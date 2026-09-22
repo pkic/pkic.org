@@ -98,8 +98,9 @@ describe("emitted stylesheet", () => {
   it("redefines the dark palette for an explicit dark choice too", () => {
     expect(css).toContain(':root[data-theme="dark"]');
     const stamped = css.slice(css.indexOf(':root[data-theme="dark"]'));
-    for (const name of Object.keys(themes.dark)) {
-      expect(stamped, name).toContain(`${cssVar(name)}:`);
+    for (const name of Object.keys(themes.dark) as (keyof typeof themes.dark)[]) {
+      if (themes.dark[name] !== themes.light[name]) expect(stamped, name).toContain(`${cssVar(name)}:`);
+      else expect(css.split(`${cssVar(name)}:`)).toHaveLength(2);
     }
   });
 

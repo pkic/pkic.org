@@ -51,7 +51,7 @@
   }
 
   .pk-btn--secondary {
-    background: var(--pk-surface);
+    background: var(--pk-surface-raise);
     color: var(--pk-ink);
     border-color: var(--pk-line);
   }

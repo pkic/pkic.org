@@ -207,37 +207,35 @@ function StatusAndCurrency({ rows }: { rows: DonationAnalyticsData["donations"][
   return (
     <Panel>
       <PanelHeader title="Donations by status and currency" headingLevel={2} />
-      <PanelBody>
-        <DataTable
-          caption="Donations by status and currency"
-          columns={[
-            { header: "Status", cell: (row) => <Badge status={row.status} /> },
-            { header: "Currency", cell: (row) => row.currency.toUpperCase(), className: "pk-mono" },
-            {
-              header: { label: "Count", className: "pk-end" },
-              cell: (row) => row.count,
-              className: "pk-mono pk-end",
-            },
-            {
-              header: { label: "Gross", className: "pk-end" },
-              cell: (row) => fmtMoney(row.totalGross, row.currency),
-              className: "pk-mono pk-end",
-            },
-            {
-              header: { label: "Average Gross", className: "pk-end" },
-              cell: (row) => fmtMoney(row.averageGross, row.currency),
-              className: "pk-mono pk-end",
-            },
-            {
-              header: { label: "Net Total", className: "pk-end" },
-              cell: (row) => (row.totalNet === null ? "—" : fmtMoney(row.totalNet, row.currency)),
-              className: "pk-mono pk-end",
-            },
-          ]}
-          data={rows}
-          empty="No donations recorded yet"
-        />
-      </PanelBody>
+      <DataTable
+        caption="Donations by status and currency"
+        columns={[
+          { header: "Status", cell: (row) => <Badge status={row.status} /> },
+          { header: "Currency", cell: (row) => row.currency.toUpperCase(), className: "pk-mono" },
+          {
+            header: { label: "Count", className: "pk-end" },
+            cell: (row) => row.count,
+            className: "pk-mono pk-end",
+          },
+          {
+            header: { label: "Gross", className: "pk-end" },
+            cell: (row) => fmtMoney(row.totalGross, row.currency),
+            className: "pk-mono pk-end",
+          },
+          {
+            header: { label: "Average Gross", className: "pk-end" },
+            cell: (row) => fmtMoney(row.averageGross, row.currency),
+            className: "pk-mono pk-end",
+          },
+          {
+            header: { label: "Net Total", className: "pk-end" },
+            cell: (row) => (row.totalNet === null ? "—" : fmtMoney(row.totalNet, row.currency)),
+            className: "pk-mono pk-end",
+          },
+        ]}
+        data={rows}
+        empty="No donations recorded yet"
+      />
     </Panel>
   );
 }
@@ -248,8 +246,8 @@ function PeriodPanel({ title, chart, rows }: { title: string; chart: string; row
       <PanelHeader title={title} headingLevel={2} />
       <PanelBody class="pk-stack pk-stack--snug">
         {chart && <div dangerouslySetInnerHTML={{ __html: chart }} />}
-        <DataTable caption={title} columns={periodColumns} data={rows} empty="No donations recorded for this period" />
       </PanelBody>
+      <DataTable caption={title} columns={periodColumns} data={rows} empty="No donations recorded for this period" />
     </Panel>
   );
 }

@@ -242,7 +242,7 @@ export function DataTable<Row>({
 
   return (
     <div class="pk-table__scroll">
-      <table class="pk-table" aria-busy={loading ? "true" : undefined}>
+      <table class="pk-table pk-table--data" aria-busy={loading ? "true" : undefined}>
         <caption class={showCaption ? "pk-table__caption" : "pk-table__caption pk-table__caption--hidden"}>
           {caption}
         </caption>
@@ -355,7 +355,10 @@ export function DataTable<Row>({
                           cell that already holds its own buttons - the actions
                           column - is not covered by it. */}
                       {index === 0 && action && <RowActionControl action={action} />}
-                      {column.cell(row)}
+                      <span class="pk-table__mobile-label" aria-hidden="true">
+                        {column.header}
+                      </span>
+                      <div class="pk-table__value">{column.cell(row)}</div>
                     </td>
                   ))}
                 </tr>

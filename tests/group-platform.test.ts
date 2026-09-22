@@ -2,6 +2,9 @@ import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   groupMembershipsListQuerySchema,
+  groupLeadershipListResponseSchema,
+  groupCreateSchema,
+  groupUpdateSchema,
   groupMembershipsManagementListResponseSchema,
   groupMembershipsParticipantListResponseSchema,
   groupCategoryRulesResponseSchema,
@@ -646,6 +649,34 @@ describe("group capacity membership", () => {
   });
 });
 
+describe("group abbreviated names", () => {
+  it("persists, searches, updates, and clears the optional name without changing the full name or slug", async () => {
+    const admin = await insertActor("abbreviation-admin@example.test", "admin");
+    const group = await createGroup(
+      env.DB,
+      admin,
+      groupCreateSchema.parse({
+        typeKey: "working_group",
+        name: "Cryptographic Module",
+        abbreviatedName: "  CMWG  ",
+        visibility: "public",
+      }),
+    );
+    expect(group.abbreviatedName).toBe("CMWG");
+    const found = await listGroups(env.DB, { q: "CMWG", limit: 10, offset: 0 }, { canReadAll: false });
+    expect(found.groups.map((item) => item.id)).toContain(group.id);
+    const publicResponse = await callApi(env as Env, `/api/v1/groups/${group.id}`);
+    expect(publicGroupDetailResponseSchema.parse(await publicResponse.json()).group.abbreviatedName).toBe("CMWG");
+    const updated = await updateGroup(env.DB, admin, group.id, groupUpdateSchema.parse({ abbreviatedName: "CM" }));
+    expect(updated).toMatchObject({ name: group.name, slug: group.slug, abbreviatedName: "CM" });
+    expect((await updateGroup(env.DB, admin, group.id, { abbreviatedName: null })).abbreviatedName).toBeNull();
+    expect(groupUpdateSchema.safeParse({ abbreviatedName: " " }).success).toBe(false);
+    expect(
+      groupCreateSchema.safeParse({ typeKey: "working_group", name: "Test", abbreviatedName: "A".repeat(41) }).success,
+    ).toBe(false);
+  });
+});
+
 describe("group configuration concurrency", () => {
   it("rejects a stale group update without overwriting the winning change or auditing success", async () => {
     const admin = await insertActor("group-update-race-admin@example.test", "admin");
@@ -723,6 +754,43 @@ describe("group configuration concurrency", () => {
 });
 
 describe("group leadership inheritance", () => {
+  it("searches and pages leadership through the mounted route, including closed terms", async () => {
+    const admin = await insertActor("leadership-list-admin@example.test", "admin");
+    const group = await createGroup(env.DB, admin, { typeKey: "working_group", name: "Leadership Query" });
+    const alpha = await insertActor("alpha-leader@example.test");
+    const beta = await insertActor("beta-leader@example.test");
+    const former = await insertActor("former-leader@example.test");
+    const firstId = await grantGroupLeadership(group.id, alpha);
+    await grantGroupLeadership(group.id, beta, "role-group_deputy_lead");
+    const formerId = await grantGroupLeadership(group.id, former);
+    await env.DB.prepare("UPDATE user_roles SET revoked_at = ? WHERE id = ?")
+      .bind("2026-01-01T00:00:00.000Z", formerId)
+      .run();
+    const token = await createAdminSession(env.DB, admin.id, "leadership-list-token");
+    async function page(query: string) {
+      const response = await callApi(env as Env, `/api/v1/groups/${group.id}/leadership?${query}`, {
+        headers: { Authorization: `Bearer ${token}` },
+      });
+      expect(response.status, await response.clone().text()).toBe(200);
+      return groupLeadershipListResponseSchema.parse(await response.json());
+    }
+    const first = await page("limit=1&offset=0&sort=title");
+    expect(first.assignments).toHaveLength(1);
+    expect(first.page).toMatchObject({ total: 2, hasMore: true, offset: 0 });
+    const next = await page("limit=1&offset=1&sort=title");
+    expect(next.assignments).toHaveLength(1);
+    expect(next.assignments[0].userRoleId).not.toBe(first.assignments[0].userRoleId);
+    expect(next.page.hasMore).toBe(false);
+    const filtered = await page("q=alpha-leader");
+    expect(filtered.assignments.map((row) => row.userRoleId)).toEqual([firstId]);
+    expect(filtered.page.total).toBe(1);
+    const past = await page("q=former-leader");
+    expect(past.assignments).toEqual([]);
+    expect(past.past.map((row) => row.userRoleId)).toEqual([formerId]);
+    expect(past.pastPage.total).toBe(1);
+    expect((await page(`userRoleId=${formerId}`)).past[0].userRoleId).toBe(formerId);
+  });
+
   it("binds leadership authority to one explicit represented Member capacity", async () => {
     const globalAdmin = await insertActor("capacity-admin@example.test", "admin");
     const group = await createGroup(env.DB, globalAdmin, {

@@ -4,7 +4,7 @@ import { z } from "zod";
 import { utcInstantSchema } from "./api-common";
 import { eventSummarySchema } from "./event-read-models";
 import { databaseIdSchema } from "./identifiers";
-import { paginatedResponseSchema, paginationQuerySchemaWithDefaults } from "./pagination";
+import { paginatedResponseSchema, listQuerySchema } from "./pagination";
 import { proposalStatusSchema } from "./proposal-status";
 
 /** "submitter" when the caller is the proposal's proposer_user_id, "speaker" for any other listed role. */
@@ -22,7 +22,7 @@ export const currentUserProposalSchema = z.object({
 });
 export type CurrentUserProposal = z.infer<typeof currentUserProposalSchema>;
 
-export const currentUserProposalsListQuerySchema = paginationQuerySchemaWithDefaults().extend({
+export const currentUserProposalsListQuerySchema = listQuerySchema(["title", "updated_at", "status"] as const).extend({
   eventId: databaseIdSchema.optional(),
 });
 export type CurrentUserProposalsListQuery = z.infer<typeof currentUserProposalsListQuerySchema>;

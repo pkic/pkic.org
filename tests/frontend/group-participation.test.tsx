@@ -21,6 +21,7 @@ function group(overrides: Partial<SelfGroup> = {}): SelfGroup {
   return {
     id: "10000000-0000-4000-8000-000000000001",
     slug: "architecture",
+    abbreviatedName: null,
     name: "Architecture Group",
     type: { key: "working_group", singularLabel: "Working group", pluralLabel: "Working groups" },
     parentGroup: null,
@@ -495,7 +496,7 @@ describe("staff groups collection", () => {
     // screen reader: the dash that stands in for the badge is decoration, and
     // the word beside it is what carries the state.
     expect(activeRow.querySelector(".pk-badge")).toBeNull();
-    expect(activeRow.querySelector("[aria-hidden='true']")?.textContent).toBe("—");
+    expect(activeRow.querySelector(".pk-table__value [aria-hidden='true']")?.textContent).toBe("—");
     expect(activeRow.querySelector(".pk-sr-only")?.textContent).toBe("Active");
     expect(inactiveRow.querySelector(".pk-badge")?.textContent).toBe("Inactive");
   });

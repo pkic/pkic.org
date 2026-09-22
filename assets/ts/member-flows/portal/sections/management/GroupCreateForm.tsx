@@ -1,3 +1,4 @@
+import { useContractForm } from "../../../../hooks/useContractForm";
 import { useEffect, useState } from "preact/hooks";
 import {
   GROUP_AUTOMATIC_ENROLLMENT_MODES,
@@ -8,14 +9,13 @@ import {
   groupCreationCapabilitiesResponseSchema,
   groupResponseSchema,
   type Group,
-  type GroupCreateInput,
   type GroupType,
 } from "../../../../../shared/schemas/groups";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
 import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
 import { Spinner } from "../../../../components/Spinner";
-import { ApiClientError, getJson, postJson } from "../../../../shared/api-client";
+import { getJson, postJson } from "../../../../shared/api-client";
 import { useData } from "../../../../hooks/useData";
 import { Button } from "../../../../ui/Button";
 import { Checkbox } from "../../../../ui/Checkbox";
@@ -29,6 +29,7 @@ interface GroupCreateDraft {
   typeKey: string | null;
   parentGroupId: string | null;
   name: string;
+  abbreviatedName: string;
   slug: string;
   description: string;
   links: string[];
@@ -59,6 +60,7 @@ function draftFromType(type: GroupType | null): GroupCreateDraft {
     typeKey: type?.key ?? null,
     parentGroupId: null,
     name: "",
+    abbreviatedName: "",
     slug: "",
     description: "",
     links: [],
@@ -95,6 +97,7 @@ export function GroupCreateForm({
     setDraft((current) => ({
       ...draftFromType(typeSelected),
       name: current.name,
+      abbreviatedName: current.abbreviatedName,
       slug: current.slug,
       description: current.description,
       links: current.links,
@@ -109,35 +112,43 @@ export function GroupCreateForm({
     setDraft((current) => ({ ...current, [key]: value }));
   }
 
+  const body = {
+    typeKey: draft.typeKey,
+    parentGroupId: draft.parentGroupId,
+    name: draft.name,
+    abbreviatedName: draft.abbreviatedName.trim() || null,
+    slug: draft.slug.trim() || undefined,
+    description: draft.description.trim() || null,
+    links: draft.links,
+    visibility: draft.visibility,
+    governanceInheritanceMode: draft.governanceInheritanceMode,
+    eligibilityMode: draft.eligibilityMode,
+    automaticEnrollmentMode: draft.automaticEnrollmentMode,
+    allowAutomaticOptOut: draft.allowAutomaticOptOut,
+    publicLeadership: draft.publicLeadership,
+    publicRoster: draft.publicRoster,
+    minEndorsersForBallot: draft.minEndorsersForBallot,
+  };
+  const form = useContractForm(groupCreateSchema, body);
+
   async function submit(event: Event): Promise<void> {
     event.preventDefault();
     // The submit button stays focusable while the create is in flight — a
     // disabled control throws a screen-reader user out of the form they are
     // in the middle of — so the form itself refuses a second submission.
     if (saving) return;
+    const checked = form.submit();
+    if (!checked.data) {
+      setError(checked.message);
+      return;
+    }
     setSaving(true);
     setError(null);
     try {
-      const input = groupCreateSchema.parse({
-        typeKey: draft.typeKey,
-        parentGroupId: draft.parentGroupId,
-        name: draft.name,
-        slug: draft.slug.trim() || undefined,
-        description: draft.description.trim() || null,
-        links: draft.links,
-        visibility: draft.visibility,
-        governanceInheritanceMode: draft.governanceInheritanceMode,
-        eligibilityMode: draft.eligibilityMode,
-        automaticEnrollmentMode: draft.automaticEnrollmentMode,
-        allowAutomaticOptOut: draft.allowAutomaticOptOut,
-        publicLeadership: draft.publicLeadership,
-        publicRoster: draft.publicRoster,
-        minEndorsersForBallot: draft.minEndorsersForBallot,
-      }) satisfies GroupCreateInput;
-      const response = await postJson("/api/v1/groups", input, groupResponseSchema);
+      const response = await postJson("/api/v1/groups", checked.data, groupResponseSchema);
       onCreated(response.group);
     } catch (cause) {
-      setError(cause instanceof ApiClientError ? cause.message : "Could not create this group.");
+      setError(form.refuse(cause));
     } finally {
       setSaving(false);
     }
@@ -157,13 +168,13 @@ export function GroupCreateForm({
           <p class="pk-small">
             A group brings its own members, meetings, events, votes, forms, and mailing lists together in one place.
           </p>
-          <form class="pk-stack" onSubmit={(event) => void submit(event)}>
+          <form noValidate {...form.handlers} class="pk-stack" onSubmit={(event) => void submit(event)}>
             {/* One disabled fieldset takes every control out of play while the
                 create is in flight, rather than each deciding for itself. The
                 submit control stays outside it so the button the reader just
                 pressed keeps focus instead of being disabled from under them. */}
             <fieldset class="pk-fieldset pk-stack" disabled={saving}>
-              <Field label="Group type">
+              <Field {...form.of("typeKey")} label="Group type">
                 {(control) => (
                   <ServerSearchSelect
                     {...control}
@@ -179,7 +190,7 @@ export function GroupCreateForm({
                   />
                 )}
               </Field>
-              <Field label="Parent group (optional)">
+              <Field {...form.of("parentGroupId")} label="Parent group (optional)">
                 {(control) => (
                   <ServerSearchSelect
                     {...control}
@@ -193,7 +204,7 @@ export function GroupCreateForm({
                 )}
               </Field>
               <div class="pk-grid pk-grid--roomy">
-                <Field label="Name" required>
+                <Field {...form.of("name")} label="Name" required>
                   {(control) => (
                     <TextInput
                       {...control}
@@ -202,7 +213,7 @@ export function GroupCreateForm({
                     />
                   )}
                 </Field>
-                <Field label="Slug (optional)" help="Leave blank to derive one from the name.">
+                <Field {...form.of("slug")} label="Slug (optional)" help="Leave blank to derive one from the name.">
                   {(control) => (
                     <TextInput
                       {...control}
@@ -212,7 +223,17 @@ export function GroupCreateForm({
                   )}
                 </Field>
               </div>
-              <Field label="Description">
+              <Field {...form.of("abbreviatedName")} label="Abbreviated name">
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    name="abbreviatedName"
+                    value={draft.abbreviatedName}
+                    onInput={(event) => setField("abbreviatedName", event.currentTarget.value)}
+                  />
+                )}
+              </Field>
+              <Field {...form.of("description")} label="Description">
                 {(control) => (
                   <MarkdownEditor
                     variant="compact"

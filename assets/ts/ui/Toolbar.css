@@ -9,17 +9,20 @@
   .pk-toolbar {
     display: flex;
     align-items: center;
-    gap: var(--pk-4);
+    justify-content: flex-end;
+    gap: var(--pk-3);
     flex-wrap: wrap;
   }
 
   .pk-toolbar__search {
-    flex: 1;
+    flex: 0 1 20rem;
     min-width: var(--pk-6);
     position: relative;
   }
 
-  .pk-toolbar .pk-btn--icon {
+  .pk-toolbar .pk-btn,
+  .pk-toolbar .pk-menu__trigger:not(.pk-menu__trigger--plain) {
+    font-size: var(--pk-text-md);
     min-block-size: calc(1.35em + 2 * var(--pk-control-y) + 2px);
   }
 
@@ -43,7 +46,7 @@
     border-radius: var(--pk-radius);
     font-size: var(--pk-text-md);
     line-height: 1.35;
-    background: var(--pk-surface);
+    background: var(--pk-control-surface);
     color: var(--pk-ink);
     transition:
       border-color var(--pk-dur-fast),
@@ -102,9 +105,7 @@
 
     .pk-toolbar__controls {
       width: 100%;
-      /* Under a full-width search box the commands read as a row from the
-         left; pushed to the right, a wrapped last button sat alone. */
-      justify-content: flex-start;
+      justify-content: flex-end;
     }
   }
 }

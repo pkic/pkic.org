@@ -44,6 +44,16 @@ export function GroupSettingsFields({
         )}
       </Field>
 
+      <Field {...fields("abbreviatedName")} label="Abbreviated name">
+        {(control) => (
+          <TextInput
+            {...control}
+            name="abbreviatedName"
+            value={draft.abbreviatedName}
+            onInput={(event) => setField("abbreviatedName", event.currentTarget.value)}
+          />
+        )}
+      </Field>
       <Field {...fields("description")} label="Description">
         {(control) => (
           <MarkdownEditor

@@ -126,45 +126,44 @@ export function ApplicationCommunicationsCard({
     <div class="pk">
       <Panel aria-label="Communications and notes">
         <PanelHeader title="Communications and notes" />
+        <DataTable
+          caption="Communication and note history"
+          rows={detail.communications}
+          rowKey={(record) => record.id}
+          empty="Nothing has been emailed or noted on this application yet."
+          columns={[
+            {
+              id: "kind",
+              header: "Kind",
+              cell: (record) => (
+                <Badge tone={record.kind === "communication" ? "info" : "neutral"}>{KIND_LABEL[record.kind]}</Badge>
+              ),
+              width: "fit",
+            },
+            {
+              id: "message",
+              header: "Message",
+              // The first labelled column is fit-width here, so the prose
+              // column claims the slack explicitly.
+              width: "primary",
+              cell: (record) => (
+                <div class="pk-stack pk-stack--tight">
+                  {record.subject && <strong>{record.subject}</strong>}
+                  <span class="pk-break">{record.body}</span>
+                </div>
+              ),
+            },
+            {
+              // A timestamp has a bounded length; the column hugs it and
+              // keeps the table's own ink and size.
+              id: "recorded",
+              header: "Recorded",
+              cell: (record) => fmt(record.createdAt),
+              width: "fit",
+            },
+          ]}
+        />
         <PanelBody class="pk-stack">
-          <DataTable
-            caption="Communication and note history"
-            rows={detail.communications}
-            rowKey={(record) => record.id}
-            empty="Nothing has been emailed or noted on this application yet."
-            columns={[
-              {
-                id: "kind",
-                header: "Kind",
-                cell: (record) => (
-                  <Badge tone={record.kind === "communication" ? "info" : "neutral"}>{KIND_LABEL[record.kind]}</Badge>
-                ),
-                width: "fit",
-              },
-              {
-                id: "message",
-                header: "Message",
-                // The first labelled column is fit-width here, so the prose
-                // column claims the slack explicitly.
-                width: "primary",
-                cell: (record) => (
-                  <div class="pk-stack pk-stack--tight">
-                    {record.subject && <strong>{record.subject}</strong>}
-                    <span class="pk-break">{record.body}</span>
-                  </div>
-                ),
-              },
-              {
-                // A timestamp has a bounded length; the column hugs it and
-                // keeps the table's own ink and size.
-                id: "recorded",
-                header: "Recorded",
-                cell: (record) => fmt(record.createdAt),
-                width: "fit",
-              },
-            ]}
-          />
-
           {canWrite && (
             <>
               <form

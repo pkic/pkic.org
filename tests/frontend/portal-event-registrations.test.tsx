@@ -192,7 +192,7 @@ describe("event registrations list", () => {
 
     const heads = [...page.querySelectorAll("th")].map((th) => th.textContent!.trim());
     expect(heads.some((head) => head.startsWith("Email"))).toBe(true);
-    const cells = [...page.querySelectorAll("tbody td")].map((td) => td.textContent!.trim());
+    const cells = [...page.querySelectorAll("tbody td .pk-table__value")].map((td) => td.textContent!.trim());
     expect(cells).toContain("Bounced");
   });
 

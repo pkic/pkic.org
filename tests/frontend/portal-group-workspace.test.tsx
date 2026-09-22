@@ -23,6 +23,7 @@ vi.mock("wouter/use-hash-location", () => ({
 
 function group(revision = 0) {
   return {
+    abbreviatedName: null,
     id: GROUP_ID,
     slug: "architecture",
     name: "Architecture Committee",

@@ -189,17 +189,18 @@ export async function createGroup(db: DatabaseLike, actor: AuthAdmin, input: Gro
       db
         .prepare(
           `INSERT INTO groups
-             (id, type_key, parent_group_id, name, slug, description, links_json, visibility,
+             (id, type_key, parent_group_id, name, abbreviated_name, slug, description, links_json, visibility,
               governance_inheritance_mode, eligibility_mode, automatic_enrollment_mode,
               allow_automatic_opt_out, public_leadership, public_roster, min_endorsers_for_ballot,
               active, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
         )
         .bind(
           id,
           input.typeKey,
           input.parentGroupId ?? null,
           input.name,
+          input.abbreviatedName ?? null,
           slug,
           input.description ?? null,
           serializeLinks(input.links ?? []),
@@ -300,6 +301,7 @@ export async function updateGroup(
   if (changes.typeKey !== undefined) add("type_key", changes.typeKey);
   if (changes.parentGroupId !== undefined) add("parent_group_id", changes.parentGroupId);
   if (changes.name !== undefined) add("name", changes.name);
+  if (changes.abbreviatedName !== undefined) add("abbreviated_name", changes.abbreviatedName);
   if (changes.slug !== undefined) add("slug", changes.slug);
   if (changes.description !== undefined) add("description", changes.description);
   if (changes.links !== undefined) add("links_json", serializeLinks(changes.links));

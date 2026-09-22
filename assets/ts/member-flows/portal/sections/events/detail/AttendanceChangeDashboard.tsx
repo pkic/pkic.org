@@ -1,82 +1,14 @@
-import { DataTable, type DataTableColumn } from "../../../../../ui/DataTable";
+import { StackedBarChart } from "../../../../../ui/StackedBarChart";
+import { statusBars } from "../../../../../ui/chart";
 import { EmptyState } from "../../../../../ui/EmptyState";
 import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
-import { PersonCell } from "../../../../../ui/PersonCell";
 import { StatCard } from "../../../../../ui/StatCard";
 import { attendanceTypeLabel } from "../../../../../shared/attendance";
 import type { EventStatsResponse } from "../types";
-import { fmt } from "../../../ui";
-import { eventRegistrationViewPath } from "./registration-paths";
 import "../../../../../ui/Content.css";
 
 type AttendanceChanges = EventStatsResponse["attendanceChanges"];
-type AttendanceChangeDayRow = AttendanceChanges["byDay"][number];
-type AttendanceChangeTransitionRow = AttendanceChanges["byTransition"][number];
-type AttendanceChangeRecentRow = AttendanceChanges["recent"][number];
-
-/** "In-person → Virtual", in the vocabulary the rest of the event uses. */
-function transitionLabel(row: { from_type: string; to_type: string }): string {
-  return `${attendanceTypeLabel(row.from_type)} → ${attendanceTypeLabel(row.to_type)}`;
-}
-
-const BY_DAY_COLUMNS: ReadonlyArray<DataTableColumn<AttendanceChangeDayRow>> = [
-  { id: "day", header: "Event day", cell: (row) => row.label ?? row.day_date },
-  {
-    id: "attendees",
-    header: "Attendees",
-    align: "end",
-    cell: (row) => <span class="pk-strong">{row.changed_attendees}</span>,
-  },
-  { id: "left", header: "No longer in-person", align: "end", cell: (row) => row.left_in_person_attendees },
-  { id: "joined", header: "Now in-person", align: "end", cell: (row) => row.joined_in_person_attendees },
-  {
-    id: "dayChanges",
-    header: "Day changes",
-    align: "end",
-    cell: (row) => <span class="pk-muted">{row.day_changes}</span>,
-  },
-];
-
-const BY_TRANSITION_COLUMNS: ReadonlyArray<DataTableColumn<AttendanceChangeTransitionRow>> = [
-  { id: "change", header: "Change", cell: (row) => transitionLabel(row) },
-  { id: "attendees", header: "Attendees", align: "end", cell: (row) => <span class="pk-strong">{row.attendees}</span> },
-  { id: "days", header: "Days", align: "end", cell: (row) => <span class="pk-muted">{row.day_changes}</span> },
-];
-
-/** The recent-changes columns; the row itself opens the registration. */
-function recentColumns(): ReadonlyArray<DataTableColumn<AttendanceChangeRecentRow>> {
-  return [
-    {
-      id: "attendee",
-      header: "Attendee",
-      cell: (row) => (
-        <PersonCell
-          name={row.display_name ?? row.user_email ?? row.registration_id}
-          email={row.display_name && row.user_email ? row.user_email : undefined}
-          size="sm"
-        />
-      ),
-    },
-    {
-      id: "days",
-      header: "Event days",
-      cell: (row) => (
-        <>
-          {row.days.map((day) => day.label ?? day.day_date).join(", ")}
-          {row.days.length > 1 && <span class="pk-muted"> ({row.days.length} days)</span>}
-        </>
-      ),
-    },
-    { id: "change", header: "Change", cell: (row) => transitionLabel(row) },
-    { id: "when", header: "When", cell: (row) => <span class="pk-mono pk-small">{fmt(row.changed_at)}</span> },
-  ];
-}
-
-const dayRowKey = (row: AttendanceChangeDayRow): string => row.day_date;
-const transitionRowKey = (row: AttendanceChangeTransitionRow): string => `${row.from_type}->${row.to_type}`;
-const recentRowKey = (row: AttendanceChangeRecentRow): string =>
-  `${row.registration_id}:${row.changed_at}:${row.from_type}:${row.to_type}`;
-
+/** Both directions are displayed separately: a net total would hide movement. */
 export function AttendanceChangeDashboard({ slug, changes }: { slug: string; changes: AttendanceChanges }) {
   const registrationsHref = `#/events/${slug}/registrations/attendance-changed`;
 
@@ -121,40 +53,35 @@ export function AttendanceChangeDashboard({ slug, changes }: { slug: string; cha
         </div>
 
         {changes.changedAttendees > 0 ? (
-          <>
-            <div class="pk-stack">
-              <DataTable
-                caption="Where attendance changed"
-                showCaption
-                columns={BY_DAY_COLUMNS}
-                rows={changes.byDay}
-                rowKey={dayRowKey}
-                empty={<EmptyState title="No event day has recorded a change yet." />}
-              />
-              <DataTable
-                caption="How attendance changed"
-                showCaption
-                columns={BY_TRANSITION_COLUMNS}
-                rows={changes.byTransition}
-                rowKey={transitionRowKey}
-                empty={<EmptyState title="No transition has been recorded yet." />}
-              />
-            </div>
-
-            <DataTable
-              caption="Recent attendee changes"
-              showCaption
-              columns={recentColumns()}
-              rows={changes.recent}
-              rowKey={recentRowKey}
-              // The row is the attendee, so the row opens their registration.
-              rowAction={(row) => ({
-                label: `Open ${row.display_name ?? row.user_email ?? row.registration_id}`,
-                href: `#${eventRegistrationViewPath(slug, row.registration_id)}`,
-              })}
-              empty={<EmptyState title="No recent change to show." />}
+          <div class="pk-stack">
+            <StackedBarChart
+              caption="Where attendance changed"
+              labels={changes.byDay.map((day) => day.label ?? day.day_date)}
+              series={[
+                {
+                  label: "Attendees changed",
+                  values: changes.byDay.map((day) => day.changed_attendees),
+                  color: "var(--pk-info)",
+                },
+              ]}
             />
-          </>
+            <section aria-label="How attendance changed" class="pk-stack pk-stack--snug">
+              <h3 class="pk-panel__title">How attendance changed</h3>
+              <div
+                dangerouslySetInnerHTML={{
+                  __html: statusBars(
+                    Object.fromEntries(
+                      changes.byTransition.map((row) => [
+                        `${attendanceTypeLabel(row.from_type)} → ${attendanceTypeLabel(row.to_type)}`,
+                        row.attendees,
+                      ]),
+                    ),
+                    changes.byTransition.reduce((sum, row) => sum + row.attendees, 0),
+                  ),
+                }}
+              />
+            </section>
+          </div>
         ) : (
           <EmptyState title="No attendees have changed attendance after registration." />
         )}

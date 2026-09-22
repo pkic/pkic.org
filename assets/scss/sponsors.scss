@@ -187,7 +187,7 @@ $sponsors-tier-heights: (
   // follows the theme around it.
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) & .sponsor-link {
-      background: var(--pk-on-solid);
+      background: var(--pk-logo-surface);
       border-radius: var(--pk-radius-sm);
       padding: var(--pk-2);
       box-sizing: content-box;
@@ -195,13 +195,14 @@ $sponsors-tier-heights: (
   }
 
   :root[data-theme="dark"] & .sponsor-link {
-    background: var(--pk-on-solid);
+    background: var(--pk-logo-surface);
     border-radius: var(--pk-radius-sm);
     padding: var(--pk-2);
     box-sizing: content-box;
   }
 
   .sponsor-logo {
+    mix-blend-mode: multiply;
     max-block-size: 100%;
     max-inline-size: 100%;
     object-fit: contain;

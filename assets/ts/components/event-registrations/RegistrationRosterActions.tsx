@@ -1,7 +1,10 @@
 import { useState } from "preact/hooks";
 import { eventRegistrationPromotionsResponseSchema } from "../../../shared/schemas/event-registrations";
 import { postJson } from "../../shared/api-client";
-import { Button } from "../../ui/Button";
+import { ButtonLink } from "../../ui/Button";
+
+import { Menu } from "../../ui/Menu";
+import { IconDownload } from "../icons";
 
 export function RegistrationRosterActions({
   promotionsEndpoint,
@@ -31,12 +34,21 @@ export function RegistrationRosterActions({
 
   return (
     <>
-      <Button variant="secondary" size="sm" disabled={promoting} onClick={() => void runWaitlistPromotions()}>
-        {promoting ? "Running promotions…" : "Run waitlist promotions"}
-      </Button>
-      <Button variant="secondary" size="sm" onClick={() => (window.location.href = exportsEndpoint)}>
-        Download CSV
-      </Button>
+      <Menu
+        label="Registration actions"
+        align="end"
+        items={[
+          {
+            id: "waitlist-promotions",
+            label: promoting ? "Running promotions…" : "Run waitlist promotions",
+            disabled: promoting,
+            onSelect: () => void runWaitlistPromotions(),
+          },
+        ]}
+      />
+      <ButtonLink href={exportsEndpoint} icon aria-label="Download CSV" title="Download CSV">
+        <IconDownload />
+      </ButtonLink>
     </>
   );
 }

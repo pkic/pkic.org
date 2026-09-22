@@ -13,6 +13,7 @@ import {
   groupLeadershipCandidatesListQuerySchema,
   groupLeadershipCandidatesListResponseSchema,
   groupLeadershipListResponseSchema,
+  groupLeadershipListQuerySchema,
   groupLeadershipUpdateSchema,
   groupLeaveSchema,
   groupMemberAddBodySchema,
@@ -260,7 +261,7 @@ export const groupLeadershipListRouteSchema = {
   description:
     "Current assignments include leadership inherited from ancestors; past terms are local only. Titles come " +
     "from each assignment, with the group type's defaults returned for new ones.",
-  request: { params: groupReferenceParamsSchema },
+  request: { params: groupReferenceParamsSchema, query: groupLeadershipListQuerySchema },
   responses: {
     "200": {
       description: "Effective leadership, closed terms, and the group type's default titles.",

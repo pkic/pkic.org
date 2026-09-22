@@ -87,7 +87,7 @@ export function ApiDataTable<T, Response = unknown>({
   columns,
   params,
   paginate = false,
-  searchPlaceholder,
+  searchPlaceholder = "Search…",
   initialPageSize,
   empty,
   rowKey,

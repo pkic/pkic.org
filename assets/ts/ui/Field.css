@@ -142,7 +142,7 @@
     padding: var(--pk-control-y) var(--pk-control-x);
     border: 1px solid var(--pk-line);
     border-radius: var(--pk-radius);
-    background: var(--pk-surface);
+    background: var(--pk-control-surface);
     color: var(--pk-ink);
     font-size: var(--pk-text-md);
     transition:
@@ -223,7 +223,7 @@
     height: 1.05rem;
     margin-top: 0.15rem;
     position: relative;
-    background: var(--pk-surface);
+    background: var(--pk-control-surface);
     border: 1px solid var(--pk-line-strong);
     cursor: pointer;
   }

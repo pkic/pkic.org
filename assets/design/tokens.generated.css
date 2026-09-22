@@ -74,7 +74,12 @@
     --pk-stack: 1rem;
 
     --pk-canvas: #f5f6f7;
+    --pk-page-surface: #ffffff;
     --pk-surface: #ffffff;
+    --pk-control-surface: #ffffff;
+    --pk-logo-surface: #ffffff;
+    --pk-member-logo-filter: grayscale(1);
+    --pk-member-logo-blend: multiply;
     --pk-surface-sunk: #f8f9fa;
     --pk-surface-raise: #ffffff;
     --pk-ink: #212529;
@@ -113,17 +118,22 @@
      :not([data-theme="light"]) lets an explicit light choice beat a dark OS. */
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --pk-canvas: #121417;
-      --pk-surface: #1a1e22;
-      --pk-surface-sunk: #16191d;
-      --pk-surface-raise: #22272c;
+      --pk-canvas: #141715;
+      --pk-page-surface: #141715;
+      --pk-surface: #1c211e;
+      --pk-control-surface: #101411;
+      --pk-logo-surface: #e0e4e8;
+      --pk-member-logo-filter: grayscale(1) invert(1);
+      --pk-member-logo-blend: screen;
+      --pk-surface-sunk: #181d1a;
+      --pk-surface-raise: #272e29;
       --pk-ink: #e9ecef;
-      --pk-ink-muted: #9aa3ab;
+      --pk-ink-muted: #b0bab3;
       --pk-ink-faint: #6c757d;
       --pk-ink-inverse: #10141a;
-      --pk-line: #2f353b;
-      --pk-line-soft: #262b31;
-      --pk-line-strong: #4a5259;
+      --pk-line: #4a584f;
+      --pk-line-soft: #344039;
+      --pk-line-strong: #788a7f;
       --pk-overlay: rgba(0, 0, 0, 0.62);
       --pk-ok: #3ec98c;
       --pk-ok-ink: #6fd8a4;
@@ -137,7 +147,6 @@
       --pk-info: #7cb0f5;
       --pk-info-ink: #a0c7f8;
       --pk-info-soft: #16202e;
-      --pk-accent-strong: color-mix(in oklab, var(--pk-accent) 62%, #000);
       --pk-accent-ink: color-mix(in oklab, var(--pk-accent) 70%, #fff);
       --pk-accent-soft: color-mix(in oklab, var(--pk-accent) 20%, #000);
       --pk-accent-deep: color-mix(in oklab, var(--pk-accent) 82%, #000);
@@ -151,17 +160,22 @@
 
   /* Stamped explicitly, so the toggle also wins in the other direction. */
   :root[data-theme="dark"] {
-    --pk-canvas: #121417;
-    --pk-surface: #1a1e22;
-    --pk-surface-sunk: #16191d;
-    --pk-surface-raise: #22272c;
+    --pk-canvas: #141715;
+    --pk-page-surface: #141715;
+    --pk-surface: #1c211e;
+    --pk-control-surface: #101411;
+    --pk-logo-surface: #e0e4e8;
+    --pk-member-logo-filter: grayscale(1) invert(1);
+    --pk-member-logo-blend: screen;
+    --pk-surface-sunk: #181d1a;
+    --pk-surface-raise: #272e29;
     --pk-ink: #e9ecef;
-    --pk-ink-muted: #9aa3ab;
+    --pk-ink-muted: #b0bab3;
     --pk-ink-faint: #6c757d;
     --pk-ink-inverse: #10141a;
-    --pk-line: #2f353b;
-    --pk-line-soft: #262b31;
-    --pk-line-strong: #4a5259;
+    --pk-line: #4a584f;
+    --pk-line-soft: #344039;
+    --pk-line-strong: #788a7f;
     --pk-overlay: rgba(0, 0, 0, 0.62);
     --pk-ok: #3ec98c;
     --pk-ok-ink: #6fd8a4;
@@ -175,7 +189,6 @@
     --pk-info: #7cb0f5;
     --pk-info-ink: #a0c7f8;
     --pk-info-soft: #16202e;
-    --pk-accent-strong: color-mix(in oklab, var(--pk-accent) 62%, #000);
     --pk-accent-ink: color-mix(in oklab, var(--pk-accent) 70%, #fff);
     --pk-accent-soft: color-mix(in oklab, var(--pk-accent) 20%, #000);
     --pk-accent-deep: color-mix(in oklab, var(--pk-accent) 82%, #000);

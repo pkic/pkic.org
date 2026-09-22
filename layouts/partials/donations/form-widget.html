@@ -49,7 +49,7 @@
   {{- with $cancelPath       }} data-donation-cancel-path="{{ . }}"{{ end -}}
 >
   <div class="pk-stack pk-stack--tight">
-    <h3>{{ $heading }}</h3>
+    <h3 class="pk-panel__title">{{ $heading }}</h3>
     {{ with $description }}<p class="pk-muted">{{ . }}</p>{{ end }}
     <p class="pk-small">A receipt will be issued by email after your donation is processed.</p>
   </div>

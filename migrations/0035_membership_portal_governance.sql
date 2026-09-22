@@ -1385,6 +1385,7 @@ VALUES
   ('role-group_deputy_lead', 'Secretary', 50, 1, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'));
 
 CREATE TABLE groups (
+  abbreviated_name            TEXT,
   id                          TEXT NOT NULL PRIMARY KEY,
   type_key                    TEXT NOT NULL,
   parent_group_id             TEXT,

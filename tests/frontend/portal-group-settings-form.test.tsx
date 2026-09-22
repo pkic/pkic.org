@@ -21,6 +21,7 @@ const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const GROUP_PATH = `/api/v1/groups/${GROUP_ID}`;
 
 const record = {
+  abbreviatedName: null,
   id: GROUP_ID,
   slug: "architecture",
   name: "Architecture Committee",

@@ -291,7 +291,7 @@ $pkic-page-hero-themes: (
 // Also a `.pk` root, so the ground and the link colour are re-pointed through
 // the tokens the base layer reads rather than declared again here.
 .pkic-stats-bar {
-  --pk-canvas: #{$green};
+  --pk-canvas: var(--pk-accent-strong);
   // The ground is painted here rather than inherited from `.pk`.
   //
   // These surfaces set `--pk-canvas` to their own gradient and used to rely on
@@ -378,7 +378,7 @@ $pkic-page-hero-themes: (
     top: 50%;
     left: 10%;
     right: 10%;
-    border-top: 1px solid $gray-200;
+    border-top: 1px solid var(--pk-line-soft);
   }
 }
 
@@ -461,15 +461,36 @@ $pkic-page-hero-themes: (
   letter-spacing: 0.1em;
 }
 
+// A centered wrap balances five cards as three plus two instead of stranding
+// the final card below a row of four. Cards keep the same readable measure.
+.pkic-wg-grid {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--pk-5);
+
+  > .pkic-wg-spotlight {
+    flex: 0 1 calc((100% - 2 * var(--pk-5)) / 3);
+  }
+
+  @media (max-width: 63.9375rem) {
+    > .pkic-wg-spotlight { flex-basis: calc((100% - var(--pk-5)) / 2); }
+  }
+
+  @media (max-width: 39.9375rem) {
+    > .pkic-wg-spotlight { flex-basis: 100%; }
+  }
+}
+
 // WG spotlight card container
 .pkic-wg-spotlight {
   // Equal heights across a row belong to the card, not to a utility class every
   // caller has to remember. The grids that hold these cards stretch their
   // items, so a full-height card fills whatever cell it lands in.
-  height: 100%;
-  // `--pk-surface` rather than white: the reader can choose the dark theme now,
-  // and a hard-coded ground turns into a light island with near-white text.
+  // Flex rows stretch cards without fixing a percentage height.
+  // The border defines the card; its fill stays close to the page ground.
   background: var(--pk-surface);
+  border: 1px solid var(--pk-line-soft);
   border-radius: 14px;
   overflow: hidden;
   box-shadow:
@@ -495,13 +516,14 @@ $pkic-page-hero-themes: (
   }
 
   &-header {
-    padding: 1.75rem 1.5rem 1.5rem;
+    padding: var(--pk-5);
     background: linear-gradient(135deg, var(--wg-a), var(--wg-b));
     position: relative;
     overflow: hidden;
-    min-height: 140px;
+    min-height: var(--pk-8);
     display: flex;
-    flex-direction: column;
+    flex-direction: row;
+    align-items: center;
     justify-content: space-between;
 
     // Decorative circles
@@ -559,7 +581,7 @@ $pkic-page-hero-themes: (
     h3 {
       font-size: 1.1rem;
       font-weight: 700;
-      margin-bottom: 0.5rem;
+      margin: 0 0 var(--pk-2);
       color: var(--pk-ink);
 
       a {
@@ -573,7 +595,7 @@ $pkic-page-hero-themes: (
     }
 
     p {
-      font-size: 0.83rem;
+      font-size: var(--pk-text-md);
       color: var(--pk-ink-muted);
       line-height: 1.6;
       margin: 0;
@@ -1049,7 +1071,7 @@ $pkic-page-hero-themes: (
   padding: var(--pk-3) var(--pk-4);
   background: $gray-100;
   font-size: 0.85rem;
-  border-top: 1px solid $gray-200;
+  border-top: 1px solid var(--pk-line-soft);
 }
 
 // ============================================================

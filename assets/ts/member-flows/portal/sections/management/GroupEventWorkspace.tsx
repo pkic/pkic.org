@@ -238,6 +238,9 @@ export function GroupEventWorkspace({
             {activeTab === GROUP_EVENT_OVERVIEW_TAB && (
               <div class="pk-record">
                 <div class="pk-stack">
+                  {canRegister && <GroupEventRegistrationPanel event={event} groupId={groupId} />}
+                </div>
+                <aside class="pk-stack pk-datalist-aligned">
                   <Panel aria-label="Schedule">
                     <PanelHeader title="Schedule" />
                     <PanelBody>
@@ -254,9 +257,6 @@ export function GroupEventWorkspace({
                       />
                     </PanelBody>
                   </Panel>
-                  {canRegister && <GroupEventRegistrationPanel event={event} groupId={groupId} />}
-                </div>
-                <aside class="pk-stack pk-datalist-aligned">
                   <Panel aria-label="Event facts">
                     <PanelHeader title="Event" />
                     <PanelBody>

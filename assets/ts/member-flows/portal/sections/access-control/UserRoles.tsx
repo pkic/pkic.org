@@ -132,73 +132,72 @@ export function UserRoles({ canGrant = true, canRevoke = true }: { canGrant?: bo
                   </div>
                 </form>
               )}
-
-              <ApiDataTable
-                caption={`Roles assigned to ${user.email}`}
-                endpoint={`/api/v1/users/${user.id}/roles`}
-                responseSchema={userRolesListResponseSchema}
-                resolve={(response) => response.roles}
-                resolvePage={(response) => response.page}
-                paginate
-                initialPageSize={25}
-                initialSort="-created_at"
-                searchPlaceholder="Search role assignments…"
-                actionsRef={tableRef}
-                rowKey={(assignment) => assignment.id}
-                empty="No roles assigned"
-                columns={[
-                  {
-                    header: "Role",
-                    // The weight is on the cell's own element: a column's
-                    // `className` is translated through a closed vocabulary
-                    // that has no entry for it, so it would be dropped.
-                    cell: (assignment) => <span class="pk-strong">{assignment.roleName}</span>,
-                    className: "pk-mono",
-                    sort: { asc: "role_name", desc: "-role_name" },
-                  },
-                  {
-                    header: "Context",
-                    cell: (assignment) =>
-                      assignment.contextType ? (
-                        `${assignment.contextType}:${assignment.contextId}`
-                      ) : (
-                        <span class="pk-muted">Global</span>
-                      ),
-                    className: "pk-small pk-mono",
-                    sort: { asc: "context_type", desc: "-context_type" },
-                  },
-                  {
-                    // Dates have a bounded length; the columns say so and
-                    // keep the table's own ink and size.
-                    header: "Expires",
-                    cell: (assignment) =>
-                      assignment.expiresAt ? fmt(assignment.expiresAt) : <span class="pk-muted">Never</span>,
-                    width: "fit",
-                    sort: { asc: "expires_at", desc: "-expires_at" },
-                  },
-                  {
-                    header: "Granted",
-                    cell: (assignment) => fmtDate(assignment.createdAt),
-                    width: "fit",
-                    sort: { asc: "created_at", desc: "-created_at" },
-                  },
-                  {
-                    header: "",
-                    cell: (assignment) =>
-                      canRevoke ? (
-                        <RowActions
-                          subject={assignment.roleName}
-                          actions={[
-                            { id: "revoke", label: "Revoke role", onSelect: () => void handleRevoke(assignment) },
-                          ]}
-                        />
-                      ) : null,
-                  },
-                ]}
-              />
             </>
           )}
         </PanelBody>
+        {user && (
+          <ApiDataTable
+            caption={`Roles assigned to ${user.email}`}
+            endpoint={`/api/v1/users/${user.id}/roles`}
+            responseSchema={userRolesListResponseSchema}
+            resolve={(response) => response.roles}
+            resolvePage={(response) => response.page}
+            paginate
+            initialPageSize={25}
+            initialSort="-created_at"
+            searchPlaceholder="Search role assignments…"
+            actionsRef={tableRef}
+            rowKey={(assignment) => assignment.id}
+            empty="No roles assigned"
+            columns={[
+              {
+                header: "Role",
+                // The weight is on the cell's own element: a column's
+                // `className` is translated through a closed vocabulary
+                // that has no entry for it, so it would be dropped.
+                cell: (assignment) => <span class="pk-strong">{assignment.roleName}</span>,
+                className: "pk-mono",
+                sort: { asc: "role_name", desc: "-role_name" },
+              },
+              {
+                header: "Context",
+                cell: (assignment) =>
+                  assignment.contextType ? (
+                    `${assignment.contextType}:${assignment.contextId}`
+                  ) : (
+                    <span class="pk-muted">Global</span>
+                  ),
+                className: "pk-small pk-mono",
+                sort: { asc: "context_type", desc: "-context_type" },
+              },
+              {
+                // Dates have a bounded length; the columns say so and
+                // keep the table's own ink and size.
+                header: "Expires",
+                cell: (assignment) =>
+                  assignment.expiresAt ? fmt(assignment.expiresAt) : <span class="pk-muted">Never</span>,
+                width: "fit",
+                sort: { asc: "expires_at", desc: "-expires_at" },
+              },
+              {
+                header: "Granted",
+                cell: (assignment) => fmtDate(assignment.createdAt),
+                width: "fit",
+                sort: { asc: "created_at", desc: "-created_at" },
+              },
+              {
+                header: "",
+                cell: (assignment) =>
+                  canRevoke ? (
+                    <RowActions
+                      subject={assignment.roleName}
+                      actions={[{ id: "revoke", label: "Revoke role", onSelect: () => void handleRevoke(assignment) }]}
+                    />
+                  ) : null,
+              },
+            ]}
+          />
+        )}
       </Panel>
     </div>
   );

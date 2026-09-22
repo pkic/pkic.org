@@ -14,17 +14,8 @@
  * hover, sorting, selection, checkboxes, skeletons, row activation — stay in
  * `DataTable.css` and ride that component's chunk.
  *
- * WHAT IS DELIBERATELY ABSENT: a ground and an ink on the body rows.
- *
- * The tokens flip with the reader's theme; a page's ground and the link colour
- * inside its cells may not. Painting a row `--pk-surface-sunk` while its text
- * came from somewhere else is exactly how this table used to render dark grey
- * on near-black, one row in two, for anyone whose system was set to dark. A
- * table sits on the page it is written into and inherits both halves from it,
- * which is the same rule `base.css` states for `.pk`: a surface that does not
- * own the ground does not paint one. The header is the single band that does
- * paint, and it names both halves — `--pk-surface-sunk` under `--pk-ink` — so
- * they can only ever flip together.
+ * Prose tables own both their row backgrounds and ink, so striped rows stay
+ * readable in either theme. Portal lists retain their compact presentation.
  */
 
 @layer components {
@@ -36,12 +27,6 @@
        scrolling within itself. */
     min-width: 0;
     max-width: 100%;
-  }
-
-  /* A table in prose is a block in the flow of the article and needs the
-     vertical rhythm of one. A data table sits in a panel that spaces it. */
-  .pk-table__scroll--prose {
-    margin: var(--pk-5) 0;
   }
 
   .pk-table {
@@ -68,17 +53,32 @@
     vertical-align: top;
   }
 
-  /*
-   * A long label kept to one line, for a cell whose value comes from a fixed
-   * vocabulary: a configured category label is prose that would otherwise set
-   * the height of every row around it, and the reader is scanning the column
-   * rather than reading it. The full text stays in the cell's `title`, so it
-   * is a pointer away and never lost.
-   */
-  .pk-table__clamp {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+  /* A table in prose is a block in the flow of the article and needs the
+     vertical rhythm of one. A data table sits in a panel that spaces it. */
+  .pk-table__scroll--prose {
+    --pk-row-y: var(--pk-3);
+    margin: var(--pk-5) 0;
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-lg);
+    background: var(--pk-surface);
+    color: var(--pk-ink);
+    font-size: var(--pk-text-md);
+    line-height: 1.6;
+    box-shadow: var(--pk-shadow-1);
+  }
+
+  .pk-table__scroll--prose th {
+    padding-block: var(--pk-3);
+    background: var(--pk-on-solid-ink);
+    color: var(--pk-on-solid);
+    letter-spacing: normal;
+  }
+
+  .pk-table__scroll--prose tbody tr:nth-child(odd) {
+    background: var(--pk-surface-sunk);
+  }
+
+  .pk-table__scroll--prose td {
+    border-bottom: 0;
   }
 }

@@ -116,52 +116,52 @@ export function UserEmailAddressesPanel({
             </div>
           </form>
         )}
-        <ApiDataTable
-          caption="Secondary email addresses"
-          endpoint={`/api/v1/users/${encodeURIComponent(userId)}/emails`}
-          responseSchema={userEmailsListResponseSchema}
-          resolve={(response) => response.emails}
-          resolvePage={(response) => response.page}
-          paginate
-          initialPageSize={10}
-          initialSort="email"
-          searchPlaceholder="Search secondary emails…"
-          actionsRef={tableRef}
-          rowKey={(email) => email.id}
-          empty="No secondary emails"
-          columns={[
-            {
-              header: "Secondary email",
-              cell: (email) => email.email,
-              sort: { asc: "email", desc: "-email" },
-            },
-            {
-              header: "Added",
-              cell: (email) => <span class="pk-small pk-mono">{fmtDate(email.createdAt)}</span>,
-              sort: { asc: "created_at", desc: "-created_at" },
-            },
-            ...(canWrite
-              ? [
-                  {
-                    header: "Actions",
-                    cell: (email: UserEmailRecord) => (
-                      <RowActions
-                        subject={email.email}
-                        actions={[
-                          {
-                            id: "remove",
-                            label: "Remove email",
-                            onSelect: () => void handleRemove(email.id, email.email),
-                          },
-                        ]}
-                      />
-                    ),
-                  },
-                ]
-              : []),
-          ]}
-        />
       </PanelBody>
+      <ApiDataTable
+        caption="Secondary email addresses"
+        endpoint={`/api/v1/users/${encodeURIComponent(userId)}/emails`}
+        responseSchema={userEmailsListResponseSchema}
+        resolve={(response) => response.emails}
+        resolvePage={(response) => response.page}
+        paginate
+        initialPageSize={10}
+        initialSort="email"
+        searchPlaceholder="Search secondary emails…"
+        actionsRef={tableRef}
+        rowKey={(email) => email.id}
+        empty="No secondary emails"
+        columns={[
+          {
+            header: "Secondary email",
+            cell: (email) => email.email,
+            sort: { asc: "email", desc: "-email" },
+          },
+          {
+            header: "Added",
+            cell: (email) => <span class="pk-small pk-mono">{fmtDate(email.createdAt)}</span>,
+            sort: { asc: "created_at", desc: "-created_at" },
+          },
+          ...(canWrite
+            ? [
+                {
+                  header: "Actions",
+                  cell: (email: UserEmailRecord) => (
+                    <RowActions
+                      subject={email.email}
+                      actions={[
+                        {
+                          id: "remove",
+                          label: "Remove email",
+                          onSelect: () => void handleRemove(email.id, email.email),
+                        },
+                      ]}
+                    />
+                  ),
+                },
+              ]
+            : []),
+        ]}
+      />
     </Panel>
   );
 }

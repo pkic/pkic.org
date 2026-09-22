@@ -184,7 +184,8 @@ describe("Event Analytics Overview on the design system", () => {
     // Each card is a Panel, so its title is a real heading instead of a `h6`
     // carrying its own type scale.
     expect(headings(container)).toEqual(["Registrations by Status", "Top Events", "Activity — last 30 days"]);
-    expect(captions(container)).toContain("Top events by registrations");
+    expect(container.querySelector(".pk-chart__bars")?.textContent).toContain("registered");
+    expect(container.querySelector(".pk-table--data")).toBeNull();
 
     /*
      * The email and donation figures are gone from this panel, not restyled:
@@ -231,7 +232,7 @@ describe("Event Analytics Overview on the design system", () => {
 });
 
 describe("System Analytics Registrations on the design system", () => {
-  it("gives each chart and its period table a distinct name, so no two tables are announced alike", async () => {
+  it("switches period charts through accessible tabs without duplicating statistics in visible tables", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => json(REGISTRATIONS)),
@@ -240,19 +241,14 @@ describe("System Analytics Registrations on the design system", () => {
     const container = mountNode(<RegistrationAnalytics />);
     await settle();
 
-    expect(headings(container)).toEqual([
-      "By Status",
-      "By Attendance Type",
-      "Registrations — Weekly (last 12 weeks)",
-      "Registrations — Monthly (last 12 months)",
-    ]);
-
-    const names = captions(container);
-    // The chart emits its own hidden data table; the visible one beside it is
-    // named for the panel, so the pair does not read as the same table twice.
-    expect(names).toContain("Registrations per week");
-    expect(names).toContain("Registrations — Weekly (last 12 weeks)");
-    expect(new Set(names).size).toBe(names.length);
+    expect(headings(container)).toEqual(["Registrations — Weekly (last 12 weeks)", "By status", "By attendance type"]);
+    expect(captions(container)).toEqual(["Registrations per week"]);
+    expect(container.querySelector(".pk-table--data")).toBeNull();
+    const monthly = container.querySelector<HTMLButtonElement>('[role="tab"][id$="-monthly"]')!;
+    await act(async () => monthly.click());
+    expect(captions(container)).toEqual(["Registrations per month"]);
+    expect(monthly.getAttribute("aria-selected")).toBe("true");
+    expect(container.querySelector('[role="tabpanel"]')?.getAttribute("aria-labelledby")).toBe(monthly.id);
 
     expect(container.querySelector(".pk")).not.toBeNull();
     expect(container.querySelector(".card, .row, [class*='col-md'], .text-muted, .fw-bold")).toBeNull();

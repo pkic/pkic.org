@@ -127,36 +127,36 @@ function ReviewDetail({ reviewId, onDecided }: { reviewId: string; onDecided: ()
         </p>
         {error && <ErrorAlert error={error} />}
         {detail.hasLogoChange && <p>Includes a proposed logo change.</p>}
-
-        <DataTable
-          caption={`Proposed changes for ${detail.organizationName}`}
-          columns={[
-            {
-              header: "Field",
-              cell: (entry) => ORGANIZATION_CONTENT_FIELD_LABELS[entry.field] ?? entry.field,
-              width: "fit",
-            },
-            // One column shows the change in place — removed words struck,
-            // inserted ones marked — instead of two fixed columns of prose
-            // to compare by eye (#97). The first column is fit-width, so
-            // this one claims the slack explicitly.
-            {
-              header: "Change",
-              cell: (entry) => (
-                <TextDiff
-                  before={formatDiffValue(entry.current)}
-                  after={formatDiffValue(entry.proposed)}
-                  label={`Change to ${ORGANIZATION_CONTENT_FIELD_LABELS[entry.field] ?? entry.field}`}
-                />
-              ),
-              width: "primary",
-            },
-          ]}
-          data={detail.diff}
-          rowKey={(entry) => entry.field}
-          empty="No field changes (logo only)."
-        />
-
+      </PanelBody>
+      <DataTable
+        caption={`Proposed changes for ${detail.organizationName}`}
+        columns={[
+          {
+            header: "Field",
+            cell: (entry) => ORGANIZATION_CONTENT_FIELD_LABELS[entry.field] ?? entry.field,
+            width: "fit",
+          },
+          // One column shows the change in place — removed words struck,
+          // inserted ones marked — instead of two fixed columns of prose
+          // to compare by eye (#97). The first column is fit-width, so
+          // this one claims the slack explicitly.
+          {
+            header: "Change",
+            cell: (entry) => (
+              <TextDiff
+                before={formatDiffValue(entry.current)}
+                after={formatDiffValue(entry.proposed)}
+                label={`Change to ${ORGANIZATION_CONTENT_FIELD_LABELS[entry.field] ?? entry.field}`}
+              />
+            ),
+            width: "primary",
+          },
+        ]}
+        data={detail.diff}
+        rowKey={(entry) => entry.field}
+        empty="No field changes (logo only)."
+      />
+      <PanelBody class="pk-stack pk-stack--snug" {...form.handlers}>
         {detail.status === "pending" ? (
           <>
             <Field

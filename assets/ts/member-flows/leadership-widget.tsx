@@ -58,11 +58,14 @@ export function GroupGovernanceWidget({
   slug,
   view,
   color,
+  pastHeadingHtml,
 }: {
   apiBase: string;
   slug: string;
   view: View;
   color: string;
+  /** Trusted HTML rendered by Hugo from the shortcode’s Markdown body. */
+  pastHeadingHtml?: string;
 }) {
   const [directory, setDirectory] = useState<GroupDirectoryResponse | null>(null);
   const [failed, setFailed] = useState(false);
@@ -95,7 +98,7 @@ export function GroupGovernanceWidget({
       )}
       {past.length > 0 && (
         <div class="consortium-past-leadership">
-          <h4 class="consortium-past-heading">Past positions</h4>
+          {pastHeadingHtml && <div dangerouslySetInnerHTML={{ __html: pastHeadingHtml }} />}
           {/*
             The same grid and the same card the sitting members get. A past
             position had its own one-line vocabulary — a small avatar, a role
@@ -133,7 +136,17 @@ function main(): void {
     const view: View = root.dataset.view === "leadership" ? "leadership" : "roster";
     const color = root.dataset.color ?? "green";
     if (!slug) return;
-    render(<GroupGovernanceWidget apiBase={apiBase} slug={slug} view={view} color={color} />, root);
+    const pastHeadingHtml = root.querySelector<HTMLTemplateElement>("template[data-past-heading]")?.innerHTML;
+    render(
+      <GroupGovernanceWidget
+        apiBase={apiBase}
+        slug={slug}
+        view={view}
+        color={color}
+        pastHeadingHtml={pastHeadingHtml}
+      />,
+      root,
+    );
   });
 }
 

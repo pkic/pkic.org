@@ -3,7 +3,7 @@
  * when, and the closed terms that came before. Inherited rows are shown but
  * edited at their source group; local rows carry their commands.
  */
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import {
   groupLeadershipListResponseSchema,
   type GroupLeadershipAssignment,
@@ -12,11 +12,12 @@ import {
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
-import { Button } from "../../../../ui/Button";
 import { usePortalHashLocation } from "../../hash-location";
-import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import type { Column } from "../../../../components/Table";
 import { EmptyState } from "../../../../ui/EmptyState";
-import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { TabList } from "../../../../ui/TabList";
+import { Panel, PanelHeader } from "../../../../ui/Panel";
 import { PersonCell } from "../../../../ui/PersonCell";
 import { RowActions } from "../../../../ui/RowActions";
 import { useData } from "../../../../hooks/useData";
@@ -46,11 +47,11 @@ function leadershipColumns(
   busyId: string | null,
   onEdit: (assignment: GroupLeadershipAssignment) => void,
   onEnd?: (assignment: GroupLeadershipAssignment) => void,
-): ReadonlyArray<DataTableColumn<GroupLeadershipAssignment>> {
+): Column<GroupLeadershipAssignment>[] {
   return [
     {
-      id: "person",
       header: "Person",
+      sort: { asc: "person", desc: "-person" },
       // The design system's table gives slack to no column on its own; the
       // person is the row's subject, so a wide screen's slack lands here.
       width: "primary",
@@ -59,8 +60,8 @@ function leadershipColumns(
     {
       // The title is what this person is called here; the role underneath is
       // the authority it carries, which is what the group type configures.
-      id: "title",
       header: "Title",
+      sort: { asc: "title", desc: "-title" },
       cell: (assignment) => (
         <>
           <div class="pk-strong">{assignment.title}</div>
@@ -68,21 +69,18 @@ function leadershipColumns(
         </>
       ),
     },
-    { id: "represents", header: "Represents", cell: capacityLabel },
+    { header: "Represents", cell: capacityLabel },
     {
       // A term has a bounded length; the column hugs it instead of wearing
       // `pk-nowrap` while still claiming slack.
-      id: "term",
       header: "Term",
       width: "fit",
       cell: (assignment) => formatTerm(assignment.startsAt, assignment.endsAt),
     },
-    { id: "source", header: "Source", cell: sourceLabel },
+    { header: "Source", cell: sourceLabel },
     {
-      id: "actions",
       header: "Actions",
-      headerHidden: true,
-      align: "end",
+      className: "pk-end",
       // Inherited leadership has no local term to edit or end, so its row
       // carries no menu at all rather than a menu that refuses.
       cell: (assignment) =>
@@ -120,9 +118,15 @@ export function GroupLeadership({
   assignmentSegment?: string;
 }) {
   const leadership = useData(
-    () => getJson(`/api/v1/groups/${encodeURIComponent(groupId)}/leadership`, groupLeadershipListResponseSchema),
-    [groupId],
+    () =>
+      getJson(
+        `/api/v1/groups/${encodeURIComponent(groupId)}/leadership${assignmentSegment && assignmentSegment !== ADD_LEADERSHIP_SEGMENT ? `?userRoleId=${encodeURIComponent(assignmentSegment)}` : ""}`,
+        groupLeadershipListResponseSchema,
+      ),
+    [groupId, assignmentSegment],
   );
+  const currentTable = useRef<ApiTableActions | null>(null);
+  const [view, setView] = useState("current");
   const [, navigate] = usePortalHashLocation();
   const leadershipPath = `/groups/${encodeURIComponent(groupId)}/leadership`;
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -145,7 +149,7 @@ export function GroupLeadership({
         `/api/v1/groups/${encodeURIComponent(groupId)}/leadership/${encodeURIComponent(assignment.userRoleId)}`,
         groupLeadershipListResponseSchema,
       );
-      await leadership.reload();
+      await Promise.all([leadership.reload(), currentTable.current?.reload()]);
     } catch (cause) {
       setMutationError(cause instanceof ApiClientError ? cause.message : "Could not end this leadership term.");
     } finally {
@@ -188,7 +192,6 @@ export function GroupLeadership({
   }, [strayAddress, leadershipPath, navigate]);
 
   if (leadership.loading && !leadership.data) return <Spinner label="Loading leadership…" />;
-  const titles = data?.titles ?? { lead: "Chair", deputyLead: "Vice Chair" };
 
   if (data && assignmentSegment === ADD_LEADERSHIP_SEGMENT) {
     return (
@@ -229,8 +232,7 @@ export function GroupLeadership({
 
   return (
     <div class="pk pk-stack">
-      {/* The panel names itself: a group workspace stacks several of these,
-          and an unnamed <section> is announced as nothing at all. */}
+      {mutationError && <ErrorAlert error={mutationError} />}
       <Panel aria-label="Leadership">
         <PanelHeader title="Leadership">
           {data && (
@@ -238,76 +240,49 @@ export function GroupLeadership({
               {data.governanceInheritanceMode === "local_only" ? "Local only" : "Inherits parent leadership"}
             </span>
           )}
-          <Button size="sm" variant="primary" onClick={() => navigate(`${leadershipPath}/${ADD_LEADERSHIP_SEGMENT}`)}>
-            Add leadership
-          </Button>
         </PanelHeader>
-        <PanelBody class="pk-stack">
-          <p class="pk-muted pk-small">
-            A {titles.lead.toLowerCase()} holds the lead role and a {titles.deputyLead.toLowerCase()} the deputy role;
-            both manage the group. Titles are set per assignment, so co-chairs and secretaries fit without new roles.
-            Inherited leadership is changed at its source group.
-          </p>
-          {mutationError && <ErrorAlert error={mutationError} />}
-          {/* A failed load replaces the table rather than sitting above an
-              empty one: "No leadership yet" is a claim about the group, and
-              the surface does not know that when the request did not arrive. */}
-          {leadership.error ? (
-            <ErrorAlert error={leadership.error} />
-          ) : (
-            <DataTable
-              caption="Current leadership of this group"
-              columns={leadershipColumns(
-                busyId,
-                (assignment) => navigate(`${leadershipPath}/${encodeURIComponent(assignment.userRoleId)}`),
-                (assignment) => void endTerm(assignment),
-              )}
-              rows={data?.assignments ?? []}
-              rowKey={(assignment) => assignment.userRoleId}
-              // A leader is a person with a record; the row goes to it (#45).
-              rowAction={(assignment) => ({
-                label: `Open ${assignment.userName}`,
-                href: usePortalHashLocation.hrefs(`/users/${encodeURIComponent(assignment.userId)}`),
-              })}
-              loading={leadership.loading}
-              empty={
-                <EmptyState
-                  title="No leadership yet"
-                  body={`Give this group a ${titles.lead.toLowerCase()} from among the people who participate in it.`}
-                >
-                  <Button
-                    size="sm"
-                    variant="primary"
-                    onClick={() => navigate(`${leadershipPath}/${ADD_LEADERSHIP_SEGMENT}`)}
-                  >
-                    Add leadership
-                  </Button>
-                </EmptyState>
-              }
-            />
-          )}
-        </PanelBody>
+        <div class="pk-table-list__inset">
+          <TabList
+            label="Leadership history"
+            activeId={view}
+            onSelect={setView}
+            idPrefix="leadership-view"
+            items={[
+              { id: "current", label: "Current leadership", panelId: "leadership-list" },
+              { id: "past", label: "Past leadership", panelId: "leadership-list" },
+            ]}
+          />
+        </div>
+        <div id="leadership-list" role="tabpanel" aria-labelledby={`leadership-view-${view}`}>
+          <ApiDataTable
+            key={view}
+            caption={view === "past" ? "Closed leadership terms of this group" : "Current leadership of this group"}
+            endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/leadership`}
+            responseSchema={groupLeadershipListResponseSchema}
+            resolve={(response) => (view === "past" ? response.past : response.assignments)}
+            resolvePage={(response) => (view === "past" ? response.pastPage : response.page)}
+            paginate
+            searchPlaceholder="Search leadership…"
+            initialSort={view === "past" ? "-ends_at" : "person"}
+            actionsRef={currentTable}
+            createAction={{
+              label: "Add leadership",
+              onSelect: () => navigate(`${leadershipPath}/${ADD_LEADERSHIP_SEGMENT}`),
+            }}
+            columns={leadershipColumns(
+              busyId,
+              (assignment) => navigate(`${leadershipPath}/${encodeURIComponent(assignment.userRoleId)}`),
+              view === "past" ? undefined : (assignment) => void endTerm(assignment),
+            )}
+            rowKey={(assignment) => assignment.userRoleId}
+            rowAction={(assignment) => ({
+              label: `Open ${assignment.userName}`,
+              href: usePortalHashLocation.hrefs(`/users/${encodeURIComponent(assignment.userId)}`),
+            })}
+            empty={<EmptyState title={view === "past" ? "No past leadership found" : "No leadership found"} />}
+          />
+        </div>
       </Panel>
-      {data && data.past.length > 0 && (
-        <Panel aria-label="Past leadership">
-          <PanelHeader title="Past leadership" />
-          <PanelBody>
-            <DataTable
-              caption="Closed leadership terms of this group"
-              columns={leadershipColumns(busyId, (assignment) =>
-                navigate(`${leadershipPath}/${encodeURIComponent(assignment.userRoleId)}`),
-              )}
-              rows={data.past}
-              rowKey={(assignment) => assignment.userRoleId}
-              // A leader is a person with a record; the row goes to it (#45).
-              rowAction={(assignment) => ({
-                label: `Open ${assignment.userName}`,
-                href: usePortalHashLocation.hrefs(`/users/${encodeURIComponent(assignment.userId)}`),
-              })}
-            />
-          </PanelBody>
-        </Panel>
-      )}
     </div>
   );
 }

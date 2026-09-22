@@ -34,6 +34,7 @@ vi.mock("../../assets/ts/hooks/useHashQueryParam", () => ({
 }));
 
 const group = groupSettingsDetailSchema.parse({
+  abbreviatedName: null,
   id: GROUP_ID,
   slug: "architecture",
   name: "Architecture Committee",

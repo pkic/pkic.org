@@ -117,13 +117,13 @@ describe("event Proposals section", () => {
     expect(links).toHaveLength(2);
     for (const link of links) {
       expect(link.tagName).toBe("A");
-      expect(link.className).toBe("pk-btn pk-btn--secondary pk-btn--sm");
+      expect(link.className).toBe("pk-btn pk-btn--secondary");
     }
-    // The arrow is decoration; the accessible name is the words beside it.
-    expect(links[0].querySelector('[aria-hidden="true"]')?.textContent).toBe("↓");
-    expect(links[0].textContent?.replace("↓", "").trim()).toBe("Current presentations");
+    // Download icons are decorative; each link retains its descriptive name.
+    for (const link of links) expect(link.querySelector('svg[aria-hidden="true"]')).not.toBeNull();
+    expect(links[0].textContent?.trim()).toBe("Current presentations");
     // "All versions" said nothing on its own once read out of the group.
-    expect(links[1].textContent).toBe("All presentation versions");
+    expect(links[1].textContent?.trim()).toBe("All presentation versions");
     expect(links[1].getAttribute("href")).toContain("versions=all");
   });
 

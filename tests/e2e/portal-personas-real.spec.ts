@@ -36,6 +36,7 @@ async function createGroup(
   governanceInheritanceMode?: "inherited" | "local_only",
 ): Promise<JsonRecord> {
   const body = await jsonResponse(request, "POST", "/api/v1/groups", {
+    abbreviatedName: null,
     typeKey: "working_group",
     name,
     slug,

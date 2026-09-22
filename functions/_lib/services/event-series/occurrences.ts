@@ -1,3 +1,4 @@
+import { buildD1TextSearchFilter } from "../../db/search";
 import { meetingRecurrenceId } from "../../../../assets/shared/meeting-calendar-policy";
 import { prepareCalendarRevision } from "./calendar-schedule";
 import type { z } from "zod";
@@ -191,6 +192,15 @@ export function buildSeriesOccurrencesPageQuery(
   const accessibleEvents = buildLiveAccessibleGroupResourceIdsCte("event", groupId, access, "view");
   const conditions = ["occurrence.series_id = ?"];
   const bindings: unknown[] = [...accessibleEvents.bindings, seriesId];
+  if (query.q) {
+    const search = buildD1TextSearchFilter(query.q, [
+      "occurrence.starts_at",
+      "occurrence.status",
+      "COALESCE(occurrence.location_override, series.location)",
+    ]);
+    conditions.push(search.sql);
+    bindings.push(...search.bindings);
+  }
   if (query.status) {
     conditions.push("occurrence.status = ?");
     bindings.push(query.status);

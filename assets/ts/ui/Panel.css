@@ -7,6 +7,7 @@
 
 @layer components {
   .pk-panel {
+    min-width: 0;
     background: var(--pk-surface);
     border: 1px solid var(--pk-line);
     border-radius: var(--pk-radius-lg);

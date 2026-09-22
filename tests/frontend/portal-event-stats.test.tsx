@@ -133,7 +133,7 @@ describe("portal event statistics", () => {
     );
   });
 
-  it("keeps every table in a named section of its own, each table named", async () => {
+  it("shows invitation summaries as labeled charts without duplicate tables", async () => {
     stubAnalyticsFetch(() => jsonResponse(analytics()));
 
     mount(<EventStats slug={SLUG} section="registrations" />);
@@ -144,9 +144,9 @@ describe("portal event statistics", () => {
 
     mount(<EventStats slug={SLUG} section="invitations" />);
     await settle();
-    const captions = [...container.querySelectorAll("caption")].map((node) => node.textContent);
-    expect(captions).toContain("Attendee invites by status");
-    expect(captions).toContain("Speaker invites by status");
+    expect(container.querySelectorAll("table")).toHaveLength(0);
+    expect(container.querySelector('[aria-label="Attendee invites"]')).not.toBeNull();
+    expect(container.querySelectorAll(".pk-chart__bars").length).toBeGreaterThan(0);
   });
 
   it("states the actionable counts in words rather than as a colour alone", async () => {

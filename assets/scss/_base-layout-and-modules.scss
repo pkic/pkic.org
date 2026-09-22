@@ -538,7 +538,7 @@ blockquote::after {
 @mixin readable-dark-headings {
   main h2:not(:where(#portal-app *)) {
     background: none;
-    color: var(--pk-accent-ink);
+    color: var(--pk-ink);
     -webkit-text-fill-color: currentColor;
   }
 }

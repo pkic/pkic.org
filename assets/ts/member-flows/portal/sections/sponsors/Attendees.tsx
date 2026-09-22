@@ -1,13 +1,12 @@
 /** Sponsor-capability view of consenting attendees in the unified portal. */
-import { useEffect } from "preact/hooks";
-import { ApiClientError } from "../../../../shared/api-client";
-import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { Pager } from "../../../../components/Pager";
-import { useApiPage } from "../../../../hooks/useApiPage";
+import { useCallback, useEffect, useState } from "preact/hooks";
+import { ApiClientError, getJson } from "../../../../shared/api-client";
+import { ApiDataTable } from "../../../../components/ApiDataTable";
+import type { CollectionLoader } from "../../../../hooks/useServerCollection";
 import { Alert } from "../../../../ui/Alert";
+import { IconDownload } from "../../../../components/icons";
 import { ButtonLink } from "../../../../ui/Button";
-import { Panel, PanelBody } from "../../../../ui/Panel";
-import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
+import type { Column } from "../../../../components/Table";
 import { EmptyState } from "../../../../ui/EmptyState";
 import type { SponsorAttendee, SponsorCapacity } from "../../../../../shared/schemas/sponsor-access";
 import { sponsorAttendeesListResponseSchema } from "../../../../../shared/schemas/sponsor-access";
@@ -26,17 +25,17 @@ function fmtAttendanceType(value: string | null): string {
  * render decides, so rebuilding them on every listing update only makes the
  * table re-derive an identical shape.
  */
-const ATTENDEE_COLUMNS: ReadonlyArray<DataTableColumn<SponsorAttendee>> = [
+const ATTENDEE_COLUMNS: Column<SponsorAttendee>[] = [
   // The design system's table gives slack to no column on its own; the
   // person is the row's subject, so a wide screen's slack lands there.
-  { id: "name", header: "Name", width: "primary", cell: (a) => fmtName(a) },
+  { header: "Name", width: "primary", cell: (a) => fmtName(a) },
   // A bounded value: `fit` keeps the address on one line instead of letting
   // the primary column squeeze it into a one-character-per-line tower.
-  { id: "email", header: "Email", width: "fit", cell: (a) => a.email ?? "—" },
-  { id: "organizationName", header: "Organization", cell: (a) => a.organizationName ?? "—" },
-  { id: "jobTitle", header: "Job title", cell: (a) => a.jobTitle ?? "—" },
+  { header: "Email", cell: (a) => a.email ?? "—" },
+  { header: "Organization", cell: (a) => a.organizationName ?? "—" },
+  { header: "Job title", cell: (a) => a.jobTitle ?? "—" },
   // A bounded vocabulary hugs its content instead of claiming slack.
-  { id: "attendanceType", header: "Attendance", width: "fit", cell: (a) => fmtAttendanceType(a.attendanceType) },
+  { header: "Attendance", width: "fit", cell: (a) => fmtAttendanceType(a.attendanceType) },
 ];
 
 export function SponsorAttendees({
@@ -46,22 +45,30 @@ export function SponsorAttendees({
   capacity: SponsorCapacity;
   onUnauthorized: () => void;
 }) {
-  const listing = useApiPage(
-    `/api/v1/sponsors/${encodeURIComponent(capacity.sponsorId)}/events/${encodeURIComponent(capacity.eventSlug)}/attendees`,
-    { sort: "name" },
-    sponsorAttendeesListResponseSchema,
-    (data) => data.attendees,
+  const [sessionExpired, setSessionExpired] = useState(false);
+  const [ineligible, setIneligible] = useState(false);
+  useEffect(() => setIneligible(false), [capacity.sponsorId, capacity.eventSlug]);
+  const load = useCallback<CollectionLoader>(
+    async (url, signal, schema) => {
+      try {
+        return await getJson(url, schema, { signal });
+      } catch (error) {
+        if (!signal.aborted && error instanceof ApiClientError) {
+          if (error.status === 401) {
+            setSessionExpired(true);
+            onUnauthorized();
+          }
+          if (error.status === 403) setIneligible(true);
+        }
+        throw error;
+      }
+    },
+    [onUnauthorized],
   );
-  const attendees = listing.data?.attendees ?? null;
-  const ineligible = listing.error instanceof ApiClientError && listing.error.status === 403;
-  const sessionExpired = listing.error instanceof ApiClientError && listing.error.status === 401;
-
-  useEffect(() => {
-    if (listing.error instanceof ApiClientError && listing.error.status === 401) onUnauthorized();
-  }, [listing.error, onUnauthorized]);
-
+  const endpoint = `/api/v1/sponsors/${encodeURIComponent(capacity.sponsorId)}/events/${encodeURIComponent(capacity.eventSlug)}/attendees`;
   const eventLabel = capacity.eventName ?? "your event";
 
+  if (sessionExpired) return null;
   if (ineligible) {
     return (
       <div class="pk pk-stack content-width-md">
@@ -82,43 +89,47 @@ export function SponsorAttendees({
         <p class="pk-small">
           {eventLabel} · {capacity.tier} sponsor · {capacity.contactEmail}
         </p>
-        {/* A download is a navigation to a representation of this list, so it
-            is an anchor wearing the button's clothes rather than a button that
-            fakes one. */}
-        <ButtonLink
-          href={`/api/v1/sponsors/${encodeURIComponent(capacity.sponsorId)}/events/${encodeURIComponent(capacity.eventSlug)}/attendees?format=csv`}
-          download={`attendees-${capacity.eventSlug}.csv`}
-        >
-          Download CSV
-        </ButtonLink>
       </div>
 
       <p class="pk-small">
         Only attendees who consented to sharing their profile with event sponsors are listed below.
       </p>
 
-      {listing.error && !sessionExpired ? (
-        <ErrorAlert error={listing.error} />
-      ) : (
-        <Panel>
-          <PanelBody>
-            <DataTable
-              caption={`Consenting attendees for ${eventLabel}`}
-              columns={ATTENDEE_COLUMNS}
-              rows={attendees ?? []}
-              rowKey={(a) => a.registrationId}
-              loading={listing.loading}
-              empty={
-                <EmptyState
-                  title="No consenting attendees yet"
-                  body="Registered attendees appear here once they agree to share their profile with event sponsors."
-                />
-              }
-            />
-            {listing.pagerProps && <Pager {...listing.pagerProps} />}
-          </PanelBody>
-        </Panel>
-      )}
+      <ApiDataTable
+        caption={`Consenting attendees for ${eventLabel}`}
+        columns={ATTENDEE_COLUMNS}
+        endpoint={endpoint}
+        responseSchema={sponsorAttendeesListResponseSchema}
+        resolve={(data) => data.attendees}
+        resolvePage={(data) => data.page}
+        initialSort="name"
+        paginate
+        load={load}
+        rowKey={(attendee) => attendee.registrationId}
+        toolbar={() => (
+          <>
+            {" "}
+            {/* A download is a navigation to a representation of this list, so it
+            is an anchor wearing the button's clothes rather than a button that
+            fakes one. */}
+            <ButtonLink
+              icon
+              aria-label="Download CSV"
+              title="Download CSV"
+              href={`/api/v1/sponsors/${encodeURIComponent(capacity.sponsorId)}/events/${encodeURIComponent(capacity.eventSlug)}/attendees?format=csv`}
+              download={`attendees-${capacity.eventSlug}.csv`}
+            >
+              <IconDownload />
+            </ButtonLink>
+          </>
+        )}
+        empty={
+          <EmptyState
+            title="No consenting attendees found"
+            body="Only registered attendees who agreed to share their profile are listed."
+          />
+        }
+      />
     </div>
   );
 }

@@ -80,11 +80,11 @@
   }
 
   .pk-chart__bar::-webkit-progress-value {
-    background: var(--pk-accent-strong);
+    background: var(--pk-info);
   }
 
   .pk-chart__bar::-moz-progress-bar {
-    background: var(--pk-accent-strong);
+    background: var(--pk-info);
   }
 
   .pk-chart__bar-count {

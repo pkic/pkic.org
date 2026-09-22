@@ -396,6 +396,13 @@ describe("group event sharing", () => {
       page: { total: 2, hasMore: false },
     });
 
+    const filteredOccurrences = await authenticatedRequest(
+      fixture.memberToken,
+      `${seriesPath}/${fixture.seriesId}/occurrences?q=absent-location&limit=1`,
+    );
+    expect(filteredOccurrences.status).toBe(200);
+    expect(await filteredOccurrences.json()).toMatchObject({ occurrences: [], page: { total: 0, hasMore: false } });
+
     const wrongContext = await authenticatedRequest(
       fixture.memberToken,
       `/api/v1/groups/${fixture.outsiderId}/events/${fixture.eventId}`,

@@ -55,22 +55,22 @@ export function RetentionDueTable({ actionsRef }: { actionsRef?: MutableRef<ApiT
           Events whose configured retention window has elapsed and whose identifying registration data has not yet been
           redacted.
         </p>
-        <ApiDataTable
-          caption="Events due for retention redaction"
-          endpoint="/api/v1/retention/due"
-          responseSchema={retentionDueListResponseSchema}
-          resolve={(data) => data.items}
-          resolvePage={(data) => data.page}
-          paginate
-          initialPageSize={25}
-          initialSort="dueAt"
-          searchPlaceholder="Search event name or slug…"
-          actionsRef={actionsRef}
-          load={loadPortalCollection}
-          columns={columns}
-          empty="Nothing is due for retention redaction."
-        />
       </PanelBody>
+      <ApiDataTable
+        caption="Events due for retention redaction"
+        endpoint="/api/v1/retention/due"
+        responseSchema={retentionDueListResponseSchema}
+        resolve={(data) => data.items}
+        resolvePage={(data) => data.page}
+        paginate
+        initialPageSize={25}
+        initialSort="dueAt"
+        searchPlaceholder="Search event name or slug…"
+        actionsRef={actionsRef}
+        load={loadPortalCollection}
+        columns={columns}
+        empty="Nothing is due for retention redaction."
+      />
     </Panel>
   );
 }

@@ -425,7 +425,7 @@ export function DataTable<T>({
   // reader looking at eleven rows learns why without opening four menus.
   const chips: AppliedFilterChip[] = [];
   if (onFilterChange) {
-    for (const { column } of visible) {
+    for (const column of columns) {
       const columnFilter = column.filter;
       const summary = columnFilter ? filterSummaryFor(column) : undefined;
       if (!columnFilter || summary === undefined) continue;
@@ -441,20 +441,6 @@ export function DataTable<T>({
       });
     }
   }
-  for (const label of hidden) {
-    chips.push({
-      id: `hidden-${label}`,
-      label: `${label} hidden`,
-      clearLabel: `Show the ${label} column`,
-      onClear: () =>
-        setHidden((current) => {
-          const next = new Set(current);
-          next.delete(label);
-          return next;
-        }),
-    });
-  }
-
   const openColumn = filterOpen ? columns.find((column) => column.filter?.param === filterOpen) : undefined;
   const openTextFilter = openColumn?.filter?.text;
 

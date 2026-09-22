@@ -6,6 +6,7 @@ export * from "./automatic-enrollment";
 export * from "./automatic-enrollment-group";
 export * from "./governance";
 export * from "./leadership";
+export * from "./leadership-read";
 export * from "./leadership-candidates";
 export * from "./leadership-seating";
 export * from "./management";

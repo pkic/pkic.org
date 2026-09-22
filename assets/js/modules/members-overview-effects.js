@@ -120,6 +120,7 @@
 })();
 
 (function () {
+  if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   var SHOW_MS = 2200;
   var ZOOM_MS = 3800;
   var ZOOM_MS_DIA = 7600;

@@ -26,6 +26,7 @@ const MEMBER_ID = "30000000-0000-4000-8000-000000000001";
 const IDENTITY_ID = "30000000-0000-4000-8000-000000000002";
 
 const group = {
+  abbreviatedName: null,
   id: GROUP_ID,
   slug: "synthetic-architecture-group",
   name: "Synthetic Architecture Group",

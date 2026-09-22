@@ -31,6 +31,8 @@ import {
   type CurrentUserProposalsListQuery,
 } from "../../../assets/shared/schemas/current-user-proposals";
 import type { OffsetPageQuery } from "../db/pagination";
+import { buildD1TextSearchFilter } from "../db/search";
+import { resolveMappedOrderBy } from "../db/sort";
 import { queryPage } from "../db/pagination";
 import type { DatabaseLike } from "../types";
 import { persistedUtcInstant } from "../utils/time";
@@ -62,6 +64,7 @@ export function buildCurrentUserProposalsPageQuery(
   userId: string,
   query: CurrentUserProposalsListQuery,
 ): OffsetPageQuery {
+  const search = query.q ? buildD1TextSearchFilter(query.q, ["sp.title", "sp.status", "e.name"]) : null;
   return {
     sql: `SELECT sp.id AS id, sp.title AS title, sp.status AS status, sp.updated_at AS updated_at,
             e.id AS event_id, e.slug AS event_slug, e.name AS event_name,
@@ -72,9 +75,18 @@ export function buildCurrentUserProposalsPageQuery(
              OR EXISTS (
                   SELECT 1 FROM proposal_speakers ps
                    WHERE ps.proposal_id = sp.id AND ps.user_id = ?
-                ))`,
-    bindings: [userId, query.eventId ?? null, query.eventId ?? null, userId, userId],
-    orderBy: "ORDER BY strftime('%Y-%m-%dT%H:%M:%fZ', sp.updated_at) DESC, sp.id ASC",
+                )) ${search ? `AND ${search.sql}` : ""}`,
+    bindings: [userId, query.eventId ?? null, query.eventId ?? null, userId, userId, ...(search?.bindings ?? [])],
+    orderBy: resolveMappedOrderBy(
+      query.sort,
+      {
+        title: "sp.title COLLATE NOCASE",
+        status: "sp.status",
+        updated_at: "strftime('%Y-%m-%dT%H:%M:%fZ', sp.updated_at)",
+      },
+      "strftime('%Y-%m-%dT%H:%M:%fZ', sp.updated_at) DESC",
+      "sp.id ASC",
+    ),
     limit: query.limit,
     offset: query.offset,
   };

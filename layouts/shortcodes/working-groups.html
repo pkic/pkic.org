@@ -25,20 +25,13 @@
 {{- end -}}
 {{- $wgCards = sort $wgCards "Params.card.order" -}}
 
-{{/*
-  No `pk` root: the spotlight cards below are still painted by `assets/scss`
-  with a white ground and near-black ink, and the base layer — which beats the
-  legacy layer — would paint this section with the design system's canvas,
-  including the dark one a reader who prefers dark would get. The layout comes
-  from the utilities, which are unscoped and carry no such opinion.
-*/}}
 <section class="pkic-wg-section pk-section">
   <div class="pk-container pk-stack pk-stack--loose">
     <div class="pk-cluster pk-cluster--between">
       <h2>{{ $heading }}</h2>
       <a href="{{ $moreUrl }}" class="pk-btn pk-btn--secondary pk-btn--sm">{{ $moreText }}</a>
     </div>
-    <div class="pk-grid">
+    <div class="pkic-wg-grid">
       {{ range $wgCards }}
       {{ partial "wg/spotlight-card.html" . }}
       {{ end }}

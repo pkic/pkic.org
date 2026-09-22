@@ -6,7 +6,7 @@
   position: fixed;
   z-index: 9999;
   width: 210px;
-  background: #fff;
+  background: var(--pk-surface-raise);
   border-radius: 10px;
   box-shadow:
     0 6px 24px rgba(0, 0, 0, 0.14),
@@ -31,14 +31,14 @@
   display: block;
   font-size: 0.82rem;
   font-weight: 700;
-  color: #111;
+  color: var(--pk-ink);
   line-height: 1.35;
 }
 
 .member-hovercard-slogan {
   display: block;
   font-size: 0.72rem;
-  color: #666;
+  color: var(--pk-ink-muted);
   margin-top: 4px;
   line-height: 1.4;
 }
@@ -89,7 +89,7 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  background: rgba(255, 255, 255, 0.97);
+  background: var(--pk-surface);
   opacity: 0;
   pointer-events: none;
   // Fast fade-in, slower ease-out handled by :not() below
@@ -107,6 +107,9 @@
 }
 
 .member-zoom-logo {
+  background: var(--pk-logo-surface);
+  border-radius: var(--pk-radius-sm);
+  padding: var(--pk-3);
   max-height: 72px;
   max-width: 55%;
   width: auto;
@@ -125,13 +128,13 @@
 .member-zoom-name {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #111;
+  color: var(--pk-ink);
   line-height: 1.3;
 }
 
 .member-zoom-slogan {
   font-size: 0.75rem;
-  color: #555;
+  color: var(--pk-ink-muted);
   line-height: 1.4;
 }
 
@@ -166,9 +169,7 @@
 }
 
 .members-overview {
-  // `--pk-surface` rather than white: the reader can choose the dark theme now,
-  // and a hard-coded ground turns into a light island with near-white text on it.
-  background: var(--pk-surface);
+  background: var(--pk-page-surface);
   // The wall's inset used to be four responsive padding utilities on the
   // markup. It is one decision, so it lives with the rest of the frame.
   padding-block: var(--pk-5);

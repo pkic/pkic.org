@@ -326,32 +326,28 @@
   margin: 5px 20px;
   height: 18px;
   max-width: 90px;
-  filter: grayscale(1);
+  filter: var(--pk-member-logo-filter);
+  mix-blend-mode: var(--pk-member-logo-blend);
   transition:
     filter 0.2s ease,
     transform 0.2s ease;
 }
 
-// Preserve the artwork's light ground in either theme, as on the sponsor wall.
-.members a {
-  background: var(--pk-on-solid);
-  border-radius: var(--pk-radius-sm);
+// The mixed wall has one monochrome treatment. Full-color sponsor artwork
+// belongs to the tiered sponsor wall; individual light plates interrupt this row.
+.members .member-logo-sponsor {
+  filter: var(--pk-member-logo-filter);
+  mix-blend-mode: var(--pk-member-logo-blend);
 }
-
-.member-logo-sponsor {
-  filter: none;
-  opacity: 1;
-  transition: transform 0.2s ease;
-}
-
-/* Every logo on the wall is the same size. A sponsor is told apart by
-   keeping its color while member logos sit in grayscale; rank is the
-   sponsors page's job, where the tier wall sizes by weight. */
 
 .members a:hover .member-logo {
-  filter: none;
+  opacity: 0.8;
 }
 
 .members a:hover .member-logo-sponsor {
   transform: scale(1.12);
+}
+
+.members .member-logo[data-logo-ink="light"] {
+  filter: var(--pk-member-logo-filter) invert(1);
 }

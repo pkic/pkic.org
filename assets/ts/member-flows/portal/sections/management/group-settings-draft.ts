@@ -13,11 +13,12 @@ export type GroupSettingsDraft = Pick<
   | "publicRoster"
   | "minEndorsersForBallot"
   | "active"
-> & { description: string };
+> & { description: string; abbreviatedName: string };
 
 export function draftFromGroup(group: GroupSettingsDetail): GroupSettingsDraft {
   return {
     name: group.name,
+    abbreviatedName: group.abbreviatedName ?? "",
     description: group.description ?? "",
     links: group.links,
     visibility: group.visibility,

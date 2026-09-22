@@ -21,7 +21,7 @@
   }
 
   .pk-applied-filters__lede {
-    /* The band reads as a sentence — "Showing Role: Observer, Joined hidden" —
+    /* The band reads as a sentence — "Showing Role: Observer" —
        so the lede sits on the baseline of the chips rather than above them. */
     flex: 0 0 auto;
   }

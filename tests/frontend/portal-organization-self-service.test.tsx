@@ -373,7 +373,7 @@ describe("portal organization self-service", () => {
     await settle();
     expect(container.querySelector("table")?.getAttribute("aria-busy")).toBeNull();
     // The empty region announces itself instead of being an unexplained blank.
-    expect(container.querySelector('[role="status"]')?.textContent).toContain("No past submissions.");
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("No submissions found");
   });
 
   /** The governance and sponsorship cards, with the sponsorship answer chosen. */

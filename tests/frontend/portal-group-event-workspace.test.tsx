@@ -101,7 +101,8 @@ describe("group event workspace", () => {
     expect(isCurrentTab(tab(container, "Overview"))).toBe(true);
     expect(isCurrentTab(tab(container, "Settings"))).toBe(false);
     expect(container.textContent).not.toContain("Manage meeting series");
-    expect(container.querySelector("dl")).not.toBeNull();
+    expect(container.querySelector('aside [aria-label="Schedule"]')).not.toBeNull();
+    expect(container.querySelector('aside [aria-label="Event facts"]')).not.toBeNull();
   });
 
   it("filters tabs by capability: a manager sees settings, invitations, and communications", () => {

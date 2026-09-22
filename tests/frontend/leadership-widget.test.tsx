@@ -88,7 +88,16 @@ async function mountWidget(view: "roster" | "leadership"): Promise<void> {
   container = document.createElement("div");
   document.body.append(container);
   await act(async () => {
-    render(<GroupGovernanceWidget apiBase="/api/v1" slug="board" view={view} color="green" />, container);
+    render(
+      <GroupGovernanceWidget
+        apiBase="/api/v1"
+        slug="board"
+        view={view}
+        color="green"
+        pastHeadingHtml="<h2>Previous Board members</h2>"
+      />,
+      container,
+    );
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
   await settle();
@@ -110,6 +119,7 @@ describe("GroupGovernanceWidget", () => {
     await mountWidget("roster");
 
     expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(container.querySelector("h2")?.textContent).toBe("Previous Board members");
     const cards = [...container.querySelectorAll('[data-positions="current"] .person-card')];
     expect(cards.map((card) => card.querySelector(".person-card-name")?.textContent)).toEqual([
       "Chris Bailey",
@@ -160,6 +170,7 @@ describe("GroupGovernanceWidget", () => {
    */
   function onlyLeader(overrides: Record<string, unknown>) {
     return directory({
+      pastLeadership: [],
       leadership: [
         {
           roleId: "role-group_lead",
@@ -184,6 +195,7 @@ describe("GroupGovernanceWidget", () => {
 
     const card = container.querySelector(".consortium-leaders .person-card");
     expect(card?.querySelector(".person-card-jobtitle")?.textContent).toBe("Vice Chair");
+    expect(container.querySelector("h2")).toBeNull();
     // The company is still attributed, once, by the organization block.
     expect(card?.querySelector(".person-card-org")?.textContent).toContain("Entrust");
     expect(card?.querySelector(".person-card-jobtitle")?.textContent).not.toContain("Entrust");

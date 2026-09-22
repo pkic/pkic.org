@@ -20,7 +20,7 @@ export const GroupLeadershipList = openApiRoute(groupLeadershipListRouteSchema, 
   const group = await getGroup(db, data.params.groupId);
   if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
   await requireGroupManagement(db, admin, group.id);
-  return json(await listEffectiveGroupLeadership(db, group.id));
+  return json(await listEffectiveGroupLeadership(db, group.id, data.query));
 });
 
 export const GroupLeadershipAssign = openApiRoute(groupLeadershipAssignRouteSchema, async (c: AdminContext, data) => {

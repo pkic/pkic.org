@@ -78,6 +78,22 @@ describe("GET /api/v1/users/current/proposals", () => {
     expect(body.proposals[0]).toMatchObject({ id, updatedAt: "2026-09-01T12:34:56.000Z" });
   });
 
+  it("searches and sorts the owned proposals before pagination", async () => {
+    const { userId } = await insertIndividualMember(env.DB, "H6", "proposal-search@example.test");
+    const other = await insertUser(env.DB, "proposal-search-other@example.test");
+    const eventId = await insertEvent();
+    await insertProposal(eventId, userId, { title: "Zeta cryptography" });
+    const alpha = await insertProposal(eventId, userId, { title: "Alpha cryptography" });
+    await insertProposal(eventId, userId, { title: "Unrelated talk" });
+    await insertProposal(eventId, other, { title: "Hidden cryptography" });
+    const token = await createMemberSession(env.DB, userId, "proposal-search-token");
+    const response = await getAs(token, "/api/v1/users/current/proposals?q=cryptography&sort=title&limit=1");
+    expect(response.status).toBe(200);
+    const data = currentUserProposalsListResponseSchema.parse(await response.json());
+    expect(data.proposals.map((row) => row.id)).toEqual([alpha]);
+    expect(data.page).toMatchObject({ total: 2, hasMore: true });
+  });
+
   it("rejects an unauthenticated caller", async () => {
     expect((await callApi(env, "/api/v1/users/current/proposals")).status).toBe(401);
   });

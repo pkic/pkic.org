@@ -25,6 +25,10 @@ function accentPair(hue: AccentHue): Record<string, string> {
 }
 
 export function emitTokenCss(defaultAccent: AccentHue = "green"): string {
+  // Unchanged theme values inherit from :root; emit each shared value once.
+  const darkOverrides = Object.fromEntries(
+    Object.entries(themes.dark).filter(([name, value]) => value !== themes.light[name as keyof typeof themes.light]),
+  );
   const paletteEntries = Object.fromEntries(Object.entries(palette).map(([name, value]) => [`palette-${name}`, value]));
 
   return `/*
@@ -55,13 +59,13 @@ ${block(themes.light, "    ")}
      :not([data-theme="light"]) lets an explicit light choice beat a dark OS. */
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-${block(themes.dark, "      ")}
+${block(darkOverrides, "      ")}
     }
   }
 
   /* Stamped explicitly, so the toggle also wins in the other direction. */
   :root[data-theme="dark"] {
-${block(themes.dark, "    ")}
+${block(darkOverrides, "    ")}
   }
 
   [data-density="compact"] {

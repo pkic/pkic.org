@@ -75,20 +75,9 @@
    */
   body {
     margin: 0;
-    /*
-     * The page's ground and its ink, from the tokens.
-     *
-     * Nothing painted either: in light mode the browser's own white passes for
-     * the canvas closely enough that nobody noticed, and the moment a reader
-     * chooses the dark theme the tokens flip the ink to near-white and leave
-     * the ground white underneath it. A theme the reader can choose has to
-     * reach the page itself, not only the components drawn on it.
-     *
-     * The ground is the surface token, not the canvas: the public site is
-     * white in the light theme (its logo walls and cards sit directly on the
-     * page), and the portal shell paints the sunk canvas for itself.
-     */
-    background: var(--pk-surface);
+    /* Public pages stay white in light mode and use a charcoal canvas in dark
+       mode. Card surfaces are a separate layer; the portal owns its own canvas. */
+    background: var(--pk-page-surface);
     color: var(--pk-ink);
   }
 

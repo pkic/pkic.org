@@ -7,8 +7,11 @@
 
   Usage:
     {{< leadership group="board" >}}
-    {{< leadership group="executive-council" >}}
-    {{< leadership group="all-members" view="leadership" >}}
+    ## Past Board of Directors
+    {{< /leadership >}}
+
+  The Markdown body supplies the past section heading, shown only when
+  published historical positions exist.
 
   Parameters:
     group  group slug (required)
@@ -19,4 +22,5 @@
     "group" (.Get "group")
     "view"  (.Get "view")
     "color" (.Get "color")
+    "pastHeading" (.Inner | markdownify)
 ) -}}

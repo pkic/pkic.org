@@ -10,6 +10,7 @@
 import { useId } from "preact/hooks";
 
 import "./Pager.css";
+import "./PagerSize.css";
 
 /**
  * Compute the sequence of pages to display.

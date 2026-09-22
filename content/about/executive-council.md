@@ -17,3 +17,7 @@ The Executive Council acts as a representative body of the PKI Consortium, ensur
 ## Executive Council Members
 
 {{< leadership group="executive-council" >}}
+
+## Past Executive Council Members
+
+{{< /leadership >}}

@@ -133,6 +133,30 @@ for (const scenario of [
     const row = leadership.getByRole("row").filter({ hasText: name });
     await expect(row).toBeVisible();
 
+    const search = leadership.getByRole("searchbox");
+    await search.fill(name);
+    await search.press("Enter");
+    await expect(row).toBeVisible();
+    for (const width of [1440, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await expect
+        .poll(() =>
+          row.evaluate((element) => {
+            const frame = element.closest(".pk-table__scroll")!;
+            return frame.scrollWidth <= frame.clientWidth + 1;
+          }),
+        )
+        .toBe(true);
+      await expect
+        .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
+        .toBe(true);
+      await page.screenshot({
+        path: `/Volumes/ScanDisk/mac-caches/tmp/pr180-leadership-${scenario.group}-${width}.png`,
+        fullPage: true,
+      });
+    }
+    await page.setViewportSize({ width: 1440, height: 1000 });
+
     // Editing is a command in the row's own menu that navigates to the term's
     // address — the record never arrives in edit mode (#47).
     await row.getByRole("button", { name: /^Actions for/ }).click();

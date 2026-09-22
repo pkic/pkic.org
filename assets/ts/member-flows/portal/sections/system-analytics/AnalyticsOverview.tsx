@@ -1,21 +1,5 @@
-/**
- * System Analytics — the Overview tab.
- *
- * Migrated off Bootstrap onto the design system. The three `card` blocks are
- * Panels, so their titles are real headings rather than a `h6` carrying its own
- * type scale (`text-uppercase small fw-bold text-muted`); the `row`/`col-md-6`
- * pair and the legacy `stat-grid` are the system's responsive grid, which has
- * no breakpoint classes at all; and the spacing that was on each child
- * (`mb-3`, `mb-4`, `mt-3`) is one `gap` on the parent stack.
- *
- * The "Activity — last 30 days" card was a one-consumer wrapper component
- * (`components/analytics/ActivityChartCard`) whose whole body was Bootstrap
- * markup. It is a Panel here, in the surface that renders it, rather than a
- * component indirection around three elements.
- */
-
+/** Event registration and invitation summaries, with a link to browsable event records. */
 import { recentActivityChart, statusBars } from "../../../../ui/chart";
-import { DataTable } from "../../../../components/Table";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Spinner } from "../../../../components/Spinner";
@@ -55,7 +39,7 @@ export function AnalyticsOverview() {
         <StatCard label="Pending Invites" value={invites.byStatus.sent ?? 0} note={`${invites.total} total`} />
       </div>
 
-      <div class="pk-grid pk-grid--roomy">
+      <div class="pk-grid pk-grid--cards">
         <Panel>
           <PanelHeader title="Registrations by Status" />
           <PanelBody>
@@ -64,32 +48,16 @@ export function AnalyticsOverview() {
         </Panel>
         <Panel>
           <PanelHeader title="Top Events" />
-          <PanelBody>
-            <DataTable
-              caption="Top events by registrations"
-              columns={[
-                { header: "Event", cell: (event) => event.name },
-                {
-                  header: { label: "Confirmed", className: "pk-end" },
-                  cell: (event) => event.confirmed,
-                  className: "pk-mono pk-end",
-                },
-                {
-                  header: { label: "Total", className: "pk-end" },
-                  cell: (event) => event.total,
-                  className: "pk-mono pk-end",
-                },
-              ]}
-              data={state.data.topEvents}
-              empty="No event registration activity yet"
-              rowKey={(event) => event.slug}
-              // Each row names an event, so it opens that event (#45) — which
-              // is most of the point of a "top events" table.
-              rowAction={(event) => ({
-                label: `Open ${event.name}`,
-                href: usePortalHashLocation.hrefs(`/events/${encodeURIComponent(event.slug)}`),
-              })}
+          <PanelBody class="pk-stack">
+            <div
+              dangerouslySetInnerHTML={{
+                __html: statusBars(
+                  Object.fromEntries(state.data.topEvents.map((event) => [event.name, event.total])),
+                  state.data.topEvents.reduce((sum, event) => sum + event.total, 0),
+                ),
+              }}
             />
+            <a href={usePortalHashLocation.hrefs("/events")}>Browse events →</a>
           </PanelBody>
         </Panel>
       </div>

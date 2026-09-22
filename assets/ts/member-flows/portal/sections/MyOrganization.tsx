@@ -13,23 +13,20 @@ import { useCallback, useEffect, useRef, useState } from "preact/hooks";
 import { getJson, ApiClientError } from "../../../shared/api-client";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { statusLabel } from "../../../components/Badge";
-import type { PagerProps as OffsetPagerProps } from "../../../components/Pager";
 import { Badge, type BadgeTone } from "../../../ui/Badge";
 import { Breadcrumb } from "../../../ui/Breadcrumb";
 import { Button } from "../../../ui/Button";
-import { DataTable, type DataTableColumn } from "../../../ui/DataTable";
+import { type Column } from "../../../components/Table";
 import { EmptyState } from "../../../ui/EmptyState";
 import { LinkList } from "../../../ui/LinkList";
-import { Pager } from "../../../ui/Pager";
 import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { Spinner } from "../../../ui/Spinner";
-import { useApiPage } from "../../../hooks/useApiPage";
+import { ApiDataTable } from "../../../components/ApiDataTable";
 import { usePortalHashLocation } from "../hash-location";
 import { profile as profileSignal } from "../state";
 import { toast, fmt } from "../ui";
 import type { MyOrganizationProfile, MyOrganizationReview } from "../types";
-import type { z } from "zod";
 import { uploadFile } from "../../../shared/file-upload";
 import {
   ORGANIZATION_CONTENT_FIELD_LABELS,
@@ -59,29 +56,6 @@ const REVIEW_STATUS_TONE: Record<MyOrganizationReview["status"], BadgeTone> = {
   rejected: "danger",
   withdrawn: "neutral",
 };
-
-/**
- * The canonical error sentence, rendered by the design system.
- * `friendlyErrorMessage` stays the one place transport phrasing becomes
- * English; only the surface that shows it moves here, because the shared
- * `ErrorAlert` is still Bootstrap markup.
- */
-/**
- * The shared offset-pager state, as the design system's Pager reads it. The
- * hook still speaks the older prev/next/page-size shape, so translating once
- * here keeps that conversion out of the markup.
- */
-function pagerViewProps(props: OffsetPagerProps, label: string) {
-  return {
-    page: props.page,
-    pageCount: props.total > 0 ? Math.max(1, Math.ceil(props.total / props.pageSize)) : props.page,
-    total: props.total,
-    rangeStart: props.rowCount === 0 ? 0 : props.offset + 1,
-    rangeEnd: props.offset + props.rowCount,
-    onSelect: props.onJump,
-    label,
-  };
-}
 
 function LogoUploader({
   organizationId,
@@ -197,52 +171,32 @@ function OrganizationProfileCard({
   );
 }
 
-const REVIEW_HISTORY_COLUMNS: ReadonlyArray<DataTableColumn<MyOrganizationReview>> = [
+const REVIEW_HISTORY_COLUMNS: Array<Column<MyOrganizationReview>> = [
   {
-    id: "status",
     header: "Status",
     cell: (review) => <Badge tone={REVIEW_STATUS_TONE[review.status]}>{statusLabel(review.status)}</Badge>,
   },
-  { id: "submittedAt", header: "Submitted", cell: (review) => fmt(review.submittedAt) },
-  { id: "reviewerNote", header: "Reviewer note", cell: (review) => review.reviewerNote ?? "—" },
+  { header: "Submitted", cell: (review) => fmt(review.submittedAt) },
+  { header: "Reviewer note", cell: (review) => review.reviewerNote ?? "—" },
 ];
 
 function ReviewHistoryCard({ organizationId }: { organizationId: string }) {
-  const history = useApiPage<z.infer<typeof organizationContentReviewsListResponseSchema>>(
-    `${organizationPath(organizationId)}/content/reviews`,
-    { status: "history", sort: "-submittedAt" },
-    organizationContentReviewsListResponseSchema,
-    (data) => data.reviews,
-  );
-  const reviews = history.data?.reviews ?? [];
-
   return (
     <Panel>
       <PanelHeader title="Submission history" />
-      <PanelBody class="pk-stack pk-stack--snug">
-        {history.error ? (
-          <ErrorAlert error={history.error instanceof Error ? history.error : "Could not load submission history."} />
-        ) : (
-          <>
-            <DataTable
-              caption="Organization content submissions"
-              columns={REVIEW_HISTORY_COLUMNS}
-              rows={reviews}
-              rowKey={(review) => review.id}
-              loading={history.loading}
-              empty={
-                <EmptyState
-                  title="No past submissions."
-                  body="Content changes submitted for staff review are listed here once they have been decided."
-                />
-              }
-            />
-            {history.pagerProps && reviews.length > 0 && (
-              <Pager {...pagerViewProps(history.pagerProps, "Submission history pages")} />
-            )}
-          </>
-        )}
-      </PanelBody>
+      <ApiDataTable
+        caption="Organization content submissions"
+        endpoint={`${organizationPath(organizationId)}/content/reviews`}
+        params={{ status: "history" }}
+        responseSchema={organizationContentReviewsListResponseSchema}
+        resolve={(data) => data.reviews}
+        resolvePage={(data) => data.page}
+        paginate
+        initialSort="-submittedAt"
+        columns={REVIEW_HISTORY_COLUMNS}
+        rowKey={(review) => review.id}
+        empty={<EmptyState title="No submissions found" />}
+      />
     </Panel>
   );
 }

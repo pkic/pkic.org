@@ -4,7 +4,7 @@ import { eventAnalyticsFixture } from "../helpers/event-analytics";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 
-test("attendance tables use the panel width and chart labels keep a readable size", async ({ page }, testInfo) => {
+test("attendance charts fit their panels and keep labels readable", async ({ page }, testInfo) => {
   await signInToPortal(page, e2eAdminEmail("portal-analytics"));
   const slug = "pqc-conference-amsterdam-nl";
   const response = eventAnalyticsFixture();
@@ -30,18 +30,17 @@ test("attendance tables use the panel width and chart labels keep a readable siz
   for (const width of [1440, 768, 390]) {
     await page.setViewportSize({ width, height: 900 });
     await page.goto(`/portal/#/events/${slug}/stats/attendance`);
-    const where = page.getByRole("table", { name: "Where attendance changed", exact: true });
-    const how = page.getByRole("table", { name: "How attendance changed", exact: true });
+    const where = page.getByRole("figure", { name: "Where attendance changed", exact: true });
+    const how = page.getByRole("region", { name: "How attendance changed", exact: true });
     await expect(where).toBeVisible();
-    const a = await where.boundingBox();
-    const b = await how.boundingBox();
-    expect(b!.y).toBeGreaterThan(a!.y + a!.height);
-    if (width >= 768) {
-      expect(
-        await where.locator("..").evaluate((element) => element.scrollWidth - element.clientWidth),
-      ).toBeLessThanOrEqual(1);
-    }
-    await page.screenshot({ path: testInfo.outputPath(`attendance-${width}.png`), fullPage: true });
+    await expect(how).toBeVisible();
+    await expect(page.locator(".pk-table--data")).toHaveCount(0);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({
+      path: testInfo.outputPath(`attendance-${width}.png`),
+      fullPage: true,
+      animations: "disabled",
+    });
     await page.goto(`/portal/#/events/${slug}/stats/overview`);
     const plot = page.locator(".pk-chart__plot").first();
     await expect(plot).toBeVisible();
@@ -59,6 +58,10 @@ test("attendance tables use the panel width and chart labels keep a readable siz
         .first()
         .evaluate((text) => text.getBoundingClientRect().height),
     ).toBeLessThanOrEqual(16);
-    await page.screenshot({ path: testInfo.outputPath(`analytics-${width}.png`), fullPage: true });
+    await page.screenshot({
+      path: testInfo.outputPath(`analytics-${width}.png`),
+      fullPage: true,
+      animations: "disabled",
+    });
   }
 });

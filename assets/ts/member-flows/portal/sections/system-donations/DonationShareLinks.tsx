@@ -12,30 +12,24 @@
  * list. The rank tiers used to signal with colour alone; the rank number and
  * the column header carry it instead.
  */
-import { Spinner } from "../../../../components/Spinner";
-import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { Pager } from "../../../../components/Pager";
+import { useState } from "preact/hooks";
+import { ApiDataTable } from "../../../../components/ApiDataTable";
+import type { z } from "zod";
 import { Alert } from "../../../../ui/Alert";
 import { Badge } from "../../../../ui/Badge";
-import { Button } from "../../../../ui/Button";
-import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
+import { type Column } from "../../../../components/Table";
 import { PageHeader } from "../../../../ui/PageHeader";
-import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import { Panel, PanelHeader } from "../../../../ui/Panel";
 import { StatCard } from "../../../../ui/StatCard";
-import { getJson } from "../../../../shared/api-client";
 import {
   donationPromotersListResponseSchema,
   type DonationPromoter as PromoterRow,
 } from "../../../../../shared/schemas/donation-management";
 import { formatDonationAmount } from "./model";
-import { useServerCollection, type CollectionLoader } from "../../../../hooks/useServerCollection";
-import { useOffsetPager } from "../../../../hooks/useOffsetPager";
 // `pk-mono` lives in Content.css, which ships in a lazy chunk: a surface that
 // writes the class name has to import the stylesheet itself, or the share-link
 // code renders in the body face once the page stops loading Bootstrap.
 import "../../../../ui/Content.css";
-
-const loadPortalCollection: CollectionLoader = (url, signal, schema) => getJson(url, schema, { signal });
 
 interface RankedPromoterRow extends PromoterRow {
   rank: number;
@@ -59,11 +53,10 @@ function totalImpact(promoter: PromoterRow): string {
   return totalUsd > 0 ? formatDonationAmount(totalUsd, "usd") : "—";
 }
 
-const PROMOTER_COLUMNS: ReadonlyArray<DataTableColumn<RankedPromoterRow>> = [
+const PROMOTER_COLUMNS: Array<Column<RankedPromoterRow>> = [
   {
-    id: "rank",
     header: "Rank",
-    align: "end",
+    className: "pk-end",
     width: "fit",
     // The number is the content, so the tone is emphasis rather than the only
     // thing distinguishing the top three from the rest.
@@ -74,7 +67,6 @@ const PROMOTER_COLUMNS: ReadonlyArray<DataTableColumn<RankedPromoterRow>> = [
     ),
   },
   {
-    id: "promoter",
     header: "Promoter",
     // The design system's table gives slack to no column on its own; the
     // promoter — the row's subject — is where extra room does the most good.
@@ -90,12 +82,11 @@ const PROMOTER_COLUMNS: ReadonlyArray<DataTableColumn<RankedPromoterRow>> = [
       </div>
     ),
   },
-  { id: "own", header: "Own donation", align: "end", width: "fit", cell: (row) => ownAmount(row) },
-  { id: "clicks", header: "Link clicks", align: "end", width: "fit", cell: (row) => row.clicks },
+  { header: "Own donation", className: "pk-end", width: "fit", cell: (row) => ownAmount(row) },
+  { header: "Link clicks", className: "pk-end", width: "fit", cell: (row) => row.clicks },
   {
-    id: "referred",
     header: "Referred donors",
-    align: "end",
+    className: "pk-end",
     width: "fit",
     cell: (row) =>
       row.attributed_total > row.attributed_completed ? (
@@ -107,16 +98,14 @@ const PROMOTER_COLUMNS: ReadonlyArray<DataTableColumn<RankedPromoterRow>> = [
       ),
   },
   {
-    id: "referred-amount",
     header: "Referred amount",
-    align: "end",
+    className: "pk-end",
     width: "fit",
     cell: (row) => referredAmount(row),
   },
   {
-    id: "impact",
     header: "Total impact",
-    align: "end",
+    className: "pk-end",
     width: "fit",
     cell: (row) => <span class="pk-strong">{totalImpact(row)}</span>,
   },
@@ -137,32 +126,12 @@ export function DonationShareLinks({ canRead = true }: { canRead?: boolean }) {
 }
 
 function ShareLinksView() {
-  const pager = useOffsetPager();
-  const { offset, pageSize } = pager;
-  const listing = useServerCollection({
-    endpoint: "/api/v1/donations/promoters",
-    params: {
-      limit: String(pageSize),
-      offset: String(offset),
-      sort: "-impact",
-    },
-    responseSchema: donationPromotersListResponseSchema,
-    load: loadPortalCollection,
-  });
-  const promoters = listing.data?.promoters ?? [];
-  const summary = listing.data?.summary ?? {
-    promoterCount: 0,
-    totalOwnGrossUsd: 0,
-    totalAttributedGrossUsd: 0,
-    totalClicks: 0,
-    totalAttributedCompleted: 0,
-  };
-  const rows: RankedPromoterRow[] = promoters.map((promoter, index) => ({ ...promoter, rank: offset + index + 1 }));
-
+  const [data, setData] = useState<z.infer<typeof donationPromotersListResponseSchema> | null>(null);
+  const summary = data?.summary;
   return (
     <div class="pk pk-stack">
       <PageHeader title="Share links" />
-      {summary.promoterCount > 0 && (
+      {summary && summary.promoterCount > 0 && (
         <div class="pk-stat-row">
           <StatCard label="Share links" value={String(summary.promoterCount)} />
           <StatCard label="Own donations" value={formatDonationAmount(summary.totalOwnGrossUsd, "usd")} />
@@ -173,33 +142,22 @@ function ShareLinksView() {
       )}
 
       <Panel>
-        <PanelHeader title="Promoter leaderboard" headingLevel={2}>
-          <Button size="sm" onClick={() => void listing.reload()}>
-            <span aria-hidden="true">↺</span> Refresh
-          </Button>
-        </PanelHeader>
-        <PanelBody class="pk-stack pk-stack--snug">
-          {listing.loading && <Spinner label="Loading share links…" />}
-          {!listing.loading && listing.error && <ErrorAlert error={listing.error} />}
-          {!listing.loading && !listing.error && (
-            <>
-              <DataTable
-                caption="Promoter share links, ranked by total impact"
-                columns={PROMOTER_COLUMNS}
-                rows={rows}
-                rowKey={(row) => row.code}
-                empty="No promoter links yet"
-              />
-              <Pager
-                {...pager.pagerProps({
-                  hasMore: listing.data?.page.hasMore ?? false,
-                  rowCount: promoters.length,
-                  total: summary.promoterCount,
-                })}
-              />
-            </>
-          )}
-        </PanelBody>
+        <PanelHeader title="Promoter leaderboard" headingLevel={2} />
+        <ApiDataTable
+          caption="Promoter share links, ranked by total impact"
+          endpoint="/api/v1/donations/promoters"
+          responseSchema={donationPromotersListResponseSchema}
+          resolve={(response) =>
+            response.promoters.map((promoter, index) => ({ ...promoter, rank: response.page.offset + index + 1 }))
+          }
+          resolvePage={(response) => response.page}
+          onData={setData}
+          paginate
+          initialSort="-impact"
+          columns={PROMOTER_COLUMNS}
+          rowKey={(row) => row.code}
+          empty="No promoter links found"
+        />
       </Panel>
     </div>
   );

@@ -17,6 +17,7 @@ function json(value: unknown): Response {
 function directory(leadership: unknown[]) {
   return {
     group: {
+      abbreviatedName: null,
       id: GROUP_ID,
       slug: "pqc-task-force",
       name: "PQC Task Force",

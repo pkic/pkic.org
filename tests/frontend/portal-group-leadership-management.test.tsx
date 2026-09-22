@@ -147,6 +147,8 @@ function assignment(overrides: Record<string, unknown>) {
 }
 
 const leadership = {
+  page: { limit: 50, offset: 0, total: 2, hasMore: false },
+  pastPage: { limit: 50, offset: 0, total: 1, hasMore: false },
   group: sourceGroup,
   governanceInheritanceMode: "inherited",
   titles: TITLES,
@@ -227,22 +229,30 @@ describe("portal group leadership management", () => {
       </>,
     );
     await settle();
+    await settle();
 
     expect(container.textContent).toContain("Current leadership");
     expect(container.textContent).toContain("Inherited from Parent Group");
     expect(container.textContent).toContain("Vice Chair");
     expect(container.textContent).toContain("Since Jan 1, 2021");
     expect(container.textContent).toContain("Past leadership");
+    expect(container.textContent).not.toContain("Former Chair");
+    await act(async () => container.querySelector<HTMLButtonElement>("#leadership-view-past")!.click());
+    await settle();
     expect(container.textContent).toContain("Former Chair");
     expect(container.textContent).toContain("Feb 14, 2013 – Jan 1, 2021");
+    expect(container.querySelectorAll("table")).toHaveLength(1);
+    await act(async () => container.querySelector<HTMLButtonElement>("#leadership-view-current")!.click());
+    await settle();
     // The inherited deputy has no row menu; the local chair and the closed term do.
-    expect(container.querySelectorAll('[aria-haspopup="menu"]')).toHaveLength(2);
+    expect(container.querySelectorAll('[aria-label^="Actions for"]')).toHaveLength(1);
     expect(container.querySelector('button[aria-label="Actions for Parent Deputy"]')).toBeNull();
 
     await openRowMenu(container, "Actions for Local Leader");
     await act(async () => menuItem(container, "End term now").click());
     expect(document.body.textContent).toContain("End Local Leader's term as Chair?");
     await act(async () => confirmDialogButton("End term").click());
+    await settle();
     await settle();
     expect(
       requests.some(
@@ -263,6 +273,7 @@ describe("portal group leadership management", () => {
       stubFetch(() => json(leadership));
       const container = mount(<GroupLeadership groupId={GROUP_ID} />);
       await settle();
+      await settle();
 
       await openRowMenu(container, "Actions for Local Leader");
       await act(async () => menuItem(container, "Edit term").click());
@@ -279,6 +290,7 @@ describe("portal group leadership management", () => {
       stubFetch(() => json(leadership));
       const container = mount(<GroupLeadership groupId={GROUP_ID} assignmentSegment={USER_ROLE_ID} />);
       await settle();
+      await settle();
 
       expect(container.textContent).toContain("Edit term for Local Leader");
       expect(container.textContent).not.toContain("Past leadership");
@@ -289,6 +301,7 @@ describe("portal group leadership management", () => {
       stubFetch(() => json(leadership));
       const stale = "30000000-0000-4000-8000-00000000ffff";
       const container = mount(<GroupLeadership groupId={GROUP_ID} assignmentSegment={stale} />);
+      await settle();
       await settle();
 
       expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/leadership`);
@@ -302,6 +315,7 @@ describe("portal group leadership management", () => {
       // another group's assignment.
       const inherited = "30000000-0000-4000-8000-000000000002";
       const container = mount(<GroupLeadership groupId={GROUP_ID} assignmentSegment={inherited} />);
+      await settle();
       await settle();
 
       expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/leadership`);
@@ -324,6 +338,7 @@ describe("portal group leadership management", () => {
     });
     const container = mount(<GroupLeadership groupId={GROUP_ID} assignmentSegment="add" />);
     await settle();
+    await settle();
 
     const participant = controlFor(container, "Participant");
     expect(participant.getAttribute("role")).toBe("combobox");
@@ -334,6 +349,7 @@ describe("portal group leadership management", () => {
     expect(searchButtons()).toEqual([]);
 
     setValue(participant, "leader", "input");
+    await settle();
     await settle();
     expect(searchButtons()).toEqual([]);
     // The matches are there for the choosing without anything else happening.
@@ -350,6 +366,7 @@ describe("portal group leadership management", () => {
     });
     const container = mount(<GroupLeadership groupId={GROUP_ID} assignmentSegment="add" />);
     await settle();
+    await settle();
     await pickCapacity(container, "leader@example.test");
 
     // The candidate is not seated in this group, so the form says the
@@ -364,6 +381,7 @@ describe("portal group leadership management", () => {
     setValue(controlFor(container, "Term starts"), "2024-07-01", "input");
     setValue(controlFor(container, "Term ends"), "2026-10-01", "input");
     await act(async () => button(container, "Assign leadership").click());
+    await settle();
     await settle();
 
     const request = requests.find(
@@ -386,6 +404,7 @@ describe("portal group leadership management", () => {
     const requests = stubFetch(() => json(leadership));
     const container = mount(<GroupLeadership groupId={GROUP_ID} assignmentSegment={PAST_USER_ROLE_ID} />);
     await settle();
+    await settle();
 
     // The title is a select of the role's own titles, not free text: a chair
     // should be offered rather than something you have to know to type.
@@ -398,6 +417,7 @@ describe("portal group leadership management", () => {
     setValue(title, "Co-Chair", "change");
     setValue(controlFor(container, "Term ends"), "2021-06-30", "input");
     await act(async () => button(container, "Save term").click());
+    await settle();
     await settle();
 
     const request = requests.find(
@@ -426,6 +446,7 @@ describe("portal group leadership management", () => {
     );
     const container = mount(<GroupLeadership groupId={GROUP_ID} assignmentSegment={USER_ROLE_ID} />);
     await settle();
+    await settle();
 
     const title = controlFor<HTMLSelectElement>(container, "Title");
     // "Co-Chair" and "Lead" are in no response here, so a control still
@@ -443,12 +464,14 @@ describe("portal group leadership management", () => {
     );
     const container = mount(<GroupLeadership groupId={GROUP_ID} assignmentSegment={PAST_USER_ROLE_ID} />);
     await settle();
+    await settle();
 
     const title = controlFor<HTMLSelectElement>(container, "Title");
     expect([...title.options].map((option) => option.value)).toEqual(["Board Chair", "Chair"]);
     expect(title.value).toBe("Board Chair");
 
     await act(async () => button(container, "Save term").click());
+    await settle();
     await settle();
     const request = requests.find(({ method }) => method === "PATCH");
     expect(groupLeadershipUpdateSchema.parse(request?.body).title).toBe("Board Chair");
@@ -480,6 +503,7 @@ describe("portal group leadership management", () => {
     await pickCapacity(container, "leader@example.test");
 
     await act(async () => button(container, "Assign leadership").click());
+    await settle();
     await settle();
 
     expect(container.textContent).toContain("Management access changed.");

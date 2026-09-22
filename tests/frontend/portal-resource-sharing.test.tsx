@@ -64,6 +64,7 @@ const granteeGroup = {
 };
 
 const managedGroup = {
+  abbreviatedName: null,
   ...granteeGroup,
   parentGroup: null,
   description: null,

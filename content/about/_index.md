@@ -39,6 +39,10 @@ The Public Key Infrastructure Consortium is comprised of leading organizations t
 
 {{< leadership group="all-members" view="leadership" >}}
 
+## Past Leadership
+
+{{< /leadership >}}
+
 ### Board of Directors and Executive Council
 
 The PKI Consortium is guided by a dedicated Board of Directors and an Executive Council, composed of industry leaders and experts. Their leadership ensures the consortium remains focused on its mission and vision.

@@ -31,59 +31,59 @@ export function ProposalPrograms() {
             Programs appear here only when you can read that event&apos;s proposals. Review and management capabilities
             are independent, and this does not grant access to other group resources.
           </p>
-          <ApiDataTable
-            caption="Proposal programs"
-            endpoint="/api/v1/proposals/programs"
-            responseSchema={proposalProgramsListResponseSchema}
-            resolve={(response) => response.programs}
-            resolvePage={(response) => response.page}
-            paginate
-            initialSort="eventName"
-            searchPlaceholder="Search programs…"
-            columns={[
-              {
-                header: "Event",
-                cell: (program) => (
-                  <div class="pk-stack pk-stack--tight">
-                    <span class="pk-strong">{program.event.name}</span>
-                    <span class="pk-small">{program.group.name}</span>
-                  </div>
-                ),
-                sort: { asc: "eventName", desc: "-eventName", defaultDirection: "asc" },
-              },
-              {
-                // A date has a bounded length; the column says so instead of
-                // wearing `pk-nowrap` while still claiming slack, and keeps
-                // the table's own ink and size.
-                header: "Starts",
-                cell: (program) => fmt(program.event.startsAt),
-                width: "fit",
-                sort: { asc: "startsAt", desc: "-startsAt" },
-              },
-              {
-                header: "Access",
-                cell: (program) => (
-                  <Badge
-                    status={program.access.canFinalize ? "accepted" : "under_review"}
-                    label={capabilityLabel(program)}
-                  />
-                ),
-                width: "fit",
-              },
-            ]}
-            empty={
-              <EmptyState
-                title="No proposal programs are available to your current identity."
-                body="A program appears here once you can read that event's proposals. Switching identity may show others."
-              />
-            }
-            rowKey={(program) => `${program.group.id}:${program.event.id}`}
-            rowAction={(program) => ({
-              label: `Open proposals for ${program.event.name}`,
-              href: `#/groups/${encodeURIComponent(program.group.id)}/events/${encodeURIComponent(program.event.id)}/proposals`,
-            })}
-          />
         </PanelBody>
+        <ApiDataTable
+          caption="Proposal programs"
+          endpoint="/api/v1/proposals/programs"
+          responseSchema={proposalProgramsListResponseSchema}
+          resolve={(response) => response.programs}
+          resolvePage={(response) => response.page}
+          paginate
+          initialSort="eventName"
+          searchPlaceholder="Search programs…"
+          columns={[
+            {
+              header: "Event",
+              cell: (program) => (
+                <div class="pk-stack pk-stack--tight">
+                  <span class="pk-strong">{program.event.name}</span>
+                  <span class="pk-small">{program.group.name}</span>
+                </div>
+              ),
+              sort: { asc: "eventName", desc: "-eventName", defaultDirection: "asc" },
+            },
+            {
+              // A date has a bounded length; the column says so instead of
+              // wearing `pk-nowrap` while still claiming slack, and keeps
+              // the table's own ink and size.
+              header: "Starts",
+              cell: (program) => fmt(program.event.startsAt),
+              width: "fit",
+              sort: { asc: "startsAt", desc: "-startsAt" },
+            },
+            {
+              header: "Access",
+              cell: (program) => (
+                <Badge
+                  status={program.access.canFinalize ? "accepted" : "under_review"}
+                  label={capabilityLabel(program)}
+                />
+              ),
+              width: "fit",
+            },
+          ]}
+          empty={
+            <EmptyState
+              title="No proposal programs are available to your current identity."
+              body="A program appears here once you can read that event's proposals. Switching identity may show others."
+            />
+          }
+          rowKey={(program) => `${program.group.id}:${program.event.id}`}
+          rowAction={(program) => ({
+            label: `Open proposals for ${program.event.name}`,
+            href: `#/groups/${encodeURIComponent(program.group.id)}/events/${encodeURIComponent(program.event.id)}/proposals`,
+          })}
+        />
       </Panel>
     </div>
   );

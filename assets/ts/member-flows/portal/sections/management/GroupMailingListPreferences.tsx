@@ -80,55 +80,53 @@ export function GroupMailingListPreferences({ groupId }: { groupId: string }) {
   return (
     <Panel class="pk" aria-label="My mailing-list preferences">
       <PanelHeader title="My mailing-list preferences" />
-      <PanelBody class="pk-stack pk-stack--snug">
-        {error && <ErrorAlert error={error} />}
-        <ApiDataTable
-          caption="My mailing-list preferences"
-          actionsRef={actions}
-          endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/mailing-lists`}
-          responseSchema={effectiveMailingListSubscriptionsResponseSchema}
-          resolve={(response) => response.subscriptions}
-          resolvePage={(response) => response.page}
-          paginate
-          searchPlaceholder="Search mailing lists…"
-          initialSort="label"
-          columns={[
-            {
-              header: "Mailing list",
-              cell: (subscription) => (
-                <div class="pk-stack pk-stack--tight">
-                  <span class="pk-strong">{subscription.mailingList.label}</span>
-                  <span class="pk-small pk-break">{subscription.mailingList.email}</span>
-                </div>
-              ),
-              sort: { asc: "label", desc: "-label" },
-            },
-            {
-              header: "Purpose",
-              // The shared vocabulary rather than an underscore-stripping
-              // replace, so a purpose reads the same wherever it appears.
-              cell: (subscription) => statusLabel(subscription.mailingList.purpose),
-              sort: { asc: "purpose", desc: "-purpose" },
-            },
-            {
-              header: "Effective status",
-              cell: (subscription) => (subscription.effectiveSubscribed ? "Subscribed" : "Not subscribed"),
-            },
-            {
-              header: "Preference",
-              cell: (subscription) => (
-                <SubscriptionPreference
-                  subscription={subscription}
-                  disabled={pendingListId === subscription.mailingList.id}
-                  onChange={(preference) => void updatePreference(subscription, preference)}
-                />
-              ),
-            },
-          ]}
-          empty="No mailing lists are available through this group."
-          rowKey={(subscription) => subscription.mailingList.id}
-        />
-      </PanelBody>
+      <PanelBody class="pk-stack pk-stack--snug">{error && <ErrorAlert error={error} />}</PanelBody>
+      <ApiDataTable
+        caption="My mailing-list preferences"
+        actionsRef={actions}
+        endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/mailing-lists`}
+        responseSchema={effectiveMailingListSubscriptionsResponseSchema}
+        resolve={(response) => response.subscriptions}
+        resolvePage={(response) => response.page}
+        paginate
+        searchPlaceholder="Search mailing lists…"
+        initialSort="label"
+        columns={[
+          {
+            header: "Mailing list",
+            cell: (subscription) => (
+              <div class="pk-stack pk-stack--tight">
+                <span class="pk-strong">{subscription.mailingList.label}</span>
+                <span class="pk-small pk-break">{subscription.mailingList.email}</span>
+              </div>
+            ),
+            sort: { asc: "label", desc: "-label" },
+          },
+          {
+            header: "Purpose",
+            // The shared vocabulary rather than an underscore-stripping
+            // replace, so a purpose reads the same wherever it appears.
+            cell: (subscription) => statusLabel(subscription.mailingList.purpose),
+            sort: { asc: "purpose", desc: "-purpose" },
+          },
+          {
+            header: "Effective status",
+            cell: (subscription) => (subscription.effectiveSubscribed ? "Subscribed" : "Not subscribed"),
+          },
+          {
+            header: "Preference",
+            cell: (subscription) => (
+              <SubscriptionPreference
+                subscription={subscription}
+                disabled={pendingListId === subscription.mailingList.id}
+                onChange={(preference) => void updatePreference(subscription, preference)}
+              />
+            ),
+          },
+        ]}
+        empty="No mailing lists are available through this group."
+        rowKey={(subscription) => subscription.mailingList.id}
+      />
     </Panel>
   );
 }

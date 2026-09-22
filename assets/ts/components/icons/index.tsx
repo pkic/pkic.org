@@ -535,3 +535,23 @@ export function IconLayers() {
     </svg>
   );
 }
+
+export function IconDownload(props: SvgProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="16"
+      height="16"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M8 1.5v9m-3-3 3 3 3-3M2 10.5v3h12v-3" />
+    </svg>
+  );
+}

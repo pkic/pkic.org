@@ -11,6 +11,7 @@ test("group configuration requires editing and preserves only saved changes", as
   await create.getByLabel("Group type").fill("Working");
   await create.getByRole("option", { name: /Working Groups/ }).click();
   await create.getByLabel(/^Name/).fill(name);
+  await create.getByLabel("Abbreviated name", { exact: true }).fill("SRWG");
   await create.getByRole("button", { name: "Create group", exact: true }).click();
   await expect(page).toHaveURL(/#\/groups\/[^/]+\/settings$/);
   await page.getByRole("link", { name: "Overview", exact: true }).click();
@@ -22,6 +23,7 @@ test("group configuration requires editing and preserves only saved changes", as
   await expect(page).toHaveURL(/#\/groups\/[^/]+\/settings$/);
   const general = page.getByRole("tabpanel");
   await expect(general.locator("input,select,textarea")).toHaveCount(0);
+  await expect(general).toContainText("SRWG");
   async function edit(label: string) {
     await page.getByRole("button", { name: label, exact: true }).click();
     await page.getByRole("menuitem", { name: "Edit settings", exact: true }).click();
@@ -37,10 +39,12 @@ test("group configuration requires editing and preserves only saved changes", as
   await general.getByRole("button", { name: "Save group settings", exact: true }).click();
   await expect(general.getByLabel(/^Name/)).toHaveAttribute("aria-invalid", "true");
   await general.getByLabel(/^Name/).fill(`${name} saved`);
+  await general.getByLabel("Abbreviated name", { exact: true }).fill("SAVED");
   await general.getByRole("button", { name: "Save group settings", exact: true }).click();
   await expect(general.locator("input,select,textarea")).toHaveCount(0);
   await page.reload();
   await expect(page.getByRole("heading", { name: `${name} saved`, exact: true })).toBeVisible();
+  await expect(general).toContainText("SAVED");
   await page.getByRole("tab", { name: "Eligibility", exact: true }).click();
   const eligibility = page.getByRole("tabpanel");
   await expect(eligibility.getByRole("table")).toBeVisible();

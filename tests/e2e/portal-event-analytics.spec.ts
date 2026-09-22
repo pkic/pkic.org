@@ -2,6 +2,7 @@
  * @covers system.12.3
  * @covers system.12.3.a
  */
+import { registrationAnalyticsResponseSchema } from "../../assets/shared/schemas/analytics";
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
@@ -32,6 +33,50 @@ test("permitted staff reach event analytics under the events they measure", asyn
   await expect(
     page.getByRole("heading", { name: "Registrations — Weekly (last 12 weeks)", exact: true }),
   ).toBeVisible();
+
+  await expect(page.locator(".pk-table--data")).toHaveCount(0);
+  await page.getByRole("tab", { name: "Monthly", exact: true }).click();
+  await expect(
+    page.getByRole("heading", { name: "Registrations — Monthly (last 12 months)", exact: true }),
+  ).toBeVisible();
+  // Populated fixture exercises chart geometry independently of the empty local seed.
+  await page.route("**/api/v1/analytics/registrations", (route) =>
+    route.fulfill({
+      json: registrationAnalyticsResponseSchema.parse({
+        generatedAt: "2026-09-22T12:00:00.000Z",
+        registrations: {
+          total: 180,
+          byStatus: { registered: 140, cancelled: 20, pending: 20 },
+          byAttendanceType: { in_person: 110, virtual: 50, on_demand: 20 },
+          weekly: Array.from({ length: 12 }, (_, index) => ({ week: `2026-W${30 + index}`, count: 5 + index * 2 })),
+          monthly: Array.from({ length: 12 }, (_, index) => ({
+            month: `2026-${String(index + 1).padStart(2, "0")}`,
+            count: 5 + index * 3,
+          })),
+        },
+      }),
+    }),
+  );
+  await page.reload();
+  await page.getByRole("tab", { name: "Monthly", exact: true }).click();
+  await expect(page.getByRole("figure", { name: "Registrations per month" })).toBeVisible();
+  for (const width of [1440, 390]) {
+    await page.setViewportSize({ width, height: 1000 });
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+    await page.screenshot({
+      path: `/Volumes/ScanDisk/mac-caches/tmp/pr180-analytics-${width}.png`,
+      fullPage: true,
+      animations: "disabled",
+    });
+    await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
+    await page.screenshot({
+      path: `/Volumes/ScanDisk/mac-caches/tmp/pr180-analytics-dark-${width}.png`,
+      fullPage: true,
+      animations: "disabled",
+    });
+    await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
+  }
+  await page.setViewportSize({ width: 1440, height: 1000 });
 
   // Donation analytics now live under Donations → Analytics, not here — this
   // strip only offers Overview and Registrations.

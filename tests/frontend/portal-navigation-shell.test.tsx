@@ -30,6 +30,7 @@ function emptyPage(key: string): unknown {
 
 function group(id: string, name: string): Record<string, unknown> {
   return {
+    abbreviatedName: null,
     id,
     slug: name.toLowerCase().replace(/\s+/g, "-"),
     name,

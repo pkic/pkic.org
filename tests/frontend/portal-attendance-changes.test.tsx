@@ -110,30 +110,17 @@ describe("portal attendance movement dashboard", () => {
     expect(hrefs).toContain(`#/events/${SLUG}/registrations/attendance-changed`);
     expect(hrefs).toContain(`#/events/${SLUG}/registrations/left-in-person`);
     expect(hrefs).toContain(`#/events/${SLUG}/registrations/joined-in-person`);
-    expect(hrefs).toContain(`#/events/${SLUG}/registrations/detail/${REGISTRATION_ID}`);
+    expect(container.querySelector(".pk-table--data")).toBeNull();
   });
 
-  it("names itself and each of its tables for assistive technology", () => {
+  it("names its chart and exposes the same values to assistive technology", () => {
     mount(<AttendanceChangeDashboard slug={SLUG} changes={changes()} />);
-
-    // The panel is an h2, so it nests as a sibling of the other event-dashboard
-    // sections rather than inventing a rung in the page outline.
-    const headings = [...container.querySelectorAll("h1, h2, h3, h4, h5, h6")];
-    expect(headings.map((node) => [node.tagName, node.textContent])).toEqual([["H2", "Attendance movement"]]);
-
-    // Three tables on one surface are only tellable apart by their captions.
-    const captions = [...container.querySelectorAll("caption")].map((node) => node.textContent);
-    expect(captions).toEqual(["Where attendance changed", "How attendance changed", "Recent attendee changes"]);
-    for (const caption of container.querySelectorAll("caption")) {
-      expect(caption.classList.contains("pk-table__caption--hidden")).toBe(false);
-    }
-
-    // Every column header is a real th with a scope, so a cell can be related
-    // back to the column it belongs to.
-    const headers = [...container.querySelectorAll("th")];
-    expect(headers.length).toBeGreaterThan(0);
-    expect(headers.every((header) => header.getAttribute("scope") === "col")).toBe(true);
-    expect(headers.map((header) => header.textContent)).toContain("No longer in-person");
+    expect(container.querySelector('figure[aria-label="Where attendance changed"]')).not.toBeNull();
+    expect(container.querySelector("caption")?.textContent).toBe("Where attendance changed");
+    expect(container.querySelector('[aria-label="How attendance changed"]')?.textContent).toContain(
+      "In-person → Virtual",
+    );
+    expect(container.querySelector(".pk-table--data")).toBeNull();
   });
 
   it("states the direction of movement in words, not by colour alone", () => {
@@ -169,50 +156,10 @@ describe("portal attendance movement dashboard", () => {
     });
   });
 
-  it("says each table is empty when the totals arrive without their detail rows", () => {
-    // A truncated or partially failed analytics query can report a headline
-    // count with no supporting rows. Rendering three captioned tables with
-    // empty bodies would look like a working surface reporting nothing.
+  it("reports missing breakdown data without zeroing the headline totals", () => {
     mount(<AttendanceChangeDashboard slug={SLUG} changes={changes({ byDay: [], byTransition: [], recent: [] })} />);
-
-    const announcements = [...container.querySelectorAll(".pk-table__empty")].map((node) => node.textContent);
-    expect(announcements).toEqual([
-      "No event day has recorded a change yet.",
-      "No transition has been recorded yet.",
-      "No recent change to show.",
-    ]);
-    expect(container.querySelectorAll("tbody tr")).toHaveLength(0);
-    // The overall figures are not silently zeroed to match the missing rows.
+    expect(container.textContent).toContain("No data");
     expect(statValues()["Attendees changed"]).toBe("5");
-  });
-
-  it("keeps a multi-day change legible and falls back to the identifier it has", () => {
-    mount(
-      <AttendanceChangeDashboard
-        slug={SLUG}
-        changes={changes({
-          recent: [
-            {
-              registration_id: REGISTRATION_ID,
-              changed_at: "2026-05-20T09:30:00.000Z",
-              from_type: "in_person",
-              to_type: "on_demand",
-              user_email: null,
-              display_name: null,
-              days: [{ day_date: "2026-06-03", label: null }],
-            },
-          ],
-        })}
-      />,
-    );
-
-    const text = container.textContent ?? "";
-    // With neither a name nor an address the row still identifies its
-    // registration rather than rendering an empty link.
-    expect(text).toContain(REGISTRATION_ID);
-    // An unlabelled day falls back to its date, and the transition is spelled
-    // out in the event's own vocabulary.
-    expect(text).toContain("2026-06-03");
-    expect(text).toContain("In-person → On-demand");
+    expect(container.querySelector("table")).toBeNull();
   });
 });

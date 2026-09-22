@@ -68,6 +68,7 @@ describe("portal group creation and category policy", () => {
   it("loads group types and posts the complete canonical group-create contract", async () => {
     const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
     const created = {
+      abbreviatedName: null,
       id: GROUP_ID,
       slug: "security-working-group",
       name: "Security Working Group",
@@ -306,6 +307,7 @@ describe("portal group creation and category policy", () => {
         if (url.pathname.endsWith("/category-rules") && method === "PUT") {
           return json({
             group: {
+              abbreviatedName: null,
               id: GROUP_ID,
               slug: "security-working-group",
               name: "Security Working Group",

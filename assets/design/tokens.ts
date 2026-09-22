@@ -27,7 +27,12 @@ export const prefix = "pk";
 /** Surfaces, ink and lines — the only values that differ wholesale by theme. */
 const surfacesLight = {
   canvas: "#f5f6f7",
+  "page-surface": neutral.white,
   surface: neutral.white,
+  "control-surface": neutral.white,
+  "logo-surface": neutral.white,
+  "member-logo-filter": "grayscale(1)",
+  "member-logo-blend": "multiply",
   "surface-sunk": neutral[100],
   "surface-raise": neutral.white,
   ink: neutral[800],
@@ -41,17 +46,22 @@ const surfacesLight = {
 } as const;
 
 const surfacesDark: Record<keyof typeof surfacesLight, string> = {
-  canvas: "#121417",
-  surface: "#1a1e22",
-  "surface-sunk": "#16191d",
-  "surface-raise": "#22272c",
+  canvas: "#141715",
+  "page-surface": "#141715",
+  surface: "#1c211e",
+  "control-surface": "#101411",
+  "logo-surface": "#e0e4e8",
+  "member-logo-filter": "grayscale(1) invert(1)",
+  "member-logo-blend": "screen",
+  "surface-sunk": "#181d1a",
+  "surface-raise": "#272e29",
   ink: neutral[200],
-  "ink-muted": "#9aa3ab",
+  "ink-muted": "#b0bab3",
   "ink-faint": neutral[500],
   "ink-inverse": "#10141a",
-  line: "#2f353b",
-  "line-soft": "#262b31",
-  "line-strong": "#4a5259",
+  line: "#4a584f",
+  "line-soft": "#344039",
+  "line-strong": "#788a7f",
   overlay: "rgba(0, 0, 0, 0.62)",
 };
 

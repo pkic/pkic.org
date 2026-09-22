@@ -11,3 +11,7 @@ The PKIC Board of Directors provides strategic leadership and governance for the
 ## Current Board of Directors
 
 {{< leadership group="board" >}}
+
+## Past Board of Directors
+
+{{< /leadership >}}

@@ -32,6 +32,7 @@
  * the D1 read model. This component only arranges the returned page for each
  * visual mode.
  */
+import { prepareMemberLogo } from "../shared/member-logo-treatment";
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { getJson } from "../shared/api-client";
@@ -384,6 +385,17 @@ function WallMode({
 }
 
 function main(): void {
+  // Capture image loads because the wall animation clones the rendered anchors.
+  document.addEventListener(
+    "load",
+    (event) => {
+      if (event.target instanceof HTMLImageElement && event.target.classList.contains("member-logo")) {
+        prepareMemberLogo(event.target);
+      }
+    },
+    true,
+  );
+  document.querySelectorAll<HTMLImageElement>("img.member-logo").forEach(prepareMemberLogo);
   document.querySelectorAll<HTMLElement>("[data-sponsors-wall]").forEach((root) => {
     const apiBase = root.dataset.apiBase ?? API_BASE_FALLBACK;
     const eventSlug = root.dataset.eventSlug || undefined;

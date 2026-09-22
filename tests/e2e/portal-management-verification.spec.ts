@@ -674,8 +674,31 @@ test.describe("Portal management browser-verification pass", () => {
     );
     await page.goto(`/portal/#/events/${EVENT_SLUG}/registrations`);
     expect((await loaded).status()).toBe(200);
-    await expect(page.getByRole("button", { name: "Run waitlist promotions" })).toBeVisible({ timeout: 15_000 });
-    await expect(page.getByRole("button", { name: "Download CSV" })).toBeVisible();
+    await page.getByRole("button", { name: "Registration actions", exact: true }).click();
+    await expect(page.getByRole("menuitem", { name: "Run waitlist promotions" })).toBeVisible();
+    await page.keyboard.press("Escape");
+    const download = page.getByRole("link", { name: "Download CSV", exact: true });
+    await expect(download).toBeVisible();
+    await expect(download.locator("svg")).toBeVisible();
+    const actions = page.getByRole("button", { name: "Registration actions", exact: true });
+    expect(
+      Math.abs((await download.boundingBox())!.height - (await actions.boundingBox())!.height),
+    ).toBeLessThanOrEqual(1);
+    await page.screenshot({ path: test.info().outputPath("registration-toolbar.png") });
+    await page.emulateMedia({ colorScheme: "dark" });
+    expect(await download.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe(
+      await page.getByRole("searchbox").evaluate((el) => getComputedStyle(el).backgroundColor),
+    );
+    await page.screenshot({ path: test.info().outputPath("registration-toolbar-dark.png"), animations: "disabled" });
+    await page.goto(`/portal/#/events/${EVENT_SLUG}`);
+    const schedule = page.getByLabel("Schedule", { exact: true });
+    await expect(schedule).toBeVisible();
+    expect(await schedule.evaluate((el) => el.closest("aside") !== null)).toBe(true);
+    await page.screenshot({ path: test.info().outputPath("event-overview-dark.png"), animations: "disabled" });
+    await page.setViewportSize({ width: 390, height: 844 });
+    await expect(schedule).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+
     expect(legacyRequests).toEqual([]);
   });
 

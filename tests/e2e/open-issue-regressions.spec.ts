@@ -16,7 +16,7 @@ test("registration shows completion marks only for completed steps and uses the 
   await page.screenshot({ path: test.info().outputPath("registration.png"), fullPage: true });
 });
 
-test("donation columns and callout stay readable at desktop and mobile widths", async ({ page }) => {
+test("donation columns, table, and callout stay readable at desktop and mobile widths", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 1000 });
   await page.goto("/donate/");
   const form = page.locator("[data-donation-form]");
@@ -24,11 +24,41 @@ test("donation columns and callout stay readable at desktop and mobile widths", 
   const formBox = await form.boundingBox();
   const textBox = await text.boundingBox();
   expect(formBox!.x).toBeGreaterThan(textBox!.x + textBox!.width);
+  const table = page.getByRole("table");
+  await expect(table.getByRole("columnheader")).toHaveText(["Amount", "What your gift makes possible"]);
+  const amounts = table.locator("tbody td:first-child");
+  await expect(amounts).toHaveCount(6);
+  expect(await amounts.first().evaluate((el) => getComputedStyle(el).textAlign)).toMatch(/^(right|end)$/);
+  const cell = await amounts.first().evaluate((el) => {
+    const style = getComputedStyle(el);
+    return {
+      fontSize: parseFloat(style.fontSize),
+      lineHeight: parseFloat(style.lineHeight),
+      padding: parseFloat(style.paddingTop),
+    };
+  });
+  expect(cell.fontSize).toBe(14);
+  expect(cell.lineHeight / cell.fontSize).toBeGreaterThanOrEqual(1.5);
+  expect(cell.padding).toBeGreaterThanOrEqual(12);
   const callout = page.locator(".pk-alert--callout");
   await expect(callout).toBeVisible();
   expect(await callout.evaluate((el) => getComputedStyle(el).backgroundImage)).toContain("linear-gradient");
   for (const colorScheme of ["light", "dark"] as const) {
     await page.emulateMedia({ colorScheme });
+    await page.evaluate(() => window.scrollTo(0, 0));
+    await page.screenshot({
+      path: test.info().outputPath(`donate-${colorScheme}.png`),
+      fullPage: true,
+      animations: "disabled",
+    });
+    await table
+      .locator("..")
+      .screenshot({ path: test.info().outputPath(`donate-table-${colorScheme}.png`), animations: "disabled" });
+    const rowColors = await table
+      .locator("tbody tr")
+      .evaluateAll((rows) => rows.map((row) => getComputedStyle(row).backgroundColor));
+    expect(rowColors[0]).not.toBe(rowColors[1]);
+    expect(rowColors[0]).toBe(rowColors[2]);
     const contrasts = await callout.evaluate((el) => {
       const context = document.createElement("canvas").getContext("2d")!;
       const luminance = (color: string) => {
@@ -42,19 +72,34 @@ test("donation columns and callout stay readable at desktop and mobile widths", 
       };
       const style = getComputedStyle(el);
       const foreground = luminance(style.color);
-      return [...style.backgroundImage.matchAll(/(?:rgba?|color)\([^()]+\)/g)].map(([color]) => {
+      const calloutContrasts = [...style.backgroundImage.matchAll(/(?:rgba?|color)\([^()]+\)/g)].map(([color]) => {
         const background = luminance(color);
         return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
       });
+      const prose = document.querySelector(".pk-table")!.parentElement!.parentElement!;
+      const tableContrasts = [
+        ...document.querySelectorAll(".pk-table th, .pk-table td, [data-donation-form] h3"),
+        ...prose.querySelectorAll(":scope > p"),
+      ].map((cell) => {
+        const foreground = luminance(getComputedStyle(cell).color);
+        let surface: Element | null = cell;
+        while (surface && getComputedStyle(surface).backgroundColor === "rgba(0, 0, 0, 0)")
+          surface = surface.parentElement;
+        const background = luminance(getComputedStyle(surface!).backgroundColor);
+        return (Math.max(foreground, background) + 0.05) / (Math.min(foreground, background) + 0.05);
+      });
+      return [...calloutContrasts, ...tableContrasts];
     });
-    expect(contrasts).toHaveLength(2);
+    expect(contrasts).toHaveLength(26);
     for (const contrast of contrasts) expect(contrast).toBeGreaterThanOrEqual(4.5);
   }
   await page.emulateMedia({ colorScheme: "light" });
-  await page.screenshot({ path: test.info().outputPath("donate-desktop.png"), fullPage: true });
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: test.info().outputPath("donate-desktop.png"), fullPage: true, animations: "disabled" });
   await page.setViewportSize({ width: 390, height: 844 });
   expect((await form.boundingBox())!.y).toBeGreaterThan((await text.boundingBox())!.y);
   expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
+  await page.screenshot({ path: test.info().outputPath("donate-mobile.png"), fullPage: true, animations: "disabled" });
 });
 
 test("dark homepage titles use readable ink and navigation emits no unload warning", async ({ page }) => {
@@ -62,11 +107,16 @@ test("dark homepage titles use readable ink and navigation emits no unload warni
   await page.route("**/api/v1/members/wall*", (route) =>
     route.fulfill({
       json: memberWallResponseSchema.parse({
-        entries: [0, 1].map((sponsorLevel) => ({
-          key: `synthetic-${sponsorLevel}`,
+        entries: [0, 1, 0].map((sponsorLevel, index) => ({
+          key: `synthetic-${index}`,
           href: "/members/",
-          logoUrl: "/synthetic-member-logo.svg",
-          name: "Synthetic member",
+          logoUrl:
+            index === 2
+              ? "/synthetic-white-logo.svg"
+              : sponsorLevel
+                ? "/synthetic-sponsor-logo.svg"
+                : "/synthetic-member-logo.svg",
+          name: index === 2 ? "White artwork" : sponsorLevel ? "Synthetic sponsor" : "Synthetic member",
           slogan: null,
           sponsorLevel,
           sponsorLevelName: sponsorLevel ? "Sponsor" : null,
@@ -80,6 +130,18 @@ test("dark homepage titles use readable ink and navigation emits no unload warni
       body: '<svg xmlns="http://www.w3.org/2000/svg" width="180" height="36"><text x="0" y="27" fill="black" font-size="24">Member</text></svg>',
     }),
   );
+  await page.route("**/synthetic-sponsor-logo.svg", (route) =>
+    route.fulfill({
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="180" height="36"><rect width="180" height="36" fill="white"/><text x="4" y="27" fill="#005aaf" font-size="24">Sponsor</text><circle cx="160" cy="18" r="10" fill="#d62242"/></svg>',
+    }),
+  );
+  await page.route("**/synthetic-white-logo.svg", (route) =>
+    route.fulfill({
+      contentType: "image/svg+xml",
+      body: '<svg xmlns="http://www.w3.org/2000/svg" width="180" height="36"><text x="4" y="27" fill="white" font-size="24">White artwork</text></svg>',
+    }),
+  );
   const warnings: string[] = [];
   page.on("console", (message) => {
     if (/permissions.policy.*unload/i.test(message.text())) warnings.push(message.text());
@@ -91,8 +153,26 @@ test("dark homepage titles use readable ink and navigation emits no unload warni
   await expect(logo).toBeVisible();
   await expect
     .poll(() => logo.evaluate((el) => getComputedStyle(el.parentElement!).backgroundColor))
-    .toBe("rgb(255, 255, 255)");
+    .toBe("rgba(0, 0, 0, 0)");
+  expect(await logo.evaluate((el) => getComputedStyle(el).filter)).toContain("invert(1)");
+  const sponsor = page.locator('.members-overview img[alt="Synthetic sponsor"]').first();
+  await expect(sponsor).toBeVisible();
+  expect(await sponsor.evaluate((el) => getComputedStyle(el.parentElement!).backgroundColor)).toBe("rgba(0, 0, 0, 0)");
   expect(await logo.evaluate((el) => getComputedStyle(el).filter)).not.toMatch(/opacity|contrast/);
+  const whiteArtwork = page.locator('.members-overview img[alt="White artwork"]').first();
+  await expect(whiteArtwork).toHaveAttribute("data-logo-ink", "light");
+  expect(await whiteArtwork.evaluate((el) => getComputedStyle(el).filter)).toBe("grayscale(1) invert(1) invert(1)");
+  const cards = await page.locator(".pkic-wg-spotlight").evaluateAll((elements) =>
+    elements.map((el) => {
+      const { x, y, width } = el.getBoundingClientRect();
+      return { x, y, width };
+    }),
+  );
+  expect(cards).toHaveLength(5);
+  expect(cards[0].y).toBe(cards[2].y);
+  expect(cards[3].y).toBe(cards[4].y);
+  expect(cards[3].x).toBeGreaterThan(cards[0].x);
+
   const colors = await titles.evaluateAll((elements) =>
     elements.map((el) => {
       const style = getComputedStyle(el);

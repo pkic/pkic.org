@@ -16,7 +16,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { toPublicRoleProfile, type PublicRoleProfileRow } from "../membership/public-role-profile";
 import { EFFECTIVE_GROUP_LINEAGE_CTE } from "./governance";
-import { LEADERSHIP_TERM_SELECT_SQL } from "./leadership";
+import { LEADERSHIP_TERM_SELECT_SQL } from "./leadership-read";
 import { getVisibleGroup } from "./read-model";
 
 const DEFAULT_SEAT_TITLE = "Member";

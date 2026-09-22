@@ -15,6 +15,20 @@
 
 @layer components {
   /*
+   * A long label kept to one line, for a cell whose value comes from a fixed
+   * vocabulary: a configured category label is prose that would otherwise set
+   * the height of every row around it, and the reader is scanning the column
+   * rather than reading it. The full text stays in the cell's `title`, so it
+   * is a pointer away and never lost.
+   */
+  .pk-table__clamp {
+    display: block;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /*
    * THE MEASURE — how wide a list is allowed to get.
    *
    * The design system's own examples are drawn inside a 66rem column, and they
@@ -83,53 +97,83 @@
     margin: var(--pk-4);
   }
 
-  /*
-   * Inside a page-authored `Panel` the list keeps its regions but hands the
-   * chrome back to the panel around it — one frame, never two. The stack
-   * gap returns because the outer panel's body supplies the padding and the
-   * rules would double against its edges.
-   */
-  .pk-panel .pk-table-list {
-    background: transparent;
+  /* A list placed directly under a panel header shares that panel's frame.
+     The toolbar, rows, and pager keep their own spacing and separators. */
+  .pk-panel > .pk-table-list,
+  .pk-panel > [role="tabpanel"] > .pk-table-list {
     border: 0;
     border-radius: 0;
-    overflow: visible;
-    gap: var(--pk-3);
   }
 
-  .pk-panel .pk-table-list > .pk-toolbar {
-    padding: 0;
-    border-bottom: 0;
+  /* The list reflows to labeled records when its card cannot fit columns. */
+  .pk-table__scroll:has(> .pk-table--data) {
+    container-type: inline-size;
+  }
+  .pk-table--data {
+    overflow-wrap: anywhere;
+  }
+  .pk-table__value {
+    min-width: 0;
+  }
+  .pk-table__mobile-label {
+    display: none;
+  }
+  .pk-table--data .pk-person-cell__name,
+  .pk-table--data .pk-person-cell__email {
+    white-space: normal;
+    overflow-wrap: anywhere;
+  }
+  .pk-table--data th {
+    white-space: normal;
   }
 
-  .pk-panel .pk-table-list .pk-pager {
-    border-top: 0;
-    padding: 0;
-  }
-
-  .pk-panel .pk-table-list > .pk-center,
-  .pk-panel .pk-table-list > .pk-stack > .pk-alert,
-  .pk-panel .pk-table-list > .pk > .pk-alert {
-    margin: 0;
-  }
-
-  /*
-   * Directly under a panel's header, with no body padding around it, the
-   * list is flush: its rows run to the panel's edges and its regions
-   * separate with rules, exactly as they do in the list panel itself. A
-   * message above the rows keeps a row's inset so it does not touch the
-   * frame.
-   */
-  .pk-panel > .pk-table-list {
-    gap: 0;
-  }
-
-  .pk-panel > .pk-table-list > .pk-bulk-bar {
-    border-bottom: 1px solid var(--pk-line);
-  }
-
-  .pk-panel > .pk-table-list > .pk-alert {
-    margin: var(--pk-3) var(--pk-4);
+  @container (max-width: 52rem) {
+    .pk-table--data,
+    .pk-table--data thead,
+    .pk-table--data tbody {
+      display: block;
+    }
+    .pk-table--data thead tr {
+      display: flex;
+      flex-wrap: wrap;
+    }
+    .pk-table--data th {
+      flex: 1 1 auto;
+      min-width: 0;
+      width: auto;
+      white-space: normal;
+    }
+    .pk-table--data tbody tr {
+      display: block;
+      padding-block: var(--pk-2);
+      border-bottom: 1px solid var(--pk-line);
+    }
+    .pk-table--data tbody td {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+      gap: var(--pk-3);
+      width: auto;
+      min-width: 0;
+      white-space: normal;
+      text-align: start;
+      border: 0;
+    }
+    .pk-table__mobile-label {
+      display: block;
+      color: var(--pk-ink-muted);
+      font-size: var(--pk-text-xs);
+    }
+    .pk-table--data .pk-nowrap,
+    .pk-table--data .pk-cluster--nowrap {
+      white-space: normal;
+      flex-wrap: wrap;
+    }
+    .pk-table--data .pk-table__detail td {
+      display: block;
+    }
+    .pk-table--data .pk-table__select {
+      display: block;
+    }
   }
 
   /*
@@ -165,16 +209,7 @@
      * what they hold; a `fit` column still hugs its content and never wraps.
      */
     width: 40%;
-    /*
-     * The floor. `table-layout: auto` treats the 99% as a preference and can
-     * still crush this column toward its minimum when every other column's
-     * content asks for room — the audit log's details, a two-column list,
-     * collapsed to one character per line exactly that way. A primary column
-     * is the row's subject or its prose; it never makes sense narrower than
-     * a reading measure, and the table's own scroll region absorbs the
-     * difference on a narrow screen.
-     */
-    min-width: 18rem;
+    min-width: 0;
   }
 
   /*

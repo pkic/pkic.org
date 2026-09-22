@@ -22,7 +22,12 @@ export function GroupSettingsForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const body = { ...draft, expectedRevision: group.revision, description: draft.description.trim() || null };
+  const body = {
+    ...draft,
+    abbreviatedName: draft.abbreviatedName.trim() || null,
+    expectedRevision: group.revision,
+    description: draft.description.trim() || null,
+  };
   const form = useContractForm(groupUpdateSchema, body);
   useEffect(() => {
     setDraft(draftFromGroup(group));
@@ -83,6 +88,7 @@ export function GroupSettingsForm({
             <DescriptionList
               items={[
                 { term: "Name", value: group.name },
+                { term: "Abbreviated name", value: group.abbreviatedName },
                 { term: "Description", value: group.description },
                 {
                   term: "Links",

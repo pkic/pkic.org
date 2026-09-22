@@ -260,7 +260,7 @@ describe("portal system donations", () => {
     const promoters = mount(<Donations pageSegment="promoters" />);
     await settle();
     expect(requests[0]?.pathname).toBe("/api/v1/donations/promoters");
-    expect(promoters.textContent).toContain("No promoter links yet");
+    expect(promoters.textContent).toContain("No promoter links found");
 
     const detail = mount(<DonationDetailPage donationId="donation-1" />);
     await settle();
@@ -386,8 +386,8 @@ describe("portal system donations", () => {
 
     const alert = container.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain("Something went wrong on our side");
-    // "No promoter links yet" would claim the list is empty when it is unknown.
-    expect(container.textContent).not.toContain("No promoter links yet");
+    // "No promoter links found" would claim the list is empty when it is unknown.
+    expect(container.textContent).not.toContain("No promoter links found");
     expect(captions(container)).not.toContain("Promoter share links, ranked by total impact");
   });
 

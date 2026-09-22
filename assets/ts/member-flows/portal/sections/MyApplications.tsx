@@ -10,12 +10,11 @@ import { getJson, ApiClientError } from "../../../shared/api-client";
 import { myApplicationDetailSchema, myApplicationsListResponseSchema } from "../../../../shared/schemas/me";
 import { Spinner } from "../../../components/Spinner";
 import { ErrorAlert } from "../../../components/ErrorAlert";
-import { Pager } from "../../../components/Pager";
-import { useApiPage } from "../../../hooks/useApiPage";
+import { ApiDataTable } from "../../../components/ApiDataTable";
 import { fmt, fmtDate } from "../ui";
 import { Badge, statusLabel } from "../../../components/Badge";
 import { ButtonLink } from "../../../ui/Button";
-import { DataTable, type DataTableColumn } from "../../../ui/DataTable";
+import { type Column } from "../../../components/Table";
 import { EmptyState } from "../../../ui/EmptyState";
 import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
@@ -147,24 +146,20 @@ function ApplicationDetailView({ id }: { id: string }) {
   );
 }
 
-function applicationColumns(
-  categoryLabel: (code: string) => string,
-): ReadonlyArray<DataTableColumn<MyApplicationSummary>> {
+function applicationColumns(categoryLabel: (code: string) => string): Array<Column<MyApplicationSummary>> {
   return [
     // The design system's table gives slack to no column on its own; the
     // category is the row's subject, so a wide screen's slack lands there —
     // and it reads as the catalog's words, not a bare letter code.
     {
-      id: "membershipCategory",
       header: "Category",
       width: "primary",
       cell: (app) => categoryLabel(app.membershipCategory),
     },
     // The badge carries the status as words as well as a tone, so the column is
     // readable without relying on colour.
-    { id: "stage", header: "Status", cell: (app) => <Badge status={app.stage} /> },
+    { header: "Status", cell: (app) => <Badge status={app.stage} /> },
     {
-      id: "createdAt",
       header: "Submitted",
       cell: (app) => fmtDate(app.createdAt),
       // A date has a bounded length; saying so keeps the slack in the
@@ -175,50 +170,37 @@ function applicationColumns(
 }
 
 function MyApplicationsList() {
-  const page = useApiPage(
-    "/api/v1/users/current/applications",
-    { sort: "-createdAt" },
-    myApplicationsListResponseSchema,
-    (data) => data.applications,
-  );
-  const categories = useMembershipCategoryLabels((page.data?.applications.length ?? 0) > 0);
-
-  if (page.error) {
-    return (
-      <ErrorAlert error={page.error instanceof Error ? page.error.message : "Could not load your applications."} />
-    );
-  }
-  if (!page.data) return <Spinner label="Loading your applications…" />;
-  const applications = page.data.applications;
+  const categories = useMembershipCategoryLabels(true);
 
   return (
     <div class="pk pk-stack">
       <PageHeader title="My application" />
       <Panel>
-        <PanelBody>
-          <DataTable
-            caption="Your membership applications"
-            columns={applicationColumns(categories.label)}
-            rows={applications}
-            rowKey={(app) => app.id}
-            loading={page.loading}
-            // The row's activation is a real control stretched over the row,
-            // not a click handler on the `<tr>`: a row is not focusable and
-            // takes no Enter key, so the handler this replaces could only be
-            // reached with a mouse.
-            rowAction={(app) => ({
-              label: `Open the application submitted ${fmtDate(app.createdAt)}`,
-              href: `#/application/${encodeURIComponent(app.id)}`,
-            })}
-            empty={
-              <EmptyState
-                title="No membership application is on file for your account."
-                body="An application you submit appears here as soon as it reaches us."
-              />
-            }
-          />
-          {page.pagerProps && <Pager {...page.pagerProps} />}
-        </PanelBody>
+        <ApiDataTable
+          caption="Your membership applications"
+          columns={applicationColumns(categories.label)}
+          endpoint="/api/v1/users/current/applications"
+          responseSchema={myApplicationsListResponseSchema}
+          resolve={(data) => data.applications}
+          resolvePage={(data) => data.page}
+          paginate
+          initialSort="-createdAt"
+          rowKey={(app) => app.id}
+          // The row's activation is a real control stretched over the row,
+          // not a click handler on the `<tr>`: a row is not focusable and
+          // takes no Enter key, so the handler this replaces could only be
+          // reached with a mouse.
+          rowAction={(app) => ({
+            label: `Open the application submitted ${fmtDate(app.createdAt)}`,
+            href: `#/application/${encodeURIComponent(app.id)}`,
+          })}
+          empty={
+            <EmptyState
+              title="No membership application is on file for your account."
+              body="An application you submit appears here as soon as it reaches us."
+            />
+          }
+        />
       </Panel>
     </div>
   );

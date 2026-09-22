@@ -26,6 +26,7 @@ import {
 import { publicUserHeadshotPath } from "../user-headshot";
 
 interface GroupRow {
+  abbreviated_name: string | null;
   id: string;
   slug: string;
   name: string;
@@ -59,7 +60,7 @@ interface GroupRow {
 }
 
 const GROUP_SELECT = `SELECT
-  g.id, g.slug, g.name, g.type_key,
+  g.id, g.slug, g.name, g.abbreviated_name, g.type_key,
   gt.singular_label AS type_singular_label,
   gt.plural_label AS type_plural_label,
   parent.id AS parent_id, parent.slug AS parent_slug, parent.name AS parent_name,
@@ -89,6 +90,7 @@ function mapGroup(row: GroupRow): Group {
     id: row.id,
     slug: row.slug,
     name: row.name,
+    abbreviatedName: row.abbreviated_name,
     type: {
       key: row.type_key,
       singularLabel: row.type_singular_label,
@@ -235,7 +237,9 @@ export function buildGroupsPageQuery(
   query: GroupsListQuery,
   access: GroupListAccess = { canReadAll: true },
 ): OffsetPageQuery {
-  const search = query.q ? buildD1TextSearchFilter(query.q, ["g.name", "g.slug", "g.description"]) : null;
+  const search = query.q
+    ? buildD1TextSearchFilter(query.q, ["g.name", "g.abbreviated_name", "g.slug", "g.description"])
+    : null;
   const conditions: string[] = [];
   const bindings: unknown[] = [];
   // A management projection is already a stronger visibility boundary. Do

@@ -28,6 +28,7 @@ export function publicGroupDetail(group: Group): PublicGroup {
     id: group.id,
     slug: group.slug,
     name: group.name,
+    abbreviatedName: group.abbreviatedName,
     type: group.type,
     parentGroup: group.parentGroup,
     description: group.description,

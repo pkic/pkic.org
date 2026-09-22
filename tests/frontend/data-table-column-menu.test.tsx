@@ -117,6 +117,7 @@ describe("column menus", () => {
     );
     void act(() => hide!.click());
     expect(headers().some((text) => text.startsWith("Stage"))).toBe(false);
+    expect(container.querySelector(".pk-applied-filters")).toBeNull();
 
     popup = openMenu(container, "Choose columns");
     const stage = [...popup.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find((b) =>

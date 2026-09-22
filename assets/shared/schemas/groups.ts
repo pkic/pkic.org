@@ -4,7 +4,7 @@ import { booleanQueryFlagSchema, slugPattern, trimmedString, utcInstantSchema } 
 import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import { MEMBERSHIP_CATEGORY_CATALOG_LIMIT, membershipCategorySchema } from "./membership-categories";
-import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { listQuerySchema, pageInfoSchema, paginatedResponseSchema } from "./pagination";
 import { httpOrSameOriginUrlSchema } from "./urls";
 
 export const groupIdSchema = databaseIdSchema;
@@ -76,7 +76,10 @@ export type GroupLabel = z.infer<typeof groupLabelSchema>;
 export const groupSummarySchema = groupLabelSchema.pick({ id: true, slug: true, name: true });
 export type GroupSummary = z.infer<typeof groupSummarySchema>;
 
+export const groupAbbreviatedNameSchema = trimmedString(1, 40).nullable();
+
 export const groupSchema = z.object({
+  abbreviatedName: groupAbbreviatedNameSchema,
   ...groupLabelSchema.shape,
   parentGroup: groupLabelSchema.nullable(),
   description: z.string().nullable(),
@@ -103,6 +106,7 @@ export type Group = z.infer<typeof groupSchema>;
 
 /** Data-minimized group detail safe for an unauthenticated public response. */
 export const publicGroupSchema = z.object({
+  abbreviatedName: groupAbbreviatedNameSchema,
   ...groupLabelSchema.shape,
   parentGroup: groupLabelSchema.nullable(),
   description: z.string().nullable(),
@@ -164,6 +168,7 @@ const groupPolicyInputShape = {
 };
 
 export const groupCreateSchema = z.object({
+  abbreviatedName: groupAbbreviatedNameSchema.optional(),
   typeKey: groupTypeKeySchema,
   parentGroupId: groupIdSchema.nullable().optional(),
   name: trimmedString(1, 200),
@@ -176,6 +181,7 @@ export const groupCreateSchema = z.object({
 export type GroupCreateInput = z.infer<typeof groupCreateSchema>;
 
 export const groupUpdateSchema = z.object({
+  abbreviatedName: groupAbbreviatedNameSchema.optional(),
   expectedRevision: groupRevisionSchema.optional(),
   typeKey: groupTypeKeySchema.optional(),
   parentGroupId: groupIdSchema.nullable().optional(),
@@ -453,17 +459,32 @@ export const groupLeadershipCandidatesListResponseSchema = paginatedResponseSche
   groupLeadershipCandidateSchema,
 );
 
-export const groupLeadershipListResponseSchema = z.object({
+export const GROUP_LEADERSHIP_SORT_COLUMNS = [
+  "person",
+  "title",
+  "organization",
+  "starts_at",
+  "ends_at",
+  "source",
+] as const;
+export const groupLeadershipListQuerySchema = listQuerySchema(GROUP_LEADERSHIP_SORT_COLUMNS).extend({
+  userRoleId: databaseIdSchema.optional(),
+});
+export type GroupLeadershipListQuery = z.infer<typeof groupLeadershipListQuerySchema>;
+
+export const groupLeadershipListResponseSchema = paginatedResponseSchema(
+  "assignments",
+  groupLeadershipAssignmentSchema,
+).extend({
   group: groupLabelSchema,
   governanceInheritanceMode: groupGovernanceInheritanceModeSchema,
   /** The group type's default titles, used to label roles and pre-fill new assignments. */
   titles: groupLeadershipTitlesSchema,
   /** The vocabulary the title control offers per role: the type's own title first, then reference data. */
   titleOptions: groupLeadershipTitleOptionsSchema,
-  /** Effective leadership right now: local assignments plus those inherited from ancestors. */
-  assignments: z.array(groupLeadershipAssignmentSchema),
   /** Closed local terms, most recently ended first. */
   past: z.array(groupLeadershipAssignmentSchema),
+  pastPage: pageInfoSchema,
 });
 export type GroupLeadershipListResponse = z.infer<typeof groupLeadershipListResponseSchema>;
 

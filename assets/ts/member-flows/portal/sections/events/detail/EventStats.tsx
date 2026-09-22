@@ -1,8 +1,8 @@
-import type { ComponentChildren } from "preact";
 import { Alert } from "../../../../../ui/Alert";
-import { Badge, type BadgeTone } from "../../../../../ui/Badge";
+import { Badge } from "../../../../../ui/Badge";
 import { Button } from "../../../../../ui/Button";
-import { DataTable, type DataTableColumn } from "../../../../../ui/DataTable";
+import { statusBars } from "../../../../../ui/chart";
+import { IconRefresh } from "../../../../../components/icons";
 import { EmptyState } from "../../../../../ui/EmptyState";
 import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
 import { Spinner } from "../../../../../ui/Spinner";
@@ -46,74 +46,12 @@ function attendancePendingFill(type: string): string {
   return `color-mix(in oklab, ${attendanceFill(type)} 38%, var(--pk-surface))`;
 }
 
-/** Invite lifecycle tones. The wording stays canonical through `statusLabel`. */
-const INVITE_STATUS_TONE: Record<string, BadgeTone> = {
-  sent: "info",
-  accepted: "ok",
-  declined: "danger",
-  revoked: "warn",
-  expired: "neutral",
-};
-
-/** "sent" reads as "Pending" from an invite-recipient's point of view — override the default status label. */
-function inviteBadge(status: string) {
-  return (
-    <Badge tone={INVITE_STATUS_TONE[status] ?? "neutral"}>{status === "sent" ? "Pending" : statusLabel(status)}</Badge>
-  );
-}
-
-interface CountRow {
-  key: string;
-  label: ComponentChildren;
-  count: number;
-}
-
-function countColumns(header: string): ReadonlyArray<DataTableColumn<CountRow>> {
-  return [
-    { id: "label", header, cell: (row) => row.label },
-    { id: "count", header: "Count", align: "end", cell: (row) => row.count },
-  ];
-}
-
-const countRowKey = (row: CountRow): string => row.key;
-
-interface DeclineReasonRow {
-  key: string;
-  reason: string;
-  count: number;
-  unsubscribed: number;
-}
-
-const DECLINE_REASON_COLUMNS: ReadonlyArray<DataTableColumn<DeclineReasonRow>> = [
-  { id: "reason", header: "Reason", cell: (row) => row.reason },
-  { id: "count", header: "Count", align: "end", cell: (row) => row.count },
-  { id: "unsubscribed", header: "Unsubscribed", align: "end", cell: (row) => row.unsubscribed },
-];
-
 interface WaitlistDayRow {
   label: string;
   waiting: number;
   offered: number;
   accepted: number;
 }
-
-const WAITLIST_DAY_COLUMNS: ReadonlyArray<DataTableColumn<WaitlistDayRow>> = [
-  { id: "day", header: "Event day", cell: (row) => row.label },
-  { id: "waiting", header: "Waiting", align: "end", cell: (row) => row.waiting },
-  { id: "offered", header: "Offered", align: "end", cell: (row) => row.offered },
-  {
-    id: "open",
-    header: "Open now",
-    align: "end",
-    cell: (row) => <span class="pk-strong">{row.waiting + row.offered}</span>,
-  },
-  {
-    id: "accepted",
-    header: "Accepted historically",
-    align: "end",
-    cell: (row) => <span class="pk-muted">{row.accepted}</span>,
-  },
-];
 
 /** The page's sections, each a routed tab (#118). */
 type StatsSection = "overview" | "attendance" | "registrations" | "invitations" | "calendar";
@@ -272,12 +210,12 @@ export function EventStats({
   const waitlistAcceptedCount = waitlistTotals.byStatus?.accepted ?? 0;
   const waitlistOfferedCount = waitlistTotals.byStatus?.offered ?? 0;
 
-  const rsvpStatusRows: CountRow[] = Object.entries(s.rsvp?.byStatus ?? {}).map(([status, count]) => ({
+  const rsvpStatusRows = Object.entries(s.rsvp?.byStatus ?? {}).map(([status, count]) => ({
     key: status,
     label: statusLabel(status),
     count,
   }));
-  const rsvpActionRows: CountRow[] = Object.entries(s.rsvp?.actionsTaken ?? {}).map(([action, count]) => ({
+  const rsvpActionRows = Object.entries(s.rsvp?.actionsTaken ?? {}).map(([action, count]) => ({
     key: action,
     label: statusLabel(action),
     count,
@@ -311,8 +249,8 @@ export function EventStats({
         <>
           <Panel>
             <PanelHeader title="Event dashboard" headingLevel={2}>
-              <Button size="sm" onClick={() => void reload()}>
-                <span aria-hidden="true">↺</span> Refresh
+              <Button onClick={() => void reload()} aria-label="Refresh dashboard" icon>
+                <IconRefresh />
               </Button>
             </PanelHeader>
             <PanelBody class="pk-stack">
@@ -440,11 +378,15 @@ export function EventStats({
                     tone="ok"
                   />
                 </div>
-                <DataTable
+              </PanelBody>
+              <PanelBody>
+                <StackedBarChart
                   caption="Open waitlist by event day"
-                  columns={WAITLIST_DAY_COLUMNS}
-                  rows={waitlistDayRows}
-                  rowKey={(row) => row.label}
+                  labels={waitlistDayRows.map((row) => row.label)}
+                  series={[
+                    { label: "Waiting", values: waitlistDayRows.map((row) => row.waiting), color: "var(--pk-warn)" },
+                    { label: "Offered", values: waitlistDayRows.map((row) => row.offered), color: "var(--pk-info)" },
+                  ]}
                 />
               </PanelBody>
             </Panel>
@@ -453,45 +395,46 @@ export function EventStats({
       )}
 
       {active === "invitations" && (
-        <div class="pk-grid pk-grid--roomy">
+        <div class="pk-grid pk-grid--cards">
           {(["attendee", "speaker"] as const).map((type) => {
             const inv = s.invites?.[type];
             if (!inv) return null;
             const declineReasons = inv.declineReasons ?? [];
             const title = type === "attendee" ? "Attendee invites" : "Speaker invites";
-            const inviteRows: CountRow[] = [
-              ...Object.entries(inv.byStatus ?? {}).map(([status, count]) => ({
-                key: status,
-                label: inviteBadge(status),
-                count,
-              })),
-              { key: "__total", label: <span class="pk-strong">Total</span>, count: inv.total ?? 0 },
-            ];
             return (
-              <Panel key={type}>
+              <Panel key={type} aria-label={title}>
                 <PanelHeader title={title} headingLevel={2} />
-                <PanelBody class="pk-stack pk-stack--snug">
-                  <DataTable
-                    caption={`${title} by status`}
-                    columns={countColumns("Status")}
-                    rows={inviteRows}
-                    rowKey={countRowKey}
+                <PanelBody class="pk-stack">
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html: statusBars(
+                        Object.fromEntries(
+                          Object.entries(inv.byStatus).map(([status, count]) => [
+                            status === "sent" ? "Pending" : statusLabel(status),
+                            count,
+                          ]),
+                        ),
+                        inv.total,
+                      ),
+                    }}
                   />
                   {declineReasons.length > 0 && (
-                    <>
-                      <p class="pk-strong pk-small">Decline reasons</p>
-                      <DataTable
-                        caption={`${title}: decline reasons`}
-                        columns={DECLINE_REASON_COLUMNS}
-                        rows={declineReasons.map((dr, index) => ({
-                          key: dr.reason_code ?? `unspecified-${String(index)}`,
-                          reason: dr.reason_code ?? "Not specified",
-                          count: dr.count,
-                          unsubscribed: dr.unsubscribed,
-                        }))}
-                        rowKey={(row) => row.key}
+                    <section aria-label={`${title}: decline reasons`} class="pk-stack pk-stack--snug">
+                      <h3 class="pk-panel__title">Decline reasons</h3>
+                      <div
+                        dangerouslySetInnerHTML={{
+                          __html: statusBars(
+                            Object.fromEntries(
+                              declineReasons.map((row) => [row.reason_code ?? "Not specified", row.count]),
+                            ),
+                            declineReasons.reduce((sum, row) => sum + row.count, 0),
+                          ),
+                        }}
                       />
-                    </>
+                      <p class="pk-small pk-muted">
+                        {declineReasons.reduce((sum, row) => sum + row.unsubscribed, 0)} unsubscribed
+                      </p>
+                    </section>
                   )}
                 </PanelBody>
               </Panel>
@@ -504,22 +447,28 @@ export function EventStats({
         <Panel>
           <PanelHeader title={`Calendar RSVP (${String(s.rsvp.total)})`} headingLevel={2} />
           <PanelBody>
-            <div class="pk-grid pk-grid--roomy">
-              <DataTable
-                caption="By status"
-                showCaption
-                columns={countColumns("Status")}
-                rows={rsvpStatusRows}
-                rowKey={countRowKey}
+            <div class="pk-stack">
+              <h3 class="pk-panel__title">By status</h3>
+              <div
+                dangerouslySetInnerHTML={{
+                  __html: statusBars(
+                    Object.fromEntries(rsvpStatusRows.map((row) => [String(row.label), row.count])),
+                    s.rsvp.total,
+                  ),
+                }}
               />
               {rsvpActionRows.length > 0 && (
-                <DataTable
-                  caption="Actions taken"
-                  showCaption
-                  columns={countColumns("Action")}
-                  rows={rsvpActionRows}
-                  rowKey={countRowKey}
-                />
+                <>
+                  <h3 class="pk-panel__title">Actions taken</h3>
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html: statusBars(
+                        Object.fromEntries(rsvpActionRows.map((row) => [String(row.label), row.count])),
+                        rsvpActionRows.reduce((sum, row) => sum + row.count, 0),
+                      ),
+                    }}
+                  />
+                </>
               )}
             </div>
           </PanelBody>

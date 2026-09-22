@@ -70,7 +70,9 @@ describe("DataTable", () => {
 
   it("renders the rows it was given, in the order it was given them", () => {
     const container = mount(<DataTable caption="Members" columns={columns} rows={rows} rowKey={(r) => r.id} />);
-    const names = [...container.querySelectorAll("tbody tr td:first-child")].map((cell) => cell.textContent);
+    const names = [...container.querySelectorAll("tbody tr td:first-child .pk-table__value")].map(
+      (cell) => cell.textContent,
+    );
     expect(names).toEqual(["Marit Halvorsen", "Jelani Okonkwo", "Sofia Beaumont"]);
   });
 

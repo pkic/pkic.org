@@ -141,68 +141,68 @@ export function RoleDetail({ roleId, canGrant, canRevoke }: { roleId: string; ca
               ) : canGrant ? (
                 <RoleAssignForm roleId={role.id} onAssigned={() => void assignmentsRef.current?.reload()} />
               ) : null}
-              <ApiDataTable
-                caption={`${role.name} assignees`}
-                endpoint={`/api/v1/roles/${encodeURIComponent(role.id)}/assignments`}
-                responseSchema={roleAssignmentsListResponseSchema}
-                resolve={(data) => data.assignments}
-                resolvePage={(data) => data.page}
-                paginate
-                initialPageSize={25}
-                initialSort="-created_at"
-                searchPlaceholder="Search assignees…"
-                actionsRef={assignmentsRef}
-                rowKey={(assignment) => assignment.userRoleId}
-                empty="No one holds this role"
-                columns={[
-                  {
-                    header: "Person",
-                    cell: (assignment) => <PersonCell size="sm" name={assignment.name} email={assignment.email} />,
-                    sort: { asc: "name", desc: "-name" },
-                  },
-                  {
-                    header: "Context",
-                    cell: (assignment) =>
-                      assignment.contextType ? (
-                        `${assignment.contextType}:${assignment.contextId}`
-                      ) : (
-                        <span class="pk-muted">Global</span>
-                      ),
-                    className: "pk-mono pk-small",
-                    sort: { asc: "context_type", desc: "-context_type" },
-                  },
-                  {
-                    header: "Expires",
-                    cell: (assignment) =>
-                      assignment.expiresAt ? fmt(assignment.expiresAt) : <span class="pk-muted">Never</span>,
-                    className: "pk-small",
-                    sort: { asc: "expires_at", desc: "-expires_at" },
-                  },
-                  {
-                    header: "Granted",
-                    cell: (assignment) => fmtDate(assignment.createdAt),
-                    className: "pk-mono pk-small",
-                    sort: { asc: "created_at", desc: "-created_at" },
-                  },
-                  {
-                    header: "",
-                    cell: (assignment) =>
-                      canRevoke ? (
-                        <RowActions
-                          subject={assignment.name}
-                          actions={[
-                            {
-                              id: "unassign",
-                              label: "Unassign role",
-                              onSelect: () => void handleUnassign(assignment),
-                            },
-                          ]}
-                        />
-                      ) : null,
-                  },
-                ]}
-              />
             </PanelBody>
+            <ApiDataTable
+              caption={`${role.name} assignees`}
+              endpoint={`/api/v1/roles/${encodeURIComponent(role.id)}/assignments`}
+              responseSchema={roleAssignmentsListResponseSchema}
+              resolve={(data) => data.assignments}
+              resolvePage={(data) => data.page}
+              paginate
+              initialPageSize={25}
+              initialSort="-created_at"
+              searchPlaceholder="Search assignees…"
+              actionsRef={assignmentsRef}
+              rowKey={(assignment) => assignment.userRoleId}
+              empty="No one holds this role"
+              columns={[
+                {
+                  header: "Person",
+                  cell: (assignment) => <PersonCell size="sm" name={assignment.name} email={assignment.email} />,
+                  sort: { asc: "name", desc: "-name" },
+                },
+                {
+                  header: "Context",
+                  cell: (assignment) =>
+                    assignment.contextType ? (
+                      `${assignment.contextType}:${assignment.contextId}`
+                    ) : (
+                      <span class="pk-muted">Global</span>
+                    ),
+                  className: "pk-mono pk-small",
+                  sort: { asc: "context_type", desc: "-context_type" },
+                },
+                {
+                  header: "Expires",
+                  cell: (assignment) =>
+                    assignment.expiresAt ? fmt(assignment.expiresAt) : <span class="pk-muted">Never</span>,
+                  className: "pk-small",
+                  sort: { asc: "expires_at", desc: "-expires_at" },
+                },
+                {
+                  header: "Granted",
+                  cell: (assignment) => fmtDate(assignment.createdAt),
+                  className: "pk-mono pk-small",
+                  sort: { asc: "created_at", desc: "-created_at" },
+                },
+                {
+                  header: "",
+                  cell: (assignment) =>
+                    canRevoke ? (
+                      <RowActions
+                        subject={assignment.name}
+                        actions={[
+                          {
+                            id: "unassign",
+                            label: "Unassign role",
+                            onSelect: () => void handleUnassign(assignment),
+                          },
+                        ]}
+                      />
+                    ) : null,
+                },
+              ]}
+            />
           </Panel>
         </>
       ) : null}

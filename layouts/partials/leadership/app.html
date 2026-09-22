@@ -15,4 +15,6 @@
   data-group="{{ .group }}"
   data-view="{{ .view | default "roster" }}"
   data-color="{{ .color | default "green" }}"
-></div>
+>
+  {{ with .pastHeading }}<template data-past-heading>{{ . }}</template>{{ end }}
+</div>

@@ -117,14 +117,12 @@ export function SubjectAnalytics<Row>({
       {table && (
         <Panel>
           <PanelHeader title={table.title} />
-          <PanelBody>
-            <DataTable
-              caption={table.title}
-              columns={table.columns}
-              data={table.rows}
-              empty={<EmptyState title={table.empty} />}
-            />
-          </PanelBody>
+          <DataTable
+            caption={table.title}
+            columns={table.columns}
+            data={table.rows}
+            empty={<EmptyState title={table.empty} />}
+          />
         </Panel>
       )}
     </div>

@@ -42,6 +42,7 @@ vi.mock("../../assets/ts/member-flows/portal/sections/management/GroupStatistics
 
 function group(id: string, name: string) {
   return {
+    abbreviatedName: null,
     id,
     slug: name.toLowerCase().replace(/\s+/g, "-"),
     name,

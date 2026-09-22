@@ -13,7 +13,7 @@
  * the person took part and nothing more. The reader's permissions do not
  * enter into it.
  */
-import { useEffect, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
 import type { z } from "zod";
 
 import {
@@ -22,12 +22,12 @@ import {
   userMeetingParticipationListResponseSchema,
   userVoteParticipationListResponseSchema,
 } from "../../../../../shared/schemas/user-participation-history";
-import { getJson } from "../../../../shared/api-client";
+import { ApiDataTable } from "../../../../components/ApiDataTable";
 // The product adapter, not the design system's Badge: `status` maps this
 // product's vocabulary (a participant role, an upload vs a review) onto the
 // system's tones, which is exactly the translation that layer exists for.
 import { Badge } from "../../../../components/Badge";
-import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
+import { type Column } from "../../../../components/Table";
 import { usePortalHashLocation } from "../../hash-location";
 import { TabList } from "../../../../ui/TabList";
 import { fmt } from "../../ui";
@@ -48,9 +48,10 @@ function occurred(value: string) {
 
 export function UserParticipationHistory({ userId, canRead }: { userId: string; canRead: boolean }) {
   const [tab, setTab] = useState<TabId>("events");
+  if (!canRead) return emptyState("Participation history is not available for this account.");
 
   return (
-    <div class="pk-table-list">
+    <div class="pk-stack">
       <div class="pk-table-list__inset">
         <TabList
           label="Participation"
@@ -63,44 +64,14 @@ export function UserParticipationHistory({ userId, canRead }: { userId: string; 
         />
       </div>
 
-      {tab === "events" && <EventsTab userId={userId} canRead={canRead} />}
-      {tab === "meetings" && <MeetingsTab userId={userId} canRead={canRead} />}
-      {tab === "documents" && <DocumentsTab userId={userId} canRead={canRead} />}
-      {tab === "votes" && <VotesTab userId={userId} canRead={canRead} />}
+      <div id="participation-panel" role="tabpanel" aria-labelledby={`participation-${tab}`}>
+        {tab === "events" && <EventsTab userId={userId} />}
+        {tab === "meetings" && <MeetingsTab userId={userId} />}
+        {tab === "documents" && <DocumentsTab userId={userId} />}
+        {tab === "votes" && <VotesTab userId={userId} />}
+      </div>
     </div>
   );
-}
-
-/**
- * One tab's page. A tab that cannot load shows the same empty state as a tab
- * with nothing in it: a record still reads without its history.
- */
-function useHistoryPage<Schema extends z.ZodType>(
-  url: string,
-  schema: Schema,
-  enabled: boolean,
-): { data: z.output<Schema> | null; loading: boolean } {
-  const [data, setData] = useState<z.output<Schema> | null>(null);
-  const [loading, setLoading] = useState(true);
-  useEffect(() => {
-    if (!enabled) return;
-    let cancelled = false;
-    setLoading(true);
-    void getJson(url, schema)
-      .then((page) => {
-        if (!cancelled) setData(page);
-      })
-      .catch(() => {
-        if (!cancelled) setData(null);
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [url, schema, enabled]);
-  return { data, loading };
 }
 
 function emptyState(what: string) {
@@ -112,16 +83,10 @@ function emptyState(what: string) {
   );
 }
 
-function EventsTab({ userId, canRead }: { userId: string; canRead: boolean }) {
-  const { data, loading } = useHistoryPage(
-    `/api/v1/users/${encodeURIComponent(userId)}/participation/events`,
-    userEventParticipationListResponseSchema,
-    canRead,
-  );
-  const columns: DataTableColumn<NonNullable<typeof data>["events"][number]>[] = [
-    { id: "name", header: "Event", cell: (row) => <span class="pk-strong">{row.eventName}</span> },
+function EventsTab({ userId }: { userId: string }) {
+  const columns: Column<z.infer<typeof userEventParticipationListResponseSchema>["events"][number]>[] = [
+    { header: "Event", cell: (row) => <span class="pk-strong">{row.eventName}</span> },
     {
-      id: "roles",
       header: "Roles",
       width: "fit",
       // One row per event carrying every role held there, so somebody who
@@ -134,109 +99,107 @@ function EventsTab({ userId, canRead }: { userId: string; canRead: boolean }) {
         </span>
       ),
     },
-    { id: "location", header: "Location", cell: (row) => row.location ?? "—" },
-    { id: "date", header: "Date", width: "fit", cell: (row) => occurred(row.occurredAt) },
+    { header: "Location", cell: (row) => row.location ?? "—" },
+    { header: "Date", width: "fit", cell: (row) => occurred(row.occurredAt) },
   ];
   return (
-    <DataTable
+    <ApiDataTable
       caption="Events attended"
       columns={columns}
-      rows={data?.events ?? []}
+      endpoint={`/api/v1/users/${encodeURIComponent(userId)}/participation/events`}
+      responseSchema={userEventParticipationListResponseSchema}
+      resolve={(data) => data.events}
+      resolvePage={(data) => data.page}
+      paginate
+      initialSort="-occurredAt"
       rowKey={(row) => row.eventId}
       // The row names an event, so it opens that event (#45).
       rowAction={(row) => ({
         label: `Open ${row.eventName}`,
         href: usePortalHashLocation.hrefs(`/events/${encodeURIComponent(row.eventSlug)}`),
       })}
-      loading={loading}
       empty={emptyState("Events appear here as they are attended.")}
     />
   );
 }
 
-function MeetingsTab({ userId, canRead }: { userId: string; canRead: boolean }) {
-  const { data, loading } = useHistoryPage(
-    `/api/v1/users/${encodeURIComponent(userId)}/participation/meetings`,
-    userMeetingParticipationListResponseSchema,
-    canRead,
-  );
-  const columns: DataTableColumn<NonNullable<typeof data>["meetings"][number]>[] = [
-    { id: "name", header: "Meeting", width: "primary", cell: (row) => <span class="pk-strong">{row.eventName}</span> },
-    { id: "group", header: "Group", width: "fit", cell: (row) => row.group?.name ?? "—" },
-    { id: "date", header: "Date", width: "fit", cell: (row) => occurred(row.occurredAt) },
+function MeetingsTab({ userId }: { userId: string }) {
+  const columns: Column<z.infer<typeof userMeetingParticipationListResponseSchema>["meetings"][number]>[] = [
+    { header: "Meeting", width: "primary", cell: (row) => <span class="pk-strong">{row.eventName}</span> },
+    { header: "Group", width: "fit", cell: (row) => row.group?.name ?? "—" },
+    { header: "Date", width: "fit", cell: (row) => occurred(row.occurredAt) },
   ];
   return (
-    <DataTable
+    <ApiDataTable
       caption="Meetings attended"
       columns={columns}
-      rows={data?.meetings ?? []}
+      endpoint={`/api/v1/users/${encodeURIComponent(userId)}/participation/meetings`}
+      responseSchema={userMeetingParticipationListResponseSchema}
+      resolve={(data) => data.meetings}
+      resolvePage={(data) => data.page}
+      paginate
+      initialSort="-occurredAt"
       rowKey={(row) => row.occurrenceId}
-      loading={loading}
       empty={emptyState("Meetings appear here as they are joined.")}
     />
   );
 }
 
-function DocumentsTab({ userId, canRead }: { userId: string; canRead: boolean }) {
-  const { data, loading } = useHistoryPage(
-    `/api/v1/users/${encodeURIComponent(userId)}/participation/documents`,
-    userDocumentContributionListResponseSchema,
-    canRead,
-  );
-  const columns: DataTableColumn<NonNullable<typeof data>["documents"][number]>[] = [
+function DocumentsTab({ userId }: { userId: string }) {
+  const columns: Column<z.infer<typeof userDocumentContributionListResponseSchema>["documents"][number]>[] = [
     {
-      id: "title",
       header: "Document",
       width: "primary",
       cell: (row) => <span class="pk-strong">{row.proposalTitle}</span>,
     },
     {
-      id: "contribution",
       header: "Contribution",
       width: "fit",
       cell: (row) => <Badge status={row.contribution} />,
     },
-    { id: "date", header: "Updated", width: "fit", cell: (row) => occurred(row.occurredAt) },
+    { header: "Updated", width: "fit", cell: (row) => occurred(row.occurredAt) },
   ];
   return (
-    <DataTable
+    <ApiDataTable
       caption="Documents contributed to"
       columns={columns}
-      rows={data?.documents ?? []}
+      endpoint={`/api/v1/users/${encodeURIComponent(userId)}/participation/documents`}
+      responseSchema={userDocumentContributionListResponseSchema}
+      resolve={(data) => data.documents}
+      resolvePage={(data) => data.page}
+      paginate
+      initialSort="-occurredAt"
       rowKey={(row) => row.contributionId}
-      loading={loading}
       empty={emptyState("Uploads and reviews appear here.")}
     />
   );
 }
 
-function VotesTab({ userId, canRead }: { userId: string; canRead: boolean }) {
-  const { data, loading } = useHistoryPage(
-    `/api/v1/users/${encodeURIComponent(userId)}/participation/votes`,
-    userVoteParticipationListResponseSchema,
-    canRead,
-  );
-  const columns: DataTableColumn<NonNullable<typeof data>["votes"][number]>[] = [
-    { id: "title", header: "Ballot", width: "primary", cell: (row) => <span class="pk-strong">{row.voteTitle}</span> },
-    { id: "group", header: "Group", width: "fit", cell: (row) => row.group.name },
+function VotesTab({ userId }: { userId: string }) {
+  const columns: Column<z.infer<typeof userVoteParticipationListResponseSchema>["votes"][number]>[] = [
+    { header: "Ballot", width: "primary", cell: (row) => <span class="pk-strong">{row.voteTitle}</span> },
+    { header: "Group", width: "fit", cell: (row) => row.group.name },
     {
-      id: "choice",
       header: "Vote",
       width: "fit",
       // Present only for a vote its own group chose to publish in full. Every
       // other ballot reads as participation alone.
       cell: (row) => (row.choice ? <Badge status={row.choice} /> : <span class="pk-muted">Not published</span>),
     },
-    { id: "date", header: "Closed", width: "fit", cell: (row) => occurred(row.occurredAt) },
+    { header: "Closed", width: "fit", cell: (row) => occurred(row.occurredAt) },
   ];
   return (
     <>
-      <DataTable
+      <ApiDataTable
         caption="Votes participated in"
         columns={columns}
-        rows={data?.votes ?? []}
+        endpoint={`/api/v1/users/${encodeURIComponent(userId)}/participation/votes`}
+        responseSchema={userVoteParticipationListResponseSchema}
+        resolve={(data) => data.votes}
+        resolvePage={(data) => data.page}
+        paginate
+        initialSort="-occurredAt"
         rowKey={(row) => `${row.voteId}-${String(row.round)}`}
-        loading={loading}
         empty={emptyState("Ballots appear here as they are cast.")}
       />
       <div class="pk-table-list__inset">

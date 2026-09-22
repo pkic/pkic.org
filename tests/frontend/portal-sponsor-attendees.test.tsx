@@ -126,7 +126,8 @@ describe("sponsor attendee roster", () => {
     const download = container.querySelector<HTMLAnchorElement>("a[download]")!;
     expect(download.getAttribute("href")).toBe(`${ATTENDEES_PATH}?format=csv`);
     expect(download.getAttribute("download")).toBe("attendees-spring-summit.csv");
-    expect(download.textContent).toBe("Download CSV");
+    expect(download.getAttribute("aria-label")).toBe("Download CSV");
+    expect(download.querySelector("svg")).not.toBeNull();
   });
 
   it("announces an empty roster instead of an empty grid", async () => {
@@ -137,7 +138,7 @@ describe("sponsor attendee roster", () => {
     await settle();
 
     const status = container.querySelector('[role="status"]');
-    expect(status?.textContent).toContain("No consenting attendees yet");
+    expect(status?.textContent).toContain("No consenting attendees found");
     expect(container.querySelectorAll("tbody tr")).toHaveLength(0);
   });
 

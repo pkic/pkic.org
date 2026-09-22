@@ -204,38 +204,38 @@ export function ResourceSharingEditor({
         </form>
         {saved && <Alert tone="ok">Sharing grant saved.</Alert>}
         <ErrorAlert error={error} />
-        <ApiDataTable
-          caption={`Groups this ${resourceLabel} is shared with`}
-          endpoint={endpoint}
-          responseSchema={config.listResponseSchema}
-          resolve={(response) => response.grants}
-          resolvePage={(response) => response.page}
-          paginate
-          searchPlaceholder="Search shared groups…"
-          initialSort="group"
-          actionsRef={tableActions}
-          columns={[
-            { header: "Group", cell: (grant) => grant.granteeGroup.name, sort: { asc: "group", desc: "-group" } },
-            {
-              header: "Capability",
-              cell: (grant) => capabilityLabel(grant.capability),
-              sort: { asc: "capability", desc: "-capability" },
-            },
-            {
-              header: "",
-              className: "pk-end",
-              cell: (grant) => (
-                <RowActions
-                  subject={grant.granteeGroup.name}
-                  actions={[{ id: "revoke", label: "Revoke", onSelect: () => void revokeGrant(grant) }]}
-                />
-              ),
-            },
-          ]}
-          empty="This resource is not shared with any other group."
-          rowKey={(grant) => `${grant.granteeGroup.id}:${grant.capability}`}
-        />
       </PanelBody>
+      <ApiDataTable
+        caption={`Groups this ${resourceLabel} is shared with`}
+        endpoint={endpoint}
+        responseSchema={config.listResponseSchema}
+        resolve={(response) => response.grants}
+        resolvePage={(response) => response.page}
+        paginate
+        searchPlaceholder="Search shared groups…"
+        initialSort="group"
+        actionsRef={tableActions}
+        columns={[
+          { header: "Group", cell: (grant) => grant.granteeGroup.name, sort: { asc: "group", desc: "-group" } },
+          {
+            header: "Capability",
+            cell: (grant) => capabilityLabel(grant.capability),
+            sort: { asc: "capability", desc: "-capability" },
+          },
+          {
+            header: "",
+            className: "pk-end",
+            cell: (grant) => (
+              <RowActions
+                subject={grant.granteeGroup.name}
+                actions={[{ id: "revoke", label: "Revoke", onSelect: () => void revokeGrant(grant) }]}
+              />
+            ),
+          },
+        ]}
+        empty="This resource is not shared with any other group."
+        rowKey={(grant) => `${grant.granteeGroup.id}:${grant.capability}`}
+      />
     </Panel>
   );
 }
