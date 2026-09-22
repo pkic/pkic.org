@@ -7,16 +7,21 @@
  */
 
 @layer components {
+  .pk-check--fill {
+    flex: 1;
+    min-width: 0;
+  }
+
   .pk-field {
     display: flex;
     flex-direction: column;
-    gap: 0.3rem;
+    gap: var(--pk-2);
     min-width: 0;
   }
 
   .pk-field__label {
-    font-size: var(--pk-text-sm);
-    font-weight: 500;
+    font-size: var(--pk-text-md);
+    font-weight: 600;
     color: var(--pk-ink);
   }
 

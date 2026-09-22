@@ -69,6 +69,10 @@
     background: var(--pk-ok-soft);
   }
 
+  .pk-panel__body--warn {
+    background: var(--pk-warn-soft);
+  }
+
   .pk-panel__body--info {
     background: var(--pk-info-soft);
   }

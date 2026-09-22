@@ -166,7 +166,6 @@ export function IconPencil(props: SvgProps) {
 export function IconCheckmark(props: SvgProps) {
   return (
     <svg
-      class="event-flow-consent-indicator-check"
       xmlns="http://www.w3.org/2000/svg"
       width="12"
       height="12"

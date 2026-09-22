@@ -208,13 +208,9 @@
    */
   .pk-split {
     display: grid;
-    grid-template-columns: minmax(0, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(min(30rem, 100%), 1fr));
     gap: var(--pk-gap, var(--pk-4));
     align-items: start;
-  }
-
-  .pk-split {
-    grid-template-columns: repeat(auto-fit, minmax(min(30rem, 100%), 1fr));
   }
 
   /* A compact record summary beside a wider working pane. Both retain a

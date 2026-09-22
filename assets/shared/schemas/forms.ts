@@ -5,6 +5,7 @@ import { formFieldOptionsSchema, formFieldRulesSchema } from "./form-field-rules
 import { addDuplicateStringIssues } from "./refinements";
 import { proposalTypeSchema } from "./proposal-management";
 import { eventDayReadModelSchema, eventSummarySchema, requiredTermSchema } from "./event-read-models";
+import { eventRegistrationPolicySchema } from "./event-series";
 import { groupIdSchema } from "./groups";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
@@ -267,6 +268,7 @@ export const eventFormPlacementParamsSchema = eventSlugParamsSchema.extend({
 
 export const eventFormsResponseSchema = z.object({
   event: eventSummarySchema,
+  registrationPolicy: eventRegistrationPolicySchema,
   purpose: eventFormsPurposeSchema,
   form: activeFormSummarySchema.extend({ key: z.string() }).nullable(),
   requiredTerms: z.array(requiredTermSchema),

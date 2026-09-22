@@ -36,6 +36,7 @@ function placements(requiredTerms: unknown[] = []): Record<string, unknown> {
     event: { id: "20000000-0000-4000-8000-000000000001", slug: "pqc-2026", name: "PQC Conference 2026" },
     purpose: "proposal_submission",
     form: null,
+    registrationPolicy: "public",
     requiredTerms,
     allowedSessionTypes: ["talk"],
     eventDays: [],
@@ -165,8 +166,6 @@ describe("proposal submission gate", () => {
     const consent = document.querySelector<HTMLInputElement>("input[data-consent-input]");
     expect(consent).not.toBeNull();
     expect(consent?.getAttribute("aria-invalid")).toBe("true");
-    const field = consent?.closest(".pk-field");
-    expect(field?.className).toContain("pk-field--invalid");
     const messageId = consent?.getAttribute("aria-describedby");
     expect(messageId).toBeTruthy();
     expect(document.querySelector(`[id="${messageId!.split(" ").at(-1)!}"]`)?.getAttribute("role")).toBe("alert");

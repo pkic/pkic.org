@@ -3,13 +3,17 @@ import {
   type EventFormsPurpose,
   type EventFormsResponse,
 } from "../../../../assets/shared/schemas/forms";
+import { normalizeEventRegistrationPolicy } from "./detail";
 import type { DatabaseLike } from "../../types";
 import { countRegisteredByEventDay, listEventDays } from "../event-days";
 import { eventDayReadModels, requiredTermReadModel } from "../event-read-models";
 import { getRequiredTerms, resolveEventSessionTypes, type EventRecord } from "../events";
 import { getActiveFormForEvent, toEventFormResolutionEvent } from "../forms";
 
-type EventConfigurationEvent = Pick<EventRecord, "id" | "slug" | "name" | "settings_json" | "source_mode">;
+type EventConfigurationEvent = Pick<
+  EventRecord,
+  "id" | "slug" | "name" | "settings_json" | "source_mode" | "registration_mode"
+>;
 
 /**
  * Builds the single event-registration projection shared by public and group
@@ -34,6 +38,7 @@ export async function getEventRegistrationConfiguration(
 
   return eventFormsResponseSchema.parse({
     event: { id: event.id, slug: event.slug, name: event.name },
+    registrationPolicy: normalizeEventRegistrationPolicy(event.registration_mode),
     purpose,
     form,
     allowedSessionTypes: resolveEventSessionTypes(event.settings_json).map((sessionType) => sessionType.label),

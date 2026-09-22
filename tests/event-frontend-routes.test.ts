@@ -1,3 +1,4 @@
+import { eventFormsResponseSchema } from "../assets/shared/schemas/forms";
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
@@ -156,10 +157,8 @@ describe("event frontend routes and hydration contracts", () => {
     );
 
     expect(response.status).toBe(200);
-    const payload = (await response.json()) as {
-      purpose: string;
-      requiredTerms: Array<{ termKey: string; version: string; required: boolean }>;
-    };
+    const payload = eventFormsResponseSchema.parse(await response.json());
+    expect(payload.registrationPolicy).toBe("public");
 
     expect(payload.purpose).toBe("event_registration");
     expect(payload.requiredTerms.length).toBeGreaterThan(0);

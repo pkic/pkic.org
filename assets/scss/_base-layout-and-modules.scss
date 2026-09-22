@@ -526,24 +526,19 @@ blockquote::after {
   padding: 1.5rem;
 }
 
-// Public-page heading typography. The portal application (#portal-app) is
-// excluded: its design system owns every heading in there, and these
-// unlayered rules — gradient fills, !important weights, prose margins — were
-// silently overriding `.pk` panel and page-header titles (a panel called
-// "Passkeys" rendered as gradient text while its siblings stayed ink).
-// The exclusion is wrapped in `:where()` so it adds no specificity: a bare
-// `:not(#portal-app *)` carries the id's weight, and these element rules
-// then outranked every card and component title on the public site.
+// Prose heading typography belongs outside shared design-system roots.
+// Components use the same heading rules on the public site and in the portal.
+// Keep the exclusion at zero specificity so authored card styles still win.
 // H2: gradient text from accent → accent-2, creating visual interest without a solid color wall
 @mixin readable-dark-headings {
-  main h2:not(:where(#portal-app *)) {
+  main h2:not(:where(.pk *)) {
     background: none;
     color: var(--pk-ink);
     -webkit-text-fill-color: currentColor;
   }
 }
 
-main h2:not(:where(#portal-app *)) {
+main h2:not(:where(.pk *)) {
   font-size: 1.5em;
   font-weight: 700 !important;
   background: linear-gradient(
@@ -576,7 +571,7 @@ main h2:not(:where(#portal-app *)) {
 }
 
 // H3: solid companion color — muted, never alarming
-main h3:not(:where(#portal-app *)) {
+main h3:not(:where(.pk *)) {
   font-size: 1.15em;
   font-weight: 600 !important;
   color: var(--page-accent-2, var(--page-accent, var(--wg-color, #{$blue-dark})));
@@ -585,7 +580,7 @@ main h3:not(:where(#portal-app *)) {
   padding-top: 0;
 }
 
-main h4:not(:where(#portal-app *)) {
+main h4:not(:where(.pk *)) {
   font-size: 1em;
   font-weight: 600 !important;
   color: $gray-600;
@@ -594,7 +589,7 @@ main h4:not(:where(#portal-app *)) {
   padding-top: 0;
 }
 
-main h5:not(:where(#portal-app *)) {
+main h5:not(:where(.pk *)) {
   font-size: 0.9em;
   font-weight: 600 !important;
   color: $gray-500;
@@ -603,7 +598,7 @@ main h5:not(:where(#portal-app *)) {
   margin-top: 1em;
 }
 
-main h6:not(:where(#portal-app *)) {
+main h6:not(:where(.pk *)) {
   font-size: 0.85em;
   font-weight: 600 !important;
   color: $gray-500;

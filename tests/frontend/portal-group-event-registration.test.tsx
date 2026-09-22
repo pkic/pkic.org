@@ -86,6 +86,7 @@ function config(overrides: Partial<EventFormsResponse> = {}): EventFormsResponse
       description: "Tell the event team how you plan to participate.",
       fields: [field],
     },
+    registrationPolicy: "public",
     requiredTerms: [term],
     allowedSessionTypes: [],
     eventDays: [],

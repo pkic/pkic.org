@@ -14,7 +14,7 @@ import { renderDonationCta } from "../shared/donation/cta";
 import type { FormField } from "../shared/types";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { installStepNavigation } from "../shared/form/step-navigation";
-import { withLoadingButton } from "../shared/form/submit";
+import { handleSubmitError, withLoadingButton } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
 import { clearReferralSession } from "../shared/query-context";
 import {
@@ -32,7 +32,7 @@ import {
   RegistrationDayStatusSummary,
 } from "../components/RegistrationDayStatusSummary";
 import { optionsFor } from "../shared/form/custom-field-rules";
-import { handleFormInviteSubmitError } from "../shared/widgets/invite-recovery";
+import { registrationInvitation } from "./registration-invitation";
 import { installEmailReviewCard, resetEmailReviewConfirmation } from "./registration-email-review";
 type RegistrationSubmitResponse = RegistrationSubmissionResponse;
 
@@ -407,6 +407,7 @@ async function main(): Promise<void> {
 
   const { form, statusEl, eventSlug, eventPagePath, apiBase, query } = boot;
   const eventPathHeaders = eventPagePath ? { "x-event-base-path": eventPagePath } : undefined;
+  const invitation = registrationInvitation(boot);
   let customFieldDefs: FormField[] = [];
   installLiveValidation(form, statusEl);
   installEmailReviewCard(form);
@@ -450,12 +451,14 @@ async function main(): Promise<void> {
 
     const nextButton = boot.root.querySelector<HTMLButtonElement>("[data-step-next]");
     if (nextButton) nextButton.disabled = false;
+    await invitation.check(forms.registrationPolicy);
 
     // Apply Cloudflare geo hint to any country-select widgets.
     // Fire-and-forget: we don't block form load on this.
     if (customFields) void applyGeolocationCountryHint(customFields, apiBase);
   } catch {
-    setStatus(statusEl, "Could not load registration form details.", true);
+    invitation.loadFailed();
+    setStatus(statusEl, "Could not load registration form details. Reload this page to try again.", true);
   }
 
   form.addEventListener("change", (event) => {
@@ -492,6 +495,7 @@ async function main(): Promise<void> {
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (!invitation.canSubmit()) return;
     updateRegistrationReview(boot.root, form, customFieldDefs);
     // `validateBeforeSubmit` below is what marks the form as validated; adding
     // the class here as well was a second owner for the same state.
@@ -540,13 +544,7 @@ async function main(): Promise<void> {
           eventDayCount || undefined,
         );
       } catch (error) {
-        await handleFormInviteSubmitError({
-          error,
-          form,
-          apiBase,
-          statusEl,
-          hasInviteToken: Boolean(query.inviteToken),
-        });
+        if (!invitation.handleError(error)) handleSubmitError(error, form, statusEl);
       }
     });
   });

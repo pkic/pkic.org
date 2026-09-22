@@ -132,7 +132,7 @@
     padding: calc(var(--pk-control-y) * 0.7) calc(var(--pk-control-x) * 0.8);
   }
   .pk-btn--lg {
-    font-size: var(--pk-text-lg);
+    font-size: var(--pk-text-xl);
     padding: calc(var(--pk-control-y) * 1.5) calc(var(--pk-control-x) * 1.4);
     /* Large is the marketing size — heroes, banners, checkout steps — and its
        labels are sentences, not verbs. The base `nowrap` is right for control

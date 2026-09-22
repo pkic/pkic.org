@@ -76,6 +76,7 @@ function eventPlacementResponse(): Response {
         description: null,
         fields: [],
       },
+      registrationPolicy: "public",
       requiredTerms: [],
       allowedSessionTypes: [],
       eventDays: [],

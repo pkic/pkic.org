@@ -283,6 +283,7 @@ describe("portal selected-group collections", () => {
             event: { id: event.id, slug: event.slug, name: event.name },
             purpose: "event_registration",
             form: null,
+            registrationPolicy: "public",
             requiredTerms: [
               {
                 termKey: "event-terms",
