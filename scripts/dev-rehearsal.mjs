@@ -4,7 +4,12 @@ import { randomBytes } from "node:crypto";
 import { spawn, execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { parseRehearsalOptions, rehearsalMemberArguments } from "./rehearsal/options.mjs";
-import { rehearsalConfig, rehearsalEnvironment } from "./rehearsal/config.mjs";
+import {
+  rehearsalConfig,
+  rehearsalEnvironment,
+  rehearsalEnvFiles,
+  serializeRehearsalVars,
+} from "./rehearsal/config.mjs";
 
 const root = fileURLToPath(new URL("../", import.meta.url));
 const env = rehearsalEnvironment(process.env);
@@ -28,12 +33,9 @@ async function main() {
   if (command !== "init" && !manifest.ready)
     throw new Error("Import did not finish. Initialize a new state directory.");
   if (command === "init" || command === "start") {
-    fs.writeFileSync(
-      configPath,
-      JSON.stringify(rehearsalConfig(root, state, port, inboxPort, manifest.signingSecret), null, 2),
-      { mode: 0o600 },
-    );
-    fs.writeFileSync(envPath, "# Rehearsal: no inherited integration secrets\n", { mode: 0o600 });
+    const config = rehearsalConfig(root, state, port, inboxPort, manifest.signingSecret);
+    fs.writeFileSync(configPath, JSON.stringify(config, null, 2), { mode: 0o600 });
+    fs.writeFileSync(envPath, serializeRehearsalVars(config.vars), { mode: 0o600 });
   }
   // Run the installed CLI with the isolated directory as cwd: pnpm exec
   // requires a package there and changing back to root could load local secrets.
@@ -80,7 +82,16 @@ async function main() {
   );
   const child = spawn(
     process.execPath,
-    [...wrangler, "dev", ...flags, "--ip", "127.0.0.1", "--port", String(port), "--env-file", envPath],
+    [
+      ...wrangler,
+      "dev",
+      ...flags,
+      "--ip",
+      "127.0.0.1",
+      "--port",
+      String(port),
+      ...rehearsalEnvFiles(root, state).flatMap((file) => ["--env-file", file]),
+    ],
     {
       cwd: state,
       env,

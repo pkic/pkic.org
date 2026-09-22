@@ -3,6 +3,19 @@ import { randomBytes } from "node:crypto";
 import ts from "typescript";
 import fs from "node:fs";
 
+const REHEARSAL_CONTROLLED_VAR_NAMES = new Set([
+  "APP_BASE_URL",
+  "WEBAUTHN_ORIGIN",
+  "WEBAUTHN_RP_ID",
+  "WEBAUTHN_RP_NAME",
+  "INTERNAL_SIGNING_SECRET",
+  "MEETING_PROVIDER_ENCRYPTION_KEY",
+  "SENDGRID_API_BASE",
+  "SENDGRID_API_KEY",
+  "TURNSTILE_ENABLED",
+  "SERVICE_MODE",
+]);
+
 export function rehearsalConfig(root, state, port, inboxPort, signingSecret) {
   const parsed = ts.parseConfigFileTextToJson(
     "wrangler.jsonc",
@@ -29,6 +42,7 @@ export function rehearsalConfig(root, state, port, inboxPort, signingSecret) {
     kv_namespaces: local.kv_namespaces.map(({ binding, id }) => ({ binding, id, remote: false })),
     ratelimits: local.ratelimits,
     vars: {
+      ...local.vars,
       APP_BASE_URL: `http://localhost:${port}`,
       WEBAUTHN_ORIGIN: `http://localhost:${port}`,
       WEBAUTHN_RP_ID: "localhost",
@@ -41,6 +55,22 @@ export function rehearsalConfig(root, state, port, inboxPort, signingSecret) {
       SERVICE_MODE: "normal",
     },
   };
+}
+
+export function rehearsalEnvFiles(root, state) {
+  const repositoryVars = path.join(root, ".dev.vars");
+  const rehearsalOverrides = path.join(state, ".rehearsal.vars");
+  return fs.existsSync(repositoryVars) ? [repositoryVars, rehearsalOverrides] : [rehearsalOverrides];
+}
+
+export function serializeRehearsalVars(vars) {
+  return [
+    "# Rehearsal-controlled values override .dev.vars to keep email and local identity isolated.",
+    ...Object.entries(vars)
+      .filter(([key]) => REHEARSAL_CONTROLLED_VAR_NAMES.has(key))
+      .map(([key, value]) => `${key}=${JSON.stringify(value)}`),
+    "",
+  ].join("\n");
 }
 
 export function rehearsalEnvironment(env) {

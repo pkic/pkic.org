@@ -9,7 +9,7 @@ Some basic git knowledge is required, please check https://guides.github.com/ to
 1. [Install hugo](https://gohugo.io/getting-started/installing/#quick-install)
 2. [Create a fork](https://guides.github.com/activities/forking/#fork) of this repository
 3. [Clone your fork](https://guides.github.com/activities/forking/#clone)
-4. Create local worker secrets for Wrangler by copying `.dev.vars.example` to `.dev.vars` and setting at least `INTERNAL_SIGNING_SECRET`.
+4. Create local worker secrets for Wrangler by copying `.dev.vars.example` to `.dev.vars` and setting at least `INTERNAL_SIGNING_SECRET`. The local rehearsal also loads this file, then overrides its email transport and local identity settings so messages are captured locally instead of delivered.
 5. Run `pnpm run dev` in the root directory of your fork (Vite runs the Cloudflare Worker and rebuilds the Hugo site into the static asset output)
 6. Open `http://localhost:8788/` in your browser to preview your local version
 7. Make changes until you are satisfied; the preview will update automatically

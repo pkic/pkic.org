@@ -1,10 +1,15 @@
 import { afterEach, describe, expect, it } from "vitest";
-import { mkdtempSync, rmSync } from "node:fs";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createCaptureServer } from "../../scripts/email-capture/server.mjs";
 import { parseRehearsalOptions, rehearsalMemberArguments } from "../../scripts/rehearsal/options.mjs";
-import { rehearsalConfig, rehearsalEnvironment } from "../../scripts/rehearsal/config.mjs";
+import {
+  rehearsalConfig,
+  rehearsalEnvironment,
+  rehearsalEnvFiles,
+  serializeRehearsalVars,
+} from "../../scripts/rehearsal/config.mjs";
 
 import { parseArgs } from "../../scripts/migrate-members/cli.mjs";
 
@@ -73,12 +78,13 @@ describe("local migration rehearsal", () => {
     );
   });
 
-  it("isolates configuration and inherited credentials from all real providers", () => {
+  it("keeps infrastructure local and excludes inherited process credentials", () => {
     const state = mkdtempSync(path.join(tmpdir(), "rehearsal-config-"));
     directories.push(state);
     const config = rehearsalConfig(process.cwd(), state, 8788, 8799, "new-local-secret");
     expect(config.vars.SENDGRID_API_BASE).toBe("http://127.0.0.1:8799");
     expect(config.vars.SENDGRID_API_KEY).toBe("local-capture-only-not-a-real-key");
+    expect(config.vars.STRIPE_PUBLISHABLE_KEY).toMatch(/^pk_test_/);
     expect(config.vars.INTERNAL_SIGNING_SECRET).toBe("new-local-secret");
     expect(config).not.toHaveProperty("triggers");
     expect(config).not.toHaveProperty("routes");
@@ -96,6 +102,32 @@ describe("local migration rehearsal", () => {
         NODE_OPTIONS: "--import unwanted.mjs",
       }),
     ).toEqual({ PATH: "/bin", HOME: "/home/local" });
+  });
+
+  it("loads repository development secrets before rehearsal-controlled overrides", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "rehearsal-root-"));
+    const state = mkdtempSync(path.join(tmpdir(), "rehearsal-state-"));
+    directories.push(root, state);
+    writeFileSync(
+      path.join(root, ".dev.vars"),
+      "STRIPE_SECRET_KEY=sk_test_local\nSTRIPE_PUBLISHABLE_KEY=pk_test_local\nSENDGRID_API_BASE=https://api.sendgrid.com\n",
+    );
+
+    const config = rehearsalConfig(process.cwd(), state, 8788, 8799, "new-local-secret");
+    const overridesPath = path.join(state, ".rehearsal.vars");
+    writeFileSync(overridesPath, serializeRehearsalVars(config.vars));
+
+    expect(rehearsalEnvFiles(root, state)).toEqual([path.join(root, ".dev.vars"), overridesPath]);
+    expect(readFileSync(overridesPath, "utf8")).toContain('SENDGRID_API_BASE="http://127.0.0.1:8799"');
+    expect(readFileSync(overridesPath, "utf8")).toContain('SENDGRID_API_KEY="local-capture-only-not-a-real-key"');
+    expect(readFileSync(overridesPath, "utf8")).not.toContain("STRIPE_PUBLISHABLE_KEY");
+  });
+
+  it("starts with rehearsal-controlled values when .dev.vars is absent", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "rehearsal-root-"));
+    const state = mkdtempSync(path.join(tmpdir(), "rehearsal-state-"));
+    directories.push(root, state);
+    expect(rehearsalEnvFiles(root, state)).toEqual([path.join(state, ".rehearsal.vars")]);
   });
 
   it("shows a local inbox and captures original recipients, BCC and bodies without delivery", async () => {
