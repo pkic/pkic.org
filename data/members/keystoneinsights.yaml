@@ -1,12 +1,12 @@
 id: keystoneinsights
 name: Keystone Digital Sdn Bhd
 slogan:
-website: https://www.keystoneinsights.org
+website: https://www.keystonedigital.com.my/
 # Business domains for email
 organizationDomains:
   - keystonedigital.com.my
 # Short description, longer content can be placed in `content/members/`
-description: Keystone Intelligence - Turning Knowledge into Sustainable Global Impact. Built in Malaysia, powered by Kaito, headquartered in Merdeka 118.
+description: Keystone Intelligence - Turning Knowledge into Sustainable Global Impact.
 
 # membership
 memberSince: 2026-09-22
@@ -23,29 +23,29 @@ sponsor:
 
 # Blog posts
 blog:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Press Releases
 press:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Careers
 careers:
-  url: 
-  feed: 
+  url:
+  feed:
   language: en_US
 
 # Social media
 social:
-  x: 
-  facebook: https://www.facebook.com/tr
-  instagram: 
-  linkedin: 
-  youtube: 
+  x:
+  facebook:
+  instagram:
+  linkedin:
+  youtube:
 
 # Here you can list those who represent or have represented the member.
 #
