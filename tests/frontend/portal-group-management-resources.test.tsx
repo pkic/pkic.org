@@ -375,6 +375,11 @@ describe("portal group management resources", () => {
     // page that holds several of them rather than announced as "table".
     expect(container.querySelector("section")?.getAttribute("aria-label")).toBe("Members");
     expect(container.querySelector("caption")?.textContent).toBe("Members");
+    const categoryCell = container.querySelector("tbody td:nth-child(4)");
+    expect(categoryCell?.classList.contains("pk-table__col--compact")).toBe(true);
+    expect(categoryCell?.querySelector(".pk-table__coded-label__code")?.textContent).toBe("A");
+    expect(categoryCell?.querySelector(".pk-table__coded-label__separator")?.textContent?.trim()).toBe("|");
+    expect(categoryCell?.querySelector(".pk-table__coded-label")?.getAttribute("title")).toBe("Category A");
     // The actions column names each row's subject instead of the control, so
     // a roster of "Remove" buttons is still a roster of distinct controls.
     expect(rowActionControlNames(container)).toEqual(["Actions for Member Person"]);

@@ -20,7 +20,7 @@
   /* A measured reading column. One max-width, not twelve breakpoint variants. */
   .pk-container {
     width: 100%;
-    max-width: var(--pk-measure, 72rem);
+    max-width: var(--pk-measure, 82rem);
     margin-inline: auto;
     padding-inline: var(--pk-4);
   }
@@ -242,35 +242,6 @@
   @media (min-width: 64rem) {
     .pk-record {
       grid-template-columns: minmax(0, 1fr) minmax(18rem, 22rem);
-    }
-  }
-
-  /*
-   * A figure that stands beside the prose rather than across it.
-   *
-   * Rendered Markdown can hand a shortcode one thing about an illustration —
-   * its class — so the class has to carry the whole shape. This is the shape a
-   * logo or a small diagram wants: a stated width, so it can neither grow into
-   * a banner nor disappear, and, once the column is wide enough to leave a
-   * readable measure next to it, a side to sit on with the text running past.
-   *
-   * The width is stated rather than capped because a float is sized to fit its
-   * contents, and an SVG declaring only a `viewBox` has no contents to measure:
-   * the same logo that overran the column with no float on it was invisible in
-   * production with one, floated to zero width.
-   *
-   * It replaces `float-lg-end`, which is where the About page's logo came from
-   * and which has meant nothing since the framework was removed.
-   */
-  .pk-figure-aside {
-    width: min(18rem, 100%);
-    margin: var(--pk-4) auto;
-  }
-
-  @media (min-width: 60rem) {
-    .pk-figure-aside {
-      float: inline-end;
-      margin: 0 0 var(--pk-4) var(--pk-6);
     }
   }
 

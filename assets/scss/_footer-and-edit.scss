@@ -333,15 +333,16 @@
     transform 0.2s ease;
 }
 
-// The mixed wall has one monochrome treatment. Full-color sponsor artwork
-// belongs to the tiered sponsor wall; individual light plates interrupt this row.
+// Sponsors retain their brand artwork in light mode. The same token keeps
+// dark artwork legible on the dark wall without changing the image assets.
 .members .member-logo-sponsor {
-  filter: var(--pk-member-logo-filter);
+  filter: var(--pk-member-logo-hover-filter);
   mix-blend-mode: var(--pk-member-logo-blend);
 }
 
 .members a:hover .member-logo {
   opacity: 0.8;
+  filter: var(--pk-member-logo-hover-filter);
 }
 
 .members a:hover .member-logo-sponsor {

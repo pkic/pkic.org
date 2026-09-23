@@ -26,6 +26,7 @@ import { PersonCell } from "../../../../ui/PersonCell";
 import { RowActions } from "../../../../ui/RowActions";
 import { fmtDate, toast } from "../../ui";
 import { usePortalHashLocation } from "../../hash-location";
+import { TableCodedLabel } from "../../../../ui/TableCodedLabel";
 
 /**
  * Everyone the consortium counts as a member, one row each.
@@ -182,10 +183,13 @@ export function MembersList({
             // One line: the label is a fixed vocabulary the reader scans
             // rather than reads, and left to wrap it sets the height of every
             // row. The full text is the cell's tooltip.
-            <span class="pk-table__clamp" title={member.membershipCategoryLabel}>
-              {member.membershipCategoryLabel} <span class="pk-muted pk-small">({member.membershipCategory})</span>
-            </span>
+            <TableCodedLabel
+              code={member.membershipCategory}
+              name={member.membershipCategoryLabel}
+              title={member.membershipCategoryLabel}
+            />
           ),
+          width: "compact",
           sort: { asc: "membershipCategory", desc: "-membershipCategory" },
           filter: {
             param: "membershipCategory",

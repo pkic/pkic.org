@@ -12,6 +12,7 @@ import type { PortalSession } from "../../types";
 import { portalHasGlobalPermission, portalSettingsPages } from "../../shell/portal-navigation";
 import { EmptyState } from "../../../../components/EmptyState";
 import { Spinner } from "../../../../components/Spinner";
+import { Breadcrumb } from "../../../../ui/Breadcrumb";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { SettingsIndex } from "./SettingsIndex";
 
@@ -35,6 +36,9 @@ const OrganizationContentReviews = lazy(() =>
   import("../OrganizationContentReviews").then((module) => ({ default: module.OrganizationContentReviews })),
 );
 const SystemAuditLog = lazy(() => import("../SystemAuditLog").then((module) => ({ default: module.SystemAuditLog })));
+const SystemAuditLogDetail = lazy(() =>
+  import("../SystemAuditLogDetail").then((module) => ({ default: module.SystemAuditLogDetail })),
+);
 const EmailTemplates = lazy(() =>
   import("../email-templates/EmailTemplates").then((module) => ({ default: module.EmailTemplates })),
 );
@@ -65,7 +69,8 @@ export function SettingsSection({
   if (!page) return <SettingsIndex pages={pages} />;
 
   const requested = `/settings/${page}`;
-  if (!pages.some((candidate) => candidate.path === requested)) {
+  const currentPage = pages.find((candidate) => candidate.path === requested);
+  if (!currentPage) {
     // The reader followed a link into a page their grants do not reach. The
     // page still opens with a header — the dead end is the content, not the
     // absence of a page.
@@ -77,7 +82,7 @@ export function SettingsSection({
     );
   }
 
-  return (
+  const content = (
     <Suspense fallback={<Spinner />}>
       {requested === "/settings/application-workflow" ? (
         <ApplicationWorkflow
@@ -97,7 +102,11 @@ export function SettingsSection({
       ) : requested === "/settings/organization-content-reviews" ? (
         <OrganizationContentReviews reviewId={resourceId} />
       ) : requested === "/settings/audit-log" ? (
-        <SystemAuditLog />
+        resourceId ? (
+          <SystemAuditLogDetail id={resourceId} />
+        ) : (
+          <SystemAuditLog />
+        )
       ) : requested === "/settings/email-templates" ? (
         <EmailTemplates
           canRead={portalHasGlobalPermission(session, "email-templates:read")}
@@ -129,5 +138,22 @@ export function SettingsSection({
         />
       ) : null}
     </Suspense>
+  );
+
+  // The same navigation entry supplies the sidebar, index, and page trail.
+  // Access control owns a deeper trail for its tabs and records; addressable
+  // detail pages provide their record-specific leaf after loading it.
+  if (resourceId || page === "access-control") return content;
+  return (
+    <div class="pk pk-stack pk-stack--snug">
+      <Breadcrumb
+        items={[
+          { label: "Settings", href: "#/settings" },
+          ...(currentPage.group ? [{ label: currentPage.group }] : []),
+          { label: currentPage.label },
+        ]}
+      />
+      {content}
+    </div>
   );
 }

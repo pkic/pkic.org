@@ -74,7 +74,7 @@ function clickButton(label: string): void {
  * that way and the item by its text.
  */
 function runRosterCommand(label: string): void {
-  const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Representative settings"]');
+  const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Add representative"]');
   if (!trigger) throw new Error("the roster offers no settings menu");
   void act(() => trigger.click());
   const item = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(

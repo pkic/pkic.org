@@ -323,18 +323,9 @@ function RoutedTemplateEditor({ templateKey, canWrite }: { templateKey: string; 
 
   if (error) return <ErrorAlert error={error} />;
   if (!loaded) return <Spinner label="Loading email template…" />;
-  return (
-    <TemplateEditor
-      templateKey={templateKey}
-      initialVersion={loaded.version}
-      canWrite={canWrite}
-      onBack={() => {
-        window.location.hash = "#/settings/email-templates";
-      }}
-    />
-  );
+  return <TemplateEditor templateKey={templateKey} initialVersion={loaded.version} canWrite={canWrite} />;
 }
-type TemplatesView = "list" | "create" | { key: string; initialVersion: EmailTemplateVersion | null };
+type TemplatesView = "list" | "create";
 
 export function EmailTemplates({
   canRead = true,
@@ -415,37 +406,19 @@ export function EmailTemplates({
     ];
   }
 
-  async function openEditor(key: string) {
-    try {
-      setView({ key, initialVersion: await getEmailTemplateEditorVersion(key) });
-    } catch (e) {
-      toast((e as Error).message, "error");
-    }
-  }
-
   if (!canRead) {
     return canWrite ? <EmailTemplateCreateOnly /> : null;
   }
 
   if (templateKey) return <RoutedTemplateEditor templateKey={templateKey} canWrite={canWrite} />;
 
-  if (view !== "list" && view !== "create") {
-    return (
-      <TemplateEditor
-        templateKey={view.key}
-        initialVersion={view.initialVersion}
-        canWrite={canWrite}
-        onBack={() => setView("list")}
-      />
-    );
-  }
-
   if (view === "create" && canWrite) {
     return (
       <CreateTemplate
         canRead={canRead}
         onCreated={(key) => {
-          void openEditor(key);
+          setView("list");
+          window.location.hash = `#/settings/email-templates/${encodeURIComponent(key)}`;
         }}
         onCancel={() => setView("list")}
       />

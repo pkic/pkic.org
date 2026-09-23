@@ -17,13 +17,13 @@ import { uploadThroughControl } from "./helpers/file-upload";
  * keeps its own.
  */
 async function openOrganizationEditMode(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Record actions", exact: true }).click();
+  await page.getByRole("region", { name: "About", exact: true }).getByRole("button", { name: "About actions" }).click();
   await page.getByRole("menuitem", { name: "Edit organization…" }).click();
 }
 
 /** Runs one of the Representatives list's add commands from its own menu. */
 async function runRepresentativeCommand(page: Page, label: string): Promise<void> {
-  await page.getByRole("button", { name: "Representative settings", exact: true }).click();
+  await page.getByRole("button", { name: "Add representative", exact: true }).click();
   await page.getByRole("menuitem", { name: label }).click();
 }
 
@@ -369,7 +369,7 @@ test("permitted staff edit the organization through the page-level Edit/Save", a
   await createBareOrganization(page, organizationName);
 
   await openOrganizationEditMode(page);
-  await expect(page.getByRole("button", { name: "Record actions", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "About actions", exact: true })).toHaveCount(0);
 
   // About card.
   await page.getByLabel("Slogan").fill("Security, standardized.");
@@ -392,7 +392,7 @@ test("permitted staff edit the organization through the page-level Edit/Save", a
   await expect(page.getByText("Organization updated", { exact: true })).toBeVisible();
 
   // Editing closed and every field from every card landed in the one PATCH.
-  await expect(page.getByRole("button", { name: "Record actions", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "About actions", exact: true })).toBeVisible();
   expect(patchRequests).toHaveLength(1);
 
   // The slogan is the record's lede, under the name in the header — About

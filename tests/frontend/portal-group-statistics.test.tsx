@@ -45,6 +45,17 @@ async function settle(): Promise<void> {
   });
 }
 
+async function openReportingWindow(container: HTMLElement): Promise<void> {
+  const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Participation options"]');
+  if (!trigger) throw new Error("No participation menu is available");
+  await act(() => trigger.click());
+  const item = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+    (candidate) => candidate.textContent?.trim() === "Change reporting window",
+  );
+  if (!item) throw new Error("No reporting-window command is available");
+  await act(() => item.click());
+}
+
 /**
  * The number a named stat card reports.
  *
@@ -111,6 +122,10 @@ describe("portal group statistics", () => {
     const container = mount();
     await settle();
 
+    expect(container.querySelector('form[aria-label="Reporting window"]')).toBeNull();
+    expect(container.querySelector("dialog")).toBeNull();
+    await openReportingWindow(container);
+
     // `controlFor` resolves through the label's `for` and the control's `id`,
     // so it throws exactly when that pair is broken.
     expect(controlFor<HTMLSelectElement>(container, "Count people who").tagName).toBe("SELECT");
@@ -122,12 +137,14 @@ describe("portal group statistics", () => {
 
     const regions = [...container.querySelectorAll("section")].map((section) => section.getAttribute("aria-label"));
     expect(regions).toEqual(["Participation", "Activity"]);
-    expect(container.querySelector("details")?.open).toBe(false);
-    expect(container.querySelector("summary")?.textContent).toContain("Reporting window");
-
+    expect(container.querySelector("details")).toBeNull();
+    expect(container.querySelector('form[aria-label="Reporting window"]')).not.toBeNull();
     // The scope select offers what the query contract accepts, so a third
     // population added there reaches the reader without an edit here.
     expect(optionValues(controlFor<HTMLSelectElement>(container, "Count people who"))).toEqual([...GROUP_STATS_SCOPES]);
+    const cancel = [...container.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Cancel");
+    await act(() => cancel?.click());
+    expect(container.querySelector('form[aria-label="Reporting window"]')).toBeNull();
   });
 
   it("uses the shared schema-backed UTC window controls and sends filtering to D1", async () => {
@@ -149,6 +166,7 @@ describe("portal group statistics", () => {
     );
     const container = mount();
     await settle();
+    await openReportingWindow(container);
     await chooseOption(controlFor<HTMLSelectElement>(container, "Count people who"), "historical");
     await typeInto(controlFor(container, "From"), "2026-08-01");
     await typeInto(controlFor(container, "To"), "2026-08-26");
@@ -174,6 +192,8 @@ describe("portal group statistics", () => {
     const container = mount();
     await settle();
     expect(fetchMock).toHaveBeenCalledTimes(1);
+
+    await openReportingWindow(container);
 
     await typeInto(controlFor(container, "From"), "2026-08-26");
     await typeInto(controlFor(container, "To"), "2026-08-01");

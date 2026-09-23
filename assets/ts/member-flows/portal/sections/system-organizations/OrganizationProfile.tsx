@@ -20,6 +20,7 @@ import type { FieldPresentation } from "../../../../hooks/useContractForm";
 import { DescriptionList, type DescriptionListItem } from "../../../../ui/DescriptionList";
 import { Field } from "../../../../ui/Field";
 import { LinkList } from "../../../../ui/LinkList";
+import { Menu } from "../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { Select, TextInput } from "../../../../ui/TextControl";
 import { fmt, fmtDate } from "../../ui";
@@ -36,6 +37,7 @@ export interface OrganizationCardProps {
   busy?: boolean;
   /** Each field's live validation state, by field name. */
   fields?: (name: string) => FieldPresentation;
+  onEdit?: () => void;
 }
 
 interface EditorProps {
@@ -101,6 +103,7 @@ export function OrganizationAbout(props: OrganizationCardProps) {
     const { draft, onDraft, busy, fields } = edit;
     return (
       <Panel aria-label="About">
+        <PanelHeader title="About" />
         <PanelBody class="pk-stack">
           <TextField field="name" label="Name" required maxLength={200} {...edit} />
           <TextField field="slogan" label="Slogan" maxLength={300} {...edit} />
@@ -137,10 +140,18 @@ export function OrganizationAbout(props: OrganizationCardProps) {
   // again here printed the same line twice on one screen.
   return (
     <Panel aria-label="About">
-      <PanelHeader title="About" />
+      <PanelHeader title="About">
+        {props.onEdit && (
+          <Menu
+            label="About actions"
+            align="end"
+            items={[{ id: "edit", label: "Edit organization…", onSelect: props.onEdit }]}
+          />
+        )}
+      </PanelHeader>
       <PanelBody class="pk-stack pk-stack--snug">
         {organization.description ? (
-          <Markdown className="pk-prose-block" markdown={organization.description} />
+          <Markdown className="pk-prose-block pk-prose-block--full" markdown={organization.description} />
         ) : (
           <p class="pk-muted">Nothing written about this organization yet.</p>
         )}

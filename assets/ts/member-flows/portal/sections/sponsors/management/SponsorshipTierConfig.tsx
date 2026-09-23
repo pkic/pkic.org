@@ -221,19 +221,25 @@ export function SponsorshipTierConfig({ canWrite }: { canWrite: boolean }) {
     <div class="pk" {...form.handlers}>
       <Panel aria-label="Sponsorship tier pricing">
         <PanelHeader title="Sponsorship tier pricing" />
-        <PanelBody>
-          {loading && <Spinner />}
-          {!loading && error && <ErrorAlert error={error} />}
-          {!loading && (!error || tiers.length > 0) && (
-            <DataTable
-              caption="Sponsorship tier pricing"
-              columns={columns}
-              rows={tiers}
-              rowKey={(tier) => tier.id}
-              empty={<EmptyState title="No tier pricing is configured." />}
-            />
-          )}
-        </PanelBody>
+        {loading && (
+          <PanelBody>
+            <Spinner />
+          </PanelBody>
+        )}
+        {!loading && error && (
+          <PanelBody>
+            <ErrorAlert error={error} />
+          </PanelBody>
+        )}
+        {!loading && (!error || tiers.length > 0) && (
+          <DataTable
+            caption="Sponsorship tier pricing"
+            columns={columns}
+            rows={tiers}
+            rowKey={(tier) => tier.id}
+            empty={<EmptyState title="No tier pricing is configured." />}
+          />
+        )}
       </Panel>
     </div>
   );

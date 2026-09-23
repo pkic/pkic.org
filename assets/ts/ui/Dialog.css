@@ -20,6 +20,11 @@
     box-shadow: var(--pk-shadow-3);
   }
 
+  /* The flex layout must not override the native closed-dialog state. */
+  .pk-dialog:not([open]) {
+    display: none;
+  }
+
   .pk-dialog::backdrop {
     background: var(--pk-overlay);
   }

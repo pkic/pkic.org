@@ -110,13 +110,15 @@ describe("settings section", () => {
     expect(tabs(page)).toHaveLength(0);
   });
 
-  it("opens the page an address names, headed by itself rather than by the section", async () => {
+  it("opens the page an address names with a breadcrumb back to Settings", async () => {
     const page = mount(<SettingsSection session={staffWith("audit:read")} page="audit-log" />);
     await settle();
 
-    // The page names itself; nothing above it repeats "Settings".
+    // The heading names the page, while the trail names its place in Settings.
     expect(page.querySelector("h2")?.textContent).toBe("Audit log");
-    expect(page.textContent).not.toContain("Settings");
+    const trail = page.querySelector('nav[aria-label="Breadcrumb"]');
+    expect(trail?.querySelector<HTMLAnchorElement>("a")?.getAttribute("href")).toBe("#/settings");
+    expect(trail?.querySelector('[aria-current="page"]')?.textContent).toBe("Audit log");
   });
 
   it("opens each of the three pages the membership tab used to hold", async () => {
@@ -124,6 +126,11 @@ describe("settings section", () => {
     await settle();
 
     expect(page.querySelector("h2")?.textContent).toBe("Membership categories");
+    expect([...page.querySelectorAll('nav[aria-label="Breadcrumb"] li')].map((item) => item.textContent)).toEqual([
+      "Settings",
+      "Membership",
+      "Membership categories",
+    ]);
   });
 
   it("says a requested page is unavailable, rather than silently showing another one", () => {

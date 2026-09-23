@@ -15,7 +15,7 @@ import { useContractForm } from "../../../../hooks/useContractForm";
 import { postJson, patchJson } from "../../../../shared/api-client";
 import { MEMBERSHIP_WORKFLOWS_API } from "../../../../shared/membership-workflow-catalog";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
-import { Button, ButtonLink } from "../../../../ui/Button";
+import { Button } from "../../../../ui/Button";
 import { Field } from "../../../../ui/Field";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
@@ -173,7 +173,8 @@ export function WorkflowVersionEditor({
         title={title}
         trail={[
           { label: "Settings", href: usePortalHashLocation.hrefs("/settings") },
-          { label: "Application workflows", href: usePortalHashLocation.hrefs(path) },
+          { label: "Membership" },
+          { label: "Application workflow", href: usePortalHashLocation.hrefs(path) },
           { label: title },
         ]}
       />
@@ -312,7 +313,6 @@ export function WorkflowVersionEditor({
                 Save draft
               </Button>
             ))}
-          <ButtonLink href={usePortalHashLocation.hrefs(path)}>Back to workflows</ButtonLink>
         </div>
       </form>
       {initial && canWrite && <WorkflowRemoval version={initial} />}

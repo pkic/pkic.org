@@ -491,7 +491,7 @@ async function main(): Promise<void> {
   }
 
   const identityMount = form.querySelector<HTMLElement>("[data-registration-identity]");
-  if (identityMount) render(<RegistrationIdentitySelect />, identityMount);
+  if (identityMount) render(<RegistrationIdentitySelect form={form} />, identityMount);
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();

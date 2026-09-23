@@ -43,11 +43,12 @@ export type SortDirection = "asc" | "desc";
  *
  *   content   the default: sized by what it holds
  *   fit       hugs its content and never wraps — dates, counts, badges
+ *   compact   caps a descriptive label at 12rem and truncates its display
  *   primary   takes all the slack on a wide screen. One per table; the
  *             translation layer gives it to the first column when no column
  *             claims it, because a list leads with its subject.
  */
-export type DataTableColumnWidth = "content" | "fit" | "primary";
+export type DataTableColumnWidth = "content" | "fit" | "compact" | "primary";
 
 export interface DataTableColumn<Row> {
   id: string;
@@ -151,20 +152,44 @@ export interface DataTableProps<Row> {
   headerEnd?: ComponentChildren;
 }
 
-/**
- * The row's activation, as a real control. Its own text is for assistive
- * technology only - what a sighted reader sees is the row.
- */
+/** The stretched row link receives the pointer above the displayed cells.
+ * Give it the full value under the pointer so clamped cells still have a
+ * native tooltip, including rich cells whose own title is underneath it. */
+function updateRowActionTooltip(event: MouseEvent) {
+  const link = event.currentTarget as HTMLElement;
+  const cells = link.closest("tr")?.querySelectorAll(":scope > td");
+  const hoveredCell = [...(cells ?? [])].find((cell) => {
+    const bounds = cell.getBoundingClientRect();
+    return event.clientX >= bounds.left && event.clientX < bounds.right;
+  });
+  const value = hoveredCell?.querySelector(".pk-table__value");
+  const titledValues = [...(value?.querySelectorAll<HTMLElement>("[title]") ?? [])]
+    .map((element) => element.title.trim())
+    .filter(Boolean);
+  const fullValue = titledValues.length
+    ? titledValues.join(" · ")
+    : ((value as HTMLElement | null)?.innerText ?? value?.textContent)?.replace(/\s+/g, " ").trim();
+  const tooltip = fullValue || link.getAttribute("aria-label") || "";
+  if (link.title !== tooltip) link.title = tooltip;
+}
+
+/** The row's activation remains a real keyboard-accessible control. */
 function RowActionControl({ action }: { action: DataTableRowAction }) {
   if (action.href) {
     return (
-      <a class="pk-table__row-link" href={action.href}>
+      <a class="pk-table__row-link" href={action.href} aria-label={action.label} onMouseMove={updateRowActionTooltip}>
         <span class="pk-table__sr">{action.label}</span>
       </a>
     );
   }
   return (
-    <button type="button" class="pk-table__row-link" onClick={action.onSelect}>
+    <button
+      type="button"
+      class="pk-table__row-link"
+      aria-label={action.label}
+      onClick={action.onSelect}
+      onMouseMove={updateRowActionTooltip}
+    >
       <span class="pk-table__sr">{action.label}</span>
     </button>
   );
@@ -191,6 +216,7 @@ function alignClass(align: DataTableColumn<unknown>["align"]): string | undefine
  */
 function widthClass(width: DataTableColumn<unknown>["width"]): string | undefined {
   if (width === "fit") return "pk-table__col--fit";
+  if (width === "compact") return "pk-table__col--compact";
   if (width === "primary") return "pk-table__col--primary";
   return undefined;
 }
@@ -198,6 +224,18 @@ function widthClass(width: DataTableColumn<unknown>["width"]): string | undefine
 function classList(...names: Array<string | undefined>): string | undefined {
   const used = names.filter(Boolean);
   return used.length > 0 ? used.join(" ") : undefined;
+}
+
+/** Plain strings get a full-value tooltip; the cell container applies the
+ * shared one-line display to text and links, while rich cells may stack lines. */
+function cellValue(value: ComponentChildren): ComponentChildren {
+  return typeof value === "string" ? (
+    <span class="pk-table__clamp" title={value}>
+      {value}
+    </span>
+  ) : (
+    value
+  );
 }
 
 function nextDirection(sort: DataTableProps<unknown>["sort"], columnId: string): SortDirection {
@@ -358,7 +396,7 @@ export function DataTable<Row>({
                       <span class="pk-table__mobile-label" aria-hidden="true">
                         {column.header}
                       </span>
-                      <div class="pk-table__value">{column.cell(row)}</div>
+                      <div class="pk-table__value">{cellValue(column.cell(row))}</div>
                     </td>
                   ))}
                 </tr>

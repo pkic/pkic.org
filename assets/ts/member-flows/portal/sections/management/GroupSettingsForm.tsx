@@ -89,6 +89,7 @@ export function GroupSettingsForm({
               items={[
                 { term: "Name", value: group.name },
                 { term: "Abbreviated name", value: group.abbreviatedName },
+                { term: "URL slug", value: <span class="pk-mono">{group.slug}</span> },
                 { term: "Description", value: group.description },
                 {
                   term: "Links",

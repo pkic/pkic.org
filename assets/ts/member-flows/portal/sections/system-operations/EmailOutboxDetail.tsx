@@ -2,7 +2,6 @@ import { emailOutboxDetailResponseSchema } from "../../../../../shared/schemas/e
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { Alert } from "../../../../ui/Alert";
-import { ButtonLink } from "../../../../ui/Button";
 import { DescriptionList } from "../../../../ui/DescriptionList";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { Panel, PanelBody } from "../../../../ui/Panel";
@@ -20,7 +19,11 @@ export function EmailOutboxDetail({ id }: { id: string }) {
     <div class="pk pk-stack">
       <PageHeader
         title={message?.subject || "Email delivery details"}
-        actions={<ButtonLink href="#/settings/email-outbox">Back to email outbox</ButtonLink>}
+        trail={[
+          { label: "Settings", href: "#/settings" },
+          { label: "Email outbox", href: "#/settings/email-outbox" },
+          { label: message?.subject || "Email delivery details" },
+        ]}
       />
       {loading && <Spinner />}
       {error && <Alert tone="danger">{error}</Alert>}

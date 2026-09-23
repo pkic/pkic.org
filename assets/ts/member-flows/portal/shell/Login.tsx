@@ -114,7 +114,6 @@ export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }
                 <div class="pk-stack pk-stack--tight">
                   <Button
                     variant="primary"
-                    size="lg"
                     block
                     loading={passkeySubmitting}
                     disabled={passkeySubmitting}
@@ -129,7 +128,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }
               )}
 
               {passkeysSupported && !emailShown && (
-                <Button variant="secondary" size="lg" block onClick={() => setEmailOpen(true)}>
+                <Button variant="secondary" block onClick={() => setEmailOpen(true)}>
                   Sign in with an email link
                 </Button>
               )}

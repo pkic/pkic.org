@@ -80,7 +80,11 @@ export function GroupMailingListPreferences({ groupId }: { groupId: string }) {
   return (
     <Panel class="pk" aria-label="My mailing-list preferences">
       <PanelHeader title="My mailing-list preferences" />
-      <PanelBody class="pk-stack pk-stack--snug">{error && <ErrorAlert error={error} />}</PanelBody>
+      {error && (
+        <PanelBody>
+          <ErrorAlert error={error} />
+        </PanelBody>
+      )}
       <ApiDataTable
         caption="My mailing-list preferences"
         actionsRef={actions}

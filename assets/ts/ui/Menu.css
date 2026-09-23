@@ -113,6 +113,7 @@
     font-size: var(--pk-text-sm);
     text-align: left;
     cursor: pointer;
+    text-decoration: none;
   }
 
   .pk-menu__item:hover:not(:disabled) {
@@ -160,6 +161,10 @@
    * missing one cannot.
    */
   .pk-menu__item:disabled {
+    color: var(--pk-ink-faint);
+    cursor: not-allowed;
+  }
+  .pk-menu__item[aria-disabled="true"] {
     color: var(--pk-ink-faint);
     cursor: not-allowed;
   }

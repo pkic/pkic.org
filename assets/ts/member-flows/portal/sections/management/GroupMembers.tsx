@@ -19,6 +19,7 @@ import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { EmptyState } from "../../../../ui/EmptyState";
 import { Spinner } from "../../../../components/Spinner";
 import { PersonCell } from "../../../../ui/PersonCell";
+import { TableCodedLabel } from "../../../../ui/TableCodedLabel";
 import { RowActions } from "../../../../ui/RowActions";
 import { deleteJson, getJson, ApiClientError } from "../../../../shared/api-client";
 import { fmtCalendarDate } from "../../ui";
@@ -236,7 +237,14 @@ function GroupMembersManager({
           },
           {
             header: "Category",
-            cell: (membership: GroupMembership) => categories.label(membership.membershipCategory) || "—",
+            cell: (membership: GroupMembership) => (
+              <TableCodedLabel
+                code={membership.membershipCategory}
+                name={categories.name(membership.membershipCategory) || "—"}
+                title={categories.label(membership.membershipCategory)}
+              />
+            ),
+            width: "compact",
             sort: { asc: "membership_category", desc: "-membership_category", defaultDirection: "asc" },
           },
           {

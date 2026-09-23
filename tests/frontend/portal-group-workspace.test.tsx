@@ -21,9 +21,9 @@ vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["/groups/10000000-0000-4000-8000-000000000001/settings", navigate],
 }));
 
-function group(revision = 0) {
+function group(revision = 0, abbreviatedName: string | null = null) {
   return {
-    abbreviatedName: null,
+    abbreviatedName,
     id: GROUP_ID,
     slug: "architecture",
     name: "Architecture Committee",
@@ -139,7 +139,7 @@ describe("portal selected-group workspace", () => {
         requests.push({ url, method, body: typeof init.body === "string" ? JSON.parse(init.body) : undefined });
         if (url.pathname === `/api/v1/groups/${GROUP_ID}` && method === "GET") {
           return json({
-            group: group(revision),
+            group: group(revision, "AC"),
             capabilities: ["view", "manage"],
             configuration: configuration(revision),
           });
@@ -165,7 +165,7 @@ describe("portal selected-group workspace", () => {
         }
         if (url.pathname === `/api/v1/groups/${GROUP_ID}` && method === "PATCH") {
           revision += 1;
-          return json({ group: group(revision) });
+          return json({ group: group(revision, "AC") });
         }
         throw new Error(`Unexpected request: ${method} ${url.pathname}`);
       }),
@@ -175,6 +175,7 @@ describe("portal selected-group workspace", () => {
     await settle();
 
     expect(container.textContent).toContain("Architecture Committee");
+    expect(container.querySelector(".pk-page-header__title")?.textContent).toBe("Architecture Committee (AC)");
     expect(container.textContent).toContain("Part of Parent Group");
     expect(container.querySelector('button[aria-label="Group actions"]')).toBeNull();
     // The headline counts live on the overview's about panel now, not in the

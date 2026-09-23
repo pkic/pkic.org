@@ -304,14 +304,41 @@
   @media (max-width: 991px) {
     padding-left: 0;
     margin-top: 2rem;
-    border-top: 1px solid $gray-200;
+    border-top: 1px solid var(--pk-line-soft);
     padding-top: 2rem;
+  }
+}
+
+.blog-taxonomy-index {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(Min(100%, 19rem), 1fr));
+  gap: 0 var(--pk-6);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+
+  li {
+    border-bottom: 1px solid var(--pk-line-soft);
+  }
+
+  a {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--pk-3);
+    padding: var(--pk-3) 0;
+    color: var(--pk-ink);
+    text-decoration: none;
+
+    &:hover {
+      color: var(--pk-accent-ink);
+    }
   }
 }
 
 .blog-sidebar-reading-time {
   font-size: 0.82rem;
-  color: $gray-500;
+  color: var(--pk-ink-muted);
   margin-bottom: 1.25rem;
 }
 
@@ -324,11 +351,11 @@
   font-weight: 700 !important;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: $gray-400;
+  color: var(--pk-ink-muted);
   padding-top: 0 !important;
   margin-bottom: 0.75rem;
   padding-bottom: 0.4rem;
-  border-bottom: 1px solid $gray-100;
+  border-bottom: 1px solid var(--pk-line-soft);
 }
 
 .blog-sidebar-list {
@@ -339,7 +366,7 @@
 
   li {
     padding: 0.4rem 0;
-    border-bottom: 1px solid $gray-200;
+    border-bottom: 1px solid var(--pk-line-soft);
     line-height: 1.35;
 
     &:first-child {
@@ -352,10 +379,10 @@
   }
 
   a {
-    color: $gray-700;
+    color: var(--pk-ink-muted);
     text-decoration: none;
     &:hover {
-      color: $green;
+      color: var(--pk-accent-ink);
     }
   }
 }
@@ -367,7 +394,7 @@
   align-items: flex-start;
   gap: 0.75rem;
   padding: 0.75rem 0;
-  border-bottom: 1px solid $gray-100;
+  border-bottom: 1px solid var(--pk-line-soft);
 
   &:last-child {
     border-bottom: none;
@@ -379,7 +406,7 @@
   height: 48px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid rgba(0, 0, 0, 0.07);
+  border: 2px solid var(--pk-line-soft);
   flex-shrink: 0;
 }
 
@@ -410,7 +437,7 @@
 .blog-author-name {
   font-size: 0.87rem;
   font-weight: 700;
-  color: #111;
+  color: var(--pk-ink);
   line-height: 1.3;
   text-decoration: none;
   white-space: nowrap;
@@ -418,13 +445,13 @@
   text-overflow: ellipsis;
 
   &:hover {
-    color: $green;
+    color: var(--pk-accent-ink);
   }
 }
 
 .blog-author-role {
   font-size: 0.72rem;
-  color: $gray-500;
+  color: var(--pk-ink-muted);
   line-height: 1.4;
   margin-top: 0.1rem;
 }
@@ -441,16 +468,16 @@
   transition: filter 0.18s;
 
   .blog-author-card:hover & {
-    filter: var(--pk-member-logo-filter);
+    filter: var(--pk-member-logo-hover-filter);
   }
 }
 
 .blog-author-org-name {
   font-size: 0.75rem;
-  color: $gray-500;
+  color: var(--pk-ink-muted);
   text-decoration: none;
   &:hover {
-    color: $green;
+    color: var(--pk-accent-ink);
   }
 }
 
@@ -464,11 +491,11 @@
   gap: var(--pk-2);
 
   a.linkArea {
-    color: $gray-400;
+    color: var(--pk-ink-muted);
     transition: color 0.15s;
 
     &:hover {
-      color: $gray-800;
+      color: var(--pk-ink);
     }
   }
 }
@@ -498,17 +525,17 @@
   flex-direction: column;
   gap: 0.35rem;
   padding: 1rem 1.25rem;
-  border: 1px solid $gray-200;
+  border: 1px solid var(--pk-line-soft);
   border-radius: 0.75rem;
   text-decoration: none;
   color: inherit;
   transition:
     border-color 0.15s,
     box-shadow 0.15s;
-  background: $gray-100;
+  background: var(--pk-surface-raise);
 
   &:hover {
-    border-color: $green;
+    border-color: var(--pk-accent-ink);
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
     color: inherit;
   }
@@ -526,7 +553,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: $green;
+  color: var(--pk-accent-ink);
 
   .blog-post-nav-next & {
     justify-content: flex-end;
@@ -536,7 +563,7 @@
 .blog-post-nav-title {
   font-size: 0.85rem;
   font-weight: 600;
-  color: $gray-800;
+  color: var(--pk-ink);
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -576,7 +603,7 @@
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  border: 2px solid #fff;
+  border: 2px solid var(--pk-surface);
   flex-shrink: 0;
   font-size: 0.6rem;
   font-weight: 800;
@@ -599,8 +626,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: $gray-200;
-  color: $gray-600;
+  background: var(--pk-surface-raise);
+  color: var(--pk-ink-muted);
   font-size: 0.58rem;
 }
 
@@ -613,7 +640,7 @@
     color: inherit;
     text-decoration: none;
     &:hover {
-      color: $green;
+      color: var(--pk-accent-ink);
     }
   }
 }
@@ -650,9 +677,9 @@
 .blog-sidebar-sponsors {
   margin-top: 2rem;
   padding: 1.25rem 1.1rem 1rem;
-  background: $gray-100;
+  background: var(--pk-surface-raise);
   border-radius: 1rem;
-  border: 1px solid $gray-200;
+  border: 1px solid var(--pk-line-soft);
   z-index: 100; // stay well below the navbar (1040)
 
   // Replaces `sticky-lg-top` and its inline `top` offset, which the site's
@@ -668,7 +695,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: $gray-400;
+  color: var(--pk-ink-muted);
   text-align: center;
   margin-bottom: 1.1rem;
 }
@@ -684,7 +711,7 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
   text-align: center;
-  color: $gray-400;
+  color: var(--pk-ink-muted);
   margin-bottom: 0.5rem;
 }
 
@@ -717,11 +744,11 @@
   height: clamp(18px, calc(8px * var(--sponsor-weight, 1)), 44px);
   width: auto;
   object-fit: contain;
-  filter: grayscale(0.15);
+  filter: var(--pk-member-logo-hover-filter);
   transition: filter 0.15s;
 
   .blog-sidebar-sponsor-link:hover & {
-    filter: grayscale(0);
+    filter: var(--pk-member-logo-hover-filter);
   }
 }
 
@@ -754,17 +781,17 @@
   text-align: center;
   padding-top: 0.5rem;
   margin-top: 0.5rem;
-  border-top: 1px solid $gray-200;
+  border-top: 1px solid var(--pk-line-soft);
 }
 
 .blog-sidebar-sponsors-all-link {
   font-size: 0.72rem;
   font-weight: 600;
-  color: $gray-400;
+  color: var(--pk-ink-muted);
   text-decoration: none;
 
   &:hover {
-    color: $green;
+    color: var(--pk-accent-ink);
   }
 }
 
@@ -790,7 +817,7 @@
 .news-card-footer {
   margin-top: auto;
   padding-top: 0.875rem;
-  border-top: 1px solid $gray-100;
+  border-top: 1px solid var(--pk-line-soft);
   display: flex;
   flex-direction: column;
   align-items: flex-start;
@@ -802,7 +829,7 @@
 .news-card-member-name {
   font-size: 0.78rem;
   font-weight: 600;
-  color: $gray-700;
+  color: var(--pk-ink);
   overflow-wrap: anywhere;
   white-space: normal;
 }
@@ -817,14 +844,14 @@
   align-items: center;
   gap: 0.2rem;
   font-size: 0.72rem;
-  color: $gray-600;
+  color: var(--pk-ink-muted);
   text-decoration: none;
   transition: color 0.15s;
   white-space: normal;
   overflow-wrap: anywhere;
 
   &:hover {
-    color: $green;
+    color: var(--pk-accent-ink);
   }
   svg {
     flex-shrink: 0;
@@ -840,13 +867,13 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: $gray-700;
+  color: var(--pk-ink);
   margin-bottom: 1.25rem;
   // Reset gradient text treatment from global h2 rule
   background: none !important;
   -webkit-background-clip: unset !important;
   background-clip: unset !important;
-  -webkit-text-fill-color: $gray-700 !important;
+  -webkit-text-fill-color: var(--pk-ink) !important;
 
   svg {
     color: $amber;
@@ -854,9 +881,9 @@
   }
 
   &--plain {
-    color: $gray-500;
+    color: var(--pk-ink-muted);
     font-weight: 600;
-    -webkit-text-fill-color: $gray-500 !important;
+    -webkit-text-fill-color: var(--pk-ink-muted) !important;
     svg {
       display: none;
     }
@@ -865,5 +892,5 @@
 
 .news-spotlight {
   padding-bottom: 1rem;
-  border-bottom: 1px solid $gray-200;
+  border-bottom: 1px solid var(--pk-line-soft);
 }

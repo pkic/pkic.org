@@ -101,8 +101,14 @@ export function Organizations({
       cell: (organization) =>
         organization.primaryContactName ? (
           <>
-            {organization.primaryContactName}
-            <div class="pk-mono pk-muted pk-small">{organization.primaryContactEmail}</div>
+            <span class="pk-table__clamp" title={organization.primaryContactName}>
+              {organization.primaryContactName}
+            </span>
+            {organization.primaryContactEmail && (
+              <span class="pk-table__clamp pk-mono pk-muted pk-small" title={organization.primaryContactEmail}>
+                {organization.primaryContactEmail}
+              </span>
+            )}
           </>
         ) : (
           <em class="pk-muted">None</em>
@@ -118,7 +124,7 @@ export function Organizations({
       header: "Website",
       cell: (organization) =>
         organization.website ? (
-          <a href={organization.website} target="_blank" rel="noreferrer">
+          <a href={organization.website} target="_blank" rel="noreferrer" title={organization.website}>
             {organization.website.replace(/^https?:\/\//, "")}
           </a>
         ) : (

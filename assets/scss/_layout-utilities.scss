@@ -107,3 +107,20 @@
     top: 5rem;
   }
 }
+// The About page's SVG needs a real width before it can float beside prose;
+// theme-aware filtering preserves its black artwork in light mode.
+.pk-figure-aside {
+  width: Min(18rem, 100%);
+  margin: var(--pk-4) auto;
+
+  img {
+    filter: var(--pk-member-logo-hover-filter);
+  }
+}
+
+@media (min-width: 60rem) {
+  .pk-figure-aside {
+    float: inline-end;
+    margin: 0 0 var(--pk-4) var(--pk-6);
+  }
+}

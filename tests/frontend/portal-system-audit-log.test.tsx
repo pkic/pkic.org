@@ -3,6 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { SystemAuditLog } from "../../assets/ts/member-flows/portal/sections/SystemAuditLog";
+import { SystemAuditLogDetail } from "../../assets/ts/member-flows/portal/sections/SystemAuditLogDetail";
 import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
 
 let container: HTMLElement | null = null;
@@ -27,6 +28,40 @@ afterEach(() => {
 });
 
 describe("portal system audit log", () => {
+  it("renders one shareable entry with its full changes on a detail page", async () => {
+    const id = "10000000-0000-4000-8000-000000000001";
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        requests.push(
+          new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, location.origin),
+        );
+        return json({
+          entry: {
+            id,
+            actor_type: "admin",
+            actor_id: "20000000-0000-4000-8000-000000000001",
+            actor_display: "Audit Manager",
+            action: "system_setting_updated",
+            entity_type: "system_setting",
+            entity_id: "setting-1",
+            details: { field: { from: "Old", to: "New" } },
+            created_at: "2026-08-27T12:00:00.000Z",
+          },
+        });
+      }),
+    );
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<SystemAuditLogDetail id={id} />, container!));
+    await settle();
+    expect(requests[0]?.pathname).toBe(`/api/v1/audit-log/${id}`);
+    expect(container.textContent).toContain("Audit Manager");
+    expect(container.textContent).toContain("Old → New");
+    expect(container.querySelector('a[href="#/settings/audit-log"]')).not.toBeNull();
+  });
+
   it("loads a schema-validated server page from the canonical domain API", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
@@ -69,9 +104,11 @@ describe("portal system audit log", () => {
     await settle();
 
     expect(container.textContent).toContain("Audit Manager");
+    expect(container.querySelector('tbody td:nth-child(2) .pk-table__clamp[title="Audit Manager"]')).not.toBeNull();
     expect(container.textContent).toContain("system_setting_updated");
-    expect(container.textContent).toContain("Field");
-    expect(container.textContent).toContain("label");
+    expect(container.textContent).toContain("1 field");
+    expect(container.textContent).not.toContain("label");
+    expect(container.querySelector('a[href="#/settings/audit-log/audit-1"]')).not.toBeNull();
     expect(container.querySelector("pre")).toBeNull();
     expect(requests).toHaveLength(1);
     expect(requests[0]?.pathname).toBe("/api/v1/audit-log");

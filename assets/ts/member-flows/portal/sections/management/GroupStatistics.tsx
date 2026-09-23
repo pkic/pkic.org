@@ -14,10 +14,12 @@ import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
 import { EmptyState } from "../../../../ui/EmptyState";
 import { Field } from "../../../../ui/Field";
+import { Menu } from "../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { StatCard } from "../../../../ui/StatCard";
 import { Select, TextInput } from "../../../../ui/TextControl";
 import { fmt } from "../../ui";
+import "./GroupStatistics.css";
 
 interface DateWindow {
   scope: GroupStatsQuery["scope"];
@@ -66,6 +68,7 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
     groupStatsQuerySchema.parse({ scope: "current", timezone: "UTC" }),
   );
   const [windowError, setWindowError] = useState("");
+  const [windowOpen, setWindowOpen] = useState(false);
   const form = useContractForm(groupStatsQuerySchema, windowQuery(draft));
   const stats = useData(
     () =>
@@ -77,8 +80,7 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
     setDraft((current) => ({ ...current, [field]: value }));
   }
 
-  function applyWindow(event: Event): void {
-    event.preventDefault();
+  function applyWindow(): void {
     // A rejected window never reaches the server: the contract marks the
     // boundary it refuses and the form states the rest.
     const checked = form.submit();
@@ -88,6 +90,14 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
     }
     setWindowError("");
     setQuery(checked.data);
+    setWindowOpen(false);
+  }
+
+  function editWindow(): void {
+    form.reset();
+    setDraft({ scope: query.scope, from: query.from?.slice(0, 10) ?? "", to: query.to?.slice(0, 10) ?? "" });
+    setWindowError("");
+    setWindowOpen(true);
   }
 
   if (!stats.data && stats.loading) return <Spinner label="Loading group analytics…" />;
@@ -99,76 +109,102 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
 
   return (
     <div class="pk pk-stack">
-      <details>
-        <summary>
-          Reporting window · {SCOPE_LABELS[query.scope]} · {query.from?.slice(0, 10) ?? "Beginning"} to{" "}
-          {query.to?.slice(0, 10) ?? "now"}
-        </summary>
-        <div class="pk-stack">
-          <form noValidate class="pk-stack" aria-label="Analytics window" onSubmit={applyWindow} {...form.handlers}>
-            <div class="pk-grid pk-grid--tight">
-              <Field label="Count people who" {...form.of("scope")}>
-                {(control) => (
-                  <Select
-                    {...control}
-                    name="scope"
-                    value={draft.scope}
-                    onChange={(event) => updateDraft("scope", event.currentTarget.value)}
-                  >
-                    {GROUP_STATS_SCOPES.map((scope) => (
-                      <option key={scope} value={scope}>
-                        {SCOPE_LABELS[scope]}
-                      </option>
-                    ))}
-                  </Select>
-                )}
-              </Field>
-              <Field
-                label="From"
-                help="A UTC day. Leave blank to start at the beginning of available history."
-                {...form.of("from")}
-              >
-                {(control) => (
-                  <TextInput
-                    {...control}
-                    name="from"
-                    type="date"
-                    value={draft.from}
-                    onInput={(event) => updateDraft("from", event.currentTarget.value)}
-                  />
-                )}
-              </Field>
-              <Field
-                label="To"
-                help="Up to, but not including, this UTC day. Leave blank to run up to now."
-                {...form.of("to")}
-              >
-                {(control) => (
-                  <TextInput
-                    {...control}
-                    name="to"
-                    type="date"
-                    value={draft.to}
-                    onInput={(event) => updateDraft("to", event.currentTarget.value)}
-                  />
-                )}
-              </Field>
-            </div>
-            {windowError && <Alert tone="danger">{windowError}</Alert>}
-            <div class="pk-cluster">
-              <Button type="submit" loading={stats.loading}>
-                Apply window
-              </Button>
-            </div>
-          </form>
-          {stats.error && <ErrorAlert error={stats.error} />}
-        </div>
-      </details>
+      {stats.error && <ErrorAlert error={stats.error} />}
 
       {stats.data && (
         <>
           <Panel aria-label="Participation">
-            <PanelHeader title="Participation" />
+            <PanelHeader title="Participation">
+              <span class="pk-small pk-muted">
+                {SCOPE_LABELS[query.scope]} · {query.from?.slice(0, 10) ?? "Beginning"}–
+                {query.to?.slice(0, 10) ?? "now"}
+              </span>
+              <Menu
+                label="Participation options"
+                align="end"
+                items={[{ id: "reporting-window", label: "Change reporting window", onSelect: editWindow }]}
+              />
+            </PanelHeader>
+            {windowOpen && (
+              <PanelBody class="pk-analytics-window-editor">
+                <form
+                  noValidate
+                  class="pk-stack pk-stack--snug"
+                  aria-label="Reporting window"
+                  onSubmit={(event) => {
+                    event.preventDefault();
+                    applyWindow();
+                  }}
+                  {...form.handlers}
+                >
+                  <div class="pk-grid pk-grid--tight">
+                    <Field label="Count people who" {...form.of("scope")}>
+                      {(control) => (
+                        <Select
+                          {...control}
+                          name="scope"
+                          value={draft.scope}
+                          onChange={(event) => updateDraft("scope", event.currentTarget.value)}
+                        >
+                          {GROUP_STATS_SCOPES.map((scope) => (
+                            <option key={scope} value={scope}>
+                              {SCOPE_LABELS[scope]}
+                            </option>
+                          ))}
+                        </Select>
+                      )}
+                    </Field>
+                    <Field
+                      label="From"
+                      help="A UTC day. Leave blank to start at the beginning of available history."
+                      {...form.of("from")}
+                    >
+                      {(control) => (
+                        <TextInput
+                          {...control}
+                          name="from"
+                          type="date"
+                          value={draft.from}
+                          onInput={(event) => updateDraft("from", event.currentTarget.value)}
+                        />
+                      )}
+                    </Field>
+                    <Field
+                      label="To"
+                      help="Up to, but not including, this UTC day. Leave blank to run up to now."
+                      {...form.of("to")}
+                    >
+                      {(control) => (
+                        <TextInput
+                          {...control}
+                          name="to"
+                          type="date"
+                          value={draft.to}
+                          onInput={(event) => updateDraft("to", event.currentTarget.value)}
+                        />
+                      )}
+                    </Field>
+                  </div>
+                  {windowError && <Alert tone="danger">{windowError}</Alert>}
+                  <div class="pk-cluster pk-cluster--end">
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      onClick={() => {
+                        form.reset();
+                        setWindowError("");
+                        setWindowOpen(false);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button size="sm" variant="primary" type="submit">
+                      Apply window
+                    </Button>
+                  </div>
+                </form>
+              </PanelBody>
+            )}
             <PanelBody class="pk-stack pk-stack--snug">
               <p class="pk-small">
                 {stats.data.scope === "current"

@@ -85,6 +85,24 @@ async function mouseOnlyControls(page: Page): Promise<string[]> {
 }
 
 test.describe("public site at every width", () => {
+  test("gives standard public pages the full desktop content measure", async ({ page }) => {
+    await page.setViewportSize({ width: 1552, height: 900 });
+    await page.goto("/about/");
+    const contentContainer = page.locator("#content").locator("xpath=..");
+    expect((await contentContainer.boundingBox())?.width).toBeGreaterThan(1280);
+    expect(await horizontalOverflow(page)).toBe(0);
+  });
+
+  test("uses the wide four-column working group grid on desktop", async ({ page }) => {
+    await page.setViewportSize({ width: 1600, height: 900 });
+    await page.goto("/wg/");
+    const grid = page.locator(".bento-grid").first();
+    const container = grid.locator("xpath=..");
+    await expect(grid).toBeVisible();
+    expect((await container.boundingBox())?.width).toBeGreaterThan(1200);
+    expect(await grid.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").length)).toBe(4);
+  });
+
   test("fits the viewport and stays operable at mobile, tablet and desktop", async ({ page }) => {
     const failures: string[] = [];
 

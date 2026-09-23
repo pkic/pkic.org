@@ -68,8 +68,13 @@ const rowColumns: Column<EmailOutboxRow>[] = [
     header: "Subject",
     cell: (row) => (
       <>
-        <span class="pk-strong">{row.subject || "Email delivery details"}</span>
-        <div class="pk-small pk-muted">
+        <span class="pk-strong pk-table__clamp" title={row.subject || "Email delivery details"}>
+          {row.subject || "Email delivery details"}
+        </span>
+        <div
+          class="pk-small pk-muted pk-table__clamp"
+          title={[row.templateKey, row.eventName].filter(Boolean).join(" · ")}
+        >
           {row.templateKey}
           {row.templateVersion !== null ? ` v${row.templateVersion}` : ""}
           {row.eventName ? ` · ${row.eventName}` : ""}

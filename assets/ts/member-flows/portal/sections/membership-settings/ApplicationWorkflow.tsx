@@ -59,13 +59,7 @@ export function ApplicationWorkflow({
   if (resourceId) return <VersionPage id={resourceId} canWrite={canWrite} canPublish={canPublish} />;
   return (
     <div class="pk pk-stack">
-      <PageHeader
-        title="Application workflows"
-        trail={[
-          { label: "Settings", href: usePortalHashLocation.hrefs("/settings") },
-          { label: "Application workflows" },
-        ]}
-      />
+      <PageHeader title="Application workflows" />
       <p>
         Categories select a published workflow. Each application keeps its version, so a later policy edit cannot change
         an ongoing review.

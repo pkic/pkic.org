@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { successResponseSchema, trimmedString, utcInstantSchema } from "./api-common";
 import { authErrors, ok, requiresPermissions } from "./route-contract";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 /**
  * The scheduler is the mechanism; a scheduled job is the resource it manages.
@@ -48,7 +49,16 @@ export const scheduledJobResourceSchema = scheduledJobSchema.extend({
 });
 export type ScheduledJobResource = z.infer<typeof scheduledJobResourceSchema>;
 
-export const schedulerJobsListResponseSchema = z.object({ jobs: z.array(scheduledJobResourceSchema).max(200) });
+export const SCHEDULED_JOB_SORT_COLUMNS = [
+  "job_key",
+  "interval_seconds",
+  "next_run_at",
+  "last_run_at",
+  "last_status",
+] as const;
+export const schedulerJobsListQuerySchema = listQuerySchema(SCHEDULED_JOB_SORT_COLUMNS);
+export type SchedulerJobsListQuery = z.infer<typeof schedulerJobsListQuerySchema>;
+export const schedulerJobsListResponseSchema = paginatedResponseSchema("jobs", scheduledJobResourceSchema);
 
 export const schedulerJobParamsSchema = z.object({ jobKey: z.string().trim().min(1).max(80) });
 
@@ -71,7 +81,8 @@ export const schedulerJobsListRouteSchema = {
   ...requiresPermissions("scheduler:read"),
   summary: "List scheduled jobs",
   description:
-    "Returns every recurring job with its cadence, next wake, and outcome history. `lastSuccessAt` is reported separately from `lastRunAt` so a job that runs often but last succeeded days ago is visible rather than hidden behind one timestamp.",
+    "Searches, sorts, and paginates recurring jobs with their cadence, next wake, and outcome history. `lastSuccessAt` is reported separately from `lastRunAt` so a job that runs often but last succeeded days ago is visible rather than hidden behind one timestamp.",
+  request: { query: schedulerJobsListQuerySchema },
   responses: {
     ...ok("Scheduled job registry.", schedulerJobsListResponseSchema),
     ...authErrors({ forbidden: "Requires scheduler:read." }),

@@ -34,11 +34,14 @@ import { useCallback, useEffect, useId, useRef, useState } from "preact/hooks";
 import { MenuLevel } from "./MenuLevel";
 import "./Menu.css";
 
-export interface MenuItem {
+interface MenuItemBase {
   id: string;
   label: string;
   icon?: ComponentChildren;
-  onSelect: () => void;
+  /** A command; omit for link items with `href`. */
+  onSelect?: () => void;
+  /** A destination or download; rendered as an anchor in the menu. */
+  href?: string;
   /** Navigation within a paginated menu keeps the popup available. */
   keepOpen?: boolean;
   /** Choices opened as a submenu, with keyboard return to their parent. */
@@ -55,6 +58,8 @@ export interface MenuItem {
   /** Draws a rule above the item: the start of a new group of choices. */
   separatorBefore?: boolean;
 }
+
+export type MenuItem = MenuItemBase;
 
 export interface MenuProps {
   /** Accessible name for the trigger. */

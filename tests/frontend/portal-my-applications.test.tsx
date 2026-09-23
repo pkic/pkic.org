@@ -196,16 +196,15 @@ describe("my applications", () => {
     );
   });
 
-  it("returns to the list from the detail view", async () => {
+  it("shows the list in the detail breadcrumb", async () => {
     stub();
 
     const root = mount(APPLICATION_ID);
     await settle();
 
-    const back = [...root.querySelectorAll<HTMLAnchorElement>("a")].find((link) =>
-      link.textContent?.includes("Back to applications"),
-    );
-    expect(back?.getAttribute("href")).toBe("#/application");
+    const trail = root.querySelector('nav[aria-label="Breadcrumb"]');
+    expect(trail?.querySelector<HTMLAnchorElement>("a")?.getAttribute("href")).toBe("#/application");
+    expect(trail?.querySelector('[aria-current="page"]')?.textContent).toBe(detail.applicantName);
   });
 
   it("says so in an announced region when no application is on file", async () => {
@@ -244,11 +243,9 @@ describe("my applications", () => {
     const alert = root.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain("This wasn't found");
     expect(root.textContent).not.toContain("Status history");
-    // The way back is still there, so the reader is not stranded.
-    expect(
-      [...root.querySelectorAll<HTMLAnchorElement>("a")].some(
-        (link) => link.textContent?.includes("Back to applications") && link.getAttribute("href") === "#/application",
-      ),
-    ).toBe(true);
+    // The list remains reachable through the trail even when this record fails.
+    expect(root.querySelector<HTMLAnchorElement>('nav[aria-label="Breadcrumb"] a')?.getAttribute("href")).toBe(
+      "#/application",
+    );
   });
 });

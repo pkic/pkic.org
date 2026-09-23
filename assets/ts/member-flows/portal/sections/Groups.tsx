@@ -22,6 +22,7 @@ import {
   leaveGroupEntirely,
 } from "./group-participation-commands";
 import { fmtDate } from "../ui";
+import { TableCodedLabel } from "../../../ui/TableCodedLabel";
 
 type SelfGroupsPage = z.infer<typeof selfGroupsListResponseSchema>;
 type Group = z.infer<typeof groupSchema>;
@@ -133,7 +134,7 @@ function MemberGroupCatalog({ onCreate }: { onCreate?: () => void }) {
           header: "Group",
           cell: (group: SelfGroup) => (
             <div>
-              <div class="pk-strong">{group.name}</div>
+              <TableCodedLabel code={group.abbreviatedName} name={group.name} wideCode className="pk-strong" />
               <div class="pk-small pk-muted">
                 {group.type.singularLabel}
                 {group.parentGroup ? ` · part of ${group.parentGroup.name}` : ""}
@@ -204,7 +205,7 @@ function AllGroups({ canCreate, onCreate }: { canCreate: boolean; onCreate?: () 
           header: "Group",
           cell: (group: Group) => (
             <div>
-              <div class="pk-strong">{group.name}</div>
+              <TableCodedLabel code={group.abbreviatedName} name={group.name} wideCode className="pk-strong" />
               <div class="pk-small">{group.type.singularLabel}</div>
             </div>
           ),

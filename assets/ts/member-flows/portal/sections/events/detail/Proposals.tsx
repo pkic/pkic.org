@@ -21,7 +21,13 @@ function ProposalsList({ slug }: { slug: string }) {
       endpoint={`/api/v1/events/${encodeURIComponent(slug)}/proposals`}
       urlState="proposals"
       rowHref={(proposal) => usePortalHashLocation.hrefs(eventProposalDetailViewPath(slug, proposal.id))}
-      toolbarPrefix={(_, access) => <EventPresentationArchiveLinks slug={slug} canRead={access?.canRead === true} />}
+      toolbarPrefix={(_, access, selectedProposalIds) => (
+        <EventPresentationArchiveLinks
+          slug={slug}
+          canRead={access?.canRead === true}
+          selectedProposalIds={selectedProposalIds}
+        />
+      )}
     />
   );
 }

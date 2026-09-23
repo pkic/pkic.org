@@ -121,6 +121,35 @@ describe("GET /api/v1/audit-log", () => {
     expect(body.page).toEqual({ limit: 50, offset: 0, total: 2, hasMore: false });
   });
 
+  it("opens a shareable entry by id with the same audit permission as the list", async () => {
+    const id = crypto.randomUUID();
+    await insertAuditLogRow({
+      id,
+      actorType: "admin",
+      actorId: adminUserId,
+      action: "organization_updated",
+      entityType: "organization",
+      entityId: crypto.randomUUID(),
+      detailsJson: JSON.stringify({ name: { from: "Old", to: "New" } }),
+      secondsAgo: 1,
+    });
+
+    const response = await callAppGet(`/api/v1/audit-log/${id}`, adminToken);
+    expect(response.status).toBe(200);
+    expect(await response.json()).toMatchObject({
+      entry: {
+        id,
+        actor_display: expect.any(String),
+        action: "organization_updated",
+        details: { name: { to: "New" } },
+      },
+    });
+    expect((await callAppGet(`/api/v1/audit-log/${crypto.randomUUID()}`, adminToken)).status).toBe(404);
+    expect((await callAppGet(`/api/v1/audit-log/${id}`, "invalid")).status).toBe(401);
+    const outsider = await seedPersona(env.DB, onlyPersona("admin:read"));
+    expect((await callAppGet(`/api/v1/audit-log/${id}`, outsider.token!)).status).toBe(403);
+  });
+
   it("filters by entityType", async () => {
     await insertAuditLogRow({ actorType: "system", action: "a1", entityType: "registration", secondsAgo: 10 });
     await insertAuditLogRow({ actorType: "system", action: "a2", entityType: "event", secondsAgo: 5 });

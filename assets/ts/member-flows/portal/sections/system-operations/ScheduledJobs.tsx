@@ -1,14 +1,11 @@
 /**
  * Scheduled jobs — the dispatcher registry, its cadence, and its outcomes.
  *
- * Rendered by the design system's DataTable rather than a hand-built table:
- * the caption names the table for anyone listing the tables on the page, and
- * the pause form arrives as the row's own detail row instead of being nested
- * inside the actions cell, where it inherited that cell's end alignment.
+ * The shared API table owns list loading, search, refresh, and paging. Row
+ * actions stay behind the same menu used by other portal lists.
  */
 import { ScheduledJobScheduleDialog } from "./ScheduledJobScheduleDialog";
-import { Panel } from "../../../../ui/Panel";
-import { useEffect, useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import {
   schedulerJobRunResponseSchema,
   schedulerJobsListResponseSchema,
@@ -18,17 +15,18 @@ import {
   type ScheduledJobStateUpdate,
 } from "../../../../../shared/schemas/scheduler";
 import { Badge, statusLabel } from "../../../../components/Badge";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import type { Column } from "../../../../components/Table";
 import { useContractForm } from "../../../../hooks/useContractForm";
 import { Alert } from "../../../../ui/Alert";
 import type { MenuItem } from "../../../../ui/Menu";
 import { RowActions } from "../../../../ui/RowActions";
-import { DataTable, type DataTableColumn } from "../../../../ui/DataTable";
 import { EmptyState } from "../../../../ui/EmptyState";
 import { Field } from "../../../../ui/Field";
 import { Dialog } from "../../../../ui/Dialog";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { Textarea } from "../../../../ui/TextControl";
-import { getJson, patchJson, postJson } from "../../../../shared/api-client";
+import { patchJson, postJson } from "../../../../shared/api-client";
 import { fmt, toast } from "../../ui";
 import "../../../../ui/Content.css";
 
@@ -238,45 +236,21 @@ function PauseDialog({
 export function ScheduledJobs() {
   const [scheduleJob, setScheduleJob] = useState<ScheduledJobResource | null>(null);
   const [jobs, setJobs] = useState<ScheduledJobResource[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
   const [busyJob, setBusyJob] = useState<string | null>(null);
   const [pauseJob, setPauseJob] = useState<string | null>(null);
   const [pauseReason, setPauseReason] = useState("");
-
-  async function load(signal?: AbortSignal): Promise<void> {
-    const response = await getJson("/api/v1/scheduler/jobs", schedulerJobsListResponseSchema, { signal });
-    setJobs(response.jobs);
-  }
-
-  useEffect(() => {
-    const controller = new AbortController();
-    setLoading(true);
-    setError(null);
-    void load(controller.signal)
-      .catch((loadError) => {
-        if (!controller.signal.aborted) setError((loadError as Error).message);
-      })
-      .finally(() => {
-        if (!controller.signal.aborted) setLoading(false);
-      });
-    return () => controller.abort();
-  }, []);
-
-  function replaceJob(updated: ScheduledJobResource): void {
-    setJobs((current) => current.map((job) => (job.jobKey === updated.jobKey ? updated : job)));
-  }
+  const tableActions = useRef<ApiTableActions | null>(null);
 
   /** Sends one state change; a rejection is thrown so the caller can say where. */
   async function updateState(job: ScheduledJobResource, update: ScheduledJobStateUpdate): Promise<void> {
     setBusyJob(job.jobKey);
     try {
-      const response = await patchJson(
+      await patchJson(
         `/api/v1/scheduler/jobs/${encodeURIComponent(job.jobKey)}`,
         update,
         schedulerJobStateResponseSchema,
       );
-      replaceJob(response.job);
+      await tableActions.current?.reload();
       setPauseJob(null);
       setPauseReason("");
       toast(update.state === "paused" ? "Scheduled job paused." : "Scheduled job resumed.", "success");
@@ -301,7 +275,7 @@ export function ScheduledJobs() {
         {},
         schedulerJobRunResponseSchema,
       );
-      await load();
+      await tableActions.current?.reload();
       toast(
         `${titleFromKey(job.jobKey)} finished with status ${statusLabel(result.status).toLowerCase()}.`,
         result.status === "succeeded" ? "success" : "error",
@@ -324,16 +298,28 @@ export function ScheduledJobs() {
     },
   };
 
-  const columns: ReadonlyArray<DataTableColumn<ScheduledJobResource>> = [
-    { id: "job", header: "Job", cell: (job) => <JobIdentity job={job} /> },
-    { id: "schedule", header: "Schedule", cell: (job) => <JobSchedule job={job} /> },
-    { id: "outcome", header: "Last outcome", cell: (job) => <JobOutcome job={job} /> },
-    { id: "health", header: "Health", cell: (job) => <JobHealth job={job} /> },
+  const columns: Column<ScheduledJobResource>[] = [
     {
-      id: "actions",
-      header: "Actions",
-      headerHidden: true,
-      align: "end",
+      header: "Job",
+      width: "primary",
+      sort: { asc: "job_key", desc: "-job_key" },
+      cell: (job) => <JobIdentity job={job} />,
+    },
+    {
+      header: "Schedule",
+      sort: { asc: "next_run_at", desc: "-next_run_at" },
+      cell: (job) => <JobSchedule job={job} />,
+    },
+    {
+      header: "Last outcome",
+      sort: { asc: "last_run_at", desc: "-last_run_at" },
+      cell: (job) => <JobOutcome job={job} />,
+    },
+    { header: "Health", cell: (job) => <JobHealth job={job} /> },
+    {
+      header: "",
+      width: "fit",
+      className: "pk-end",
       cell: (job) => <JobActions job={job} controls={controls} />,
     },
   ];
@@ -347,8 +333,8 @@ export function ScheduledJobs() {
         <ScheduledJobScheduleDialog
           job={scheduleJob}
           onCancel={() => setScheduleJob(null)}
-          onSaved={(job) => {
-            replaceJob(job);
+          onSaved={() => {
+            void tableActions.current?.reload();
             setScheduleJob(null);
           }}
         />
@@ -366,27 +352,27 @@ export function ScheduledJobs() {
       <p class="pk-small">
         Inspect dispatcher cadence and outcomes. Pausing prevents future claims but does not cancel a running job.
       </p>
-      {error ? (
-        <Alert tone="danger" title="Could not load the scheduled jobs.">
-          {error}
-        </Alert>
-      ) : (
-        <Panel>
-          <DataTable
-            caption="Scheduled jobs"
-            columns={columns}
-            rows={jobs}
-            rowKey={(job) => job.jobKey}
-            loading={loading}
-            empty={
-              <EmptyState
-                title="No scheduled jobs are configured."
-                body="A job appears here once the dispatcher registers it."
-              />
-            }
+      <ApiDataTable
+        caption="Scheduled jobs"
+        endpoint="/api/v1/scheduler/jobs"
+        responseSchema={schedulerJobsListResponseSchema}
+        resolve={(response) => response.jobs}
+        resolvePage={(response) => response.page}
+        columns={columns}
+        rowKey={(job) => job.jobKey}
+        initialSort="job_key"
+        searchPlaceholder="Search scheduled jobs…"
+        paginate
+        initialPageSize={25}
+        actionsRef={tableActions}
+        onData={(response) => setJobs(response.jobs)}
+        empty={
+          <EmptyState
+            title="No scheduled jobs are configured."
+            body="A job appears here once the dispatcher registers it."
           />
-        </Panel>
-      )}
+        }
+      />
     </div>
   );
 }

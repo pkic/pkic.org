@@ -29,27 +29,31 @@ function SettingsNavigation({
   location: string;
   onNavigate: () => void;
 }) {
+  const ownsPage = (path: string) => location === path || location.startsWith(`${path}/`);
   const groups = [...new Set(items.map((item) => item.group))];
   const links = (children: PortalNavItem[]) =>
-    children.map((child) => (
-      <li key={child.path}>
-        <Link
-          href={child.path}
-          class={`portal-sidebar-group${location === child.path ? " active" : ""}`}
-          aria-current={location === child.path ? "page" : undefined}
-          onClick={onNavigate}
-        >
-          <span class="portal-sidebar-group-name">{child.label}</span>
-        </Link>
-      </li>
-    ));
+    children.map((child) => {
+      const active = ownsPage(child.path);
+      return (
+        <li key={child.path}>
+          <Link
+            href={child.path}
+            class={`portal-sidebar-group${active ? " active" : ""}`}
+            aria-current={location === child.path ? "page" : active ? "location" : undefined}
+            onClick={onNavigate}
+          >
+            <span class="portal-sidebar-group-name">{child.label}</span>
+          </Link>
+        </li>
+      );
+    });
   return (
     <>
       {groups.map((group) => {
         const children = items.filter((item) => item.group === group);
         return group ? (
           <li key={group}>
-            <details open={children.some((child) => location.startsWith(child.path))}>
+            <details open={children.some((child) => ownsPage(child.path))}>
               <summary class="portal-sidebar-group">{group}</summary>
               <ul class="portal-sidebar-groups" aria-label={`${group} settings`}>
                 {links(children)}

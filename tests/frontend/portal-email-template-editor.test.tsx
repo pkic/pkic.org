@@ -103,17 +103,12 @@ async function settle(): Promise<void> {
   });
 }
 
-async function mount(props: { canWrite?: boolean; onBack?: () => void } = {}): Promise<void> {
+async function mount(props: { canWrite?: boolean } = {}): Promise<void> {
   container = document.createElement("div");
   document.body.append(container);
   await act(() =>
     render(
-      <TemplateEditor
-        templateKey={TEMPLATE_KEY}
-        initialVersion={ACTIVE_VERSION}
-        canWrite={props.canWrite ?? true}
-        onBack={props.onBack ?? (() => undefined)}
-      />,
+      <TemplateEditor templateKey={TEMPLATE_KEY} initialVersion={ACTIVE_VERSION} canWrite={props.canWrite ?? true} />,
       container!,
     ),
   );
@@ -361,13 +356,13 @@ describe("portal email template editor", () => {
     );
   });
 
-  it("returns to the list from the panel header", async () => {
+  it("shows the template's addressable place in the settings breadcrumb", async () => {
     stubApi();
-    const onBack = vi.fn();
-    await mount({ onBack });
+    await mount();
 
     expect(container!.querySelector("h3")?.textContent).toBe(`Edit: ${TEMPLATE_KEY}`);
-    await click("← Back to list");
-    expect(onBack).toHaveBeenCalledTimes(1);
+    const trail = container!.querySelector('nav[aria-label="Breadcrumb"]');
+    expect(trail?.querySelector<HTMLAnchorElement>('a[href="#/settings/email-templates"]')).not.toBeNull();
+    expect(trail?.querySelector('[aria-current="page"]')?.textContent).toBe(TEMPLATE_KEY);
   });
 });

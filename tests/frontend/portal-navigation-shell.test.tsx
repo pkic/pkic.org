@@ -210,6 +210,21 @@ describe("portal navigation shell", () => {
     expect(membership?.querySelectorAll("a")).toHaveLength(4);
   });
 
+  it("keeps the parent settings page highlighted on a detail route", async () => {
+    currentLocation.value = "/settings/application-workflow/version-1";
+    window.location.hash = "#/settings/application-workflow/version-1";
+    mountNavigation(portalSessionFixture({ staff: true }));
+    await settle();
+
+    const pages = container.querySelector('ul[aria-label="Settings pages"]');
+    const workflow = pages?.querySelector<HTMLAnchorElement>('a[href="#/settings/application-workflow"]');
+    const reminders = pages?.querySelector<HTMLAnchorElement>('a[href="#/settings/applicant-reminders"]');
+    expect(workflow?.classList.contains("active")).toBe(true);
+    expect(workflow?.getAttribute("aria-current")).toBe("location");
+    expect(workflow?.closest("details")?.open).toBe(true);
+    expect(reminders?.classList.contains("active")).toBe(false);
+  });
+
   it("opens a section's own pages under it and folds them away when the reader leaves", async () => {
     /*
      * A section's pages belong under the section, the way a group's pages

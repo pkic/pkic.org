@@ -178,6 +178,9 @@
     white-space: pre-wrap;
     overflow-wrap: anywhere;
   }
+  .pk-prose-block--full {
+    max-width: none;
+  }
 
   /* A short row of related links, separated by a middle dot rather than boxed as buttons. */
   .pk-inline-links {

@@ -633,7 +633,8 @@ $wg-colors: (
     width: 100%;
     height: 100%;
     object-fit: contain;
-    filter: grayscale(0.3) opacity(0.85);
+    filter: var(--pk-member-logo-hover-filter);
+    mix-blend-mode: var(--pk-member-logo-blend);
     transition: filter 0.2s ease;
   }
 
@@ -677,7 +678,7 @@ $wg-colors: (
   }
 
   &:hover .member-card-logo {
-    filter: none;
+    filter: var(--pk-member-logo-hover-filter);
   }
 
   .member-card-name {
@@ -689,13 +690,13 @@ $wg-colors: (
 
   .member-card-slogan {
     font-size: 0.8rem;
-    color: $gray-500;
+    color: var(--pk-ink-muted);
     margin-bottom: 0.5rem;
   }
 
   .member-card-description {
     font-size: 0.8rem;
-    color: $gray-600;
+    color: var(--pk-ink-muted);
     line-height: 1.4;
     flex: 1;
   }

@@ -95,7 +95,7 @@
   transition: filter 0.15s;
 
   .wg-leader-card:hover & {
-    filter: var(--pk-member-logo-filter);
+    filter: var(--pk-member-logo-hover-filter);
   }
 
   &--large {
@@ -280,7 +280,7 @@
   font-size: 0.78rem;
   color: var(--pk-ink-muted);
   line-height: 1.4;
-  margin-top: var(--pk-1);
+  margin-top: calc(var(--pk-1) / 2);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -308,7 +308,7 @@
   filter: var(--pk-member-logo-filter);
   transition: filter 0.18s;
   .person-card:hover & {
-    filter: var(--pk-member-logo-filter);
+    filter: var(--pk-member-logo-hover-filter);
   }
 }
 

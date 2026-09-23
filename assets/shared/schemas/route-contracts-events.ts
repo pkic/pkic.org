@@ -222,7 +222,10 @@ export const eventPresentationArchiveRouteSchema = {
   summary: "Download an event presentation archive",
   request: { params: eventSlugParamsSchema, query: eventPresentationArchiveQuerySchema },
   responses: {
-    "200": { description: "ZIP archive of current presentations, or every retained version when versions=all." },
+    "200": {
+      description:
+        "ZIP archive of current presentations, or every retained version when versions=all, optionally limited to selected proposals.",
+    },
     "401": jsonErrorResponse("An authenticated user session is required."),
     "403": jsonErrorResponse("Proposal read permission is required."),
     "404": jsonErrorResponse("Event or presentations not found."),

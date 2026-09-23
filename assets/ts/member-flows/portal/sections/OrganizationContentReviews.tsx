@@ -16,7 +16,7 @@ import { TextDiff } from "../../../components/TextDiff";
 import { useContractForm } from "../../../hooks/useContractForm";
 import { getJson, postJson } from "../../../shared/api-client";
 import { ORGANIZATION_CONTENT_FIELD_LABELS } from "../../../shared/organization-content";
-import { Button, ButtonLink } from "../../../ui/Button";
+import { Button } from "../../../ui/Button";
 import { Field } from "../../../ui/Field";
 import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
@@ -199,11 +199,11 @@ function RoutedContentReview({ reviewId }: { reviewId: string }) {
     <div class="pk pk-stack">
       <PageHeader
         title="Content review"
-        actions={
-          <ButtonLink size="sm" variant="ghost" href="#/settings/organization-content-reviews">
-            Back to content reviews
-          </ButtonLink>
-        }
+        trail={[
+          { label: "Settings", href: "#/settings" },
+          { label: "Content reviews", href: "#/settings/organization-content-reviews" },
+          { label: "Content review" },
+        ]}
       />
       <ReviewDetail
         reviewId={reviewId}

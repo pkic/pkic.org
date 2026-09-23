@@ -6,7 +6,7 @@ import {
   identityMutationResponseSchema,
   type ActingIdentity,
 } from "../../../../shared/schemas/identity";
-import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataTable";
+import { ApiDataTable, type ApiTableActions, type ApiDataTableProps } from "../../../components/ApiDataTable";
 import { DataTable, type Column } from "../../../components/Table";
 import { EmptyState } from "../../../components/EmptyState";
 import { Badge } from "../../../ui/Badge";
@@ -140,7 +140,7 @@ export function ActingIdentityDirectory({
   onChanged?: () => Promise<void>;
   actionsRef?: MutableRef<ApiTableActions | null>;
   /** The directory's create affordance, rendered in its own toolbar row alongside search and refresh. */
-  createAction?: { label: string; onSelect: () => void };
+  createAction?: ApiDataTableProps<ActingIdentity, unknown>["createAction"];
   /** The list's name; the organization page calls it Representatives. */
   caption?: string;
   /** Extra commands for the list's toolbar, beside search and refresh. */

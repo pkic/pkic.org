@@ -125,9 +125,12 @@ describe("group settings form", () => {
     const { bodies } = stubPatch(() => json(saveResponse));
     const container = mount(<GroupSettingsForm group={group} onUpdated={vi.fn(async () => undefined)} />);
     await settle();
+    expect(container.textContent).toContain("URL slug");
+    expect(container.textContent).toContain("architecture");
     expect(container.querySelector("input,select,textarea")).toBeNull();
     expect(container.querySelector('button[type="submit"]')).toBeNull();
     await beginRecordEdit(container, "Group settings actions");
+    expect(container.textContent).toContain("The URL slug is separate.");
     const name = labelled(container, "Name")[0] as HTMLInputElement;
     await act(async () => {
       name.value = "Unsaved name";
@@ -207,6 +210,17 @@ describe("group settings form", () => {
     void act(() => {
       name.dispatchEvent(new Event("input", { bubbles: true }));
     });
+    const slug = labelled(container, "URL slug")[0] as HTMLInputElement;
+    expect(slug.value).toBe("architecture");
+    slug.value = "architecture-design";
+    void act(() => {
+      slug.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    const abbreviation = labelled(container, "Abbreviated name")[0] as HTMLInputElement;
+    abbreviation.value = "ADC";
+    void act(() => {
+      abbreviation.dispatchEvent(new Event("input", { bubbles: true }));
+    });
     await save(container);
 
     expect(bodies).toHaveLength(1);
@@ -214,6 +228,8 @@ describe("group settings form", () => {
     // comparison in this file says it is.
     const sent = groupUpdateSchema.parse(JSON.parse(bodies[0]));
     expect(sent.name).toBe("Architecture and Design Committee");
+    expect(sent.slug).toBe("architecture-design");
+    expect(sent.abbreviatedName).toBe("ADC");
     expect(sent.expectedRevision).toBe(4);
     expect(sent.links).toEqual(["https://github.com/pkic"]);
     expect(onUpdated).toHaveBeenCalledTimes(1);

@@ -18,6 +18,7 @@ import { ErrorAlert } from "./ErrorAlert";
 import { ADMIN_LIST_PAGE_SIZE_DEFAULT, Pager } from "./Pager";
 import { DataTable, type DataTableProps } from "./Table";
 import { IconPlus, IconRefresh } from "./icons";
+import { SplitButton, type SplitButtonProps } from "../ui/SplitButton";
 
 export interface ApiTableActions {
   reload: () => Promise<void>;
@@ -40,13 +41,16 @@ export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, 
    * refresh so every collection offers "New …" in one predictable place.
    * The form it reveals stays behind this action — never in the default view.
    */
-  createAction?: {
-    label: string;
-    onSelect: () => void;
-    disabled?: boolean;
-    /** For a create control that toggles a disclosure (an inline form above the list), the open state. */
-    expanded?: boolean;
-  };
+  createAction?:
+    | {
+        label: string;
+        onSelect: () => void;
+        disabled?: boolean;
+        /** For a create control that toggles a disclosure (an inline form above the list), the open state. */
+        expanded?: boolean;
+        items?: never;
+      }
+    | SplitButtonProps;
   /**
    * Namespace for URL-addressed list state: search, sort, and page mirror
    * into `<namespace>.q` etc. in the query string, so a filtered page can be
@@ -213,19 +217,23 @@ export function ApiDataTable<T, Response = unknown>({
               full-size control. Primary, because the list's create affordance
               is the one thing the head offers beyond finding rows — the
               design system's list head draws it the same way. */}
-          {createAction && (
-            <Button
-              variant="primary"
-              icon
-              aria-label={createAction.label}
-              title={createAction.label}
-              onClick={createAction.onSelect}
-              disabled={createAction.disabled}
-              aria-expanded={createAction.expanded}
-            >
-              <IconPlus />
-              <span class="pk-sr-only">{createAction.label}</span>
-            </Button>
+          {createAction && "items" in createAction && createAction.items ? (
+            <SplitButton {...createAction} />
+          ) : (
+            createAction && (
+              <Button
+                variant="primary"
+                icon
+                aria-label={createAction.label}
+                title={createAction.label}
+                onClick={createAction.onSelect}
+                disabled={createAction.disabled}
+                aria-expanded={createAction.expanded}
+              >
+                <IconPlus />
+                <span class="pk-sr-only">{createAction.label}</span>
+              </Button>
+            )
           )}
           <Button
             variant="secondary"

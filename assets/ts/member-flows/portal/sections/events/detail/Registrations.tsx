@@ -59,7 +59,15 @@ type RegistrationStats = EventRegistrationsListResponse["stats"];
 
 // ─── Registration list ────────────────────────────────────────────────────────
 
-function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: string; initialAttendanceChange?: string }) {
+export function RegistrationsList({
+  slug,
+  initialAttendanceChange = "",
+  embedded = false,
+}: {
+  slug: string;
+  initialAttendanceChange?: string;
+  embedded?: boolean;
+}) {
   // Not a column filter: the attendance-change view is seeded by the route
   // (`…/registrations/left-in-person`), reshapes the columns and the empty
   // sentence, and the table does not report its filters back to the page.
@@ -261,7 +269,7 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
 
   return (
     <div class="pk pk-stack">
-      {stats && <RegistrationTotals stats={stats} />}
+      {!embedded && stats && <RegistrationTotals stats={stats} />}
       <ApiDataTable
         caption="Event registrations"
         endpoint={eventRegistrationsPath(slug)}
@@ -273,35 +281,39 @@ function RegistrationsList({ slug, initialAttendanceChange = "" }: { slug: strin
         searchPlaceholder="Search name / email…"
         params={attendanceChangeFilter ? { attendance_change: attendanceChangeFilter } : {}}
         actionsRef={tableRef}
-        toolbar={({ resetPage }) => (
-          <>
-            {/* Status, email delivery and sponsor consent narrow from their
+        toolbar={
+          embedded
+            ? undefined
+            : ({ resetPage }) => (
+                <>
+                  {/* Status, email delivery and sponsor consent narrow from their
                 own columns' menus. This one stays: it is a view of the list
                 rather than a value a column shows, arrived at from the
                 attendance dashboard's links as much as from here. */}
-            <FilterSelect
-              ariaLabel="Attendance changes"
-              value={attendanceChangeFilter}
-              options={[
-                { value: "", label: "All attendance activity" },
-                ...eventRegistrationAttendanceChangeFilterSchema.options.map((change) => ({
-                  value: change,
-                  label: EVENT_REGISTRATION_ATTENDANCE_CHANGE_LABELS[change],
-                })),
-              ]}
-              onChange={(value) => {
-                setAttendanceChangeFilter(value);
-                resetPage();
-              }}
-            />
-            <RegistrationRosterActions
-              promotionsEndpoint={eventRegistrationPromotionsPath(slug)}
-              exportsEndpoint={eventRegistrationExportsPath(slug)}
-              onPromoted={() => tableRef.current?.reload()}
-              notify={toast}
-            />
-          </>
-        )}
+                  <FilterSelect
+                    ariaLabel="Attendance changes"
+                    value={attendanceChangeFilter}
+                    options={[
+                      { value: "", label: "All attendance activity" },
+                      ...eventRegistrationAttendanceChangeFilterSchema.options.map((change) => ({
+                        value: change,
+                        label: EVENT_REGISTRATION_ATTENDANCE_CHANGE_LABELS[change],
+                      })),
+                    ]}
+                    onChange={(value) => {
+                      setAttendanceChangeFilter(value);
+                      resetPage();
+                    }}
+                  />
+                  <RegistrationRosterActions
+                    promotionsEndpoint={eventRegistrationPromotionsPath(slug)}
+                    exportsEndpoint={eventRegistrationExportsPath(slug)}
+                    onPromoted={() => tableRef.current?.reload()}
+                    notify={toast}
+                  />
+                </>
+              )
+        }
         columns={columns}
         empty={attendanceChangeFilter ? "No attendees match this attendance change" : "No registrations yet"}
         rowKey={(r) => r.id}

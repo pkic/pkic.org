@@ -469,6 +469,7 @@ export const GROUP_LEADERSHIP_SORT_COLUMNS = [
 ] as const;
 export const groupLeadershipListQuerySchema = listQuerySchema(GROUP_LEADERSHIP_SORT_COLUMNS).extend({
   userRoleId: databaseIdSchema.optional(),
+  term: z.enum(["current", "past"]).optional(),
 });
 export type GroupLeadershipListQuery = z.infer<typeof groupLeadershipListQuerySchema>;
 

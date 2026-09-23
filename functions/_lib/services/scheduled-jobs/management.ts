@@ -2,10 +2,16 @@ import type {
   ScheduledJob,
   ScheduledJobResource,
   ScheduledJobStateUpdate,
+  SchedulerJobsListQuery,
 } from "../../../../assets/shared/schemas/scheduler";
+import { SCHEDULED_JOB_SORT_COLUMNS } from "../../../../assets/shared/schemas/scheduler";
+import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { hasPermission, preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
-import { all, first } from "../../db/queries";
+import { first } from "../../db/queries";
+import { queryPage } from "../../db/pagination";
+import { buildD1TextSearchFilter } from "../../db/search";
+import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
 import type { DatabaseLike, Env, UserBackedAuthAdmin } from "../../types";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../audit";
@@ -41,14 +47,6 @@ function toScheduledJob(row: ScheduledJobRow): ScheduledJob {
   };
 }
 
-export async function listScheduledJobs(db: DatabaseLike): Promise<ScheduledJob[]> {
-  const rows = await all<ScheduledJobRow>(
-    db,
-    `SELECT ${SCHEDULED_JOB_COLUMNS} FROM scheduled_jobs ORDER BY job_key ASC`,
-  );
-  return rows.map(toScheduledJob);
-}
-
 const JOB_DEFINITIONS = new Map(SCHEDULED_JOB_DEFINITIONS.map((definition) => [definition.key, definition]));
 
 function toScheduledJobResource(job: ScheduledJob, actor: UserBackedAuthAdmin): ScheduledJobResource {
@@ -69,8 +67,28 @@ function toScheduledJobResource(job: ScheduledJob, actor: UserBackedAuthAdmin): 
 export async function listScheduledJobsForActor(
   db: DatabaseLike,
   actor: UserBackedAuthAdmin,
-): Promise<ScheduledJobResource[]> {
-  return (await listScheduledJobs(db)).map((job) => toScheduledJobResource(job, actor));
+  query: SchedulerJobsListQuery,
+) {
+  const search = query.q ? buildD1TextSearchFilter(query.q, ["job_key", "last_status", "last_error"]) : null;
+  const sortColumns = {
+    job_key: "job_key",
+    interval_seconds: "interval_seconds",
+    next_run_at: "next_run_at",
+    last_run_at: "last_run_at",
+    last_status: "last_status",
+  } satisfies Record<(typeof SCHEDULED_JOB_SORT_COLUMNS)[number], string>;
+  const { rows, total } = await queryPage<ScheduledJobRow>(db, {
+    source: {
+      selectSql: `SELECT ${SCHEDULED_JOB_COLUMNS}`,
+      fromSql: `FROM scheduled_jobs${search ? ` WHERE ${search.sql}` : ""}`,
+      bindings: search?.bindings ?? [],
+    },
+    orderBy: resolveMappedOrderBy(query.sort, sortColumns, "job_key ASC", "job_key ASC"),
+    limit: query.limit,
+    offset: query.offset,
+  });
+  const jobs = rows.map((row) => toScheduledJobResource(toScheduledJob(row), actor));
+  return { jobs, page: buildPageInfo(query.limit, query.offset, total, jobs.length) };
 }
 
 async function requireJobRow(db: DatabaseLike, jobKey: string): Promise<ScheduledJobRow> {

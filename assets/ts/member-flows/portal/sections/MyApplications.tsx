@@ -13,7 +13,6 @@ import { ErrorAlert } from "../../../components/ErrorAlert";
 import { ApiDataTable } from "../../../components/ApiDataTable";
 import { fmt, fmtDate } from "../ui";
 import { Badge, statusLabel } from "../../../components/Badge";
-import { ButtonLink } from "../../../ui/Button";
 import { type Column } from "../../../components/Table";
 import { EmptyState } from "../../../ui/EmptyState";
 import { PageHeader } from "../../../ui/PageHeader";
@@ -59,24 +58,11 @@ function ApplicationDetailView({ id }: { id: string }) {
 
   return (
     <div class="pk pk-stack">
-      {/* The applicant heads the page; the link returns to the addressable list. */}
-      {detail ? (
-        <PageHeader
-          title={detail.applicantName}
-          context={<Badge status={detail.stage} />}
-          actions={
-            <ButtonLink size="sm" variant="ghost" href="#/application">
-              Back to applications
-            </ButtonLink>
-          }
-        />
-      ) : (
-        <div class="pk-cluster">
-          <ButtonLink size="sm" variant="ghost" href="#/application">
-            Back to applications
-          </ButtonLink>
-        </div>
-      )}
+      <PageHeader
+        title={detail?.applicantName ?? "Application"}
+        context={detail ? <Badge status={detail.stage} /> : undefined}
+        trail={[{ label: "Applications", href: "#/application" }, { label: detail?.applicantName ?? "Application" }]}
+      />
       {error && <ErrorAlert error={error} />}
       {!detail && !error ? (
         <Spinner label="Loading your application…" />

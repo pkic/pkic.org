@@ -91,12 +91,18 @@ export function EventProposalsTable({
   urlState?: string;
   /** Where a row goes: the proposal's own page. */
   rowHref: (proposal: EventProposalSummary) => string;
-  toolbarPrefix?: (actions: ApiTableActions, access: ProposalAccess | null) => ComponentChildren;
+  toolbarPrefix?: (
+    actions: ApiTableActions,
+    access: ProposalAccess | null,
+    selectedProposalIds: ReadonlySet<string>,
+  ) => ComponentChildren;
   empty?: string;
 }) {
   const [stats, setStats] = useState<ProposalStats | null>(null);
   const [access, setAccess] = useState<ProposalAccess | null>(null);
+  const [selectedProposalIds, setSelectedProposalIds] = useState<ReadonlySet<string>>(new Set());
   const tableRef = useRef<ApiTableActions | null>(null);
+  const visibleProposalTitles = useRef(new Map<string, string>());
 
   return (
     <div class="pk pk-stack pk-stack--snug">
@@ -111,6 +117,12 @@ export function EventProposalsTable({
         onData={(response) => {
           setStats(response.stats);
           setAccess(response.access);
+          visibleProposalTitles.current = new Map(response.proposals.map((proposal) => [proposal.id, proposal.title]));
+          setSelectedProposalIds((current) => {
+            if (current.size === 0) return current;
+            const visible = new Set([...current].filter((id) => visibleProposalTitles.current.has(id)));
+            return visible.size === current.size ? current : visible;
+          });
         }}
         paginate
         initialSort="-submittedAt"
@@ -121,9 +133,15 @@ export function EventProposalsTable({
         actionsRef={tableRef}
         toolbar={
           toolbarPrefix
-            ? (actions) => toolbarPrefix({ reload: actions.reload, resetPage: actions.resetPage }, access)
+            ? (actions) =>
+                toolbarPrefix({ reload: actions.reload, resetPage: actions.resetPage }, access, selectedProposalIds)
             : undefined
         }
+        selection={{
+          selected: selectedProposalIds,
+          onChange: setSelectedProposalIds,
+          rowLabel: (id) => visibleProposalTitles.current.get(id) ?? `proposal ${id}`,
+        }}
         columns={[
           {
             header: "Title",

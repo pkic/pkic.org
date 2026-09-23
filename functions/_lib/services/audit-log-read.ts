@@ -41,6 +41,12 @@ interface AuditLogSortPolicy {
  * bare id to the audit tables.
  */
 const USER_BACKED_ACTOR_TYPES_SQL = USER_BACKED_AUDIT_ACTOR_TYPES.map((actorType) => `'${actorType}'`).join(", ");
+const AUDIT_LOG_SELECT_SQL = `SELECT
+  al.id, al.actor_type, al.actor_id,
+  COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS actor_display,
+  al.action, al.entity_type, al.entity_id, al.details_json, al.created_at`;
+const AUDIT_LOG_FROM_SQL = `FROM audit_log al
+  LEFT JOIN users u ON al.actor_type IN (${USER_BACKED_ACTOR_TYPES_SQL}) AND u.id = al.actor_id`;
 
 const SCOPED_AUDIT_SORT_POLICY: AuditLogSortPolicy = {
   expressions: {
@@ -106,18 +112,8 @@ export function buildAuditLogPageQuery(
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
   return {
     source: {
-      selectSql: `SELECT
-        al.id,
-        al.actor_type,
-        al.actor_id,
-        COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS actor_display,
-        al.action,
-        al.entity_type,
-        al.entity_id,
-        al.details_json,
-        al.created_at`,
-      fromSql: `FROM audit_log al
-    LEFT JOIN users u ON al.actor_type IN (${USER_BACKED_ACTOR_TYPES_SQL}) AND u.id = al.actor_id
+      selectSql: AUDIT_LOG_SELECT_SQL,
+      fromSql: `${AUDIT_LOG_FROM_SQL}
     ${restriction.joins ?? ""}
     ${where}`,
       bindings,
@@ -147,6 +143,12 @@ export function buildGlobalAuditLogPageQuery(query: AuditLogListQuery) {
 export async function listGlobalAuditLog(db: DatabaseLike, query: AuditLogListQuery) {
   const { auditLog, page } = await listAuditLogPage(db, query, {}, GLOBAL_AUDIT_LOG_SORT_POLICY);
   return { entries: auditLog, page };
+}
+
+export async function getGlobalAuditLogEntry(db: DatabaseLike, id: string) {
+  const row = await first<AuditLogReadRow>(db, `${AUDIT_LOG_SELECT_SQL} ${AUDIT_LOG_FROM_SQL} WHERE al.id = ?`, [id]);
+  if (!row) throw new AppError(404, "AUDIT_LOG_ENTRY_NOT_FOUND", "Audit log entry not found");
+  return toAuditLogResponseRows([row])[0];
 }
 
 async function listAuditLogForScope(db: DatabaseLike, query: ScopedAuditLogListQuery, scope: AuditLogRestriction) {

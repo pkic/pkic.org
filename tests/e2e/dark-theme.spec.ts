@@ -124,6 +124,50 @@ test.describe("the dark theme", () => {
     await expect.poll(() => logo.evaluate((element) => getComputedStyle(element).filter)).toContain("invert(1)");
   });
 
+  test("keeps the member directory, blog sidebar, and About mark readable", async ({ page }) => {
+    await page.goto("/wg/pqc/members/");
+    const card = page.locator(".member-card:has(.member-card-description):has(.member-card-logo)").first();
+    await expect(card).toBeVisible();
+    const memberStyles = await card.evaluate((element) => {
+      const description = element.querySelector(".member-card-description");
+      const logo = element.querySelector(".member-card-logo");
+      const probe = document.createElement("span");
+      probe.style.color = "var(--pk-ink-muted)";
+      element.appendChild(probe);
+      const mutedInk = getComputedStyle(probe).color;
+      probe.remove();
+      return {
+        descriptionColor: description && getComputedStyle(description).color,
+        mutedInk,
+        logoFilter: logo && getComputedStyle(logo).filter,
+      };
+    });
+    expect(memberStyles.descriptionColor).toBe(memberStyles.mutedInk);
+    expect(memberStyles.logoFilter).toContain("invert(1)");
+
+    await page.goto("/about/");
+    const aboutLogo = page.getByRole("img", { name: "Logo of the PKI Consortium" });
+    await expect(aboutLogo).toBeVisible();
+    expect(await aboutLogo.evaluate((element) => getComputedStyle(element).filter)).toContain("invert(1)");
+
+    await page.goto("/authors/");
+    const author = page.locator(".blog-taxonomy-index a").first();
+    await expect(author).toBeVisible();
+    expect(await author.evaluate((element) => getComputedStyle(element).color)).toBe(
+      await page.locator("body").evaluate((element) => getComputedStyle(element).color),
+    );
+
+    await page.goto(
+      "/2026/06/14/defining-quantum-ready-for-the-supply-chain-introducing-the-pqc-maturity-model-pqcmm/",
+    );
+    const byline = page.locator(".blog-author-name").first();
+    await expect(byline).toBeVisible();
+    expect(await byline.evaluate((element) => getComputedStyle(element).color)).toBe(
+      await page.locator("body").evaluate((element) => getComputedStyle(element).color),
+    );
+    expect(await unreadableSurfaces(page)).toEqual([]);
+  });
+
   test("reaches the portal's own chrome, not only the components in it", async ({ page }) => {
     await page.addInitScript(() => {
       try {
@@ -171,5 +215,34 @@ test.describe("the dark theme", () => {
     await expect(page.locator("html")).not.toHaveAttribute("data-theme", /.*/);
     await page.reload();
     await expect(page.locator("html")).not.toHaveAttribute("data-theme", /.*/);
+  });
+});
+
+test.describe("the light theme", () => {
+  test.use({ colorScheme: "light" });
+
+  test("preserves color artwork in the sponsor wall and on affiliation hover", async ({ page }) => {
+    await page.goto("/");
+    await expect
+      .poll(() =>
+        page.locator(".members img").evaluateAll((images) => {
+          const sponsor = images.find((image) => image.classList.contains("member-logo-sponsor"));
+          return sponsor ? getComputedStyle(sponsor).filter : null;
+        }),
+      )
+      .toBe("none");
+
+    // Public leadership data can be empty locally, so exercise its real CSS
+    // with a minimal card while retaining the same page and theme stylesheet.
+    await page.evaluate(() => {
+      const card = document.createElement("div");
+      card.className = "person-card";
+      card.innerHTML = '<img class="person-card-org-logo" src="/img/logo-black.svg" alt="Affiliation">';
+      document.body.appendChild(card);
+    });
+    const logo = page.locator(".person-card-org-logo");
+    expect(await logo.evaluate((element) => getComputedStyle(element).filter)).toContain("grayscale(1)");
+    await page.locator(".person-card").hover();
+    await expect.poll(() => logo.evaluate((element) => getComputedStyle(element).filter)).toBe("none");
   });
 });

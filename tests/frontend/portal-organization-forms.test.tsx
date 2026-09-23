@@ -366,7 +366,7 @@ describe("portal organization profile", () => {
    * record keeps its own.
    */
   async function openEditMode(container: HTMLElement): Promise<void> {
-    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Record actions"]');
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="About actions"]');
     if (!trigger) throw new Error("the record offers no actions menu");
     await act(async () => trigger.click());
     const item = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(

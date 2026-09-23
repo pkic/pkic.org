@@ -29,7 +29,7 @@ test("staff compose visual blocks, cancel drafts, and publish the same Markdown 
   const detail = organizationDetailResponseSchema.parse(created.body).organization;
   await page.goto(`/portal/#/organizations/${detail.id}`);
   const edit = async () => {
-    await page.getByRole("button", { name: "Record actions", exact: true }).click();
+    await page.getByRole("button", { name: "About actions", exact: true }).click();
     await page.getByRole("menuitem", { name: "Edit organization…" }).click();
   };
   await expect(page.getByRole("textbox", { name: "Member page content", exact: true })).toHaveCount(0);

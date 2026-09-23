@@ -274,10 +274,11 @@ export async function listEffectiveGroupLeadership(
   );
   if (!typeTitles) throw new AppError(500, "GROUP_TYPE_MISSING", "The group's type is not configured");
   const titles = { lead: typeTitles.lead_title, deputyLead: typeTitles.deputy_lead_title };
+  const emptyPage = { rows: [], page: buildPageInfo(query.limit, query.offset, 0, 0) };
   const [titleOptions, assignments, past] = await Promise.all([
     leadershipTitleOptions(db, titles),
-    listCurrentLeadership(db, group.id, query),
-    listPastLeadership(db, group.id, query),
+    query.term === "past" ? Promise.resolve(emptyPage) : listCurrentLeadership(db, group.id, query),
+    query.term === "current" ? Promise.resolve(emptyPage) : listPastLeadership(db, group.id, query),
   ]);
   return {
     group: { id: group.id, slug: group.slug, name: group.name, type: group.type },

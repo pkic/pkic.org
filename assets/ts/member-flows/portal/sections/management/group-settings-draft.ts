@@ -3,6 +3,7 @@ import type { GroupSettingsDetail } from "../../../../../shared/schemas/groups";
 export type GroupSettingsDraft = Pick<
   GroupSettingsDetail,
   | "name"
+  | "slug"
   | "links"
   | "visibility"
   | "governanceInheritanceMode"
@@ -18,6 +19,7 @@ export type GroupSettingsDraft = Pick<
 export function draftFromGroup(group: GroupSettingsDetail): GroupSettingsDraft {
   return {
     name: group.name,
+    slug: group.slug,
     abbreviatedName: group.abbreviatedName ?? "",
     description: group.description ?? "",
     links: group.links,

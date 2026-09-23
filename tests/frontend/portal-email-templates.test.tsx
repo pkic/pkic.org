@@ -88,6 +88,7 @@ afterEach(() => {
   toastArea?.remove();
   toastArea = null;
   vi.unstubAllGlobals();
+  window.location.hash = "";
 });
 
 describe("portal email templates", () => {
@@ -253,6 +254,9 @@ describe("portal email templates", () => {
     });
     await settle();
 
+    expect(window.location.hash).toBe(`#/settings/email-templates/${templateKey}`);
+    await act(() => render(<EmailTemplates canWrite templateKey={templateKey} />, container!));
+    await settle();
     expect(container!.textContent).toContain(`Edit: ${templateKey}`);
     expect(await markdownValue(container!, "Body")).toBe(version.body);
   });

@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AttendanceChangeDashboard } from "../../assets/ts/member-flows/portal/sections/events/detail/AttendanceChangeDashboard";
 import type { EventAnalyticsResponse } from "../../assets/shared/schemas/event-analytics";
 
@@ -93,10 +93,11 @@ beforeEach(() => {
 afterEach(() => {
   void act(() => render(null, container));
   container.remove();
+  vi.unstubAllGlobals();
 });
 
 describe("portal attendance movement dashboard", () => {
-  it("reports every headline figure and drills into the matching registration list", () => {
+  it("reports every headline figure and offers the matching lists as in-card tabs", () => {
     mount(<AttendanceChangeDashboard slug={SLUG} changes={changes()} />);
 
     expect(statValues()).toEqual({
@@ -106,11 +107,41 @@ describe("portal attendance movement dashboard", () => {
       "Day changes": "7",
     });
 
-    const hrefs = [...container.querySelectorAll("a")].map((link) => link.getAttribute("href"));
-    expect(hrefs).toContain(`#/events/${SLUG}/registrations/attendance-changed`);
-    expect(hrefs).toContain(`#/events/${SLUG}/registrations/left-in-person`);
-    expect(hrefs).toContain(`#/events/${SLUG}/registrations/joined-in-person`);
+    expect([...container.querySelectorAll('[role="tab"]')].map((tab) => tab.textContent)).toEqual([
+      "Summary",
+      "Changed attendees",
+      "Left in-person",
+      "Joined in-person",
+    ]);
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Summary");
+    expect(container.querySelector('a[href*="registrations/left-in-person"]')).toBeNull();
     expect(container.querySelector(".pk-table--data")).toBeNull();
+  });
+
+  it("loads the selected attendance subset inside the card", async () => {
+    const requests: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: string) => {
+        requests.push(String(input));
+        return Promise.resolve(new Response("{}", { status: 500 }));
+      }),
+    );
+    mount(<AttendanceChangeDashboard slug={SLUG} changes={changes()} />);
+    const tab = [...container.querySelectorAll<HTMLButtonElement>('[role="tab"]')].find(
+      (item) => item.textContent === "Left in-person",
+    );
+    await act(async () => tab?.click());
+    await act(async () => {
+      await Promise.resolve();
+    });
+    expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Left in-person");
+    expect(container.querySelector('[role="tabpanel"]')?.classList.contains("pk-attendance-movement__detail")).toBe(
+      true,
+    );
+    expect(
+      requests.some((url) => new URL(url, location.origin).searchParams.get("attendance_change") === "left_in_person"),
+    ).toBe(true);
   });
 
   it("names its chart and exposes the same values to assistive technology", () => {
@@ -133,8 +164,8 @@ describe("portal attendance movement dashboard", () => {
     expect(text).toContain("4 moves from in-person");
     expect(text).toContain("Now in-person");
     expect(text).toContain("3 moves to in-person");
-    expect(text).toContain("Attendees who left in-person");
-    expect(text).toContain("Attendees who joined in-person");
+    expect(text).toContain("Left in-person");
+    expect(text).toContain("Joined in-person");
     // No card is tinted to carry meaning a reader might not perceive.
     expect(container.querySelector('[class*="pk-stat-card__note--"]')).toBeNull();
   });

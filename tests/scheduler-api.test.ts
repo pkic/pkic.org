@@ -110,6 +110,30 @@ describe("scheduler API", () => {
     expect(payload.jobs.map((job) => job.jobKey)).toContain("votes_due_work");
   });
 
+  it("searches, sorts, and pages jobs through the shared list query", async () => {
+    const token = await staffWith([onlyPersona("scheduler:read")]);
+    const firstResponse = await call(token, "/api/v1/scheduler/jobs?limit=2&sort=-job_key");
+    expect(firstResponse.status).toBe(200);
+    const first = schedulerJobsListResponseSchema.parse(await firstResponse.json());
+    expect(first.jobs).toHaveLength(2);
+    expect(first.page.offset).toBe(0);
+    expect(first.page.hasMore).toBe(true);
+    expect(first.jobs[0].jobKey > first.jobs[1].jobKey).toBe(true);
+
+    const nextResponse = await call(token, "/api/v1/scheduler/jobs?limit=2&offset=2&sort=-job_key");
+    expect(nextResponse.status).toBe(200);
+    const next = schedulerJobsListResponseSchema.parse(await nextResponse.json());
+    expect(next.page.offset).toBe(2);
+    expect(next.jobs[0]?.jobKey).not.toBe(first.jobs[0].jobKey);
+
+    const searchedResponse = await call(token, "/api/v1/scheduler/jobs?q=retention");
+    expect(searchedResponse.status).toBe(200);
+    const searched = schedulerJobsListResponseSchema.parse(await searchedResponse.json());
+    expect(searched.jobs.map((job) => job.jobKey)).toEqual(["retention"]);
+    expect(searched.page.total).toBe(1);
+    expect((await call(token, "/api/v1/scheduler/jobs?sort=not_a_column")).status).toBe(400);
+  });
+
   it("derives exact state and run capabilities from the job's live domain grants", async () => {
     const manager = await staffWith(["schedulerOperator"]);
     const managerPayload = schedulerJobsListResponseSchema.parse(

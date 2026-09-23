@@ -67,6 +67,10 @@ function scheduledJob(overrides: Partial<ScheduledJobResource> = {}): ScheduledJ
   };
 }
 
+function jobsPage(jobs: ScheduledJobResource[]) {
+  return { jobs, page: { limit: 25, offset: 0, total: jobs.length, hasMore: false } };
+}
+
 afterEach(() => {
   if (container) {
     void act(() => render(null, container!));
@@ -88,7 +92,7 @@ describe("portal scheduled-job management", () => {
         );
         const method = init?.method ?? (input instanceof Request ? input.method : "GET");
         requests.push(`${method} ${url.pathname}`);
-        if (url.pathname === "/api/v1/scheduler/jobs") return json({ jobs: [scheduledJob()] });
+        if (url.pathname === "/api/v1/scheduler/jobs") return json(jobsPage([scheduledJob()]));
         throw new Error(`Unexpected request: ${method} ${url.pathname}`);
       }),
     );
@@ -127,7 +131,7 @@ describe("portal scheduled-job management", () => {
   it("shows a named empty state rather than a bare table when no job is registered", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json({ jobs: [] })),
+      vi.fn(async () => json(jobsPage([]))),
     );
 
     container = document.createElement("div");
@@ -152,7 +156,7 @@ describe("portal scheduled-job management", () => {
         const method = init?.method ?? (input instanceof Request ? input.method : "GET");
         const body = typeof init?.body === "string" ? JSON.parse(init.body) : null;
         requests.push({ method, path: url.pathname, body });
-        if (url.pathname === "/api/v1/scheduler/jobs" && method === "GET") return json({ jobs: [current] });
+        if (url.pathname === "/api/v1/scheduler/jobs" && method === "GET") return json(jobsPage([current]));
         if (url.pathname === "/api/v1/scheduler/jobs/retention" && method === "PATCH") {
           const state = (body as { state: "active" | "paused" }).state;
           current = scheduledJob({
@@ -217,8 +221,10 @@ describe("portal scheduled-job management", () => {
     });
     await act(() => button(container!, "Confirm pause").click());
     await settle();
+    await settle();
 
     await runRowAction(container, "Retention", "Resume");
+    await settle();
     await settle();
     await runRowAction(container, "Retention", "Run now");
     for (let attempt = 0; attempt < 3; attempt += 1) await settle();
@@ -249,7 +255,7 @@ describe("portal scheduled-job pause refusals", () => {
         );
         const method = init?.method ?? (input instanceof Request ? input.method : "GET");
         if (url.pathname === "/api/v1/scheduler/jobs" && method === "GET") {
-          return json({ jobs: [scheduledJob({ capabilities: { manageState: true, run: true } })] });
+          return json(jobsPage([scheduledJob({ capabilities: { manageState: true, run: true } })]));
         }
         if (url.pathname === "/api/v1/scheduler/jobs/retention" && method === "PATCH") {
           patched += 1;

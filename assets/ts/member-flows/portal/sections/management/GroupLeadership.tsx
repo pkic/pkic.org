@@ -16,7 +16,6 @@ import { usePortalHashLocation } from "../../hash-location";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import type { Column } from "../../../../components/Table";
 import { EmptyState } from "../../../../ui/EmptyState";
-import { Select } from "../../../../ui/TextControl";
 import { Panel, PanelHeader } from "../../../../ui/Panel";
 import { PersonCell } from "../../../../ui/PersonCell";
 import { RowActions } from "../../../../ui/RowActions";
@@ -76,6 +75,13 @@ function leadershipColumns(
       header: "Term",
       width: "fit",
       cell: (assignment) => formatTerm(assignment.startsAt, assignment.endsAt),
+      filter: {
+        param: "term",
+        options: [
+          { value: "", label: "Current leadership" },
+          { value: "past", label: "Past leadership" },
+        ],
+      },
     },
     { header: "Source", cell: sourceLabel },
     {
@@ -243,16 +249,9 @@ export function GroupLeadership({
         </PanelHeader>
         <ApiDataTable
           key={view}
-          toolbar={() => (
-            <Select
-              aria-label="Leadership status"
-              value={view}
-              onChange={(event) => setView(event.currentTarget.value)}
-            >
-              <option value="current">Current leadership</option>
-              <option value="past">Past leadership</option>
-            </Select>
-          )}
+          params={{ term: view }}
+          initialFilters={view === "past" ? { term: "past" } : undefined}
+          onFiltersChange={(filters) => setView(filters.term === "past" ? "past" : "current")}
           caption={view === "past" ? "Closed leadership terms of this group" : "Current leadership of this group"}
           endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/leadership`}
           responseSchema={groupLeadershipListResponseSchema}

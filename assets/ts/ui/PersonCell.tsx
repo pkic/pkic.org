@@ -42,9 +42,13 @@ export function PersonCell({
     <div class={classes} {...rest}>
       <Avatar name={name} src={avatarSrc} size={avatarSize} shape={shape} status={avatarStatus} />
       <div class="pk-person-cell__text">
-        <div class="pk-person-cell__name">{name}</div>
+        <div class="pk-person-cell__name" title={name}>
+          {name}
+        </div>
         {email ? (
-          <div class="pk-person-cell__email">{email}</div>
+          <div class="pk-person-cell__email" title={email}>
+            {email}
+          </div>
         ) : detail ? (
           <div class="pk-person-cell__email">{detail}</div>
         ) : null}

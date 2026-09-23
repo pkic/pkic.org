@@ -838,10 +838,10 @@ test("offers event presentation archives only with proposal read access", async 
 
   await page.goto("/portal/#/events/pqc-2026/proposals");
 
-  const currentDownload = page.getByRole("link", { name: "Current presentations" });
-  const allVersionsDownload = page.getByRole("link", { name: "All presentation versions" });
+  const currentDownload = page.getByRole("link", { name: "Download current presentations for all accepted proposals" });
+  const downloadOptions = page.getByRole("button", { name: "Presentation download options" });
   await expect(currentDownload).toHaveCount(0);
-  await expect(allVersionsDownload).toHaveCount(0);
+  await expect(downloadOptions).toHaveCount(0);
 
   canReadPresentations = true;
   await page.reload();
@@ -849,6 +849,8 @@ test("offers event presentation archives only with proposal read access", async 
   await expect(currentDownload).toBeVisible();
   await expect(currentDownload).toHaveAttribute("href", "/api/v1/events/pqc-2026/presentations/archive");
 
+  await downloadOptions.click();
+  const allVersionsDownload = page.getByRole("menuitem", { name: "All presentation versions" });
   await expect(allVersionsDownload).toBeVisible();
   await expect(allVersionsDownload).toHaveAttribute(
     "href",

@@ -44,7 +44,27 @@ export function GroupSettingsFields({
         )}
       </Field>
 
-      <Field {...fields("abbreviatedName")} label="Abbreviated name">
+      <Field
+        {...fields("slug")}
+        label="URL slug"
+        required
+        help="Used in public group links. Changing it can break existing links."
+      >
+        {(control) => (
+          <TextInput
+            {...control}
+            name="slug"
+            value={draft.slug}
+            onInput={(event) => setField("slug", event.currentTarget.value)}
+          />
+        )}
+      </Field>
+
+      <Field
+        {...fields("abbreviatedName")}
+        label="Abbreviated name"
+        help="Shown in group lists and the group header. The URL slug is separate."
+      >
         {(control) => (
           <TextInput
             {...control}

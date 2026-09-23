@@ -8,8 +8,8 @@ import { json } from "../../../../_lib/http";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { listScheduledJobsForActor } from "../../../../_lib/services/scheduled-jobs/management";
 
-export const SchedulerJobsList = openApiRoute(schedulerJobsListRouteSchema, async (c: AdminContext) => {
+export const SchedulerJobsList = openApiRoute(schedulerJobsListRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
   const { db, staff } = await requireStaffPermission(c, "scheduler:read");
-  return json(schedulerJobsListResponseSchema.parse({ jobs: await listScheduledJobsForActor(db, staff) }));
+  return json(schedulerJobsListResponseSchema.parse(await listScheduledJobsForActor(db, staff, data.query)));
 });

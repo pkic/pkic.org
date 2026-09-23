@@ -788,6 +788,12 @@ describe("group leadership inheritance", () => {
     expect(past.assignments).toEqual([]);
     expect(past.past.map((row) => row.userRoleId)).toEqual([formerId]);
     expect(past.pastPage.total).toBe(1);
+    const currentTerms = await page("term=current");
+    expect(currentTerms.page.total).toBe(2);
+    expect(currentTerms.pastPage.total).toBe(0);
+    const pastTerms = await page("term=past");
+    expect(pastTerms.page.total).toBe(0);
+    expect(pastTerms.past.map((row) => row.userRoleId)).toEqual([formerId]);
     expect((await page(`userRoleId=${formerId}`)).past[0].userRoleId).toBe(formerId);
   });
 

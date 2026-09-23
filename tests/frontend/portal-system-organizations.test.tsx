@@ -277,6 +277,10 @@ describe("portal System Organizations", () => {
     expect(requests.some((request) => request.pathname.startsWith("/api/v1/admin/organizations"))).toBe(false);
     expect(container.textContent).toContain("Example Organization");
     expect(container.textContent).not.toContain("Add organization");
+    const contact = container.querySelector("tbody td:nth-child(2) .pk-table__value");
+    expect(contact?.querySelector('[title="Ada Lovelace"].pk-table__clamp')).not.toBeNull();
+    expect(contact?.querySelector('[title="ada@example.test"].pk-table__clamp')).not.toBeNull();
+    expect(container.querySelector('tbody td:nth-child(4) a[title="https://example.test"]')).not.toBeNull();
   });
 
   it("names the organization table and gives each row a real link to open it", async () => {
@@ -382,10 +386,10 @@ describe("portal System Organizations", () => {
     await settle();
     // The commands live in menus now, and a reader who may not use them is
     // offered no menu at all — not a menu of disabled items.
-    expect(readOnly.querySelector('button[aria-label="Record actions"]')).toBeNull();
+    expect(readOnly.querySelector('button[aria-label="About actions"]')).toBeNull();
     expect(readOnly.textContent).not.toContain("Remove");
     await settle();
-    expect(readOnly.querySelector('button[aria-label="Representative settings"]')).toBeNull();
+    expect(readOnly.querySelector('button[aria-label="Add representative"]')).toBeNull();
 
     const writer = mount(
       <OrganizationDetail
@@ -397,13 +401,13 @@ describe("portal System Organizations", () => {
       />,
     );
     await settle();
-    expect(writer.querySelector('button[aria-label="Record actions"]')).not.toBeNull();
+    expect(writer.querySelector('section[aria-label="About"] button[aria-label="About actions"]')).not.toBeNull();
     expect(writer.textContent).toContain("Contacts");
     // Reading another facet is a tab away, and its bounded query runs then.
     const menuTrigger = await waitForElement(() =>
       writer.querySelector<HTMLButtonElement>('[aria-label="Actions for Ada Lovelace"]'),
     );
-    expect(writer.querySelector('button[aria-label="Representative settings"]')).not.toBeNull();
+    expect(writer.querySelector('button[aria-label="Add representative"]')).not.toBeNull();
     expect(writer.textContent).toContain("Active");
 
     await act(async () => menuTrigger.click());
@@ -449,7 +453,7 @@ describe("portal System Organizations", () => {
       />,
     );
     await settle();
-    const rosterMenu = container.querySelector<HTMLButtonElement>('button[aria-label="Representative settings"]');
+    const rosterMenu = container.querySelector<HTMLButtonElement>('button[aria-label="Add representative"]');
     expect(rosterMenu).toBeTruthy();
     await act(async () => rosterMenu?.click());
     const addCommand = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(

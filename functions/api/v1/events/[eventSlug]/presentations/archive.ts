@@ -18,7 +18,10 @@ export const EventPresentationArchiveGet = openApiRoute(
     }
 
     const includeAllVersions = data.query.versions === "all";
-    const presentations = await listEventPresentations(db, event.id, { includeAllVersions });
+    const presentations = await listEventPresentations(db, event.id, {
+      includeAllVersions,
+      proposalIds: data.query.proposalIds,
+    });
     if (presentations.length === 0) {
       throw new AppError(404, "PRESENTATIONS_NOT_FOUND", "No presentations were found for this event.");
     }

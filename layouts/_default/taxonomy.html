@@ -4,22 +4,24 @@
      instead, and the pager brings its own design-system styling. */}}
 <section class="pk pk-section pk-center">
   <div class="pk-container pk-container--narrow pk-stack pk-stack--snug">
-    <h1>{{ $.Site.Params.shortName }} blog</h1>
+    <h1>{{ if eq .Kind "taxonomy" }}{{ .Title }}{{ else }}{{ .Data.Term }}{{ end }}</h1>
     {{ if eq .Kind "term" }}
-    <p class="pk-lede">Posts by <a href="../{{ .Data.Plurar }}">{{ .Data.Singular }}</a> <strong>{{ .Data.Term }}</strong></p>
+    <p class="pk-lede">Posts by {{ .Data.Term }}. <a href="{{ .Parent.RelPermalink }}">Browse all {{ .Data.Plural }}</a></p>
     {{ else }}
-    <p class="pk-lede">Posts by <strong>{{ .Data.Singular }}</strong>, back to <a href="/blog/">blog</a></p>
+    <p class="pk-lede">Explore posts by {{ .Data.Singular }}. <a href="/blog/">Back to the blog</a></p>
     {{ end }}
   </div>
 </section>
 
 <div class="pk-section">
   <div class="pk-container pk-stack pk-stack--loose">
-    <ul>
+    {{ if eq .Kind "taxonomy" }}
+    <ul class="blog-taxonomy-index">
       {{ range .Data.Terms.ByCount }}
-      <li><a href="{{ .Page.RelPermalink }}">{{ .Page.Title }} <span class="pk-badge pk-badge--neutral">{{ .Count }}</span></a></li>
+      <li><a href="{{ .Page.RelPermalink }}"><span>{{ .Page.Title }}</span><span class="pk-badge pk-badge--neutral">{{ .Count }}</span></a></li>
       {{ end }}
     </ul>
+    {{ end }}
 
     {{ if eq .Kind "term" }}
       {{ range .Paginator.Pages }}

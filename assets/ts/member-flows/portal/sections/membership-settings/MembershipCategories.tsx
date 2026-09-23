@@ -146,7 +146,9 @@ export function MembershipCategories({
           <PageHeader
             trail={[
               { label: "Settings", href: usePortalHashLocation.hrefs("/settings") },
+              { label: "Membership" },
               { label: "Membership categories", href: usePortalHashLocation.hrefs(CATEGORIES_PATH) },
+              { label: "Membership category" },
             ]}
             title="Membership category"
           />

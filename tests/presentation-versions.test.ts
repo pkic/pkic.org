@@ -835,6 +835,28 @@ describe("presentation versioning", () => {
     expect(allVersionsText).toContain(
       `003 - Post-Quantum Key Exchange - ${proposalId.slice(0, 12)} - v002-current.pdf`,
     );
+
+    const selectedResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/events/pqc-2026/presentations/archive?proposalIds=${proposalId}`, {
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
+      envWithBucket,
+      execCtx,
+    );
+    expect(selectedResponse.status).toBe(200);
+    const selectedText = new TextDecoder().decode(await selectedResponse.arrayBuffer());
+    expect(selectedText).toContain("current-version-marker");
+    expect(selectedText).not.toContain("second-presentation-marker");
+    expect(selectedText).not.toContain("superseded-version-marker");
+
+    const invalidSelection = await app.fetch(
+      new Request("https://app.test/api/v1/events/pqc-2026/presentations/archive?proposalIds=invalid", {
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
+      envWithBucket,
+      execCtx,
+    );
+    expect(invalidSelection.status).toBe(400);
   });
 
   it("serializes concurrent version creation and keeps exactly one current version", async () => {

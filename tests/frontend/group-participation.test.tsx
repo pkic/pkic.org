@@ -465,11 +465,13 @@ describe("staff groups collection", () => {
               groups: [
                 group({
                   id: "10000000-0000-4000-8000-000000000010",
+                  slug: "pqc",
                   name: "Architecture Group",
                   active: true,
                 }),
                 group({
                   id: "10000000-0000-4000-8000-000000000011",
+                  abbreviatedName: "RET",
                   name: "Retired Group",
                   active: false,
                 }),
@@ -491,12 +493,17 @@ describe("staff groups collection", () => {
     const activeRow = rows.find((row) => row.textContent?.includes("Architecture Group"));
     const inactiveRow = rows.find((row) => row.textContent?.includes("Retired Group"));
     if (!activeRow || !inactiveRow) throw new Error("missing expected group rows");
+    expect(activeRow.querySelector(".pk-table__coded-label")).toBeNull();
+    expect(activeRow.querySelector(".pk-table__clamp")?.textContent).toBe("Architecture Group");
+    expect(activeRow.querySelector(".pk-table__clamp")?.getAttribute("title")).toBe("Architecture Group");
+    expect(inactiveRow.querySelector(".pk-table__coded-label__code")?.textContent).toBe("RET");
+    expect(inactiveRow.querySelector(".pk-table__coded-label__separator")?.textContent?.trim()).toBe("|");
 
     // An active group is quiet on the page — no pill — but not silent to a
     // screen reader: the dash that stands in for the badge is decoration, and
     // the word beside it is what carries the state.
     expect(activeRow.querySelector(".pk-badge")).toBeNull();
-    expect(activeRow.querySelector(".pk-table__value [aria-hidden='true']")?.textContent).toBe("—");
+    expect(activeRow.querySelector(".pk-table__value > [aria-hidden='true']")?.textContent).toBe("—");
     expect(activeRow.querySelector(".pk-sr-only")?.textContent).toBe("Active");
     expect(inactiveRow.querySelector(".pk-badge")?.textContent).toBe("Inactive");
   });

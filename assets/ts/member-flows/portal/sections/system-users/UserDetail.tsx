@@ -48,7 +48,7 @@ import { StatCard } from "../../../../ui/StatCard";
 // chunk rather than the entry stylesheet, so the module that writes those
 // class names is the one that has to pull the sheet in.
 import "../../../../ui/Content.css";
-
+import "./UserDetail.css";
 /*
  * Attendance tone thresholds. Product policy, not a system decision: the
  * design system's Meter takes a tone and says nothing about what counts as
@@ -408,7 +408,7 @@ export function UserDetail({
           cancelHref={recordPath}
         />
       ) : (
-        <div class="pk-record">
+        <div class="pk-record pk-user-record">
           <div class="pk-stack">
             {/*
             About speaks from the identity marked as default.

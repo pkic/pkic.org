@@ -76,6 +76,53 @@ describe("DataTable", () => {
     expect(names).toEqual(["Marit Halvorsen", "Jelani Okonkwo", "Sofia Beaumont"]);
   });
 
+  it("truncates plain-text cells visually while retaining the full value", () => {
+    const container = mount(
+      <DataTable
+        caption="Members"
+        columns={[...columns, { id: "rich", header: "Status", cell: () => <strong>Active</strong> }]}
+        rows={rows}
+        rowKey={(r) => r.id}
+      />,
+    );
+    const plain = container.querySelector("tbody tr td:first-child .pk-table__clamp");
+    expect(plain?.textContent).toBe("Marit Halvorsen");
+    expect(plain?.getAttribute("title")).toBe("Marit Halvorsen");
+    expect(container.querySelector("tbody tr td:last-child .pk-table__clamp")).toBeNull();
+  });
+
+  it("shows the hovered cell's full value through the stretched row link", () => {
+    const container = mount(
+      <DataTable
+        caption="Members"
+        columns={[
+          columns[0],
+          {
+            id: "organization",
+            header: "Organization",
+            cell: () => <span title="Full organization name">Short organization name</span>,
+          },
+        ]}
+        rows={[rows[0]]}
+        rowKey={(row) => row.id}
+        rowAction={() => ({ label: "Open member", href: "/members/mh" })}
+      />,
+    );
+    const [nameCell, organizationCell] = container.querySelectorAll<HTMLTableCellElement>("tbody tr td");
+    vi.spyOn(nameCell, "getBoundingClientRect").mockReturnValue({ left: 0, right: 100 } as DOMRect);
+    vi.spyOn(organizationCell, "getBoundingClientRect").mockReturnValue({ left: 100, right: 200 } as DOMRect);
+    const link = container.querySelector<HTMLAnchorElement>(".pk-table__row-link")!;
+
+    void act(() => {
+      link.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 150 }));
+    });
+    expect(link.title).toBe("Full organization name");
+    void act(() => {
+      link.dispatchEvent(new MouseEvent("mousemove", { bubbles: true, clientX: 50 }));
+    });
+    expect(link.title).toBe("Marit Halvorsen");
+  });
+
   it("marks only the sorted column with aria-sort", () => {
     const container = mount(
       <DataTable

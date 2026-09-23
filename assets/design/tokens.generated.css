@@ -79,6 +79,7 @@
     --pk-control-surface: #ffffff;
     --pk-logo-surface: #ffffff;
     --pk-member-logo-filter: grayscale(1);
+    --pk-member-logo-hover-filter: none;
     --pk-member-logo-blend: multiply;
     --pk-surface-sunk: #f8f9fa;
     --pk-surface-raise: #ffffff;
@@ -124,6 +125,7 @@
       --pk-control-surface: #26333a;
       --pk-logo-surface: #e0e4e8;
       --pk-member-logo-filter: grayscale(1) invert(1);
+      --pk-member-logo-hover-filter: grayscale(1) invert(1);
       --pk-member-logo-blend: screen;
       --pk-surface-sunk: #151e23;
       --pk-surface-raise: #243038;
@@ -166,6 +168,7 @@
     --pk-control-surface: #26333a;
     --pk-logo-surface: #e0e4e8;
     --pk-member-logo-filter: grayscale(1) invert(1);
+    --pk-member-logo-hover-filter: grayscale(1) invert(1);
     --pk-member-logo-blend: screen;
     --pk-surface-sunk: #151e23;
     --pk-surface-raise: #243038;

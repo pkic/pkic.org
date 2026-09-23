@@ -14,18 +14,43 @@
  */
 
 @layer components {
-  /*
-   * A long label kept to one line, for a cell whose value comes from a fixed
-   * vocabulary: a configured category label is prose that would otherwise set
-   * the height of every row around it, and the reader is scanning the column
-   * rather than reading it. The full text stays in the cell's `title`, so it
-   * is a pointer away and never lost.
-   */
+  /* Compound values can clamp each named line independently, keeping a name
+     and its detail visible without letting either one wrap the row. */
   .pk-table__clamp {
     display: block;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
+  }
+
+  .pk-table__coded-label {
+    --pk-table-code-width: 1.25rem;
+    display: flex;
+    align-items: baseline;
+    gap: var(--pk-1);
+    min-width: 0;
+    max-width: 100%;
+    white-space: nowrap;
+  }
+  .pk-table__coded-label--wide {
+    --pk-table-code-width: 3rem;
+  }
+  .pk-table__coded-label__code {
+    flex: 0 0 var(--pk-table-code-width);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    font-weight: 400;
+  }
+  .pk-table__coded-label__separator {
+    color: var(--pk-line-strong);
+    font-weight: 400;
+  }
+  .pk-table__coded-label__name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
   }
 
   /*
@@ -100,7 +125,8 @@
   /* A list placed directly under a panel header shares that panel's frame.
      The toolbar, rows, and pager keep their own spacing and separators. */
   .pk-panel > .pk-table-list,
-  .pk-panel > [role="tabpanel"] > .pk-table-list {
+  .pk-panel > [role="tabpanel"] > .pk-table-list,
+  .pk-profile-header__content > section > .pk-table-list {
     border: 0;
     border-radius: 0;
   }
@@ -114,20 +140,37 @@
   }
   .pk-table__value {
     min-width: 0;
+    /* Text and links are a one-line display by default. A structured cell
+       may still stack its own block-level name and detail lines. */
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
   }
   .pk-table__mobile-label {
     display: none;
-  }
-  .pk-table--data .pk-person-cell__name,
-  .pk-table--data .pk-person-cell__email {
-    white-space: normal;
-    overflow-wrap: anywhere;
   }
   .pk-table--data th {
     white-space: normal;
   }
 
   @container (max-width: 52rem) {
+    /* A block-level table otherwise leaves its table-caption in a tiny
+       anonymous table box, wrapping a visible title letter by letter. */
+    .pk-table--data .pk-table__caption:not(.pk-table__caption--hidden) {
+      display: block;
+      box-sizing: border-box;
+      width: 100%;
+    }
+    /* Static headings repeat the labels already present in every mobile
+       record. Interactive headings remain available for filters and sorting. */
+    .pk-table--data thead:not(:has(button, input, select, a)) {
+      display: none;
+    }
+    .pk-table--data .pk-person-cell__name,
+    .pk-table--data .pk-person-cell__email {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
     .pk-table--data,
     .pk-table--data thead,
     .pk-table--data tbody {
@@ -157,6 +200,10 @@
       white-space: normal;
       text-align: start;
       border: 0;
+    }
+    .pk-table--data .pk-table__col--compact,
+    .pk-table--data .pk-table__col--compact .pk-table__value {
+      max-width: none;
     }
     .pk-table__mobile-label {
       display: block;
@@ -210,6 +257,24 @@
      */
     width: 40%;
     min-width: 0;
+  }
+  /* A very long subject must not contribute its full unbroken width to the
+     auto-layout table before ellipsis gets a chance to render. Inline-size
+     containment lets the value fill the assigned column without setting the
+     column's minimum width. */
+  .pk-table__col--primary .pk-table__value {
+    contain: inline-size;
+  }
+
+  /* A category is useful as a short code plus a preview of its label. Its
+     full wording is in the title and filter; it must not make the table wider
+     than the card just because one category has a long name. */
+  .pk-table__col--compact {
+    width: 12rem;
+    max-width: 12rem;
+  }
+  .pk-table__col--compact .pk-table__value {
+    max-width: 12rem;
   }
 
   /*

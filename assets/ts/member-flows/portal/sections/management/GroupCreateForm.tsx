@@ -223,7 +223,11 @@ export function GroupCreateForm({
                   )}
                 </Field>
               </div>
-              <Field {...form.of("abbreviatedName")} label="Abbreviated name">
+              <Field
+                {...form.of("abbreviatedName")}
+                label="Abbreviated name"
+                help="Shown in group lists and the group header. The URL slug is separate."
+              >
                 {(control) => (
                   <TextInput
                     {...control}

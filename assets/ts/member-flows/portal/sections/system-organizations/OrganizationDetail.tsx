@@ -25,7 +25,6 @@ import { useContractForm } from "../../../../hooks/useContractForm";
 import { getJson, patchJson } from "../../../../shared/api-client";
 import { Alert } from "../../../../ui/Alert";
 import { Button } from "../../../../ui/Button";
-import { Menu } from "../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { fmtDate, toast } from "../../ui";
 import { draftFromOrganization, payloadFromDraft, type OrganizationDraft } from "./OrganizationDraft";
@@ -192,19 +191,7 @@ export function OrganizationDetail({
                   Cancel
                 </Button>
               </>
-            ) : (
-              <Menu
-                label="Record actions"
-                align="end"
-                items={[
-                  {
-                    id: "edit",
-                    label: "Edit organization…",
-                    onSelect: () => setDraft(draftFromOrganization(organization)),
-                  },
-                ]}
-              />
-            )
+            ) : undefined
           ) : undefined
         }
       />
@@ -217,7 +204,10 @@ export function OrganizationDetail({
           on one edge. In edit mode the same cards carry inputs in place. */}
       <div class="pk-record" {...liveHandlers}>
         <div class="pk-stack">
-          <OrganizationAbout {...cardProps} />
+          <OrganizationAbout
+            {...cardProps}
+            onEdit={canWrite && !editing ? () => setDraft(draftFromOrganization(organization)) : undefined}
+          />
           <IdentityRoster organization={organization} canManageIdentities={canManageIdentities} onChanged={load} />
           {/* What the account has done across the consortium, one bounded
               query per tab, aggregated over its representatives. */}

@@ -52,8 +52,12 @@ export function GroupEventProposals({
         endpoint={`/api/v1/events/${encodeURIComponent(resolvedEventSlug)}/proposals`}
         urlState="proposals"
         rowHref={(proposal) => usePortalHashLocation.hrefs(groupEventProposalPath(groupId, eventId, proposal.id))}
-        toolbarPrefix={(_, access) => (
-          <EventPresentationArchiveLinks slug={resolvedEventSlug} canRead={access?.canRead === true} />
+        toolbarPrefix={(_, access, selectedProposalIds) => (
+          <EventPresentationArchiveLinks
+            slug={resolvedEventSlug}
+            canRead={access?.canRead === true}
+            selectedProposalIds={selectedProposalIds}
+          />
         )}
         empty="No proposals are available through this event."
       />

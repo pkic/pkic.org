@@ -1,0 +1,23 @@
+@layer components {
+  .pk-attendance-movement > .pk-tabs {
+    padding-inline: var(--pk-4);
+  }
+
+  .pk-attendance-movement .pk-table-list {
+    border: 0;
+    border-radius: 0;
+    background: transparent;
+  }
+
+  /* The table's own toolbar and rows provide their spacing. Padding on the
+     enclosing PanelBody made the entire list stop short of the card edges. */
+  .pk-attendance-movement > .pk-attendance-movement__detail {
+    padding: 0;
+  }
+
+  @media (max-width: 48rem) {
+    .pk-attendance-movement > .pk-tabs {
+      padding-inline: var(--pk-3);
+    }
+  }
+}

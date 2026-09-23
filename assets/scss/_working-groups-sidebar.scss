@@ -5,9 +5,9 @@
   gap: 0.3rem;
   margin-top: auto;
   padding: 0.5rem 0 0.65rem;
-  border-top: 1px solid $gray-100;
+  border-top: 1px solid var(--pk-line-soft);
   font-size: 0.7rem;
-  color: $gray-400;
+  color: var(--pk-ink-muted);
 
   svg {
     flex-shrink: 0;
@@ -21,7 +21,7 @@
 }
 
 .person-card-footer-dates {
-  color: $gray-400;
+  color: var(--pk-ink-muted);
 }
 
 // ── Person card: compact mode (sidebar / WG leadership) ──────────────────────
@@ -43,7 +43,7 @@
 
   &:hover {
     box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07);
-    border-color: $gray-300;
+    border-color: var(--pk-line-strong);
   }
 }
 
@@ -117,7 +117,7 @@
   filter: var(--pk-member-logo-filter);
   transition: filter 0.15s;
   .person-card-compact:hover & {
-    filter: var(--pk-member-logo-filter);
+    filter: var(--pk-member-logo-hover-filter);
   }
 }
 

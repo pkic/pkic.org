@@ -4,6 +4,7 @@ import { identitiesListResponseSchema, type ActingIdentity } from "../../shared/
 import { userDetailResponseSchema } from "../../shared/schemas/user-management";
 import { userAuthSessionResponseSchema } from "../../shared/schemas/user-auth";
 import { getJson } from "../shared/api-client";
+import { buildServerCollectionUrl } from "../hooks/useServerCollection";
 import { Field } from "../ui/Field";
 import { ServerSearchSelect } from "./ServerSearchSelect";
 
@@ -19,29 +20,55 @@ const catalog = {
   sort: "organization_name",
 };
 
+function fillEmptyField(form: HTMLFormElement | undefined, name: string, value: string | null | undefined): void {
+  const field = form?.elements.namedItem(name);
+  if (!(field instanceof HTMLInputElement) || field.value || !value) return;
+  field.value = value;
+  field.dispatchEvent(new Event("input", { bubbles: true }));
+}
+
 /** Optional attribution. Merely opening a form never selects or activates an identity. */
-export function RegistrationIdentitySelect() {
+export function RegistrationIdentitySelect({ form }: { form?: HTMLFormElement }) {
   const [session, setSession] = useState<z.infer<typeof userAuthSessionResponseSchema> | null>(null);
   const [profile, setProfile] = useState<z.infer<typeof userDetailResponseSchema>["user"] | null>(null);
-  const [hasIdentities, setHasIdentities] = useState(false);
+  const [hasSelectableIdentity, setHasSelectableIdentity] = useState(false);
   const identityField = useRef<HTMLInputElement>(null);
   const [selected, setSelected] = useState<ActingIdentity | null>(null);
   useEffect(() => {
     let active = true;
     void getJson("/api/v1/auth/session", userAuthSessionResponseSchema)
-      .then(async (response) => {
-        if (!response.member) return;
-        const available = await getJson(catalog.endpoint + "?active=true&limit=1", identitiesListResponseSchema);
-        if (!available.identities.length) return;
-        const detail = await getJson(
-          `/api/v1/users/${encodeURIComponent(response.identity.id)}`,
-          userDetailResponseSchema,
-        );
-        if (active) {
-          setSession(response);
-          setProfile(detail.user);
-          setHasIdentities(true);
-        }
+      .then((response) => {
+        if (!active) return;
+        setSession(response);
+        fillEmptyField(form, "email", response.identity.email);
+        void getJson(`/api/v1/users/${encodeURIComponent(response.identity.id)}`, userDetailResponseSchema)
+          .then((detail) => {
+            if (!active) return;
+            setProfile(detail.user);
+            fillEmptyField(form, "firstName", detail.user.first_name);
+            fillEmptyField(form, "lastName", detail.user.last_name);
+          })
+          .catch(() => {
+            /* Email can still be prefilled if the profile request fails. */
+          });
+        const url = buildServerCollectionUrl(catalog.endpoint, {
+          ...catalog.params,
+          limit: "1",
+          offset: "0",
+          sort: catalog.sort,
+        });
+        void getJson(url, identitiesListResponseSchema)
+          .then((available) => {
+            if (!active) return;
+            // A sole individual identity adds no useful choice to this form.
+            setHasSelectableIdentity(
+              available.page.total > 1 ||
+                (available.identities[0] !== undefined && available.identities[0].organizationId !== null),
+            );
+          })
+          .catch(() => {
+            /* A failed identity lookup must not block registration. */
+          });
       })
       .catch(() => {
         /* Signed-out visitors use the ordinary event form. */
@@ -49,8 +76,8 @@ export function RegistrationIdentitySelect() {
     return () => {
       active = false;
     };
-  }, []);
-  if (!session || !profile || !hasIdentities) return null;
+  }, [form]);
+  if (!session || !hasSelectableIdentity) return null;
   return (
     <Field
       label="Event identity"
@@ -67,13 +94,13 @@ export function RegistrationIdentitySelect() {
             placeholder="Use the event form details"
             onChange={(identity) => {
               setSelected(identity);
-              const form = identityField.current?.form;
+              const containingForm = form ?? identityField.current?.form;
               const values = {
                 "custom.organization_name": identity?.organizationName,
                 "custom.job_title": identity?.jobTitle,
               };
               for (const [name, value] of Object.entries(values)) {
-                const field = form?.elements.namedItem(name);
+                const field = containingForm?.elements.namedItem(name);
                 if (field instanceof HTMLInputElement) {
                   field.readOnly = Boolean(identity && value);
                   if (identity) {
@@ -84,15 +111,11 @@ export function RegistrationIdentitySelect() {
               }
               if (identity) {
                 for (const [name, value] of Object.entries({
-                  firstName: profile.first_name,
-                  lastName: profile.last_name,
+                  firstName: profile?.first_name,
+                  lastName: profile?.last_name,
                   email: session.identity.email,
                 })) {
-                  const field = form?.elements.namedItem(name);
-                  if (field instanceof HTMLInputElement) {
-                    field.value = value ?? "";
-                    field.dispatchEvent(new Event("input", { bubbles: true }));
-                  }
+                  fillEmptyField(containingForm ?? undefined, name, value);
                 }
               }
             }}

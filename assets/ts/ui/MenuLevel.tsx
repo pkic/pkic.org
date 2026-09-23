@@ -27,8 +27,8 @@ export function MenuLevel({
 }) {
   const childId = useId();
   const popupRef = useRef<HTMLDivElement>(null);
-  const itemRefs = useRef<(HTMLButtonElement | null)[]>([]);
-  const childAnchor = useRef<HTMLButtonElement>(null);
+  const itemRefs = useRef<(HTMLButtonElement | HTMLAnchorElement | null)[]>([]);
+  const childAnchor = useRef<HTMLElement>(null);
   const reachable = items.flatMap((item, index) => (item.disabled ? [] : [index]));
   const [active, setActive] = useState((initialLast ? reachable.at(-1) : reachable[0]) ?? -1);
   const [child, setChild] = useState<string | null>(null);
@@ -59,7 +59,7 @@ export function MenuLevel({
       return;
     }
     if (!item.keepOpen) close(true);
-    item.onSelect();
+    item.onSelect?.();
   }
   function keyDown(event: KeyboardEvent) {
     event.stopPropagation();
@@ -104,44 +104,61 @@ export function MenuLevel({
   return (
     <div ref={popupRef} id={id} role="menu" aria-label={label} class="pk-menu__popup" onKeyDown={keyDown}>
       {heading && <p class="pk-menu__heading">{heading}</p>}
-      {items.map((item, index) => (
-        <button
-          key={item.id}
-          ref={(element) => {
+      {items.map((item, index) => {
+        const shared = {
+          key: item.id,
+          ref: (element: HTMLButtonElement | HTMLAnchorElement | null) => {
             itemRefs.current[index] = element;
-          }}
-          type="button"
-          role={item.checked === undefined ? "menuitem" : "menuitemradio"}
-          aria-haspopup={item.children ? "menu" : undefined}
-          aria-expanded={item.children ? child === item.id : undefined}
-          aria-controls={item.children && child === item.id ? childId : undefined}
-          aria-checked={item.checked === undefined ? undefined : item.checked}
-          disabled={item.disabled}
-          tabIndex={index === active && !childItem ? 0 : -1}
-          class={[
+          },
+          role: (item.checked === undefined ? "menuitem" : "menuitemradio") as "menuitem" | "menuitemradio",
+          "aria-haspopup": item.children ? ("menu" as const) : undefined,
+          "aria-expanded": item.children ? child === item.id : undefined,
+          "aria-controls": item.children && child === item.id ? childId : undefined,
+          "aria-checked": item.checked === undefined ? undefined : item.checked,
+          tabIndex: index === active && !childItem ? 0 : -1,
+          class: [
             "pk-menu__item",
             item.danger ? "pk-menu__item--danger" : null,
             item.checked !== undefined ? "pk-menu__item--choice" : null,
             item.separatorBefore ? "pk-menu__item--separated" : null,
           ]
             .filter(Boolean)
-            .join(" ")}
-          onClick={() => select(item, index)}
-        >
-          {item.checked !== undefined && (
-            <span class="pk-menu__check" aria-hidden="true">
-              {item.checked ? "✓" : ""}
-            </span>
-          )}
-          {item.icon && (
-            <span class="pk-menu__item-icon" aria-hidden="true">
-              {item.icon}
-            </span>
-          )}
-          {item.label}
-          {item.children && <span aria-hidden="true"> ›</span>}
-        </button>
-      ))}
+            .join(" "),
+        };
+        const content = (
+          <>
+            {item.checked !== undefined && (
+              <span class="pk-menu__check" aria-hidden="true">
+                {item.checked ? "✓" : ""}
+              </span>
+            )}
+            {item.icon && (
+              <span class="pk-menu__item-icon" aria-hidden="true">
+                {item.icon}
+              </span>
+            )}
+            {item.label}
+            {item.children && <span aria-hidden="true"> ›</span>}
+          </>
+        );
+        return item.href ? (
+          <a
+            {...shared}
+            href={item.href}
+            aria-disabled={item.disabled ? "true" : undefined}
+            onClick={(event) => {
+              if (item.disabled) event.preventDefault();
+              else close(false);
+            }}
+          >
+            {content}
+          </a>
+        ) : (
+          <button {...shared} type="button" disabled={item.disabled} onClick={() => select(item, index)}>
+            {content}
+          </button>
+        );
+      })}
       {childItem?.children && (
         <MenuLevel
           id={childId}

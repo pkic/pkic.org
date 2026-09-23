@@ -12,7 +12,6 @@ import { Tabs } from "../../../../components/Tabs";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { Avatar } from "../../../../ui/Avatar";
-import { PanelBody } from "../../../../ui/Panel";
 import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import { Menu } from "../../../../ui/Menu";
 import { usePortalHashLocation } from "../../hash-location";
@@ -162,9 +161,7 @@ export function GroupMailingListRecord({
             >
               {tab === "subscribers" && (
                 <section aria-label={`${list.label} subscribers`}>
-                  <PanelBody>
-                    <GroupMailingListSubscribers groupId={groupId} listId={list.id} />
-                  </PanelBody>
+                  <GroupMailingListSubscribers groupId={groupId} listId={list.id} />
                 </section>
               )}
               {tab === "settings" && (

@@ -74,7 +74,9 @@ export function MembershipCategoryForm({
   const title = category ? `${category.label} (${category.code})` : "New membership category";
   const trail = [
     { label: "Settings", href: usePortalHashLocation.hrefs("/settings") },
+    { label: "Membership" },
     { label: "Membership categories", href: usePortalHashLocation.hrefs(CATEGORIES_PATH) },
+    { label: title },
   ];
 
   async function save(event: Event) {

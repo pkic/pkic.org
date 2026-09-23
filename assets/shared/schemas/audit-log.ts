@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { requiresPermissions } from "./route-contract";
+import { databaseIdSchema } from "./identifiers";
 
 /**
  * Actor types whose `actor_id` is a `users.id`. Read models resolve these to
@@ -57,6 +58,23 @@ export type ScopedAuditLogResponse = z.infer<typeof scopedAuditLogResponseSchema
 
 export const auditLogListResponseSchema = paginatedResponseSchema("entries", auditLogEntrySchema);
 export type AuditLogListResponse = z.infer<typeof auditLogListResponseSchema>;
+
+export const auditLogDetailResponseSchema = z.object({ entry: auditLogEntrySchema });
+export const auditLogDetailRouteSchema = {
+  ...requiresPermissions("audit:read"),
+  tags: ["Audit log"],
+  summary: "Read one audit log entry",
+  request: { params: z.object({ id: databaseIdSchema }) },
+  responses: {
+    "200": {
+      description: "Audit log entry.",
+      content: { "application/json": { schema: auditLogDetailResponseSchema } },
+    },
+    "401": { description: "Portal staff authentication is required." },
+    "403": { description: "The staff identity lacks audit:read." },
+    "404": { description: "Audit log entry not found." },
+  },
+};
 
 export const auditLogListRouteSchema = {
   ...requiresPermissions("audit:read"),

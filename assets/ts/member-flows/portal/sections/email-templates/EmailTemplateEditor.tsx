@@ -7,6 +7,7 @@ import type { ApiTableActions } from "../../../../components/ApiDataTable";
 import { Alert } from "../../../../ui/Alert";
 import { Badge } from "../../../../ui/Badge";
 import { Button } from "../../../../ui/Button";
+import { Breadcrumb } from "../../../../ui/Breadcrumb";
 import { Menu } from "../../../../ui/Menu";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
@@ -37,7 +38,6 @@ import { EmailTemplateVersionHistory } from "./EmailTemplateVersionHistory";
 // stylesheet, because only the two template editors use it.
 import "../../../../ui/OverlayEditor.css";
 import "../../../../ui/Content.css";
-
 const EMAIL_LAYOUT_TEMPLATE_KEY = "email_layout";
 const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
 
@@ -45,12 +45,10 @@ export function TemplateEditor({
   templateKey,
   initialVersion,
   canWrite,
-  onBack,
 }: {
   templateKey: string;
   initialVersion: EmailTemplateVersion | null;
   canWrite: boolean;
-  onBack: () => void;
 }) {
   const current = initialVersion;
   const isLayout = templateKey === EMAIL_LAYOUT_TEMPLATE_KEY;
@@ -264,6 +262,13 @@ export function TemplateEditor({
 
   return (
     <div class="pk pk-stack">
+      <Breadcrumb
+        items={[
+          { label: "Settings", href: "#/settings" },
+          { label: "Email templates", href: "#/settings/email-templates" },
+          { label: templateKey },
+        ]}
+      />
       <Panel>
         <PanelHeader title={`Edit: ${templateKey}`}>
           {isLayout && <Badge tone="info">shared shell</Badge>}
@@ -278,9 +283,6 @@ export function TemplateEditor({
               {saving ? "Saving…" : "Save as Draft"}
             </Button>
           )}
-          <Button size="sm" onClick={onBack}>
-            ← Back to list
-          </Button>
         </PanelHeader>
         <PanelBody>
           {/* A source and its preview are a pair, so they take half the page

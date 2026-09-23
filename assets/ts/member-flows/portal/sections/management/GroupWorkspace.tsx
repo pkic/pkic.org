@@ -52,7 +52,7 @@ const OVERVIEW_VIEW = "overview";
 function GroupContextHeader({ group }: { group: AuthenticatedGroup }) {
   return (
     <PageHeader
-      title={group.name}
+      title={group.abbreviatedName ? `${group.name} (${group.abbreviatedName})` : group.name}
       context={
         <>
           <Badge tone="neutral">{group.type.singularLabel}</Badge>

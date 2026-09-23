@@ -1,7 +1,6 @@
 import { Badge } from "../../../components/Badge";
 import { ApiDataTable } from "../../../components/ApiDataTable";
 import { formatDateTime } from "../../../shared/ui";
-import { DetailsSummary } from "../../../components/DetailsSummary";
 import { EntityLink } from "../../../components/EntityLink";
 import { USER_BACKED_AUDIT_ACTOR_TYPES, auditLogListResponseSchema } from "../../../../shared/schemas/audit-log";
 import { PageHeader } from "../../../ui/PageHeader";
@@ -55,19 +54,21 @@ export function SystemAuditLog() {
             header: "Actor",
             cell: (entry) => (
               <>
-                {entry.actor_type === "system" ? (
-                  <span class="pk-muted">System</span>
-                ) : (
-                  <EntityLink href={entry.actor_id ? portalEntityHref(entry.actor_type, entry.actor_id) : null}>
-                    {entry.actor_display ? (
-                      entry.actor_display
-                    ) : entry.actor_id ? (
-                      <span class="pk-small pk-mono">{entry.actor_id}</span>
-                    ) : (
-                      <span class="pk-muted">{entry.actor_type}</span>
-                    )}
-                  </EntityLink>
-                )}
+                <span class="pk-table__clamp" title={entry.actor_display ?? entry.actor_id ?? entry.actor_type}>
+                  {entry.actor_type === "system" ? (
+                    <span class="pk-muted">System</span>
+                  ) : (
+                    <EntityLink href={entry.actor_id ? portalEntityHref(entry.actor_type, entry.actor_id) : null}>
+                      {entry.actor_display ? (
+                        entry.actor_display
+                      ) : entry.actor_id ? (
+                        <span class="pk-small pk-mono">{entry.actor_id}</span>
+                      ) : (
+                        <span class="pk-muted">{entry.actor_type}</span>
+                      )}
+                    </EntityLink>
+                  )}
+                </span>
                 <div class="pk-small">{entry.actor_type}</div>
               </>
             ),
@@ -111,16 +112,20 @@ export function SystemAuditLog() {
             width: "fit",
           },
           {
-            // The one prose column: the first labelled column is a fit-width
-            // timestamp here, so the slack is claimed explicitly rather than
-            // left to the default, which hands it to the first column.
             header: "Details",
-            cell: (entry) => <DetailsSummary value={entry.details} layout="inline" />,
+            cell: (entry) => {
+              const count = Object.keys(entry.details ?? {}).length;
+              return count > 0 ? `${count} ${count === 1 ? "field" : "fields"}` : "—";
+            },
             width: "primary",
           },
         ]}
         empty="No entries match the current filters."
         rowKey={(entry) => entry.id}
+        rowAction={(entry) => ({
+          label: `Open audit entry ${entry.action}`,
+          href: `#/settings/audit-log/${encodeURIComponent(entry.id)}`,
+        })}
       />
     </div>
   );
