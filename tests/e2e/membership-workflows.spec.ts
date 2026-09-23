@@ -180,7 +180,7 @@ test("navigates workflow breadcrumbs between settings, the list, and an organiza
   await signInAsE2eStaff(page, e2eAdminEmail("membership-workflows-breadcrumbs"));
   await page.goto("/portal/#/settings/application-workflow");
   const breadcrumb = page.getByRole("navigation", { name: "Breadcrumb", exact: true });
-  await expect(breadcrumb.locator('[aria-current="page"]')).toHaveText("Application workflows");
+  await expect(breadcrumb.locator('[aria-current="page"]')).toHaveText("Application workflow");
   await breadcrumb.getByRole("link", { name: "Settings", exact: true }).click();
   await expect(page).toHaveURL(/#\/settings$/);
   await page.goto("/portal/#/settings/application-workflow/new");
@@ -197,7 +197,7 @@ test("navigates workflow breadcrumbs between settings, the list, and an organiza
   await expect(breadcrumb).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.screenshot({ path: testInfo.outputPath("workflow-breadcrumb-mobile.png"), fullPage: true });
-  const listLink = breadcrumb.getByRole("link", { name: "Application workflows", exact: true });
+  const listLink = breadcrumb.getByRole("link", { name: "Application workflow", exact: true });
   await listLink.focus();
   await listLink.press("Enter");
   await expect(page).toHaveURL(/#\/settings\/application-workflow(?:\?|$)/);
