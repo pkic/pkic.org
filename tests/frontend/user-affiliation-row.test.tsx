@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { describe, expect, it, vi } from "vitest";
 import { exampleMembershipCategories } from "./helpers/membership-category-catalog";
 vi.mock("../../assets/ts/hooks/useMembershipCategoryCatalog", () => ({
   useMembershipCategoryCatalog: () => exampleMembershipCategories,
@@ -12,7 +13,6 @@ vi.mock("../../assets/ts/hooks/useMembershipCategoryCatalog", () => ({
  */
 import { render } from "preact";
 import { act } from "preact/test-utils";
-import { describe, expect, it, vi } from "vitest";
 // The affiliations panel routes its add command; the mock keeps the router out.
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
 import { UserAffiliationsPanel } from "../../assets/ts/member-flows/portal/sections/system-users/UserAffiliationsPanel";

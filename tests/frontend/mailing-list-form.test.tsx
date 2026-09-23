@@ -1,11 +1,11 @@
 // @vitest-environment jsdom
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { exampleMembershipCategories } from "./helpers/membership-category-catalog";
 vi.mock("../../assets/ts/hooks/useMembershipCategoryCatalog", () => ({
   useMembershipCategoryCatalog: () => exampleMembershipCategories,
 }));
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
-import { afterEach, describe, expect, it, vi } from "vitest";
 import { groupMailingListCreateSchema } from "../../assets/shared/schemas/mailing-lists";
 import { MEMBERSHIP_CATEGORIES, type MembershipCategory } from "../../assets/shared/schemas/membership-categories";
 import { MailingListForm } from "../../assets/ts/components/mailing-lists/MailingListForm";

@@ -555,30 +555,28 @@ export function TemplateEditor({
                     <summary class="pk-small pk-strong">Preview sample data</summary>
                     {/* Preview data. The reset sits under the field rather than in
                   its label row: the label names the control and nothing else. */}
-                    {canWrite && (
-                      <div class="pk-stack pk-stack--tight">
-                        <Field label="Preview data (JSON)">
-                          {(control) => (
-                            <Textarea
-                              {...control}
-                              class="pk-mono"
-                              rows={6}
-                              value={previewData}
-                              onInput={(e) => setPreviewData((e.target as HTMLTextAreaElement).value)}
-                            />
-                          )}
-                        </Field>
-                        <div class="pk-cluster pk-cluster--end">
-                          <Button
-                            variant="link"
-                            size="sm"
-                            onClick={() => setPreviewData(JSON.stringify(PREVIEW_DEFAULTS, null, 2))}
-                          >
-                            Reset to defaults
-                          </Button>
-                        </div>
+                    <div class="pk-stack pk-stack--tight">
+                      <Field label="Preview data (JSON)">
+                        {(control) => (
+                          <Textarea
+                            {...control}
+                            class="pk-mono"
+                            rows={6}
+                            value={previewData}
+                            onInput={(e) => setPreviewData((e.target as HTMLTextAreaElement).value)}
+                          />
+                        )}
+                      </Field>
+                      <div class="pk-cluster pk-cluster--end">
+                        <Button
+                          variant="link"
+                          size="sm"
+                          onClick={() => setPreviewData(JSON.stringify(PREVIEW_DEFAULTS, null, 2))}
+                        >
+                          Reset to defaults
+                        </Button>
                       </div>
-                    )}
+                    </div>
                   </details>
                 </PanelBody>
               </Panel>

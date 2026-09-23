@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { exampleMembershipCategories } from "./helpers/membership-category-catalog";
 vi.mock("../../assets/ts/hooks/useMembershipCategoryCatalog", () => ({
   useMembershipCategoryCatalog: () => exampleMembershipCategories,
@@ -6,7 +7,6 @@ vi.mock("../../assets/ts/hooks/useMembershipCategoryCatalog", () => ({
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { beginRecordEdit } from "./helpers/record-edit";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupMailingLists } from "../../assets/ts/member-flows/portal/sections/management/GroupMailingLists";
 import {

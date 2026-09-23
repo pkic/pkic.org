@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { describe, expect, it, vi } from "vitest";
 import { exampleMembershipCategories } from "./helpers/membership-category-catalog";
 vi.mock("../../assets/ts/hooks/useMembershipCategoryCatalog", () => ({
   useMembershipCategoryCatalog: () => exampleMembershipCategories,
@@ -8,7 +9,6 @@ vi.mock("../../assets/ts/hooks/useMembershipCategoryCatalog", () => ({
  */
 import { render } from "preact";
 import { act } from "preact/test-utils";
-import { describe, expect, it, vi } from "vitest";
 // The panel's own command navigates to the grant page (#107); the mock keeps
 // the router out of the test and records where it was sent.
 const navigate = vi.fn();
