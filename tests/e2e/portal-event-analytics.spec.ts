@@ -63,17 +63,8 @@ test("permitted staff reach event analytics under the events they measure", asyn
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
-    await page.screenshot({
-      path: `/Volumes/ScanDisk/mac-caches/tmp/pr180-analytics-${width}.png`,
-      fullPage: true,
-      animations: "disabled",
-    });
     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
-    await page.screenshot({
-      path: `/Volumes/ScanDisk/mac-caches/tmp/pr180-analytics-dark-${width}.png`,
-      fullPage: true,
-      animations: "disabled",
-    });
+    await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
