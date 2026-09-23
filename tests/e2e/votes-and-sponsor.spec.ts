@@ -1,6 +1,6 @@
 /**
- * E2E coverage for: the public votes pages (/votes/, /votes/detail/)
- * and the event-scoped "Sponsor Now" self-service checkout widget.
+ * E2E coverage for the public votes pages (/votes/, /votes/detail/)
+ * and the event sponsorship checkout and inquiry paths.
  *
  * Votes: a real vote is created and made public through the actual admin
  * API (proving the public GET /api/v1/votes(/:slug) endpoints and the new
@@ -10,11 +10,8 @@
  * closes a vote locally, and votes.test.ts already covers that tallying
  * logic at the service layer.
  *
- * Sponsor checkout: Stripe isn't configured in local dev (no
- * STRIPE_SECRET_KEY in .dev.vars, same gap already documented for the
- * donation flow), so the checkout-session creation call is mocked to
- * return a same-origin redirect URL, verifying the form submits the
- * right payload and follows the returned URL.
+ * Stripe isn't configured in local dev, so the checkout-session creation
+ * call is mocked while the form and redirect run in the browser.
  * @covers vote.5.11
  */
 import { expect, test } from "@playwright/test";
@@ -213,39 +210,38 @@ test.describe("public votes pages", () => {
   });
 });
 
-test.describe("event sponsor self-service checkout (Path B)", () => {
-  test("submits the Sponsor Now form and follows the returned Stripe checkout redirect", async ({ page }) => {
-    let capturedBody: Record<string, unknown> | null = null;
+test.describe("event sponsorship inquiry", () => {
+  test("links the event sponsor page to the public inquiry form", async ({ page }) => {
+    await page.goto("/events/2026/pqc-conference-amsterdam-nl/sponsors/");
+    await page.getByRole("link", { name: "Discuss sponsorship opportunities" }).click();
+    await expect(page).toHaveURL(/\/sponsors\/sponsor\/$/);
+    await expect(page.getByRole("heading", { name: /sponsor/i }).first()).toBeVisible();
+  });
+});
 
+test.describe("event sponsor self-service checkout", () => {
+  test("submits the Sponsor Now form and follows the returned checkout redirect", async ({ page }) => {
+    let capturedBody: Record<string, unknown> | null = null;
     await page.route("**/api/v1/sponsors/checkouts", async (route) => {
       capturedBody = route.request().postDataJSON() as Record<string, unknown>;
       const checkoutUrl = new URL(
         "/events/2026/pqc-conference-amsterdam-nl/sponsors/complete/?session_id=cs_test_mocked",
         route.request().url(),
       ).toString();
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          url: checkoutUrl,
-        }),
-      });
+      await route.fulfill({ status: 200, json: { url: checkoutUrl } });
     });
 
     await page.goto("/events/2026/pqc-conference-amsterdam-nl/sponsors/");
     await expect(page.getByRole("heading", { name: "Sponsor Now" })).toBeVisible();
-
     await page.locator("label[for='tier-Innovator']").click();
     await page.locator("#sponsorFirstName").fill("Casey");
     await page.locator("#sponsorLastName").fill("Sponsor");
     await page.locator("#sponsorEmail").fill("casey-sponsor@example.test");
     await page.locator("#sponsorOrganizationName").fill("Example Sponsor Org");
-
     await page.getByRole("button", { name: /Sponsor Now/i }).click();
 
     await expect(page).toHaveURL(/sponsors\/complete\/\?session_id=cs_test_mocked/);
     await expect(page.getByRole("heading", { name: /Thank you for sponsoring/i })).toBeVisible();
-
     expect(capturedBody).toMatchObject({
       checkoutAttemptId: expect.stringMatching(/^[0-9a-f-]{36}$/i),
       contactName: "Casey Sponsor",
