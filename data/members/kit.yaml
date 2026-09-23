@@ -1,0 +1,64 @@
+id: kit
+name: Karlsruhe Institute of Technology (KIT)
+slogan: Science for Impact
+website: https://www.kit.edu/
+# Business domains for email
+organizationDomains:
+  - kit.edu
+# Short description, longer content can be placed in `content/members/`
+description: With passion, curiosity, creativity, and freedom, while firmly rooted in social responsibility, we contribute to the shaping of a sustainable and resilient future.
+
+# membership
+memberSince: 2026-09-22
+memberType: H4
+workingGroups:
+  - CBOM
+  - CM
+  - PKIMM
+  - PQC
+  - TCWG
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url:
+  feed:
+  language: en_US
+
+# Press Releases
+press:
+  url: https://www.kit.edu/kit/english/press_releases.php
+  feed:
+  language: en_US
+
+# Careers
+careers:
+  url: https://www.kit.edu/career/index.php
+  feed:
+  language: en_US
+
+# Social media
+social:
+  x: https://twitter.com/KITKarlsruhe
+  facebook: https://www.facebook.com/KIT.Karlsruhe.Official
+  instagram: https://www.instagram.com/kitkarlsruhe
+  linkedin:
+  youtube: https://www.youtube.com/user/KITVideoclips
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Mohammed Ramadan
+    role: Senior Researcher
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/m-ramadan-m/
+    description: Mohammed is the Senior Researcher at Karlsruhe Institute of Technology (KIT) and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |

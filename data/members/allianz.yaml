@@ -1,0 +1,61 @@
+id: allianz
+name: Allianz Services
+slogan:
+website: https://www.allianz.com
+# Business domains for email
+organizationDomains:
+  - allianz.com
+# Short description, longer content can be placed in `content/members/`
+description: As an international financial services provider, Allianz offers worldwide products and solutions in insurance and asset management.
+
+# membership
+memberSince: 2026-09-09
+memberType: H8
+workingGroups:
+  - CM
+  - PQC
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: https://www.allianz.com/en/mediacenter/news/articles.html
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: https://careers.allianz.com/?utm_source=allianz.com&utm_medium=website+header+flyout&utm_campaign=Careers+at+Allianz+Group
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: https://x.com/Allianz
+  facebook: https://www.facebook.com/allianz
+  instagram: https://www.instagram.com/allianz
+  linkedin: https://www.linkedin.com/company/allianz/posts/?feedView=all
+  youtube: https://www.youtube.com/channel/UCeGmH7XrpzCjlrrxoAVnWPA
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: Daniel Palencia Picó
+    role: Governance Vulnerability Expert
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/daniel-palencia-pic%C3%B3-08470b208/
+    description: Daniel is the Governance Vulnerability Expert at Allianz Services and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |

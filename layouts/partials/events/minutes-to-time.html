@@ -1,0 +1,5 @@
+{{- /* Converts minutes since midnight (the dot, int) back into an "HH:MM" string. */ -}}
+{{- $mins := . -}}
+{{- $h := div $mins 60 -}}
+{{- $m := mod $mins 60 -}}
+{{- return (printf "%02d:%02d" $h $m) -}}

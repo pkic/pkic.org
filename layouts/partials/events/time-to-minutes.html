@@ -1,0 +1,5 @@
+{{- /* Converts an "HH:MM" string (the dot) into minutes since midnight (int). */ -}}
+{{- $parts := split . ":" -}}
+{{- $h := default "0" (index $parts 0 | strings.TrimLeft "0") -}}
+{{- $m := default "0" (index $parts 1 | strings.TrimLeft "0") -}}
+{{- return (add (mul (int $h) 60) (int $m)) -}}

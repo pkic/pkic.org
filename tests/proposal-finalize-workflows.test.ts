@@ -524,7 +524,7 @@ describe("proposal HTTP error responses (full router stack)", () => {
     });
     expect(first.status).toBe(200);
 
-    // Second finalize — must return JSON 409, not a 500 or a crash
+    // Second finalize corrects the existing decision.
     const second = await callApp(`/api/v1/proposals/${proposalId}/decisions`, adminToken, {
       finalStatus: "accepted",
     });

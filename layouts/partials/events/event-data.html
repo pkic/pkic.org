@@ -33,6 +33,7 @@
      Uses string-only HH:MM arithmetic — no timezone conversion needed.
      The resulting agenda dict uses string keys ("2006-01-02") so all consumers
      that call time.Format on the key still work (Hugo parses ISO date strings). */}}
+{{- $locationsData := $data.locations -}}
 {{- with $data.agenda -}}
     {{- $transitionMins := int (default 5 $data.transitionMinutes) -}}
     {{- $agendaEnriched := dict -}}
@@ -65,7 +66,83 @@
                 {{- $enrichedSlots = $enrichedSlots | append $slot -}}
             {{- end -}}
         {{- end -}}
-        {{- $agendaEnriched = merge $agendaEnriched (dict $dayStr $enrichedSlots) -}}
+
+        {{- /* Second pass: let a session declare its own durationMinutes so it can span
+             multiple of the rows above (e.g. one hall running a panel while another runs
+             several shorter back-to-back sessions in the same window). For every session,
+             resolve its effective duration (its own value, falling back to the row's),
+             derive its endTime, and compute rowSpan = how many rows its time window covers.
+             Locations still "inside" an earlier session's span are recorded per row so the
+             template can skip rendering a competing empty cell there instead of covering
+             it with a "continuation" placeholder. */ -}}
+        {{- $dayLocations := slice -}}
+        {{- if $locationsData -}}
+            {{- $dayLocations = $locationsData.order -}}
+            {{- if index $locationsData $dayStr -}}
+                {{- $dayLocations = (index $locationsData $dayStr).order -}}
+            {{- end -}}
+        {{- end -}}
+
+        {{- $finalSlots := slice -}}
+        {{- range $index, $slot := $enrichedSlots -}}
+            {{- $slotStartMins := partial "events/time-to-minutes.html" $slot.time -}}
+
+            {{- $newSessions := slice -}}
+            {{- range $slot.sessions -}}
+                {{- $session := . -}}
+                {{- $ownDurRaw := default $slot.durationMinutes $session.durationMinutes -}}
+                {{- if $ownDurRaw -}}
+                    {{- $ownDur := int $ownDurRaw -}}
+                    {{- $ownEndMins := add $slotStartMins $ownDur -}}
+                    {{- $rowSpan := 1 -}}
+                    {{- range after (add $index 1) $enrichedSlots -}}
+                        {{- if lt (partial "events/time-to-minutes.html" .time) $ownEndMins -}}
+                            {{- $rowSpan = add $rowSpan 1 -}}
+                        {{- end -}}
+                    {{- end -}}
+                    {{- $newSessions = $newSessions | append (merge $session (dict
+                        "durationMinutes" $ownDur
+                        "endTime"         (partial "events/minutes-to-time.html" $ownEndMins)
+                        "rowSpan"         $rowSpan
+                    )) -}}
+                {{- else -}}
+                    {{- $newSessions = $newSessions | append $session -}}
+                {{- end -}}
+            {{- end -}}
+
+            {{- $slotSessions := default (slice) $slot.sessions -}}
+            {{- $coveredLocations := slice -}}
+            {{- range $dayLocations -}}
+                {{- $loc := . -}}
+                {{- if not (where $slotSessions "locations" "intersect" (slice $loc)) -}}
+                    {{- $covered := false -}}
+                    {{- range $finalSlots -}}
+                        {{- $priorSlot := . -}}
+                        {{- if not $covered -}}
+                            {{- $priorStartMins := partial "events/time-to-minutes.html" $priorSlot.time -}}
+                            {{- $priorSessions := default (slice) $priorSlot.sessions -}}
+                            {{- range (where $priorSessions "locations" "intersect" (slice $loc)) -}}
+                                {{- if .durationMinutes -}}
+                                    {{- if gt (add $priorStartMins .durationMinutes) $slotStartMins -}}
+                                        {{- $covered = true -}}
+                                    {{- end -}}
+                                {{- end -}}
+                            {{- end -}}
+                        {{- end -}}
+                    {{- end -}}
+                    {{- if $covered -}}
+                        {{- $coveredLocations = $coveredLocations | append $loc -}}
+                    {{- end -}}
+                {{- end -}}
+            {{- end -}}
+
+            {{- $finalSlots = $finalSlots | append (merge $slot (dict
+                "sessions"         $newSessions
+                "coveredLocations" $coveredLocations
+            )) -}}
+        {{- end -}}
+
+        {{- $agendaEnriched = merge $agendaEnriched (dict $dayStr $finalSlots) -}}
     {{- end -}}
     {{- $data = merge $data (dict "agenda" $agendaEnriched) -}}
 {{- end -}}

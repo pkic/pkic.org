@@ -264,6 +264,8 @@ caches:
   getresource:
     dir: :cacheDir/:project
     maxAge: 28800
+
+server:
   headers:
     - for: /**
       values:
@@ -275,6 +277,7 @@ caches:
           style-src 'unsafe-inline' 'self';
           font-src 'self';
           script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js https://pkic.github.io/self-assessment/ https://js.stripe.com localhost:*;
+          worker-src 'self' blob:;
           img-src 'self' https://i.ytimg.com localhost:* data:;
           frame-src https://www.youtube-nocookie.com/ https://player.vimeo.com/ https://www.youtube.com/ https://js.stripe.com;
           media-src https://www.rovid.nl/def/dco/2016/def-dco-20160823-idoa9bivg-web-hd.mp4 localhost:*;
