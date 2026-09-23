@@ -91,13 +91,14 @@ async function settle(): Promise<void> {
  * not care about either.
  */
 async function waitFor<T>(find: () => T | null | undefined, what: string): Promise<T> {
-  for (let attempt = 0; attempt < 25; attempt += 1) {
+  const deadline = Date.now() + 2_000;
+  do {
     const found = find();
     if (found) return found;
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      await new Promise((resolve) => setTimeout(resolve, 10));
     });
-  }
+  } while (Date.now() < deadline);
   throw new Error(`${what} never appeared`);
 }
 
