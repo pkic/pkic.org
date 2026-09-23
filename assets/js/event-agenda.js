@@ -1,4 +1,6 @@
 document.addEventListener('DOMContentLoaded', function () {
+    initializeAgendaGridLayout();
+
     // Initialize location filtering
     initializeLocationFiltering();
 
@@ -26,6 +28,36 @@ document.addEventListener('DOMContentLoaded', function () {
 
     // Break overlays removed; using inline break cards again
 });
+
+/** Translate schedule geometry into a stylesheet; authored templates carry no style attributes. */
+function initializeAgendaGridLayout() {
+    const rules = [];
+    document.querySelectorAll('.agenda-grid[data-grid-rows]').forEach((grid, gridIndex) => {
+        const rows = grid.dataset.gridRows;
+        if (!rows || !/^(?:[1-9]\d*px)(?: [1-9]\d*px)*$/.test(rows)) return;
+
+        grid.dataset.agendaLayout = String(gridIndex);
+        const gridSelector = `.agenda-grid[data-agenda-layout="${gridIndex}"]`;
+        rules.push(`${gridSelector} { grid-template-rows: ${rows}; }`);
+
+        Array.from(grid.children).forEach((cell, cellIndex) => {
+            const row = Number(cell.dataset.gridRow);
+            const span = Number(cell.dataset.gridSpan ?? 1);
+            const column = Number(cell.dataset.gridColumn);
+            if (![row, span].every(value => Number.isInteger(value) && value > 0 && value <= 100)) return;
+            if (cell.dataset.gridColumn && (!Number.isInteger(column) || column < 1 || column > 100)) return;
+
+            cell.dataset.agendaCell = String(cellIndex);
+            const selector = `${gridSelector} > [data-agenda-cell="${cellIndex}"]`;
+            rules.push(`${selector} { grid-row: ${row} / span ${span};${cell.dataset.gridColumn ? ` grid-column: ${column};` : ''} }`);
+        });
+    });
+
+    if (rules.length === 0) return;
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(rules.join('\n'));
+    document.adoptedStyleSheets = [...document.adoptedStyleSheets, sheet];
+}
 
 /**
  * Session dialogs.

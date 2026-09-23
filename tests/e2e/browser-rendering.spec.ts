@@ -19,11 +19,16 @@ function sendgridServer(): string {
 }
 
 async function setNativeChecked(page: Page, selector: string): Promise<void> {
-  const el = page.locator(selector);
-  await el.scrollIntoViewIfNeeded();
-  await el.evaluate((input) => {
-    (input as HTMLInputElement).click();
-  });
+  const input = page.locator(selector);
+  await expect(input).toHaveCount(1);
+  const id = await input.getAttribute("id");
+  const label = id ? page.locator(`label[for="${id}"]`) : input.locator("xpath=ancestor::label[1]");
+  if (await label.count()) {
+    await label.click();
+  } else {
+    await input.check();
+  }
+  await expect(input).toBeChecked();
 }
 
 /*
@@ -548,6 +553,20 @@ async function createPortalWaitlistEvent(page: Page): Promise<{ eventId: string;
 }
 
 test.describe("browser workflows", () => {
+  test("places agenda sessions in their scheduled rows without inline styles", async ({ page }) => {
+    await page.goto("/events/2026/pqc-conference-amsterdam-nl/agenda/");
+    const grid = page.locator(".agenda-grid").first();
+    await expect(grid).toBeVisible();
+    await expect
+      .poll(() => grid.evaluate((element) => getComputedStyle(element).gridTemplateRows.split(" ").length))
+      .toBeGreaterThan(3);
+    const firstTime = grid.locator(".agenda-time").first();
+    const firstSession = grid.locator(".agenda-session").first();
+    expect(await firstTime.evaluate((element) => getComputedStyle(element).gridRowStart)).toBe("1");
+    expect(await firstSession.evaluate((element) => getComputedStyle(element).gridColumnStart)).toBe("2");
+    expect(await firstSession.getAttribute("style")).toBeNull();
+  });
+
   test("stops and reloads an agenda recording when its modal closes", async ({ page }) => {
     await setupPage(page);
     const errorMonitor = monitorErrors(page);

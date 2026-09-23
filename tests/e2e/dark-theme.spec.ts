@@ -118,29 +118,45 @@ test.describe("the dark theme", () => {
     expect(warningSurface).not.toBe("rgb(255, 255, 255)");
     expect(await unreadableSurfaces(page)).toEqual([]);
 
+    // The fresh database has no published group roster. Exercise its mark's
+    // actual CSS without making the theme check depend on production data.
     await page.goto("/wg/pqc/");
-    const logo = page.locator(".person-card-org-logo").first();
-    await expect(logo).toBeVisible();
-    await expect.poll(() => logo.evaluate((element) => getComputedStyle(element).filter)).toContain("invert(1)");
+    const logoFilter = await page.evaluate(() => {
+      const card = document.createElement("div");
+      card.className = "person-card";
+      const logo = document.createElement("img");
+      logo.className = "person-card-org-logo";
+      card.append(logo);
+      document.body.append(card);
+      const filter = getComputedStyle(logo).filter;
+      card.remove();
+      return filter;
+    });
+    expect(logoFilter).toContain("invert(1)");
   });
 
   test("keeps the member directory, blog sidebar, and About mark readable", async ({ page }) => {
     await page.goto("/wg/pqc/members/");
-    const card = page.locator(".member-card:has(.member-card-description):has(.member-card-logo)").first();
-    await expect(card).toBeVisible();
-    const memberStyles = await card.evaluate((element) => {
-      const description = element.querySelector(".member-card-description");
-      const logo = element.querySelector(".member-card-logo");
+    const memberStyles = await page.evaluate(() => {
+      const card = document.createElement("div");
+      card.className = "member-card";
+      const description = document.createElement("p");
+      description.className = "member-card-description";
+      const logo = document.createElement("img");
+      logo.className = "member-card-logo";
+      card.append(description, logo);
+      document.body.append(card);
       const probe = document.createElement("span");
       probe.style.color = "var(--pk-ink-muted)";
-      element.appendChild(probe);
+      card.appendChild(probe);
       const mutedInk = getComputedStyle(probe).color;
-      probe.remove();
-      return {
-        descriptionColor: description && getComputedStyle(description).color,
+      const styles = {
+        descriptionColor: getComputedStyle(description).color,
         mutedInk,
-        logoFilter: logo && getComputedStyle(logo).filter,
+        logoFilter: getComputedStyle(logo).filter,
       };
+      card.remove();
+      return styles;
     });
     expect(memberStyles.descriptionColor).toBe(memberStyles.mutedInk);
     expect(memberStyles.logoFilter).toContain("invert(1)");
@@ -223,14 +239,20 @@ test.describe("the light theme", () => {
 
   test("preserves color artwork in the sponsor wall and on affiliation hover", async ({ page }) => {
     await page.goto("/");
-    await expect
-      .poll(() =>
-        page.locator(".members img").evaluateAll((images) => {
-          const sponsor = images.find((image) => image.classList.contains("member-logo-sponsor"));
-          return sponsor ? getComputedStyle(sponsor).filter : null;
-        }),
-      )
-      .toBe("none");
+    // The fresh E2E database has no sponsor. Keep the CSS assertion independent
+    // of live membership data while exercising the same selector and tokens.
+    const sponsorFilter = await page.evaluate(() => {
+      const wall = document.createElement("div");
+      wall.className = "members";
+      const logo = document.createElement("img");
+      logo.className = "member-logo-sponsor";
+      wall.append(logo);
+      document.body.append(wall);
+      const filter = getComputedStyle(logo).filter;
+      wall.remove();
+      return filter;
+    });
+    expect(sponsorFilter).toBe("none");
 
     // Public leadership data can be empty locally, so exercise its real CSS
     // with a minimal card while retaining the same page and theme stylesheet.

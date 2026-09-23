@@ -343,12 +343,12 @@
                         {{- end -}}
                         {{- $gridTemplateRows := delimit $rowHeightPx " " -}}
                         <div class="agenda-grid-container">
-                            <div class="agenda-grid" data-locations="{{ len $locations }}" style="grid-template-rows: {{ $gridTemplateRows }};">
+                            <div class="agenda-grid" data-locations="{{ len $locations }}" data-grid-rows="{{ $gridTemplateRows }}">
                                 <!-- Schedule rows -->
                                 {{- range $rowIndex, $timeSlot := $items -}}
                                     {{- $gridRow := add $rowIndex 1 -}}
                                     <!-- Time cell -->
-                                    <div class="agenda-time" style="grid-row: {{ $gridRow }}; grid-column: 1;">
+                                    <div class="agenda-time" data-grid-row="{{ $gridRow }}" data-grid-column="1">
                                         <div class="time-main">{{ $timeSlot.time }}</div>
                                         {{ $dateTime := (time.AsTime (printf "%sT%s:00" $day $timeSlot.time) $data.timezone).UTC }}
                                         <time class="time-local localTime" datetime="{{ $dateTime.Format "2006-01-02T15:04:05Z" }}">
@@ -358,7 +358,7 @@
 
                                     {{- if not $timeSlot.sessions -}}
                                         <!-- Break spanning all locations -->
-                                        <div class="agenda-break" style="grid-row: {{ $gridRow }};">
+                                        <div class="agenda-break" data-grid-row="{{ $gridRow }}">
                                             <div class="break-card">
                                                 {{ if $timeSlot.sponsor }}
                                                     {{ $sponsorData := partial "sponsors/item.html" (dict "id" $timeSlot.sponsor) }}
@@ -392,7 +392,7 @@
                                             {{- if $sessions -}}
                                                 {{- $rowSpan = default 1 (index $sessions 0).rowSpan -}}
                                             {{- end -}}
-                                            <div class="agenda-session location-{{ $locationIndex }}" data-location="{{ $locationIndex }}" style="grid-row: {{ $gridRow }} / span {{ $rowSpan }}; grid-column: {{ add $locationIndex 2 }};">
+                                            <div class="agenda-session location-{{ $locationIndex }}" data-location="{{ $locationIndex }}" data-grid-row="{{ $gridRow }}" data-grid-span="{{ $rowSpan }}" data-grid-column="{{ add $locationIndex 2 }}">
                                                 {{- if $sessions -}}
                                                     {{- range $sessions -}}
                                                         {{- $modalId := printf "sessionModal-%s-%v-%s" ($timeSlot.time | replaceRE ":" "") $locationIndex (.title | urlize) -}}
@@ -426,7 +426,7 @@
                                                                                         </div>
                                                                                     {{ end }}
                                                                                     <div class="speaker-details">
-                                                                                        <div class="speaker-name">{{ .name }}{{- if hasSuffix $speaker " *" -}} <span class="badge text-bg-warning ms-2">Moderator</span>{{- end -}}</div>
+                                                                                        <div class="speaker-name">{{ .name }}{{- if hasSuffix $speaker " *" -}} <span class="pk-badge pk-badge--warn">Moderator</span>{{- end -}}</div>
                                                                                         <div class="speaker-role">{{ .title }}</div>
                                                                                     </div>
                                                                                 </div>
