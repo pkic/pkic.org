@@ -44,6 +44,7 @@
 - Never edit a migration that has been applied to preview or production. Verify both migration ledgers before changing migration history.
 - Squash branch migrations that reached neither preview nor production into the final branch migration instead of appending corrective migrations.
 - Deployments do not apply D1 migrations. Treat preview and production migration application as a separate, manual operation that requires explicit approval.
+- Use `pnpm migrate:preview` or `pnpm migrate:production` for remote migrations; migration 0035 needs the repository's atomic file-import workaround for D1's trigger parsing error. Do not bypass it with raw `wrangler d1 migrations apply` until 0035 is recorded.
 - All branch and pull-request previews share the preview database. Keep preview-compatible migrations and code changes coordinated across concurrently active branches.
 - Never copy, import, backfill, or otherwise move production personal data, credentials, secrets, or private uploads into preview. Use synthetic or purpose-created preview fixtures.
 - Prefer additive schema evolution. Avoid table rebuilds and changeable product vocabularies in table-level `CHECK` constraints.
