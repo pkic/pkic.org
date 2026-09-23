@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   portalHashPath,
+  portalIdentityInvitationToken,
   portalMagicLinkReturnPath,
   portalMagicLinkToken,
   portalReturnPath,
@@ -16,6 +17,14 @@ describe("portal return path", () => {
     expect(portalReturnPath("#/login")).toBeUndefined();
     expect(portalReturnPath("#/verify?token=abc")).toBeUndefined();
     expect(portalReturnPath("#/auth/oauth?client_id=x")).toBeUndefined();
+    expect(portalReturnPath("#/identity-invitations?token=secret-token")).toBeUndefined();
+  });
+
+  it("reads a public identity invitation token without treating it as a login link", () => {
+    const hash = "#/identity-invitations?token=secret-token";
+    expect(portalHashPath(hash)).toBe("/identity-invitations");
+    expect(portalIdentityInvitationToken(hash)).toBe("secret-token");
+    expect(portalMagicLinkToken(hash)).toBeNull();
   });
 
   it("reads the token and the return path off a verify link", () => {

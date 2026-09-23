@@ -1,10 +1,12 @@
 import { serializeLinks } from "../../../../assets/shared/schemas/links";
+import { queueEmailAuthCapability } from "../../auth/email-auth-capabilities";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { nowIso } from "../../utils/time";
+import { uuid } from "../../utils/ids";
 import { normalizeEmail } from "../../validation";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
@@ -19,6 +21,7 @@ import { isConcurrentIdentityConflict } from "./conflicts";
 import {
   loadIdentityNotificationContext,
   prepareIdentityNotification,
+  IDENTITY_INVITATION_TTL_SECONDS,
   type IdentityNotificationContext,
 } from "./notifications";
 import type { IdentityManagerActor } from "./types";
@@ -50,10 +53,11 @@ async function commitIdentityCreation(
     links?: string[];
     showOnOrganizationProfile: boolean;
     activation: Activation;
+    signingSecret?: string;
     userStatement?: StatementLike | null;
     notificationContext?: IdentityNotificationContext;
   },
-): Promise<{ identityId: string; state: "pending" | "active" }> {
+): Promise<{ identityId: string; state: "pending" | "active"; outboxId: string }> {
   await requireOrganizationIdentityManagement(db, {
     memberId: input.memberId,
     actorUserId: actor.userId,
@@ -76,6 +80,22 @@ async function commitIdentityCreation(
     startImmediately: input.activation.mode === "immediate",
     now: at,
   });
+  if (input.activation.mode === "invitation" && !input.signingSecret) {
+    throw new AppError(500, "INTERNAL_SECRET_MISSING", "Identity invitation signing secret is required");
+  }
+  const invitationToken =
+    input.activation.mode === "invitation"
+      ? (
+          await queueEmailAuthCapability({
+            signingSecret: input.signingSecret!,
+            purpose: "identity_invitation",
+            subjectId: prepared.identityId,
+            email: context.email,
+            ttlSeconds: IDENTITY_INVITATION_TTL_SECONDS,
+          })
+        ).queuedToken
+      : undefined;
+  const outboxId = uuid();
   const statements = [
     prepareOrganizationIdentityManagementGuard(db, {
       memberId: input.memberId,
@@ -110,6 +130,8 @@ async function commitIdentityCreation(
       userId: input.userId,
       context,
       action: input.activation.mode === "immediate" ? "activated" : "invited",
+      invitationToken,
+      outboxId,
       at,
     }),
     ...(input.activation.mode === "immediate"
@@ -127,7 +149,11 @@ async function commitIdentityCreation(
     }
     throw error;
   }
-  return { identityId: prepared.identityId, state: input.activation.mode === "immediate" ? "active" : "pending" };
+  return {
+    identityId: prepared.identityId,
+    state: input.activation.mode === "immediate" ? "active" : "pending",
+    outboxId,
+  };
 }
 
 export async function createOrganizationIdentity(
@@ -142,8 +168,9 @@ export async function createOrganizationIdentity(
     links?: string[];
     showOnOrganizationProfile: boolean;
     activation: Activation;
+    signingSecret?: string;
   },
-): Promise<{ identityId: string; state: "pending" | "active" }> {
+): Promise<{ identityId: string; state: "pending" | "active"; outboxId: string }> {
   return commitIdentityCreation(db, actor, {
     ...input,
     memberId: await resolveOrganizationMemberId(db, input.organizationId),
@@ -162,8 +189,9 @@ export async function createOrganizationIdentityByEmail(
     links?: string[];
     showOnOrganizationProfile: boolean;
     activation: Activation;
+    signingSecret?: string;
   },
-): Promise<{ identityId: string; state: "pending" | "active" }> {
+): Promise<{ identityId: string; state: "pending" | "active"; outboxId: string }> {
   const existingUser = await findUserByEmail(db, input.email);
   const { firstName, lastName } = existingUser
     ? { firstName: undefined, lastName: undefined }
@@ -206,6 +234,7 @@ export async function createOrganizationIdentityByEmail(
     links: input.links,
     showOnOrganizationProfile: input.showOnOrganizationProfile,
     activation: input.activation,
+    signingSecret: input.signingSecret,
     userStatement,
     notificationContext: {
       email: user.email,

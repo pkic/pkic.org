@@ -6147,7 +6147,11 @@ VALUES (
 
 {{changeMessage}}
 
-When this identity is active, actions taken in that capacity are attributed to {{organizationName}}. Invitations require the recipient to sign in and accept them. If this change is unexpected, please contact an authorized contact for the organization.',
+{{#if invitationToken}}[Review and accept this identity]({{baseUrl}}/portal/#/identity-invitations?token={{invitationToken}})
+
+The link expires after seven days. Opening it does not activate the identity; you must confirm on the page.{{/if}}
+
+When this identity is active, actions taken in that capacity are attributed to {{organizationName}}. If this change is unexpected, please contact an authorized contact for the organization.',
   'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
 );
 

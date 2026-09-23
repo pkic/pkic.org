@@ -45,7 +45,7 @@ async function requireOrgContact(db: DatabaseLike, member: AuthMember): Promise<
 export async function addCoworker(
   db: DatabaseLike,
   member: AuthMember,
-  input: { name: string; email: string },
+  input: { name: string; email: string; signingSecret: string },
 ): Promise<AddedCoworker> {
   await requireOrgContact(db, member);
   const organizationId = member.organizationId!;
@@ -65,6 +65,7 @@ export async function addCoworker(
       name: input.name,
       showOnOrganizationProfile: true,
       activation: { mode: "invitation" },
+      signingSecret: input.signingSecret,
     },
   );
   const invited = await first<{ user_id: string; name: string; email: string }>(

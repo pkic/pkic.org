@@ -16,6 +16,7 @@ import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { openMyOrganization, signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { approveMemberThroughReview, readActiveIdentities, uniqueSuffix } from "./helpers/membership";
+import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 
 /** An open working group anyone eligible may join without an invitation. */
 const OPEN_WORKING_GROUP = "20000000-0000-4000-8000-000000000003";
@@ -69,6 +70,7 @@ test("an organization contact adds a colleague and can take the access away agai
   await expect(form).toBeVisible();
   await form.locator('input[name="name"]').fill(`Colleague ${suffix}`);
   await form.locator('input[name="email"]').fill(colleagueEmail);
+  const emailCount = await capturedEmailCount();
   const added = page.waitForResponse(
     (response) =>
       /\/api\/v1\/organizations\/[^/]+\/identities$/.test(new URL(response.url()).pathname) &&
@@ -82,28 +84,25 @@ test("an organization contact adds a colleague and can take the access away agai
   await expect(page).toHaveURL(/#\/organizations\/[^/]+$/);
   await expect(page.getByText(colleagueEmail, { exact: false }).first()).toBeVisible({ timeout: 15_000 });
 
-  // The invitation does not grant capacity until the exact colleague accepts it.
+  // The email opens a read-only review page. No portal session is needed to
+  // confirm, and merely following the URL does not activate the identity.
+  const invitationEmail = await waitForCapturedEmail(colleagueEmail, "Invitation to act for", { since: emailCount });
+  const invitationUrl = extractEmailUrl(invitationEmail, "/portal/#/identity-invitations?token=");
   await page.context().clearCookies();
-  await signInToPortal(page, colleagueEmail);
-  await page.goto("/portal/#/account");
+  await page.goto(invitationUrl);
+  await expect(page.getByRole("heading", { name: "Identity invitation" })).toBeVisible();
+  await expect(page.getByText(organizationName, { exact: false })).toBeVisible();
   const accepted = page.waitForResponse(
     (response) =>
-      /\/api\/v1\/users\/current\/identities\/[^/]+$/.test(new URL(response.url()).pathname) &&
-      response.request().method() === "PATCH",
+      new URL(response.url()).pathname === "/api/v1/identities/invitations/accept" &&
+      response.request().method() === "POST",
   );
-  /*
-   * Accepting reloads the portal so the session is rebuilt with the new
-   * capacity (see AccountSettings). The wait is armed before the click, not
-   * after: registered afterwards it resolves against the page that is already
-   * loaded, and the reload then lands in the middle of the evaluate below —
-   * "Execution context was destroyed".
-   */
-  const reloaded = page.waitForEvent("load");
   await page.getByRole("button", { name: "Accept identity" }).click();
   expect((await accepted).status()).toBe(200);
-  await reloaded;
+  await expect(page.getByText("Identity accepted")).toBeVisible();
 
   // The accepted identity now grants organization-derived membership.
+  await signInToPortal(page, colleagueEmail);
   const colleagueMemberships = await readActiveIdentities(page);
   expect(
     colleagueMemberships.map((membership) => membership.organizationName),

@@ -263,7 +263,9 @@ describe("POST organization identities — self-service coworker invitations", (
         .run(),
     );
 
-    await expect(addCoworker(racingDb, member, { name: "Racing Coworker", email })).rejects.toMatchObject({
+    await expect(
+      addCoworker(racingDb, member, { name: "Racing Coworker", email, signingSecret: env.INTERNAL_SIGNING_SECRET! }),
+    ).rejects.toMatchObject({
       status: 409,
       code: "IDENTITY_AUTHORIZATION_CHANGED",
     });

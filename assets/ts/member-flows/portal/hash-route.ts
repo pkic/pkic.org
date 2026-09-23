@@ -25,6 +25,12 @@ export function portalMagicLinkToken(hash: string): string | null {
   return hashQuery(hash).get("token");
 }
 
+/** Emailed identity invitations use a public confirmation screen, not login. */
+export function portalIdentityInvitationToken(hash: string): string | null {
+  if (portalHashPath(hash) !== "/identity-invitations") return null;
+  return hashQuery(hash).get("token");
+}
+
 /** The route a verify link asks to return to, when it names a valid one. */
 export function portalMagicLinkReturnPath(hash: string): string | null {
   if (portalHashPath(hash) !== "/verify") return null;
@@ -39,7 +45,14 @@ export function portalMagicLinkReturnPath(hash: string): string | null {
  */
 export function portalReturnPath(hash: string): string | undefined {
   const route = portalHashPath(hash);
-  if (route === "/" || route === "/login" || route === "/verify" || route === "/auth/oauth") return undefined;
+  if (
+    route === "/" ||
+    route === "/login" ||
+    route === "/verify" ||
+    route === "/auth/oauth" ||
+    route === "/identity-invitations"
+  )
+    return undefined;
   const path = hash.replace(/^#/, "");
   return portalReturnPathSchema.safeParse(path).success ? path : undefined;
 }

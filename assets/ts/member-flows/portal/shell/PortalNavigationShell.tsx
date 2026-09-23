@@ -5,6 +5,7 @@ import { usePortalHashLocation } from "../hash-location";
 import { successResponseSchema } from "../../../../shared/schemas/api-common";
 import { userOrganizationsListResponseSchema } from "../../../../shared/schemas/user-organizations";
 import { Alert } from "../../../ui/Alert";
+import { ButtonLink } from "../../../ui/Button";
 import { Menu } from "../../../ui/Menu";
 import { MenuIcon } from "../../../components/MenuIcon";
 import { useData } from "../../../hooks/useData";
@@ -128,6 +129,7 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
   }
 
   const activeSection = portalActiveSection(location);
+  const pendingIdentityCount = session?.pendingIdentityCount ?? 0;
 
   return (
     <div id="portal-root">
@@ -265,7 +267,23 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
           </Menu>
         </div>
       </aside>
-      <main id="portal-main">{children}</main>
+      <main id="portal-main">
+        {pendingIdentityCount > 0 && location !== "/account" && (
+          <div class="pk portal-identity-invitation">
+            <Alert tone="info" title="Identity invitation">
+              <p>
+                You have{" "}
+                {pendingIdentityCount === 1 ? "an identity invitation" : `${pendingIdentityCount} identity invitations`}{" "}
+                waiting for review.
+              </p>
+              <ButtonLink href="#/account" variant="primary" size="sm">
+                Review {pendingIdentityCount === 1 ? "invitation" : "invitations"}
+              </ButtonLink>
+            </Alert>
+          </div>
+        )}
+        {children}
+      </main>
     </div>
   );
 }

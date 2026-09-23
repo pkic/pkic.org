@@ -28,6 +28,8 @@ import { myProfileSchema } from "../../../shared/schemas/me";
 import { userAuthEstablishedResponseSchema, userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth";
 import { SponsorAccess } from "./sections/sponsors/Access";
 import { portalHashPath, portalMagicLinkReturnPath, portalMagicLinkToken } from "./hash-route";
+import { IdentityInvitationAcceptance } from "./shell/IdentityInvitationAcceptance";
+import { usePortalHashLocation } from "./hash-location";
 import { portalDefaultPath } from "./shell/portal-navigation";
 import type { PortalSession } from "./types";
 import { McpAuthorization } from "./shell/McpAuthorization";
@@ -43,7 +45,9 @@ async function verifyMagicLink(token: string): Promise<PortalSession> {
 
 export function App() {
   useSessionExpiry();
-  const isMcpAuthorization = portalHashPath(window.location.hash) === "/auth/oauth";
+  const [portalPath] = usePortalHashLocation();
+  const isMcpAuthorization = portalPath === "/auth/oauth";
+  const isIdentityInvitation = portalPath === "/identity-invitations";
   const [verifying, setVerifying] = useState(() => Boolean(portalMagicLinkToken(window.location.hash)));
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
@@ -74,6 +78,10 @@ export function App() {
 
     async function run(): Promise<void> {
       if (isMcpAuthorization) return;
+      if (isIdentityInvitation) {
+        finishAuthCheck();
+        return;
+      }
       setAuthChecking();
       const userToken = portalMagicLinkToken(window.location.hash);
       if (userToken) {
@@ -110,10 +118,14 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [isMcpAuthorization]);
+  }, [isMcpAuthorization, isIdentityInvitation]);
 
   if (isMcpAuthorization) {
     return <McpAuthorization />;
+  }
+
+  if (isIdentityInvitation) {
+    return <IdentityInvitationAcceptance />;
   }
 
   if (verifying || authStatus.value === "loading") {

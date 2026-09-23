@@ -8,6 +8,8 @@ import {
   identitiesListResponseSchema,
   identityCreateSchema,
   identityMutationResponseSchema,
+  identityInvitationLinkRequestSchema,
+  identityInvitationPreviewResponseSchema,
   identityUpdateSchema,
 } from "./identity";
 import { requiresSession } from "./route-contract";
@@ -136,5 +138,42 @@ export const currentUserIdentityAcceptRouteSchema = {
     },
     "404": jsonErrorResponse("Pending identity invitation not found."),
     "409": jsonErrorResponse("The identity or user session changed while accepting the invitation."),
+  },
+};
+
+export const identityInvitationPreviewRouteSchema = {
+  tags: ["Identities"],
+  summary: "Review an emailed identity invitation",
+  description:
+    "A signed, expiring email link reveals the invited organization and recipient without changing identity state or requiring a login session.",
+  request: {
+    body: { required: true, content: { "application/json": { schema: identityInvitationLinkRequestSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Pending invitation details.",
+      content: { "application/json": { schema: identityInvitationPreviewResponseSchema } },
+    },
+    "404": jsonErrorResponse("Invitation link or pending identity not found."),
+    "410": jsonErrorResponse("Invitation link expired."),
+  },
+};
+
+export const identityInvitationAcceptRouteSchema = {
+  tags: ["Identities"],
+  summary: "Accept an emailed identity invitation",
+  description:
+    "The signed email capability activates exactly one pending identity and is consumed in the same atomic D1 command; no login session is created.",
+  request: {
+    body: { required: true, content: { "application/json": { schema: identityInvitationLinkRequestSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Identity invitation accepted.",
+      content: { "application/json": { schema: identityMutationResponseSchema } },
+    },
+    "404": jsonErrorResponse("Invitation link or pending identity not found."),
+    "409": jsonErrorResponse("Invitation was already used or changed."),
+    "410": jsonErrorResponse("Invitation link expired."),
   },
 };

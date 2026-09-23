@@ -9,6 +9,8 @@ import {
 import { requireIdentityManagerActor } from "../../../../../_lib/auth/identity-access";
 import { requestDb, type AdminContext } from "../../../../../_lib/db/context";
 import { jsonPrivate } from "../../../../../_lib/http";
+import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
+import { requireInternalSecret } from "../../../../../_lib/request";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import {
   createOrganizationIdentity,
@@ -41,6 +43,7 @@ export const OrganizationIdentityPost = openApiRoute(
   async (c: AdminContext, data) => {
     const db = requestDb(c);
     const actor = await requireIdentityManagerActor(db, c.req.raw, c.env);
+    const signingSecret = data.body.activation.mode === "invitation" ? requireInternalSecret(c.env) : undefined;
     const result =
       data.body.userReference === "existing_user"
         ? await createOrganizationIdentity(db, actor, {
@@ -52,6 +55,7 @@ export const OrganizationIdentityPost = openApiRoute(
             links: data.body.links,
             showOnOrganizationProfile: data.body.showOnOrganizationProfile ?? true,
             activation: data.body.activation,
+            signingSecret,
           })
         : await createOrganizationIdentityByEmail(db, actor, {
             organizationId: data.params.organizationId,
@@ -62,7 +66,12 @@ export const OrganizationIdentityPost = openApiRoute(
             links: data.body.links,
             showOnOrganizationProfile: data.body.showOnOrganizationProfile,
             activation: data.body.activation,
+            signingSecret,
           });
-    return jsonPrivate(identityMutationResponseSchema.parse({ success: true, ...result }), 201);
+    c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, result.outboxId));
+    return jsonPrivate(
+      identityMutationResponseSchema.parse({ success: true, identityId: result.identityId, state: result.state }),
+      201,
+    );
   },
 );

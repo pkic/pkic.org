@@ -8,6 +8,7 @@ import {
   utcInstantSchema,
 } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
+import { EMAIL_AUTH_TOKEN_MAX_LENGTH } from "../constants/email-auth";
 import { linksSchema } from "./links";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { httpOrSameOriginUrlSchema } from "./urls";
@@ -135,6 +136,16 @@ export const currentUserIdentityCreateSchema = z.object({
 /** The signed-in user accepts one pending identity invitation addressed to them. */
 export const currentUserIdentityAcceptSchema = z.object({
   transition: z.object({ state: z.literal("active") }),
+});
+
+/** Bearer proof sent to the invited user's verified primary email. */
+export const identityInvitationLinkRequestSchema = z.object({
+  token: z.string().min(1).max(EMAIL_AUTH_TOKEN_MAX_LENGTH),
+});
+
+export const identityInvitationPreviewResponseSchema = successResponseSchema.extend({
+  organizationName: z.string().min(1),
+  recipientEmail: normalizedEmailSchema,
 });
 
 export const identityProfileUpdateSchema = z

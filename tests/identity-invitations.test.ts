@@ -1,6 +1,7 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { acceptPendingIdentity } from "../functions/_lib/services/identities";
+import { deliveredEmailPayload } from "./helpers/context";
 import { callApi } from "./helpers/app";
 import { createMemberSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
@@ -59,9 +60,72 @@ async function inviteIdentity(): Promise<{
   };
 }
 
+async function deliveredInvitationToken(identityId: string): Promise<string> {
+  const queued = await env.DB.prepare(
+    "SELECT payload_json FROM email_outbox WHERE substr(idempotency_key, 1, length(?)) = ? AND template_key = 'organization-identity-changed' LIMIT 1",
+  )
+    .bind(`organization-identity:${identityId}:invited:`, `organization-identity:${identityId}:invited:`)
+    .first<{ payload_json: string }>();
+  expect(queued).toBeTruthy();
+  const delivered = await deliveredEmailPayload<{ invitationToken: string }>(env.DB, env, queued!.payload_json);
+  return delivered.invitationToken;
+}
+
 beforeEach(resetDb);
 
 describe("identity invitation acceptance", () => {
+  it("reviews and accepts an emailed invitation without signing in, only after an explicit POST", async () => {
+    const { identityId, invitedUserId } = await inviteIdentity();
+    const token = await deliveredInvitationToken(identityId);
+    const body = JSON.stringify({ token });
+    const init = { method: "POST", headers: { "content-type": "application/json" }, body };
+
+    const reviewed = await callApi(env, "/api/v1/identities/invitations/preview", init);
+    expect(reviewed.status, await reviewed.clone().text()).toBe(200);
+    expect(await reviewed.json()).toMatchObject({
+      success: true,
+      organizationName: "Invitation Lifecycle Organization",
+      recipientEmail: "invited@invitation-lifecycle.example",
+    });
+    expect(await env.DB.prepare("SELECT started_at FROM identities WHERE id = ?").bind(identityId).first()).toEqual({
+      started_at: null,
+    });
+
+    const accepted = await callApi(env, "/api/v1/identities/invitations/accept", init);
+    expect(accepted.status, await accepted.clone().text()).toBe(200);
+    expect(await accepted.json()).toMatchObject({ success: true, identityId, state: "active" });
+    expect(
+      await env.DB.prepare("SELECT started_at FROM identities WHERE id = ?").bind(identityId).first(),
+    ).toMatchObject({
+      started_at: expect.any(String),
+    });
+    expect(
+      Number(
+        (
+          await env.DB.prepare("SELECT COUNT(*) AS total FROM group_memberships WHERE user_id = ? AND left_at IS NULL")
+            .bind(invitedUserId)
+            .first<{ total: number }>()
+        )?.total ?? 0,
+      ),
+    ).toBeGreaterThan(0);
+    expect((await callApi(env, "/api/v1/identities/invitations/accept", init)).status).toBe(404);
+    expect((await callApi(env, "/api/v1/identities/invitations/preview", init)).status).toBe(404);
+  });
+
+  it("rejects an invitation link after the recipient account email changes", async () => {
+    const { identityId, invitedUserId } = await inviteIdentity();
+    const token = await deliveredInvitationToken(identityId);
+    await env.DB.prepare("UPDATE users SET email = ?, normalized_email = ? WHERE id = ?")
+      .bind("changed@invitation-lifecycle.example", "changed@invitation-lifecycle.example", invitedUserId)
+      .run();
+    const response = await callApi(env, "/api/v1/identities/invitations/preview", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ token }),
+    });
+    expect(response.status).toBe(404);
+  });
+
   it("keeps a sign-in invitation capacity-only until the exact user accepts, then enrolls atomically", async () => {
     const { identityId, invitedUserId, invitedToken } = await inviteIdentity();
 

@@ -101,6 +101,21 @@ function mountNavigation(session = portalSessionFixture({ staff: true }), headsh
 }
 
 describe("portal navigation shell", () => {
+  it("makes pending identity invitations visible to a signed-in user", async () => {
+    mountNavigation(portalSessionFixture({ staff: true, pendingIdentityCount: 1 }));
+    await settle();
+    const invitation = container.querySelector<HTMLElement>(".portal-identity-invitation");
+    expect(invitation?.textContent).toContain("an identity invitation");
+    expect(invitation?.querySelector('a[href="#/account"]')?.textContent).toContain("Review invitation");
+
+    void act(() => render(null, container));
+    currentLocation.value = "/account";
+    window.location.hash = "#/account";
+    mountNavigation(portalSessionFixture({ staff: true, pendingIdentityCount: 1 }));
+    await settle();
+    expect(container.querySelector(".portal-identity-invitation")).toBeNull();
+  });
+
   it("exposes one labelled navigation and controlled mobile drawer", async () => {
     mountNavigation();
     await settle();
