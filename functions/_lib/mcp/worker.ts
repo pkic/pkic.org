@@ -6,7 +6,6 @@ import { WorkerEntrypoint } from "cloudflare:workers";
 import type { Hono } from "hono";
 import { signMcpSessionToken } from "../auth/mcp-session";
 import { AUTH_SCOPES } from "../auth/scopes";
-import { filterOpenApiSpecForMcp } from "../openapi/mcp";
 import type { Env } from "../types";
 import {
   MCP_OAUTH_AUTHORIZE_PATH,
@@ -24,7 +23,7 @@ export const MCP_OPENAPI_JSON_PATH = "/api/v1/mcp/openapi.json";
 
 interface McpWorkerOptions {
   app: Hono<{ Bindings: Env }>;
-  openApiSchema: Record<string, unknown>;
+  getMcpOpenApiSchema: (request: Request, env: Env) => Promise<Record<string, unknown>>;
 }
 
 function ttlSeconds(value: string | undefined, fallback: number): number {
@@ -122,7 +121,7 @@ function createMcpResponse(options: McpWorkerOptions) {
   return async (request: Request, env: Env, ctx: ExecutionContext, oauthProps?: McpOAuthProps): Promise<Response> => {
     const authorization = await authorizationHeaderForMcp(request, env, oauthProps);
     const server = openApiMcpServer({
-      spec: filterOpenApiSpecForMcp(options.openApiSchema),
+      spec: await options.getMcpOpenApiSchema(request, env),
       executor: mcpExecutor(env),
       request: apiRequestFromMcp(options.app, request, env, ctx, authorization),
       name: "pkic-api",

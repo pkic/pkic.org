@@ -171,4 +171,26 @@ describe("public and integration resource router smoke tests", () => {
     const payload = (await response.json()) as { paths?: Record<string, unknown> };
     expect(Object.keys(payload.paths ?? {})).not.toHaveLength(0);
   });
+
+  it("serves both generated OpenAPI documents through the assets binding", async () => {
+    const requestedPaths: string[] = [];
+    const document = { info: { title: "Generated document" }, paths: { "/generated": {} } };
+    const assets = {
+      fetch: async (request: Request) => {
+        requestedPaths.push(new URL(request.url).pathname);
+        return Response.json(document);
+      },
+    };
+    const envWithAssets = { ...(env as any), OAUTH_KV: undefined, ASSETS: undefined, ASSETS_PUBLIC: assets };
+
+    for (const path of ["/api/v1/openapi.json", "/api/v1/mcp/openapi.json"]) {
+      const response = await app.fetch(new Request(`https://app.test${path}`), envWithAssets, {
+        passThroughOnException: () => {},
+        waitUntil: () => {},
+      } as any);
+      expect(response.status).toBe(200);
+      expect(await response.json()).toEqual(document);
+    }
+    expect(requestedPaths).toEqual(["/api/v1/openapi.json", "/api/v1/mcp/openapi.json"]);
+  });
 });

@@ -124,6 +124,9 @@ async function buildHugoSite(isDev: boolean, rebuildFrontend = true): Promise<vo
 
   await run("hugo", hugoArgs);
   await run("pnpm", ["exec", "pagefind"]);
+  if (!isDev) {
+    await run("node", ["--experimental-strip-types", "scripts/generate-openapi.mjs", cloudflareEnv]);
+  }
 }
 
 function buildHugoSiteOnce(isDev: boolean): Promise<void> {

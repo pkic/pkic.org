@@ -20,6 +20,7 @@ import { processIncomingEmail } from "./_lib/services/calendar-rsvp-email-ingest
 import { decorateOpenApiSpec, filterOpenApiSpecForMcp } from "./_lib/openapi/mcp";
 import { OPENAPI_INFO, OPENAPI_TAGS, OPENAPI_TAG_GROUPS } from "./_lib/openapi/document";
 import { createMcpWorkerFetch, MCP_OPENAPI_JSON_PATH } from "./_lib/mcp/worker";
+import { getStaticAssetsBinding } from "./_lib/static-assets";
 
 const OPENAPI_JSON_PATH = "/api/v1/openapi.json";
 const DOCS_PATH = "/api/v1/docs";
@@ -68,9 +69,34 @@ function mcpOpenApiSpecResponse(): Response {
   });
 }
 
+async function builtDocumentResponse(
+  request: Request,
+  env: Env,
+  path: string,
+  fallback: () => Response,
+): Promise<Response> {
+  const assets = getStaticAssetsBinding(env);
+  if (assets) {
+    const response = await assets.fetch(new Request(new URL(path, request.url)));
+    if (response.ok) return response;
+  }
+  return fallback();
+}
+
+async function getMcpOpenApiSchema(request: Request, env: Env): Promise<Record<string, unknown>> {
+  const assets = getStaticAssetsBinding(env);
+  if (assets) {
+    const response = await assets.fetch(new Request(new URL(MCP_OPENAPI_JSON_PATH, request.url)));
+    if (response.ok) return (await response.json()) as Record<string, unknown>;
+  }
+  return filterOpenApiSpecForMcp(openapi.schema);
+}
+
 app.get("/og/*", OgCardGet);
-app.get(OPENAPI_JSON_PATH, openApiSpecResponse);
-app.get(MCP_OPENAPI_JSON_PATH, mcpOpenApiSpecResponse);
+app.get(OPENAPI_JSON_PATH, (c) => builtDocumentResponse(c.req.raw, c.env, OPENAPI_JSON_PATH, openApiSpecResponse));
+app.get(MCP_OPENAPI_JSON_PATH, (c) =>
+  builtDocumentResponse(c.req.raw, c.env, MCP_OPENAPI_JSON_PATH, mcpOpenApiSpecResponse),
+);
 app.get(DOCS_PATH, () => htmlResponse(getSwaggerUI(OPENAPI_JSON_PATH)));
 app.get(REDOC_PATH, () => htmlResponse(getReDocUI(OPENAPI_JSON_PATH)));
 openapi.route("/api", api_Router);
@@ -81,7 +107,7 @@ app.route("/news", newsRouter);
 app.route("/events", events_Router);
 
 // Build the MCP fetch handler after OpenAPI routes are registered.
-const fetchWithMcp = createMcpWorkerFetch({ app, openApiSchema: openapi.schema });
+const fetchWithMcp = createMcpWorkerFetch({ app, getMcpOpenApiSchema });
 
 async function runScheduledJob(controller: ScheduledController, env: Env): Promise<void> {
   logInfo("SCHEDULED_JOB_STARTED", { cron: controller.cron, scheduledTime: controller.scheduledTime });
