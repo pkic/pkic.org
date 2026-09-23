@@ -206,7 +206,8 @@ describe("UserRoles", () => {
     // Both multi-control groups are named by a legend, because neither has a
     // single control for a label's `for` to point at.
     const legends = [...container.querySelectorAll("legend")].map((legend) => legend.textContent);
-    expect(legends).toEqual(expect.arrayContaining(["User", "Target"]));
+    expect(legends).toEqual(expect.arrayContaining(["User"]));
+    expect([...container.querySelectorAll("label")].some((label) => label.textContent === "Target")).toBe(true);
     // The one single-control field keeps a real label/control pair.
     const expires = [...container.querySelectorAll("label")].find((label) => label.textContent?.startsWith("Expires"))!;
     expect(container.querySelector(`[id="${expires.htmlFor}"]`)).not.toBeNull();

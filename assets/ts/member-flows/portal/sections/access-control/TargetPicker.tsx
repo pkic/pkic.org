@@ -37,7 +37,7 @@ export function TargetPicker({
     // A grid rather than a flex row: the two selectors sit side by side where
     // there is room and stack on a phone, without a breakpoint class each.
     <div class="pk pk-grid">
-      <Field label="Target type" help="A grant with no target applies everywhere.">
+      <Field label="Target" help="A grant with no target applies everywhere.">
         {(control) => (
           <Select
             {...control}

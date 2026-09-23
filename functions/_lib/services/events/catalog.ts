@@ -85,6 +85,11 @@ function buildEventsListPredicate(viewer: EventAudienceViewer, query: EventsList
     conditions.push("event.visibility = ?");
     bindings.push(query.visibility);
   }
+  if (query.kind) {
+    conditions.push(
+      `${query.kind === "series" ? "" : "NOT "}EXISTS (SELECT 1 FROM event_series series WHERE series.event_id = event.id)`,
+    );
+  }
   if (query.from) {
     conditions.push("COALESCE(event.ends_at, event.starts_at) >= ?");
     bindings.push(query.from);

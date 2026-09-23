@@ -20,6 +20,7 @@ import { currentUserMeetingsListResponseSchema } from "../../../../shared/schema
 import { eventsListResponseSchema } from "../../../../shared/schemas/event-management";
 import { userOrganizationsListResponseSchema } from "../../../../shared/schemas/user-organizations";
 import { currentUserVotesListResponseSchema } from "../../../../shared/schemas/votes";
+import { formatDateTime } from "../../../../shared/format-date";
 import { Badge } from "../../../components/Badge";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Spinner } from "../../../components/Spinner";
@@ -165,9 +166,9 @@ function MeetingsPanel() {
                 {occurrence.eventName}
               </Link>
               <span class="pk-small">{occurrence.groupName}</span>
-              <span class="pk-small">{fmt(occurrence.startsAt)}</span>
+              <span class="pk-small">{formatDateTime(occurrence.startsAt, { fullDate: true })}</span>
               {formatRelativeDays(occurrence.startsAt) && (
-                <span class="pk-small">({formatRelativeDays(occurrence.startsAt)})</span>
+                <span class="pk-small pk-push">({formatRelativeDays(occurrence.startsAt)})</span>
               )}
             </li>
           ))}
@@ -180,7 +181,7 @@ function MeetingsPanel() {
 function EventsPanel() {
   const events = useData(() => {
     const from = encodeURIComponent(new Date().toISOString());
-    return getJson(`/api/v1/events?from=${from}&limit=5`, eventsListResponseSchema);
+    return getJson(`/api/v1/events?kind=standalone&from=${from}&limit=5`, eventsListResponseSchema);
   }, []);
   const rows = events.data?.events ?? [];
 

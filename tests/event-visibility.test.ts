@@ -249,6 +249,26 @@ describe("event audience visibility", () => {
     expect(response.status).toBe(401);
   });
 
+  it("filters meeting series before paging standalone events", async () => {
+    const meetingId = await insertEvent("member-meeting", "public");
+    await env.DB.prepare("UPDATE events SET profile_key = 'meeting' WHERE id = ?").bind(meetingId).run();
+    await env.DB.prepare(
+      `INSERT INTO event_series
+         (id, event_id, starts_at, recurrence_rule, timezone, duration_minutes, active, created_at, updated_at)
+       VALUES (?, ?, '2027-01-01T10:00:00.000Z', 'FREQ=MONTHLY', 'UTC', 60, 1, datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), meetingId)
+      .run();
+    await insertEvent("standalone-workshop", "public");
+
+    const standalone = await requestAudienceList("/api/v1/events?kind=standalone&limit=1");
+    expect(standalone.events.map((event) => event.slug)).toEqual(["standalone-workshop"]);
+    expect(standalone.page.total).toBe(1);
+    const series = await requestAudienceList("/api/v1/events?kind=series&limit=1");
+    expect(series.events.map((event) => event.slug)).toEqual(["member-meeting"]);
+    expect(series.page.total).toBe(1);
+  });
+
   it("uses the visibility schedule index for anonymous page and count queries", async () => {
     const query = buildEventsPageQuery(
       { userId: null, canReadAll: false },

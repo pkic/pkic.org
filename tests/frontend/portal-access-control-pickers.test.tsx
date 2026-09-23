@@ -45,8 +45,8 @@ describe("permission target picker", () => {
   it("names the target-type menu and explains what an empty target means", () => {
     const container = mount(<TargetPicker value={{ targetType: null, targetId: null }} onChange={() => undefined} />);
 
-    expect(labelNames(container)).toEqual(["Target type"]);
-    const select = controlFor<HTMLSelectElement>(container, "Target type");
+    expect(labelNames(container)).toEqual(["Target"]);
+    const select = controlFor<HTMLSelectElement>(container, "Target");
     expect([...select.options].map((option) => option.textContent)).toEqual([
       "Global (no target)",
       "Event",
@@ -68,7 +68,7 @@ describe("permission target picker", () => {
       />,
     );
 
-    await chooseOption(controlFor(container, "Target type"), "organization");
+    await chooseOption(controlFor(container, "Target"), "organization");
     expect(changes).toEqual([{ targetType: "organization", targetId: null }]);
   });
 

@@ -190,10 +190,7 @@ export function Grants({
                     </Select>
                   )}
                 </Field>
-                <fieldset class="pk-fieldset pk-field">
-                  <legend class="pk-field__label">Target</legend>
-                  <TargetPicker value={target} onChange={setTarget} disabled={submitting} />
-                </fieldset>
+                <TargetPicker value={target} onChange={setTarget} disabled={submitting} />
                 <Field
                   label="Expires (optional)"
                   help="Leave empty for a grant that never expires."

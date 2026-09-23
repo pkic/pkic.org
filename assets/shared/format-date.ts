@@ -108,7 +108,7 @@ export function formatMonthYear(value: string | null | undefined): string {
  */
 export function formatDateTime(
   value: string | null | undefined,
-  options: { seconds?: boolean; zoneName?: boolean } = {},
+  options: { seconds?: boolean; zoneName?: boolean; fullDate?: boolean } = {},
 ): string {
   if (!value) return EMPTY;
   const date = toDate(value);
@@ -127,7 +127,7 @@ export function formatDateTime(
     });
   }
   return date.toLocaleString(undefined, {
-    dateStyle: "short",
+    dateStyle: options.fullDate ? "full" : "short",
     timeStyle: options.seconds ? "medium" : "short",
   });
 }

@@ -218,6 +218,7 @@ describe("portal landing", () => {
     expect(link?.textContent).toBe("PQC Conference 2026");
     expect(events.textContent).toContain("Amsterdam");
     expect(events.querySelector("ul")?.getAttribute("aria-label")).toBe("Upcoming events");
+    expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes("kind=standalone"))).toBe(true);
   });
 
   it("lists an open ballot exactly once on the landing page", async () => {

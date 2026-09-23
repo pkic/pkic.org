@@ -40,7 +40,6 @@ import { MeetingGuests } from "./MeetingGuests";
 import { MeetingInvitations } from "./MeetingInvitations";
 import { MeetingOccurrenceSettings } from "./MeetingOccurrenceSettings";
 import { downloadMeetingCalendar } from "./meeting-calendar-actions";
-import { MEETING_PERSONAL_CALENDAR_NOTICE } from "../../../../../shared/meeting-calendar-policy";
 
 /** The record's facets, in the order a manager reads them. */
 const OCCURRENCE_TABS = [
@@ -259,7 +258,6 @@ export function MeetingOccurrenceRecord({
               ]}
               actions={<Menu label="Occurrence actions" align="end" items={commandsFor(occurrence)} />}
             />
-            <p class="pk-small pk-muted">{MEETING_PERSONAL_CALENDAR_NOTICE}</p>
             {canManage && cancelling && (
               <Dialog
                 open

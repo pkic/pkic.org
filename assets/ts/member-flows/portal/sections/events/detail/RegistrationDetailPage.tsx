@@ -196,9 +196,7 @@ export function RegistrationDetailPage({
 
           <Panel>
             <PanelHeader title="Audit log" />
-            <PanelBody>
-              <RegistrationAuditLogSection slug={slug} regId={regId} />
-            </PanelBody>
+            <RegistrationAuditLogSection slug={slug} regId={regId} />
           </Panel>
         </div>
         <aside class="pk-stack pk-datalist-aligned">

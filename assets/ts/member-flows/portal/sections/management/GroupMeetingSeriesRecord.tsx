@@ -17,7 +17,6 @@ import { MeetingOccurrenceRecord } from "./MeetingOccurrenceRecord";
 import { MeetingOccurrences } from "./MeetingOccurrences";
 import { MeetingSeriesSettings } from "./MeetingSeriesSettings";
 import { downloadMeetingCalendar } from "./meeting-calendar-actions";
-import { MEETING_PERSONAL_CALENDAR_NOTICE } from "../../../../../shared/meeting-calendar-policy";
 
 /** The series record's facets. Each one loads its data when it is opened. */
 const SERIES_RECORD_TABS = [
@@ -184,7 +183,6 @@ export function GroupMeetingSeriesRecord({
                   }
                 />
               )}
-              {!addingOccurrence && <p class="pk-small pk-muted">{MEETING_PERSONAL_CALENDAR_NOTICE}</p>}
               {canManage && cancelling && (
                 <Dialog
                   open

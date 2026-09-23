@@ -178,6 +178,10 @@ describe("registration detail", () => {
     expect([...container.querySelectorAll("caption")].map((caption) => caption.textContent)).toContain(
       "Registration history",
     );
+    const auditHeader = [...container.querySelectorAll(".pk-panel__title")].find(
+      (heading) => heading.textContent === "Audit log",
+    );
+    expect(auditHeader?.closest(".pk-panel")?.querySelector(":scope > .pk-table-list")).not.toBeNull();
     expect(container.querySelector(".pk-record > aside")).not.toBeNull();
     expect(container.querySelector(".pk-record table tbody")?.textContent).toContain("Virtual");
   });

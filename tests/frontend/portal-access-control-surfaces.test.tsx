@@ -203,10 +203,10 @@ describe("Grants on the design system", () => {
       "Leave empty for a grant that never expires.",
     );
 
-    // The two multi-control pickers have no single control to point a `for`
-    // at, so each is named by its group's legend instead.
+    // The user picker is a group; the target type has one labelled control.
     const legends = [...container.querySelectorAll("legend")].map((legend) => legend.textContent);
-    expect(legends).toEqual(["User", "Target"]);
+    expect(legends).toEqual(["User"]);
+    expect(controlFor(container, "Target").tagName).toBe("SELECT");
   });
 
   it("refuses an incomplete grant in a live region and sends nothing", async () => {
@@ -394,9 +394,9 @@ describe("the role assign form", () => {
     stubAssignApi();
     const container = mount(<RoleAssignForm roleId={ROLE.id} onAssigned={vi.fn()} />);
 
-    // The three headings used to be <label> elements with no `for` — a label
-    // pointing at nothing names nothing.
-    expect([...container.querySelectorAll("legend")].map((legend) => legend.textContent)).toEqual(["User", "Target"]);
+    // The user picker is grouped; the target and expiry are labelled controls.
+    expect([...container.querySelectorAll("legend")].map((legend) => legend.textContent)).toEqual(["User"]);
+    expect(controlFor(container, "Target").tagName).toBe("SELECT");
     const expires = controlFor(container, "Expires (optional)");
     expect(expires.getAttribute("type")).toBe("datetime-local");
     const describedBy = expires.getAttribute("aria-describedby");

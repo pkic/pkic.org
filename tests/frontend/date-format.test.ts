@@ -103,6 +103,9 @@ describe("friendly date formatting", () => {
       new Date("2026-12-01T08:00:00.000Z").toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" }),
     );
     expect(formatDateTime("2026-12-01T08:00:00.000Z", { seconds: true })).toMatch(/\d{1,2}.\d{2}.\d{2}/);
+    expect(formatDateTime("2026-12-01T08:00:00.000Z", { fullDate: true })).toBe(
+      new Date("2026-12-01T08:00:00.000Z").toLocaleString(undefined, { dateStyle: "full", timeStyle: "short" }),
+    );
     // The zone-labeled variant tells the reader whose clock is shown.
     expect(formatDateTime("2026-12-01T08:00:00.000Z", { zoneName: true })).not.toBe(
       formatDateTime("2026-12-01T08:00:00.000Z"),

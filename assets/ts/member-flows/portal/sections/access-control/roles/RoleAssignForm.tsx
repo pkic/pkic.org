@@ -47,10 +47,7 @@ export function RoleAssignForm({ roleId, onAssigned }: { roleId: string; onAssig
           <legend class="pk-field__label">User</legend>
           <UserPicker endpoint="/api/v1/permissions/subjects" value={user} onChange={setUser} disabled={submitting} />
         </fieldset>
-        <fieldset class="pk-fieldset pk-field">
-          <legend class="pk-field__label">Target</legend>
-          <TargetPicker value={target} onChange={setTarget} disabled={submitting} />
-        </fieldset>
+        <TargetPicker value={target} onChange={setTarget} disabled={submitting} />
         <Field
           label="Expires (optional)"
           help="Leave empty for an assignment that never expires."

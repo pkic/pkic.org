@@ -220,6 +220,7 @@ export const EVENT_MANAGEMENT_LIST_SORT_COLUMNS = [
 ] as const;
 export const eventsListQuerySchema = listQuerySchema(EVENT_MANAGEMENT_LIST_SORT_COLUMNS).extend({
   visibility: eventVisibilitySchema.optional(),
+  kind: z.enum(["standalone", "series"]).optional(),
   from: utcInstantSchema.optional(),
   to: utcInstantSchema.optional(),
 });
