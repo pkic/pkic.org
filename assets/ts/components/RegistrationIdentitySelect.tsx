@@ -23,6 +23,7 @@ const catalog = {
 export function RegistrationIdentitySelect() {
   const [session, setSession] = useState<z.infer<typeof userAuthSessionResponseSchema> | null>(null);
   const [profile, setProfile] = useState<z.infer<typeof userDetailResponseSchema>["user"] | null>(null);
+  const [hasIdentities, setHasIdentities] = useState(false);
   const identityField = useRef<HTMLInputElement>(null);
   const [selected, setSelected] = useState<ActingIdentity | null>(null);
   useEffect(() => {
@@ -30,6 +31,8 @@ export function RegistrationIdentitySelect() {
     void getJson("/api/v1/auth/session", userAuthSessionResponseSchema)
       .then(async (response) => {
         if (!response.member) return;
+        const available = await getJson(catalog.endpoint + "?active=true&limit=1", identitiesListResponseSchema);
+        if (!available.identities.length) return;
         const detail = await getJson(
           `/api/v1/users/${encodeURIComponent(response.identity.id)}`,
           userDetailResponseSchema,
@@ -37,6 +40,7 @@ export function RegistrationIdentitySelect() {
         if (active) {
           setSession(response);
           setProfile(detail.user);
+          setHasIdentities(true);
         }
       })
       .catch(() => {
@@ -46,7 +50,7 @@ export function RegistrationIdentitySelect() {
       active = false;
     };
   }, []);
-  if (!session || !profile) return null;
+  if (!session || !profile || !hasIdentities) return null;
   return (
     <Field
       label="Event identity"

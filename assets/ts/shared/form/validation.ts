@@ -109,6 +109,10 @@ export function fieldStateFor(control: FormControl): FieldState | null {
  * exactly as it did when it was correct.
  */
 function reportField(form: HTMLFormElement, control: FormControl, message: string): void {
+  // Each consent card owns its own checkbox error. Reusing the collection's
+  // server-error slot puts a required term's message below the last (possibly
+  // optional) card, making that optional choice look mandatory.
+  if (control.name === "consents" && control.closest("[data-term-key]")) return;
   const target = findControlFieldError(control) ?? findFieldErrorTarget(form, control.name);
   if (message.length > 0) {
     setFieldMessage(target, message, "invalid");

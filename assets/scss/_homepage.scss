@@ -1010,6 +1010,59 @@ $pkic-page-hero-themes: (
       margin-bottom: 0;
     }
   }
+
+}
+
+@mixin dark-bento-image-layout {
+  .pkic-card-bento > .bento-card:only-child:has(> .bento-hero-image-wrapper) {
+    @media (min-width: 900px) {
+      display: grid;
+      grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.1fr);
+      grid-template-rows: auto auto 1fr auto;
+      align-content: center;
+      column-gap: var(--pk-6);
+      padding: 0;
+
+      > .bento-hero-image-wrapper {
+        grid-column: 1;
+        grid-row: 1 / 5;
+        align-self: stretch;
+        margin: 0;
+        border: 0;
+
+        .bento-hero-image {
+          height: 100%;
+          min-height: 18rem;
+        }
+      }
+
+      > .pkic-icon,
+      > .bento-title,
+      > .bento-text,
+      > .pk-cluster {
+        grid-column: 2;
+        margin-inline-end: var(--pk-6);
+      }
+
+      > .pkic-icon {
+        margin-block-start: var(--pk-6);
+      }
+
+      > .pk-cluster {
+        margin-block-end: var(--pk-6);
+      }
+    }
+  }
+}
+
+:root[data-theme="dark"] {
+  @include dark-bento-image-layout;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    @include dark-bento-image-layout;
+  }
 }
 
 .pkic-wg-card {

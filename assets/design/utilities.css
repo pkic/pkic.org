@@ -145,10 +145,13 @@
    * the floor does neither (issue 111).
    */
   .pk-grid--cards {
-    grid-template-columns: repeat(
-      auto-fit,
-      minmax(min(max(16rem, calc((100% - 2 * var(--pk-gap, var(--pk-4))) / 3)), 100%), 1fr)
-    );
+    grid-template-columns: repeat(auto-fit, minmax(min(max(16rem, 31%), 100%), 1fr));
+  }
+
+  @media (min-width: 760px) {
+    .pkic-card-bento:has(> :nth-child(4):last-child) {
+      grid-template-columns: repeat(2, 1fr);
+    }
   }
 
   /*
@@ -288,12 +291,17 @@
    * `AffiliationRow` draws the terms of a tie exactly this way; this is the
    * same treatment made available to anything else that needs it.
    */
-  .pk-inline-list {
-    display: flex;
-    flex-wrap: wrap;
+  /* Both list layouts keep list semantics without browser markers or indent. */
+  .pk-inline-list,
+  .pk-plain-list {
     margin: 0;
     padding: 0;
     list-style: none;
+  }
+
+  .pk-inline-list {
+    display: flex;
+    flex-wrap: wrap;
   }
 
   .pk-inline-list > li + li::before {
@@ -353,7 +361,9 @@
   }
 
   /* The few text utilities worth having, all reading tokens. */
-  .pk-muted {
+  .pk-muted,
+  .pk-lede,
+  .pk-small {
     color: var(--pk-ink-muted);
   }
 
@@ -384,12 +394,10 @@
      a page cannot invent its own "slightly bigger" text. */
   .pk-lede {
     font-size: var(--pk-text-lg);
-    color: var(--pk-ink-muted);
   }
 
   .pk-small {
     font-size: var(--pk-text-xs);
-    color: var(--pk-ink-muted);
   }
 
   /* Fills the remaining space in a flex parent — replaces `mt-auto`/`ms-auto`
@@ -508,17 +516,4 @@
   /* Preformatted text that must still wrap: a long free-text answer has no
      line breaks of its own and would otherwise scroll sideways forever. */
 
-  /*
-   * A list that is a list to assistive technology and not to the eye.
-   *
-   * Links in a sidebar, facts under a name: the markup should stay a `ul` so
-   * it is announced as "list, 3 items", but the marker and the browser's
-   * indent are wrong wherever the list is the layout. Pair it with `pk-stack`
-   * or `pk-cluster` for the arrangement.
-   */
-  .pk-plain-list {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-  }
 }

@@ -86,5 +86,36 @@ for (const colorScheme of ["light", "dark"] as const) {
       await page.setViewportSize({ width: 390, height: 844 });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     });
+
+    test("event cards, agenda tabs, and registration controls use distinct theme surfaces", async ({ page }) => {
+      await page.goto(`${eventPath}/`);
+      const card = page.locator(".bento-card.bento-orange-pale").first();
+      await expect(card).toBeVisible();
+      if (colorScheme === "dark") {
+        expect(await card.evaluate((element) => getComputedStyle(element).backgroundImage)).toBe("none");
+        expect(await card.evaluate((element) => getComputedStyle(element).color)).toBe(
+          await page.locator("body").evaluate((element) => getComputedStyle(element).color),
+        );
+      }
+
+      await page.goto(`${eventPath}/agenda/`);
+      const day = page.locator(".agenda-tab").filter({ visible: true }).first();
+      await expect(day).toBeVisible();
+      if (colorScheme === "dark") {
+        expect(await day.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(
+          await page.locator("body").evaluate((element) => getComputedStyle(element).backgroundColor),
+        );
+      }
+
+      await page.goto(`${eventPath}/register/`);
+      await expect(page.getByLabel("First name", { exact: true })).toBeVisible();
+      await expect(page.getByLabel("Event identity")).toHaveCount(0);
+      if (colorScheme === "dark") {
+        const input = page.getByLabel("First name", { exact: true });
+        expect(await input.evaluate((element) => getComputedStyle(element).backgroundColor)).not.toBe(
+          await page.locator("body").evaluate((element) => getComputedStyle(element).backgroundColor),
+        );
+      }
+    });
   });
 }

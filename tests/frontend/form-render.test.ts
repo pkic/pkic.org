@@ -9,7 +9,7 @@ import {
   readCustomFieldValues,
 } from "../../assets/ts/shared/widgets/custom-fields";
 import { findFieldErrorTarget } from "../../assets/ts/shared/form/validation-map";
-import { installLiveValidation } from "../../assets/ts/shared/form/validation";
+import { installLiveValidation, validateBeforeSubmit } from "../../assets/ts/shared/form/validation";
 import { controlFor } from "./helpers/labelled-control";
 
 const option = (value: string) => ({ value, label: value, active: true });
@@ -97,6 +97,32 @@ describe("frontend field rendering", () => {
     const consent = controlFor(host, "Privacy policy");
     expect(consent.getAttribute("aria-invalid")).toBe("true");
     expect(host.querySelector('[role="alert"]')?.textContent).toContain("You need to agree");
+    form.remove();
+  });
+
+  it("keeps a required consent error on its card instead of below an optional consent", () => {
+    const form = document.createElement("form");
+    const host = document.createElement("div");
+    const collectionError = document.createElement("p");
+    collectionError.dataset.fieldError = "consents";
+    form.append(host, collectionError);
+    document.body.append(form);
+    void act(() =>
+      renderConsentInputs(host, [
+        { termKey: "privacy", version: "v1", required: true, contentRef: null, displayText: "Privacy policy" },
+        { termKey: "sponsors", version: "v1", required: false, contentRef: null, displayText: "Sponsor sharing" },
+      ]),
+    );
+
+    let valid = true;
+    void act(() => {
+      valid = validateBeforeSubmit(form, document.createElement("p"));
+    });
+    expect(valid).toBe(false);
+    expect(collectionError.textContent).toBe("");
+    expect(host.querySelector('[data-term-key="privacy"] [role="alert"]')).not.toBeNull();
+    expect(host.querySelector('[data-term-key="sponsors"] [role="alert"]')).toBeNull();
+    void act(() => render(null, host));
     form.remove();
   });
 

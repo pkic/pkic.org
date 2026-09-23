@@ -118,22 +118,22 @@
      :not([data-theme="light"]) lets an explicit light choice beat a dark OS. */
   @media (prefers-color-scheme: dark) {
     :root:not([data-theme="light"]) {
-      --pk-canvas: #141715;
-      --pk-page-surface: #141715;
-      --pk-surface: #1c211e;
-      --pk-control-surface: #101411;
+      --pk-canvas: #0c1114;
+      --pk-page-surface: #12181c;
+      --pk-surface: #1b2429;
+      --pk-control-surface: #26333a;
       --pk-logo-surface: #e0e4e8;
       --pk-member-logo-filter: grayscale(1) invert(1);
       --pk-member-logo-blend: screen;
-      --pk-surface-sunk: #181d1a;
-      --pk-surface-raise: #272e29;
-      --pk-ink: #e9ecef;
-      --pk-ink-muted: #b0bab3;
-      --pk-ink-faint: #6c757d;
+      --pk-surface-sunk: #151e23;
+      --pk-surface-raise: #243038;
+      --pk-ink: #eef3f2;
+      --pk-ink-muted: #b5c3c3;
+      --pk-ink-faint: #8fa1a3;
       --pk-ink-inverse: #10141a;
-      --pk-line: #4a584f;
-      --pk-line-soft: #344039;
-      --pk-line-strong: #788a7f;
+      --pk-line: #3b4b52;
+      --pk-line-soft: #2b3940;
+      --pk-line-strong: #6c8088;
       --pk-overlay: rgba(0, 0, 0, 0.62);
       --pk-ok: #3ec98c;
       --pk-ok-ink: #6fd8a4;
@@ -160,22 +160,22 @@
 
   /* Stamped explicitly, so the toggle also wins in the other direction. */
   :root[data-theme="dark"] {
-    --pk-canvas: #141715;
-    --pk-page-surface: #141715;
-    --pk-surface: #1c211e;
-    --pk-control-surface: #101411;
+    --pk-canvas: #0c1114;
+    --pk-page-surface: #12181c;
+    --pk-surface: #1b2429;
+    --pk-control-surface: #26333a;
     --pk-logo-surface: #e0e4e8;
     --pk-member-logo-filter: grayscale(1) invert(1);
     --pk-member-logo-blend: screen;
-    --pk-surface-sunk: #181d1a;
-    --pk-surface-raise: #272e29;
-    --pk-ink: #e9ecef;
-    --pk-ink-muted: #b0bab3;
-    --pk-ink-faint: #6c757d;
+    --pk-surface-sunk: #151e23;
+    --pk-surface-raise: #243038;
+    --pk-ink: #eef3f2;
+    --pk-ink-muted: #b5c3c3;
+    --pk-ink-faint: #8fa1a3;
     --pk-ink-inverse: #10141a;
-    --pk-line: #4a584f;
-    --pk-line-soft: #344039;
-    --pk-line-strong: #788a7f;
+    --pk-line: #3b4b52;
+    --pk-line-soft: #2b3940;
+    --pk-line-strong: #6c8088;
     --pk-overlay: rgba(0, 0, 0, 0.62);
     --pk-ok: #3ec98c;
     --pk-ok-ink: #6fd8a4;

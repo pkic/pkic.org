@@ -437,11 +437,11 @@
   max-width: 100px;
   max-height: 26px;
   object-fit: contain;
-  filter: grayscale(1) contrast(0.65) brightness(0.95);
+  filter: var(--pk-member-logo-filter);
   transition: filter 0.18s;
 
   .blog-author-card:hover & {
-    filter: grayscale(0);
+    filter: var(--pk-member-logo-filter);
   }
 }
 

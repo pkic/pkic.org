@@ -844,22 +844,23 @@
 .agenda-tab {
   appearance: none;
   padding: var(--pk-2) var(--pk-4);
-  border: 1px solid transparent;
+  border: 1px solid var(--pk-line-strong);
   border-bottom: 0;
   border-radius: var(--pk-radius) var(--pk-radius) 0 0;
-  background: var(--pk-ok-soft);
+  background: var(--pk-surface-raise);
   color: var(--pk-ink);
-  font-weight: 500;
+  font-weight: 600;
   cursor: pointer;
 }
 
 .agenda-tab:hover {
-  background: var(--pk-surface-sunk);
+  background: var(--pk-control-surface);
 }
 
 .agenda-tab.is-active {
-  background: var(--pk-surface);
-  border-color: var(--pk-line);
+  background: var(--pk-control-surface);
+  border-color: var(--pk-accent);
+  border-bottom: 2px solid var(--pk-accent);
   font-weight: 700;
 }
 

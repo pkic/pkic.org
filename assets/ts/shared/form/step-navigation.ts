@@ -85,15 +85,15 @@ export function installStepNavigation(
     let hasErrors = false;
 
     for (const field of fields) {
+      const errorTarget =
+        field.name === "consents" && field.closest("[data-term-key]") ? null : findFieldErrorTarget(form, field.name);
       if (!field.checkValidity()) {
         hasErrors = true;
-        const errorTarget = findFieldErrorTarget(form, field.name);
         if (errorTarget) {
           errorTarget.textContent = field.validationMessage || "Required";
         }
         if (!firstInvalid) firstInvalid = field;
       } else {
-        const errorTarget = findFieldErrorTarget(form, field.name);
         if (errorTarget) errorTarget.textContent = "";
       }
     }

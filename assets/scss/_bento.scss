@@ -121,7 +121,7 @@
   box-shadow:
     0 4px 12px rgba(0, 0, 0, 0.04),
     0 1px 2px rgba(0, 0, 0, 0.02);
-  color: #0f172a;
+  color: var(--pk-ink);
 
   // Icon accent
   .bento-icon {
@@ -129,7 +129,7 @@
     margin-bottom: 1rem;
     display: block;
     line-height: 1;
-    color: #1e293b;
+    color: var(--pk-ink);
   }
 
   .bento-title {
@@ -268,6 +268,58 @@
     box-shadow:
       0 8px 24px rgba($bg, 0.12),
       inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+  }
+
+  // Pale cards are text-heavy. A light gradient with dark copy loses contrast
+  // on a dark page, especially where the tint becomes darker at one edge.
+  // Give every pale variant the same stable theme surface and a restrained
+  // accent border, so no part of a paragraph fades into its own background.
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) & {
+      @include bento-pale-dark($bg);
+    }
+  }
+
+  :root[data-theme="dark"] & {
+    @include bento-pale-dark($bg);
+  }
+}
+
+@mixin bento-pale-dark($bg) {
+  background: var(--pk-surface);
+  color: var(--pk-ink);
+  border-color: var(--pk-line-soft);
+  border-radius: var(--pk-radius-lg);
+  box-shadow: none;
+  transform: none;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 3px;
+    background: color-mix(in srgb, #{$bg} 68%, var(--pk-ink));
+  }
+
+  .bento-text {
+    color: var(--pk-ink-muted);
+  }
+
+  .bento-icon {
+    color: color-mix(in srgb, #{$bg} 55%, var(--pk-ink));
+  }
+
+  .bento-badge {
+    color: var(--pk-ink);
+    background: var(--pk-surface-raise);
+    border-color: var(--pk-line);
+  }
+
+  &:hover {
+    transform: none;
+    border-color: var(--pk-line-strong);
+    box-shadow: var(--pk-shadow-2) !important;
   }
 }
 

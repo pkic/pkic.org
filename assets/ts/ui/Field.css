@@ -159,6 +159,12 @@
     color: var(--pk-ink-faint);
   }
 
+  /* Chromium otherwise paints saved values pale blue over the dark theme. */
+  .pk-input:-webkit-autofill {
+    -webkit-text-fill-color: var(--pk-ink);
+    box-shadow: inset 0 0 0 1000px var(--pk-control-surface);
+  }
+
   .pk-input:disabled {
     background: var(--pk-surface-sunk);
     color: var(--pk-ink-faint);
@@ -166,9 +172,7 @@
   }
 
   /* Reserve room for the state mark so the value never slides under it. */
-  .pk-field--ok .pk-input,
-  .pk-field--advisory .pk-input,
-  .pk-field--invalid .pk-input {
+  .pk-field:is(.pk-field--ok, .pk-field--advisory, .pk-field--invalid) .pk-input {
     border-color: var(--state);
     padding-right: 2.2rem;
   }
@@ -195,12 +199,8 @@
   }
 
   /* A select carrying a state mark needs room for both it and the chevron. */
-  .pk-field--ok .pk-input--select,
-  .pk-field--advisory .pk-input--select,
-  .pk-field--invalid .pk-input--select,
-  .pk-field--ok .pk-input[role="combobox"],
-  .pk-field--advisory .pk-input[role="combobox"],
-  .pk-field--invalid .pk-input[role="combobox"] {
+  .pk-field:is(.pk-field--ok, .pk-field--advisory, .pk-field--invalid)
+    .pk-input:is(.pk-input--select, [role="combobox"]) {
     padding-right: 3.4rem;
     background-position:
       right 2.4rem center,

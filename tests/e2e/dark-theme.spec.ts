@@ -71,12 +71,9 @@ test.describe("the dark theme", () => {
       });
       await page.goto(path);
       /*
-       * Against the token, not a literal colour. The page's ground is the
-       * surface token deliberately — the public site is white in the light
-       * theme, and the portal shell paints the sunk canvas for itself — and a
-       * hardcoded value here simply recorded whichever token was in use the
-       * day it was written, then failed when the ground moved from canvas to
-       * surface. What matters is that the theme reaches `body` at all.
+       * Against the token, not a literal color. The page has its own ground
+       * beneath raised surfaces; a hardcoded value here would fail when the
+       * palette changes. What matters is that the theme reaches `body`.
        */
       const ground = await page.evaluate(() => {
         const style = getComputedStyle(document.documentElement);
@@ -90,7 +87,7 @@ test.describe("the dark theme", () => {
         };
         return {
           body: getComputedStyle(document.body).backgroundColor,
-          surface: toRgb(style.getPropertyValue("--pk-surface")),
+          surface: toRgb(style.getPropertyValue("--pk-page-surface")),
           light: toRgb("#ffffff"),
         };
       });
@@ -101,6 +98,31 @@ test.describe("the dark theme", () => {
       expect(await unreadableSurfaces(page)).toEqual([]);
     });
   }
+
+  test("keeps event content and affiliation marks legible", async ({ page }) => {
+    await page.goto("/events/2026/pqc-conference-amsterdam-nl/");
+
+    const reasons = page.getByText("The rules are finalized").locator("xpath=ancestor::section[1]");
+    await expect(reasons).toBeVisible();
+    const columns = await reasons.evaluate(
+      (element) => getComputedStyle(element).gridTemplateColumns.split(" ").length,
+    );
+    expect(columns).toBe(2);
+
+    await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
+    const warning = page
+      .getByText("In-person registration is currently full.")
+      .locator("xpath=ancestor::blockquote[1]");
+    await expect(warning).toBeVisible();
+    const warningSurface = await warning.evaluate((element) => getComputedStyle(element).backgroundColor);
+    expect(warningSurface).not.toBe("rgb(255, 255, 255)");
+    expect(await unreadableSurfaces(page)).toEqual([]);
+
+    await page.goto("/wg/pqc/");
+    const logo = page.locator(".person-card-org-logo").first();
+    await expect(logo).toBeVisible();
+    await expect.poll(() => logo.evaluate((element) => getComputedStyle(element).filter)).toContain("invert(1)");
+  });
 
   test("reaches the portal's own chrome, not only the components in it", async ({ page }) => {
     await page.addInitScript(() => {

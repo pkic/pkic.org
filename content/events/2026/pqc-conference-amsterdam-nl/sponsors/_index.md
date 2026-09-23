@@ -40,13 +40,11 @@ cards:
     text: "Plenary sessions are live-streamed internationally. Conference recordings and coverage reach an audience far beyond the attendees in the venue — making the conference a sustained brand presence, not a three-day event."
 {{< /cards >}}
 
-## Sponsor Now
+## Become a sponsor
 
-Ready to secure your spot? Select a tier below to pay by card via Stripe — your sponsorship is confirmed once our team reviews the payment.
+Interested in sponsoring the Amsterdam conference? Contact us to discuss event sponsorship packages, availability, and payment options.
 
-{{< event-sponsor-checkout slug="pqc-conference-amsterdam-nl" >}}
-
-Prefer to discuss options first, ask about a consortium-level tier, or pay by invoice? Use our [general sponsor interest form](/sponsors/sponsor/) instead.
+{{< button link="/sponsors/sponsor/" label="Discuss sponsorship opportunities" >}}
 
 ## Current sponsors
 
