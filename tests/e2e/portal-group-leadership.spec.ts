@@ -150,10 +150,6 @@ for (const scenario of [
       await expect
         .poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth))
         .toBe(true);
-      await page.screenshot({
-        path: `/Volumes/ScanDisk/mac-caches/tmp/pr180-leadership-${scenario.group}-${width}.png`,
-        fullPage: true,
-      });
     }
     await page.setViewportSize({ width: 1440, height: 1000 });
 
