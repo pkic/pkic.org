@@ -167,6 +167,7 @@ test("permitted staff create, preview, activate, and reopen an email template th
   await expect(versionTwoRow.getByText("Active", { exact: true })).toBeVisible();
 
   await page.reload();
+  await page.goto("/portal/#/settings/email-templates");
   await page.getByRole("searchbox", { name: "Search email templates" }).fill(templateKey);
   await page.getByRole("button", { name: "Search email templates" }).click();
   const templateLink = page.getByRole("link", { name: "Edit " + templateKey, exact: true });

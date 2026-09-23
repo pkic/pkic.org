@@ -69,5 +69,7 @@ test("a freshly approved member sees their application and empty records elsewhe
   await expect(page.getByRole("heading", { name: `Participation Member ${suffix}` })).toBeVisible({
     timeout: 15_000,
   });
-  await expect(page.getByRole("link", { name: "Back to applications" })).toBeVisible();
+  await expect(
+    page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Applications" }),
+  ).toBeVisible();
 });

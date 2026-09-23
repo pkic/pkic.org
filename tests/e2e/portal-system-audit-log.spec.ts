@@ -86,11 +86,15 @@ test("renders loading, empty, and paginated audit-log states", async ({ page }) 
       });
       return;
     }
+    if (url.pathname.endsWith(`/${pageOneEntry.id}`)) {
+      await route.fulfill({ json: { entry: pageOneEntry } });
+      return;
+    }
     requestCount += 1;
     const offset = Number(url.searchParams.get("offset") ?? "0");
     requestOffsets.push(offset);
 
-    if (requestCount === 4) {
+    if (requestCount === 5) {
       await route.fulfill({
         status: 500,
         json: { error: { code: "TEST_ERROR", message: "Synthetic audit log failure" } },
@@ -147,19 +151,16 @@ test("renders loading, empty, and paginated audit-log states", async ({ page }) 
   await expect(page.getByRole("menuitem", { name: "Filter this column…" })).toHaveCount(0);
   await page.keyboard.press("Escape");
 
-  const details = page
-    .getByRole("row")
-    .filter({ hasText: "page_one_action" })
-    .locator("dl")
-    .filter({ has: page.locator("div.pk-datalist") });
+  await page.getByRole("link", { name: "Open audit entry page_one_action" }).click();
+  const details = page.getByRole("region", { name: "Audit entry" }).locator("dl");
   for (const width of [1920, 1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     await expect(details).toBeVisible();
-    const pairs = await details.locator(":scope > div").evaluateAll((nodes) =>
+    const pairs = await details.locator(":scope > dt").evaluateAll((nodes) =>
       nodes.map((node) => {
-        const term = node.querySelector("dt")!.getBoundingClientRect();
-        const value = node.querySelector("dd")!.getBoundingClientRect();
-        const parent = node.getBoundingClientRect();
+        const term = node.getBoundingClientRect();
+        const value = node.nextElementSibling!.getBoundingClientRect();
+        const parent = node.parentElement!.getBoundingClientRect();
         return {
           termTop: term.top,
           valueTop: value.top,
@@ -170,7 +171,7 @@ test("renders loading, empty, and paginated audit-log states", async ({ page }) 
         };
       }),
     );
-    expect(pairs).toHaveLength(5);
+    expect(pairs).toHaveLength(7);
     for (const pair of pairs) {
       if (width > 480) expect(Math.abs(pair.termTop - pair.valueTop)).toBeLessThan(1);
       expect(pair.termLeft).toBeGreaterThanOrEqual(pair.left - 1);
@@ -180,6 +181,7 @@ test("renders loading, empty, and paginated audit-log states", async ({ page }) 
     await page.screenshot({ path: test.info().outputPath(`audit-table-${width}.png`), fullPage: true });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.getByRole("navigation", { name: "Breadcrumb" }).getByRole("link", { name: "Audit log" }).click();
 
   await nextPage.click();
   await expect(page.getByText("page_two_action", { exact: true })).toBeVisible();
@@ -189,6 +191,6 @@ test("renders loading, empty, and paginated audit-log states", async ({ page }) 
 
   await page.getByRole("button", { name: "Refresh", exact: true }).click();
   await expect(page.getByRole("alert")).toHaveText("Synthetic audit log failure");
-  expect(requestCount).toBe(4);
-  expect(requestOffsets).toEqual([0, 0, 50, 50]);
+  expect(requestCount).toBe(5);
+  expect(requestOffsets).toEqual([0, 0, 0, 50, 50]);
 });

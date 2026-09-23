@@ -928,7 +928,7 @@ test.describe("Portal management browser-verification pass", () => {
     await page.getByRole("link", { name: "Review workflow and objections", exact: true }).click();
     await page.getByLabel("Review decision and reason").fill("Verified the organization and applicant authority.");
     await page.getByRole("button", { name: "Complete review", exact: true }).click();
-    await expect(page.getByText("Approved", { exact: true })).toBeVisible();
+    await expect(header.getByText("Approved", { exact: true })).toBeVisible();
     await expect(page.getByRole("button", { name: "Complete review", exact: true })).toHaveCount(0);
 
     // Independent confirmation 1/3: re-fetch the application from the System

@@ -142,7 +142,7 @@ test.describe("Groups: catalog, creation, self-service participation, and the Me
 
     await form.getByLabel("Group type").fill("Working");
     await form.getByRole("option", { name: /Working Groups/ }).click();
-    await form.getByLabel("Name").fill(name);
+    await form.getByRole("textbox", { name: "Name (required)", exact: true }).fill(name);
     await form.getByLabel("Description").fill("Created end-to-end by a Playwright spec.");
     await expect(submit).toBeEnabled();
 

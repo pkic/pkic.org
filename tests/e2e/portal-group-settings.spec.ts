@@ -43,7 +43,7 @@ test("group configuration requires editing and preserves only saved changes", as
   await general.getByRole("button", { name: "Save group settings", exact: true }).click();
   await expect(general.locator("input,select,textarea")).toHaveCount(0);
   await page.reload();
-  await expect(page.getByRole("heading", { name: `${name} saved`, exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: `${name} saved (SAVED)`, exact: true })).toBeVisible();
   await expect(general).toContainText("SAVED");
   await page.getByRole("tab", { name: "Eligibility", exact: true }).click();
   const eligibility = page.getByRole("tabpanel");

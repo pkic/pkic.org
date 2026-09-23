@@ -19,6 +19,7 @@ function groupDetailResponse() {
       id: GROUP_ID,
       slug: "pqc",
       name: "Post-Quantum Cryptography Working Group",
+      abbreviatedName: null,
       type: { key: "working_group", singularLabel: "Working group", pluralLabel: "Working groups" },
       parentGroup: null,
       description: null,
