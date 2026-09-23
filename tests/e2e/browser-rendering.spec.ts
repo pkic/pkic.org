@@ -278,12 +278,14 @@ async function fillRegistrationStep1(
   page: Page,
   values: { firstName: string; lastName: string; email: string },
 ): Promise<void> {
+  await expect(page.locator("[data-event-registration] [data-step-next]")).toBeEnabled();
+  await expect(page.locator("[data-event-registration] form")).toBeVisible();
   await page.getByLabel("First name").fill(values.firstName);
   await page.getByLabel("Last name").fill(values.lastName);
   await page.getByLabel("Work email").fill(values.email);
+  await expect(page.getByLabel("Work email")).toHaveValue(values.email);
   await page.getByRole("button", { name: /Continue/i }).click();
-  // Wait for step 2 day-attendance inputs to be rendered by Preact (API-driven)
-  await page.locator("input[id^='dayAttendance-']").first().waitFor({ state: "attached", timeout: 15_000 });
+  await expect(page.locator("[data-day-attendance] label").first()).toBeVisible({ timeout: 15_000 });
 }
 
 async function fillRegistrationStep2(page: Page): Promise<void> {
