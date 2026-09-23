@@ -19,4 +19,17 @@ if (typeof globalThis.window !== "undefined") {
   if (typeof window.scrollTo !== "function") {
     window.scrollTo = function scrollTo() {};
   }
+
+  // ProseMirror measures a Range after editing a selection. jsdom implements
+  // neither geometry method, even though both exist in browsers.
+  if (typeof Range.prototype.getClientRects !== "function") {
+    Range.prototype.getClientRects = function getClientRects() {
+      return document.createElement("span").getClientRects();
+    };
+  }
+  if (typeof Range.prototype.getBoundingClientRect !== "function") {
+    Range.prototype.getBoundingClientRect = function getBoundingClientRect() {
+      return document.createElement("span").getBoundingClientRect();
+    };
+  }
 }
