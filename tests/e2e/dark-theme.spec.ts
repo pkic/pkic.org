@@ -126,8 +126,8 @@ test.describe("the dark theme", () => {
       card.className = "person-card";
       const logo = document.createElement("img");
       logo.className = "person-card-org-logo";
-      card.append(logo);
-      document.body.append(card);
+      card.appendChild(logo);
+      document.body.appendChild(card);
       const filter = getComputedStyle(logo).filter;
       card.remove();
       return filter;
@@ -144,8 +144,9 @@ test.describe("the dark theme", () => {
       description.className = "member-card-description";
       const logo = document.createElement("img");
       logo.className = "member-card-logo";
-      card.append(description, logo);
-      document.body.append(card);
+      card.appendChild(description);
+      card.appendChild(logo);
+      document.body.appendChild(card);
       const probe = document.createElement("span");
       probe.style.color = "var(--pk-ink-muted)";
       card.appendChild(probe);
@@ -246,8 +247,8 @@ test.describe("the light theme", () => {
       wall.className = "members";
       const logo = document.createElement("img");
       logo.className = "member-logo-sponsor";
-      wall.append(logo);
-      document.body.append(wall);
+      wall.appendChild(logo);
+      document.body.appendChild(wall);
       const filter = getComputedStyle(logo).filter;
       wall.remove();
       return filter;
