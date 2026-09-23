@@ -20,6 +20,7 @@ const APPROVED_API_ROOTS = new Set([
   "forms",
   "geolocation",
   "groups",
+  "identities",
   "invites",
   "meetings",
   "members",
