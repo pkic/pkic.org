@@ -6,9 +6,8 @@
  * Availability and Standing panels are correctly absent, and nobody can see
  * whether the page works.
  *
- * Like the governance roster seed, this is not a schema migration: user ids
- * differ per environment, so every row resolves its person by email at run
- * time. An email with no user inserts zero rows rather than failing the run.
+ * This is local demo data, not a schema migration: every row resolves its
+ * person by email at run time. An email with no user inserts zero rows.
  * Every statement is idempotent — running it twice changes nothing the second
  * time — so it is safe to re-run after adding people.
  *
@@ -19,8 +18,6 @@
  *
  * Usage:
  *   node scripts/seed-member-profiles.mjs --local
- *   node scripts/seed-member-profiles.mjs --preview
- *   node scripts/seed-member-profiles.mjs --production
  */
 import { execFileSync } from "node:child_process";
 import fs from "node:fs";
@@ -36,8 +33,6 @@ const ROOT = new URL("..", import.meta.url).pathname;
 
 const ENVS = {
   local: { wranglerFlag: "--local", wranglerEnv: "local", database: "pkic-db-local" },
-  preview: { wranglerFlag: "--remote", wranglerEnv: "preview", database: "pkic-db-preview" },
-  production: { wranglerFlag: "--remote", wranglerEnv: "production", database: "pkic-db" },
 };
 
 /** The e2e harness runs against a throwaway database in a temp directory. */
@@ -47,19 +42,8 @@ function persistTo(argv) {
 }
 
 function parseEnv(argv) {
-  for (const name of Object.keys(ENVS)) {
-    if (argv.includes(`--${name}`)) {
-      if (name === "production") {
-        // This seeds a fabricated organization, invented meetings and
-        // attendance, and vouches nobody actually gave. That is fine for a
-        // development or preview database and is never acceptable in
-        // production, where it would be indistinguishable from real record.
-        throw new Error("seed-member-profiles is demo data and must not be run against production.");
-      }
-      return name;
-    }
-  }
-  throw new Error("Pass one of --local, --preview");
+  if (argv.includes("--local") && !argv.includes("--preview") && !argv.includes("--production")) return "local";
+  throw new Error("seed-member-profiles contains fabricated personal records and may run only with --local.");
 }
 
 /** The consortium's shared skill vocabulary. */

@@ -7,7 +7,7 @@
  *   node scripts/seed.mjs --production             # remote production env
  *
  * Optional flags:
- *   --only admin|event|templates   run only one component (can repeat)
+ *   --only admin|event|templates|profiles   run only one component (can repeat)
  *   --skip-migrations              skip D1 migration apply step
  */
 
@@ -138,10 +138,10 @@ function seedTemplates(cfg) {
   ]);
 }
 
-/* Takes the environment by name, as other seed commands do, because
-   it resolves people by email and needs to know which database that is, not
-   just whether the call is local or remote. */
 function seedMemberProfiles(cfg) {
+  if (cfg.wranglerEnv !== "local") {
+    throw new Error("Demo member profiles may only be seeded into local D1.");
+  }
   run("node", [script("seed-member-profiles.mjs"), `--${cfg.wranglerEnv}`]);
 }
 
@@ -158,6 +158,6 @@ if (!skipMigrations) applyMigrations(cfg);
 if (runAll || only.has("admin")) seedAdmin(cfg);
 if (runAll || only.has("event")) seedEvent(cfg);
 if (runAll || only.has("templates")) seedTemplates(cfg);
-if (runAll || only.has("profiles")) seedMemberProfiles(cfg);
+if (only.has("profiles") || (runAll && env === "local")) seedMemberProfiles(cfg);
 
 console.log(`\n✓ Done seeding ${cfg.label}.`);
