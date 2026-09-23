@@ -98,6 +98,7 @@ describe("the meeting series record page", () => {
     // The selected record is the page subject; its group is navigation context.
     expect(container.querySelector("h3.pk-profile-header__title")?.textContent).toBe("Architecture call");
     expect(container.textContent).toContain("Online");
+    expect(container.textContent).not.toContain("Personal invitations and calendar replies belong to their recipient");
     expect(backLink(container)).toBeUndefined();
   });
 
