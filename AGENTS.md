@@ -8,6 +8,8 @@
 - Inspect existing schemas, parsers, list controls, services, SQL helpers, shortcodes, and UI components before adding another abstraction.
 - Existing debt is not precedent. Do not copy a known weak pattern; improve touched code and track larger remediation explicitly instead of hiding it in a baseline.
 - Keep changes focused. Use descriptive domain and use-case names; do not introduce vague buckets such as `commands`, `management`, or `repository` without a real interface boundary.
+- Member onboarding and profile changes use the portal. Treat `data/members/*.yaml` as legacy import material, not an ongoing member edit path.
+- Before proposing a public `pkic/pkic.org` PR, compare with its current `main` and review every new commit and tracked file for internal plans, personal data, and one-time tooling.
 - Keep authored files cohesive and reasonably small. A line-count check is only a warning signal; separate responsibilities instead of moving unrelated code into another large file.
 - Do not add lint suppressions, architecture baselines, duplication allowances, or generated ignore files to make a new gate pass. Fix the violations before enabling the gate.
 
@@ -64,6 +66,7 @@
 - Branches and pull requests are deployed automatically to preview; `main` is deployed automatically to production. Treat `pnpm run deploy:preview` and `pnpm run deploy:production` as exceptional manual operations and never run them without an explicit request and confirmed target.
 - Automatic application deployment does not apply migrations. Report required manual preview or production migration steps separately.
 - Treat a passing check as necessary but not sufficient: verify the final diff against the requested architecture, data, and security invariants.
+- For a reported portal issue, reproduce the complete user journey and inspect the rendered screen; a narrow test or `ready-for-verification` label alone does not establish that the workflow works.
 
 ## Relevant skills
 

@@ -6,7 +6,7 @@ You can make simple changes in the GitHub editor. For more advanced changes you 
 
 Some basic git knowledge is required, please check https://guides.github.com/ to get started from scratch. An editor such as [Visual Studio Code](https://code.visualstudio.com/) can help you to [simplify most of these tasks](https://code.visualstudio.com/docs/editor/github) and help you with editing the content.
 
-1. [Install hugo](https://gohugo.io/getting-started/installing/#quick-install)
+1. Install [Hugo](https://gohugo.io/getting-started/installing/#quick-install), Node.js, and pnpm.
 2. [Create a fork](https://guides.github.com/activities/forking/#fork) of this repository
 3. [Clone your fork](https://guides.github.com/activities/forking/#clone)
 4. Create local worker secrets for Wrangler by copying `.dev.vars.example` to `.dev.vars` and setting at least `INTERNAL_SIGNING_SECRET`. The local rehearsal also loads this file, then overrides its email transport and local identity settings so messages are captured locally instead of delivered.
@@ -18,20 +18,14 @@ Some basic git knowledge is required, please check https://guides.github.com/ to
 
 ## Adding a new member
 
-1. Create a `new-member-name.yaml` in the `data/members` folder.
-2. Add the member logo as an SVG in `assets/images/members`. The filename must match the member `id` (e.g., `member.svg`).
+Applicants use the [membership application](https://pkic.org/join/) and confirm their email. Authorized staff review applications in the portal under **Applications**; approval creates the member and its associated identity. Staff can grant an existing person individual membership from **Members → Grant membership** when the application process does not apply. Manage organization details and logos in the portal under **Organizations**.
 
-The SVG must meet the following requirements:
-
-- **Responsive:** a valid `viewBox`, with no `width` or `height` attributes.
-- **Tightly cropped:** the `viewBox` should fit the artwork with no built-in whitespace (the site controls spacing).
-- **Fully vector:** no `<image>` tags and no embedded Base64 data.
-- **Clean:** no `<script>`, `<metadata>`, or editor-specific tags and namespaces (e.g., `sodipodi`, `inkscape`).
+Do not create a new `data/members/*.yaml` file or commit a logo to `assets/images/members` for an ongoing member change. Those files are legacy import material for the database cutover.
 
 ## Adding a new author
 
-- For member authors, add a representative in the `data/members/member.yaml` file.
-- For authors that are not associated with a member, add a listing in `data/authors.yaml`.
+- Keep a post's `authors` and `authorProfiles` front matter accurate. Member and representative records are managed in the portal.
+- For authors who are not associated with a member, add a listing in `data/authors.yaml` when the public author catalog needs one.
 
 ## Formatting content
 
