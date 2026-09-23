@@ -123,17 +123,12 @@ export function ProposalDetailPage({
     comments,
     commentPage,
     loadingMoreComments,
-    versions,
-    versionPage,
-    loadingMoreVersions,
     loading: loadingSub,
     savingComment,
-    reload: loadSubData,
     reviewSaved: handleReviewSaved,
     addComment,
     loadMoreComments: handleLoadMoreComments,
     loadMoreReviews: handleLoadMoreReviews,
-    loadMoreVersions: handleLoadMoreVersions,
   } = subresources;
 
   // Abstract editing
@@ -160,7 +155,6 @@ export function ProposalDetailPage({
   const proposalRequiresPresentation =
     sessionTypes.find((t) => t.label.toLowerCase() === proposal.proposal_type.toLowerCase())?.requiresPresentation ??
     false;
-  const canManagePresentation = proposal.status === "accepted" || proposalRequiresPresentation || versions.length > 0;
   const proposalDecidable = isProposalDecidableStatus(proposal.status);
   const canEditAbstract = proposal.status === "accepted" ? access.canEditAcceptedAbstract : access.canFinalize;
   const reviewCount = reviewSummary.totalReviews;
@@ -181,14 +175,7 @@ export function ProposalDetailPage({
     ...(access.canReview
       ? [{ key: "reviews" as const, label: `Reviews (${loadingSub ? "…" : String(reviewCount)})` }]
       : []),
-    ...(canManagePresentation
-      ? [
-          {
-            key: "presentation" as const,
-            label: `Presentation${loadingSub ? "" : versions.length > 0 ? ` (${String(versions.length)})` : ""}`,
-          },
-        ]
-      : []),
+    ...(access.canRead ? [{ key: "presentation" as const, label: "Presentation" }] : []),
     ...(access.canReview ? [{ key: "audit-log" as const, label: "Audit log" }] : []),
     ...(showDecision ? [{ key: "decision" as const, label: "Decision" }] : []),
   ];
@@ -452,16 +439,7 @@ export function ProposalDetailPage({
             ))}
 
           {activeTab === "presentation" && (
-            <PresentationVersionsTab
-              proposalId={proposalId}
-              versions={versions}
-              loading={loadingSub}
-              hasMore={versionPage?.hasMore ?? false}
-              loadingMore={loadingMoreVersions}
-              canManage={access.canFinalize}
-              onLoadMore={() => void handleLoadMoreVersions()}
-              onReload={() => void loadSubData()}
-            />
+            <PresentationVersionsTab proposalId={proposalId} canManage={access.canFinalize} />
           )}
 
           {activeTab === "reviews" && (

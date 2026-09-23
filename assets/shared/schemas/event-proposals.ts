@@ -22,10 +22,13 @@ export const EVENT_PROPOSALS_SORT_COLUMNS = [
   "recommendations",
 ] as const;
 
+export const proposalPresentationFilterSchema = z.enum(["uploaded", "missing"]);
+
 export const eventProposalsListQuerySchema = listQuerySchema(EVENT_PROPOSALS_SORT_COLUMNS).extend({
   sort: sortColumnSchemaWithDefault(EVENT_PROPOSALS_SORT_COLUMNS, "-submittedAt"),
   status: proposalAdminStatusFilterSchema.optional(),
   recommendation: proposalRecommendationSchema.optional(),
+  presentation: proposalPresentationFilterSchema.optional(),
 });
 export type EventProposalsListQuery = z.infer<typeof eventProposalsListQuerySchema>;
 
@@ -73,6 +76,7 @@ export const eventProposalSummarySchema = eventProposalCoreSchema
     recommendation_accept_count: z.number(),
     recommendation_needs_work_count: z.number(),
     recommendation_reject_count: z.number(),
+    has_presentation: z.boolean(),
   });
 
 export const eventProposalDetailSchema = eventProposalCoreSchema

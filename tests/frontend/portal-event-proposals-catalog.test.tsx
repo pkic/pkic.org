@@ -59,6 +59,7 @@ function proposal() {
     recommendation_accept_count: 0,
     recommendation_needs_work_count: 0,
     recommendation_reject_count: 0,
+    has_presentation: false,
   };
 }
 

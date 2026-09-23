@@ -30,6 +30,9 @@ const SORT_EXPRESSIONS: Readonly<Record<string, string>> = {
   recommendations: "(COALESCE(rv.accept_count, 0) - COALESCE(rv.reject_count, 0))",
 };
 
+const PRESENTATION_EXISTS_SQL =
+  "EXISTS (SELECT 1 FROM presentation_versions pv WHERE pv.proposal_id = sp.id AND pv.deleted_at IS NULL)";
+
 function proposalOrderBy(sort: ProposalSort): string {
   const descending = sort.startsWith("-");
   const key = descending ? sort.slice(1) : sort;
@@ -79,6 +82,9 @@ export function buildEventProposalsPageQuery(query: EventProposalsServiceQuery):
       "EXISTS (SELECT 1 FROM proposal_reviews pr_filter WHERE pr_filter.proposal_id = sp.id AND pr_filter.review_round = sp.review_round AND pr_filter.recommendation = ?)",
     );
     predicateBindings.push(query.recommendation);
+  }
+  if (query.presentation) {
+    conditions.push(`${query.presentation === "missing" ? "NOT " : ""}${PRESENTATION_EXISTS_SQL}`);
   }
   if (query.q) {
     const proposal = buildD1TextSearchFilter(query.q, [
@@ -148,6 +154,7 @@ export function buildEventProposalsPageQuery(query: EventProposalsServiceQuery):
                 COALESCE(rv.accept_count, 0) AS recommendation_accept_count,
                 COALESCE(rv.needs_work_count, 0) AS recommendation_needs_work_count,
                 COALESCE(rv.reject_count, 0) AS recommendation_reject_count,
+                ${PRESENTATION_EXISTS_SQL} AS has_presentation,
                 pd.final_status AS decision_status, pd.decision_note, pd.decided_at AS decision_decided_at
       `,
       fromSql: pageFromSql,
@@ -202,7 +209,10 @@ export async function listEventProposals(
       .bind(query.eventId),
   ]);
 
-  const { rows: proposals, total } = decodeOffsetPageResults<EventProposalSummary>(rowsResult, totalResult);
+  const { rows, total } = decodeOffsetPageResults<
+    Omit<EventProposalSummary, "has_presentation"> & { has_presentation: number }
+  >(rowsResult, totalResult);
+  const proposals = rows.map((row) => ({ ...row, has_presentation: row.has_presentation === 1 }));
   const statsRow = batchFirst<ProposalStatsRow>(statsResult);
   const byStatus = parseCountRecord(statsRow?.by_status_json ?? "{}");
   const byRecommendation = parseCountRecord(statsRow?.by_recommendation_json ?? "{}");

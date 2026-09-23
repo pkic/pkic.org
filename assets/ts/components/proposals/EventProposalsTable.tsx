@@ -18,6 +18,7 @@ import { ApiDataTable, type ApiTableActions } from "../ApiDataTable";
 import { CollectionTotals } from "../CollectionTotals";
 import {
   eventProposalsResponseSchema,
+  proposalPresentationFilterSchema,
   type EventProposalSummary,
   type ProposalAccess,
   type ProposalStats,
@@ -230,6 +231,29 @@ export function EventProposalsTable({
             className: "pk-end",
             width: "fit",
             sort: { asc: "reviews", desc: "-reviews" },
+          },
+          {
+            header: "Presentation",
+            cell: (proposal) =>
+              proposal.has_presentation ? (
+                <span aria-label="Presentation uploaded">✓</span>
+              ) : (
+                <span class="pk-muted" aria-label="No presentation uploaded">
+                  —
+                </span>
+              ),
+            width: "fit",
+            defaultHidden: true,
+            filter: {
+              param: "presentation",
+              options: [
+                { value: "", label: "Any presentation status" },
+                ...proposalPresentationFilterSchema.options.map((value) => ({
+                  value,
+                  label: value.charAt(0).toUpperCase() + value.slice(1),
+                })),
+              ],
+            },
           },
           {
             header: "Submitted",

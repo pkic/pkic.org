@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { PresentationVersionsTab } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/PresentationVersionsTab";
@@ -36,25 +36,11 @@ const version: PresentationVersion = {
 
 let container: HTMLElement | null = null;
 
-function mount(props: Partial<Parameters<typeof PresentationVersionsTab>[0]> = {}) {
+async function mount(props: Partial<Parameters<typeof PresentationVersionsTab>[0]> = {}) {
   container = document.createElement("div");
   document.body.append(container);
-  void act(() =>
-    render(
-      <PresentationVersionsTab
-        proposalId={PROPOSAL_ID}
-        versions={[version]}
-        loading={false}
-        hasMore={false}
-        loadingMore={false}
-        canManage
-        onLoadMore={() => {}}
-        onReload={() => {}}
-        {...props}
-      />,
-      container!,
-    ),
-  );
+  void act(() => render(<PresentationVersionsTab proposalId={PROPOSAL_ID} canManage {...props} />, container!));
+  await settle();
   return container!;
 }
 
@@ -73,12 +59,15 @@ function jsonResponse(body: unknown, status = 200): Response {
 }
 
 /** Stubs fetch with one answer and records every request body. */
-function stubFetch(respond: () => Response): string[] {
+function stubFetch(respond: () => Response, versions: PresentationVersion[] = [version]): string[] {
   const bodies: string[] = [];
   vi.stubGlobal(
     "fetch",
     vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-      bodies.push(init?.body?.toString() ?? "");
+      if (!init?.method || init.method === "GET") {
+        return jsonResponse({ versions, page: { limit: 25, offset: 0, total: versions.length, hasMore: false } });
+      }
+      bodies.push(init.body?.toString() ?? "");
       return respond();
     }),
   );
@@ -109,24 +98,25 @@ afterEach(() => {
   container = null;
 });
 
+beforeEach(() => {
+  stubFetch(() => jsonResponse({ version }));
+});
+
 describe("presentation versions tab", () => {
-  it("names each version region and its metadata for assistive technology", () => {
-    const root = mount();
+  it("renders versions in a paged table with named actions and review details", async () => {
+    const root = await mount();
 
-    const card = root.querySelector("[data-presentation-version-card]") as HTMLElement;
-    // The card is a named region, so the three identically labelled controls
-    // inside it are announced with the version they act on.
-    expect(card.tagName).toBe("SECTION");
-    expect(card.getAttribute("aria-label")).toBe("Presentation version 1");
-    expect(card.querySelector("h3")?.textContent).toBe("Version 1");
-
-    // Every value is announced with the term that names it, rather than as a
-    // run of text separated by middots.
-    const terms = [...card.querySelectorAll("dl.pk-datalist > dt")].map((dt) => dt.textContent);
-    expect(terms).toEqual(["Uploaded", "File", "Type", "Size"]);
-    const values = [...card.querySelectorAll("dl.pk-datalist > dd")].map((dd) => dd.textContent);
-    expect(values).toContain("pqc-migration-talk.pdf");
-    expect(values).toContain("2 KB");
+    const table = root.querySelector("table") as HTMLTableElement;
+    expect(table.querySelector("caption")?.textContent).toBe("Presentation versions");
+    const headers = [...table.querySelectorAll("thead th")].map((head) =>
+      head.textContent?.replace(/[↑↓]/g, "").trim(),
+    );
+    expect(headers).toEqual(["Version", "File", "Uploaded", "Size", "Review", "Actions"]);
+    const row = table.querySelector("tbody tr") as HTMLTableRowElement;
+    expect(row.textContent).toContain("Version 1");
+    expect(row.textContent).toContain("pqc-migration-talk.pdf");
+    expect(row.textContent).toContain("2 KB");
+    expect(table.querySelector(".pk-table__detail")?.textContent).toContain("Please add speaker notes");
 
     // The end-to-end spec reads the review outcome through this hook, and it
     // has to stay a word rather than a colour.
@@ -134,7 +124,7 @@ describe("presentation versions tab", () => {
 
     // The download is a destination drawn as a button: the design system's
     // link, with the same classes a Button beside it carries.
-    const download = [...card.querySelectorAll("a")].find((link) => link.textContent === "Download");
+    const download = [...row.querySelectorAll("a")].find((link) => link.textContent === "Download");
     expect(download?.classList.contains("pk-btn")).toBe(true);
     expect(download?.hasAttribute("download")).toBe(true);
 
@@ -145,7 +135,7 @@ describe("presentation versions tab", () => {
   });
 
   it("labels every review control and points each label at its own field", async () => {
-    const root = mount();
+    const root = await mount();
     await openReviewForm(root);
 
     expect(root.querySelector(`#${REVIEW_FORM_ID}`)).not.toBeNull();
@@ -174,8 +164,7 @@ describe("presentation versions tab", () => {
 
   it("sends the review the shared request schema describes", async () => {
     const bodies = stubFetch(() => jsonResponse({ version }));
-    const reloads: number[] = [];
-    const root = mount({ onReload: () => reloads.push(1) });
+    const root = await mount();
     await openReviewForm(root);
 
     const select = root.querySelector("select") as HTMLSelectElement;
@@ -192,14 +181,16 @@ describe("presentation versions tab", () => {
     // endpoint validates against.
     const parsed = presentationVersionReviewRequestSchema.parse(JSON.parse(bodies[0]));
     expect(parsed).toEqual({ status: "needs_revision", note: "Please add speaker notes." });
-    expect(reloads).toHaveLength(1);
+    expect(
+      vi.mocked(fetch).mock.calls.filter(([, init]) => !init?.method || init.method === "GET").length,
+    ).toBeGreaterThan(1);
     // A saved review closes its own form.
     expect(root.querySelector(`#${REVIEW_FORM_ID}`)).toBeNull();
   });
 
   it("refuses a note the contract rejects on the field, live, and sends nothing", async () => {
     const bodies = stubFetch(() => jsonResponse({ version }));
-    const root = mount();
+    const root = await mount();
     await openReviewForm(root);
 
     // The contract caps the note; the field says so as it is typed, before
@@ -233,7 +224,7 @@ describe("presentation versions tab", () => {
         400,
       ),
     );
-    const root = mount();
+    const root = await mount();
     await openReviewForm(root);
     await typeNote(root, "See https://example.test");
     await act(() => buttonNamed(root, "Save review").click());
@@ -253,7 +244,7 @@ describe("presentation versions tab", () => {
 
   it("states a refusal the server does not attribute to a field inside the form", async () => {
     stubFetch(() => jsonResponse({ error: { code: "FORBIDDEN", message: "You cannot review this version." } }, 403));
-    const root = mount();
+    const root = await mount();
     await openReviewForm(root);
     await act(() => buttonNamed(root, "Save review").click());
     await settle();
@@ -269,7 +260,7 @@ describe("presentation versions tab", () => {
 
   it("states an upload failure in a live region above the list", async () => {
     stubFetch(() => jsonResponse({ error: { code: "TOO_LARGE", message: "That file is too large." } }, 413));
-    const root = mount();
+    const root = await mount();
 
     const fileInput = root.querySelector('input[type="file"]') as HTMLInputElement;
     // The input is taken out of the page with the platform's own attribute,
@@ -287,29 +278,15 @@ describe("presentation versions tab", () => {
     expect(alert.textContent).toContain("That file is too large.");
   });
 
-  it("offers the upload from the empty state and hides it from a reader who cannot manage", () => {
-    const root = mount({ versions: [], canManage: false });
+  it("keeps an empty table and hides upload from a reader who cannot manage", async () => {
+    stubFetch(() => jsonResponse({ version }), []);
+    const root = await mount({ canManage: false });
 
-    const status = root.querySelector('[role="status"]') as HTMLElement;
-    expect(status.textContent).toContain("No presentation uploaded yet.");
+    expect(root.querySelector(".pk-table__empty")?.textContent).toContain("No presentation uploaded yet.");
     expect(root.querySelector('input[type="file"]')).toBeNull();
 
     void act(() => render(null, container!));
-    void act(() =>
-      render(
-        <PresentationVersionsTab
-          proposalId={PROPOSAL_ID}
-          versions={[]}
-          loading={false}
-          hasMore={false}
-          loadingMore={false}
-          canManage
-          onLoadMore={() => {}}
-          onReload={() => {}}
-        />,
-        container!,
-      ),
-    );
+    void act(() => render(<PresentationVersionsTab proposalId={PROPOSAL_ID} canManage />, container!));
     expect(buttonNamed(container!, "Upload on behalf of speaker")).toBeTruthy();
   });
 });

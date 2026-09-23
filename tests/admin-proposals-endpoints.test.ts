@@ -343,6 +343,7 @@ describe("admin proposal endpoints", () => {
     expect(Number(payload.proposals[0].average_review_score)).toBe(9);
     expect(Number(payload.proposals[0].recommendation_accept_count)).toBe(1);
     expect(payload.proposals[0].decision_status).toBe("accepted");
+    expect(payload.proposals[0].has_presentation).toBe(false);
     expect(payload.page.total).toBe(1);
     expect(payload.page.hasMore).toBe(false);
     expect(payload.page.limit).toBe(50);
@@ -353,6 +354,47 @@ describe("admin proposal endpoints", () => {
     expect(payload.stats.unreviewedCount).toBe(0);
     expect(payload.stats.total).toBe(1);
     expect((await callAdminProposalsList(adminToken, "/api/v1/admin/events/pqc-2026/proposals")).status).toBe(404);
+  });
+
+  it("reports and filters retained presentation uploads in the paged proposal list", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const adminToken = await createAdminSession(env.DB, adminId, "token-proposal-presentation-list");
+    await env.DB.prepare(
+      `INSERT INTO presentation_versions
+         (id, proposal_id, version_number, r2_key, uploaded_by_user_id, uploaded_at, is_current)
+       VALUES (?, ?, 1, ?, ?, '2026-09-01T10:00:00.000Z', 1)`,
+    )
+      .bind(crypto.randomUUID(), proposalId, "test/presentation.pdf", adminId)
+      .run();
+
+    const uploaded = eventProposalsResponseSchema.parse(
+      await (
+        await callAdminProposalsList(adminToken, "/api/v1/events/pqc-2026/proposals?presentation=uploaded")
+      ).json(),
+    );
+    expect(uploaded.proposals.map((proposal) => [proposal.id, proposal.has_presentation])).toEqual([
+      [proposalId, true],
+    ]);
+    expect(uploaded.page.total).toBe(1);
+
+    const missing = eventProposalsResponseSchema.parse(
+      await (await callAdminProposalsList(adminToken, "/api/v1/events/pqc-2026/proposals?presentation=missing")).json(),
+    );
+    expect(missing.proposals).toEqual([]);
+    expect(missing.page.total).toBe(0);
+
+    await env.DB.prepare(
+      "UPDATE presentation_versions SET deleted_at = '2026-09-02T10:00:00.000Z' WHERE proposal_id = ?",
+    )
+      .bind(proposalId)
+      .run();
+    const afterDelete = eventProposalsResponseSchema.parse(
+      await (await callAdminProposalsList(adminToken, "/api/v1/events/pqc-2026/proposals?presentation=missing")).json(),
+    );
+    expect(afterDelete.proposals.map((proposal) => [proposal.id, proposal.has_presentation])).toEqual([
+      [proposalId, false],
+    ]);
   });
 
   it("selects archived proposals explicitly without mixing them into the active catalogue", async () => {

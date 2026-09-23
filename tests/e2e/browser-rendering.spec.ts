@@ -1520,15 +1520,16 @@ test.describe("browser workflows", () => {
     await screenshot("06-admin-presentation-tab");
 
     // Open the review form and submit a "needs_revision" review
-    const versionCard = page.locator("[data-presentation-version-card]").filter({ hasText: /Version 1/i });
-    await versionCard.getByRole("button", { name: /^Review$/i }).click();
-    const statusSelect = versionCard.locator("select");
+    const versionRow = page.getByRole("row", { name: /Version 1/i });
+    await versionRow.getByRole("button", { name: /^Review$/i }).click();
+    const reviewForm = page.locator(".pk-table__detail form");
+    const statusSelect = reviewForm.locator("select");
     await expect(statusSelect).toBeVisible({ timeout: 5_000 });
     await statusSelect.selectOption("needs_revision");
-    const noteInput = versionCard.getByRole("textbox", { name: "Note for the speaker", exact: true });
+    const noteInput = reviewForm.getByRole("textbox", { name: "Note for the speaker", exact: true });
     await noteInput.fill("Please add speaker notes to each slide before the final review.");
-    await versionCard.getByRole("button", { name: /Save review/i }).click();
-    await expect(versionCard.locator("[data-presentation-review-status]")).toHaveText("Needs revision", {
+    await reviewForm.getByRole("button", { name: /Save review/i }).click();
+    await expect(versionRow.locator("[data-presentation-review-status]")).toHaveText("Needs revision", {
       timeout: 10_000,
     });
     await screenshot("07-review-submitted");

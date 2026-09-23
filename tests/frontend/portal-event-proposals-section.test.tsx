@@ -152,6 +152,7 @@ describe("event Proposals section", () => {
       recommendation_accept_count: 0,
       recommendation_needs_work_count: 0,
       recommendation_reject_count: 0,
+      has_presentation: false,
     });
     respond(ACCESS, [proposal]);
     const root = await mount();
@@ -170,6 +171,40 @@ describe("event Proposals section", () => {
     const allUrl = new URL(all?.href ?? "", location.origin);
     expect(allUrl.searchParams.get("versions")).toBe("all");
     expect(allUrl.searchParams.get("proposalIds")).toBe(id);
+  });
+
+  it("offers the optional presentation column and filters uploads on the server", async () => {
+    const root = await mount();
+    expect([...root.querySelectorAll("thead th")].map((head) => head.textContent)).not.toContain("Presentation");
+
+    await act(async () => root.querySelector<HTMLButtonElement>('button[aria-label="Choose columns"]')?.click());
+    const showPresentation = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find(
+      (item) => item.textContent?.trim() === "Presentation",
+    );
+    expect(showPresentation).toBeDefined();
+    await act(async () => showPresentation?.click());
+    expect(root.querySelector('button[aria-label="Presentation column options"]')).not.toBeNull();
+
+    await act(async () =>
+      root.querySelector<HTMLButtonElement>('button[aria-label="Presentation column options"]')?.click(),
+    );
+    const filterMenu = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) =>
+      item.textContent?.trim().startsWith("Filter"),
+    );
+    await act(async () => filterMenu?.click());
+    const uploaded = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find(
+      (item) => item.textContent?.trim() === "Uploaded",
+    );
+    expect(uploaded).toBeDefined();
+    await act(async () => uploaded?.click());
+    await settle();
+    expect(
+      vi
+        .mocked(fetch)
+        .mock.calls.some(
+          ([input]) => new URL(String(input), location.origin).searchParams.get("presentation") === "uploaded",
+        ),
+    ).toBe(true);
   });
 
   it("hides the archive links from a reader who may not read proposals", async () => {
