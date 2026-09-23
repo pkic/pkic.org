@@ -5,7 +5,7 @@ const ROOT = process.cwd();
 const DEFAULT_MAX_LINES = 600;
 const EXTENSIONS = new Set([".ts", ".tsx", ".js", ".json", ".jsonc", ".md", ".sql", ".yml", ".yaml", ".mjs"]);
 const IGNORE_DIRS = new Set([".git", "node_modules", "public", "resources", "content"]);
-const SCOPED_ROOTS = ["assets", "functions", "tests", "docs/events-backend", "migrations", "scripts", "shared"];
+const SCOPED_ROOTS = ["assets", "functions", "tests", "migrations", "scripts", "shared"];
 const SCOPED_FILES = new Set(["package.json", "tsconfig.json", "wrangler.jsonc"]);
 const EXEMPT_PATTERNS = [
   /^migrations\/.*\.sql$/,

@@ -138,7 +138,7 @@ function seedTemplates(cfg) {
   ]);
 }
 
-/* Takes the environment by name — like seed-governance-rosters.mjs — because
+/* Takes the environment by name, as other seed commands do, because
    it resolves people by email and needs to know which database that is, not
    just whether the call is local or remote. */
 function seedMemberProfiles(cfg) {
