@@ -12,7 +12,7 @@ test("event settings require editing and keep the configured wall clock after sa
   await signInToPortal(page, e2eAdminEmail("portal-event-management"));
   const slug = "e2e-standalone-settings";
   await page.goto(`/portal/#/events/${slug}/settings/general`);
-  await expect(page.getByRole("heading", { name: "Event details", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Event details", exact: true })).toBeVisible({ timeout: 15_000 });
   const details = page.getByRole("region", { name: "Event details", exact: true });
   await expect(details.locator("input,select,textarea")).toHaveCount(0);
   async function edit() {

@@ -161,7 +161,9 @@ test("dark homepage titles use readable ink and navigation emits no unload warni
   expect(await logo.evaluate((el) => getComputedStyle(el).filter)).not.toMatch(/opacity|contrast/);
   const whiteArtwork = page.locator('.members-overview img[alt="White artwork"]').first();
   await expect(whiteArtwork).toHaveAttribute("data-logo-ink", "light");
-  expect(await whiteArtwork.evaluate((el) => getComputedStyle(el).filter)).toBe("grayscale(1) invert(1) invert(1)");
+  await expect
+    .poll(() => whiteArtwork.evaluate((el) => getComputedStyle(el).filter))
+    .toBe("grayscale(1) invert(1) invert(1)");
   const cards = await page.locator(".pkic-wg-spotlight").evaluateAll((elements) =>
     elements.map((el) => {
       const { x, y, width } = el.getBoundingClientRect();

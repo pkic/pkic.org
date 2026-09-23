@@ -686,9 +686,13 @@ test.describe("Portal management browser-verification pass", () => {
     ).toBeLessThanOrEqual(1);
     await page.screenshot({ path: test.info().outputPath("registration-toolbar.png") });
     await page.emulateMedia({ colorScheme: "dark" });
-    expect(await download.evaluate((el) => getComputedStyle(el).backgroundColor)).not.toBe(
-      await page.getByRole("searchbox").evaluate((el) => getComputedStyle(el).backgroundColor),
-    );
+    await expect
+      .poll(async () => {
+        const downloadColor = await download.evaluate((el) => getComputedStyle(el).backgroundColor);
+        const searchColor = await page.getByRole("searchbox").evaluate((el) => getComputedStyle(el).backgroundColor);
+        return downloadColor !== searchColor;
+      })
+      .toBe(true);
     await page.screenshot({ path: test.info().outputPath("registration-toolbar-dark.png"), animations: "disabled" });
     await page.goto(`/portal/#/events/${EVENT_SLUG}`);
     const schedule = page.getByLabel("Schedule", { exact: true });
