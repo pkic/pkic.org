@@ -153,6 +153,17 @@ describe("GET /api/v1/users/current/meetings", () => {
     );
     expect(firstPage.occurrences).toHaveLength(1);
     expect(firstPage.page).toMatchObject({ limit: 1, offset: 0, total: 2, hasMore: true });
+
+    const seriesPage = currentUserMeetingsListResponseSchema.parse(
+      await (
+        await getAs(
+          token,
+          `/api/v1/users/current/meetings?from=${encodeURIComponent(NOW)}&seriesId=${ownedUpcoming.seriesId}&limit=1`,
+        )
+      ).json(),
+    );
+    expect(seriesPage.occurrences.map((occurrence) => occurrence.occurrenceId)).toEqual([ownedUpcoming.occurrenceId]);
+    expect(seriesPage.page.total).toBe(1);
   });
 
   it("rejects an unauthenticated caller and a session with no active membership", async () => {

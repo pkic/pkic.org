@@ -3,7 +3,12 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { App } from "../../assets/ts/member-flows/meeting-join/App";
-import { meetingEntryReturnUrl, meetingEntrySignInUrl } from "../../assets/shared/meeting-entry-navigation";
+import {
+  meetingEntryReturnUrl,
+  meetingEntrySignInUrl,
+  meetingSeriesEntrySignInUrl,
+  meetingSeriesEntryUrl,
+} from "../../assets/shared/meeting-entry-navigation";
 import { youtubeVideoEmbed } from "../../assets/shared/markdown-media";
 import { meetingJoinLandingSchema, meetingJoinResponseSchema } from "../../assets/shared/schemas/meeting-entry";
 
@@ -26,8 +31,8 @@ const containers: HTMLElement[] = [];
 function response(body: unknown, status = 200) {
   return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
 }
-async function mount() {
-  vi.stubGlobal("location", { ...window.location, search: `?occurrence=${id}`, assign: vi.fn() });
+async function mount(search = `?occurrence=${id}`) {
+  vi.stubGlobal("location", { ...window.location, search, assign: vi.fn() });
   const container = document.createElement("div");
   document.body.append(container);
   containers.push(container);
@@ -64,15 +69,62 @@ describe("authenticated broadcast entry", () => {
   it("returns only to a validated occurrence on this site after sign-in", () => {
     expect(meetingEntrySignInUrl(id)).toBe(`/portal/#/meeting-entry/${id}`);
     expect(meetingEntryReturnUrl(`#/meeting-entry/${id}`)).toBe(`/meetings/join/?occurrence=${id}`);
+    expect(meetingSeriesEntryUrl(landing.occurrence.seriesId)).toBe(
+      `/meetings/join/?series=${landing.occurrence.seriesId}`,
+    );
+    expect(meetingEntryReturnUrl(`#/meeting-series-entry/${landing.occurrence.seriesId}`)).toBe(
+      meetingSeriesEntryUrl(landing.occurrence.seriesId),
+    );
     for (const hash of [
       "#/meeting-entry/https://evil.test",
       "#/meeting-entry/../evil",
       "#/meeting-entry/%2F%2Fevil.test",
       `#/meeting-entry/${id}?next=evil`,
+      "#/meeting-series-entry/https://evil.test",
       "#/users/current",
     ]) {
       expect(meetingEntryReturnUrl(hash)).toBeNull();
     }
+  });
+  it("resolves a recurring invitation to its next eligible occurrence before loading entry", async () => {
+    const page = {
+      occurrences: [
+        {
+          occurrenceId: id,
+          seriesId: landing.occurrence.seriesId,
+          eventId: "70000000-0000-4000-8000-000000000001",
+          groupId: "20000000-0000-4000-8000-000000000003",
+          groupName: "Working group",
+          eventName: landing.occurrence.eventName,
+          startsAt: landing.occurrence.startsAt,
+          endsAt: landing.occurrence.endsAt,
+          status: "scheduled",
+        },
+      ],
+      page: { limit: 1, offset: 0, total: 1, hasMore: false },
+    };
+    const fetchMock = vi.fn((input: RequestInfo | URL) =>
+      Promise.resolve(response(String(input).includes("/users/current/meetings?") ? page : landing)),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    const container = await mount(`?series=${landing.occurrence.seriesId}`);
+    await vi.waitFor(() => expect(container.textContent).toContain("Conference broadcast"));
+    expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual([
+      expect.stringContaining(`seriesId=${landing.occurrence.seriesId}`),
+      expect.stringContaining(`/occurrences/${id}/join`),
+    ]);
+  });
+  it("preserves a recurring invitation across sign-in", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(response({ error: { code: "UNAUTHORIZED", message: "Sign in required" } }, 401))),
+    );
+    const container = await mount(`?series=${landing.occurrence.seriesId}`);
+    await vi.waitFor(() =>
+      expect(container.querySelector("a")?.getAttribute("href")).toBe(
+        meetingSeriesEntrySignInUrl(landing.occurrence.seriesId),
+      ),
+    );
   });
   it("reveals the player only after intentional entry and removes it when access is revoked", async () => {
     let revoked = false;

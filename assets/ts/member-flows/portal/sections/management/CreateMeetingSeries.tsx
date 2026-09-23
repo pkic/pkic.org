@@ -50,6 +50,7 @@ function initialDraft(): MeetingSeriesDraft {
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || "UTC",
     durationMinutes: 60,
     location: "",
+    providerJoinUrl: "",
     registrationPolicy: "automatic",
     visibility: "group_members",
     memberEligibility: "owner_group",
@@ -97,7 +98,8 @@ function MeetingSeriesForm({
     timezone: draft.timezone,
     durationMinutes: draft.durationMinutes,
     location: draft.location.trim() || null,
-    providerType: null,
+    providerJoinUrl: draft.providerJoinUrl.trim() || null,
+    providerType: draft.providerJoinUrl.trim() ? "external_url" : null,
   });
 
   async function submit(event: Event): Promise<void> {
@@ -145,6 +147,7 @@ function MeetingSeriesForm({
               timezone: form.of("timezone"),
               durationMinutes: form.of("durationMinutes"),
               location: form.of("location"),
+              providerJoinUrl: form.of("providerJoinUrl"),
               recurrenceRule: form.of("recurrenceRule"),
               registrationPolicy: form.of("policy.registrationPolicy"),
               visibility: form.of("policy.visibility"),

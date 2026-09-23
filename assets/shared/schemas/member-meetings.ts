@@ -27,6 +27,7 @@ export type MemberMeetingOccurrence = z.infer<typeof memberMeetingOccurrenceSche
 export const currentUserMeetingsListQuerySchema = paginationQuerySchemaWithDefaults().extend({
   from: utcInstantSchema.optional(),
   to: utcInstantSchema.optional(),
+  seriesId: databaseIdSchema.optional(),
 });
 export type CurrentUserMeetingsListQuery = z.infer<typeof currentUserMeetingsListQuerySchema>;
 

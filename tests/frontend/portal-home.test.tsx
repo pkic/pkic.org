@@ -170,6 +170,11 @@ describe("portal landing", () => {
     const meetings = panelNamed(container, "Upcoming meetings").querySelector("ul");
     expect(meetings?.getAttribute("aria-label")).toBe("Upcoming meetings");
     expect(meetings?.textContent).toContain("Monthly sync");
+    const personalCalendar = panelNamed(container, "Upcoming meetings").querySelector(
+      'a[href*="/calendar.ics?personal=true"]',
+    );
+    expect(personalCalendar?.textContent).toContain("my personal calendar");
+    expect(panelNamed(container, "Upcoming meetings").textContent).toContain("Do not forward it");
 
     // The "View all" affordance is a real link, not a click handler on a span.
     const viewAll = panelNamed(container, "Your organizations").querySelector("a[href='#/organizations']");

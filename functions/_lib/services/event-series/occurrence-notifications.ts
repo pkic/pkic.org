@@ -9,6 +9,7 @@
  * is in the group today and the question is who was told about this meeting.
  */
 import { generateSignedRsvpAddress } from "../../email/rsvp";
+import { outboundMeetingLocation } from "../../../../assets/shared/meeting-calendar-policy";
 import { prepareBulkQueueEmailChunkStatements } from "../../email/outbox";
 import { all } from "../../db/queries";
 import type { BulkEmailQueueRow } from "../../email/outbox-queue";
@@ -112,6 +113,8 @@ async function buildOccurrenceChangeEmails(
   const method = change === "cancelled" ? "CANCEL" : "REQUEST";
   const templateKey = change === "cancelled" ? OCCURRENCE_CANCELLED_TEMPLATE_KEY : OCCURRENCE_UPDATED_TEMPLATE_KEY;
   return recipients.map((recipient) => {
+    const location = outboundMeetingLocation(subject.location);
+    const previousLocation = outboundMeetingLocation(subject.previousLocation);
     const invite: OccurrenceInvite = {
       ...subject,
       joinUrl,
@@ -136,17 +139,17 @@ async function buildOccurrenceChangeEmails(
         eventName: subject.eventName,
         previousStartsAt: subject.previousStartsAt,
         previousEndsAt: subject.previousEndsAt,
-        previousLocation: subject.previousLocation,
+        previousLocation,
         timeChanged: Boolean(
           subject.previousStartsAt &&
           (subject.previousStartsAt !== subject.startsAt || subject.previousEndsAt !== subject.endsAt),
         ),
-        locationChanged: subject.previousLocation !== undefined && subject.previousLocation !== subject.location,
+        locationChanged: subject.previousLocation !== undefined && previousLocation !== location,
         restored: subject.restored,
         seriesCancelled: subject.seriesCancelled,
         startsAt: subject.startsAt,
         endsAt: subject.endsAt,
-        location: subject.location ?? "",
+        location: location ?? "",
         joinUrl,
       },
       capabilityLinkValues: [joinUrl],

@@ -3,7 +3,7 @@ import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test"
 import { beforeEach, describe, expect, it } from "vitest";
 import ICAL from "ical.js";
 import app from "../functions/router";
-import { meetingCalendarThrough } from "../assets/shared/meeting-calendar-policy";
+import { meetingCalendarThrough, outboundMeetingLocation } from "../assets/shared/meeting-calendar-policy";
 import { eventSeriesCreateSchema, eventSeriesResponseSchema } from "../assets/shared/schemas/event-series";
 import {
   createGroupEventSeries,
@@ -24,7 +24,7 @@ import { verifySignedRsvpAddressFull } from "../functions/_lib/email/rsvp";
 import type { AuthAdmin } from "../functions/_lib/types";
 import { insertUser } from "./helpers/membership";
 import { ensureGroupMembershipCapacity } from "./helpers/group-leadership";
-import { createAdminSession } from "./helpers/auth";
+import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
@@ -80,6 +80,41 @@ beforeEach(async () => {
 });
 
 describe("recurring meeting calendars", () => {
+  it("treats provider URLs as private destinations rather than public locations", () => {
+    expect(outboundMeetingLocation("Room 12, Amsterdam")).toBe("Room 12, Amsterdam");
+    for (const location of [
+      "https://teams.example.test/private-room",
+      "Teams: teams.example.test/private-room",
+      "www.meet.example.test/private-room",
+    ]) {
+      expect(outboundMeetingLocation(location)).toBeNull();
+      expect(eventSeriesCreateSchema.safeParse({ ...input(), location }).success).toBe(false);
+    }
+  });
+  it("downloads the signed-in member's personal recurring invitation without exposing the provider URL", async () => {
+    const series = await createGroupEventSeries(env.DB, admin, GROUP, input());
+    const privateUrl = "https://teams.example.test/private-room";
+    await env.DB.prepare("UPDATE event_series SET location = ? WHERE id = ?").bind(privateUrl, series.id).run();
+    const token = await createMemberSession(env.DB, userId, "personal-series-calendar", signingSecret);
+    const response = await app.fetch(
+      new Request(`${BASE}/api/v1/groups/${GROUP}/meetings/series/${series.id}/calendar.ics?personal=true`, {
+        headers: { authorization: `Bearer ${token}` },
+      }),
+      { ...env, INTERNAL_SIGNING_SECRET: signingSecret } as typeof env,
+      createExecutionContext(),
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(response.headers.get("content-disposition")).toContain("-personal.ics");
+    const calendar = new ICAL.Component(ICAL.parse(await response.text()));
+    expect(calendar.getFirstPropertyValue("method")).toBe("REQUEST");
+    const master = calendar.getFirstSubcomponent("vevent")!;
+    expect(String(master.getFirstPropertyValue("attendee"))).toContain(email);
+    expect(String(master.getFirstPropertyValue("organizer"))).toContain("mailto:");
+    expect(String(master.getFirstPropertyValue("url"))).toBe(`${BASE}/meetings/join/?series=${series.id}`);
+    expect(master.getFirstSubcomponent("valarm")?.getFirstPropertyValue("action")).toBe("DISPLAY");
+    expect(master.hasProperty("location")).toBe(false);
+    expect(calendar.toString()).not.toContain(privateUrl);
+  });
   it("downloads one selected occurrence and rejects invalid or unrelated occurrence IDs", async () => {
     const series = await createGroupEventSeries(env.DB, admin, GROUP, input());
     const [first] = await occurrences(series.id);

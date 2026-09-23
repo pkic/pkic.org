@@ -29,6 +29,7 @@ export interface MeetingSeriesDraft {
   timezone: string;
   durationMinutes: number;
   location: string;
+  providerJoinUrl: string;
   registrationPolicy: EventRegistrationPolicy;
   visibility: EventVisibility;
   memberEligibility: EventMemberEligibility;
@@ -262,7 +263,7 @@ export function MeetingSeriesFields({
         </Field>
       </div>
 
-      <Field {...fieldProps.location} label="Location or public meeting page">
+      <Field {...fieldProps.location} label="Physical location">
         {(control) => (
           <TextInput
             {...control}
@@ -270,6 +271,22 @@ export function MeetingSeriesFields({
             value={draft.location}
             disabled={disabled}
             onInput={(event) => updateDraft(draft, onChange, "location", event.currentTarget.value)}
+          />
+        )}
+      </Field>
+      <Field
+        {...fieldProps.providerJoinUrl}
+        label="Private meeting destination URL"
+        help="Never shown to attendees. They use their PKI meeting link, which records entry before redirecting here. Leave blank to keep the current destination when editing."
+      >
+        {(control) => (
+          <TextInput
+            {...control}
+            type="url"
+            name="providerJoinUrl"
+            value={draft.providerJoinUrl}
+            disabled={disabled}
+            onInput={(event) => updateDraft(draft, onChange, "providerJoinUrl", event.currentTarget.value)}
           />
         )}
       </Field>

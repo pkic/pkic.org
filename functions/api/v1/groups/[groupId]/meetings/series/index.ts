@@ -30,7 +30,13 @@ export const GroupMeetingSeriesCreate = openApiRoute(
   async (c: AdminContext, data) => {
     const db = requestDb(c);
     const actor = await requireAdminFromRequest(db, c.req.raw, c.env);
-    const series = await createGroupEventSeries(db, actor, data.params.groupId, data.body);
+    const series = await createGroupEventSeries(
+      db,
+      actor,
+      data.params.groupId,
+      data.body,
+      c.env.MEETING_PROVIDER_ENCRYPTION_KEY ?? "",
+    );
     c.executionCtx.waitUntil(deliverSeriesCalendar(db, c.env, c.req.raw, series.id));
     return json(eventSeriesResponseSchema.parse({ series }), 201);
   },

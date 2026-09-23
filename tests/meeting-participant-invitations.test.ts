@@ -239,9 +239,7 @@ describe("meeting participant invitations", () => {
     expect(links[0].idempotency_key).toMatch(
       new RegExp(`^meeting-series-invitation:${automatic.id}:auto-first@example.test:`),
     );
-    expect(JSON.parse(links[0].payload_json).joinUrl).toBe(
-      `${APP_BASE_URL}/portal/#/groups/${GROUP_ID}/meetings/${automatic.id}`,
-    );
+    expect(JSON.parse(links[0].payload_json).joinUrl).toBe(`${APP_BASE_URL}/meetings/join/?series=${automatic.id}`);
 
     // A member who joins the group later is owed the upcoming meeting's link.
     await seatParticipant("auto-late@example.test");

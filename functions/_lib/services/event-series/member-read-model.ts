@@ -27,6 +27,7 @@ export interface MemberMeetingsQuery {
   /** ISO instant lower bound, resolved by the route handler — never computed here. */
   from: string;
   to?: string;
+  seriesId?: string;
   limit: number;
   offset: number;
 }
@@ -59,11 +60,19 @@ function toMemberMeetingOccurrence(row: MemberMeetingOccurrenceRow): MemberMeeti
 
 /** Canonical page/count query, also used by the D1 EXPLAIN plan regression test. */
 export function buildMemberMeetingsPageQuery(userId: string, query: MemberMeetingsQuery): OffsetPageQuery {
-  const conditions = ["occurrence.status = 'scheduled'", "series.active = 1", "occurrence.starts_at >= ?"];
+  const conditions = [
+    "occurrence.status = 'scheduled'",
+    "series.active = 1",
+    query.seriesId ? "occurrence.ends_at >= ?" : "occurrence.starts_at >= ?",
+  ];
   const bindings: unknown[] = [query.from];
   if (query.to) {
     conditions.push("occurrence.starts_at <= ?");
     bindings.push(query.to);
+  }
+  if (query.seriesId) {
+    conditions.push("occurrence.series_id = ?");
+    bindings.push(query.seriesId);
   }
   const membershipPredicate = groupResourceCapabilityPredicate(
     "event",

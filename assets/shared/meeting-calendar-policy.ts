@@ -6,6 +6,16 @@ export const MEETING_CALENDAR_RECIPIENT_PAGE = 100;
 export const MEETING_PERSONAL_CALENDAR_NOTICE =
   "Sign in with your own account. Personal invitations and calendar replies belong to their recipient; do not forward them. Opening a join link records entry, not verified attendance.";
 
+export function isMeetingLocationUrl(location: string | null | undefined): boolean {
+  return /(?:\b[a-z][a-z0-9+.-]*:\/\/|\bwww\.|\b(?:[a-z0-9-]+\.)+[a-z]{2,}(?:[/:?#]|\b))/i.test(location ?? "");
+}
+
+/** A URL in Location can bypass the tracked join flow; only non-URL locations belong in outbound invitations. */
+export function outboundMeetingLocation(location: string | null | undefined): string | null {
+  const value = location?.trim();
+  return value && !isMeetingLocationUrl(value) ? value : null;
+}
+
 /** iCalendar identifies timed recurrence instances at whole-second precision. */
 export function meetingRecurrenceId(startsAt: string): string {
   return new Date(Math.floor(Date.parse(startsAt) / 1000) * 1000).toISOString();

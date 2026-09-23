@@ -1,4 +1,8 @@
-import { MEETING_PERSONAL_CALENDAR_NOTICE } from "../../../../assets/shared/meeting-calendar-policy";
+import {
+  MEETING_PERSONAL_CALENDAR_NOTICE,
+  outboundMeetingLocation,
+} from "../../../../assets/shared/meeting-calendar-policy";
+import { meetingSeriesEntryUrl } from "../../../../assets/shared/meeting-entry-navigation";
 import ICAL from "ical.js";
 import { zonedDateTimeParts, zonedDateTimeToDate } from "../../../../assets/shared/timezone";
 import { meetingCalendarThrough } from "../../../../assets/shared/meeting-calendar-policy";
@@ -31,7 +35,7 @@ export interface SeriesCalendar {
 }
 
 export function seriesCalendarUrl(baseUrl: string, series: SeriesCalendar): string {
-  return `${baseUrl.replace(/\/$/, "")}/portal/#/groups/${encodeURIComponent(series.owner_group_id)}/meetings/${encodeURIComponent(series.id)}`;
+  return `${baseUrl.replace(/\/$/, "")}${meetingSeriesEntryUrl(series.id)}`;
 }
 
 export function prepareSeriesCalendarDefinition(
@@ -93,17 +97,25 @@ export function buildSeriesCalendarPayload(
     item.addPropertyWithValue("summary", series.event_name);
     item.addPropertyWithValue(
       "description",
-      `Open the meeting to see its occurrences and join: ${url}\n${MEETING_PERSONAL_CALENDAR_NOTICE}`,
+      `Open this link to confirm your identity, record your entry, and join the next scheduled occurrence: ${url}\n\n${MEETING_PERSONAL_CALENDAR_NOTICE}`,
     );
     item.addPropertyWithValue("url", url);
     item.addPropertyWithValue("status", cancelled ? "CANCELLED" : "CONFIRMED");
-    if (location) item.addPropertyWithValue("location", location);
+    const publicLocation = outboundMeetingLocation(location);
+    if (publicLocation) item.addPropertyWithValue("location", publicLocation);
     if (options.organizerEmail) item.addPropertyWithValue("organizer", `mailto:${options.organizerEmail}`);
     if (options.attendeeEmail) {
       const attendee = item.addPropertyWithValue("attendee", `mailto:${options.attendeeEmail}`);
       attendee.setParameter("role", "REQ-PARTICIPANT");
       attendee.setParameter("partstat", "NEEDS-ACTION");
       attendee.setParameter("rsvp", "TRUE");
+    }
+    if (!cancelled) {
+      const reminder = new ICAL.Component("valarm");
+      reminder.addPropertyWithValue("action", "DISPLAY");
+      reminder.addPropertyWithValue("description", `Reminder: ${series.event_name}`);
+      reminder.addPropertyWithValue("trigger", ICAL.Duration.fromString("-PT15M"));
+      item.addSubcomponent(reminder);
     }
     calendar.addSubcomponent(item);
     return item;

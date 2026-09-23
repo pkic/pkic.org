@@ -27,6 +27,7 @@ import { Spinner } from "../../../components/Spinner";
 import { EmptyState } from "../../../ui/EmptyState";
 import { PageHeader } from "../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
+import { ButtonLink } from "../../../ui/Button";
 import { useData } from "../../../hooks/useData";
 import { getJson } from "../../../shared/api-client";
 import { portalSession, profile } from "../state";
@@ -170,9 +171,18 @@ function MeetingsPanel() {
               {formatRelativeDays(occurrence.startsAt) && (
                 <span class="pk-small pk-push">({formatRelativeDays(occurrence.startsAt)})</span>
               )}
+              <ButtonLink
+                size="sm"
+                href={`/api/v1/groups/${encodeURIComponent(occurrence.groupId)}/meetings/series/${encodeURIComponent(occurrence.seriesId)}/calendar.ics?personal=true`}
+              >
+                Download my personal calendar (.ics)
+              </ButtonLink>
             </li>
           ))}
         </ul>
+      )}
+      {occurrences.length > 0 && (
+        <p class="pk-small pk-muted">This calendar file contains your RSVP identity. Do not forward it.</p>
       )}
     </PanelCard>
   );

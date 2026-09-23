@@ -6,6 +6,7 @@ import {
   type EventSeries,
 } from "../../../../assets/shared/schemas/event-series";
 import { parseJsonSafe } from "../../utils/json";
+import { outboundMeetingLocation } from "../../../../assets/shared/meeting-calendar-policy";
 
 export interface EventSeriesRow {
   id: string;
@@ -72,7 +73,7 @@ export function toEventSeries(row: EventSeriesRow): EventSeries {
     recurrenceRule: row.recurrence_rule,
     timezone: row.timezone,
     durationMinutes: row.duration_minutes,
-    location: row.location,
+    location: outboundMeetingLocation(row.location),
     providerType: row.provider_type,
     providerConfigured: row.provider_data_json !== null,
     active: row.active === 1,
@@ -114,8 +115,8 @@ export function toEventOccurrence(row: EventOccurrenceRow) {
     startsAt: row.starts_at,
     endsAt: row.ends_at,
     status: row.status,
-    locationOverride: row.location_override,
-    location: row.location,
+    locationOverride: outboundMeetingLocation(row.location_override),
+    location: outboundMeetingLocation(row.location),
     providerConfigured: row.provider_join_url_ciphertext !== null,
     guestCount: row.guest_count,
     joinConfirmedCount: row.join_confirmed_count,

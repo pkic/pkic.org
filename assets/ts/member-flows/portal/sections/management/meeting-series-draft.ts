@@ -12,6 +12,7 @@ export function draftFromSeries(series: GroupEventSeries): MeetingSeriesDraft {
     timezone: series.timezone,
     durationMinutes: series.durationMinutes,
     location: series.location ?? "",
+    providerJoinUrl: "",
     registrationPolicy: series.registrationPolicy,
     visibility: series.visibility,
     memberEligibility: series.memberEligibility ?? "owner_group",
@@ -36,6 +37,7 @@ export function seriesChanges(
   }
   const location = draft.location.trim() || null;
   if (location !== series.location) changes.location = location;
+  if (draft.providerJoinUrl.trim()) changes.providerJoinUrl = draft.providerJoinUrl.trim();
   if (
     draft.registrationPolicy !== series.registrationPolicy ||
     draft.visibility !== series.visibility ||

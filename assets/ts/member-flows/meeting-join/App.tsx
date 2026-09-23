@@ -1,6 +1,6 @@
 import { useEffect, useState } from "preact/hooks";
 import { youtubeVideoEmbed } from "../../../shared/markdown-media";
-import { meetingEntrySignInUrl } from "../../../shared/meeting-entry-navigation";
+import { meetingEntrySignInUrl, meetingSeriesEntrySignInUrl } from "../../../shared/meeting-entry-navigation";
 import { BroadcastViewer } from "./BroadcastViewer";
 import {
   meetingInvitationVerificationCreateResponseSchema,
@@ -10,6 +10,7 @@ import {
   meetingJoinResponseSchema,
   type MeetingJoinLanding,
 } from "../../../shared/schemas/meeting-entry";
+import { currentUserMeetingsListResponseSchema } from "../../../shared/schemas/member-meetings";
 import { Spinner } from "../../components/Spinner";
 import { useContractForm } from "../../hooks/useContractForm";
 import { Alert } from "../../ui/Alert";
@@ -41,7 +42,10 @@ function errorMessage(error: unknown): string {
 }
 
 export function App({ invitation }: { invitation: MeetingGuestInvitationFragment | null }) {
-  const occurrenceId = invitation?.occurrenceId ?? new URLSearchParams(window.location.search).get("occurrence") ?? "";
+  const query = new URLSearchParams(window.location.search);
+  const requestedOccurrenceId = invitation?.occurrenceId ?? query.get("occurrence") ?? "";
+  const seriesId = invitation ? "" : (query.get("series") ?? "");
+  const [occurrenceId, setOccurrenceId] = useState(requestedOccurrenceId);
   const [broadcast, setBroadcast] = useState<{ embedUrl: string; destination: string } | null>(null);
   const [needsSignIn, setNeedsSignIn] = useState(false);
   const [verificationId, setVerificationId] = useState<string | null>(null);
@@ -57,15 +61,29 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
   useEffect(() => {
     let cancelled = false;
     async function start(): Promise<void> {
-      if (!occurrenceId) {
+      if (!requestedOccurrenceId && !seriesId) {
         setError("This meeting link is incomplete.");
         setLoading(false);
         return;
       }
       try {
+        let targetOccurrenceId = requestedOccurrenceId;
+        if (!targetOccurrenceId) {
+          const parameters = new URLSearchParams({ seriesId, limit: "1", offset: "0" });
+          const page = await getJson(
+            `/api/v1/users/current/meetings?${parameters.toString()}`,
+            currentUserMeetingsListResponseSchema,
+          );
+          targetOccurrenceId = page.occurrences[0]?.occurrenceId ?? "";
+          if (!targetOccurrenceId) {
+            setError("No upcoming meeting in this series is available to join.");
+            return;
+          }
+          if (!cancelled) setOccurrenceId(targetOccurrenceId);
+        }
         if (invitation) {
           const challenge = await postJson(
-            verificationCollectionEndpoint(occurrenceId),
+            verificationCollectionEndpoint(targetOccurrenceId),
             { token: invitation.token },
             meetingInvitationVerificationCreateResponseSchema,
           );
@@ -73,7 +91,7 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
             setVerificationId(challenge.verificationId);
           }
         } else {
-          const authenticated = await loadAuthenticatedLanding(occurrenceId);
+          const authenticated = await loadAuthenticatedLanding(targetOccurrenceId);
           if (!cancelled) {
             setLanding(authenticated);
           }
@@ -91,7 +109,7 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
     return () => {
       cancelled = true;
     };
-  }, [invitation, occurrenceId]);
+  }, [invitation, requestedOccurrenceId, seriesId]);
 
   async function verifyGuest(): Promise<void> {
     if (!verificationId) return;
@@ -206,7 +224,10 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
       </Alert>
       {needsSignIn && (
         <p>
-          <ButtonLink variant="primary" href={meetingEntrySignInUrl(occurrenceId)}>
+          <ButtonLink
+            variant="primary"
+            href={seriesId ? meetingSeriesEntrySignInUrl(seriesId) : meetingEntrySignInUrl(occurrenceId)}
+          >
             Sign in to continue
           </ButtonLink>
         </p>

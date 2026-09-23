@@ -30,6 +30,7 @@ function draft(overrides: Partial<MeetingSeriesDraft> = {}): MeetingSeriesDraft 
     timezone: "Europe/Amsterdam",
     durationMinutes: 60,
     location: "Online",
+    providerJoinUrl: "",
     registrationPolicy: "no_registration",
     visibility: "group_members",
     memberEligibility: "owner_group",
@@ -61,7 +62,8 @@ const OWN_LABELS = [
   "Visibility",
   "Attendee eligibility",
   "External guests",
-  "Location or public meeting page",
+  "Physical location",
+  "Private meeting destination URL",
 ];
 
 afterEach(() => {
@@ -175,7 +177,8 @@ describe("meeting series fields", () => {
       "Visibility",
       "Attendee eligibility",
       "External guests",
-      "Location or public meeting page",
+      "Physical location",
+      "Private meeting destination URL",
     ]) {
       expect(controlFor(page, label).matches(":disabled")).toBe(false);
     }

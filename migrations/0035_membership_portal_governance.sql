@@ -4796,7 +4796,7 @@ The next scheduled meeting starts at {{startsAt}} and lasts {{durationMinutes}} 
 
 Occurrences are scheduled through year-end. Starting October 1, the calendar extends through the following year. Changes, cancellations, and extra dates arrive as updates to this same calendar.{{/if}}
 
-[Open the meeting]({{joinUrl}}) to see the schedule and join an occurrence. Sign in with the address that received this invitation.',
+{{#if cancelled}}This calendar invitation is no longer active.{{else}}[Open your meeting entry]({{joinUrl}}) when you are ready to join. Sign in with the address that received this invitation. The portal records your entry before opening the current meeting destination; the destination itself is never included in this message or calendar file.{{/if}}',
     'markdown', NULL, '', 'active', NULL, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'transactional'
   ),
   (

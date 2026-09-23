@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { outboundMeetingLocation } from "../../../../assets/shared/meeting-calendar-policy";
 import {
   meetingJoinConfirmSchema,
   meetingJoinLandingSchema,
@@ -44,7 +45,8 @@ interface TermRow {
 const JOIN_CONTEXT_SELECT = `SELECT occurrence.id AS occurrence_id, occurrence.series_id,
   event.id AS event_id, event.name AS event_name, occurrence.starts_at, occurrence.ends_at,
   COALESCE(occurrence.location_override, series.location) AS location,
-  occurrence.provider_join_url_ciphertext,
+  COALESCE(occurrence.provider_join_url_ciphertext,
+    json_extract(series.provider_data_json, '$.joinUrlCiphertext')) AS provider_join_url_ciphertext,
   COALESCE(user.preferred_name,
            NULLIF(trim(COALESCE(user.first_name, '') || ' ' || COALESCE(user.last_name, '')), ''),
            user.email) AS user_name,
@@ -169,7 +171,7 @@ async function buildLanding(
         eventName: row.event_name,
         startsAt: row.starts_at,
         endsAt: row.ends_at,
-        location: row.location,
+        location: outboundMeetingLocation(row.location),
       },
       ...identity,
       terms: terms.map((term) => ({

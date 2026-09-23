@@ -1,4 +1,7 @@
-import { MEETING_PERSONAL_CALENDAR_NOTICE } from "../../../../assets/shared/meeting-calendar-policy";
+import {
+  MEETING_PERSONAL_CALENDAR_NOTICE,
+  outboundMeetingLocation,
+} from "../../../../assets/shared/meeting-calendar-policy";
 /**
  * A meeting occurrence as a calendar invitation (#126).
  *
@@ -87,7 +90,8 @@ export function buildOccurrenceInviteIcs(
     `URL:${escapeIcs(invite.joinUrl)}`,
     `STATUS:${cancelled ? "CANCELLED" : "CONFIRMED"}`,
   ];
-  if (invite.location) lines.push(`LOCATION:${escapeIcs(invite.location)}`);
+  const publicLocation = outboundMeetingLocation(invite.location);
+  if (publicLocation) lines.push(`LOCATION:${escapeIcs(publicLocation)}`);
   if (invite.organizerEmail) lines.push(`ORGANIZER;CN=PKI Consortium:mailto:${invite.organizerEmail}`);
   if (invite.attendeeEmail)
     lines.push(`ATTENDEE;ROLE=REQ-PARTICIPANT;PARTSTAT=NEEDS-ACTION;RSVP=TRUE:mailto:${invite.attendeeEmail}`);

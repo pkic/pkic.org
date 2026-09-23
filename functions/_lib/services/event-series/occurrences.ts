@@ -46,7 +46,8 @@ const OCCURRENCE_SELECT = `SELECT occurrence.id, occurrence.series_id, occurrenc
   occurrence.ends_at, occurrence.status,
   occurrence.location_override,
   COALESCE(occurrence.location_override, series.location) AS location,
-  occurrence.provider_join_url_ciphertext,
+  COALESCE(occurrence.provider_join_url_ciphertext,
+    json_extract(series.provider_data_json, '$.joinUrlCiphertext')) AS provider_join_url_ciphertext,
   (SELECT COUNT(*) FROM event_occurrence_guests guest
     WHERE guest.series_id = occurrence.series_id
       AND (guest.occurrence_id IS NULL OR guest.occurrence_id = occurrence.id)

@@ -41,6 +41,7 @@ import {
 } from "./management";
 import { prepareSeriesCancellationNotifications, type OccurrenceNotificationOptions } from "./occurrence-notifications";
 import { EVENT_SERIES_FROM, EVENT_SERIES_SELECT, type EventSeriesRow, toEventSeries } from "./record";
+import { sealProviderJoinUrl } from "./provider-url";
 
 type ParsedEventSeriesCreateInput = z.infer<typeof eventSeriesCreateSchema>;
 type EventSeriesCreateInput = Omit<ParsedEventSeriesCreateInput, "policy"> & {
@@ -266,6 +267,7 @@ export async function createGroupEventSeries(
   actor: AuthAdmin,
   groupIdOrSlug: string,
   input: EventSeriesCreateInput,
+  encryptionSecret = "",
 ): Promise<EventSeries> {
   const group = await getGroup(db, groupIdOrSlug);
   if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
@@ -279,6 +281,9 @@ export async function createGroupEventSeries(
     memberEligibility: input.policy.memberEligibility,
     guestPolicy: input.policy.guestPolicy,
   });
+  const providerData = input.providerJoinUrl
+    ? JSON.stringify({ joinUrlCiphertext: await sealProviderJoinUrl(input.providerJoinUrl, encryptionSecret) })
+    : null;
   try {
     await db.batch([
       prepareGroupManagementAuthorizationGuard(db, actor, [group.id]),
@@ -296,7 +301,7 @@ export async function createGroupEventSeries(
           `INSERT INTO event_series
              (id, event_id, starts_at, recurrence_rule, timezone, duration_minutes, location,
               provider_type, provider_data_json, active, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 1, ?, ?)`,
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
         )
         .bind(
           id,
@@ -306,7 +311,8 @@ export async function createGroupEventSeries(
           input.timezone,
           input.durationMinutes,
           input.location ?? null,
-          input.providerType ?? null,
+          input.providerJoinUrl ? "external_url" : (input.providerType ?? null),
+          providerData,
           now,
           now,
         ),
@@ -339,6 +345,7 @@ export async function updateGroupEventSeries(
   groupIdOrSlug: string,
   seriesId: string,
   input: EventSeriesUpdateInput,
+  encryptionSecret = "",
 ): Promise<EventSeries> {
   const {
     series: existing,
@@ -380,6 +387,14 @@ export async function updateGroupEventSeries(
   );
   const auditChanges: Record<string, unknown> = { ...input };
   delete auditChanges.expectedUpdatedAt;
+  delete auditChanges.providerJoinUrl;
+  if (input.providerJoinUrl !== undefined) auditChanges.providerDestinationChanged = true;
+  const providerData =
+    input.providerJoinUrl === undefined
+      ? null
+      : input.providerJoinUrl === null
+        ? null
+        : JSON.stringify({ joinUrlCiphertext: await sealProviderJoinUrl(input.providerJoinUrl, encryptionSecret) });
   try {
     await commitEventResourceManagementBatch(db, actor, context, "manage", [
       prepareAuthorizationGuard(db, {
@@ -413,6 +428,7 @@ export async function updateGroupEventSeries(
              duration_minutes = COALESCE(?, duration_minutes),
              location = CASE WHEN ? = 1 THEN ? ELSE location END,
              provider_type = CASE WHEN ? = 1 THEN ? ELSE provider_type END,
+             provider_data_json = CASE WHEN ? = 1 THEN ? ELSE provider_data_json END,
              active = COALESCE(?, active), updated_at = ?
            WHERE id = ?
              AND (? = 0 OR NOT EXISTS (SELECT 1 FROM event_occurrences WHERE series_id = ?))`,
@@ -424,8 +440,10 @@ export async function updateGroupEventSeries(
           input.durationMinutes ?? null,
           input.location !== undefined ? 1 : 0,
           input.location ?? null,
-          input.providerType !== undefined ? 1 : 0,
-          input.providerType ?? null,
+          input.providerType !== undefined || input.providerJoinUrl !== undefined ? 1 : 0,
+          input.providerJoinUrl ? "external_url" : (input.providerType ?? null),
+          input.providerJoinUrl !== undefined ? 1 : 0,
+          providerData,
           input.active === undefined ? null : input.active ? 1 : 0,
           now,
           seriesId,

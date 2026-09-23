@@ -1,5 +1,6 @@
 /** Shared event-profile, recurrence, occurrence, guest, and meeting-entry contracts. */
 import { z } from "zod";
+import { isMeetingLocationUrl } from "../meeting-calendar-policy";
 import {
   booleanQueryFlagSchema,
   eventIdSchema,
@@ -187,8 +188,12 @@ export const eventSeriesCreateSchema = z.object({
     .int()
     .min(1)
     .max(7 * 24 * 60),
-  location: trimmedString(0, 500).nullable().optional(),
+  location: trimmedString(0, 500)
+    .nullable()
+    .refine((value) => !isMeetingLocationUrl(value), "Use the private meeting destination field for URLs")
+    .optional(),
   providerType: eventProviderTypeSchema.nullable().optional(),
+  providerJoinUrl: httpsCapabilityUrlSchema.nullable().optional(),
 });
 export const eventSeriesUpdateSchema = eventSeriesCreateSchema
   .omit({ eventSlug: true, existingEventId: true })
@@ -274,7 +279,10 @@ export const eventOccurrenceInvitationsResponseSchema = z.object({
 const eventOccurrenceInputSchema = z.object({
   startsAt: utcInstantSchema,
   endsAt: utcInstantSchema,
-  locationOverride: trimmedString(0, 500).nullable().optional(),
+  locationOverride: trimmedString(0, 500)
+    .nullable()
+    .refine((value) => !isMeetingLocationUrl(value), "Use the private meeting destination field for URLs")
+    .optional(),
   providerJoinUrl: httpsCapabilityUrlSchema.nullable().optional(),
 });
 export const eventOccurrenceCreateSchema = eventOccurrenceInputSchema.refine((value) => value.endsAt > value.startsAt, {
@@ -501,7 +509,10 @@ export const eventSeriesCalendarRouteSchema = {
   ...requiresSession(),
   tags: ["Groups", "Meetings"],
   summary: "Generate the current meeting-series calendar",
-  request: { params: eventSeriesParamsSchema, query: z.object({ occurrenceId: databaseIdSchema.optional() }) },
+  request: {
+    params: eventSeriesParamsSchema,
+    query: z.object({ occurrenceId: databaseIdSchema.optional(), personal: booleanQueryFlagSchema.optional() }),
+  },
   responses: {
     "200": { description: "Generated text/calendar content." },
     "401": jsonErrorResponse("An authenticated portal identity is required."),

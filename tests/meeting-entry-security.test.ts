@@ -188,6 +188,41 @@ beforeEach(async () => {
 });
 
 describe("authenticated meeting entry", () => {
+  it("keeps a series provider URL private and redirects through the tracked join confirmation", async () => {
+    const { admin, userId, series, occurrence } = await fixture();
+    const destination = "https://teams.example.test/private-room";
+    await env.DB.prepare("UPDATE event_occurrences SET provider_join_url_ciphertext = NULL WHERE id = ?")
+      .bind(occurrence.id)
+      .run();
+    await env.DB.prepare("UPDATE event_series SET location = ? WHERE id = ?").bind(destination, series.id).run();
+    const current = await getGroupEventSeries(env.DB, GROUP_ID, series.id);
+    expect(current.location).toBeNull();
+    const updated = await updateGroupEventSeries(
+      env.DB,
+      admin,
+      GROUP_ID,
+      series.id,
+      { expectedUpdatedAt: current.updatedAt, providerJoinUrl: destination },
+      ENCRYPTION_SECRET,
+    );
+    expect(updated.providerConfigured).toBe(true);
+    expect(JSON.stringify(updated)).not.toContain(destination);
+    const token = await createMemberSession(env.DB, userId, "series-provider-session", SIGNING_SECRET);
+    const path = `/api/v1/meetings/occurrences/${occurrence.id}/join`;
+    const landingResponse = await memberRequest(token, path);
+    expect(landingResponse.status).toBe(200);
+    const landing = (await landingResponse.json()) as {
+      landingRevision: string;
+      occurrence: { location: string | null };
+    };
+    expect(landing.occurrence.location).toBeNull();
+    const joinResponse = await memberRequest(token, path, {
+      method: "POST",
+      body: JSON.stringify({ landingRevision: landing.landingRevision, acceptedTerms: [], intentionalJoin: true }),
+    });
+    expect(joinResponse.status).toBe(200);
+    expect(await joinResponse.json()).toMatchObject({ redirectUrl: destination });
+  });
   it("never exposes landing identity without the exact member session", async () => {
     const { occurrence } = await fixture();
     const response = await memberRequest(null, `/api/v1/meetings/occurrences/${occurrence.id}/join`);

@@ -2,6 +2,7 @@
 import {
   MEETING_CALENDAR_OCCURRENCE_LIMIT,
   MEETING_CALENDAR_RECIPIENT_PAGE,
+  outboundMeetingLocation,
 } from "../../../../assets/shared/meeting-calendar-policy";
 import { prepareBulkQueueEmailChunkStatements, processPendingOutboxBackground } from "../../email/outbox";
 import { emailPlainText } from "../../email/plain-text";
@@ -137,7 +138,7 @@ export async function runAutomaticMeetingInvitations(
       data: {
         recipientName: emailPlainText(row.recipient_name),
         isUpdate: row.previous_sequence > 0,
-        location: emailPlainText(series.location ?? ""),
+        location: emailPlainText(outboundMeetingLocation(series.location) ?? ""),
         durationMinutes: series.duration_minutes,
         timezone: series.timezone,
         changedOccurrences: row.previous_notice_at
@@ -147,7 +148,7 @@ export async function runAutomaticMeetingInvitations(
                 startsAt: item.starts_at,
                 endsAt: item.ends_at,
                 cancelled: item.status === "cancelled",
-                location: emailPlainText(item.location ?? ""),
+                location: emailPlainText(outboundMeetingLocation(item.location) ?? ""),
                 moved: item.starts_at !== item.recurrence_id,
                 originalStartsAt: item.recurrence_id,
               }))

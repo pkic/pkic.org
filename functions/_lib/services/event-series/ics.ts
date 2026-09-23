@@ -1,4 +1,4 @@
-import { all } from "../../db/queries";
+import { all, first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import {
@@ -37,7 +37,18 @@ export async function generateGroupSeriesIcs(
   seriesId: string,
   baseUrl: string,
   occurrenceId?: string,
+  personal?: { userId: string; attendeeEmail: string; organizerEmail: string },
 ): Promise<{ content: string; filename: string }> {
+  if (personal) {
+    const eligible = await first<{ allowed: number }>(
+      db,
+      `SELECT 1 AS allowed FROM current_event_occurrence_subject_eligibility eligibility
+       JOIN event_occurrences occurrence ON occurrence.id = eligibility.occurrence_id
+       WHERE eligibility.user_id = ? AND occurrence.series_id = ? LIMIT 1`,
+      [personal.userId, seriesId],
+    );
+    if (!eligible) throw new AppError(403, "MEETING_ACCESS_REVOKED", "You are not eligible for this meeting series");
+  }
   const access = liveGroupResourceContextAccess(viewer, throughGroup.id);
   const accessibleEvents = buildLiveAccessibleGroupResourceIdsCte("event", throughGroup.id, access, "view");
   const rows = await all<CalendarRow>(
@@ -72,7 +83,10 @@ export async function generateGroupSeriesIcs(
   }
   if (rows.length > MEETING_CALENDAR_OCCURRENCE_LIMIT)
     throw new AppError(422, "MEETING_CALENDAR_TOO_LARGE", "The calendar exceeds the supported occurrence horizon");
-  const filename = meetingCalendarFilename(rows[0].event_name, rows[0].owner_group_slug);
+  const filename = meetingCalendarFilename(rows[0].event_name, rows[0].owner_group_slug).replace(
+    /\.ics$/,
+    personal ? "-personal.ics" : ".ics",
+  );
   if (occurrenceId) {
     const row = rows[0];
     if (!row.occurrence_id || !row.occurrence_starts_at || !row.ends_at) {
@@ -90,8 +104,10 @@ export async function generateGroupSeriesIcs(
           location: row.occurrence_location,
           joinUrl: occurrenceJoinUrl(baseUrl, row.occurrence_id),
           sequence: row.calendar_sequence ?? 0,
+          attendeeEmail: personal?.attendeeEmail,
+          organizerEmail: personal?.organizerEmail,
         },
-        undefined,
+        personal ? (row.status === "cancelled" || row.active !== 1 ? "CANCEL" : "REQUEST") : undefined,
         row.status === "cancelled" || row.active !== 1,
       ),
     };
@@ -116,7 +132,9 @@ export async function generateGroupSeriesIcs(
       baseUrl,
       cancelled: rows[0].active !== 1,
       now: nowIso(),
-      published: true,
+      published: !personal,
+      attendeeEmail: personal?.attendeeEmail,
+      organizerEmail: personal?.organizerEmail,
     }).inlineContent!,
   };
 }

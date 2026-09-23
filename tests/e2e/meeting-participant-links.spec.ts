@@ -140,7 +140,7 @@ for (const broadcast of [false, true]) {
     for (const label of ["Time zone", "First occurrence", "Duration (minutes)"]) {
       await expect(page.getByLabel(label)).toBeDisabled();
     }
-    await page.getByLabel("Location or public meeting page", { exact: true }).fill("Online meeting room");
+    await page.getByLabel("Physical location", { exact: true }).fill("Online meeting room");
     const savedSeries = page.waitForResponse(
       (response) =>
         response.url().endsWith(`/meetings/series/${created.seriesId!}`) && response.request().method() === "PATCH",
@@ -151,9 +151,7 @@ for (const broadcast of [false, true]) {
     await page.reload();
     await expect(page.getByText("Online meeting room", { exact: true })).toBeVisible();
     await editSeries();
-    await expect(page.getByLabel("Location or public meeting page", { exact: true })).toHaveValue(
-      "Online meeting room",
-    );
+    await expect(page.getByLabel("Physical location", { exact: true })).toHaveValue("Online meeting room");
     await page.getByRole("button", { name: "Cancel", exact: true }).click();
 
     await page.goto(`/portal/#/groups/${GROUP_ID}/meetings/${created.seriesId!}/occurrences`);
@@ -235,6 +233,18 @@ for (const broadcast of [false, true]) {
       await expect(forwardedPage.getByRole("heading", { name: eventName })).toBeVisible();
       await expect(forwardedPage.getByText("Preparing secure meeting entry…", { exact: true })).toHaveCount(0);
       await expect(forwardedPage.locator("iframe")).toHaveCount(0);
+      await forwardedPage.goto("/portal/#/home");
+      const personalMeeting = forwardedPage.getByRole("listitem").filter({ hasText: eventName });
+      await expect(personalMeeting.getByRole("link", { name: "Download my personal calendar (.ics)" })).toBeVisible();
+      await expect(
+        forwardedPage.getByText("This calendar file contains your RSVP identity. Do not forward it."),
+      ).toBeVisible();
+      const personalDownloadReady = forwardedPage.waitForEvent("download");
+      await personalMeeting.getByRole("link", { name: "Download my personal calendar (.ics)" }).click();
+      const personalDownload = await personalDownloadReady;
+      expect(personalDownload.suggestedFilename()).toContain("-personal.ics");
+      await forwardedPage.goto(joinUrl);
+      await expect(forwardedPage.getByRole("heading", { name: eventName })).toBeVisible();
       if (!broadcast) {
         await forwardedPage.route("https://meet.example.test/**", (route) =>
           route.fulfill({ contentType: "text/plain", body: "External meeting provider" }),
@@ -315,9 +325,7 @@ for (const broadcast of [false, true]) {
       expect(calendar).toContain("RRULE:");
       expect(calendar).toContain("BEGIN:VTIMEZONE");
       expect(calendar).toContain("RSVP=TRUE");
-      expect(extractEmailUrl(invitation, `/meetings/${series.id}`)).toContain(
-        `/portal/#/groups/${GROUP_ID}/meetings/${series.id}`,
-      );
+      expect(extractEmailUrl(invitation, "/meetings/join/")).toContain(`/meetings/join/?series=${series.id}`);
       await page.goto(`/portal/#/groups/${GROUP_ID}/meetings/${series.id}/occurrences`);
       await expect(page.getByRole("row").filter({ hasText: "Scheduled" }).first()).toBeVisible();
       await page.screenshot({ path: test.info().outputPath("automatic-meeting-calendar.png"), fullPage: true });

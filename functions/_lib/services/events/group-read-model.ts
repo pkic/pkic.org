@@ -7,6 +7,7 @@ import {
   type GroupEventsListQuery,
 } from "../../../../assets/shared/schemas/group-events";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
+import { outboundMeetingLocation } from "../../../../assets/shared/meeting-calendar-policy";
 import type { EventGroupCapability } from "../../../../assets/shared/schemas/resource-grants";
 import { queryPage } from "../../db/pagination";
 import { first } from "../../db/queries";
@@ -99,7 +100,7 @@ function mapGroupEvent(row: GroupEventRow, groupId: string): GroupEvent {
     registrationPolicy: normalizeEventRegistrationPolicy(row.registration_policy),
     visibility: row.visibility,
     inviteLimitAttendee: row.invite_limit_attendee,
-    location: row.location,
+    location: row.series_id ? outboundMeetingLocation(row.location) : row.location,
     links: parseLinksJson(row.links_json),
     nextOccurrenceAt: row.next_occurrence_at,
     updatedAt: row.event_updated_at,

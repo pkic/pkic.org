@@ -224,7 +224,7 @@ describe("group-owned event series", () => {
     expect(calendar.content).toContain("BEGIN:VCALENDAR");
     expect(calendar.content).toContain(`UID:${series.id}@pkic.org`);
     expect(calendar.content.replace(/\r\n /g, "")).toContain(
-      `URL:https://pkic.example.test/portal/#/groups/${GROUP_ID}/meetings/${series.id}`,
+      `URL:https://pkic.example.test/meetings/join/?series=${series.id}`,
     );
     expect(calendar.content).not.toContain("secret-room");
   });
