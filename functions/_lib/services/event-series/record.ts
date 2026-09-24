@@ -7,6 +7,7 @@ import {
 } from "../../../../assets/shared/schemas/event-series";
 import { parseJsonSafe } from "../../utils/json";
 import { outboundMeetingLocation } from "../../../../assets/shared/meeting-calendar-policy";
+import { meetingEntryPolicyFromSettings } from "../../../../assets/shared/schemas/meeting-entry-policy";
 
 export interface EventSeriesRow {
   id: string;
@@ -69,6 +70,7 @@ export function toEventSeries(row: EventSeriesRow): EventSeries {
     visibility: row.visibility,
     memberEligibility: rawEligibility === "group" ? "owner_group" : rawEligibility,
     guestPolicy: eventGuestPolicyFromSettings(row.settings_json),
+    meetingEntryPolicy: meetingEntryPolicyFromSettings(settings),
     startsAt: row.starts_at,
     recurrenceRule: row.recurrence_rule,
     timezone: row.timezone,

@@ -129,6 +129,7 @@ describe("portal group management resources", () => {
     visibility: "group_members",
     memberEligibility: "owner_group",
     guestPolicy: "occurrence_invitation",
+    meetingEntryPolicy: { authentication: "remember_browser", rememberDays: 30 },
     startsAt: "2026-09-01T15:00:00.000Z",
     recurrenceRule: "FREQ=WEEKLY;INTERVAL=1",
     timezone: "Europe/Amsterdam",

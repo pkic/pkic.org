@@ -42,17 +42,20 @@ import {
 import { prepareSeriesCancellationNotifications, type OccurrenceNotificationOptions } from "./occurrence-notifications";
 import { EVENT_SERIES_FROM, EVENT_SERIES_SELECT, type EventSeriesRow, toEventSeries } from "./record";
 import { sealProviderJoinUrl } from "./provider-url";
+import { DEFAULT_MEETING_ENTRY_POLICY } from "../../../../assets/shared/schemas/meeting-entry-policy";
 
 type ParsedEventSeriesCreateInput = z.infer<typeof eventSeriesCreateSchema>;
 type EventSeriesCreateInput = Omit<ParsedEventSeriesCreateInput, "policy"> & {
-  policy: Omit<ParsedEventSeriesCreateInput["policy"], "visibility"> & {
+  policy: Omit<ParsedEventSeriesCreateInput["policy"], "visibility" | "meetingEntryPolicy"> & {
     visibility?: ParsedEventSeriesCreateInput["policy"]["visibility"];
+    meetingEntryPolicy?: ParsedEventSeriesCreateInput["policy"]["meetingEntryPolicy"];
   };
 };
 type ParsedEventSeriesUpdateInput = z.infer<typeof eventSeriesUpdateSchema>;
 type EventSeriesUpdateInput = Omit<ParsedEventSeriesUpdateInput, "policy"> & {
-  policy?: Omit<NonNullable<ParsedEventSeriesUpdateInput["policy"]>, "visibility"> & {
+  policy?: Omit<NonNullable<ParsedEventSeriesUpdateInput["policy"]>, "visibility" | "meetingEntryPolicy"> & {
     visibility?: NonNullable<ParsedEventSeriesUpdateInput["policy"]>["visibility"];
+    meetingEntryPolicy?: NonNullable<ParsedEventSeriesUpdateInput["policy"]>["meetingEntryPolicy"];
   };
 };
 
@@ -280,6 +283,7 @@ export async function createGroupEventSeries(
   const settings = JSON.stringify({
     memberEligibility: input.policy.memberEligibility,
     guestPolicy: input.policy.guestPolicy,
+    meetingEntryPolicy: input.policy.meetingEntryPolicy ?? DEFAULT_MEETING_ENTRY_POLICY,
   });
   const providerData = input.providerJoinUrl
     ? JSON.stringify({ joinUrlCiphertext: await sealProviderJoinUrl(input.providerJoinUrl, encryptionSecret) })
@@ -293,7 +297,14 @@ export async function createGroupEventSeries(
       }),
       ...prepareSeriesEvent(
         db,
-        { ...input, policy: { ...input.policy, visibility: input.policy.visibility ?? "group_members" } },
+        {
+          ...input,
+          policy: {
+            ...input.policy,
+            visibility: input.policy.visibility ?? "group_members",
+            meetingEntryPolicy: input.policy.meetingEntryPolicy ?? DEFAULT_MEETING_ENTRY_POLICY,
+          },
+        },
         { eventId, groupId: group.id, groupSlug: group.slug, slug, settings, now },
       ),
       db
@@ -382,6 +393,7 @@ export async function updateGroupEventSeries(
           ...currentPolicy,
           memberEligibility: input.policy.memberEligibility,
           guestPolicy: input.policy.guestPolicy,
+          meetingEntryPolicy: input.policy.meetingEntryPolicy ?? existing.meetingEntryPolicy,
         }
       : currentPolicy,
   );

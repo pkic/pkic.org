@@ -88,20 +88,17 @@ test("invited external guest verifies the separate mailbox code before meeting e
   );
   expect(created.stage, JSON.stringify(created.body)).toBe("guest");
   expect(created.status, JSON.stringify(created.body)).toBe(201);
-  const occurrenceId = created.occurrenceId!;
-
   const invitationSince = await capturedEmailCount();
   const invitation = await waitForCapturedEmail(guestEmail, "Invitation:", { since: invitationSince - 1 });
-  const invitationUrl = extractEmailUrl(invitation, "/meetings/join/");
-  expect(invitationUrl).toContain("#/verify?token=pkc1_");
-  expect(invitationUrl).toContain(`occurrence=${occurrenceId}`);
+  const invitationUrl = extractEmailUrl(invitation, "/m/#token=g2.");
+  expect(invitationUrl).toMatch(/\/m\/#token=g2(?:\.[A-Za-z0-9_-]{22}){2}$/);
 
   const guestContext = await browser.newContext({ storageState: undefined });
   const guestPage = await guestContext.newPage();
   try {
     const codeSince = await capturedEmailCount();
     await guestPage.goto(invitationUrl);
-    await expect(guestPage).toHaveURL(new RegExp(`/meetings/join/\\?occurrence=${occurrenceId}$`));
+    await expect(guestPage).toHaveURL(/\/m\/#token=g2(?:\.[A-Za-z0-9_-]{22}){2}$/);
     await expect(guestPage.getByRole("heading", { name: "Verify your invitation" })).toBeVisible();
     await expect(
       guestPage.getByText("Enter the code sent to the invited email address in this same browser."),

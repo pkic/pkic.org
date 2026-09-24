@@ -1,6 +1,13 @@
+import { isPersonalMeetingToken } from "../../../shared/meeting-personal-token";
+
 export interface MeetingGuestInvitationFragment {
   token: string;
   occurrenceId: string;
+}
+
+export function parsePersonalMeetingLinkFragment(hash: string): string | null {
+  const token = hash.startsWith("#token=") ? hash.slice("#token=".length) : "";
+  return isPersonalMeetingToken(token) ? token : null;
 }
 
 export function parseMeetingGuestInvitationFragment(hash: string): MeetingGuestInvitationFragment | null {

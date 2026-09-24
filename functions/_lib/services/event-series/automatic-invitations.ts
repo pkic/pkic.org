@@ -23,6 +23,7 @@ import {
   type SeriesCalendarOccurrence,
 } from "./series-calendar";
 import { occurrenceOrganizerAddress, type OccurrenceNotificationOptions } from "./occurrence-notifications";
+import { memberMeetingLinkUrl, memberMeetingLinkUrls } from "./personal-entry-links";
 
 export const AUTOMATIC_INVITATION_TEMPLATE_KEY = "meeting-series-invitation";
 export interface AutomaticInvitationOptions extends Pick<OccurrenceNotificationOptions, "signingSecret" | "rsvpEmail"> {
@@ -118,7 +119,20 @@ export async function runAutomaticMeetingInvitations(
   if (occurrences.length > MEETING_CALENDAR_OCCURRENCE_LIMIT)
     throw new AppError(422, "MEETING_CALENDAR_TOO_LARGE", "The calendar exceeds the supported occurrence horizon");
   const organizerEmail = (await occurrenceOrganizerAddress(seriesId, options))!;
-  const joinUrl = seriesCalendarUrl(appBaseUrl, series);
+  const personalLinks = await memberMeetingLinkUrls(
+    db,
+    seriesId,
+    null,
+    page.flatMap((recipient) =>
+      recipient.user_id ? [{ userId: recipient.user_id, email: recipient.recipient_email }] : [],
+    ),
+    appBaseUrl,
+    options.signingSecret,
+  );
+  const joinUrlFor = (recipient: Recipient) =>
+    recipient.user_id
+      ? memberMeetingLinkUrl(personalLinks, recipient.user_id, recipient.recipient_email)
+      : seriesCalendarUrl(appBaseUrl, series);
   const deliveries = page.map((row) => ({
     ...row,
     sequence: Math.max(series.calendar_revision, row.previous_sequence + 1),
@@ -158,13 +172,15 @@ export async function runAutomaticMeetingInvitations(
         startsAt:
           occurrences.find((item) => item.status === "scheduled" && item.starts_at > now)?.starts_at ??
           series.starts_at,
-        joinUrl,
+        joinUrl: joinUrlFor(row),
       },
+      capabilityLinkValues: [joinUrlFor(row)],
       calendar: buildSeriesCalendarPayload({ ...series, calendar_revision: row.sequence }, occurrences, {
         definition,
         baseUrl: appBaseUrl,
         attendeeEmail: row.recipient_email,
         organizerEmail,
+        joinUrl: joinUrlFor(row),
         cancelled: row.cancelled === 1,
         now,
       }),

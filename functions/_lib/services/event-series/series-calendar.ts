@@ -65,6 +65,7 @@ export function buildSeriesCalendarPayload(
     cancelled: boolean;
     now: string;
     published?: boolean;
+    joinUrl?: string;
     definition?: ReturnType<typeof prepareSeriesCalendarDefinition>;
   },
 ): CalendarPayload {
@@ -86,7 +87,7 @@ export function buildSeriesCalendarPayload(
   }
   const utc = (instant: string) => ICAL.Time.fromJSDate(new Date(instant), true);
   const uid = `${series.id}@pkic.org`;
-  const url = seriesCalendarUrl(options.baseUrl, series);
+  const url = options.joinUrl ?? seriesCalendarUrl(options.baseUrl, series);
   function event(startsAt: string, endsAt: string, location: string | null, cancelled: boolean) {
     const item = new ICAL.Component("vevent");
     item.addPropertyWithValue("uid", uid);

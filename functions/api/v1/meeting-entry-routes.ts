@@ -1,19 +1,56 @@
 import type { z } from "zod";
 import {
+  meetingInvitationVerificationCreateResponseSchema,
   meetingJoinConfirmRouteSchema,
   meetingJoinConfirmSchema,
   meetingJoinLandingRouteSchema,
   meetingJoinResponseSchema,
 } from "../../../assets/shared/schemas/meeting-entry";
+import type { MeetingGuest } from "../../_lib/auth/meeting-guest-record";
+import { serializeMeetingGuestChallengeCookie } from "../../_lib/auth/meeting-guest-session";
 import { requestDb, type AdminContext } from "../../_lib/db/context";
+import { processOutboxByIdBackground } from "../../_lib/email/outbox";
 import { AppError } from "../../_lib/errors";
 import { jsonPrivate } from "../../_lib/http";
 import { openApiRoute } from "../../_lib/openapi/route";
+import { enforceEmailTriggerRateLimits } from "../../_lib/rate-limit";
 import { getClientIp, getUserAgent } from "../../_lib/request";
 import { confirmMeetingJoin, getMeetingJoinLanding, type MeetingJoinSubject } from "../../_lib/services/event-series";
+import { startMeetingGuestVerification } from "../../_lib/services/event-series/guest-verification";
 
 type MeetingJoinConfirmInput = z.infer<typeof meetingJoinConfirmSchema>;
 type MeetingJoinSubjectResolver = (c: AdminContext, occurrenceId: string) => Promise<MeetingJoinSubject>;
+
+/** Both guest invitation forms use the same challenge, email, and browser-binding response. */
+export async function createMeetingGuestChallengeResponse(
+  c: AdminContext,
+  guest: MeetingGuest,
+  occurrenceId: string,
+  rateLimitNamespace: string,
+): Promise<Response> {
+  const db = requestDb(c);
+  await enforceEmailTriggerRateLimits({
+    emailBinding: c.env.EMAIL_RATE_LIMITER,
+    ipBinding: c.env.IP_RATE_LIMITER,
+    namespace: rateLimitNamespace,
+    email: guest.normalizedEmail,
+    clientIp: getClientIp(c.req.raw),
+  });
+  const started = await startMeetingGuestVerification(db, guest, occurrenceId);
+  c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, started.outboxId));
+  const response = jsonPrivate(
+    meetingInvitationVerificationCreateResponseSchema.parse({
+      verificationId: started.challenge.challengeId,
+      expiresAt: started.challenge.expiresAt,
+    }),
+    202,
+  );
+  response.headers.append(
+    "set-cookie",
+    serializeMeetingGuestChallengeCookie(started.challenge.browserSecret, occurrenceId, c.req.raw),
+  );
+  return response;
+}
 
 function requireMeetingSecrets(c: AdminContext): { signing: string; encryption: string } {
   if (!c.env.INTERNAL_SIGNING_SECRET || !c.env.MEETING_PROVIDER_ENCRYPTION_KEY) {

@@ -11,6 +11,7 @@ import { MeetingJoinForm } from "../../assets/ts/member-flows/meeting-join/Meeti
 import {
   consumeMeetingGuestInvitationFragment,
   parseMeetingGuestInvitationFragment,
+  parsePersonalMeetingLinkFragment,
 } from "../../assets/ts/member-flows/meeting-join/invitation-fragment";
 
 const mounted: HTMLElement[] = [];
@@ -78,6 +79,48 @@ describe("secure meeting join browser flow", () => {
       ),
     ).toEqual({ token: "secret", occurrenceId: "occurrence-id" });
     expect(replaceState).toHaveBeenCalledWith({}, "", "/meetings/join/?occurrence=occurrence-id");
+  });
+
+  it("keeps a personal link reloadable and requires verification on a new browser", async () => {
+    const token = `m2.${"A".repeat(22)}.${"B".repeat(22)}.0.${"C".repeat(22)}`;
+    expect(parsePersonalMeetingLinkFragment(`#token=${token}`)).toBe(token);
+    expect(parsePersonalMeetingLinkFragment(`#p=${token}`)).toBeNull();
+    const requests: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = String(input);
+        requests.push(url);
+        if (url === "/api/v1/meetings/links/resolve")
+          return jsonResponse({
+            occurrenceId: occurrence.id,
+            seriesId: occurrence.seriesId,
+            eventName: occurrence.eventName,
+            startsAt: occurrence.startsAt,
+            name: "Paul",
+          });
+        if (url === `/api/v1/meetings/occurrences/${occurrence.id}/links/session`)
+          return jsonResponse({
+            status: "verify",
+            verification: "member",
+            occurrenceId: occurrence.id,
+            eventName: occurrence.eventName,
+            name: "Paul",
+          });
+        throw new Error(`Unexpected request: ${url}`);
+      }),
+    );
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    await act(async () => render(<App invitation={null} personalToken={token} />, container));
+    await vi.waitFor(() => expect(container.textContent).toContain("Welcome, Paul"));
+    expect(container.textContent).toContain("Verify and continue");
+    expect(container.textContent).toContain("Not Paul?");
+    expect(requests).toEqual([
+      "/api/v1/meetings/links/resolve",
+      `/api/v1/meetings/occurrences/${occurrence.id}/links/session`,
+    ]);
   });
 
   it("renders only the server-authored identity and submits checked current terms", () => {

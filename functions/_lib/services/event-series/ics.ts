@@ -14,6 +14,7 @@ import { buildSeriesCalendarPayload, type SeriesCalendar, type SeriesCalendarOcc
 import { buildOccurrenceInviteIcs } from "./invite-calendar";
 import { occurrenceJoinUrl } from "./occurrence-notifications";
 import { meetingCalendarFilename } from "./calendar-filename";
+import { memberMeetingLinkUrl, memberMeetingLinkUrls } from "./personal-entry-links";
 
 interface CalendarGroupContext {
   id: string;
@@ -37,7 +38,7 @@ export async function generateGroupSeriesIcs(
   seriesId: string,
   baseUrl: string,
   occurrenceId?: string,
-  personal?: { userId: string; attendeeEmail: string; organizerEmail: string },
+  personal?: { userId: string; attendeeEmail: string; organizerEmail: string; signingSecret: string },
 ): Promise<{ content: string; filename: string }> {
   if (personal) {
     const eligible = await first<{ allowed: number }>(
@@ -87,6 +88,18 @@ export async function generateGroupSeriesIcs(
     /\.ics$/,
     personal ? "-personal.ics" : ".ics",
   );
+  let personalJoinUrl: string | undefined;
+  if (personal) {
+    const links = await memberMeetingLinkUrls(
+      db,
+      seriesId,
+      occurrenceId ?? null,
+      [{ userId: personal.userId, email: personal.attendeeEmail }],
+      baseUrl,
+      personal.signingSecret,
+    );
+    personalJoinUrl = memberMeetingLinkUrl(links, personal.userId, personal.attendeeEmail);
+  }
   if (occurrenceId) {
     const row = rows[0];
     if (!row.occurrence_id || !row.occurrence_starts_at || !row.ends_at) {
@@ -102,7 +115,7 @@ export async function generateGroupSeriesIcs(
           startsAt: row.occurrence_starts_at,
           endsAt: row.ends_at,
           location: row.occurrence_location,
-          joinUrl: occurrenceJoinUrl(baseUrl, row.occurrence_id),
+          joinUrl: personalJoinUrl ?? occurrenceJoinUrl(baseUrl, row.occurrence_id),
           sequence: row.calendar_sequence ?? 0,
           attendeeEmail: personal?.attendeeEmail,
           organizerEmail: personal?.organizerEmail,
@@ -134,6 +147,7 @@ export async function generateGroupSeriesIcs(
       now: nowIso(),
       published: !personal,
       attendeeEmail: personal?.attendeeEmail,
+      joinUrl: personalJoinUrl,
       organizerEmail: personal?.organizerEmail,
     }).inlineContent!,
   };

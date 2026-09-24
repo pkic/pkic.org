@@ -17,6 +17,7 @@ export function draftFromSeries(series: GroupEventSeries): MeetingSeriesDraft {
     visibility: series.visibility,
     memberEligibility: series.memberEligibility ?? "owner_group",
     guestPolicy: series.guestPolicy ?? "none",
+    meetingEntryPolicy: series.meetingEntryPolicy,
   };
 }
 
@@ -42,13 +43,16 @@ export function seriesChanges(
     draft.registrationPolicy !== series.registrationPolicy ||
     draft.visibility !== series.visibility ||
     draft.memberEligibility !== (series.memberEligibility ?? "owner_group") ||
-    draft.guestPolicy !== (series.guestPolicy ?? "none")
+    draft.guestPolicy !== (series.guestPolicy ?? "none") ||
+    draft.meetingEntryPolicy.authentication !== series.meetingEntryPolicy.authentication ||
+    draft.meetingEntryPolicy.rememberDays !== series.meetingEntryPolicy.rememberDays
   ) {
     changes.policy = {
       registrationPolicy: draft.registrationPolicy,
       visibility: draft.visibility,
       memberEligibility: draft.memberEligibility,
       guestPolicy: draft.guestPolicy,
+      meetingEntryPolicy: draft.meetingEntryPolicy,
     };
   }
   if (active !== series.active) changes.active = active;

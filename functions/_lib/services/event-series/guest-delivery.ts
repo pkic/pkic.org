@@ -16,6 +16,7 @@ interface GuestInvitationDeliveryInput {
   startsAt: string;
   occurrenceId: string;
   appBaseUrl: string;
+  personalUrl?: string;
 }
 
 function invitationCapabilityTtlSeconds(expiresAt: string): number {
@@ -24,15 +25,16 @@ function invitationCapabilityTtlSeconds(expiresAt: string): number {
 }
 
 export async function prepareMeetingGuestInvitationDelivery(db: DatabaseLike, input: GuestInvitationDeliveryInput) {
-  const queuedToken = await queuedCapabilityTokenBoundToSecret(
-    "meeting_guest_verify",
-    input.guestId,
-    input.invitationSecret,
-    invitationCapabilityTtlSeconds(input.expiresAt),
-  );
-  const invitationUrl = `${input.appBaseUrl}/meetings/join/#/verify?token=${encodeURIComponent(
-    queuedToken,
-  )}&occurrence=${encodeURIComponent(input.occurrenceId)}`;
+  const invitationUrl =
+    input.personalUrl ??
+    `${input.appBaseUrl}/meetings/join/#/verify?token=${encodeURIComponent(
+      await queuedCapabilityTokenBoundToSecret(
+        "meeting_guest_verify",
+        input.guestId,
+        input.invitationSecret,
+        invitationCapabilityTtlSeconds(input.expiresAt),
+      ),
+    )}&occurrence=${encodeURIComponent(input.occurrenceId)}`;
   return prepareQueueEmailStatement(db, {
     outboxId: uuid(),
     idempotencyKey: `meeting-guest-invitation:${input.guestId}:${input.invitationVersion}`,

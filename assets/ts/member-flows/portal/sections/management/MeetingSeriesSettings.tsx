@@ -124,6 +124,8 @@ export function MeetingSeriesSettings({
                 visibility: form.of("policy.visibility"),
                 memberEligibility: form.of("policy.memberEligibility"),
                 guestPolicy: form.of("policy.guestPolicy"),
+                meetingEntryAuthentication: form.of("policy.meetingEntryPolicy.authentication"),
+                meetingEntryRememberDays: form.of("policy.meetingEntryPolicy.rememberDays"),
               }}
             />
             {/* A note about the whole form, not the help text of one control:
@@ -157,6 +159,13 @@ export function MeetingSeriesSettings({
               { term: "Visibility", value: EVENT_VISIBILITY_LABELS[series.visibility] },
               { term: "Attendee eligibility", value: ELIGIBILITY_LABELS[series.memberEligibility ?? "owner_group"] },
               { term: "External guests", value: GUEST_LABELS[series.guestPolicy ?? "none"] },
+              {
+                term: "Meeting entry authentication",
+                value:
+                  series.meetingEntryPolicy.authentication === "always"
+                    ? "Verify on every entry"
+                    : `Remember this browser for ${String(series.meetingEntryPolicy.rememberDays)} days`,
+              },
               { term: "Status", value: series.active ? "Active" : "Inactive" },
             ]}
           />

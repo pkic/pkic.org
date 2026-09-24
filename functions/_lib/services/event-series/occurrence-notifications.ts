@@ -18,6 +18,7 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import { buildOccurrenceCalendarPayload, type OccurrenceInvite } from "./invite-calendar";
+import { memberMeetingLinkUrl, memberMeetingLinkUrls, memberMeetingOccurrenceLinkUrls } from "./personal-entry-links";
 
 export const PARTICIPANT_INVITATION_TEMPLATE_KEY = "meeting-participant-invitation";
 export const OCCURRENCE_UPDATED_TEMPLATE_KEY = "meeting-occurrence-updated";
@@ -97,7 +98,27 @@ export async function prepareOccurrenceChangeNotifications(
   options: OccurrenceNotificationOptions,
 ): Promise<StatementLike[]> {
   const recipients = await listInvitedRecipients(db, subject.occurrenceId);
-  const rows = await buildOccurrenceChangeEmails(subject, change, options, recipients);
+  const series = await all<{ series_id: string }>(db, "SELECT series_id FROM event_occurrences WHERE id = ? LIMIT 1", [
+    subject.occurrenceId,
+  ]);
+  const links =
+    options.signingSecret && series[0]
+      ? await memberMeetingLinkUrls(
+          db,
+          series[0].series_id,
+          subject.occurrenceId,
+          recipients.flatMap((recipient) =>
+            recipient.user_id ? [{ userId: recipient.user_id, email: recipient.recipient_email }] : [],
+          ),
+          options.appBaseUrl,
+          options.signingSecret,
+        )
+      : new Map<string, string>();
+  const rows = await buildOccurrenceChangeEmails(subject, change, options, recipients, (recipient) =>
+    recipient.user_id && links.size
+      ? memberMeetingLinkUrl(links, recipient.user_id, recipient.recipient_email)
+      : occurrenceJoinUrl(options.appBaseUrl, subject.occurrenceId),
+  );
   return prepareBulkQueueEmailChunkStatements(db, rows, nowIso()).map((chunk) => chunk.statement);
 }
 
@@ -106,13 +127,14 @@ async function buildOccurrenceChangeEmails(
   change: OccurrenceChange,
   options: OccurrenceNotificationOptions,
   recipients: InvitedRecipient[],
+  joinUrlFor: (recipient: InvitedRecipient) => string,
 ): Promise<BulkEmailQueueRow[]> {
   if (!recipients.length) return [];
   const organizerEmail = await occurrenceOrganizerAddress(subject.occurrenceId, options);
-  const joinUrl = occurrenceJoinUrl(options.appBaseUrl, subject.occurrenceId);
   const method = change === "cancelled" ? "CANCEL" : "REQUEST";
   const templateKey = change === "cancelled" ? OCCURRENCE_CANCELLED_TEMPLATE_KEY : OCCURRENCE_UPDATED_TEMPLATE_KEY;
   return recipients.map((recipient) => {
+    const joinUrl = joinUrlFor(recipient);
     const location = outboundMeetingLocation(subject.location);
     const previousLocation = outboundMeetingLocation(subject.previousLocation);
     const invite: OccurrenceInvite = {
@@ -194,6 +216,17 @@ export async function prepareSeriesCancellationNotifications(
     grouped.set(row.occurrenceId, recipients);
   }
   const emails: BulkEmailQueueRow[] = [];
+  const urls = options.signingSecret
+    ? await memberMeetingOccurrenceLinkUrls(
+        db,
+        seriesId,
+        rows.flatMap((row) =>
+          row.user_id ? [{ userId: row.user_id, email: row.recipient_email, occurrenceId: row.occurrenceId }] : [],
+        ),
+        options.appBaseUrl,
+        options.signingSecret,
+      )
+    : new Map<string, string>();
   for (const recipients of grouped.values()) {
     emails.push(
       ...(await buildOccurrenceChangeEmails(
@@ -201,6 +234,12 @@ export async function prepareSeriesCancellationNotifications(
         "cancelled",
         options,
         recipients,
+        (recipient) =>
+          recipient.user_id
+            ? (urls.get(
+                `${recipients[0].occurrenceId}\0${recipient.user_id}\0${recipient.recipient_email.toLowerCase()}`,
+              ) ?? occurrenceJoinUrl(options.appBaseUrl, recipients[0].occurrenceId))
+            : occurrenceJoinUrl(options.appBaseUrl, recipients[0].occurrenceId),
       )),
     );
   }

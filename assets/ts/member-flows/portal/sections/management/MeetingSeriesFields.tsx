@@ -1,5 +1,9 @@
 import { MEETING_CALENDAR_HELP } from "../../../../../shared/meeting-calendar-policy";
 import {
+  MEETING_ENTRY_AUTHENTICATIONS,
+  type MeetingEntryPolicy,
+} from "../../../../../shared/schemas/meeting-entry-policy";
+import {
   EVENT_GUEST_POLICIES,
   EVENT_MEMBER_ELIGIBILITIES,
   EVENT_PROFILE_LABELS,
@@ -34,6 +38,7 @@ export interface MeetingSeriesDraft {
   visibility: EventVisibility;
   memberEligibility: EventMemberEligibility;
   guestPolicy: EventGuestPolicy;
+  meetingEntryPolicy: MeetingEntryPolicy;
 }
 
 /**
@@ -85,7 +90,9 @@ export function MeetingSeriesFields({
   draft: MeetingSeriesDraft;
   disabled?: boolean;
   scheduleLocked?: boolean;
-  fieldProps?: Partial<Record<keyof MeetingSeriesDraft, FieldPresentation>>;
+  fieldProps?: Partial<
+    Record<keyof MeetingSeriesDraft | "meetingEntryAuthentication" | "meetingEntryRememberDays", FieldPresentation>
+  >;
   onChange: (draft: MeetingSeriesDraft) => void;
 }) {
   const scheduleDisabled = disabled || scheduleLocked;
@@ -261,6 +268,60 @@ export function MeetingSeriesFields({
             </Select>
           )}
         </Field>
+      </div>
+
+      <div class="pk-grid">
+        <Field
+          {...fieldProps.meetingEntryAuthentication}
+          label="Meeting entry authentication"
+          help="Personal calendar links identify the invited person. Choose when this browser must verify that identity again."
+        >
+          {(control) => (
+            <Select
+              {...control}
+              name="policy.meetingEntryPolicy.authentication"
+              value={draft.meetingEntryPolicy.authentication}
+              disabled={disabled}
+              onChange={(event) =>
+                updateDraft(draft, onChange, "meetingEntryPolicy", {
+                  ...draft.meetingEntryPolicy,
+                  authentication: event.currentTarget.value as MeetingEntryPolicy["authentication"],
+                })
+              }
+            >
+              {MEETING_ENTRY_AUTHENTICATIONS.map((authentication) => (
+                <option key={authentication} value={authentication}>
+                  {authentication === "always" ? "Verify on every entry" : "Remember this browser"}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        {draft.meetingEntryPolicy.authentication === "remember_browser" && (
+          <Field
+            {...fieldProps.meetingEntryRememberDays}
+            label="Remember browser for (days)"
+            help="After this period, the attendee must verify again. Maximum 90 days."
+          >
+            {(control) => (
+              <TextInput
+                {...control}
+                type="number"
+                min={1}
+                max={90}
+                name="policy.meetingEntryPolicy.rememberDays"
+                value={draft.meetingEntryPolicy.rememberDays}
+                disabled={disabled}
+                onInput={(event) =>
+                  updateDraft(draft, onChange, "meetingEntryPolicy", {
+                    ...draft.meetingEntryPolicy,
+                    rememberDays: Number(event.currentTarget.value),
+                  })
+                }
+              />
+            )}
+          </Field>
+        )}
       </div>
 
       <Field {...fieldProps.location} label="Physical location">

@@ -12,7 +12,7 @@ export const GroupMeetingSeriesCalendar = openApiRoute(
   async (c: AdminContext, data) => {
     const db = requestDb(c);
     const { group, viewer } = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
-    let personal: { userId: string; attendeeEmail: string; organizerEmail: string } | undefined;
+    let personal: { userId: string; attendeeEmail: string; organizerEmail: string; signingSecret: string } | undefined;
     if (data.query.personal) {
       const member = await requireMemberFromRequest(db, c.req.raw, c.env);
       if (!c.env.INTERNAL_SIGNING_SECRET) {
@@ -25,7 +25,12 @@ export const GroupMeetingSeriesCalendar = openApiRoute(
       if (!organizerEmail) {
         throw new AppError(503, "EMAIL_SIGNING_NOT_CONFIGURED", "Personal calendar RSVP signing is unavailable");
       }
-      personal = { userId: member.userId, attendeeEmail: member.email, organizerEmail };
+      personal = {
+        userId: member.userId,
+        attendeeEmail: member.email,
+        organizerEmail,
+        signingSecret: c.env.INTERNAL_SIGNING_SECRET,
+      };
     }
     const calendar = await generateGroupSeriesIcs(
       db,

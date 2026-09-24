@@ -110,7 +110,7 @@ describe("recurring meeting calendars", () => {
     const master = calendar.getFirstSubcomponent("vevent")!;
     expect(String(master.getFirstPropertyValue("attendee"))).toContain(email);
     expect(String(master.getFirstPropertyValue("organizer"))).toContain("mailto:");
-    expect(String(master.getFirstPropertyValue("url"))).toBe(`${BASE}/meetings/join/?series=${series.id}`);
+    expect(String(master.getFirstPropertyValue("url"))).toMatch(/^https:\/\/app\.test\/m\/#token=m2\./);
     expect(master.getFirstSubcomponent("valarm")?.getFirstPropertyValue("action")).toBe("DISPLAY");
     expect(master.hasProperty("location")).toBe(false);
     expect(calendar.toString()).not.toContain(privateUrl);

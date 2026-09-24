@@ -23,6 +23,7 @@ import { currentUserVotesListResponseSchema } from "../../../../shared/schemas/v
 import { formatDateTime } from "../../../../shared/format-date";
 import { Badge } from "../../../components/Badge";
 import { ErrorAlert } from "../../../components/ErrorAlert";
+import { IconCalendarDownload } from "../../../components/icons";
 import { Spinner } from "../../../components/Spinner";
 import { EmptyState } from "../../../ui/EmptyState";
 import { PageHeader } from "../../../ui/PageHeader";
@@ -160,23 +161,32 @@ function MeetingsPanel() {
       {occurrences.length > 0 && (
         <ul class="pk-stack pk-stack--tight" aria-label="Upcoming meetings">
           {occurrences.map((occurrence) => (
-            <li key={occurrence.occurrenceId} class="pk-cluster">
-              <Link
-                href={`/groups/${encodeURIComponent(occurrence.groupId)}/meetings/${encodeURIComponent(occurrence.seriesId)}`}
-              >
-                {occurrence.eventName}
-              </Link>
+            <li key={occurrence.occurrenceId} class="pk-stack pk-stack--tight">
+              <div class="pk-cluster pk-cluster--nowrap">
+                <Link
+                  href={`/groups/${encodeURIComponent(occurrence.groupId)}/meetings/${encodeURIComponent(occurrence.seriesId)}`}
+                >
+                  {occurrence.eventName}
+                </Link>
+                <ButtonLink
+                  variant="ghost"
+                  size="sm"
+                  icon
+                  class="pk-push"
+                  aria-label="Download my personal calendar (.ics)"
+                  title="Download my personal calendar (.ics)"
+                  href={`/api/v1/groups/${encodeURIComponent(occurrence.groupId)}/meetings/series/${encodeURIComponent(occurrence.seriesId)}/calendar.ics?personal=true`}
+                >
+                  <IconCalendarDownload />
+                </ButtonLink>
+              </div>
               <span class="pk-small">{occurrence.groupName}</span>
-              <span class="pk-small">{formatDateTime(occurrence.startsAt, { fullDate: true })}</span>
-              {formatRelativeDays(occurrence.startsAt) && (
-                <span class="pk-small pk-push">({formatRelativeDays(occurrence.startsAt)})</span>
-              )}
-              <ButtonLink
-                size="sm"
-                href={`/api/v1/groups/${encodeURIComponent(occurrence.groupId)}/meetings/series/${encodeURIComponent(occurrence.seriesId)}/calendar.ics?personal=true`}
-              >
-                Download my personal calendar (.ics)
-              </ButtonLink>
+              <div class="pk-cluster">
+                <span class="pk-small">{formatDateTime(occurrence.startsAt, { fullDate: true })}</span>
+                {formatRelativeDays(occurrence.startsAt) && (
+                  <span class="pk-small pk-push">({formatRelativeDays(occurrence.startsAt)})</span>
+                )}
+              </div>
             </li>
           ))}
         </ul>

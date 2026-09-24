@@ -16,6 +16,7 @@ import { httpsCapabilityUrlSchema } from "./urls";
 import { eventGroupGrantSchemas } from "./resource-grants";
 import { eventInviteValiditySchema, eventInviteWindowSchema } from "./event-invite-validity";
 import { requiresSession } from "./route-contract";
+import { DEFAULT_MEETING_ENTRY_POLICY, meetingEntryPolicySchema } from "./meeting-entry-policy";
 
 export const EVENT_PROFILE_KEYS = ["meeting", "board_meeting", "conference", "workshop", "tutorial"] as const;
 export const eventProfileKeySchema = z.enum(EVENT_PROFILE_KEYS);
@@ -105,6 +106,7 @@ export const eventProfilePolicySchema = z.object({
   visibility: eventVisibilitySchema.default("group_members"),
   memberEligibility: eventMemberEligibilitySchema,
   guestPolicy: eventGuestPolicySchema,
+  meetingEntryPolicy: meetingEntryPolicySchema.default(DEFAULT_MEETING_ENTRY_POLICY),
 });
 
 function isValidTimeZone(value: string): boolean {
@@ -148,6 +150,7 @@ export const eventSeriesSchema = z.object({
   visibility: eventVisibilitySchema,
   memberEligibility: eventProfilePolicySchema.shape.memberEligibility.optional(),
   guestPolicy: eventGuestPolicySchema.optional(),
+  meetingEntryPolicy: meetingEntryPolicySchema,
   startsAt: utcInstantSchema,
   recurrenceRule: recurrenceRuleSchema,
   timezone: timeZoneSchema,

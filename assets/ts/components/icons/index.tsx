@@ -363,6 +363,27 @@ export function IconCalendarCheck(props: SvgProps) {
   );
 }
 
+export function IconCalendarDownload(props: SvgProps) {
+  return (
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      width="18"
+      height="18"
+      viewBox="0 0 16 16"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.25"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden="true"
+      {...props}
+    >
+      <path d="M4.5 1.5v3m7-3v3M2 6h12M3.5 3h9A1.5 1.5 0 0 1 14 4.5v8a1.5 1.5 0 0 1-1.5 1.5h-9A1.5 1.5 0 0 1 2 12.5v-8A1.5 1.5 0 0 1 3.5 3Z" />
+      <path d="M8 7.75v4m-1.75-1.5L8 12l1.75-1.75" />
+    </svg>
+  );
+}
+
 // ── Text formatting ─────────────────────────────────────────────────────────
 //
 // The Markdown editor's toolbar (issue 114): one glyph per command, drawn as

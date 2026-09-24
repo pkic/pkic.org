@@ -75,6 +75,8 @@ describe("authenticated broadcast entry", () => {
     expect(meetingEntryReturnUrl(`#/meeting-series-entry/${landing.occurrence.seriesId}`)).toBe(
       meetingSeriesEntryUrl(landing.occurrence.seriesId),
     );
+    const personalToken = `m2.${"A".repeat(22)}.${"B".repeat(22)}.0.${"C".repeat(22)}`;
+    expect(meetingEntryReturnUrl(`#/meeting-link/${personalToken}`)).toBe(`/m/#token=${personalToken}`);
     for (const hash of [
       "#/meeting-entry/https://evil.test",
       "#/meeting-entry/../evil",

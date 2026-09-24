@@ -4,9 +4,8 @@ import { configureMeetingOccurrence } from "./helpers/meeting-occurrence";
  *
  * The consortium wanted to know who actually comes to a meeting, and a link
  * that one person forwards to a colleague cannot answer that. What goes out
- * is the occurrence's own join page: personal not because it carries a secret
- * but because entering it needs the recipient's session, so the attendance it
- * writes is theirs and a forwarded copy admits nobody.
+ * is a signed personal locator; a new browser still has to verify the named
+ * recipient before its meeting-only session can record entry.
  *
  * Sending again is a numbered round, which is what lets a reminder exist
  * without becoming a duplicate — and what stops two managers pressing send at
@@ -18,7 +17,7 @@ import {
   cancelGroupEventSeries,
   createGroupEventSeries,
   listOccurrenceInvitations,
-  sendMeetingParticipantInvitations,
+  sendMeetingParticipantInvitations as sendMeetingParticipantInvitationsService,
   updateSeriesOccurrence,
 } from "../functions/_lib/services/event-series";
 import { recordCalendarRsvpEvent } from "../functions/_lib/services/calendar-rsvp";
@@ -37,6 +36,15 @@ import { resetDb } from "./helpers/reset-db";
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
 const ENCRYPTION_SECRET = "meeting-participant-invitation-encryption-secret-0";
 const APP_BASE_URL = "https://app.test";
+const TEST_SIGNING_SECRET = "meeting-participant-links-test-secret";
+
+function sendMeetingParticipantInvitations(...args: Parameters<typeof sendMeetingParticipantInvitationsService>) {
+  const [db, actor, groupId, seriesId, occurrenceId, baseUrl, calendar] = args;
+  return sendMeetingParticipantInvitationsService(db, actor, groupId, seriesId, occurrenceId, baseUrl, {
+    signingSecret: TEST_SIGNING_SECRET,
+    ...calendar,
+  });
+}
 
 interface OutboxRow {
   recipient_email: string;
@@ -104,7 +112,7 @@ describe("meeting participant invitations", () => {
     occurrenceId = occurrence.id;
   });
 
-  it("queues one link per participant, and the link is the occurrence's join page", async () => {
+  it("queues a distinct personal meeting link per participant", async () => {
     await seatParticipant("first-participant@example.test");
     await seatParticipant("second-participant@example.test");
 
@@ -123,16 +131,10 @@ describe("meeting participant invitations", () => {
       "first-participant@example.test",
       "second-participant@example.test",
     ]);
-    /*
-     * The same address for everybody, deliberately. A per-person secret in a
-     * mailbox is the thing that gets forwarded; this one is only usable by
-     * whoever can sign in, and the sign-in is what names the attendee.
-     */
-    for (const row of queued) {
-      expect(JSON.parse(row.payload_json).joinUrl).toBe(
-        `${APP_BASE_URL}/meetings/join/?occurrence=${encodeURIComponent(occurrenceId)}`,
-      );
-    }
+    const urls = queued.map((row) => JSON.parse(row.payload_json).joinUrl as string);
+    expect(urls).toHaveLength(2);
+    expect(new Set(urls).size).toBe(2);
+    for (const url of urls) expect(url).toMatch(/^https:\/\/app\.test\/m\/#token=m2\./);
     // Recorded on the occurrence, so the surface can say when a round went.
     expect(
       await queryAll<{ invitations_round: number; invitations_sent_at: string | null }>(
@@ -239,7 +241,7 @@ describe("meeting participant invitations", () => {
     expect(links[0].idempotency_key).toMatch(
       new RegExp(`^meeting-series-invitation:${automatic.id}:auto-first@example.test:`),
     );
-    expect(JSON.parse(links[0].payload_json).joinUrl).toBe(`${APP_BASE_URL}/meetings/join/?series=${automatic.id}`);
+    expect(JSON.parse(links[0].payload_json).joinUrl).toMatch(/^https:\/\/app\.test\/m\/#token=m2\./);
 
     // A member who joins the group later is owed the upcoming meeting's link.
     await seatParticipant("auto-late@example.test");

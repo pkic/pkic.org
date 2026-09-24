@@ -26,6 +26,7 @@ import { commitEventResourceManagementBatch, queryEventResourceManagementPage } 
 import { prepareMeetingGuestInvitationDelivery } from "./guest-delivery";
 import { type EventGuestRow, toEventGuest } from "./record";
 import { getManagedSeriesOccurrence } from "./occurrences";
+import { guestPersonalMeetingUrl } from "./personal-entry-links";
 
 type GuestInviteInput = z.infer<typeof eventOccurrenceGuestInviteSchema>;
 type GuestListQuery = z.infer<typeof eventOccurrenceGuestsListQuerySchema>;
@@ -116,6 +117,7 @@ export async function inviteOccurrenceGuest(
   occurrenceId: string,
   input: GuestInviteInput,
   appBaseUrl: string,
+  signingSecret?: string,
 ) {
   const { context, series, occurrence } = await getManagedSeriesOccurrence(
     db,
@@ -158,6 +160,9 @@ export async function inviteOccurrenceGuest(
     startsAt: occurrence.startsAt,
     occurrenceId,
     appBaseUrl,
+    personalUrl: signingSecret
+      ? await guestPersonalMeetingUrl(appBaseUrl, id, invitationSecret, signingSecret)
+      : undefined,
   });
   try {
     await commitEventResourceManagementBatch(db, actor, context, "manage", [

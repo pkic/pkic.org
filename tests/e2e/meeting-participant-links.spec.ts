@@ -3,12 +3,9 @@
  * their own.
  *
  * The consortium wanted to know who actually comes to a meeting, which one
- * address forwarded around a company cannot answer (#6). What goes out is the
- * occurrence's join page: personal not because it carries a secret — a secret
- * in a mailbox is exactly the thing that gets forwarded — but because opening
- * it needs the reader's own session. So the journey is two halves: a manager
- * sends the round from the meeting, and the link that arrives, opened by
- * somebody who is not signed in, asks who they are instead of letting them in.
+ * address forwarded around a company cannot answer (#6). The stable personal
+ * calendar link names the recipient, but a new browser still needs a fresh
+ * member sign-in before it can join or remember that identity.
  *
  * @covers event.3.10
  */
@@ -194,23 +191,23 @@ for (const broadcast of [false, true]) {
     const drained = await page.request.post("/api/v1/email/outbox/process", { data: { limit: 100 } });
     expect(drained.status()).toBe(200);
     const invitation = await waitForCapturedEmail(participantEmail, eventName, { since: since - 1 });
-    const joinUrl = extractEmailUrl(invitation, "/meetings/join/");
-    expect(joinUrl).toContain(`occurrence=${occurrenceId}`);
-    // No token, no code, nothing to steal: the link is the meeting's address.
-    expect(joinUrl).not.toContain("token=");
+    const joinUrl = extractEmailUrl(invitation, "/m/#token=m2.");
+    expect(joinUrl).toMatch(/\/m\/#token=m2(?:\.[A-Za-z0-9_-]{22}){4}$/);
+    expect(joinUrl).not.toContain(`occurrence=${occurrenceId}`);
+    expect(joinUrl).not.toContain("meet.example.test");
 
     /*
-     * And forwarded, it is worth nothing. A reader who is not signed in reaches
-     * the portal's own sign-in rather than the meeting — so the attendance the
-     * link produces always belongs to whoever proved who they were.
+     * The forwarded URL can identify the invitee, but cannot open the provider
+     * without a separate member sign-in on this browser.
      */
     const forwarded = await browser.newContext({ storageState: undefined });
     const forwardedPage = await forwarded.newPage();
     try {
       await forwardedPage.goto(joinUrl);
-      // Told to identify themselves, and told nothing about the meeting: the
-      // page does not name it, place it, or offer a way in.
-      await expect(forwardedPage.getByRole("alert")).toHaveText(/session is required/i, { timeout: 15_000 });
+      await expect(forwardedPage.getByRole("alert")).toContainText("Welcome, E2E Meeting Participant.", {
+        timeout: 15_000,
+      });
+      await expect(forwardedPage.getByRole("button", { name: "Verify and continue" })).toBeVisible();
       await expect(forwardedPage.getByRole("heading", { name: eventName })).toHaveCount(0);
       await expect(forwardedPage.getByRole("button", { name: /join meeting/i })).toHaveCount(0);
       expect(await forwardedPage.content()).not.toContain("jfKfPfyJRdk");
@@ -221,7 +218,7 @@ for (const broadcast of [false, true]) {
       expect(await anonymous.text()).not.toContain("jfKfPfyJRdk");
 
       await forwardedPage.setExtraHTTPHeaders({ "cf-connecting-ip": clientIpForIdentity(participantEmail) });
-      await forwardedPage.getByRole("link", { name: "Sign in to continue" }).click();
+      await forwardedPage.getByRole("button", { name: "Verify and continue" }).click();
       await openEmailSignIn(forwardedPage);
       await forwardedPage.getByLabel("Work email").fill(participantEmail);
       const signInSince = await capturedEmailCount();
@@ -229,7 +226,7 @@ for (const broadcast of [false, true]) {
       const signInEmail = await waitForCapturedEmail(participantEmail, "sign-in link", { since: signInSince });
       await forwardedPage.goto(extractEmailUrl(signInEmail, "/portal/"));
       await forwardedPage.reload();
-      await expect(forwardedPage).toHaveURL(new RegExp(`/meetings/join/\\?occurrence=${occurrenceId}$`));
+      await expect(forwardedPage).toHaveURL(/\/m\/#token=m2(?:\.[A-Za-z0-9_-]{22}){4}$/);
       await expect(forwardedPage.getByRole("heading", { name: eventName })).toBeVisible();
       await expect(forwardedPage.getByText("Preparing secure meeting entry…", { exact: true })).toHaveCount(0);
       await expect(forwardedPage.locator("iframe")).toHaveCount(0);
@@ -263,15 +260,10 @@ for (const broadcast of [false, true]) {
         );
         await forwardedPage.getByRole("button", { name: "Reload player" }).click();
         await expect(player).toBeVisible();
-        await forwardedPage.setViewportSize({ width: 1440, height: 1000 });
-        await forwardedPage.evaluate(() => window.scrollTo(0, 0));
-        await forwardedPage.screenshot({ path: test.info().outputPath("broadcast-desktop.png"), fullPage: true });
         await forwardedPage.setViewportSize({ width: 390, height: 844 });
         const frame = await player.boundingBox();
         expect(frame!.width).toBeLessThanOrEqual(390);
         expect(await forwardedPage.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
-        await forwardedPage.evaluate(() => window.scrollTo(0, 0));
-        await forwardedPage.screenshot({ path: test.info().outputPath("broadcast-mobile.png"), fullPage: true });
 
         await page.goto(`/portal/#/groups/${GROUP_ID}/members`);
         const participantRow = page.getByRole("row").filter({ hasText: participantEmail });
@@ -283,7 +275,7 @@ for (const broadcast of [false, true]) {
         await expect(forwardedPage.getByRole("alert")).toContainText("viewing access could not be confirmed");
         await expect(player).toHaveCount(0);
         await forwardedPage.reload();
-        await expect(forwardedPage.getByRole("alert")).toContainText("not currently eligible");
+        await expect(forwardedPage.getByRole("alert")).toContainText("No eligible upcoming meeting");
         await expect(forwardedPage.locator("iframe")).toHaveCount(0);
       }
     } finally {
@@ -325,10 +317,11 @@ for (const broadcast of [false, true]) {
       expect(calendar).toContain("RRULE:");
       expect(calendar).toContain("BEGIN:VTIMEZONE");
       expect(calendar).toContain("RSVP=TRUE");
-      expect(extractEmailUrl(invitation, "/meetings/join/")).toContain(`/meetings/join/?series=${series.id}`);
+      expect(extractEmailUrl(invitation, "/m/#token=m2.")).toMatch(
+        /\/m\/#token=m2(?:\.[A-Za-z0-9_-]{22}){2}\.0\.[A-Za-z0-9_-]{22}$/,
+      );
       await page.goto(`/portal/#/groups/${GROUP_ID}/meetings/${series.id}/occurrences`);
       await expect(page.getByRole("row").filter({ hasText: "Scheduled" }).first()).toBeVisible();
-      await page.screenshot({ path: test.info().outputPath("automatic-meeting-calendar.png"), fullPage: true });
     }
   });
 }

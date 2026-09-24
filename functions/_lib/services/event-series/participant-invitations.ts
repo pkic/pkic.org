@@ -3,12 +3,8 @@
  *
  * The consortium wanted each member to receive a link that is theirs rather
  * than one address forwarded around a company (#6): who actually came to a
- * meeting is the measurement everything else rests on. The link is not a
- * secret handed out per person — that is the guest path, and a secret in a
- * mailbox is exactly what gets forwarded. It is the occurrence's own join
- * page, which is personal because entering it needs the recipient's session:
- * attendance is recorded against whoever signed in, and a link passed on
- * sends the next reader to their own sign-in and their own attendance row.
+ * meeting is the measurement everything else rests on. A signed personal
+ * locator names the invitee; it does not authenticate a new browser.
  *
  * Recipients are the group's active participants, addressed at the identity
  * they hold there — somebody representing two organizations in one group is
@@ -25,12 +21,12 @@ import { prepareScopedAuditLogAfterOneChange } from "../audit";
 import { buildOccurrenceCalendarPayload } from "./invite-calendar";
 import { commitEventResourceManagementBatch } from "./management";
 import {
-  occurrenceJoinUrl,
   occurrenceOrganizerAddress,
   PARTICIPANT_INVITATION_TEMPLATE_KEY,
   type OccurrenceNotificationOptions,
 } from "./occurrence-notifications";
 import { getManagedSeriesOccurrence } from "./occurrences";
+import { memberMeetingLinkUrl, memberMeetingLinkUrls } from "./personal-entry-links";
 
 /**
  * The largest group this may be sent to in one request.
@@ -142,7 +138,17 @@ export async function sendMeetingParticipantInvitations(
   }
 
   const round = occurrence.invitationsRound + 1;
-  const joinUrl = occurrenceJoinUrl(appBaseUrl, occurrenceId);
+  if (!calendar.signingSecret) {
+    throw new AppError(503, "MEETING_SECURITY_CONFIG_UNAVAILABLE", "Personal meeting links are not configured");
+  }
+  const personalLinks = await memberMeetingLinkUrls(
+    db,
+    seriesId,
+    occurrenceId,
+    participants.map((participant) => ({ userId: participant.user_id, email: participant.recipient_email })),
+    appBaseUrl,
+    calendar.signingSecret,
+  );
   // The invitation is a calendar entry as well as a link (#126): it lands on
   // the recipient's calendar, and the accept or decline their calendar sends
   // back reaches the occurrence through the signed organizer address.
@@ -164,9 +170,9 @@ export async function sendMeetingParticipantInvitations(
         recipientName: participant.recipient_name,
         eventName: series.eventName,
         startsAt: occurrence.startsAt,
-        joinUrl,
+        joinUrl: memberMeetingLinkUrl(personalLinks, participant.user_id, participant.recipient_email),
       },
-      capabilityLinkValues: [joinUrl],
+      capabilityLinkValues: [memberMeetingLinkUrl(personalLinks, participant.user_id, participant.recipient_email)],
       calendar: buildOccurrenceCalendarPayload(
         {
           occurrenceId,
@@ -175,7 +181,7 @@ export async function sendMeetingParticipantInvitations(
           startsAt: occurrence.startsAt,
           endsAt: occurrence.endsAt,
           location: occurrence.location,
-          joinUrl,
+          joinUrl: memberMeetingLinkUrl(personalLinks, participant.user_id, participant.recipient_email),
           sequence: occurrence.calendarSequence,
           organizerEmail,
           attendeeEmail: participant.recipient_email,

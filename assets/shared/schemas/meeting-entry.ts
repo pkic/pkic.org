@@ -11,6 +11,9 @@ import { databaseIdSchema } from "./identifiers";
 import { publicOperation, requiresSession } from "./route-contract";
 import { httpsCapabilityUrlSchema } from "./urls";
 
+/** Selects one verified personal meeting identity without making the URL a credential. */
+export const PERSONAL_MEETING_LINK_HEADER = "x-meeting-personal-link";
+
 export const meetingTermAcceptanceSchema = z.object({
   termId: databaseIdSchema,
   version: trimmedString(1, 64),
@@ -55,6 +58,21 @@ export const meetingJoinResponseSchema = z.object({
 export const meetingInvitationVerificationCreateSchema = z.object({
   token: tokenSchema,
 });
+export const meetingPersonalLinkResolveSchema = z.object({ token: tokenSchema });
+export const meetingPersonalLinkResolveResponseSchema = z.object({
+  occurrenceId: databaseIdSchema,
+  seriesId: databaseIdSchema,
+  eventName: z.string(),
+  startsAt: utcInstantSchema,
+  name: z.string(),
+});
+export const meetingPersonalLinkSessionResponseSchema = z.object({
+  status: z.enum(["ready", "verify"]),
+  verification: z.enum(["member", "guest"]),
+  occurrenceId: databaseIdSchema,
+  eventName: z.string(),
+  name: z.string(),
+});
 export const meetingInvitationVerificationCreateResponseSchema = z.object({
   verificationId: databaseIdSchema,
   expiresAt: utcInstantSchema,
@@ -74,6 +92,61 @@ export const meetingJoinOccurrenceParamsSchema = z.object({ occurrenceId: databa
 export const meetingInvitationVerificationParamsSchema = meetingJoinOccurrenceParamsSchema.extend({
   verificationId: databaseIdSchema,
 });
+
+export const meetingPersonalLinkResolveRouteSchema = {
+  ...publicOperation(),
+  tags: ["Meetings"],
+  summary: "Resolve an invited attendee's personal meeting link without authenticating the browser",
+  request: { body: { required: true, content: { "application/json": { schema: meetingPersonalLinkResolveSchema } } } },
+  responses: {
+    "200": {
+      description: "Minimal personal meeting preview.",
+      content: { "application/json": { schema: meetingPersonalLinkResolveResponseSchema } },
+    },
+    "404": jsonErrorResponse("The link is invalid or no eligible upcoming meeting is available."),
+  },
+};
+export const meetingPersonalLinkSessionRouteSchema = {
+  ...publicOperation(),
+  tags: ["Meetings"],
+  summary: "Use verified attendee identity to establish a meeting-only browser session",
+  request: {
+    params: meetingJoinOccurrenceParamsSchema,
+    body: { required: true, content: { "application/json": { schema: meetingPersonalLinkResolveSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Meeting-only session or verification requirement.",
+      content: { "application/json": { schema: meetingPersonalLinkSessionResponseSchema } },
+    },
+    "404": jsonErrorResponse("The link is invalid or no longer eligible."),
+  },
+};
+export const meetingPersonalLinkSessionDeleteRouteSchema = {
+  ...publicOperation(),
+  tags: ["Meetings"],
+  summary: "Forget this browser's meeting-only session",
+  request: { params: meetingJoinOccurrenceParamsSchema },
+  responses: { "204": { description: "Meeting-only browser session revoked." } },
+};
+export const meetingPersonalLinkVerificationRouteSchema = {
+  ...protectsPublicAction("meeting_verification", "events:manage"),
+  ...publicOperation(),
+  tags: ["Meetings"],
+  summary: "Email a browser challenge to the guest named by a personal meeting link",
+  request: {
+    params: meetingJoinOccurrenceParamsSchema,
+    body: { required: true, content: { "application/json": { schema: meetingPersonalLinkResolveSchema } } },
+  },
+  responses: {
+    "202": {
+      description: "Verification code sent.",
+      content: { "application/json": { schema: meetingInvitationVerificationCreateResponseSchema } },
+    },
+    "404": jsonErrorResponse("The guest link is invalid or no longer eligible."),
+    "429": jsonErrorResponse("A verification code was requested too recently."),
+  },
+};
 
 export const meetingJoinLandingRouteSchema = {
   ...requiresSession(),

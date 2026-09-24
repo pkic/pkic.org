@@ -6,6 +6,7 @@ import {
   meetingJoinResponseSchema,
 } from "../../../../assets/shared/schemas/meeting-entry";
 import { all, first } from "../../db/queries";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { hmacSha256Hex, verifyHmacSha256Hex } from "../../utils/crypto";
@@ -16,7 +17,22 @@ import { openProviderJoinUrl } from "./provider-url";
 type JoinConfirmInput = z.infer<typeof meetingJoinConfirmSchema>;
 
 export type MeetingJoinSubject =
-  { kind: "member"; userId: string; sessionId: string } | { kind: "guest"; guestId: string; sessionId: string };
+  | { kind: "member"; userId: string; sessionId: string }
+  | { kind: "guest"; guestId: string; sessionId: string }
+  | {
+      kind: "personal";
+      userId: string | null;
+      guestId: string | null;
+      seriesId: string;
+      linkOccurrenceId: string | null;
+      linkSecret: string;
+      authenticatedAt: number;
+      expiresAt: number;
+      sourceKind: "member" | "guest";
+      sourceSessionId: string;
+      authentication: "remember_browser" | "always";
+      rememberDays: number;
+    };
 
 interface JoinContextRow {
   occurrence_id: string;
@@ -74,6 +90,7 @@ const JOIN_CONTEXT_SELECT = `SELECT occurrence.id AS occurrence_id, occurrence.s
   WHERE occurrence.id = ?`;
 
 function subjectIds(subject: MeetingJoinSubject): { userId: string | null; guestId: string | null } {
+  if (subject.kind === "personal") return { userId: subject.userId, guestId: subject.guestId };
   return subject.kind === "member"
     ? { userId: subject.userId, guestId: null }
     : { userId: null, guestId: subject.guestId };
@@ -119,8 +136,9 @@ async function currentTerms(db: DatabaseLike, row: JoinContextRow, subject: Meet
 }
 
 function authoritativeIdentity(row: JoinContextRow, subject: MeetingJoinSubject) {
-  const name = subject.kind === "member" ? row.user_name : row.guest_name;
-  const affiliation = subject.kind === "member" ? row.user_affiliation : row.guest_affiliation;
+  const isMember = subject.kind === "member" || (subject.kind === "personal" && subject.userId !== null);
+  const name = isMember ? row.user_name : row.guest_name;
+  const affiliation = isMember ? row.user_affiliation : row.guest_affiliation;
   if (!name) throw new AppError(409, "MEETING_IDENTITY_UNAVAILABLE", "The attendee identity is incomplete");
   return { name, affiliation };
 }
@@ -134,10 +152,7 @@ function landingRevisionPayload(
   return JSON.stringify({
     occurrenceId: row.occurrence_id,
     eventId: row.event_id,
-    subject:
-      subject.kind === "member"
-        ? { kind: subject.kind, id: subject.userId }
-        : { kind: subject.kind, id: subject.guestId },
+    subject: { kind: subject.kind, ...subjectIds(subject) },
     name: identity.name,
     affiliation: identity.affiliation,
     terms: terms.map((term) => ({
@@ -255,7 +270,7 @@ export async function confirmMeetingJoin(
 
   const proposedConfirmationId = uuid();
   const confirmationStatement =
-    subject.kind === "member"
+    userId !== null
       ? db
           .prepare(
             `INSERT INTO event_occurrence_join_confirmations
@@ -270,16 +285,7 @@ export async function confirmMeetingJoin(
                confirmed_at = excluded.confirmed_at,
                updated_at = excluded.updated_at`,
           )
-          .bind(
-            proposedConfirmationId,
-            row.occurrence_id,
-            subject.userId,
-            identity.name,
-            identity.affiliation,
-            now,
-            now,
-            now,
-          )
+          .bind(proposedConfirmationId, row.occurrence_id, userId, identity.name, identity.affiliation, now, now, now)
       : db
           .prepare(
             `INSERT INTO event_occurrence_join_confirmations
@@ -294,31 +300,134 @@ export async function confirmMeetingJoin(
                confirmed_at = excluded.confirmed_at,
                updated_at = excluded.updated_at`,
           )
-          .bind(
-            proposedConfirmationId,
-            row.occurrence_id,
-            subject.guestId,
-            identity.name,
-            identity.affiliation,
-            now,
-            now,
-            now,
-          );
+          .bind(proposedConfirmationId, row.occurrence_id, guestId, identity.name, identity.affiliation, now, now, now);
 
   try {
     await db.batch([
       ...acceptanceStatements,
-      db
-        .prepare(
-          `INSERT INTO event_occurrence_join_guards
-             (id, session_kind, session_id, occurrence_id, event_id, user_id, guest_id)
-           VALUES (?, ?, ?, ?, ?, ?, ?)`,
-        )
-        .bind(uuid(), subject.kind, subject.sessionId, row.occurrence_id, row.event_id, userId, guestId),
+      subject.kind === "personal"
+        ? prepareAuthorizationGuard(db, {
+            sql: `SELECT 1 FROM event_occurrences occurrence
+              JOIN event_series series ON series.id = occurrence.series_id AND series.active = 1
+              JOIN events event ON event.id = series.event_id
+              WHERE occurrence.id = ? AND event.id = ? AND series.id = ?
+                AND (? IS NULL OR occurrence.id = ?)
+                AND occurrence.status = 'scheduled'
+                AND EXISTS (
+                  SELECT 1 FROM current_event_occurrence_subject_eligibility eligible
+                   WHERE eligible.occurrence_id = occurrence.id
+                     AND eligible.event_id = event.id
+                     AND eligible.user_id IS ? AND eligible.guest_id IS ?
+                )
+                AND (
+                  (? IS NOT NULL AND EXISTS (
+                    SELECT 1 FROM users user
+                     WHERE user.id = ? AND user.active = 1 AND user.link_secret = ?
+                  ))
+                  OR (? IS NOT NULL AND EXISTS (
+                    SELECT 1 FROM event_occurrence_guests guest
+                     WHERE guest.id = ? AND guest.series_id = series.id
+                       AND (guest.occurrence_id IS NULL OR guest.occurrence_id = occurrence.id)
+                       AND guest.invitation_secret = ? AND guest.revoked_at IS NULL
+                       AND unixepoch(guest.expires_at) > unixepoch()
+                  ))
+                )
+                AND COALESCE(json_extract(event.settings_json, '$.meetingEntryPolicy.authentication'),
+                             'remember_browser') = ?
+                AND COALESCE(json_extract(event.settings_json, '$.meetingEntryPolicy.rememberDays'), 30) = ?
+                AND unixepoch(?) > unixepoch()
+                AND unixepoch() < unixepoch(?) +
+                    CASE WHEN ? = 'always' THEN 600 ELSE ? * 86400 END
+                AND NOT EXISTS (
+                  SELECT 1 FROM event_terms required_term
+                   WHERE required_term.event_id = event.id
+                     AND required_term.audience_type = 'attendee'
+                     AND required_term.active = 1 AND required_term.required = 1
+                     AND NOT EXISTS (
+                       SELECT 1 FROM event_access_term_acceptances acceptance
+                        WHERE acceptance.event_id = event.id
+                          AND acceptance.event_term_id = required_term.id
+                          AND acceptance.user_id IS ? AND acceptance.guest_id IS ?
+                     )
+                )
+                AND (? != 'always' OR (
+                  ( ? = 'member' AND EXISTS (
+                    SELECT 1 FROM sessions source
+                     WHERE source.id = ? AND source.user_id = ?
+                       AND source.session_type = 'auth' AND source.revoked_at IS NULL
+                       AND unixepoch(source.expires_at) > unixepoch()
+                       AND unixepoch() < unixepoch(source.created_at) + 600
+                       AND NOT EXISTS (
+                         SELECT 1 FROM event_occurrence_join_confirmations prior
+                         JOIN event_occurrences prior_occurrence ON prior_occurrence.id = prior.occurrence_id
+                          WHERE prior_occurrence.series_id = series.id AND prior.user_id = ?
+                            AND prior.confirmed_at >= source.created_at
+                       )
+                  ))
+                  OR ( ? = 'guest' AND EXISTS (
+                    SELECT 1 FROM meeting_guest_sessions source
+                    JOIN meeting_guest_browser_challenges challenge ON challenge.id = source.challenge_id
+                     WHERE source.id = ? AND source.guest_id = ?
+                       AND challenge.occurrence_id = occurrence.id
+                       AND source.revoked_at IS NULL AND unixepoch(source.expires_at) > unixepoch()
+                       AND challenge.used_at IS NOT NULL
+                       AND source.authorization_hash = challenge.authorization_hash
+                       AND unixepoch() < unixepoch(source.created_at) + 600
+                       AND NOT EXISTS (
+                         SELECT 1 FROM event_occurrence_join_confirmations prior
+                         JOIN event_occurrences prior_occurrence ON prior_occurrence.id = prior.occurrence_id
+                          WHERE prior_occurrence.series_id = series.id AND prior.guest_id = ?
+                            AND prior.confirmed_at >= source.created_at
+                       )
+                  ))
+                ))`,
+            bindings: [
+              row.occurrence_id,
+              row.event_id,
+              subject.seriesId,
+              subject.linkOccurrenceId,
+              subject.linkOccurrenceId,
+              userId,
+              guestId,
+              userId,
+              userId,
+              subject.linkSecret,
+              guestId,
+              guestId,
+              subject.linkSecret,
+              subject.authentication,
+              subject.rememberDays,
+              new Date(subject.expiresAt).toISOString(),
+              new Date(subject.authenticatedAt).toISOString(),
+              subject.authentication,
+              subject.rememberDays,
+              userId,
+              guestId,
+              subject.authentication,
+              subject.sourceKind,
+              subject.sourceSessionId,
+              userId,
+              userId,
+              subject.sourceKind,
+              subject.sourceSessionId,
+              guestId,
+              guestId,
+            ],
+          })
+        : db
+            .prepare(
+              `INSERT INTO event_occurrence_join_guards
+                 (id, session_kind, session_id, occurrence_id, event_id, user_id, guest_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            )
+            .bind(uuid(), subject.kind, subject.sessionId, row.occurrence_id, row.event_id, userId, guestId),
       confirmationStatement,
     ]);
   } catch (error) {
-    if (error instanceof Error && error.message.includes("MEETING_JOIN_CONTEXT_CHANGED")) {
+    if (
+      isAuthorizationGuardFailure(error) ||
+      (error instanceof Error && error.message.includes("MEETING_JOIN_CONTEXT_CHANGED"))
+    ) {
       throw new AppError(409, "MEETING_ACCESS_CHANGED", "Meeting access or the authenticated session changed");
     }
     throw error;

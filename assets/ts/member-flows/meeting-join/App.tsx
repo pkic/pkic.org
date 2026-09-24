@@ -1,6 +1,11 @@
 import { useEffect, useState } from "preact/hooks";
 import { youtubeVideoEmbed } from "../../../shared/markdown-media";
-import { meetingEntrySignInUrl, meetingSeriesEntrySignInUrl } from "../../../shared/meeting-entry-navigation";
+import { successResponseSchema } from "../../../shared/schemas/api-common";
+import {
+  meetingEntrySignInUrl,
+  meetingSeriesEntrySignInUrl,
+  personalMeetingEntrySignInUrl,
+} from "../../../shared/meeting-entry-navigation";
 import { BroadcastViewer } from "./BroadcastViewer";
 import {
   meetingInvitationVerificationCreateResponseSchema,
@@ -8,6 +13,9 @@ import {
   meetingInvitationVerificationUpdateSchema,
   meetingJoinLandingSchema,
   meetingJoinResponseSchema,
+  meetingPersonalLinkResolveResponseSchema,
+  meetingPersonalLinkSessionResponseSchema,
+  PERSONAL_MEETING_LINK_HEADER,
   type MeetingJoinLanding,
 } from "../../../shared/schemas/meeting-entry";
 import { currentUserMeetingsListResponseSchema } from "../../../shared/schemas/member-meetings";
@@ -18,7 +26,7 @@ import { Button, ButtonLink } from "../../ui/Button";
 import { Field } from "../../ui/Field";
 import { Panel, PanelBody } from "../../ui/Panel";
 import { TextInput } from "../../ui/TextControl";
-import { ApiClientError, getJson, patchJson, postJson } from "../../shared/api-client";
+import { ApiClientError, getJson, patchJson, postJson, requestJson } from "../../shared/api-client";
 import type { MeetingGuestInvitationFragment } from "./invitation-fragment";
 import { MeetingJoinForm, type MeetingJoinConfirmInput } from "./MeetingJoinForm";
 
@@ -33,15 +41,30 @@ function verificationCollectionEndpoint(occurrenceId: string): string {
   return `${occurrenceEndpoint(occurrenceId)}/invitations/verifications`;
 }
 
-async function loadAuthenticatedLanding(occurrenceId: string): Promise<MeetingJoinLanding> {
-  return getJson(`${occurrenceEndpoint(occurrenceId)}/join`, meetingJoinLandingSchema);
+async function loadAuthenticatedLanding(
+  occurrenceId: string,
+  personalToken?: string | null,
+): Promise<MeetingJoinLanding> {
+  const path = `${occurrenceEndpoint(occurrenceId)}/join`;
+  return personalToken
+    ? requestJson(path, meetingJoinLandingSchema, {
+        method: "GET",
+        headers: { [PERSONAL_MEETING_LINK_HEADER]: personalToken },
+      })
+    : getJson(path, meetingJoinLandingSchema);
 }
 
 function errorMessage(error: unknown): string {
   return error instanceof ApiClientError ? error.message : "Meeting entry is temporarily unavailable.";
 }
 
-export function App({ invitation }: { invitation: MeetingGuestInvitationFragment | null }) {
+export function App({
+  invitation,
+  personalToken = null,
+}: {
+  invitation: MeetingGuestInvitationFragment | null;
+  personalToken?: string | null;
+}) {
   const query = new URLSearchParams(window.location.search);
   const requestedOccurrenceId = invitation?.occurrenceId ?? query.get("occurrence") ?? "";
   const seriesId = invitation ? "" : (query.get("series") ?? "");
@@ -54,6 +77,7 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [personalName, setPersonalName] = useState<string | null>(null);
   // The verification contract the route parses decides what the code field
   // shows and when the code may be sent.
   const verification = useContractForm(meetingInvitationVerificationUpdateSchema, { code });
@@ -61,13 +85,45 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
   useEffect(() => {
     let cancelled = false;
     async function start(): Promise<void> {
-      if (!requestedOccurrenceId && !seriesId) {
+      if (!requestedOccurrenceId && !seriesId && !personalToken) {
         setError("This meeting link is incomplete.");
         setLoading(false);
         return;
       }
       try {
         let targetOccurrenceId = requestedOccurrenceId;
+        if (personalToken) {
+          const preview = await postJson(
+            "/api/v1/meetings/links/resolve",
+            { token: personalToken },
+            meetingPersonalLinkResolveResponseSchema,
+          );
+          targetOccurrenceId = preview.occurrenceId;
+          if (!cancelled) {
+            setPersonalName(preview.name);
+            setOccurrenceId(targetOccurrenceId);
+          }
+          const session = await postJson(
+            `${occurrenceEndpoint(targetOccurrenceId)}/links/session`,
+            { token: personalToken },
+            meetingPersonalLinkSessionResponseSchema,
+          );
+          if (session.status === "ready") {
+            const authenticated = await loadAuthenticatedLanding(targetOccurrenceId, personalToken);
+            if (!cancelled) setLanding(authenticated);
+          } else if (session.verification === "guest") {
+            const challenge = await postJson(
+              `${occurrenceEndpoint(targetOccurrenceId)}/links/verifications`,
+              { token: personalToken },
+              meetingInvitationVerificationCreateResponseSchema,
+            );
+            if (!cancelled) setVerificationId(challenge.verificationId);
+          } else if (!cancelled) {
+            setNeedsSignIn(true);
+            setError("Verify your identity in the member portal once on this browser to continue.");
+          }
+          return;
+        }
         if (!targetOccurrenceId) {
           const parameters = new URLSearchParams({ seriesId, limit: "1", offset: "0" });
           const page = await getJson(
@@ -109,7 +165,7 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
     return () => {
       cancelled = true;
     };
-  }, [invitation, requestedOccurrenceId, seriesId]);
+  }, [invitation, personalToken, requestedOccurrenceId, seriesId]);
 
   async function verifyGuest(): Promise<void> {
     if (!verificationId) return;
@@ -126,7 +182,17 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
         checked.data,
         meetingInvitationVerificationUpdateResponseSchema,
       );
-      setLanding(await loadAuthenticatedLanding(occurrenceId));
+      if (personalToken) {
+        const session = await postJson(
+          `${occurrenceEndpoint(occurrenceId)}/links/session`,
+          { token: personalToken },
+          meetingPersonalLinkSessionResponseSchema,
+        );
+        if (session.status !== "ready") {
+          throw new Error("Guest verification did not establish meeting access.");
+        }
+      }
+      setLanding(await loadAuthenticatedLanding(occurrenceId, personalToken));
       setVerificationId(null);
       setCode("");
       verification.reset();
@@ -144,7 +210,12 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
     setSubmitting(true);
     setError(null);
     try {
-      const result = await postJson(`${occurrenceEndpoint(occurrenceId)}/join`, input, meetingJoinResponseSchema);
+      const result = await postJson(
+        `${occurrenceEndpoint(occurrenceId)}/join`,
+        input,
+        meetingJoinResponseSchema,
+        personalToken ? { [PERSONAL_MEETING_LINK_HEADER]: personalToken } : undefined,
+      );
       const embedUrl = youtubeVideoEmbed(result.redirectUrl);
       if (embedUrl) {
         setBroadcast({ embedUrl, destination: result.redirectUrl });
@@ -152,6 +223,23 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
       } else {
         window.location.assign(result.redirectUrl);
       }
+    } catch (caught) {
+      setError(errorMessage(caught));
+      setSubmitting(false);
+    }
+  }
+
+  async function switchIdentity(resumePersonalLink = false): Promise<void> {
+    if (!occurrenceId) return;
+    setSubmitting(true);
+    setError(null);
+    try {
+      const forgotten = await fetch(`${occurrenceEndpoint(occurrenceId)}/links/session`, { method: "DELETE" });
+      if (!forgotten.ok) throw new Error("The remembered meeting identity could not be cleared.");
+      await postJson("/api/v1/auth/logout", {}, successResponseSchema);
+      window.location.assign(
+        resumePersonalLink && personalToken ? personalMeetingEntrySignInUrl(personalToken) : "/portal/",
+      );
     } catch (caught) {
       setError(errorMessage(caught));
       setSubmitting(false);
@@ -214,22 +302,43 @@ export function App({ invitation }: { invitation: MeetingGuestInvitationFragment
   if (landing && broadcast) return <BroadcastViewer landing={landing} {...broadcast} />;
   if (landing) {
     return (
-      <MeetingJoinForm landing={landing} submitting={submitting} error={error} onJoin={(input) => void join(input)} />
+      <MeetingJoinForm
+        landing={landing}
+        submitting={submitting}
+        error={error}
+        personal={Boolean(personalToken)}
+        onSwitchIdentity={() => void switchIdentity()}
+        onJoin={(input) => void join(input)}
+      />
     );
   }
   return (
     <div class="pk">
       <Alert tone="warn">
+        {personalName ? `Welcome, ${personalName}. ` : ""}
         {error ?? "Sign in through the member portal or open the invitation sent to the guest email address."}
       </Alert>
       {needsSignIn && (
         <p>
-          <ButtonLink
-            variant="primary"
-            href={seriesId ? meetingSeriesEntrySignInUrl(seriesId) : meetingEntrySignInUrl(occurrenceId)}
-          >
-            Sign in to continue
-          </ButtonLink>
+          {personalToken ? (
+            <Button variant="primary" onClick={() => void switchIdentity(true)}>
+              Verify and continue
+            </Button>
+          ) : (
+            <ButtonLink
+              variant="primary"
+              href={seriesId ? meetingSeriesEntrySignInUrl(seriesId) : meetingEntrySignInUrl(occurrenceId)}
+            >
+              Sign in to continue
+            </ButtonLink>
+          )}
+        </p>
+      )}
+      {personalToken && needsSignIn && (
+        <p>
+          <Button onClick={() => void switchIdentity()}>
+            Not {personalName ?? "you"}? Sign in with another account
+          </Button>
         </p>
       )}
     </div>

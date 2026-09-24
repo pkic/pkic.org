@@ -35,6 +35,7 @@ function draft(overrides: Partial<MeetingSeriesDraft> = {}): MeetingSeriesDraft 
     visibility: "group_members",
     memberEligibility: "owner_group",
     guestPolicy: "occurrence_invitation",
+    meetingEntryPolicy: { authentication: "remember_browser", rememberDays: 30 },
     ...overrides,
   };
 }
@@ -62,6 +63,8 @@ const OWN_LABELS = [
   "Visibility",
   "Attendee eligibility",
   "External guests",
+  "Meeting entry authentication",
+  "Remember browser for (days)",
   "Physical location",
   "Private meeting destination URL",
 ];

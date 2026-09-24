@@ -29,11 +29,15 @@ export function MeetingJoinForm({
   submitting,
   error,
   onJoin,
+  personal = false,
+  onSwitchIdentity,
 }: {
   landing: MeetingJoinLanding;
   submitting: boolean;
   error: string | null;
   onJoin: (input: MeetingJoinConfirmInput) => void;
+  personal?: boolean;
+  onSwitchIdentity?: () => void;
 }) {
   const [accepted, setAccepted] = useState<Set<string>>(
     () => new Set(landing.terms.filter((term) => term.accepted).map((term) => term.id)),
@@ -54,11 +58,18 @@ export function MeetingJoinForm({
       <Panel>
         <PanelBody class="pk-stack">
           <div class="pk-stack pk-stack--tight">
+            {personal && <p>Welcome, {landing.name}.</p>}
             <h1>{landing.occurrence.eventName}</h1>
             <p class="pk-muted">
               {formatDateTime(landing.occurrence.startsAt)} · {landing.occurrence.location ?? "Online"}
             </p>
           </div>
+
+          {personal && (
+            <p>
+              <Button onClick={onSwitchIdentity}>Not {landing.name}? Sign in</Button>
+            </p>
+          )}
 
           <dl class="pk-datalist pk-small">
             <dt>Attendee</dt>

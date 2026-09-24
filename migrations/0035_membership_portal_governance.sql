@@ -7014,3 +7014,6 @@ CREATE TABLE membership_workflow_archives (
   reason TEXT NOT NULL
 );
 CREATE INDEX idx_membership_workflow_archives_actor ON membership_workflow_archives(archived_by_user_id);
+
+-- One rotatable user secret can back personal links across features.
+ALTER TABLE users ADD COLUMN link_secret TEXT;

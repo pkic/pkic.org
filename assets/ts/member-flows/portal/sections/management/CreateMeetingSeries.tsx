@@ -12,6 +12,7 @@ import { MeetingSeriesFields, type MeetingSeriesDraft } from "./MeetingSeriesFie
 import { instantFromLocal } from "../../../../components/forms/SubmissionWindowFields";
 import { localDateTimeValue } from "./meeting-form-utils";
 import { slugify } from "../../../../../shared/slug";
+import { DEFAULT_MEETING_ENTRY_POLICY } from "../../../../../shared/schemas/meeting-entry-policy";
 
 export function CreateMeetingSeries(props: {
   groupId: string;
@@ -55,6 +56,7 @@ function initialDraft(): MeetingSeriesDraft {
     visibility: "group_members",
     memberEligibility: "owner_group",
     guestPolicy: "occurrence_invitation",
+    meetingEntryPolicy: DEFAULT_MEETING_ENTRY_POLICY,
   };
 }
 
@@ -92,6 +94,7 @@ function MeetingSeriesForm({
       visibility: draft.visibility,
       memberEligibility: draft.memberEligibility,
       guestPolicy: draft.guestPolicy,
+      meetingEntryPolicy: draft.meetingEntryPolicy,
     },
     startsAt: instantFromLocal(draft.startsAt, draft.timezone),
     recurrenceRule: draft.recurrenceRule,
@@ -153,6 +156,8 @@ function MeetingSeriesForm({
               visibility: form.of("policy.visibility"),
               memberEligibility: form.of("policy.memberEligibility"),
               guestPolicy: form.of("policy.guestPolicy"),
+              meetingEntryAuthentication: form.of("policy.meetingEntryPolicy.authentication"),
+              meetingEntryRememberDays: form.of("policy.meetingEntryPolicy.rememberDays"),
             }}
           />
           <div class="pk-cluster">

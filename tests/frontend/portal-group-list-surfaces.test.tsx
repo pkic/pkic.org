@@ -139,6 +139,7 @@ describe("the meeting series list", () => {
       profileKey: "meeting",
       registrationPolicy: "optional",
       visibility: "group_members",
+      meetingEntryPolicy: { authentication: "remember_browser", rememberDays: 30 },
       startsAt: NOW,
       recurrenceRule: "FREQ=MONTHLY",
       timezone: "UTC",

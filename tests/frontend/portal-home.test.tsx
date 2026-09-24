@@ -173,7 +173,12 @@ describe("portal landing", () => {
     const personalCalendar = panelNamed(container, "Upcoming meetings").querySelector(
       'a[href*="/calendar.ics?personal=true"]',
     );
-    expect(personalCalendar?.textContent).toContain("my personal calendar");
+    expect(personalCalendar?.getAttribute("aria-label")).toBe("Download my personal calendar (.ics)");
+    expect(personalCalendar?.getAttribute("title")).toBe("Download my personal calendar (.ics)");
+    expect(personalCalendar?.classList.contains("pk-btn--ghost")).toBe(true);
+    expect(personalCalendar?.classList.contains("pk-btn--icon")).toBe(true);
+    expect(personalCalendar?.textContent).toBe("");
+    expect(personalCalendar?.querySelector("svg")).not.toBeNull();
     expect(panelNamed(container, "Upcoming meetings").textContent).toContain("Do not forward it");
 
     // The "View all" affordance is a real link, not a click handler on a span.
