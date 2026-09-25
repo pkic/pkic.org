@@ -1,0 +1,60 @@
+id: vodafone
+name: Vodafone
+slogan:
+website: https://www.vodafone.co.uk/
+# Business domains for email
+organizationDomains:
+  - vodafone.com
+# Short description, longer content can be placed in `content/members/`
+description: Now offering 5G, experience Vodafone on The Nation's Network. Shop the latest smartphones, great sim only deals and our award winning broadband.
+
+# membership
+memberSince: 2026-09-24
+memberType: F
+workingGroups:
+
+
+# sponsor
+sponsor:
+  level:
+
+# Blog posts
+blog:
+  url: https://www.vodafone.co.uk/blog
+  feed: 
+  language: en_US
+
+# Press Releases
+press:
+  url: 
+  feed: 
+  language: en_US
+
+# Careers
+careers:
+  url: https://careers.vodafone.com/uk/
+  feed: 
+  language: en_US
+
+# Social media
+social:
+  x: https://x.com/vodafoneuk
+  facebook: https://www.facebook.com/vodafoneUK
+  instagram: https://www.instagram.com/VodafoneUK/
+  linkedin: https://www.linkedin.com/company/vodafone/
+  youtube: https://www.youtube.com/user/VODAFONEUK
+
+# Here you can list those who represent or have represented the member.
+#
+# Those who no longer represent an organization might have written blog posts,
+# to keep the attribution a from/till data range can be included.
+representatives:
+  - name: llham Dahmani FIkry
+    role: Security Architect
+    social:
+      x:
+      linkedin: https://www.linkedin.com/in/ilham-dahmani-fikry-5870a3150/
+    description: llham is the Security Architect at Vodafone and represents the organization at the PKI Consortium.
+
+# Long-form content (markdown)
+content: |
