@@ -12,4 +12,4 @@ Assess your organization's PKI maturity across every domain and get an instant g
 analysis. The assessment runs entirely in your browser — no login, and your data stays
 local. See the [assessment methodology](/wg/pkimm/model/assessment/) for the full process.
 
-{{< self-assessment-latest >}}
+{{< self-assessment-latest version="v2.0.0" >}}
