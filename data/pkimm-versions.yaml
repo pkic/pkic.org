@@ -16,11 +16,11 @@
 # recommended landing version first.
 
 versions:
+  - id: model
+    label: "2.0.0"
+    path: /wg/pkimm/model/
+    isLatestRelease: true
+
   - id: "1.0.0"
     label: "1.0.0"
     path: /wg/pkimm/1.0.0/
-    isLatestRelease: true
-
-  - id: model
-    label: "main"
-    path: /wg/pkimm/model/
