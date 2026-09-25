@@ -10,48 +10,7 @@ weight: 10
 
 The PQCMM defines **six maturity levels** (0–5) for post-quantum cryptography adoption in products and services. Each level builds on the previous one, defining what PQC readiness means in practice — from the complete absence of any quantum-safe activity, all the way to a fully optimised, PQC-by-default product or service.
 
-{{< maturity-staircase >}}
-levels:
-  - number: 0
-    label: None
-    color: none
-    summary: "No PQC implemented"
-    url: "/wg/pqc/pqcmm/levels/0-none/"
-  - number: 1
-    label: Initial
-    color: gray
-    summary: "Available for testing & evaluation"
-    url: "/wg/pqc/pqcmm/levels/1-initial/"
-  - number: 2
-    label: Foundational
-    color: green
-    summary: "Production-ready, standards-compliant"
-    url: "/wg/pqc/pqcmm/levels/2-foundational/"
-  - number: 3
-    label: Advanced
-    color: blue
-    summary: "Inventory + SBOM + Crypto Agility"
-    url: "/wg/pqc/pqcmm/levels/3-advanced/"
-  - number: 4
-    label: Managed
-    color: violet
-    summary: "CBOM + Zero-Legacy + Hybrid support"
-    url: "/wg/pqc/pqcmm/levels/4-managed/"
-  - number: 5
-    label: Optimized
-    color: purple
-    summary: "PQC default + Benchmarked + Certified"
-    url: "/wg/pqc/pqcmm/levels/5-optimized/"
-{{< /maturity-staircase >}}
-
-| Level | Name | Summary |
-|---|---|---|
-| [0 — None](/wg/pqc/pqcmm/levels/0-none/) | No PQC implemented | PQC might be in the preparation phase, but no quantum-safe algorithms have matured into the product. |
-| [1 — Initial](/wg/pqc/pqcmm/levels/1-initial/) | Available for testing | PQC algorithms are available but for testing and evaluation only; not production-ready. |
-| [2 — Foundational](/wg/pqc/pqcmm/levels/2-foundational/) | Production-ready | At least one quantum-safe algorithm is available in production and meets relevant standards. |
-| [3 — Advanced](/wg/pqc/pqcmm/levels/3-advanced/) | Inventory & Agility | Cryptographic inventory (SBOM/CBOM) is in place, and the product supports crypto agility. |
-| [4 — Managed](/wg/pqc/pqcmm/levels/4-managed/) | Zero-Legacy | Legacy algorithms are eliminated or isolated; hybrid support is available. |
-| [5 — Optimized](/wg/pqc/pqcmm/levels/5-optimized/) | PQC-by-default | Quantum-safe is the default; performance is benchmarked and the implementation independently verified. |
+{{< pqcmm-levels-overview >}}
 
 Select a level to view its detailed criteria, assessment questions, and evidence requirements.
 

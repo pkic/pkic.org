@@ -1,0 +1,5 @@
+{{/* Embed the offline-capable assessment widget against the same PQCMM data the site renders. */}}
+{{- $model := partial "pqcmm/model-data.html" (dict "page" .Page "version" (.Get "model-version")) -}}
+{{- $profile := partial "pqcmm/profile-data.html" (dict) -}}
+<self-assessment dataUrl="{{ $model.resource.RelPermalink }}" profileUrl="{{ $profile.resource.RelPermalink }}"></self-assessment>
+<script defer src="https://pkic.github.io/self-assessment/{{ with .Get "version" }}{{ . }}{{ else }}develop{{ end }}/self-assessment.js"></script>
