@@ -16,6 +16,9 @@ Some basic git knowledge is required, please check https://guides.github.com/ to
 8. [Commit and push your changes](https://guides.github.com/activities/forking/#making-changes)
 9. [Create a pull request](https://guides.github.com/activities/forking/#making-a-pull-request)
 
+Backend development, validation, database behavior, and deployment are covered
+in [CONTRIBUTING.md](CONTRIBUTING.md).
+
 ## Adding a new member
 
 Applicants use the [membership application](https://pkic.org/join/) and confirm their email. Authorized staff review applications in the portal under **Applications**; approval creates the member and its associated identity. Staff can grant an existing person individual membership from **Members → Grant membership** when the application process does not apply. Manage organization details and logos in the portal under **Organizations**.
@@ -67,60 +70,3 @@ git submodule update --remote
 ```
 
 The update command can be run to update your local copy when the remote branch changes. Submodules are managed in the file .gitmodules.
-
-## Build and deployment
-
-The Cloudflare Worker uses Vite with `@cloudflare/vite-plugin`. The Vite build runs Hugo, indexes the generated site with Pagefind, bundles the native TypeScript Worker, and writes the deployable Wrangler output config to `dist`.
-
-```bash
-pnpm run build
-pnpm run build:preview
-pnpm run build:production
-```
-
-Branches and pull requests are automatically deployed as preview sites. All preview sites share the preview D1 database. Merges to `main` are automatically deployed to production.
-
-Database migrations are not applied by those deployments and must be applied separately to the intended environment. Never copy production personal data, credentials, secrets, or private uploads into preview; use synthetic or purpose-created preview data.
-
-Manual deployment is exceptional. If an explicitly approved recovery or operational task requires it, build and deploy the selected Cloudflare environment together because the Vite plugin applies `env.preview` or `env.production` during build time:
-
-```bash
-pnpm run deploy:preview
-pnpm run deploy:production
-```
-
-The MCP OAuth binding uses Wrangler automatic provisioning for `OAUTH_KV`. On the first deploy for an environment, Wrangler will create the namespace and write the generated IDs back into [wrangler.jsonc](wrangler.jsonc).
-
-## Seed event backend data (local)
-
-Run the local seed flow to create admin/event data, forms/terms, and default email templates in D1+R2:
-
-```bash
-pnpm run seed:local
-```
-
-For ordinary interactive development, use:
-
-```bash
-pnpm run dev
-```
-
-This reuses persistent local D1 state and configured local email delivery.
-
-For an isolated disposable database with SendGrid delivery captured by a local
-interceptor, use the separate command:
-
-```bash
-pnpm run dev:intercepted
-```
-
-The intercepted server prints its capture URL and never sends messages to an
-external mailbox. Playwright starts this same isolated server automatically;
-do not start it manually before `pnpm run test:e2e` unless the test run sets
-`REUSE_SERVER`.
-
-If templates are missing or you want to reseed template versions only:
-
-```bash
-pnpm run seed:templates:local
-```
