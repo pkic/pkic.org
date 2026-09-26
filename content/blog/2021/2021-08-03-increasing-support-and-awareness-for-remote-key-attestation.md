@@ -10,6 +10,24 @@ categories:
 keyword: [hsm, token, tpm, secure-enclave, smart-card, private key, attestation, pki, crypto]
 tags: [HSM, Token, Smart-card, TPM, Secure Enclave, Key Attestation]
 
+authorProfiles:
+  - name: Tomas Gustavsson
+    organization: Keyfactor
+    role: Chief PKI Officer
+    website: https://www.keyfactor.com/
+    social:
+      x: https://x.com/primetomas
+      linkedin: https://www.linkedin.com/in/tgustavsson/
+    assetdirectory: images/members/keyfactor
+  - name: Giuseppe Damiano
+  - name: Paul van Brouwershaven
+    organization: Digitorus
+    role: Founder and CEO
+    website: https://www.digitorus.com
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
+    assetdirectory: images/members/digitorus
 ---
 
 ## Remote Key Attestation

@@ -1,4 +1,3 @@
-import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { addHours, nowIso } from "../../../../_lib/utils/time";
 import {
@@ -7,14 +6,21 @@ import {
   findInviteByToken,
   setInviteRemindersPausedUntil,
 } from "../../../../_lib/services/invites";
-import { inviteReminderPreferenceSchema } from "../../../../../assets/shared/schemas/api";
+import { inviteReminderPreferenceRouteSchema } from "../../../../../assets/shared/schemas/invites";
 import { requireInternalSecret } from "../../../../_lib/request";
+import { openApiRoute } from "../../../../_lib/openapi/route";
+import type { AdminContext } from "../../../../_lib/db/context";
 
-export async function onRequestPost(c: any): Promise<Response> {
-  c.set("sensitive", true);
-  const body = await parseJsonBody(c.req, inviteReminderPreferenceSchema);
-  const inviteId = new URL(c.req.raw.url).searchParams.get("id");
-  const invite = await findInviteByToken(c.env.DB, c.req.param("token"), requireInternalSecret(c.env), inviteId);
+type ReminderAction = "postpone_7d" | "pause_30d" | "resume" | "unsubscribe";
+
+async function updateInviteReminderPreference(
+  c: AdminContext,
+  token: string,
+  inviteId: string | undefined,
+  body: { action: ReminderAction },
+): Promise<Response> {
+  c.set?.("sensitive", true);
+  const invite = await findInviteByToken(c.env.DB, token, requireInternalSecret(c.env), inviteId ?? null);
 
   if (body.action === "unsubscribe") {
     await declineInvite(c.env.DB, {
@@ -42,9 +48,8 @@ export async function onRequestPost(c: any): Promise<Response> {
   });
 }
 
-export async function onRequest(c: any): Promise<Response> {
-  if (c.req.raw.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestPost(c);
-}
+export const InviteRemindersPost = openApiRoute(
+  inviteReminderPreferenceRouteSchema,
+  (c: AdminContext, data) => updateInviteReminderPreference(c, data.params.token, data.query.id, data.body),
+  (c: AdminContext) => c.set?.("sensitive", true),
+);

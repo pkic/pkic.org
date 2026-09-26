@@ -1,0 +1,127 @@
+/*
+ * Pager.
+ *
+ * One row, composed the way the design system's list panel draws it: the
+ * range summary sits at the start, the page controls keep to the end, and
+ * the optional rows-per-page control rides with them. The buttons are
+ * quiet — transparent until hovered — and only the current page carries
+ * the accent, so a strip of eleven pages does not read as eleven buttons.
+ *
+ * The row wraps on a narrow screen: summary first, controls following,
+ * each keeping its own cluster.
+ */
+
+@layer components {
+  .pk-pager {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2) var(--pk-3);
+    flex-wrap: wrap;
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink-muted);
+  }
+
+  /*
+   * A pager standing alone under a public listing — the blog, a taxonomy —
+   * has no count to balance against, so it centers instead of hugging the
+   * right edge the way the list panel's footer does.
+   */
+  .pk-pager--center {
+    justify-content: center;
+  }
+  .pk-pager--center .pk-pager__list {
+    margin-left: 0;
+  }
+
+  .pk-pager__summary {
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink-muted);
+  }
+
+  /*
+   * A pager rendered directly in a panel body (a page composing DataTable +
+   * Pager by hand rather than through the list block) still closes the panel
+   * the way the list specimen draws it: a soft rule above, count at the
+   * start, controls at the end.
+   */
+  .pk-panel__body > .pk-pager {
+    border-top: 1px solid var(--pk-line-soft);
+    padding-top: var(--pk-2);
+  }
+
+  .pk-pager__list {
+    list-style: none;
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0;
+    margin: 0;
+    margin-left: auto;
+    flex-wrap: wrap;
+  }
+
+  .pk-pager__item {
+    display: flex;
+    align-items: center;
+  }
+
+  .pk-pager__item--gap {
+    padding: 0 0.25rem;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+
+  .pk-pager__button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 1.7rem;
+    height: 1.7rem;
+    padding: 0 var(--pk-1);
+    border: 1px solid transparent;
+    border-radius: var(--pk-radius-sm);
+    background: transparent;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+    font-weight: 500;
+    cursor: pointer;
+    /* The portal's pager is buttons; the public one is links, which arrive
+       underlined. A page number is a control here, not a phrase in a sentence. */
+    text-decoration: none;
+    transition:
+      background-color var(--pk-dur-fast),
+      border-color var(--pk-dur-fast),
+      color var(--pk-dur-fast);
+  }
+
+  .pk-pager__button:hover:not(:disabled) {
+    background: var(--pk-surface-sunk);
+    color: var(--pk-ink);
+  }
+
+  /*
+   * `:disabled` is for the portal's buttons; `[aria-disabled]` is for the
+   * public list pages, where the pager is server-rendered and a page you
+   * cannot go to is a `span` rather than a link with its href taken away.
+   */
+  .pk-pager__button:disabled,
+  .pk-pager__button[aria-disabled="true"] {
+    opacity: 0.45;
+    cursor: not-allowed;
+  }
+
+  .pk-pager__button[aria-current="page"] {
+    background: var(--pk-accent-strong);
+    color: var(--pk-accent-on);
+  }
+
+  .pk-pager__button[aria-current="page"]:hover {
+    filter: brightness(1.08);
+  }
+
+  .pk-pager__button--prev,
+  .pk-pager__button--next {
+    min-width: auto;
+    padding: 0 0.5rem;
+  }
+}

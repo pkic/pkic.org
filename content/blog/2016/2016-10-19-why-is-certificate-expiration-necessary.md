@@ -30,6 +30,15 @@ tags:
 title: Why Is Certificate Expiration Necessary?
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 ## _The Long Life Certificate – Why It Doesn’t Exist_
 

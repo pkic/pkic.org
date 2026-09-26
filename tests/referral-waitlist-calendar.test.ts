@@ -2,7 +2,11 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env as workerEnv } from "cloudflare:workers";
 import { seedEventAndAdmin, queryAll, createContext } from "./helpers/context";
-import { createReferralCode } from "../functions/_lib/services/referrals";
+import {
+  createReferralCode,
+  recordReferralClick,
+  recordReferralConversion,
+} from "../functions/_lib/services/referrals";
 import { onRequestGet as referralRedirect } from "../functions/r/[code]";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
 import { buildBadgeAttachment } from "../functions/_lib/email/attachments";
@@ -41,6 +45,72 @@ describe("referral, waitlist, and calendar flows", () => {
       code,
     ]);
     expect(Number(stats[0].clicks)).toBe(1);
+  });
+
+  it("rolls back the referral counter when click history cannot be written", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const code = await createReferralCode(env.DB, {
+      eventId,
+      ownerType: "registration",
+      ownerId: crypto.randomUUID(),
+      length: 7,
+    });
+
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_referral_click_insert
+       BEFORE INSERT ON referral_clicks
+       BEGIN
+         SELECT RAISE(ABORT, 'injected referral click failure');
+       END`,
+    ).run();
+
+    await expect(
+      recordReferralClick(env.DB, {
+        code,
+        ip: "192.0.2.10",
+        userAgent: "test-agent",
+        secret: "test-signing-secret",
+      }),
+    ).rejects.toThrow();
+
+    const [referral] = await queryAll<{ clicks: number }>(env.DB, "SELECT clicks FROM referral_codes WHERE code = ?", [
+      code,
+    ]);
+    expect(Number(referral.clicks)).toBe(0);
+    expect(await queryAll(env.DB, "SELECT id FROM referral_clicks WHERE code = ?", [code])).toHaveLength(0);
+  });
+
+  it("counts each identified referral conversion exactly once", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const admin = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0];
+    const code = await createReferralCode(env.DB, {
+      eventId,
+      ownerType: "registration",
+      ownerId: "referrer-registration",
+      createdByUserId: admin.id,
+      length: 8,
+    });
+
+    await recordReferralConversion(env.DB, code, { type: "registration", ref: "converted-registration-1" });
+    await recordReferralConversion(env.DB, code, { type: "registration", ref: "converted-registration-1" });
+    await recordReferralConversion(env.DB, code, { type: "registration", ref: "converted-registration-2" });
+
+    const [referral] = await queryAll<{ conversions: number }>(
+      env.DB,
+      "SELECT conversions FROM referral_codes WHERE code = ?",
+      [code],
+    );
+    const conversions = await queryAll(env.DB, "SELECT id FROM referral_conversions WHERE code = ?", [code]);
+    const engagement = await queryAll(
+      env.DB,
+      "SELECT id FROM engagement_events WHERE action_type = 'referral_conversion' AND source_ref = ?",
+      [code],
+    );
+    expect(referral.conversions).toBe(2);
+    expect(conversions).toHaveLength(2);
+    expect(engagement).toHaveLength(2);
   });
 
   it("logs calendar delivery after send", async () => {

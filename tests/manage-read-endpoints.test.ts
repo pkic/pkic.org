@@ -1,26 +1,81 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
-import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
-import { onRequestGet as getRegistration } from "../functions/api/v1/registrations/manage/[token]";
-import {
-  onRequestGet as getProposal,
-  onRequestPatch as updateProposal,
-} from "../functions/api/v1/proposals/manage/[token]";
-import { onRequestPatch as updateProposalSpeaker } from "../functions/api/v1/proposals/manage/[token]/speakers/[userId]";
-import { onRequestPost as openRegistrationManage } from "../functions/api/v1/admin/events/[eventSlug]/registrations/[registrationId]/open-manage";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
+import { signAdminManageJwt } from "../functions/_lib/utils/jwt";
+import app from "../functions/router";
+import {
+  registrationManageReadResponseSchema,
+  registrationManageUpdateResponseSchema,
+} from "../assets/shared/schemas/registration";
 
 const signingSecret = "test-signing-secret";
+const absentUserId = "00000000000000000000000000000000";
+
+const retiredCapabilityRoutes = [
+  { method: "GET", path: "/api/v1/registrations/manage/no-such-token" },
+  { method: "GET", path: "/api/v1/proposals/manage/no-such-token" },
+  { method: "PATCH", path: "/api/v1/proposals/manage/no-such-token" },
+  { method: "POST", path: "/api/v1/proposals/manage/no-such-token/speakers" },
+  { method: "POST", path: "/api/v1/proposals/manage/no-such-token/speakers/remind" },
+  { method: "PATCH", path: `/api/v1/proposals/manage/no-such-token/speakers/${absentUserId}` },
+  { method: "DELETE", path: `/api/v1/proposals/manage/no-such-token/speakers/${absentUserId}` },
+  { method: "GET", path: `/api/v1/proposals/manage/no-such-token/speakers/${absentUserId}/headshot` },
+  { method: "PUT", path: `/api/v1/proposals/manage/no-such-token/speakers/${absentUserId}/headshot` },
+  { method: "DELETE", path: `/api/v1/proposals/manage/no-such-token/speakers/${absentUserId}/headshot` },
+  { method: "GET", path: "/api/v1/proposals/speaker/no-such-token" },
+  { method: "POST", path: "/api/v1/proposals/speaker/no-such-token" },
+  { method: "PATCH", path: "/api/v1/proposals/speaker/no-such-token" },
+  { method: "GET", path: "/api/v1/proposals/speaker/no-such-token/headshot" },
+  { method: "PUT", path: "/api/v1/proposals/speaker/no-such-token/headshot" },
+  { method: "DELETE", path: "/api/v1/proposals/speaker/no-such-token/headshot" },
+  { method: "PUT", path: "/api/v1/proposals/speaker/no-such-token/presentation" },
+  { method: "GET", path: "/api/v1/proposals/speaker/no-such-token/presentation/download" },
+  { method: "POST", path: "/api/v1/proposals/speaker/no-such-token/reminders" },
+  {
+    method: "GET",
+    path: "/api/v1/proposals/access/no-such-token/speakers/reminders",
+    expectedStatus: 405,
+  },
+  { method: "GET", path: "/api/v1/proposals/speakers/access/no-such-token/reminders" },
+  { method: "GET", path: "/api/v1/proposals/speakers/access/no-such-token/presentation/download" },
+] as const;
+
+function callApp(request: Request): Promise<Response> {
+  return app.fetch(request, env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
+}
 
 describe("manage read endpoints", () => {
   beforeEach(async () => {
     await resetDb();
   });
+
+  it("does not retain the retired capability route operations", async () => {
+    await seedEventAndAdmin(env.DB);
+    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const sessionToken = await createAdminSession(env.DB, admin.id, "retired-capability-route-test");
+
+    for (const route of retiredCapabilityRoutes) {
+      const response = await callApp(
+        new Request(`https://app.test${route.path}`, {
+          method: route.method,
+          headers: { authorization: `Bearer ${sessionToken}` },
+        }),
+      );
+
+      expect({ method: route.method, path: route.path, status: response.status }).toEqual({
+        method: route.method,
+        path: route.path,
+        status: "expectedStatus" in route ? route.expectedStatus : 404,
+      });
+    }
+  });
+
   it("returns registration state for a valid manage token", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
@@ -50,14 +105,19 @@ describe("manage read endpoints", () => {
       resourceId: registrationId,
     });
 
-    const response = await getRegistration(
-      createContext(env, new Request(`https://app.test/api/v1/registrations/manage/${token}`), { token }),
-    );
+    const response = await callApp(new Request(`https://app.test/api/v1/registrations/access/${token}`));
 
     expect(response.status).toBe(200);
-    const payload = (await response.json()) as { registration: { id: string; manage_link_secret?: string } };
+    expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
+    const payload = registrationManageReadResponseSchema.parse(await response.json());
     expect(payload.registration.id).toBe(registrationId);
-    expect(payload.registration.manage_link_secret).toBeUndefined();
+    expect(payload.registration).not.toHaveProperty("manage_link_secret");
+    expect(payload.registration).not.toHaveProperty("confirmation_link_secret");
+    expect(payload.registration).not.toHaveProperty("transition_revision");
+    expect(payload.registration).not.toHaveProperty("source_ref");
+    expect(payload.event).toEqual({ id: eventId, slug: "pqc-2026", name: "PQC Conference 2026" });
+    expect(payload.user).not.toHaveProperty("id");
+    expect(payload).not.toHaveProperty("manageToken");
   });
 
   it("rejects the stored token hash when it is used as a manage token", async () => {
@@ -84,13 +144,10 @@ describe("manage read endpoints", () => {
       `),
     ]);
 
-    const response = await getRegistration(
-      createContext(env, new Request(`https://app.test/api/v1/registrations/manage/${tokenHash}`), {
-        token: tokenHash,
-      }),
-    );
+    const response = await callApp(new Request(`https://app.test/api/v1/registrations/access/${tokenHash}`));
 
     expect(response.status).toBe(404);
+    expect(response.headers.get("cache-control")).toBe("no-store, max-age=0");
     const payload = (await response.json()) as { error: { code: string } };
     expect(payload.error.code).toBe("REGISTRATION_NOT_FOUND");
   });
@@ -115,11 +172,7 @@ describe("manage read endpoints", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const response = await getRegistration(
-      createContext(env, new Request(`https://app.test/api/v1/registrations/manage/${created.manageToken}`), {
-        token: created.manageToken,
-      }),
-    );
+    const response = await callApp(new Request(`https://app.test/api/v1/registrations/access/${created.manageToken}`));
 
     expect(response.status).toBe(200);
     const payload = (await response.json()) as {
@@ -186,10 +239,8 @@ describe("manage read endpoints", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const response = await getRegistration(
-      createContext(env, new Request(`https://app.test/api/v1/registrations/manage/${confirmedSecond.manageToken}`), {
-        token: confirmedSecond.manageToken,
-      }),
+    const response = await callApp(
+      new Request(`https://app.test/api/v1/registrations/access/${confirmedSecond.manageToken}`),
     );
 
     expect(response.status).toBe(200);
@@ -236,55 +287,264 @@ describe("manage read endpoints", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const openResponse = await openRegistrationManage(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/admin/events/pqc-2026/registrations/open-manage", {
-          method: "POST",
-          headers: {
-            authorization: `Bearer ${adminToken}`,
-            "cf-connecting-ip": "203.0.113.30",
-            "user-agent": "admin-browser",
-          },
-        }),
-        { eventSlug: "pqc-2026", registrationId: created.registration.id },
-      ),
+    const openResponse = await callApp(
+      new Request(`https://app.test/api/v1/events/pqc-2026/registrations/${created.registration.id}/access`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${adminToken}`,
+          "cf-connecting-ip": "203.0.113.30",
+          "user-agent": "admin-browser",
+        },
+      }),
     );
 
     expect(openResponse.status).toBe(200);
     const { manageUrl } = (await openResponse.json()) as { manageUrl: string };
     const jwt = new URL(manageUrl).searchParams.get("token") as string;
     expect(jwt.split(".")).toHaveLength(3);
+    const claims = JSON.parse(atob(jwt.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))) as {
+      actor: string;
+      sid: string;
+    };
+    expect(claims.actor).toBe(admin.id);
+    expect(claims.sid).toBeTruthy();
 
-    const validResponse = await getRegistration(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
-          headers: {
-            "cf-connecting-ip": "203.0.113.30",
-            "user-agent": "admin-browser",
-          },
-        }),
-        { token: jwt },
-      ),
+    const validResponse = await callApp(
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
+        headers: {
+          "cf-connecting-ip": "203.0.113.30",
+          "user-agent": "admin-browser",
+        },
+      }),
     );
-    expect(validResponse.status).toBe(200);
+    expect(validResponse.status, JSON.stringify(await validResponse.clone().json())).toBe(200);
 
-    const wrongContextResponse = await getRegistration(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/registrations/manage/${jwt}`, {
-          headers: {
-            "cf-connecting-ip": "203.0.113.31",
-            "user-agent": "admin-browser",
-          },
-        }),
-        { token: jwt },
-      ),
+    const updateResponse = await callApp(
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "cf-connecting-ip": "203.0.113.30",
+          "user-agent": "admin-browser",
+        },
+        body: JSON.stringify({ action: "update", firstName: "Admin edited" }),
+      }),
+    );
+    expect(updateResponse.status).toBe(200);
+    const updatePayload = registrationManageUpdateResponseSchema.parse(await updateResponse.clone().json());
+    expect(updatePayload).toEqual({ success: true, emailChanged: false });
+    expect(updatePayload).not.toHaveProperty("registration");
+    const [audit] = await queryAll<{ actor_type: string; actor_id: string }>(
+      env.DB,
+      `SELECT actor_type, actor_id
+       FROM audit_log
+       WHERE entity_id = ? AND action = 'self_service_update'
+       ORDER BY created_at DESC LIMIT 1`,
+      [created.registration.id],
+    );
+    expect(audit).toEqual({ actor_type: "admin", actor_id: admin.id });
+
+    const wrongContextResponse = await callApp(
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
+        headers: {
+          "cf-connecting-ip": "203.0.113.31",
+          "user-agent": "admin-browser",
+        },
+      }),
     );
     expect(wrongContextResponse.status).toBe(403);
     const body = (await wrongContextResponse.json()) as { error: { code: string } };
     expect(body.error.code).toBe("AUTH_INVALID");
+
+    await env.DB.prepare("UPDATE sessions SET revoked_at = datetime('now') WHERE id = ?").bind(claims.sid).run();
+    const revokedSessionGet = await callApp(
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
+        headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": "admin-browser" },
+      }),
+    );
+    expect(revokedSessionGet.status).toBe(401);
+
+    const revokedSessionPatch = await callApp(
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "cf-connecting-ip": "203.0.113.30",
+          "user-agent": "admin-browser",
+        },
+        body: JSON.stringify({ action: "update", firstName: "Should fail" }),
+      }),
+    );
+    expect(revokedSessionPatch.status).toBe(401);
+
+    const revokedSessionHeadshot = await callApp(
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}/headshot`, {
+        method: "PUT",
+        headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": "admin-browser" },
+      }),
+    );
+    expect(revokedSessionHeadshot.status).toBe(401);
+
+    // Restore only the fixture session so the following assertions isolate
+    // account deactivation as a separate invalidation mechanism.
+    await env.DB.prepare("UPDATE sessions SET revoked_at = NULL WHERE id = ?").bind(claims.sid).run();
+
+    await env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(admin.id).run();
+
+    const deactivatedGet = await callApp(
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
+        headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": "admin-browser" },
+      }),
+    );
+    expect(deactivatedGet.status).toBe(401);
+
+    const deactivatedPatch = await callApp(
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "cf-connecting-ip": "203.0.113.30",
+          "user-agent": "admin-browser",
+        },
+        body: JSON.stringify({ action: "update", firstName: "Should fail" }),
+      }),
+    );
+    expect(deactivatedPatch.status).toBe(401);
+
+    const deactivatedHeadshot = await callApp(
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}/headshot`, {
+        method: "PUT",
+        headers: { "cf-connecting-ip": "203.0.113.30", "user-agent": "admin-browser" },
+      }),
+    );
+    expect(deactivatedHeadshot.status).toBe(401);
+  });
+
+  it("rechecks the original event permissions for a scoped admin manage JWT", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const [globalAdmin] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1",
+    );
+    const scopedAdminId = crypto.randomUUID();
+    const registrationUserId = crypto.randomUUID();
+    const registrationId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+         VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+      ).bind(scopedAdminId, "scoped-admin@example.test", "scoped-admin@example.test"),
+      env.DB.prepare(
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at)
+         VALUES (?, ?, ?, 'Managed', 'Attendee', 'user', 1, datetime('now'), datetime('now'))`,
+      ).bind(registrationUserId, "managed-attendee@example.test", "managed-attendee@example.test"),
+      env.DB.prepare(
+        `INSERT INTO registrations (
+           id, event_id, user_id, status, attendance_type, source_type,
+           manage_link_secret, created_at, updated_at
+         ) VALUES (?, ?, ?, 'registered', 'virtual', 'direct', ?, datetime('now'), datetime('now'))`,
+      ).bind(registrationId, eventId, registrationUserId, crypto.randomUUID()),
+      ...(["events:read", "events:write", "events:manage", "donations:read"] as const).map((permission) =>
+        env.DB.prepare(
+          `INSERT INTO permission_grants
+             (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+        ).bind(
+          crypto.randomUUID(),
+          scopedAdminId,
+          permission,
+          permission === "donations:read" ? null : "event",
+          permission === "donations:read" ? null : eventId,
+          globalAdmin.id,
+        ),
+      ),
+    ]);
+
+    const scopedAdminToken = await createAdminSession(env.DB, scopedAdminId, "scoped-admin-manage-token");
+    const openResponse = await callApp(
+      new Request(`https://app.test/api/v1/events/pqc-2026/registrations/${registrationId}/access`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${scopedAdminToken}`,
+          "cf-connecting-ip": "203.0.113.40",
+          "user-agent": "scoped-admin-browser",
+        },
+      }),
+    );
+    expect(openResponse.status).toBe(200);
+    const { manageUrl } = (await openResponse.json()) as { manageUrl: string };
+    const jwt = new URL(manageUrl).searchParams.get("token") as string;
+
+    const validGet = await callApp(
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
+        headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
+      }),
+    );
+    expect(validGet.status).toBe(200);
+
+    const [iphash, uahash] = await Promise.all([sha256Hex("203.0.113.40"), sha256Hex("scoped-admin-browser")]);
+    const wrongEventJwt = await signAdminManageJwt(signingSecret, {
+      sub: registrationId,
+      actor: scopedAdminId,
+      sid: (await queryAll<{ id: string }>(env.DB, "SELECT id FROM sessions WHERE user_id = ?", scopedAdminId))[0].id,
+      event: "different-event",
+      iphash,
+      uahash,
+      ttlSeconds: 300,
+    });
+    const wrongEventGet = await callApp(
+      new Request(`https://app.test/api/v1/registrations/access/${wrongEventJwt}`, {
+        headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
+      }),
+    );
+    expect(wrongEventGet.status).toBe(401);
+
+    await env.DB.prepare(
+      "UPDATE permission_grants SET revoked_at = datetime('now') WHERE user_id = ? AND permission = 'events:write'",
+    )
+      .bind(scopedAdminId)
+      .run();
+
+    const readOnlyGet = await callApp(
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
+        headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
+      }),
+    );
+    expect(readOnlyGet.status).toBe(200);
+
+    const revokedPatch = await callApp(
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
+        method: "PATCH",
+        headers: {
+          "content-type": "application/json",
+          "cf-connecting-ip": "203.0.113.40",
+          "user-agent": "scoped-admin-browser",
+        },
+        body: JSON.stringify({ action: "update", firstName: "Should fail" }),
+      }),
+    );
+    expect(revokedPatch.status).toBe(403);
+
+    const revokedHeadshot = await callApp(
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}/headshot`, {
+        method: "PUT",
+        headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
+      }),
+    );
+    expect(revokedHeadshot.status).toBe(403);
+
+    await env.DB.prepare(
+      "UPDATE permission_grants SET revoked_at = datetime('now') WHERE user_id = ? AND permission = 'events:read'",
+    )
+      .bind(scopedAdminId)
+      .run();
+
+    const revokedGet = await callApp(
+      new Request(`https://app.test/api/v1/registrations/access/${jwt}`, {
+        headers: { "cf-connecting-ip": "203.0.113.40", "user-agent": "scoped-admin-browser" },
+      }),
+    );
+    expect(revokedGet.status).toBe(403);
   });
 
   it("returns proposal state for a valid manage token", async () => {
@@ -321,9 +581,7 @@ describe("manage read endpoints", () => {
       resourceId: proposalId,
     });
 
-    const response = await getProposal(
-      createContext(env, new Request(`https://app.test/api/v1/proposals/manage/${token}`), { token }),
-    );
+    const response = await callApp(new Request(`https://app.test/api/v1/proposals/access/${token}`));
 
     expect(response.status).toBe(200);
     const payload = (await response.json()) as {
@@ -335,8 +593,22 @@ describe("manage read endpoints", () => {
     expect(payload.speakers[0].email).toBe("speaker@example.test");
   });
 
-  it("lets proposers update session type and speaker roles from the manage flow", async () => {
+  it("lets proposers update session type and presentation role without changing ownership", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
+
+    await env.DB.prepare("UPDATE events SET settings_json = ? WHERE id = ?")
+      .bind(
+        JSON.stringify({
+          proposal: {
+            sessionTypes: [
+              { label: "talk", requiresPresentation: true },
+              { label: "Ask Me Anything", requiresPresentation: false },
+            ],
+          },
+        }),
+        eventId,
+      )
+      .run();
 
     const userId = crypto.randomUUID();
     const proposalId = crypto.randomUUID();
@@ -350,11 +622,11 @@ describe("manage read endpoints", () => {
       env.DB.prepare(`
         INSERT INTO session_proposals (
           id, event_id, proposer_user_id, status, proposal_type, title, abstract,
-          manage_link_secret, submitted_at, updated_at
+          details_json, manage_link_secret, submitted_at, updated_at
         ) VALUES (
           '${proposalId}', '${eventId}', '${userId}', 'submitted', 'talk', 'Proposal title',
           'Proposal abstract text that is sufficiently long for test payload validation.',
-          '${linkSecret}', datetime('now'), datetime('now')
+          '{"existing":"preserved"}', '${linkSecret}', datetime('now'), datetime('now')
         )
       `),
       env.DB.prepare(`
@@ -369,29 +641,52 @@ describe("manage read endpoints", () => {
       resourceId: proposalId,
     });
 
-    const updateResponse = await updateProposal(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/proposals/manage/${token}`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ action: "update", proposalType: "panel" }),
-        }),
-        { token },
-      ),
+    const updateResponse = await callApp(
+      new Request(`https://app.test/api/v1/proposals/access/${token}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ proposalType: "ask me anything" }),
+      }),
     );
     expect(updateResponse.status).toBe(200);
+    await expect(updateResponse.json()).resolves.toMatchObject({
+      proposal: { proposal_type: "Ask Me Anything", details: { existing: "preserved" } },
+    });
 
-    const speakerResponse = await updateProposalSpeaker(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/proposals/manage/${token}/speakers/${userId}`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({ role: "moderator" }),
-        }),
-        { token, userId },
-      ),
+    const unsupportedType = await callApp(
+      new Request(`https://app.test/api/v1/proposals/access/${token}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ proposalType: "unconfigured session" }),
+      }),
+    );
+    expect(unsupportedType.status).toBe(400);
+    await expect(unsupportedType.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_TYPE_NOT_ALLOWED" } });
+
+    const emptyUpdate = await callApp(
+      new Request(`https://app.test/api/v1/proposals/access/${token}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({}),
+      }),
+    );
+    expect(emptyUpdate.status).toBe(400);
+
+    const ambiguousWithdrawal = await callApp(
+      new Request(`https://app.test/api/v1/proposals/access/${token}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ status: "withdrawn", title: "Do not apply this title" }),
+      }),
+    );
+    expect(ambiguousWithdrawal.status).toBe(400);
+
+    const speakerResponse = await callApp(
+      new Request(`https://app.test/api/v1/proposals/access/${token}/speakers/${userId}`, {
+        method: "PATCH",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ role: "moderator" }),
+      }),
     );
     expect(speakerResponse.status).toBe(200);
 
@@ -403,6 +698,6 @@ describe("manage read endpoints", () => {
        WHERE sp.id = ? AND ps.user_id = ?`,
       [proposalId, userId],
     );
-    expect(rows[0]).toEqual({ proposal_type: "panel", role: "moderator" });
+    expect(rows[0]).toEqual({ proposal_type: "Ask Me Anything", role: "moderator" });
   });
 });

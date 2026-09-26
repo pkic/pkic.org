@@ -6,31 +6,31 @@ type EventDay = EventFormsResponse["eventDays"][number];
 
 interface OptionConfig {
   Icon: ComponentType<Omit<JSX.SVGAttributes<SVGSVGElement>, "xmlns" | "viewBox" | "fill">>;
-  color: string;
+  themeClass: string;
   description: string;
 }
 
 const OPTION_CONFIG: Record<string, OptionConfig> = {
   in_person: {
     Icon: IconInPerson,
-    color: "#e05c3b",
+    themeClass: "event-flow-attendance-card--in-person",
     description: "Join us at the venue in person",
   },
   virtual: {
     Icon: IconVirtual,
-    color: "#2b7de8",
+    themeClass: "event-flow-attendance-card--virtual",
     description: "Watch the live stream remotely",
   },
   on_demand: {
     Icon: IconOnDemand,
-    color: "#7b2be8",
+    themeClass: "event-flow-attendance-card--on-demand",
     description: "Watch the recording at your convenience",
   },
 };
 
 const FALLBACK_CONFIG: OptionConfig = {
   Icon: IconCalendarCheck,
-  color: "#198754",
+  themeClass: "event-flow-attendance-card--default",
   description: "Select your attendance preference",
 };
 
@@ -64,7 +64,7 @@ function AttendanceOption({ day, option, index, lowCapacityThreshold }: Attendan
         id={inputId}
         required={index === 0}
       />
-      <label class="event-flow-attendance-card" htmlFor={inputId} style={`--option-color: ${config.color}`}>
+      <label class={`event-flow-attendance-card ${config.themeClass}`} htmlFor={inputId}>
         <span class="event-flow-attendance-icon">
           <Icon />
         </span>
@@ -90,14 +90,25 @@ interface DayAttendancePickerProps {
 
 export function DayAttendancePicker({ days, lowCapacityThreshold = 0 }: DayAttendancePickerProps) {
   if (days.length === 0) {
-    return <p class="form-text">No per-day attendance required for this event.</p>;
+    return <p class="pk-small">No per-day attendance required for this event.</p>;
   }
 
+  /*
+   * Each day is a `fieldset` named by its `legend`, not a `div` headed by a
+   * paragraph. The options are radios sharing one `name`, so they are a group
+   * whether or not the markup says so — and without the legend a screen
+   * reader announced "In person, radio, 1 of 3" with nothing saying which
+   * day it belonged to, on an event with a card per day.
+   *
+   * `pk-fieldset` supplies the reset the element needs (no groove border, no
+   * user-agent padding, no `min-inline-size: min-content`); the spacing
+   * between days is the stack's `gap` rather than a margin on each child.
+   */
   return (
-    <>
+    <div class="pk-stack">
       {days.map((day) => (
-        <div key={day.dayDate} class="event-flow-day mb-3">
-          <p class="event-flow-day-label">{labelForDay(day)}</p>
+        <fieldset key={day.dayDate} class="pk-fieldset event-flow-day">
+          <legend class="event-flow-day-label">{labelForDay(day)}</legend>
           <div class="event-flow-attendance-options">
             {day.attendanceOptions.map((option, i) => (
               <AttendanceOption
@@ -109,8 +120,8 @@ export function DayAttendancePicker({ days, lowCapacityThreshold = 0 }: DayAtten
               />
             ))}
           </div>
-        </div>
+        </fieldset>
       ))}
-    </>
+    </div>
   );
 }

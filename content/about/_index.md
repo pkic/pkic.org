@@ -17,7 +17,7 @@ menu:
 
 ## About us
 
-{{< figure src="/img/logo-black.svg" alt="Logo of the PKI Consortium" height="100" class="float-lg-end" >}}
+{{< figure src="/img/logo-black.svg" alt="Logo of the PKI Consortium" class="pk-figure-aside" >}}
 
 The Public Key Infrastructure Consortium is comprised of leading organizations that are committed to improve, create and collaborate on generic, industry or use-case specific policies, procedures, best practices, standards and tools that advance trust in assets and communication for everyone and everything using Public Key Infrastructure (PKI) as well as the security of the internet in general. By engaging with users, regulators, supervisory bodies and other interested or relying parties the consortium can address actual issues. 
 
@@ -37,10 +37,11 @@ The Public Key Infrastructure Consortium is comprised of leading organizations t
 
 ### Chair and Vice Chair
 
-{{< leadership-grid >}}
-{{< person-card name="Paul van Brouwershaven" role="Chair" affiliation="digitorus" from="2021-01-01" >}}
-{{< person-card name="Albert de Ruiter" role="Vice Chair" affiliation="logius" from="2022-06-01" >}}
-{{< /leadership-grid >}}
+{{< leadership group="all-members" view="leadership" >}}
+
+## Past Leadership
+
+{{< /leadership >}}
 
 ### Board of Directors and Executive Council
 

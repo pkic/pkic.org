@@ -22,7 +22,9 @@ for (const file of files) {
 const collisions = [...seen.values()].filter((group) => group.length > 1);
 
 if (collisions.length > 0) {
-  console.error(`Found ${collisions.length} filename collision group(s) that will break on case-insensitive filesystems (e.g. macOS):`);
+  console.error(
+    `Found ${collisions.length} filename collision group(s) that will break on case-insensitive filesystems (e.g. macOS):`,
+  );
   for (const group of collisions) {
     console.error("-");
     for (const file of group) {

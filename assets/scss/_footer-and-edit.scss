@@ -1,17 +1,13 @@
 // ── CTA participation bar ──────────────────────────────────────────────────
 #participate {
+  // One line of text under the gradient rule, so it takes the tighter step of
+  // the spacing scale rather than `pk-section`'s between-sections rhythm —
+  // which is 3rem, and left the sentence stranded in the middle of a band
+  // twice as tall as the one it replaced.
+  padding-block: var(--pk-5);
   background: #000;
   border-top: 3px solid transparent;
-  border-image: linear-gradient(
-      to right,
-      $green,
-      $teal,
-      $blue,
-      $yellow,
-      $orange,
-      $red
-    )
-    1;
+  border-image: linear-gradient(to right, $green, $teal, $blue, $yellow, $orange, $red) 1;
   color: rgba(#fff, 0.65);
   text-align: center;
   font-size: 1.1em;
@@ -22,7 +18,7 @@
     color: #fff;
     font-weight: 500;
     text-decoration: underline;
-    text-decoration-color: rgba(#fff, 0.25);
+    text-decoration-color: rgba(#fff, 0.65);
     text-underline-offset: 3px;
     transition: text-decoration-color 0.2s ease;
 
@@ -35,9 +31,36 @@
 // ── Main footer body ───────────────────────────────────────────────────────
 .footer-body {
   border-top: 1px solid rgba(#fff, 0.06);
+  // Breathing room between the rule and the brand column: the logo was
+  // sitting directly against the border, which reads as a collision rather
+  // than a section break. `--pk-7` rather than `--pk-6` because the
+  // production footer holds 48px (`py-5`) on both sides of its body, and at
+  // 32px the brand logo still sat visibly closer to the rule than the site
+  // readers compare this footer against.
+  padding-block: var(--pk-7);
+}
+
+// Four columns on a desktop footer: the brand and the three link lists.
+//
+// The generic tracks are sized for cards. At the 22rem one the four columns
+// folded into two, which doubled the footer's height and left the brand
+// column's divider standing in the middle of it; at the 11rem one a fifth,
+// empty track opens up. A footer column is as wide as its longest link, so it
+// gets its own measure rather than bending a shared one.
+.footer-columns {
+  --pk-col-min: 14rem;
 }
 
 // Brand column
+// The member-logo marquee. It carried `text-nowrap overflow-hidden my-4` in
+// the markup; clipping and not wrapping are what make a marquee a marquee, so
+// they belong here rather than being re-stated on every page that shows one.
+.footer-member-wall {
+  white-space: nowrap;
+  overflow: hidden;
+  margin-block: 1.5rem;
+}
+
 .footer-brand {
   padding-right: 2rem;
 
@@ -67,7 +90,7 @@
   font-size: 0.82rem;
   font-weight: 300;
   line-height: 1.6;
-  color: rgba(#fff, 0.4);
+  color: rgba(#fff, 0.65);
 }
 
 .footer-social {
@@ -79,7 +102,7 @@
     height: 32px;
     border-radius: 6px;
     background: rgba(#fff, 0.05);
-    color: rgba(#fff, 0.45);
+    color: rgba(#fff, 0.65);
     margin-right: 6px;
     transition:
       background 0.2s ease,
@@ -113,7 +136,7 @@
   background: rgba(#1a1a1a, 0.85);
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
-  color: rgba(#fff, 0.45);
+  color: rgba(#fff, 0.65);
   border: 1px solid rgba(#fff, 0.1);
   border-radius: 8px;
   padding: 7px 9px;
@@ -231,7 +254,7 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: rgba(#fff, 0.35);
+  color: rgba(#fff, 0.65);
   margin-bottom: 1.1rem;
 }
 
@@ -265,10 +288,10 @@
 .footer-disclaimer {
   font-size: 0.73rem;
   line-height: 1.6;
-  color: rgba(#fff, 0.22);
+  color: rgba(#fff, 0.65);
 
   a {
-    color: rgba(#fff, 0.3);
+    color: rgba(#fff, 0.65);
     text-decoration: underline;
     text-decoration-color: rgba(#fff, 0.15);
     text-underline-offset: 2px;
@@ -280,16 +303,16 @@
 }
 
 .footer-copy {
-  color: rgba(#fff, 0.25);
+  color: rgba(#fff, 0.65);
   font-size: 0.75rem;
 }
 
 .footer-legal {
   font-size: 0.75rem;
-  color: rgba(#fff, 0.25);
+  color: rgba(#fff, 0.65);
 
   a {
-    color: rgba(#fff, 0.25);
+    color: rgba(#fff, 0.65);
     text-decoration: none;
     transition: color 0.2s ease;
 
@@ -303,48 +326,29 @@
   margin: 5px 20px;
   height: 18px;
   max-width: 90px;
-  filter: grayscale(1) opacity(0.55) contrast(0.5);
+  filter: var(--pk-member-logo-filter);
+  mix-blend-mode: var(--pk-member-logo-blend);
   transition:
     filter 0.2s ease,
     transform 0.2s ease;
 }
 
-.member-logo-sponsor {
-  filter: none;
-  opacity: 1;
-  transition: transform 0.2s ease;
-}
-
-/* Size by sponsor tier (level 1–6) — uniform margin, height does the work */
-.sponsor-lvl-1 {
-  height: 22px;
-  max-width: 110px;
-}
-.sponsor-lvl-2 {
-  height: 26px;
-  max-width: 130px;
-}
-.sponsor-lvl-3 {
-  height: 32px;
-  max-width: 155px;
-}
-.sponsor-lvl-4 {
-  height: 38px;
-  max-width: 180px;
-}
-.sponsor-lvl-5 {
-  height: 44px;
-  max-width: 210px;
-}
-.sponsor-lvl-6 {
-  height: 52px;
-  max-width: 240px;
+// Sponsors retain their brand artwork in light mode. The same token keeps
+// dark artwork legible on the dark wall without changing the image assets.
+.members .member-logo-sponsor {
+  filter: var(--pk-member-logo-hover-filter);
+  mix-blend-mode: var(--pk-member-logo-blend);
 }
 
 .members a:hover .member-logo {
-  filter: none;
+  opacity: 0.8;
+  filter: var(--pk-member-logo-hover-filter);
 }
 
 .members a:hover .member-logo-sponsor {
   transform: scale(1.12);
+}
+
+.members .member-logo[data-logo-ink="light"] {
+  filter: var(--pk-member-logo-filter) invert(1);
 }

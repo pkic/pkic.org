@@ -21,6 +21,15 @@ tags:
 title: How to do HTTPS … The Right Way
 
 
+authorProfiles:
+  - name: Corey Bonnell
+    organization: TurboLight Solutions
+    role: Founder
+    website: https://www.turbolightsolutions.com/
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/coreybonnell/
+    assetdirectory: images/members/turbolightsolutions
 ---
 With secure HTTP — aka HTTPS (the “S” is short for “secure”) — swiftly becoming universal on the Internet, it is important to know how to configure HTTPS for your website the right way. The payoff for properly securing your website has many benefits, a few of which are:
 

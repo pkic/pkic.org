@@ -1,0 +1,21 @@
+/*
+ * ControlStack — a column inside a Field's control box.
+ *
+ * `Field` hands its control one box, a flex row sized to its content, and some
+ * controls are more than one element: a combobox is its input, the popup of
+ * matches and the line that says the matches could not be loaded; a control in
+ * a form whose validator writes messages after render is the input and the
+ * slot that validator writes into. Laid straight into the row those would sit
+ * side by side, so they stack in here — and the stack takes the row's width
+ * itself, because a flex item is otherwise only as wide as its content, which
+ * for a `width: 100%` input is the browser's default size.
+ */
+@layer components {
+  .pk-control-stack {
+    display: flex;
+    flex: 1 1 auto;
+    flex-direction: column;
+    gap: var(--pk-1);
+    min-width: 0;
+  }
+}

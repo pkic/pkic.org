@@ -21,7 +21,6 @@ export interface HeadshotControllerOptions {
   uploadSuccessStatus?: string;
   deleteSuccessStatus?: string;
   confirmDeleteMessage?: string;
-  resetListeners?: boolean;
   uploadHeadshot(file: Blob): Promise<HeadshotUploadResult | void>;
   deleteHeadshot?: () => Promise<void>;
   onUploaded?: (headshotUrl: string | null | undefined) => void | Promise<void>;
@@ -31,13 +30,6 @@ export interface HeadshotControllerOptions {
 
 const DEFAULT_MAX_RAW_MB = 20;
 
-function withFreshListenerTarget<T extends HTMLElement>(element: T | null, reset: boolean): T | null {
-  if (!element || !reset) return element;
-  const clone = element.cloneNode(true) as T;
-  element.replaceWith(clone);
-  return clone;
-}
-
 function setStatusText(status: HTMLElement | null, message: string): void {
   if (status) status.textContent = message;
 }
@@ -46,15 +38,32 @@ export function confirmHeadshotUsage(options?: HeadshotDisclaimerOptions): Promi
   return showHeadshotDisclaimer(options);
 }
 
-export function wireHeadshotController(options: HeadshotControllerOptions): void {
-  const fileInput = withFreshListenerTarget(options.fileInput, options.resetListeners === true);
-  const deleteButton = withFreshListenerTarget(options.deleteButton ?? null, options.resetListeners === true);
+/**
+ * Wires the file input and the remove control, and returns the function that
+ * unwires them.
+ *
+ * The listeners are registered against an `AbortController` signal so a caller
+ * that re-wires — every Preact effect re-run does — takes its previous
+ * listeners off the same elements. What this replaced cloned each element and
+ * swapped the clone into the DOM to shed old listeners, which detached the
+ * very node the caller held a reference to: the visible input was the clone
+ * carrying the listener, while `fileRef.current` was the original, orphaned
+ * and silent. Clicking "Upload headshot" opened a picker on that orphan, whose
+ * `change` nothing was listening for, so no disclaimer appeared and no upload
+ * ever started (issue #28).
+ */
+export function wireHeadshotController(options: HeadshotControllerOptions): () => void {
+  const abort = new AbortController();
+  const { signal } = abort;
+  const fileInput = options.fileInput;
+  const deleteButton = options.deleteButton ?? null;
   let currentUrl = options.initialUrl ?? null;
 
   function updatePreview(url: string | null | undefined): void {
     currentUrl = url ?? null;
     renderHeadshotPreview(options.preview, currentUrl, options.previewOptions);
-    deleteButton?.classList.toggle("d-none", !currentUrl || !options.deleteHeadshot);
+    const hideDelete = !currentUrl || !options.deleteHeadshot;
+    if (deleteButton) deleteButton.hidden = hideDelete;
   }
 
   function reportError(error: unknown, action: HeadshotAction): void {
@@ -66,17 +75,32 @@ export function wireHeadshotController(options: HeadshotControllerOptions): void
 
   updatePreview(currentUrl);
 
-  fileInput?.addEventListener("change", () => {
-    const file = fileInput.files?.[0];
-    if (!file) return;
-    void uploadSelectedFile(file);
-  });
+  fileInput?.addEventListener(
+    "change",
+    () => {
+      const file = fileInput.files?.[0];
+      if (!file) return;
+      void uploadSelectedFile(file);
+    },
+    { signal },
+  );
 
-  deleteButton?.addEventListener("click", () => {
-    if (!options.deleteHeadshot) return;
-    if (options.confirmDeleteMessage && !confirm(options.confirmDeleteMessage)) return;
-    void removeHeadshot();
-  });
+  deleteButton?.addEventListener(
+    "click",
+    () => {
+      if (!options.deleteHeadshot) return;
+      // TODO(confirm-dialog): host not mounted on this surface. This controller is
+      // shared by public, unauthenticated token pages (assets/ts/event-flows/*)
+      // that never render <ConfirmDialogHost/>, alongside portal pages that do.
+      // Swapping to confirmAction() here would leave the promise unresolved (and
+      // the delete permanently blocked) on every surface without the host, so the
+      // native dialog stays until every caller of wireHeadshotController is
+      // guaranteed to run inside a page that mounts the host.
+      if (options.confirmDeleteMessage && !confirm(options.confirmDeleteMessage)) return;
+      void removeHeadshot();
+    },
+    { signal },
+  );
 
   async function uploadSelectedFile(file: File): Promise<void> {
     const maxRawMb = options.maxRawMb ?? DEFAULT_MAX_RAW_MB;
@@ -128,4 +152,6 @@ export function wireHeadshotController(options: HeadshotControllerOptions): void
       reportError(error, "delete");
     }
   }
+
+  return () => abort.abort();
 }

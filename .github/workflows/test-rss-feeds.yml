@@ -3,10 +3,20 @@ name: RSS Feed Validation
 on:
   pull_request:
     types: [opened, synchronize]
+    paths:
+      - "content/**"
+      - "data/**"
+      - "config.yaml"
+      - "scripts/test-feeds.py"
+      - ".github/workflows/test-rss-feeds.yml"
 
 permissions:
   contents: read
   issues: write
+
+concurrency:
+  group: rss-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
   validate:
@@ -19,7 +29,7 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.x'
+          python-version: "3.x"
 
       - name: Install dependencies
         run: |

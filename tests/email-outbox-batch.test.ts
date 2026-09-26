@@ -2,8 +2,17 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env as workerEnv } from "cloudflare:workers";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
-import { queueEmail, processPendingOutbox, processSelectedOutbox } from "../functions/_lib/email/outbox";
+import {
+  bulkQueueInviteEmails,
+  prepareBulkQueueEmailChunkStatements,
+  prepareQueueEmailStatement,
+  queueEmail,
+  processPendingOutbox,
+  processSelectedOutbox,
+  resetFailedOutbox,
+} from "../functions/_lib/email/outbox";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
+import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
 import type { Env } from "../functions/_lib/types";
 
 const env = workerEnv as unknown as Env;
@@ -88,6 +97,291 @@ describe("email outbox batch processing", () => {
     expect(rows.every((r) => r.status === "sent")).toBe(true);
   });
 
+  it("sends from the sender the template names, and from the configured sender otherwise", async () => {
+    const fetchMock = makeSendgridMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const named = await createTemplateVersion(env.DB, {
+      templateKey: "attendee_invite",
+      content: "Hello {{firstName}} from membership",
+      subjectTemplate: "From membership",
+      fromEmail: "membership@pkic.org",
+      fromName: "PKIC Membership",
+      createdByUserId: adminId,
+    });
+    await activateTemplateVersion(env.DB, { templateKey: "attendee_invite", version: named.version });
+    await queueN(env.DB, eventId, 1);
+
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 0 });
+    const [, namedInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(namedInit.body)).from).toEqual({ email: "membership@pkic.org", name: "PKIC Membership" });
+
+    // Back to a version with no sender of its own: the configured one again.
+    await activateTemplateVersion(env.DB, { templateKey: "attendee_invite", version: 1 });
+    await queueN(env.DB, eventId, 1);
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 0 });
+    const [, plainInit] = fetchMock.mock.calls[1] as [string, RequestInit];
+    expect(JSON.parse(String(plainInit.body)).from.email).not.toBe("membership@pkic.org");
+  });
+
+  it("fails an unsafe template expansion terminally without calling SendGrid", async () => {
+    const fetchMock = makeSendgridMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const unsafe = await createTemplateVersion(env.DB, {
+      templateKey: "attendee_invite",
+      content: `{{#each items}}${"x".repeat(2_001)}{{/each}}`,
+      createdByUserId: adminId,
+      subjectTemplate: "Bounded subject",
+    });
+    await activateTemplateVersion(env.DB, { templateKey: "attendee_invite", version: unsafe.version });
+    const outboxId = await queueEmail(env.DB, {
+      eventId,
+      templateKey: "attendee_invite",
+      recipientEmail: "unsafe-template@example.test",
+      messageType: "transactional",
+      data: { items: Array.from({ length: 1_000 }, () => null) },
+    });
+
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 1 });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      await queryAll<{ attempts: number; status: string; last_error: string }>(
+        env.DB,
+        "SELECT attempts, status, last_error FROM email_outbox WHERE id = ?",
+        outboxId,
+      ),
+    ).toEqual([
+      {
+        attempts: 1,
+        status: "failed",
+        last_error: expect.stringContaining("EMAIL_TEMPLATE_RENDER_LIMIT_EXCEEDED"),
+      },
+    ]);
+  });
+
+  it("ignores retired uploaded-ICS descriptors without reading R2", async () => {
+    const fetchMock = makeSendgridMock();
+    const get = vi.fn();
+    vi.stubGlobal("fetch", fetchMock);
+    await queueEmail(env.DB, {
+      eventId,
+      templateKey: "attendee_invite",
+      recipientEmail: "legacy-calendar@example.test",
+      messageType: "transactional",
+      data: { firstName: "Legacy" },
+      attachments: [
+        {
+          kind: "r2-ics-file",
+          r2Key: "retired/meeting.ics",
+          filename: "meeting.ics",
+        },
+      ] as never,
+    });
+
+    const result = await processPendingOutbox(env.DB, { ...env, ASSETS_BUCKET: { get } } as unknown as Env, 10);
+
+    expect(result).toEqual({ processed: 1, failed: 0 });
+    expect(get).not.toHaveBeenCalled();
+    const [, requestInit] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(JSON.parse(String(requestInit.body))).not.toHaveProperty("attachments");
+  });
+
+  it("enqueues a domain notification exactly once when concurrent batches reuse its idempotency key", async () => {
+    const payload = {
+      outboxId: "1234567890abcdef1234567890abcdef",
+      idempotencyKey: "speaker_invite:proposal-1:speaker-1:0",
+      eventId,
+      templateKey: "attendee_invite",
+      recipientEmail: "same@example.test",
+      messageType: "transactional" as const,
+      data: { firstName: "Same" },
+    };
+    const first = prepareQueueEmailStatement(env.DB, payload);
+    const duplicate = prepareQueueEmailStatement(env.DB, payload);
+    await Promise.all([env.DB.batch([first.statement]), env.DB.batch([duplicate.statement])]);
+
+    const rows = await queryAll<{ id: string; idempotency_key: string }>(
+      env.DB,
+      "SELECT id, idempotency_key FROM email_outbox WHERE idempotency_key = ?",
+      [payload.idempotencyKey],
+    );
+    expect(rows).toEqual([{ id: payload.outboxId, idempotency_key: payload.idempotencyKey }]);
+  });
+
+  it("claims an idempotent outbox row once when direct processors race or retry", async () => {
+    const fetchMock = makeSendgridMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const payload = {
+      outboxId: "abcdef1234567890abcdef1234567890",
+      idempotencyKey: "donation_thank_you:donation-1",
+      eventId,
+      templateKey: "attendee_invite",
+      recipientEmail: "same@example.test",
+      messageType: "transactional" as const,
+      data: { firstName: "Same" },
+    };
+    const outboxId = await queueEmail(env.DB, payload);
+
+    const [first, second] = await Promise.all([
+      processSelectedOutbox(env.DB, env, [outboxId]),
+      processSelectedOutbox(env.DB, env, [outboxId]),
+    ]);
+    const retry = await processSelectedOutbox(env.DB, env, [outboxId]);
+
+    expect(first.processed + second.processed).toBe(1);
+    expect(first.skipped + second.skipped).toBe(1);
+    expect(retry).toEqual({ processed: 0, failed: 0, skipped: 1 });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(
+      await queryAll<{ status: string }>(env.DB, "SELECT status FROM email_outbox WHERE id = ?", [outboxId]),
+    ).toEqual([{ status: "sent" }]);
+  });
+
+  it("quarantines an expired sending lease without replaying it and leaves a live lease untouched", async () => {
+    const fetchMock = makeSendgridMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const [expiredId, liveId] = await queueN(env.DB, eventId, 2);
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE email_outbox
+              SET status = 'sending', processing_token = 'abandoned',
+                  lease_expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '-1 minute')
+            WHERE id = ?`,
+      ).bind(expiredId),
+      env.DB.prepare(
+        `UPDATE email_outbox
+              SET status = 'sending', processing_token = 'current',
+                  lease_expires_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now', '+5 minutes')
+            WHERE id = ?`,
+      ).bind(liveId),
+    ]);
+
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 0, failed: 0 });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(
+      await queryAll<{ id: string; status: string; processing_token: string | null }>(
+        env.DB,
+        "SELECT id, status, processing_token FROM email_outbox WHERE id IN (?, ?) ORDER BY id",
+        [expiredId, liveId],
+      ),
+    ).toEqual(
+      [
+        { id: expiredId, status: "delivery_unknown", processing_token: null },
+        { id: liveId, status: "sending", processing_token: "current" },
+      ].sort((a, b) => a.id.localeCompare(b.id)),
+    );
+  });
+
+  it("does not automatically replay a transport-ambiguous SendGrid request", async () => {
+    let sentPayload: unknown;
+    const fetchMock = vi.fn().mockImplementation((_url: string, init: RequestInit) => {
+      sentPayload = JSON.parse(String(init.body));
+      return Promise.reject(new Error("connection closed after request write"));
+    });
+    vi.stubGlobal("fetch", fetchMock);
+    const [outboxId] = await queueN(env.DB, eventId, 1);
+
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 1 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    const sentCustomArgs = (
+      sentPayload as { personalizations: Array<{ custom_args: { outbox_id: string; env_url?: string } }> }
+    ).personalizations[0]?.custom_args;
+    expect(sentCustomArgs?.outbox_id).toBe(outboxId);
+    expect(
+      await queryAll<{ status: string; last_error: string }>(
+        env.DB,
+        "SELECT status, last_error FROM email_outbox WHERE id = ?",
+        [outboxId],
+      ),
+    ).toEqual([
+      {
+        status: "delivery_unknown",
+        last_error: expect.stringContaining("SENDGRID_DELIVERY_UNKNOWN"),
+      },
+    ]);
+
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 0, failed: 0 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+  });
+
+  it("persists an accepted request as delivery unknown when finalizing sent state fails", async () => {
+    const fetchMock = makeSendgridMock();
+    vi.stubGlobal("fetch", fetchMock);
+    const [outboxId] = await queueN(env.DB, eventId, 1);
+    await env.DB.prepare(
+      `CREATE TRIGGER reject_sent_finalization
+       BEFORE UPDATE OF status ON email_outbox
+       WHEN NEW.status = 'sent'
+       BEGIN
+         SELECT RAISE(ABORT, 'simulated sent finalization failure');
+       END`,
+    ).run();
+
+    expect(await processPendingOutbox(env.DB, env, 10)).toEqual({ processed: 1, failed: 1 });
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(
+      await queryAll<{ status: string; provider_message_id: string | null }>(
+        env.DB,
+        "SELECT status, provider_message_id FROM email_outbox WHERE id = ?",
+        [outboxId],
+      ),
+    ).toEqual([{ status: "delivery_unknown", provider_message_id: "msg-1" }]);
+
+    await env.DB.prepare("DROP TRIGGER reject_sent_finalization").run();
+  });
+
+  it("requires an explicit reset before retrying a delivery-unknown row", async () => {
+    const [outboxId] = await queueN(env.DB, eventId, 1);
+    await env.DB.prepare("UPDATE email_outbox SET status = 'delivery_unknown' WHERE id = ?").bind(outboxId).run();
+
+    expect(await resetFailedOutbox(env.DB, [outboxId])).toEqual({ reset: 1, ids: [outboxId] });
+    expect(
+      await queryAll<{ status: string }>(env.DB, "SELECT status FROM email_outbox WHERE id = ?", [outboxId]),
+    ).toEqual([{ status: "retrying" }]);
+  });
+
+  it("bulk-enqueues hundreds of emails without consuming one D1 query per recipient", async () => {
+    const budgeted = createD1QueryBudgetedDatabase(env.DB, 2);
+    const rows = Array.from({ length: 501 }, (_, index) => ({
+      eventId,
+      templateKey: "attendee_invite",
+      recipientEmail: `bulk-${index}@example.test`,
+      subject: "Bulk invite",
+      data: { firstName: `Bulk ${index}` },
+    }));
+
+    await bulkQueueInviteEmails(budgeted.db, rows);
+
+    expect(budgeted.budget.usedQueries()).toBe(2);
+    expect((await queryAll<{ count: number }>(env.DB, "SELECT COUNT(*) AS count FROM email_outbox"))[0]?.count).toBe(
+      rows.length,
+    );
+  });
+
+  it("bulk-enqueues a retried domain notification only once", async () => {
+    const payload = {
+      outboxId: "bulk-idempotent-outbox",
+      idempotencyKey: "weekly-digest:group-1:user-1:2026-08-17",
+      templateKey: "attendee_invite",
+      recipientUserId: adminId,
+      recipientEmail: "digest@example.test",
+      subject: "Weekly digest",
+      messageType: "transactional" as const,
+      data: { firstName: "Digest" },
+    };
+    const first = prepareBulkQueueEmailChunkStatements(env.DB, [payload]);
+    const retry = prepareBulkQueueEmailChunkStatements(env.DB, [payload]);
+
+    await env.DB.batch([...first, ...retry].map((chunk) => chunk.statement));
+
+    expect(
+      await queryAll<{ id: string; idempotency_key: string }>(
+        env.DB,
+        "SELECT id, idempotency_key FROM email_outbox WHERE idempotency_key = ?",
+        [payload.idempotencyKey],
+      ),
+    ).toEqual([{ id: payload.outboxId, idempotency_key: payload.idempotencyKey }]);
+  });
+
   it("respects the limit parameter and only processes up to limit rows", async () => {
     const fetchMock = makeSendgridMock();
     vi.stubGlobal("fetch", fetchMock);
@@ -113,11 +407,12 @@ describe("email outbox batch processing", () => {
 
   it("processes emails in chunks — a single SendGrid failure does not block other emails", async () => {
     let callCount = 0;
+    const providerBodySentinel = "SECRET_PROVIDER_BODY alice@example.test";
     const fetchMock = vi.fn().mockImplementation(() => {
       callCount += 1;
       // Fail the 2nd call only
       if (callCount === 2) {
-        return Promise.resolve(new Response('{"errors":[{"message":"fail"}]}', { status: 400 }));
+        return Promise.resolve(new Response(providerBodySentinel, { status: 400 }));
       }
       return Promise.resolve(new Response(null, { status: 202, headers: { "x-message-id": `msg-${callCount}` } }));
     });
@@ -135,6 +430,16 @@ describe("email outbox batch processing", () => {
 
     const retrying = await queryAll<{ id: string }>(env.DB, "SELECT id FROM email_outbox WHERE status = 'retrying'");
     expect(retrying).toHaveLength(1);
+    const failedDetails = await queryAll<{ last_error: string }>(
+      env.DB,
+      "SELECT last_error FROM email_outbox WHERE status = 'retrying'",
+    );
+    expect(failedDetails[0]?.last_error).toContain("SENDGRID_SEND_FAILED");
+    expect(failedDetails[0]?.last_error).toContain('"kind":"provider_failure"');
+    expect(failedDetails[0]?.last_error).toContain('"provider":"sendgrid"');
+    expect(failedDetails[0]?.last_error).toContain('"operation":"send_email"');
+    expect(failedDetails[0]?.last_error).toContain('"status":400');
+    expect(failedDetails[0]?.last_error).not.toContain(providerBodySentinel);
   });
 
   it("processes emails concurrently within each chunk of 10", async () => {
@@ -154,6 +459,21 @@ describe("email outbox batch processing", () => {
     // All 10 fetches should start within a short window (< 200 ms) since they run concurrently
     const spread = Math.max(...startTimes) - Math.min(...startTimes);
     expect(spread).toBeLessThan(200);
+  });
+
+  it("loads shared layout, partials, and a common template once per batch", async () => {
+    const fetchMock = makeSendgridMock();
+    vi.stubGlobal("fetch", fetchMock);
+    await queueN(env.DB, eventId, 10);
+    const budgeted = createD1QueryBudgetedDatabase(env.DB, 100);
+
+    const result = await processPendingOutbox(budgeted.db, env, 10);
+
+    expect(result).toEqual({ processed: 10, failed: 0 });
+    // 1 backlog query + 5 shared render resources + 1 message template
+    // + two state updates per email. This must grow by two statements per
+    // row, not by reloading six templates for every concurrent recipient.
+    expect(budgeted.budget.usedQueries()).toBeLessThanOrEqual(28);
   });
 
   it("processSelectedOutbox only processes the specified ids", async () => {

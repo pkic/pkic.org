@@ -1,0 +1,118 @@
+import { buildD1JsonMembershipFilter } from "../../db/json-membership";
+import { queryPage, type OffsetPageQuery } from "../../db/pagination";
+import { all } from "../../db/queries";
+import { resolveOrderBy } from "../../db/sort";
+import { parseJsonSafe } from "../../utils/json";
+import { formSubmissionSchema, FORM_SUBMISSIONS_SORT_COLUMNS } from "../../../../assets/shared/schemas/form-management";
+import type { DatabaseLike } from "../../types";
+import type { SubmissionPayload, ListFormSubmissionsParams, ListFormSubmissionsResult } from "./types";
+import {
+  MERGED_SUBMISSION_COLUMNS,
+  resolveFormSubmissionPopulation,
+  selectFromSubmissionPopulation,
+  type FormSubmissionPopulation,
+  type MergedSubmissionRow,
+} from "./population-query";
+
+interface AnswerRow {
+  submission_id: string;
+  field_key: string;
+  data_json: string | null;
+}
+
+function submitterFromRow(row: MergedSubmissionRow): SubmissionPayload["submitter"] {
+  if (!row.user_id) return null;
+  return {
+    id: row.user_id,
+    email: row.user_email,
+    firstName: row.user_first_name,
+    lastName: row.user_last_name,
+    organization: row.user_organization,
+  };
+}
+
+/** Loads native form answers for only the already bounded page of rows. */
+async function attachSubmissionAnswers(db: DatabaseLike, rows: MergedSubmissionRow[]): Promise<SubmissionPayload[]> {
+  const submissionIds = rows.filter((row) => row.source === "submission").map((row) => row.source_id);
+  const submissionFilter = buildD1JsonMembershipFilter("a.submission_id", submissionIds);
+  const answerRows = submissionIds.length
+    ? await all<AnswerRow>(
+        db,
+        `SELECT a.submission_id, COALESCE(ff.key, a.field_key) AS field_key, a.data_json
+         FROM form_submission_answers a
+         LEFT JOIN form_fields ff ON ff.id = a.field_id
+         WHERE ${submissionFilter.sql}
+         ORDER BY a.submission_id, COALESCE(ff.key, a.field_key)`,
+        submissionFilter.bindings,
+      )
+    : [];
+
+  const answersBySubmission = new Map<string, Record<string, unknown>>();
+  for (const answer of answerRows) {
+    const answers = answersBySubmission.get(answer.submission_id) ?? {};
+    answers[answer.field_key] = parseJsonSafe(answer.data_json, null);
+    answersBySubmission.set(answer.submission_id, answers);
+  }
+
+  return rows.map((row) => ({
+    id: row.id,
+    status: row.status,
+    submittedAt: row.submitted_at,
+    contextType: row.context_type,
+    contextRef: row.context_ref,
+    submitter: submitterFromRow(row),
+    answers:
+      row.source === "submission"
+        ? (answersBySubmission.get(row.source_id) ?? {})
+        : parseJsonSafe<Record<string, unknown>>(row.answers_json, {}),
+  }));
+}
+
+/** Build the canonical merged submission page/count pair for runtime and D1 plan regressions. */
+export function buildFormSubmissionsPageQuery(
+  population: FormSubmissionPopulation,
+  params: Pick<ListFormSubmissionsParams, "sort" | "limit" | "offset" | "responseId">,
+): OffsetPageQuery {
+  const orderBy = resolveOrderBy(
+    params.sort,
+    FORM_SUBMISSIONS_SORT_COLUMNS,
+    "ORDER BY submitted_at DESC",
+    "source ASC, source_id ASC",
+  );
+  const pageQuery = selectFromSubmissionPopulation(
+    population,
+    `SELECT ${MERGED_SUBMISSION_COLUMNS} FROM merged${params.responseId ? " WHERE id = ?" : ""}`,
+    params.responseId ? [params.responseId] : [],
+  );
+  return {
+    ...pageQuery,
+    orderBy,
+    limit: params.limit,
+    offset: params.offset,
+  };
+}
+
+export async function listFormSubmissions(
+  db: DatabaseLike,
+  params: ListFormSubmissionsParams,
+): Promise<ListFormSubmissionsResult> {
+  const population = await resolveFormSubmissionPopulation(db, params);
+  const page = await queryPage<MergedSubmissionRow>(db, buildFormSubmissionsPageQuery(population, params));
+  const submissions = page.rows.length
+    ? (await attachSubmissionAnswers(db, page.rows)).map((submission) => formSubmissionSchema.parse(submission))
+    : [];
+
+  return {
+    form: {
+      id: population.form.id,
+      key: population.form.key,
+      title: population.form.title,
+      purpose: population.form.purpose,
+      placement: population.placement,
+    },
+    total: page.total,
+    offset: params.offset,
+    limit: params.limit,
+    submissions,
+  };
+}

@@ -1,0 +1,40 @@
+import { getFeaturedLink, parseLinksJson } from "../../../../assets/shared/schemas/links";
+import { sanitizeLegacyHttpUrl } from "../../../../assets/shared/schemas/urls";
+import { publicMembershipAffiliation } from "../../../../assets/shared/schemas/membership-categories";
+
+export interface PublicRoleProfileRow {
+  first_name: string | null;
+  last_name: string | null;
+  job_title: string | null;
+  membership_category?: string | null;
+  org_id: string | null;
+  org_name: string | null;
+  org_logo_r2_key: string | null;
+  org_website: string | null;
+  identity_id: string | null;
+  headshot_r2_key: string | null;
+  links_json: string | null;
+}
+
+export interface PublicRoleProfile {
+  name: string;
+  jobTitle: string | null;
+  organizationName: string | null;
+  organizationLogoUrl: string | null;
+  organizationWebsite: string | null;
+  photoUrl: string | null;
+  featuredLink: string | null;
+}
+
+/** Canonical public mapping for forum and working-group role holders. */
+export function toPublicRoleProfile(row: PublicRoleProfileRow): PublicRoleProfile {
+  return {
+    name: [row.first_name, row.last_name].filter(Boolean).join(" ") || "Unknown",
+    jobTitle: row.org_id ? row.job_title : publicMembershipAffiliation(row.membership_category, row.job_title),
+    organizationName: row.org_name,
+    organizationLogoUrl: row.org_logo_r2_key && row.org_id ? `/api/v1/members/${row.org_id}/logo` : null,
+    organizationWebsite: sanitizeLegacyHttpUrl(row.org_website),
+    photoUrl: row.headshot_r2_key && row.identity_id ? `/api/v1/members/${row.identity_id}/logo` : null,
+    featuredLink: getFeaturedLink(parseLinksJson(row.links_json)),
+  };
+}

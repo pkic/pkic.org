@@ -1,0 +1,43 @@
+import { z } from "zod";
+import { normalizedEmailSchema, utcInstantSchema } from "./api-common";
+import { databaseIdSchema } from "./identifiers";
+
+const calendarRsvpSourceSchema = z.object({
+  provider: z.string().trim().min(2).max(80).default("cloudflare_email_route"),
+  sourceMessageId: z.string().trim().min(1).max(500),
+  receivedAt: z.iso.datetime().optional(),
+});
+
+/** Canonical request contract for the signed calendar RSVP endpoint. */
+export const calendarRsvpIngestSchema = z.union([
+  calendarRsvpSourceSchema.extend({
+    calendarIcs: z.string().min(1).max(300_000),
+    fromEmail: normalizedEmailSchema.optional(),
+  }),
+  calendarRsvpSourceSchema.extend({
+    uid: z.string().trim().min(1).max(500),
+    recurrenceId: utcInstantSchema.optional(),
+    partstat: z.enum(["ACCEPTED", "DECLINED", "TENTATIVE"]),
+    attendeeEmail: normalizedEmailSchema,
+  }),
+]);
+
+export const calendarRsvpStatusSchema = z.enum(["accepted", "declined", "tentative", "bounced"]);
+
+/** Shared persistence contract used by webhook and Cloudflare Email ingestion. */
+export const calendarRsvpEventInputSchema = z.object({
+  registrationId: databaseIdSchema,
+  recurrenceId: utcInstantSchema.optional(),
+  /** Trusted day identity derived from a signed inbound address or calendar UID. */
+  eventDayDate: z.iso.date().nullable().optional(),
+  icsUid: z.string().trim().min(1).max(500),
+  attendeeEmail: normalizedEmailSchema,
+  responseStatus: calendarRsvpStatusSchema,
+  provider: z.string().trim().min(2).max(80),
+  sourceMessageId: z.string().trim().min(1).max(500),
+  receivedAt: z.iso.datetime().optional(),
+  rawPayloadJson: z.string().max(10_000).optional(),
+  dedupeByCalendarUid: z.boolean().optional(),
+});
+
+export type CalendarRsvpEventInput = z.infer<typeof calendarRsvpEventInputSchema>;

@@ -1,39 +1,36 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
-import { createContext, deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
-import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
-import { onRequestGet as confirmRegistration } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
+import { deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
+import { callApi } from "./helpers/app";
 import { recordEngagement } from "../functions/_lib/services/engagement";
+import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
 
 describe("engagement events", () => {
   beforeEach(async () => {
     await resetDb();
+    stubSuccessfulMxLookup();
   });
+  afterEach(() => vi.unstubAllGlobals());
+
   it("records registration lifecycle points", async () => {
     await seedEventAndAdmin(env.DB);
 
-    const createResponse = await createRegistration(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            firstName: "Jamie",
-            lastName: "Example",
-            email: "jamie@pkic.org",
-            attendanceType: "virtual",
-            sourceType: "direct",
-            consents: [
-              { termKey: "privacy-policy", version: "v1" },
-              { termKey: "code-of-conduct", version: "v1" },
-            ],
-          }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const createResponse = await callApi(env, "/api/v1/events/pqc-2026/registrations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        firstName: "Jamie",
+        lastName: "Example",
+        email: "jamie@pkic.org",
+        attendanceType: "virtual",
+        sourceType: "direct",
+        consents: [
+          { termKey: "privacy-policy", version: "v1" },
+          { termKey: "code-of-conduct", version: "v1" },
+        ],
+      }),
+    });
 
     expect(createResponse.status).toBe(200);
 
@@ -56,14 +53,9 @@ describe("engagement events", () => {
     const token = new URL(confirmationUrl).searchParams.get("token");
     expect(token).toBeTruthy();
 
-    const confirmResponse = await confirmRegistration(
-      createContext(
-        env,
-        new Request(
-          `https://app.test/api/v1/events/pqc-2026/registrations/confirm-email?token=${encodeURIComponent(token as string)}`,
-        ),
-        { eventSlug: "pqc-2026" },
-      ),
+    const confirmResponse = await callApi(
+      env,
+      `/api/v1/events/pqc-2026/registrations/confirm-email?token=${encodeURIComponent(token as string)}`,
     );
 
     expect(confirmResponse.status).toBe(200);
@@ -106,5 +98,32 @@ describe("engagement events", () => {
     expect(rows[0].event_id).toBeNull();
     expect(rows[0].subject_type).toBe("community");
     expect(rows[0].subject_ref).toBe("profile_completion");
+  });
+
+  it("deduplicates one-shot engagement by its domain idempotency key", async () => {
+    await seedEventAndAdmin(env.DB);
+    const admin = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0];
+    const payload = {
+      userId: admin.id,
+      subjectType: "invite" as const,
+      subjectRef: "invite-retry",
+      actionType: "invite_accepted",
+      points: 3,
+      sourceType: "invite",
+      sourceRef: "invite-retry",
+      idempotencyKey: "invite_accepted:invite:invite-retry",
+    };
+
+    await Promise.all([recordEngagement(env.DB, payload), recordEngagement(env.DB, payload)]);
+
+    const rows = await queryAll<{ count: number; points: number }>(
+      env.DB,
+      `SELECT COUNT(*) AS count, COALESCE(SUM(points), 0) AS points
+       FROM engagement_events WHERE idempotency_key = ?`,
+      [payload.idempotencyKey],
+    );
+    expect(rows[0]).toEqual({ count: 1, points: 3 });
   });
 });

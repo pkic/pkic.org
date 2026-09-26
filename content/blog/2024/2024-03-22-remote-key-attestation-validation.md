@@ -8,6 +8,15 @@ categories:
 keyword: [cryptography, hardware, solutions, software]
 tags: [Remote Key Attestation]
 
+authorProfiles:
+  - name: Tomas Gustavsson
+    organization: Keyfactor
+    role: Chief PKI Officer
+    website: https://www.keyfactor.com/
+    social:
+      x: https://x.com/primetomas
+      linkedin: https://www.linkedin.com/in/tgustavsson/
+    assetdirectory: images/members/keyfactor
 ---
 
 ## Remote Key Attestation at the PKI Consortium

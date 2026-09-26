@@ -16,7 +16,7 @@ heroDescription: Making PKI knowledge accessible and providing structured paths 
 
 heroButton:
   label: Join the TCWG
-  link: /join/
+  link: /portal/#/groups/tcwg
 
 wgID: TCWG
 color: teal
@@ -25,10 +25,6 @@ sectionNav: true
 cascade:
   params:
     sectionNav: true
-
-chair:
-  name: Neal Fuerst
-  viceChair: Sandip Dholakia
 
 card:
   icon: tc

@@ -34,6 +34,15 @@ tags:
 title: 9 Common Myths About CAs
 
 
+authorProfiles:
+  - name: Tim Callan
+    organization: Sectigo
+    role: Chief Compliance Officer at Sectigo
+    website: https://www.sectigo.com/
+    social:
+      linkedin: https://www.linkedin.com/in/tim-callan
+      soundcloud: https://soundcloud.com/tim-callan/tracks
+    assetdirectory: images/members/sectigo
 ---
 Over the years misconceptions about CAs and the SSL infrastructure have arisen. Below is a list of common myths related to SSL and CAs.
 

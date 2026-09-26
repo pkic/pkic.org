@@ -1,0 +1,548 @@
+/**
+ * Membership provisioning and capacity management —
+ * POST /api/v1/members and GET /api/v1/members/capacities, gated by
+ * `membership:write`/`membership:read` permissions. Immediate identity
+ * activation additionally requires the separately granted
+ * `identities:activate` permission.
+ */
+import { describe, expect, it, beforeEach } from "vitest";
+import { env } from "cloudflare:workers";
+import app from "../functions/router";
+import { resetDb } from "./helpers/reset-db";
+import { createAdminSession } from "./helpers/auth";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
+import { memberCapacityListResponseSchema } from "../assets/shared/schemas/membership-management";
+
+function request(token: string, path: string, init: RequestInit = {}): Request {
+  const headers = new Headers(init.headers);
+  headers.set("authorization", `Bearer ${token}`);
+  if (init.body && !headers.has("content-type")) {
+    headers.set("content-type", "application/json");
+  }
+  return new Request(`https://app.test${path}`, { ...init, headers });
+}
+
+async function call(token: string, path: string, init: RequestInit = {}): Promise<Response> {
+  return app.fetch(
+    request(token, path, init),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
+}
+
+async function insertUser(email: string): Promise<string> {
+  const id = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+     VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+  )
+    .bind(id, email, email)
+    .run();
+  return id;
+}
+
+async function assignRole(
+  userId: string,
+  roleId: string,
+  grantedBy: string,
+  context: { type: string; id: string } | null = null,
+): Promise<void> {
+  await env.DB.prepare(
+    `INSERT INTO user_roles
+       (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
+     VALUES (?, ?, ?, ?, ?, ?, datetime('now'))`,
+  )
+    .bind(crypto.randomUUID(), userId, roleId, context?.type ?? null, context?.id ?? null, grantedBy)
+    .run();
+}
+
+async function seedWorkingGroup(slug: string, name: string): Promise<void> {
+  const existing = await env.DB.prepare("SELECT id FROM groups WHERE slug = ?").bind(slug).first();
+  if (existing) return;
+  await env.DB.prepare(
+    `INSERT INTO groups (id, type_key, name, slug, description, visibility, eligibility_mode, created_at, updated_at)
+     VALUES (?, 'working_group', ?, ?, NULL, 'public', 'open', datetime('now'), datetime('now'))`,
+  )
+    .bind(crypto.randomUUID(), name, slug)
+    .run();
+}
+
+async function provisioningRowCounts(): Promise<Record<string, number>> {
+  const tables = ["organizations", "members", "users", "identities", "group_memberships"];
+  return Object.fromEntries(
+    await Promise.all(
+      tables.map(async (table) => {
+        const [row] = await queryAll<{ total: number }>(env.DB, `SELECT COUNT(*) AS total FROM ${table}`);
+        return [table, row.total] as const;
+      }),
+    ),
+  );
+}
+
+function orgMemberBody(overrides: Record<string, unknown> = {}) {
+  return {
+    organizationName: "Acme Corp",
+    website: "https://acme.test",
+    description: "A test organization",
+    membershipCategory: "F",
+    memberSince: "2026-01-15",
+    identities: [
+      {
+        name: "Jane Doe",
+        email: "jane@acme.test",
+        role: "CTO",
+        links: ["https://linkedin.com/in/janedoe", "https://github.com/janedoe"],
+      },
+    ],
+    workingGroupSlugs: ["pqc"],
+    activationReason: "Verified staff provisioning fixture",
+    ...overrides,
+  };
+}
+
+describe("membership provisioning and capacities", () => {
+  let adminToken: string;
+  let adminId: string;
+
+  beforeEach(async () => {
+    await resetDb();
+    await seedEventAndAdmin(env.DB);
+    const adminRow = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0];
+    adminId = adminRow.id;
+    adminToken = await createAdminSession(env.DB, adminId, "admin-members-token");
+    await seedWorkingGroup("pqc", "Post-Quantum Cryptography Working Group");
+    await seedWorkingGroup("cm", "Cryptographic Module Working Group");
+    await seedWorkingGroup("ca", "Certificate Authorities Working Group");
+  });
+
+  it("creates an organization, representative, and member row for an org-tied category", async () => {
+    await seedWorkingGroup("future-wg", "Future Working Group");
+    const response = await call(adminToken, "/api/v1/members", {
+      method: "POST",
+      body: JSON.stringify(orgMemberBody({ workingGroupSlugs: ["pqc", "future-wg"] })),
+    });
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { organizationId: string; members: Array<{ id: string; userId: string }> };
+    expect(body.organizationId).toBeTruthy();
+    expect(body.members).toHaveLength(1);
+
+    const orgRows = await queryAll<{ name: string }>(
+      env.DB,
+      "SELECT name FROM organizations WHERE id = ?",
+      body.organizationId,
+    );
+    expect(orgRows[0].name).toBe("Acme Corp");
+
+    const aggregateRows = await queryAll<{ id: string; member_type: string; status: string; member_since: string }>(
+      env.DB,
+      "SELECT id, member_type, status, member_since FROM members WHERE organization_id = ?",
+      body.organizationId,
+    );
+    expect(aggregateRows).toHaveLength(1);
+    expect(aggregateRows[0].member_type).toBe("organization");
+    expect(aggregateRows[0].status).toBe("active");
+    // Regression guard: the old provisioning route accepted `memberSince` in the
+    // request but never write it anywhere (consolidated migration 0035 added the column,
+    // now on `members`, not `organizations`).
+    expect(aggregateRows[0].member_since).toBe("2026-01-15");
+
+    const categoryRows = await queryAll<{ category_code: string }>(
+      env.DB,
+      "SELECT category_code FROM member_category_assignments WHERE member_id = ?",
+      aggregateRows[0].id,
+    );
+    expect(categoryRows[0].category_code).toBe("F");
+
+    const primaryContactRows = await queryAll<{ user_id: string }>(
+      env.DB,
+      `SELECT user_id FROM user_roles WHERE context_type = 'organization' AND context_id = ? AND role_id = 'role-primary_contact' AND revoked_at IS NULL`,
+      aggregateRows[0].id,
+    );
+    expect(primaryContactRows[0].user_id).toBe(body.members[0].userId);
+
+    // body.members[0].id is the exact acting identity, not the shared Member
+    // aggregate id.
+    const identityRows = await queryAll<{ show_on_organization_profile: number; ended_at: string | null }>(
+      env.DB,
+      "SELECT show_on_organization_profile, ended_at FROM identities WHERE id = ?",
+      body.members[0].id,
+    );
+    expect(identityRows[0].show_on_organization_profile).toBe(1);
+    expect(identityRows[0].ended_at).toBeNull();
+
+    const [identity] = await queryAll<{ links_json: string | null }>(
+      env.DB,
+      "SELECT links_json FROM identities WHERE id = ?",
+      body.members[0].id,
+    );
+    expect(JSON.parse(identity.links_json as string)).toEqual([
+      "https://linkedin.com/in/janedoe",
+      "https://github.com/janedoe",
+    ]);
+
+    const wgRows = await queryAll<{ slug: string }>(
+      env.DB,
+      `SELECT g.slug
+         FROM group_memberships membership
+         JOIN groups g ON g.id = membership.group_id
+        WHERE membership.user_id = ? AND membership.left_at IS NULL AND g.type_key = 'working_group'
+        ORDER BY g.slug`,
+      body.members[0].userId,
+    );
+    expect(wgRows.map(({ slug }) => slug)).toEqual(["future-wg", "pqc"]);
+  });
+
+  it("creates no organization row for an individual (H6) category", async () => {
+    const response = await call(adminToken, "/api/v1/members", {
+      method: "POST",
+      body: JSON.stringify(
+        orgMemberBody({
+          organizationName: undefined,
+          membershipCategory: "H6",
+          identities: [{ name: "Solo Consultant", email: "solo@example.test" }],
+        }),
+      ),
+    });
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as {
+      organizationId: string | null;
+      members: Array<{ organizationId: string | null }>;
+    };
+    expect(body.organizationId).toBeNull();
+    expect(body.members[0].organizationId).toBeNull();
+
+    const orgCount = await queryAll(env.DB, "SELECT id FROM organizations");
+    expect(orgCount).toHaveLength(0);
+  });
+
+  it.each([
+    {
+      category: "F",
+      organizationName: "Ineligible Organization",
+      representative: { name: "Ineligible Representative", email: "ineligible-org@example.test" },
+    },
+    {
+      category: "H6",
+      organizationName: undefined,
+      representative: { name: "Ineligible Individual", email: "ineligible-individual@example.test" },
+    },
+  ])(
+    "rejects category $category joining the CA working group without partial provisioning",
+    async ({ category, organizationName, representative }) => {
+      const before = await provisioningRowCounts();
+
+      const response = await call(adminToken, "/api/v1/members", {
+        method: "POST",
+        body: JSON.stringify(
+          orgMemberBody({
+            membershipCategory: category,
+            organizationName,
+            identities: [representative],
+            workingGroupSlugs: ["ca"],
+          }),
+        ),
+      });
+
+      expect(response.status).toBe(403);
+      await expect(response.json()).resolves.toEqual({
+        error: {
+          code: "GROUP_CAPACITY_INELIGIBLE",
+          message: "The membership category is not eligible for CA Working Group",
+          details: null,
+        },
+      });
+      await expect(provisioningRowCounts()).resolves.toEqual(before);
+    },
+  );
+
+  it("adds category A to the CA working group once while ignoring duplicate and unknown slugs", async () => {
+    const response = await call(adminToken, "/api/v1/members", {
+      method: "POST",
+      body: JSON.stringify(
+        orgMemberBody({
+          membershipCategory: "A",
+          identities: [{ name: "Eligible Representative", email: "eligible@example.test" }],
+          workingGroupSlugs: ["ca", "ca", "unknown-working-group"],
+        }),
+      ),
+    });
+
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { members: Array<{ userId: string }> };
+    const rows = await queryAll<{ id: string }>(
+      env.DB,
+      `SELECT membership.id
+         FROM group_memberships membership
+         JOIN groups g ON g.id = membership.group_id
+        WHERE membership.user_id = ? AND g.slug = 'ca' AND membership.left_at IS NULL`,
+      body.members[0].userId,
+    );
+    expect(rows).toHaveLength(1);
+  });
+
+  it("rejects an individual category with an organization name", async () => {
+    const response = await call(adminToken, "/api/v1/members", {
+      method: "POST",
+      body: JSON.stringify(orgMemberBody({ membershipCategory: "H6" })),
+    });
+    expect(response.status).toBe(422);
+  });
+
+  it("reuses an existing organization when the normalized name already exists", async () => {
+    const first = await call(adminToken, "/api/v1/members", {
+      method: "POST",
+      body: JSON.stringify(orgMemberBody()),
+    });
+    const firstBody = (await first.json()) as { organizationId: string };
+
+    const second = await call(adminToken, "/api/v1/members", {
+      method: "POST",
+      body: JSON.stringify(orgMemberBody({ identities: [{ name: "Second Rep", email: "second@acme.test" }] })),
+    });
+    expect(second.status).toBe(201);
+    const secondBody = (await second.json()) as { organizationId: string };
+    expect(secondBody.organizationId).toBe(firstBody.organizationId);
+
+    const orgRows = await queryAll(env.DB, "SELECT id FROM organizations WHERE id = ?", firstBody.organizationId);
+    expect(orgRows).toHaveLength(1);
+  });
+
+  it("assigns primary and secondary contact from the first two representatives in one submission", async () => {
+    const response = await call(adminToken, "/api/v1/members", {
+      method: "POST",
+      body: JSON.stringify(
+        orgMemberBody({
+          identities: [
+            { name: "Jane Doe", email: "jane@acme.test" },
+            { name: "Second Rep", email: "second@acme.test" },
+          ],
+        }),
+      ),
+    });
+    expect(response.status).toBe(201);
+    const body = (await response.json()) as { organizationId: string; members: Array<{ userId: string }> };
+
+    const aggregateRow = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM members WHERE organization_id = ?", body.organizationId)
+    )[0];
+    const roleRows = await queryAll<{ role_id: string; user_id: string }>(
+      env.DB,
+      `SELECT role_id, user_id FROM user_roles
+       WHERE context_type = 'organization' AND context_id = ? AND revoked_at IS NULL
+         AND role_id IN ('role-primary_contact', 'role-secondary_contact')`,
+      aggregateRow.id,
+    );
+    const primaryContact = roleRows.find((r) => r.role_id === "role-primary_contact");
+    const secondaryContact = roleRows.find((r) => r.role_id === "role-secondary_contact");
+    expect(primaryContact?.user_id).toBe(body.members[0].userId);
+    expect(secondaryContact?.user_id).toBe(body.members[1].userId);
+  });
+
+  it("returns 409 when the same email is already an active representative of this exact organization", async () => {
+    await call(adminToken, "/api/v1/members", { method: "POST", body: JSON.stringify(orgMemberBody()) });
+
+    // Reusing the same organization (same normalized name) with the same
+    // representative email is a duplicate-representative conflict.
+    const response = await call(adminToken, "/api/v1/members", {
+      method: "POST",
+      body: JSON.stringify(orgMemberBody()),
+    });
+    expect(response.status).toBe(409);
+  });
+
+  it("does not conflict when the same person represents a different organization (multi-org representation is allowed)", async () => {
+    await call(adminToken, "/api/v1/members", { method: "POST", body: JSON.stringify(orgMemberBody()) });
+
+    const response = await call(adminToken, "/api/v1/members", {
+      method: "POST",
+      body: JSON.stringify(orgMemberBody({ organizationName: "Other Corp" })),
+    });
+    expect(response.status).toBe(201);
+
+    const orgRows = await queryAll(env.DB, "SELECT id FROM organizations WHERE normalized_name = 'other corp'");
+    expect(orgRows).toHaveLength(1);
+  });
+
+  /*
+   * The membership itself, not one identity acting under it. An
+   * organization's representatives inherit its category and standing, so
+   * changing either through one of them is refused on the capacities route
+   * and belongs on the aggregate.
+   */
+  describe("changing a membership", () => {
+    async function createOrganizationMember(): Promise<string> {
+      const created = await call(adminToken, "/api/v1/members", {
+        method: "POST",
+        body: JSON.stringify(orgMemberBody({ workingGroupSlugs: [] })),
+      });
+      expect(created.status, await created.clone().text()).toBe(201);
+      const { organizationId } = (await created.json()) as { organizationId: string };
+      const [aggregate] = await queryAll<{ id: string }>(
+        env.DB,
+        "SELECT id FROM members WHERE organization_id = ?",
+        organizationId,
+      );
+      return aggregate.id;
+    }
+
+    it("changes the category and the standing, and records the change", async () => {
+      const memberId = await createOrganizationMember();
+
+      const response = await call(adminToken, `/api/v1/members/${memberId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ membershipCategory: "A", status: "inactive" }),
+      });
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(await response.json()).toEqual({
+        member: { id: memberId, memberType: "organization", membershipCategory: "A", status: "inactive" },
+      });
+
+      // Ending a membership is a standing, not a deletion: the row stays.
+      expect(await queryAll<{ status: string }>(env.DB, "SELECT status FROM members WHERE id = ?", memberId)).toEqual([
+        { status: "inactive" },
+      ]);
+      expect(
+        await queryAll<{ category_code: string }>(
+          env.DB,
+          "SELECT category_code FROM member_category_assignments WHERE member_id = ?",
+          memberId,
+        ),
+      ).toEqual([{ category_code: "A" }]);
+      expect(
+        await queryAll<{ action: string }>(
+          env.DB,
+          "SELECT action FROM audit_log WHERE entity_type = 'member' AND entity_id = ? AND action = 'membership_updated'",
+          memberId,
+        ),
+      ).toHaveLength(1);
+    });
+
+    it("refuses a category that belongs to the other kind of membership", async () => {
+      const memberId = await createOrganizationMember();
+
+      // H6 describes a person with no organization behind them, so an
+      // organization cannot hold it.
+      const response = await call(adminToken, `/api/v1/members/${memberId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ membershipCategory: "H6" }),
+      });
+      expect(response.status).toBe(422);
+      expect(((await response.json()) as { error: { code: string } }).error.code).toBe(
+        "MEMBERSHIP_CATEGORY_TYPE_MISMATCH",
+      );
+      expect(
+        await queryAll<{ category_code: string }>(
+          env.DB,
+          "SELECT category_code FROM member_category_assignments WHERE member_id = ?",
+          memberId,
+        ),
+      ).toEqual([{ category_code: "F" }]);
+    });
+
+    it("refuses a membership that does not exist", async () => {
+      const response = await call(adminToken, `/api/v1/members/${crypto.randomUUID()}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "inactive" }),
+      });
+      expect(response.status).toBe(404);
+      expect(((await response.json()) as { error: { code: string } }).error.code).toBe("MEMBER_NOT_FOUND");
+    });
+
+    it("refuses a caller without membership:write", async () => {
+      // Read, and only read: `membership:write` is what this route demands,
+      // and a reader must not be able to end anybody's membership.
+      const readerId = await insertUser(`members-reader-${crypto.randomUUID()}@example.test`);
+      await env.DB.prepare(
+        `INSERT INTO permission_grants
+           (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+         VALUES (?, ?, 'membership:read', NULL, NULL, ?, datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), readerId, adminId)
+        .run();
+      const readerToken = await createAdminSession(env.DB, readerId, `members-reader-${crypto.randomUUID()}`);
+      const memberId = await createOrganizationMember();
+
+      const response = await call(readerToken, `/api/v1/members/${memberId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "inactive" }),
+      });
+      expect(response.status).toBe(403);
+      expect(await queryAll<{ status: string }>(env.DB, "SELECT status FROM members WHERE id = ?", memberId)).toEqual([
+        { status: "active" },
+      ]);
+    });
+  });
+
+  it("lists created members unfiltered by status", async () => {
+    await call(adminToken, "/api/v1/members", { method: "POST", body: JSON.stringify(orgMemberBody()) });
+
+    const response = await call(adminToken, "/api/v1/members/capacities");
+    expect(response.status).toBe(200);
+    const body = memberCapacityListResponseSchema.parse(await response.json());
+    expect(body.page.total).toBe(1);
+    expect(body.members[0].email).toBe("jane@acme.test");
+  });
+
+  it("membership_processor can list members but needs identities:activate for immediate provisioning", async () => {
+    const staffId = await insertUser("staff-membership@example.test");
+    await assignRole(staffId, "role-membership_processor", adminId);
+    const staffToken = await createAdminSession(env.DB, staffId, "staff-membership-token");
+
+    const createResponse = await call(staffToken, "/api/v1/members", {
+      method: "POST",
+      body: JSON.stringify(orgMemberBody()),
+    });
+    expect(createResponse.status).toBe(403);
+
+    const listResponse = await call(staffToken, "/api/v1/members/capacities");
+    expect(listResponse.status).toBe(200);
+
+    await env.DB.prepare(
+      `INSERT INTO permission_grants
+         (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+       VALUES (?, ?, 'identities:activate', NULL, NULL, ?, datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), staffId, adminId)
+      .run();
+
+    const authorizedCreateResponse = await call(staffToken, "/api/v1/members", {
+      method: "POST",
+      body: JSON.stringify(orgMemberBody()),
+    });
+    expect(authorizedCreateResponse.status).toBe(201);
+  });
+
+  it("a group lead is denied consortium-wide membership:write", async () => {
+    const staffId = await insertUser("wg-chair-only@example.test");
+    const leadership = await grantGroupLeadershipCapacity(env.DB, "20000000-0000-4000-8000-000000000003", staffId, {
+      grantedByUserId: adminId,
+    });
+    const staffToken = await createAdminSession(
+      env.DB,
+      staffId,
+      "staff-wg-chair-token",
+      undefined,
+      leadership.memberId,
+    );
+
+    const response = await call(staffToken, "/api/v1/members", {
+      method: "POST",
+      body: JSON.stringify(orgMemberBody()),
+    });
+    expect(response.status).toBe(403);
+  });
+
+  it("a plain user with no staff-eligible role cannot even obtain access (401)", async () => {
+    const staffId = await insertUser("no-permission@example.test");
+    const staffToken = await createAdminSession(env.DB, staffId, "staff-no-permission-token");
+
+    const response = await call(staffToken, "/api/v1/members", {
+      method: "POST",
+      body: JSON.stringify(orgMemberBody()),
+    });
+    expect(response.status).toBe(401);
+  });
+});

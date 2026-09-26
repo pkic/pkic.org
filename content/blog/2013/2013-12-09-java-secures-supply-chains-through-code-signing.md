@@ -16,6 +16,19 @@ tags:
 title: Java Secures Supply Chains Through Code Signing
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
+  - name: Erik Costlow
+    organization: Oracle
+    role: Principal Product Manager
+    website: https://www.oracle.com
 ---
 We have recently discussed the benefits of code signing in two posts: [Securing Software Distribution with Digital Signatures][1] and [Improving Code Signing][2]. These posts covered the role of code signatures as a “digital shrinkwrap” designed to answer a simple question: Did the software I am about to run actually come from the author or has someone changed it along the way?
 

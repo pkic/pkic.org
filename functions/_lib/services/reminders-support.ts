@@ -16,13 +16,16 @@ export interface DueInviteRow {
   invitee_email: string;
   invitee_first_name: string | null;
   invitee_last_name: string | null;
+  link_secret: string;
   invite_type: "attendee" | "speaker";
   reminder_count: number;
+  transition_revision: number;
   expires_at: string | null;
   event_name: string;
   event_slug: string;
   event_base_path: string | null;
   event_starts_at: string | null;
+  event_ends_at: string | null;
   event_settings_json: string;
 }
 
@@ -42,7 +45,9 @@ export interface DuePresentationRow {
   speaker_id: string;
   proposal_id: string;
   user_id: string;
+  manage_link_secret: string | null;
   email: string;
+  normalized_email: string;
   first_name: string | null;
   last_name: string | null;
   proposal_title: string;
@@ -60,19 +65,24 @@ export interface DueSpeakerInviteRow {
   speaker_id: string;
   proposal_id: string;
   user_id: string;
+  manage_link_secret: string | null;
   role: string;
   speaker_status: string;
   email: string;
+  normalized_email: string;
   first_name: string | null;
   last_name: string | null;
   proposal_title: string;
+  proposal_status: string;
   proposer_first_name: string | null;
   event_id: string;
   event_name: string;
   event_slug: string;
   event_base_path: string | null;
   event_starts_at: string | null;
+  event_ends_at: string | null;
   event_settings_json: string;
+  invite_expires_at: string | null;
   reminder_count: number;
 }
 
@@ -86,6 +96,7 @@ export interface ConfirmationReminderRow {
   confirmation_link_secret: string;
   confirmation_reminder_sent_at: string | null;
   pending_confirmation_deadline_at: string | null;
+  transition_revision: number;
   reminder_count: number;
   created_at: string;
   event_name: string;

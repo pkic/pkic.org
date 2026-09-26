@@ -1,0 +1,126 @@
+import { protectsPublicAction } from "./abuse-protection";
+/** Neutral user identity authentication contracts used by every human UI. */
+import { z } from "zod";
+import { authMemberSchema } from "./member-auth";
+import {
+  emailRecoveryRequestSchema,
+  magicLinkVerifySchema,
+  successResponseSchema,
+  utcInstantSchema,
+} from "./api-common";
+import { databaseIdSchema } from "./identifiers";
+import { publicOperation, requiresSession } from "./route-contract";
+import { sponsorCapacitySchema } from "./sponsor-access";
+import { publicStaffCapacitySchema } from "./staff-capacity";
+
+/**
+ * A portal route a sign-in link may return to once the session exists: a path
+ * under the portal's own `#`, never a scheme or a host, so the link can only
+ * land inside the portal.
+ */
+export const portalReturnPathSchema = z
+  .string()
+  .max(200)
+  .regex(/^\/(?!\/)[A-Za-z0-9\-._~!$&'()*+,;=:@/%?]*$/, "Must be a portal path");
+
+export const userAuthRequestSchema = emailRecoveryRequestSchema.extend({
+  returnPath: portalReturnPathSchema.optional(),
+});
+export const userAuthVerifySchema = magicLinkVerifySchema;
+
+export const userIdentitySchema = z.object({
+  id: databaseIdSchema,
+  email: z.email(),
+});
+
+const userCapacityFields = {
+  expiresAt: utcInstantSchema,
+  identity: userIdentitySchema,
+  staff: publicStaffCapacitySchema.optional(),
+  member: authMemberSchema.optional(),
+  sponsors: z.array(sponsorCapacitySchema).default([]),
+  eventParticipation: z.boolean().optional(),
+  pendingIdentityCount: z.number().int().nonnegative().default(0),
+};
+
+function requireCapacity<T extends z.ZodTypeAny>(schema: T) {
+  return schema.refine(
+    (value) => {
+      const capacities = value as {
+        staff?: unknown;
+        member?: unknown;
+        sponsors?: unknown[];
+        pendingIdentityCount?: number;
+        eventParticipation?: boolean;
+      };
+      return (
+        capacities.eventParticipation === true ||
+        capacities.staff !== undefined ||
+        capacities.member !== undefined ||
+        (capacities.sponsors?.length ?? 0) > 0 ||
+        (capacities.pendingIdentityCount ?? 0) > 0
+      );
+    },
+    { message: "At least one user capacity is required" },
+  );
+}
+
+export const userAuthSessionResponseSchema = requireCapacity(successResponseSchema.extend(userCapacityFields));
+export const userAuthEstablishedResponseSchema = userAuthSessionResponseSchema;
+
+export const userAuthRequestRouteSchema = {
+  ...protectsPublicAction("login_email", "email:manage"),
+  ...publicOperation(),
+  tags: ["Authentication"],
+  summary: "Request a user sign-in link",
+  description: "Sends an enumeration-safe sign-in link when the address has an active user capacity.",
+  request: {
+    body: { content: { "application/json": { schema: userAuthRequestSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Sign-in link request accepted.",
+      content: { "application/json": { schema: successResponseSchema } },
+    },
+  },
+};
+
+export const userAuthVerifyRouteSchema = {
+  ...publicOperation(),
+  tags: ["Authentication"],
+  summary: "Verify a user sign-in link",
+  request: {
+    body: { content: { "application/json": { schema: userAuthVerifySchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "A single user session with all currently eligible capacities.",
+      content: { "application/json": { schema: userAuthEstablishedResponseSchema } },
+    },
+  },
+};
+
+export const userAuthSessionRouteSchema = {
+  ...requiresSession(),
+  tags: ["Authentication"],
+  summary: "Get the current user identity and capacities",
+  responses: {
+    "200": {
+      description: "Current live user capacities.",
+      content: { "application/json": { schema: userAuthSessionResponseSchema } },
+    },
+    "401": { description: "No valid user session." },
+  },
+};
+
+export const userAuthLogoutRouteSchema = {
+  ...requiresSession(),
+  tags: ["Authentication"],
+  summary: "Sign out the current user identity",
+  responses: {
+    "200": {
+      description: "The user session was revoked and cleared.",
+      content: { "application/json": { schema: successResponseSchema } },
+    },
+  },
+};

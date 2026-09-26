@@ -1,147 +1,75 @@
 import { first, run } from "../db/queries";
 import { AppError } from "../errors";
-import { randomToken } from "../utils/crypto";
+import { sha256Hex } from "../utils/crypto";
 import type { DatabaseLike, Env } from "../types";
+import {
+  DEFAULT_TTL_SECONDS,
+  capabilityPurposeCode,
+  capabilityPurposeFromCode,
+  decodeCapabilityText,
+  encodeCapabilityText,
+  isStatelessCapabilityPurpose,
+  newCapabilityLinkSecret,
+  parseCapabilityToken,
+  signCapabilityToken,
+  signStatelessCapabilityToken,
+  statelessCapabilityLinkSecret,
+  verifyCapabilityToken,
+  verifyStatelessCapabilityToken,
+} from "./capability-token";
+import type { CapabilityPurpose, CapabilityVerifyResult } from "./capability-token";
+import {
+  activeEffectiveInviteExpirySql,
+  effectiveInviteExpirySql,
+  effectiveMeetingGuestInviteExpirySql,
+  effectiveProposalSpeakerInviteExpirySql,
+} from "../invite-validity";
+import { normalizeEmail } from "../validation";
 
 const encoder = new TextEncoder();
-const decoder = new TextDecoder();
 
-const TOKEN_PREFIX = "pkc1_";
 const QUEUED_TOKEN_PREFIX = "pkcq1_";
 const AUTHORIZED_MARKERS_FIELD = "__authorizedCapabilityMarkers";
-const SIGNING_DOMAIN = "pkic-public-capability:v1";
-const DEFAULT_TTL_SECONDS = 30 * 24 * 60 * 60;
-const MAX_TOKEN_LENGTH = 512;
-
-export type CapabilityPurpose =
-  | "registration_manage"
-  | "registration_confirm"
-  | "invite"
-  | "proposal_manage"
-  | "speaker_manage";
-
-const purposeCodes: Record<CapabilityPurpose, string> = {
-  registration_manage: "rm",
-  registration_confirm: "rc",
-  invite: "iv",
-  proposal_manage: "pm",
-  speaker_manage: "sm",
-};
-
-const purposesByCode = Object.fromEntries(
-  Object.entries(purposeCodes).map(([purpose, code]) => [code, purpose]),
-) as Record<string, CapabilityPurpose>;
-
-interface ParsedCapabilityToken {
-  purpose: CapabilityPurpose;
-  resourceId: string;
-  expiresAt: number;
-  encodedPayload: string;
-  signature: string;
-}
 
 interface QueuedCapabilityDescriptor {
   purpose: CapabilityPurpose;
   resourceId: string;
   ttlSeconds: number;
+  /** SHA-256 fingerprint of the link secret at enqueue time; never the secret itself. */
+  linkSecretFingerprint?: string;
+  /** Optional absolute delivery deadline for request-time-bounded links. */
+  expiresAtSeconds?: number;
 }
 
-export type CapabilityVerifyResult =
-  | { ok: true; resourceId: string; expiresAt: number }
-  | { ok: false; reason: "invalid" | "expired" };
+interface AuthorizedQueuedMarker {
+  marker: string;
+  /** Canonical recipient identity required for mailbox-bound capabilities. */
+  recipientNormalizedEmail?: string;
+}
+
+export {
+  newCapabilityLinkSecret,
+  signCapabilityToken,
+  signStatelessCapabilityToken,
+  verifyCapabilityToken,
+  verifyStatelessCapabilityToken,
+};
+export type {
+  CapabilityPurpose,
+  CapabilityVerifyResult,
+  EmailAuthCapabilityPurpose,
+  StatelessCapabilityPurpose,
+} from "./capability-token";
 
 export function omitCapabilitySecrets<T extends object>(
   record: T,
-): Omit<T, "confirmation_link_secret" | "manage_link_secret" | "link_secret"> {
+): Omit<T, "confirmation_link_secret" | "manage_link_secret" | "link_secret" | "invitation_secret"> {
   const sanitized = { ...record } as Record<string, unknown>;
   delete sanitized.confirmation_link_secret;
   delete sanitized.manage_link_secret;
   delete sanitized.link_secret;
-  return sanitized as Omit<T, "confirmation_link_secret" | "manage_link_secret" | "link_secret">;
-}
-
-function bytesToBase64Url(bytes: Uint8Array): string {
-  let binary = "";
-  for (const byte of bytes) binary += String.fromCharCode(byte);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/g, "");
-}
-
-function base64UrlToBytes(input: string): Uint8Array {
-  if (!/^[A-Za-z0-9_-]+$/.test(input)) throw new Error("Invalid base64url input");
-  const normalized = input.replace(/-/g, "+").replace(/_/g, "/");
-  const padded = normalized + "=".repeat((4 - (normalized.length % 4)) % 4);
-  const binary = atob(padded);
-  return Uint8Array.from(binary, (character) => character.charCodeAt(0));
-}
-
-function encodeText(input: string): string {
-  return bytesToBase64Url(encoder.encode(input));
-}
-
-function decodeText(input: string): string {
-  return decoder.decode(base64UrlToBytes(input));
-}
-
-async function importHmacKey(secret: string): Promise<CryptoKey> {
-  return crypto.subtle.importKey("raw", encoder.encode(secret), { name: "HMAC", hash: "SHA-256" }, false, [
-    "sign",
-    "verify",
-  ]);
-}
-
-function signatureInput(purpose: CapabilityPurpose, encodedPayload: string, linkSecret: string): ArrayBuffer {
-  return encoder.encode(`${SIGNING_DOMAIN}\0${purpose}\0${encodedPayload}\0${linkSecret}`).buffer as ArrayBuffer;
-}
-
-function parseToken(token: string, expectedPurpose: CapabilityPurpose): ParsedCapabilityToken | null {
-  if (!token.startsWith(TOKEN_PREFIX) || token.length > MAX_TOKEN_LENGTH) return null;
-  const parts = token.slice(TOKEN_PREFIX.length).split(".");
-  if (parts.length !== 2) return null;
-  const [encodedPayload, signature] = parts;
-
-  try {
-    const values = decodeText(encodedPayload).split("|");
-    if (values.length !== 3) return null;
-    const [purposeCode, resourceId, expiresAtRaw] = values;
-    const purpose = purposesByCode[purposeCode];
-    const expiresAt = Number(expiresAtRaw);
-    if (
-      purpose !== expectedPurpose ||
-      !resourceId ||
-      resourceId.length > 128 ||
-      !Number.isSafeInteger(expiresAt) ||
-      expiresAt <= 0
-    ) {
-      return null;
-    }
-    return { purpose, resourceId, expiresAt, encodedPayload, signature };
-  } catch {
-    return null;
-  }
-}
-
-export function newCapabilityLinkSecret(): string {
-  return randomToken(32);
-}
-
-export async function signCapabilityToken(payload: {
-  signingSecret: string;
-  linkSecret: string;
-  purpose: CapabilityPurpose;
-  resourceId: string;
-  ttlSeconds?: number;
-  nowSeconds?: number;
-}): Promise<string> {
-  const ttlSeconds = Math.max(1, Math.floor(payload.ttlSeconds ?? DEFAULT_TTL_SECONDS));
-  const expiresAt = Math.floor(payload.nowSeconds ?? Date.now() / 1000) + ttlSeconds;
-  const encodedPayload = encodeText(`${purposeCodes[payload.purpose]}|${payload.resourceId}|${expiresAt}`);
-  const key = await importHmacKey(payload.signingSecret);
-  const signature = await crypto.subtle.sign(
-    "HMAC",
-    key,
-    signatureInput(payload.purpose, encodedPayload, payload.linkSecret),
-  );
-  return `${TOKEN_PREFIX}${encodedPayload}.${bytesToBase64Url(new Uint8Array(signature))}`;
+  delete sanitized.invitation_secret;
+  return sanitized as Omit<T, "confirmation_link_secret" | "manage_link_secret" | "link_secret" | "invitation_secret">;
 }
 
 export async function signedOrQueuedCapability(payload: {
@@ -150,6 +78,7 @@ export async function signedOrQueuedCapability(payload: {
   purpose: CapabilityPurpose;
   resourceId: string;
   ttlSeconds?: number;
+  expiresAtSeconds?: number;
 }): Promise<string> {
   return payload.signingSecret
     ? signCapabilityToken({
@@ -159,50 +88,44 @@ export async function signedOrQueuedCapability(payload: {
         resourceId: payload.resourceId,
         ttlSeconds: payload.ttlSeconds,
       })
-    : queuedCapabilityToken(payload.purpose, payload.resourceId, payload.ttlSeconds);
-}
-
-export async function verifyCapabilityToken(payload: {
-  signingSecret: string;
-  linkSecret: string;
-  purpose: CapabilityPurpose;
-  token: string;
-  nowSeconds?: number;
-}): Promise<CapabilityVerifyResult> {
-  const parsed = parseToken(payload.token, payload.purpose);
-  if (!parsed) return { ok: false, reason: "invalid" };
-  if (Math.floor(payload.nowSeconds ?? Date.now() / 1000) >= parsed.expiresAt) {
-    return { ok: false, reason: "expired" };
-  }
-
-  try {
-    const signature = base64UrlToBytes(parsed.signature);
-    const key = await importHmacKey(payload.signingSecret);
-    const valid = await crypto.subtle.verify(
-      "HMAC",
-      key,
-      signature.buffer as ArrayBuffer,
-      signatureInput(parsed.purpose, parsed.encodedPayload, payload.linkSecret),
-    );
-    return valid
-      ? { ok: true, resourceId: parsed.resourceId, expiresAt: parsed.expiresAt }
-      : { ok: false, reason: "invalid" };
-  } catch {
-    return { ok: false, reason: "invalid" };
-  }
+    : queuedCapabilityTokenBoundToSecret(
+        payload.purpose,
+        payload.resourceId,
+        payload.linkSecret,
+        payload.ttlSeconds,
+        payload.expiresAtSeconds,
+      );
 }
 
 function parseQueuedDescriptor(marker: string): QueuedCapabilityDescriptor | null {
   const unfoldedMarker = marker.replace(/\r?\n[ \t]/g, "");
   if (!unfoldedMarker.startsWith(QUEUED_TOKEN_PREFIX)) return null;
   try {
-    const values = decodeText(unfoldedMarker.slice(QUEUED_TOKEN_PREFIX.length)).split("|");
-    if (values.length !== 3) return null;
-    const [purposeCode, resourceId, ttlSecondsRaw] = values;
-    const purpose = purposesByCode[purposeCode];
+    const values = decodeCapabilityText(unfoldedMarker.slice(QUEUED_TOKEN_PREFIX.length)).split("|");
+    if (values.length < 3 || values.length > 5) return null;
+    const [purposeCode, resourceId, ttlSecondsRaw, linkSecretFingerprint, expiresAtSecondsRaw] = values;
+    const purpose = capabilityPurposeFromCode(purposeCode);
     const ttlSeconds = Number(ttlSecondsRaw);
-    if (!purpose || !resourceId || !Number.isSafeInteger(ttlSeconds) || ttlSeconds <= 0) return null;
-    return { purpose, resourceId, ttlSeconds };
+    const expiresAtSeconds = expiresAtSecondsRaw === undefined ? undefined : Number(expiresAtSecondsRaw);
+    if (
+      !purpose ||
+      !resourceId ||
+      !Number.isSafeInteger(ttlSeconds) ||
+      ttlSeconds <= 0 ||
+      (linkSecretFingerprint !== undefined &&
+        linkSecretFingerprint !== "" &&
+        !/^[a-f0-9]{64}$/i.test(linkSecretFingerprint)) ||
+      (expiresAtSeconds !== undefined && (!Number.isSafeInteger(expiresAtSeconds) || expiresAtSeconds <= 0))
+    ) {
+      return null;
+    }
+    return {
+      purpose,
+      resourceId,
+      ttlSeconds,
+      linkSecretFingerprint: linkSecretFingerprint || undefined,
+      expiresAtSeconds,
+    };
   } catch {
     return null;
   }
@@ -212,24 +135,81 @@ export function queuedCapabilityToken(
   purpose: CapabilityPurpose,
   resourceId: string,
   ttlSeconds = DEFAULT_TTL_SECONDS,
+  linkSecretFingerprint?: string,
+  expiresAtSeconds?: number,
 ): string {
-  return `${QUEUED_TOKEN_PREFIX}${encodeText(
-    `${purposeCodes[purpose]}|${resourceId}|${Math.max(1, Math.floor(ttlSeconds))}`,
-  )}`;
+  if (purpose === "speaker_manage" && linkSecretFingerprint === undefined) {
+    throw new Error("Queued speaker capabilities must be bound to the current link secret");
+  }
+  if (linkSecretFingerprint !== undefined && !/^[a-f0-9]{64}$/i.test(linkSecretFingerprint)) {
+    throw new Error("Queued capability secret fingerprint is invalid");
+  }
+  if (expiresAtSeconds !== undefined && (!Number.isSafeInteger(expiresAtSeconds) || expiresAtSeconds <= 0)) {
+    throw new Error("Queued capability expiry is invalid");
+  }
+  const values = [capabilityPurposeCode(purpose), resourceId, String(Math.max(1, Math.floor(ttlSeconds)))];
+  if (linkSecretFingerprint !== undefined || expiresAtSeconds !== undefined) values.push(linkSecretFingerprint ?? "");
+  if (expiresAtSeconds !== undefined) values.push(String(expiresAtSeconds));
+  return `${QUEUED_TOKEN_PREFIX}${encodeCapabilityText(values.join("|"))}`;
 }
 
-function capabilitySecretQuery(purpose: CapabilityPurpose): string {
+/**
+ * Queues a capability that may be delivered only while the resource still has
+ * the exact link-secret generation it had when the message was enqueued.
+ * The marker contains only a one-way fingerprint, never the raw secret.
+ */
+export async function queuedCapabilityTokenBoundToSecret(
+  purpose: CapabilityPurpose,
+  resourceId: string,
+  linkSecret: string,
+  ttlSeconds = DEFAULT_TTL_SECONDS,
+  expiresAtSeconds?: number,
+): Promise<string> {
+  return queuedCapabilityToken(purpose, resourceId, ttlSeconds, await sha256Hex(linkSecret), expiresAtSeconds);
+}
+
+function capabilitySecretQuery(purpose: CapabilityPurpose, allowInactiveInvite = false): string {
   switch (purpose) {
+    case "application_status":
+      return "SELECT manage_token_hash || char(10) || applicant_email AS link_secret FROM member_applications WHERE id = ?";
     case "registration_manage":
       return "SELECT manage_link_secret AS link_secret FROM registrations WHERE id = ?";
     case "registration_confirm":
       return "SELECT confirmation_link_secret AS link_secret FROM registrations WHERE id = ?";
     case "invite":
-      return "SELECT link_secret FROM invites WHERE id = ?";
+      return allowInactiveInvite
+        ? "SELECT i.link_secret FROM invites i WHERE i.id = ?"
+        : `SELECT i.link_secret
+           FROM invites i
+           JOIN events e ON e.id = i.event_id
+           WHERE i.id = ? AND i.status = 'sent'
+             AND ${activeEffectiveInviteExpirySql(
+               effectiveInviteExpirySql("i", "e"),
+               "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+             )}`;
     case "proposal_manage":
       return "SELECT manage_link_secret AS link_secret FROM session_proposals WHERE id = ?";
     case "speaker_manage":
       return "SELECT manage_link_secret AS link_secret FROM proposal_speakers WHERE id = ?";
+    case "meeting_guest_verify": {
+      const effectiveExpiry = effectiveMeetingGuestInviteExpirySql();
+      return `SELECT guest.invitation_secret AS link_secret
+                FROM event_occurrence_guests guest
+                JOIN event_series series ON series.id = guest.series_id
+                JOIN events event ON event.id = series.event_id
+           LEFT JOIN event_occurrences guest_occurrence
+                  ON guest_occurrence.id = guest.occurrence_id
+                 AND guest_occurrence.series_id = guest.series_id
+               WHERE guest.id = ?
+                 AND guest.revoked_at IS NULL
+                 AND ${activeEffectiveInviteExpirySql(effectiveExpiry, "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')")}`;
+    }
+    case "member_join_verify":
+    case "member_join_apply":
+    case "user_sign_in":
+    case "sponsor_sign_in":
+    case "identity_invitation":
+      throw new Error("Stateless capabilities do not have a database secret query");
   }
 }
 
@@ -237,8 +217,32 @@ async function loadCapabilityLinkSecret(
   db: DatabaseLike,
   purpose: CapabilityPurpose,
   resourceId: string,
+  allowInactiveInvite = false,
+  expectedRecipientNormalizedEmail?: string,
 ): Promise<string | null> {
-  const row = await first<{ link_secret: string | null }>(db, capabilitySecretQuery(purpose), [resourceId]);
+  if (isStatelessCapabilityPurpose(purpose)) return statelessCapabilityLinkSecret(purpose);
+  const recipientBoundSpeaker = purpose === "speaker_manage" && expectedRecipientNormalizedEmail !== undefined;
+  const row = await first<{ link_secret: string | null }>(
+    db,
+    recipientBoundSpeaker
+      ? `SELECT ps.manage_link_secret AS link_secret
+           FROM proposal_speakers ps
+           JOIN users u ON u.id = ps.user_id
+           JOIN session_proposals sp ON sp.id = ps.proposal_id
+           JOIN events e ON e.id = sp.event_id
+          WHERE ps.id = ? AND u.normalized_email = ?
+            AND (
+              ps.status = 'confirmed'
+              OR (ps.status = 'invited' AND
+                ${activeEffectiveInviteExpirySql(
+                  effectiveProposalSpeakerInviteExpirySql("ps", "e"),
+                  "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')",
+                )}
+              )
+            )`
+      : capabilitySecretQuery(purpose, allowInactiveInvite),
+    recipientBoundSpeaker ? [resourceId, expectedRecipientNormalizedEmail] : [resourceId],
+  );
   return row?.link_secret ?? null;
 }
 
@@ -246,18 +250,34 @@ async function loadOrCreateCapabilityLinkSecret(
   db: DatabaseLike,
   purpose: CapabilityPurpose,
   resourceId: string,
+  expectedRecipientNormalizedEmail?: string,
 ): Promise<string | null> {
-  const existing = await loadCapabilityLinkSecret(db, purpose, resourceId);
+  if (isStatelessCapabilityPurpose(purpose)) return statelessCapabilityLinkSecret(purpose);
+  const existing = await loadCapabilityLinkSecret(db, purpose, resourceId, false, expectedRecipientNormalizedEmail);
   if (existing || purpose !== "speaker_manage") return existing;
 
   // Legacy proposal_speakers rows may have a null secret. Generate it with
   // Workers Web Crypto instead of relying on database-side randomness. The
   // conditional update makes concurrent issuers converge on one stored value.
-  await run(db, "UPDATE proposal_speakers SET manage_link_secret = ? WHERE id = ? AND manage_link_secret IS NULL", [
-    newCapabilityLinkSecret(),
-    resourceId,
-  ]);
-  return loadCapabilityLinkSecret(db, purpose, resourceId);
+  await run(
+    db,
+    `UPDATE proposal_speakers
+        SET manage_link_secret = ?
+      WHERE id = ? AND manage_link_secret IS NULL
+        AND (
+          ? IS NULL OR EXISTS (
+            SELECT 1 FROM users u
+             WHERE u.id = proposal_speakers.user_id AND u.normalized_email = ?
+          )
+        )`,
+    [
+      newCapabilityLinkSecret(),
+      resourceId,
+      expectedRecipientNormalizedEmail ?? null,
+      expectedRecipientNormalizedEmail ?? null,
+    ],
+  );
+  return loadCapabilityLinkSecret(db, purpose, resourceId, false, expectedRecipientNormalizedEmail);
 }
 
 export async function verifyDatabaseCapability(payload: {
@@ -265,11 +285,17 @@ export async function verifyDatabaseCapability(payload: {
   signingSecret: string;
   purpose: CapabilityPurpose;
   token: string;
+  allowInactiveInvite?: boolean;
 }): Promise<CapabilityVerifyResult> {
-  const parsed = parseToken(payload.token, payload.purpose);
+  const parsed = parseCapabilityToken(payload.token, payload.purpose);
   if (!parsed) return { ok: false, reason: "invalid" };
   if (Math.floor(Date.now() / 1000) >= parsed.expiresAt) return { ok: false, reason: "expired" };
-  const linkSecret = await loadCapabilityLinkSecret(payload.db, payload.purpose, parsed.resourceId);
+  const linkSecret = await loadCapabilityLinkSecret(
+    payload.db,
+    payload.purpose,
+    parsed.resourceId,
+    payload.allowInactiveInvite === true,
+  );
   if (!linkSecret) return { ok: false, reason: "invalid" };
   return verifyCapabilityToken({
     signingSecret: payload.signingSecret,
@@ -285,9 +311,22 @@ export async function issueDatabaseCapability(payload: {
   purpose: CapabilityPurpose;
   resourceId: string;
   ttlSeconds?: number;
+  expectedLinkSecretFingerprint?: string;
+  expectedRecipientNormalizedEmail?: string;
 }): Promise<string> {
-  const linkSecret = await loadOrCreateCapabilityLinkSecret(payload.db, payload.purpose, payload.resourceId);
+  const linkSecret = await loadOrCreateCapabilityLinkSecret(
+    payload.db,
+    payload.purpose,
+    payload.resourceId,
+    payload.expectedRecipientNormalizedEmail,
+  );
   if (!linkSecret) throw new AppError(404, "CAPABILITY_RESOURCE_NOT_FOUND", "Capability resource not found");
+  if (
+    payload.expectedLinkSecretFingerprint !== undefined &&
+    (await sha256Hex(linkSecret)) !== payload.expectedLinkSecretFingerprint
+  ) {
+    throw new AppError(410, "CAPABILITY_RESOURCE_STALE", "Queued capability no longer matches the resource state");
+  }
   return signCapabilityToken({ ...payload, linkSecret });
 }
 
@@ -319,12 +358,22 @@ function collectQueuedMarkers(value: unknown, markers: Set<string>): void {
 export function authorizeQueuedCapabilityLinks(
   payload: Record<string, unknown>,
   serverAuthoredValues: unknown[],
+  context?: { recipientEmail?: string },
 ): Record<string, unknown> {
   const authorizedPayload = { ...payload };
   delete authorizedPayload[AUTHORIZED_MARKERS_FIELD];
   const markers = new Set<string>();
   for (const value of serverAuthoredValues) collectQueuedMarkers(value, markers);
-  if (markers.size > 0) authorizedPayload[AUTHORIZED_MARKERS_FIELD] = [...markers];
+  if (markers.size > 0) {
+    authorizedPayload[AUTHORIZED_MARKERS_FIELD] = [...markers].map((marker): string | AuthorizedQueuedMarker => {
+      const descriptor = parseQueuedDescriptor(marker);
+      if (descriptor?.purpose !== "speaker_manage") return marker;
+      return {
+        marker,
+        ...(context?.recipientEmail ? { recipientNormalizedEmail: normalizeEmail(context.recipientEmail) } : {}),
+      };
+    });
+  }
   return authorizedPayload;
 }
 
@@ -356,7 +405,7 @@ async function materializeString(
   signingSecret: string,
   value: string,
   cache: Map<string, string>,
-  authorizedMarkers: Set<string>,
+  authorizedMarkers: Map<string, AuthorizedQueuedMarker>,
 ): Promise<string> {
   const markers = Array.from(new Set(value.match(queuedMarkerPattern) ?? [])).filter((marker) =>
     authorizedMarkers.has(canonicalQueuedMarker(marker)),
@@ -370,16 +419,33 @@ async function materializeString(
       const descriptor = parseQueuedDescriptor(marker);
       if (!descriptor) throw new AppError(500, "CAPABILITY_DESCRIPTOR_INVALID", "Queued capability is invalid");
       try {
+        const authorization = authorizedMarkers.get(canonicalMarker);
+        if (descriptor.purpose === "speaker_manage" && !authorization?.recipientNormalizedEmail) {
+          throw new AppError(410, "CAPABILITY_RESOURCE_STALE", "Queued speaker capability is not recipient-bound");
+        }
+        const nowSeconds = Math.floor(Date.now() / 1000);
+        const remainingTtlSeconds = descriptor.expiresAtSeconds
+          ? descriptor.expiresAtSeconds - nowSeconds
+          : descriptor.ttlSeconds;
+        if (remainingTtlSeconds <= 0) {
+          throw new AppError(410, "CAPABILITY_RESOURCE_STALE", "Queued capability delivery deadline expired");
+        }
         const token = await issueDatabaseCapability({
           db,
           signingSecret,
           purpose: descriptor.purpose,
           resourceId: descriptor.resourceId,
-          ttlSeconds: descriptor.ttlSeconds,
+          ttlSeconds: Math.min(descriptor.ttlSeconds, remainingTtlSeconds),
+          expectedLinkSecretFingerprint: descriptor.linkSecretFingerprint,
+          expectedRecipientNormalizedEmail:
+            descriptor.purpose === "speaker_manage" ? authorization?.recipientNormalizedEmail : undefined,
         });
         cache.set(canonicalMarker, token);
       } catch (error) {
-        if (error instanceof AppError && error.code === "CAPABILITY_RESOURCE_NOT_FOUND") {
+        if (
+          error instanceof AppError &&
+          (error.code === "CAPABILITY_RESOURCE_NOT_FOUND" || error.code === "CAPABILITY_RESOURCE_STALE")
+        ) {
           throw new AppError(410, "CAPABILITY_RESOURCE_STALE", "Queued capability resource is no longer available", {
             purpose: descriptor.purpose,
             resourceId: descriptor.resourceId,
@@ -401,7 +467,7 @@ async function materializeValue(
   signingSecret: string,
   value: unknown,
   cache: Map<string, string>,
-  authorizedMarkers: Set<string>,
+  authorizedMarkers: Map<string, AuthorizedQueuedMarker>,
 ): Promise<unknown> {
   if (typeof value === "string") return materializeString(db, signingSecret, value, cache, authorizedMarkers);
   if (Array.isArray(value)) {
@@ -428,11 +494,26 @@ export async function materializeQueuedCapabilityLinks(
   const rawAuthorizedMarkers = deliveryPayload[AUTHORIZED_MARKERS_FIELD];
   delete deliveryPayload[AUTHORIZED_MARKERS_FIELD];
   if (!JSON.stringify(deliveryPayload).includes(QUEUED_TOKEN_PREFIX)) return deliveryPayload;
-  const authorizedMarkers = new Set(
-    Array.isArray(rawAuthorizedMarkers)
-      ? rawAuthorizedMarkers.filter((marker): marker is string => typeof marker === "string").map(canonicalQueuedMarker)
-      : [],
-  );
+  const authorizedMarkers = new Map<string, AuthorizedQueuedMarker>();
+  if (Array.isArray(rawAuthorizedMarkers)) {
+    for (const rawMarker of rawAuthorizedMarkers) {
+      if (typeof rawMarker === "string") {
+        const marker = canonicalQueuedMarker(rawMarker);
+        authorizedMarkers.set(marker, { marker });
+        continue;
+      }
+      if (!rawMarker || typeof rawMarker !== "object") continue;
+      const candidate = rawMarker as Record<string, unknown>;
+      if (typeof candidate.marker !== "string") continue;
+      const marker = canonicalQueuedMarker(candidate.marker);
+      authorizedMarkers.set(marker, {
+        marker,
+        ...(typeof candidate.recipientNormalizedEmail === "string"
+          ? { recipientNormalizedEmail: normalizeEmail(candidate.recipientNormalizedEmail) }
+          : {}),
+      });
+    }
+  }
   if (authorizedMarkers.size === 0) return deliveryPayload;
   const signingSecret = env.INTERNAL_SIGNING_SECRET;
   if (!signingSecret) {

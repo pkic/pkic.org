@@ -16,7 +16,7 @@ heroDescription: A globally recognized framework for evaluating and improving PK
 
 heroButton:
   label: Join the PKIMM Working Group
-  link: /join/
+  link: /portal/#/groups/pkimm
 
 wgID: PKIMM
 color: purple
@@ -25,10 +25,6 @@ sectionNav: true
 cascade:
   params:
     sectionNav: true
-
-chair:
-  name: Roman Cinkais
-  viceChair: Kennedy Nwup
 
 keyDeliverables:
   - title: PKI Maturity Model

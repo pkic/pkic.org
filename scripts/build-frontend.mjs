@@ -20,20 +20,36 @@
 
 import { build } from "vite";
 import { resolve, relative, dirname } from "node:path";
-import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync, rmSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { entryStylesheets } from "./lib/frontend-entry-assets.mjs";
+import { assertFrontendBundleBudget } from "./lib/frontend-bundle-budget.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
 const outDir = resolve(root, "static", "js", "built");
 const dataDir = resolve(root, "data");
+const publicBuiltDir = resolve(root, "public", "js", "built");
 
 const entries = {
   loader: resolve(root, "assets/ts/loader.ts"),
 };
 
 const isDev = process.argv.includes("--dev");
+
+// Hugo copies static/js/built/ into public/js/built/ on every build, but it
+// never deletes files that exist in the destination and not the source —
+// so chunks left behind by a previous build (renamed/removed components,
+// stale content hashes) accumulate in public/ forever. Vite's own
+// `emptyOutDir` only clears static/js/built/, not Hugo's copy of it.
+// Clearing public/js/built/ before this build runs (and therefore before
+// Hugo's next copy) guarantees Hugo repopulates it as an exact mirror of
+// the fresh static/js/built/ output instead of layering on top of stale
+// files. This runs unconditionally: it's a no-op on first run (directory
+// doesn't exist yet) and production builds already get an equivalent
+// clean via Hugo's `--cleanDestinationDir`.
+rmSync(publicBuiltDir, { recursive: true, force: true });
 
 /** @type {import('vite').UserConfig} */
 const config = {
@@ -48,7 +64,7 @@ const config = {
     // Redirect React imports to Preact's compatibility layer so that
     // React-peer-dependent libraries (e.g. wouter) use Preact instead.
     alias: {
-      "react": "preact/compat",
+      react: "preact/compat",
       "react-dom/test-utils": "preact/test-utils",
       "react-dom": "preact/compat",
       "react/jsx-runtime": "preact/jsx-runtime",
@@ -65,10 +81,43 @@ const config = {
     minify: !isDev,
     sourcemap: isDev ? "inline" : false,
     rollupOptions: {
+      preserveEntrySignatures: false,
       input: entries,
       output: {
+        strictExecutionOrder: true,
         entryFileNames: isDev ? "[name].js" : "[name].[hash].js",
         chunkFileNames: isDev ? "chunks/[name].js" : "chunks/[name].[hash].js",
+        // Stylesheets follow the same rule as the scripts: stable names in a
+        // dev build so the served files can be inspected, hashed in
+        // production so they can be cached indefinitely.
+        assetFileNames: isDev ? "[name][extname]" : "[name].[hash][extname]",
+        // Rolldown's automatic chunking groups zod (and the runtime helpers
+        // it pulls in) into a shared chunk whenever two or more modules
+        // import it, then names that chunk after whichever constituent
+        // module happens to sort first — e.g. "urls" after
+        // assets/shared/schemas/urls.ts. Naming the group explicitly keeps
+        // the output deterministic and self-documenting instead of leaving
+        // it to that naming accident.
+        //
+        // `codeSplitting` is the current rolldown API (this project's Vite
+        // 8 bundles rolldown ~1.2, see node_modules/vite/package.json); the
+        // Rollup-compatible `manualChunks`/`advancedChunks` options are
+        // deprecated aliases for it as of rolldown 1.2.
+        codeSplitting: {
+          groups: [
+            // The visual editor loads only on Edit. Cache its stable engine
+            // layers independently from the form UI and optional table support.
+            { name: "editor-model", includeDependenciesRecursively: false, test: /node_modules[\\/]prosemirror-(model|state|transform)[\\/]/ },
+            { name: "editor-view", includeDependenciesRecursively: false, test: /node_modules[\\/]prosemirror-view[\\/]/ },
+            { name: "editor-tables", includeDependenciesRecursively: false, test: /node_modules[\\/](prosemirror-tables|@tiptap[\\/]extension-table)[\\/]/ },
+            { name: "editor-core", includeDependenciesRecursively: false, test: /node_modules[\\/]@tiptap[\\/]core[\\/]/ },
+            { name: "editor-markdown", includeDependenciesRecursively: false, test: /node_modules[\\/]@tiptap[\\/]markdown[\\/]/ },
+            {
+              name: "vendor",
+              test: /node_modules[\\/]zod[\\/]/,
+            },
+          ],
+        },
       },
     },
     target: "es2022",
@@ -89,11 +138,18 @@ function manifestPlugin({ entries, dataDir, root, isDev }) {
   return {
     name: "pkic-asset-manifest",
     writeBundle(_options, bundle) {
+      if (!isDev) {
+        const chunks = Object.entries(bundle).flatMap(([fileName, output]) =>
+          output.type === "chunk" ? [{ fileName, isEntry: output.isEntry, code: output.code }] : [],
+        );
+        const budget = assertFrontendBundleBudget(chunks);
+        const largest = budget.measurements[0];
+        console.log(
+          `[bundle-budget] ${budget.measurements.length} chunks pass; largest gzip chunk is ${largest.fileName} (${(largest.gzipBytes / 1024).toFixed(2)} KiB)`,
+        );
+      }
       const inputToKey = Object.fromEntries(
-        Object.entries(entries).map(([key, absPath]) => [
-          absPath.replace(/\\/g, "/"),
-          key,
-        ]),
+        Object.entries(entries).map(([key, absPath]) => [absPath.replace(/\\/g, "/"), key]),
       );
 
       const manifest = {};
@@ -104,13 +160,31 @@ function manifestPlugin({ entries, dataDir, root, isDev }) {
         const key = inputToKey[facadeModule];
         if (!key) continue;
         const url = `/js/built/${fileName}`;
+
+        // CSS imported by the entry is emitted as its own asset rather than
+        // injected by script, so Hugo has to link it. Lazy chunks are not
+        // recorded here on purpose: Vite injects their stylesheets when the
+        // chunk loads, which is what keeps component CSS off pages that never
+        // reach that component.
+        const entryCss = entryStylesheets(fileName, bundle);
+        const cssUrl = entryCss.length > 0 ? `/js/built/${entryCss[0]}` : null;
+        if (entryCss.length > 1) {
+          throw new Error(`Entry "${key}" needs ${entryCss.length} stylesheets; consolidate its static styles before publishing.`);
+        }
+
         if (isDev) {
-          manifest[key] = { url };
+          manifest[key] = cssUrl ? { url, css: cssUrl } : { url };
         } else {
           const filePath = resolve(outDir, fileName);
           const fileContent = readFileSync(filePath);
           const hash = createHash("sha256").update(fileContent).digest("base64");
           manifest[key] = { url, integrity: `sha256-${hash}` };
+          if (cssUrl) {
+            const cssContent = readFileSync(resolve(outDir, entryCss[0]));
+            const cssHash = createHash("sha256").update(cssContent).digest("base64");
+            manifest[key].css = cssUrl;
+            manifest[key].cssIntegrity = `sha256-${cssHash}`;
+          }
         }
       }
 

@@ -1,0 +1,15 @@
+import {
+  schedulerJobsListResponseSchema,
+  schedulerJobsListRouteSchema,
+} from "../../../../../assets/shared/schemas/scheduler";
+import { requireStaffPermission } from "../../../../_lib/auth/staff-permissions";
+import { markResponseSensitive, type AdminContext } from "../../../../_lib/db/context";
+import { json } from "../../../../_lib/http";
+import { openApiRoute } from "../../../../_lib/openapi/route";
+import { listScheduledJobsForActor } from "../../../../_lib/services/scheduled-jobs/management";
+
+export const SchedulerJobsList = openApiRoute(schedulerJobsListRouteSchema, async (c: AdminContext, data) => {
+  markResponseSensitive(c);
+  const { db, staff } = await requireStaffPermission(c, "scheduler:read");
+  return json(schedulerJobsListResponseSchema.parse(await listScheduledJobsForActor(db, staff, data.query)));
+});

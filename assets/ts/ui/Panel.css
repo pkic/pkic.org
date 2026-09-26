@@ -1,0 +1,89 @@
+/*
+ * Panel.
+ *
+ * A titled surface for forms and lists: border, rounded corners, and a
+ * semantically structured header with optional toolbar slot.
+ */
+
+@layer components {
+  .pk-panel {
+    min-width: 0;
+    background: var(--pk-surface);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-lg);
+    overflow: hidden;
+  }
+
+  /*
+   * The brand rule, drawn inside the panel's own rounded corner rather than as
+   * a border on it: a border would need the radius restated on three sides to
+   * avoid a square corner over a rounded one.
+   */
+  .pk-panel__stripe {
+    height: 3px;
+    background: var(--pk-grad-brand);
+  }
+
+  .pk-panel__header {
+    display: flex;
+    /* Actions drop under the title on a phone rather than pushing past the
+       panel's edge — "Add new person" was cut off at 375px. */
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--pk-2) 1rem;
+    padding: var(--pk-4) var(--pk-4);
+    border-bottom: 1px solid var(--pk-line-soft);
+  }
+
+  .pk-panel__title {
+    flex: 1;
+    margin: 0;
+    font-size: var(--pk-text-md);
+    font-weight: 500;
+    line-height: 1.35;
+    color: var(--pk-ink);
+  }
+
+  .pk-panel__toolbar {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    flex: none;
+  }
+
+  .pk-panel__body {
+    padding: var(--pk-4);
+  }
+
+  /*
+   * A tinted body. The tint is the softest step of each tone, so body text
+   * keeps its contrast against it and only the surface changes — these panels
+   * sit next to untinted ones in the same column.
+   */
+  .pk-panel__body--accent {
+    background: var(--pk-accent-soft);
+  }
+
+  .pk-panel__body--ok {
+    background: var(--pk-ok-soft);
+  }
+
+  .pk-panel__body--warn {
+    background: var(--pk-warn-soft);
+  }
+
+  .pk-panel__body--info {
+    background: var(--pk-info-soft);
+  }
+
+  @media (max-width: 48rem) {
+    .pk-panel__header {
+      padding: var(--pk-3) var(--pk-3);
+    }
+
+    .pk-panel__body {
+      padding: var(--pk-3);
+    }
+  }
+}

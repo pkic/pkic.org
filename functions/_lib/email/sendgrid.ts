@@ -1,16 +1,23 @@
 import { AppError } from "../errors";
+import { discardProviderResponseBody, providerFailureDetails } from "../integrations/provider-failure";
+import { logError } from "../logging";
 import type { Env } from "../types";
 
 export interface SendgridMessage {
+  outboxId: string;
   to: string;
   bcc?: string[];
   subject: string;
   html: string;
   text: string;
   calendarIcsContent?: string;
+  /** The iTIP method of the inline calendar part; REQUEST when not said. */
+  calendarMethod?: "REQUEST" | "CANCEL";
   categories?: string[];
   replyTo?: string;
   attachments?: Array<{ filename: string; contentType: string; base64Content: string }>;
+  /** The sender the template names; absent, the environment's configured sender (#106). */
+  from?: { email: string; name?: string | null };
 }
 
 function toSendgridMimeType(contentType: string): string {
@@ -22,14 +29,18 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
     throw new AppError(500, "SENDGRID_NOT_CONFIGURED", "SENDGRID_API_KEY is not configured");
   }
 
-  const fromEmail = env.FROM_EMAIL ?? env.SENDGRID_FROM_EMAIL ?? "noreply@pkic.org";
-  const fromName = env.FROM_NAME ?? env.SENDGRID_FROM_NAME ?? "PKI Consortium";
+  const fromEmail = message.from?.email ?? env.FROM_EMAIL ?? env.SENDGRID_FROM_EMAIL ?? "noreply@pkic.org";
+  const fromName = message.from?.name ?? env.FROM_NAME ?? env.SENDGRID_FROM_NAME ?? "PKI Consortium";
 
   const payload: Record<string, unknown> = {
     personalizations: [
       {
         to: [{ email: message.to }],
         ...(message.bcc && message.bcc.length > 0 ? { bcc: message.bcc.map((email) => ({ email })) } : {}),
+        custom_args: {
+          outbox_id: message.outboxId,
+          ...(env.APP_BASE_URL ? { env_url: env.APP_BASE_URL } : {}),
+        },
       },
     ],
     from: { email: fromEmail, name: fromName },
@@ -41,14 +52,13 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
       ...(message.calendarIcsContent
         ? [
             {
-              type: "text/calendar; method=REQUEST",
+              type: `text/calendar; method=${message.calendarMethod ?? "REQUEST"}`,
               value: message.calendarIcsContent,
             },
           ]
         : []),
     ],
     categories: message.categories ?? [],
-    ...(env.APP_BASE_URL ? { custom_args: { env_url: env.APP_BASE_URL } } : {}),
   };
 
   if (message.attachments && message.attachments.length > 0) {
@@ -60,21 +70,27 @@ export async function sendViaSendgrid(env: Env, message: SendgridMessage): Promi
     }));
   }
 
-  const response = await fetch(env.SENDGRID_API_BASE ?? "https://api.sendgrid.com/v3/mail/send", {
-    method: "POST",
-    headers: {
-      "content-type": "application/json",
-      authorization: `Bearer ${env.SENDGRID_API_KEY}`,
-    },
-    body: JSON.stringify(payload),
-  });
+  let response: Response;
+  try {
+    response = await fetch(env.SENDGRID_API_BASE ?? "https://api.sendgrid.com/v3/mail/send", {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        authorization: `Bearer ${env.SENDGRID_API_KEY}`,
+      },
+      body: JSON.stringify(payload),
+    });
+  } catch {
+    const details = providerFailureDetails("sendgrid", "send_email", null);
+    logError("SENDGRID_DELIVERY_UNKNOWN", details);
+    throw new AppError(502, "SENDGRID_DELIVERY_UNKNOWN", "SendGrid delivery outcome is unknown", details);
+  }
 
   if (!response.ok) {
-    const body = await response.text();
-    throw new AppError(502, "SENDGRID_SEND_FAILED", "SendGrid rejected email", {
-      status: response.status,
-      body,
-    });
+    const details = providerFailureDetails("sendgrid", "send_email", response.status);
+    await discardProviderResponseBody(response);
+    logError("SENDGRID_SEND_FAILED", details);
+    throw new AppError(502, "SENDGRID_SEND_FAILED", "SendGrid rejected email", details);
   }
 
   return response.headers.get("x-message-id");

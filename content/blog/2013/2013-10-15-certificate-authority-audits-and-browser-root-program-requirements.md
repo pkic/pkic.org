@@ -37,6 +37,14 @@ tags:
 title: Certificate Authority Audits and Browser Root Program Requirements
 
 
+authorProfiles:
+  - name: Kirk Hall
+    organization: Entrust
+    role: Director, Policy & Compliance
+    website: https://www.entrust.com/
+    social:
+      linkedin: https://www.linkedin.com/in/kirk-hall-30098965/
+    assetdirectory: images/members/entrust
 ---
 Recent news stories have highlighted the need for strong security in online communications, and use of SSL certificates issued by a publicly trusted Certification Authority (CA) is perhaps the best way to achieve that. But why should the public trust SSL certificates issued from commercial CA roots, which are embedded as trust anchors in web browsers?
 

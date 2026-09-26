@@ -1,3 +1,4 @@
+import { RegistrationIdentitySelect } from "../components/RegistrationIdentitySelect";
 import { render, createRef } from "preact";
 import type { ComponentChildren } from "preact";
 import { getJson, postJson } from "../shared/api-client";
@@ -10,27 +11,30 @@ import {
 import { readDayAttendance, renderDayAttendance } from "../shared/widgets/day-attendance";
 import { renderSharePanel } from "../shared/widgets/share-panel";
 import { renderDonationCta } from "../shared/donation/cta";
-import type { EventFormsResponse, FormField } from "../shared/types";
+import type { FormField } from "../shared/types";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { installStepNavigation } from "../shared/form/step-navigation";
-import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
+import { handleSubmitError, withLoadingButton } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
 import { clearReferralSession } from "../shared/query-context";
-import { registrationCreateSchema } from "../../shared/schemas/api";
+import {
+  registrationCreateSchema,
+  registrationSubmissionResponseSchema,
+  type RegistrationSubmissionResponse,
+} from "../../shared/schemas/registration";
+import { geolocationCountryResponseSchema } from "../../shared/schemas/geolocation";
+import { eventFormsResponseSchema } from "../../shared/schemas/forms";
 import { readField, deriveEventAttendanceType, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
+import { ButtonLink } from "../ui/Button";
+import {
+  hasPendingRegistrationDayWaitlist,
+  RegistrationDayStatusSummary,
+} from "../components/RegistrationDayStatusSummary";
 import { optionsFor } from "../shared/form/custom-field-rules";
-import { tryRecoverInvalidInvite } from "../shared/widgets/invite-recovery";
-
-interface RegistrationSubmitResponse {
-  success: boolean;
-  status: string;
-  manageUrl?: string;
-  shareUrl?: string;
-  manageToken?: string;
-}
-
-const EMAIL_REVIEW_FIELD = "emailReviewConfirmed";
+import { registrationInvitation } from "./registration-invitation";
+import { installEmailReviewCard, resetEmailReviewConfirmation } from "./registration-email-review";
+type RegistrationSubmitResponse = RegistrationSubmissionResponse;
 
 type CustomAnswerValue = string | number | boolean | string[] | { start: string; end: string };
 
@@ -50,7 +54,11 @@ function showSuccessPanel(
   eventSlug: string,
   days?: number,
 ): void {
-  form.classList.add("d-none");
+  // The form's markup (layouts/shortcodes/event-registration.html) no longer
+  // carries Bootstrap, so `d-none` would stop hiding it the moment that page
+  // drops `main.scss`. The stepper below already uses the platform attribute;
+  // the form now does too.
+  form.hidden = true;
   const stepper = root.querySelector<HTMLElement>(".event-flow-stepper");
   if (stepper) {
     stepper.hidden = true;
@@ -67,7 +75,7 @@ function showSuccessPanel(
     title = `Check your email to finish registration${firstName ? `, ${firstName}` : ""}`;
     body = (
       <>
-        <div class="event-flow-pending-alert text-start" role="alert">
+        <div class="event-flow-pending-alert pk-start" role="alert">
           <span class="event-flow-review-warning-marker" aria-hidden="true">
             !
           </span>
@@ -86,38 +94,40 @@ function showSuccessPanel(
             </ul>
           </div>
         </div>
-        <div class="event-flow-submission-review text-start">
+        <div class="event-flow-submission-review pk-start">
           <p class="event-flow-submission-review-label">Confirmation email sent to</p>
           <p class="event-flow-submission-review-value">{email}</p>
           {result.manageUrl && (
             <div class="event-flow-submission-action">
-              <p class="small mb-0">Wrong email address?</p>
-              <a href={result.manageUrl} class="btn btn-outline-success">
-                Edit email address
-              </a>
+              <p class="pk-small">Wrong email address?</p>
+              <ButtonLink href={result.manageUrl}>Edit email address</ButtonLink>
             </div>
           )}
         </div>
-        <p class="text-muted small mb-0">
+        <p class="pk-small">
           If the email does not arrive after a few minutes, check your spam folder and confirm that the address above is
           correct.
         </p>
       </>
     );
-  } else if (result.status === "waitlisted") {
-    icon = "📋";
-    title = "You're on the waitlist!";
+  } else if (hasPendingRegistrationDayWaitlist(result.dayWaitlist)) {
+    icon = "🗓️";
+    title = "Your registration is in place";
     showShare = !!result.shareUrl;
     body = (
-      <p class="event-flow-success-body">
-        In-person spots are fully booked. We've added you to the waitlist and will notify you by email if a spot becomes
-        available.
-        {result.manageUrl && (
-          <a href={result.manageUrl} class="d-block mt-2">
-            Manage your waitlist entry
-          </a>
-        )}
-      </p>
+      <>
+        {/* The link is a sibling of the sentence rather than a block-level
+            anchor inside it: the stack's gap is what separates them, and a
+            paragraph is no longer asked to contain a block. */}
+        <div class="pk-stack pk-stack--snug">
+          <p class="event-flow-success-body">
+            Your overall registration is confirmed, but one or more selected in-person days are still pending because
+            those rooms are at capacity.
+          </p>
+          {result.manageUrl && <a href={result.manageUrl}>Review or change registration</a>}
+        </div>
+        <RegistrationDayStatusSummary dayAttendance={result.dayAttendance} dayWaitlist={result.dayWaitlist} />
+      </>
     );
   } else {
     icon = "🎉";
@@ -380,57 +390,10 @@ function updateRegistrationReview(root: HTMLElement, form: HTMLFormElement, cust
   if (inlineEmailEl) inlineEmailEl.textContent = email || "the email address above";
 }
 
-function resetEmailReviewConfirmation(form: HTMLFormElement): void {
-  const confirmation = form.elements.namedItem(EMAIL_REVIEW_FIELD);
-  if (confirmation instanceof HTMLInputElement) {
-    confirmation.checked = false;
-    syncEmailReviewCard(form);
-  }
-}
-
-function syncEmailReviewCard(form: HTMLFormElement): void {
-  const confirmation = form.elements.namedItem(EMAIL_REVIEW_FIELD);
-  if (!(confirmation instanceof HTMLInputElement)) return;
-
-  const card = confirmation.closest<HTMLElement>("[data-email-review-card]");
-  if (!card) return;
-
-  card.classList.toggle("is-checked", confirmation.checked);
-  card.classList.toggle("is-invalid", form.classList.contains("was-validated") && !confirmation.checked);
-  card.setAttribute("aria-checked", String(confirmation.checked));
-}
-
-function installEmailReviewCard(form: HTMLFormElement): void {
-  const confirmation = form.elements.namedItem(EMAIL_REVIEW_FIELD);
-  if (!(confirmation instanceof HTMLInputElement)) return;
-
-  const card = confirmation.closest<HTMLElement>("[data-email-review-card]");
-  if (!card) return;
-
-  const toggle = (): void => {
-    confirmation.checked = !confirmation.checked;
-    confirmation.dispatchEvent(new Event("change", { bubbles: true }));
-    syncEmailReviewCard(form);
-  };
-
-  card.addEventListener("click", (event) => {
-    const target = event.target instanceof HTMLElement ? event.target : null;
-    if (target?.closest("label, input")) return;
-    toggle();
-  });
-  card.addEventListener("keydown", (event) => {
-    if (event.key !== " " && event.key !== "Enter") return;
-    event.preventDefault();
-    toggle();
-  });
-  confirmation.addEventListener("change", () => syncEmailReviewCard(form));
-  syncEmailReviewCard(form);
-}
-
-async function applyGeoHint(controller: CustomFieldsController, apiBase: string): Promise<void> {
+async function applyGeolocationCountryHint(controller: CustomFieldsController, apiBase: string): Promise<void> {
   try {
-    const geo = await getJson<{ country: string | null }>(`${apiBase}/geo`);
-    if (geo.country) controller.setGeoHint(geo.country);
+    const geolocationCountry = await getJson(`${apiBase}/geolocation/country`, geolocationCountryResponseSchema);
+    if (geolocationCountry.country) controller.setGeoHint(geolocationCountry.country);
   } catch {
     // Geo lookup is best-effort — never block or break the form.
   }
@@ -444,6 +407,7 @@ async function main(): Promise<void> {
 
   const { form, statusEl, eventSlug, eventPagePath, apiBase, query } = boot;
   const eventPathHeaders = eventPagePath ? { "x-event-base-path": eventPagePath } : undefined;
+  const invitation = registrationInvitation(boot);
   let customFieldDefs: FormField[] = [];
   installLiveValidation(form, statusEl);
   installEmailReviewCard(form);
@@ -461,7 +425,10 @@ async function main(): Promise<void> {
   let customFields: CustomFieldsController | null = null;
 
   try {
-    const forms = await getJson<EventFormsResponse>(`${apiBase}/events/${eventSlug}/forms?purpose=event_registration`);
+    const forms = await getJson(
+      `${apiBase}/events/${eventSlug}/forms/placements/event_registration`,
+      eventFormsResponseSchema,
+    );
     eventName = forms.event.name;
     eventDayCount = forms.eventDays.length;
     if (consentsContainer) {
@@ -482,11 +449,16 @@ async function main(): Promise<void> {
       });
     }
 
+    const nextButton = boot.root.querySelector<HTMLButtonElement>("[data-step-next]");
+    if (nextButton) nextButton.disabled = false;
+    await invitation.check(forms.registrationPolicy);
+
     // Apply Cloudflare geo hint to any country-select widgets.
     // Fire-and-forget: we don't block form load on this.
-    if (customFields) void applyGeoHint(customFields, apiBase);
+    if (customFields) void applyGeolocationCountryHint(customFields, apiBase);
   } catch {
-    setStatus(statusEl, "Could not load registration form details.", true);
+    invitation.loadFailed();
+    setStatus(statusEl, "Could not load registration form details. Reload this page to try again.", true);
   }
 
   form.addEventListener("change", (event) => {
@@ -518,10 +490,15 @@ async function main(): Promise<void> {
     referralInput.value = query.referralCode;
   }
 
+  const identityMount = form.querySelector<HTMLElement>("[data-registration-identity]");
+  if (identityMount) render(<RegistrationIdentitySelect form={form} />, identityMount);
+
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (!invitation.canSubmit()) return;
     updateRegistrationReview(boot.root, form, customFieldDefs);
-    form.classList.add("was-validated");
+    // `validateBeforeSubmit` below is what marks the form as validated; adding
+    // the class here as well was a second owner for the same state.
     syncConsentValidation(form);
     if (!validateBeforeSubmit(form, statusEl)) {
       return;
@@ -533,6 +510,7 @@ async function main(): Promise<void> {
         const dayAttendance = readDayAttendance(form);
         const payload = registrationCreateSchema.parse({
           firstName,
+          identityId: readField(form, "identityId") || undefined,
           lastName: readField(form, "lastName"),
           email: readField(form, "email"),
           attendanceType: dayAttendance.length === 0 ? "virtual" : undefined,
@@ -546,9 +524,10 @@ async function main(): Promise<void> {
           consents: readConsentValues(form),
         });
 
-        const result = await postJson<RegistrationSubmitResponse>(
+        const result = await postJson(
           `${apiBase}/events/${eventSlug}/registrations`,
           payload,
+          registrationSubmissionResponseSchema,
           eventPathHeaders,
         );
         clearReferralSession();
@@ -565,18 +544,7 @@ async function main(): Promise<void> {
           eventDayCount || undefined,
         );
       } catch (error) {
-        if (
-          await tryRecoverInvalidInvite({
-            error,
-            email: readField(form, "email"),
-            apiBase,
-            statusEl,
-            hasInviteToken: Boolean(query.inviteToken),
-          })
-        ) {
-          return;
-        }
-        handleSubmitError(error, form, statusEl);
+        if (!invitation.handleError(error)) handleSubmitError(error, form, statusEl);
       }
     });
   });

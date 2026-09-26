@@ -1,0 +1,300 @@
+/*
+ * The form builder's question cards, type palette and disclosures.
+ *
+ * A question is a card, not a row of inputs. Closed, it shows only what an
+ * author scans for — label, summary, type. Open, it grows an accent stripe and
+ * reveals the editors, with the key, validation and reporting settings folded
+ * behind disclosures rather than laid out as a wall.
+ */
+
+.pk-formq {
+  display: grid;
+  grid-template-columns: 1.25rem minmax(0, 1fr) auto;
+  gap: var(--pk-3);
+  align-items: center;
+  width: 100%;
+  box-sizing: border-box;
+  text-align: start;
+  background: var(--pk-surface);
+  border: 1px solid var(--pk-line-soft);
+  border-radius: var(--pk-radius-lg);
+  padding: 0.85rem var(--pk-4);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition:
+    border-color var(--pk-dur-fast),
+    box-shadow var(--pk-dur-fast);
+}
+
+.pk-formq:hover {
+  border-color: var(--pk-line-strong);
+  box-shadow: var(--pk-shadow-1);
+}
+
+.pk-formq__grip {
+  font-family: var(--pk-font-mono);
+  font-size: var(--pk-text-xs);
+  color: var(--pk-ink-faint);
+  letter-spacing: 0.1em;
+  line-height: 1;
+}
+
+.pk-formq__type {
+  font-family: var(--pk-font-mono);
+  font-size: var(--pk-text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--pk-tracking-label);
+}
+
+/* Open card: the stripe is a grid column so it paints the full height. */
+.pk-formq-open {
+  display: grid;
+  grid-template-columns: 4px minmax(0, 1fr);
+  background: var(--pk-surface);
+  border: 1px solid var(--pk-line);
+  border-radius: var(--pk-radius-lg);
+  box-shadow: var(--pk-shadow-2);
+  overflow: hidden;
+}
+
+.pk-formq-open__stripe {
+  background: var(--pk-accent);
+}
+
+.pk-formq-open__body {
+  padding: var(--pk-4);
+  min-width: 0;
+}
+
+.pk-formq-open__foot {
+  border-block-start: 1px solid var(--pk-line-soft);
+  padding-block-start: var(--pk-3);
+}
+
+/* A row of two editors that collapses to one column when there is no room. */
+.pk-formq__split {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 14rem;
+  gap: var(--pk-3);
+  align-items: start;
+}
+
+@media (max-width: 40rem) {
+  .pk-formq__split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* One editable choice: marker, label, remove. */
+.pk-formq__option {
+  display: grid;
+  grid-template-columns: 1rem minmax(0, 1fr) 1.75rem;
+  gap: var(--pk-3);
+  align-items: center;
+}
+
+.pk-formq__option-mark {
+  width: 0.85rem;
+  height: 0.85rem;
+  border: 1px solid var(--pk-line-strong);
+}
+
+.pk-formq__option-mark--one {
+  border-radius: var(--pk-radius-pill);
+}
+
+.pk-formq__option-mark--many {
+  border-radius: var(--pk-radius-sm);
+}
+
+.pk-formq__option-remove {
+  border: 0;
+  background: transparent;
+  color: var(--pk-ink-faint);
+  cursor: pointer;
+  font-size: var(--pk-text-sm);
+  line-height: 1;
+  padding: 0.25rem;
+  border-radius: var(--pk-radius-sm);
+}
+
+.pk-formq__option-remove:hover {
+  color: var(--pk-danger-ink);
+  background: var(--pk-surface-sunk);
+}
+
+/* Disclosure: a settings group folded behind its own summary line. */
+.pk-fold {
+  border: 1px solid var(--pk-line-soft);
+  border-radius: var(--pk-radius-lg);
+  overflow: hidden;
+}
+
+.pk-fold__summary {
+  display: flex;
+  width: 100%;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pk-3);
+  background: var(--pk-surface-sunk);
+  border: 0;
+  padding: 0.55rem var(--pk-4);
+  font-family: inherit;
+  font-size: var(--pk-text-sm);
+  color: var(--pk-ink);
+  cursor: pointer;
+  text-align: start;
+}
+
+.pk-fold__summary:hover {
+  background: var(--pk-accent-soft);
+}
+
+.pk-fold__body {
+  padding: var(--pk-4);
+  border-block-start: 1px solid var(--pk-line-soft);
+}
+
+/* The palette that replaces an "add empty row" button. */
+.pk-palette {
+  background: var(--pk-surface);
+  border: 1px dashed var(--pk-line);
+  border-radius: var(--pk-radius-lg);
+  padding: var(--pk-4);
+}
+
+.pk-palette__chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  border: 1px solid var(--pk-line);
+  background: var(--pk-surface);
+  border-radius: var(--pk-radius-pill);
+  padding: 0.35rem 0.75rem;
+  font-family: inherit;
+  font-size: var(--pk-text-sm);
+  color: var(--pk-ink);
+  cursor: pointer;
+}
+
+.pk-palette__chip:hover {
+  border-color: var(--pk-accent);
+  background: var(--pk-accent-soft);
+}
+
+.pk-palette__glyph {
+  font-family: var(--pk-font-mono);
+  color: var(--pk-ink-faint);
+}
+
+/* The title and description, edited in place rather than in labelled boxes. */
+.pk-formtitle {
+  width: 100%;
+  box-sizing: border-box;
+  border: 0;
+  border-block-end: 1px solid transparent;
+  background: transparent;
+  color: inherit;
+  font-family: inherit;
+  padding: 0.2rem 0;
+  outline: none;
+}
+
+.pk-formtitle:hover {
+  border-block-end-color: var(--pk-line);
+}
+
+.pk-formtitle:focus {
+  border-block-end-color: var(--pk-accent);
+}
+
+.pk-formtitle--name {
+  font-size: var(--pk-text-2xl);
+  font-weight: 600;
+}
+
+.pk-formtitle--desc {
+  color: var(--pk-ink-muted);
+  font-size: var(--pk-text-sm);
+  line-height: 1.5;
+  resize: vertical;
+}
+
+/* The accent rule that marks the form's own card. */
+.pk-formcard__rule {
+  height: 4px;
+  background: var(--pk-accent);
+}
+
+/* A quiet inline action that reads as text, not a button. */
+.pk-linkish {
+  border: 0;
+  background: transparent;
+  color: var(--pk-accent-ink);
+  padding: 0;
+  cursor: pointer;
+  text-decoration: underline;
+  font: inherit;
+}
+
+.pk-linkish:hover {
+  text-decoration: none;
+}
+
+/* Build column beside its settings rail. */
+.pk-formbuild {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 19rem;
+  gap: var(--pk-5);
+  align-items: start;
+}
+
+.pk-formbuild__rail {
+  min-width: 0;
+  position: sticky;
+  top: var(--pk-4);
+}
+
+@media (max-width: 60rem) {
+  .pk-formbuild {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .pk-formbuild__rail {
+    position: static;
+  }
+}
+
+/* The rule the tab strip sits on, separating the editor from its chrome. */
+.pk-tabs-rule {
+  border-block-end: 1px solid var(--pk-line-soft);
+}
+
+/*
+ * A group of controls under one label.
+ *
+ * `Field` binds its label to a single control, which a set of choices does not
+ * have. A fieldset with a legend is what names a group in HTML, and it is what
+ * a screen reader announces when entering one.
+ */
+.pk-choices {
+  border: 0;
+  margin: 0;
+  padding: 0;
+  min-width: 0;
+}
+
+.pk-choices__legend {
+  padding: 0;
+  color: var(--pk-ink-muted);
+  font-size: var(--pk-text-sm);
+  font-weight: 600;
+}
+
+.pk-choices__help {
+  color: var(--pk-ink-muted);
+  font-size: var(--pk-text-sm);
+  margin: 0;
+}

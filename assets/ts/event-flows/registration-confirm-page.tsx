@@ -7,28 +7,47 @@ import { renderDonationCta } from "../shared/donation/cta";
 import { withLoadingButton } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
 import { SuccessPanel } from "../components/SuccessPanel";
+import {
+  hasPendingRegistrationDayWaitlist,
+  RegistrationDayStatusSummary,
+} from "../components/RegistrationDayStatusSummary";
 import { findSubmitButton } from "../shared/form/helpers";
+import { useContractForm } from "../hooks/useContractForm";
+import { Alert } from "../ui/Alert";
+import { Button, ButtonLink } from "../ui/Button";
+import { Field } from "../ui/Field";
+import { Panel, PanelBody, PanelHeader } from "../ui/Panel";
+import { TextInput } from "../ui/TextControl";
+import {
+  registrationConfirmInfoResponseSchema,
+  registrationConfirmResponseSchema,
+  registrationResendConfirmationSchema,
+  okResponseSchema,
+  type RegistrationConfirmResponse,
+} from "../../shared/schemas/registration";
 
-interface ConfirmResponse {
-  success: true;
-  status: string;
-  shareUrl?: string | null;
-  manageUrl?: string | null;
-  manageToken?: string | null;
-  dayAttendance?: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
-  dayWaitlist?: Array<{ dayDate: string; status: string }>;
-}
-
-interface ConfirmInfoResponse {
-  firstName: string | null;
-  lastName: string | null;
-  email: string | null;
-  organizationName: string | null;
-  eventName: string | null;
-  /** True when the pending token exists but has passed its expiry time. */
-  expired: boolean;
-  recoverable?: boolean;
-}
+/**
+ * Design system notes (phase 5):
+ *
+ *  - Everything this module renders goes inside `SuccessPanel`, which is
+ *    already on the system and supplies the `.pk` root, so the base layer
+ *    applies to the markup below without a second wrapper.
+ *  - The "next steps" block was an `alert alert-light` — a box carrying no
+ *    severity, which is what a `Panel` is. Its `<strong>` stand-in for a
+ *    heading is now a real one, through `PanelHeader`.
+ *  - The resend panel reports its own outcome instead of writing into the
+ *    page-level `[data-flow-status]` banner. The address is checked by the
+ *    resend contract the route parses, and its verdict is a `Field` state,
+ *    so it carries `aria-invalid` and `aria-describedby` on the control the
+ *    reader is standing in; a refused request is an `Alert` beside the
+ *    button. Routing both through `setStatus` announced them from the bottom
+ *    of the page and repainted that element with Bootstrap's `alert-danger`.
+ *  - The resend button keeps one accessible name in every state. Relabelling
+ *    it "Try again" on failure moves the control's name under the reader's
+ *    cursor mid-interaction; the Alert already says what went wrong.
+ *  - Visibility uses the `hidden` property wherever this module owns both
+ *    sides. `[data-confirm-content]` is the exception, commented at its use.
+ */
 
 /**
  * Replace {firstName}, {eventName} and {forEvent} tokens in a template string
@@ -56,59 +75,36 @@ function fillPlaceholders(root: HTMLElement, values: Record<string, string>): vo
   }
 }
 
-function isPendingDayWaitlistStatus(status: string | undefined): boolean {
-  return status === "waiting" || status === "offered";
-}
-
-function DayStatusSummary({
-  dayAttendance,
-  dayWaitlist,
-}: {
-  dayAttendance: Array<{ dayDate: string; attendanceType: string; label: string | null }>;
-  dayWaitlist: Array<{ dayDate: string; status: string }>;
-}) {
-  if (dayAttendance.length === 0) return null;
-
-  const waitlistByDay = new Map(dayWaitlist.map((entry) => [entry.dayDate, entry.status] as const));
-
+/** The manage-registration links, which differ when days are still pending. */
+function NextSteps({ manageUrl, hasPartialDayWaitlist }: { manageUrl: string; hasPartialDayWaitlist: boolean }) {
   return (
-    <div class="alert alert-warning mt-3 mb-0">
-      <p class="fw-semibold mb-2">What is confirmed right now</p>
-      <ul class="list-unstyled mb-2">
-        {dayAttendance.map((entry) => {
-          const dayLabel = entry.label ?? entry.dayDate;
-          const waitlistStatus = waitlistByDay.get(entry.dayDate);
-
-          let statusLabel: string;
-          let statusClass = "text-bg-success";
-
-          if (waitlistStatus === "offered") {
-            statusLabel = "Spot available - review in manage page";
-            statusClass = "text-bg-info";
-          } else if (waitlistStatus === "waiting") {
-            statusLabel = "In-person still pending";
-            statusClass = "text-bg-warning";
-          } else if (entry.attendanceType === "virtual") {
-            statusLabel = "Virtual confirmed";
-          } else if (entry.attendanceType === "on_demand") {
-            statusLabel = "On-demand confirmed";
-          } else {
-            statusLabel = "In-person confirmed";
-          }
-
-          return (
-            <li class="d-flex flex-wrap align-items-center justify-content-between gap-2 mb-2">
-              <span>{dayLabel}</span>
-              <span class={`badge ${statusClass}`}>{statusLabel}</span>
-            </li>
-          );
-        })}
-      </ul>
-      <p class="small mb-0">
-        If this mix of confirmed and pending days no longer works for you, use the manage page to switch days, move to
-        on-demand, or cancel the registration.
-      </p>
-    </div>
+    <Panel class="pk-start">
+      <PanelHeader title="Next steps" />
+      <PanelBody class="pk-stack pk-stack--snug">
+        {hasPartialDayWaitlist ? (
+          <>
+            <p class="pk-small">
+              Review your confirmed and pending days, then decide whether to keep this registration, change attendance
+              for a day, or cancel entirely.
+            </p>
+            <div class="pk-cluster">
+              <ButtonLink href={manageUrl} size="sm">
+                Review or change registration
+              </ButtonLink>
+            </div>
+          </>
+        ) : (
+          <div class="pk-cluster">
+            <ButtonLink href={manageUrl} size="sm">
+              Manage registration
+            </ButtonLink>
+            <ButtonLink href={`${manageUrl}#manage-headshot-file`} size="sm">
+              Upload headshot
+            </ButtonLink>
+          </div>
+        )}
+      </PanelBody>
+    </Panel>
   );
 }
 
@@ -122,63 +118,52 @@ function DayStatusSummary({
 function showConfirmedPanel(
   root: HTMLElement,
   form: HTMLFormElement,
-  result: ConfirmResponse,
+  result: RegistrationConfirmResponse,
   firstName: string,
   lastName: string,
   eventName: string,
   email: string,
   organizationName: string,
   shareUrl: string | null | undefined,
-  manageUrl: string | null | undefined,
+  manageUrl: string,
   manageToken: string | null | undefined,
   eventSlug: string,
 ): void {
-  form.classList.add("d-none");
+  form.hidden = true;
 
   const successTitle = root.dataset["successTitle"] ?? "{firstName}, you're registered{forEvent}!";
   const successBody =
     root.dataset["successBody"] ??
     "Your calendar invite is on its way. Use the link in your confirmation email to manage your registration.";
-  const waitlistTitle = root.dataset["waitlistTitle"] ?? "{firstName}, you're on the waitlist{forEvent}!";
-  const waitlistBody =
-    root.dataset["waitlistBody"] ??
-    "We have your email confirmed. We'll notify you as soon as an in-person spot becomes available. Check the email we sent you for your manage link.";
   const partialWaitlistTitle =
     root.dataset["partialWaitlistTitle"] ?? "{firstName}, your registration is in place{forEvent}!";
   const partialWaitlistBody =
     root.dataset["partialWaitlistBody"] ??
     "Your overall registration is confirmed, but one or more selected in-person days are still pending because those rooms are at capacity right now.";
-  const activeDayWaitlist = (result.dayWaitlist ?? []).filter((entry) => isPendingDayWaitlistStatus(entry.status));
-  const hasPartialDayWaitlist = result.status === "registered" && activeDayWaitlist.length > 0;
+  const hasPartialDayWaitlist =
+    result.status === "registered" && hasPendingRegistrationDayWaitlist(result.dayWaitlist ?? []);
 
   let icon: string;
   let title: string;
   let bodyContent: preact.JSX.Element;
 
-  if (result.status === "waitlisted") {
-    icon = "📋";
-    title = interpolate(waitlistTitle, firstName, eventName);
-    bodyContent = <p class="event-flow-success-body">{interpolate(waitlistBody, firstName, eventName)}</p>;
-  } else if (hasPartialDayWaitlist) {
+  if (hasPartialDayWaitlist) {
     icon = "🗓️";
     title = interpolate(partialWaitlistTitle, firstName, eventName);
     bodyContent = (
       <>
-        <p class="event-flow-success-body">{interpolate(partialWaitlistBody, firstName, eventName)}</p>
-        <DayStatusSummary dayAttendance={result.dayAttendance ?? []} dayWaitlist={result.dayWaitlist ?? []} />
+        <p class="pk-muted">{interpolate(partialWaitlistBody, firstName, eventName)}</p>
+        <RegistrationDayStatusSummary
+          dayAttendance={result.dayAttendance ?? []}
+          dayWaitlist={result.dayWaitlist ?? []}
+        />
       </>
     );
   } else {
     icon = "🎉";
     title = interpolate(successTitle, firstName, eventName);
-    bodyContent = <p class="event-flow-success-body">{interpolate(successBody, firstName, eventName)}</p>;
+    bodyContent = <p class="pk-muted">{interpolate(successBody, firstName, eventName)}</p>;
   }
-
-  const effectiveManageUrl =
-    manageUrl ??
-    (manageToken
-      ? `/events/${encodeURIComponent(eventSlug)}/register/manage/?event=${encodeURIComponent(eventSlug)}&token=${encodeURIComponent(manageToken)}`
-      : null);
 
   const container = document.createElement("div");
   const shareRef = createRef<HTMLDivElement>();
@@ -187,35 +172,7 @@ function showConfirmedPanel(
   render(
     <SuccessPanel icon={icon} title={title}>
       {bodyContent}
-      {effectiveManageUrl && (
-        <div class="alert alert-light mt-3">
-          <p class="mb-2">
-            <strong>Next steps</strong>
-          </p>
-          {hasPartialDayWaitlist ? (
-            <>
-              <p class="small mb-2">
-                Review your confirmed and pending days, then decide whether to keep this registration, change attendance
-                for a day, or cancel entirely.
-              </p>
-              <div class="d-flex gap-2 flex-wrap">
-                <a class="btn btn-sm btn-outline-primary" href={effectiveManageUrl}>
-                  Review or change registration
-                </a>
-              </div>
-            </>
-          ) : (
-            <div class="d-flex gap-2 flex-wrap">
-              <a class="btn btn-sm btn-outline-primary" href={effectiveManageUrl}>
-                Manage registration
-              </a>
-              <a class="btn btn-sm btn-outline-secondary" href={`${effectiveManageUrl}#manage-headshot-file`}>
-                Upload headshot
-              </a>
-            </div>
-          )}
-        </div>
-      )}
+      <NextSteps manageUrl={manageUrl} hasPartialDayWaitlist={hasPartialDayWaitlist} />
       {shareUrl && <div ref={shareRef} />}
       <div ref={donateRef} />
     </SuccessPanel>,
@@ -253,7 +210,6 @@ function ResendButton({
   eventSlug,
   token,
   registrationId,
-  statusEl,
   email,
   autoSend = false,
 }: {
@@ -261,33 +217,44 @@ function ResendButton({
   eventSlug: string;
   token: string;
   registrationId: string | null;
-  statusEl: HTMLElement;
   email: string;
   autoSend?: boolean;
 }) {
   const [state, setState] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const [enteredEmail, setEnteredEmail] = useState(email);
+  // A refusal the contract does not attribute to the address field.
+  const [problem, setProblem] = useState<string | null>(null);
+  // With neither a registration id nor a known address the panel has to ask
+  // for one, and then the address is part of what the contract checks.
+  const asksForEmail = !email && !registrationId;
+  const form = useContractForm(registrationResendConfirmationSchema, {
+    ...(registrationId ? { id: registrationId } : {}),
+    token,
+    ...(asksForEmail ? { email: enteredEmail } : email ? { email } : {}),
+  });
 
   const sendFreshLink = useCallback(async () => {
-    const recoveryEmail = (email || enteredEmail).trim();
-    if (!registrationId && !email && !recoveryEmail) {
-      setStatus(statusEl, "Enter the email address you used for registration.", true);
+    // Nothing is sent that the resend contract refuses; the refused field
+    // shows its reason in place.
+    const checked = form.submit();
+    if (!checked.data) {
+      setState("error");
       return;
     }
     setState("sending");
+    setProblem(null);
     try {
-      await postJson(`${apiBase}/events/${eventSlug}/registrations/resend-confirmation`, {
-        ...(registrationId ? { id: registrationId } : {}),
-        token,
-        ...(recoveryEmail ? { email: recoveryEmail } : {}),
-      });
+      await postJson(
+        `${apiBase}/events/${eventSlug}/registrations/resend-confirmation`,
+        checked.data,
+        okResponseSchema,
+      );
       setState("sent");
     } catch (error) {
-      const normalized = normalizeValidation(error);
-      setStatus(statusEl, normalized.globalMessage, true);
+      setProblem(form.refuse(error));
       setState("error");
     }
-  }, [apiBase, email, enteredEmail, eventSlug, registrationId, statusEl, token]);
+  }, [apiBase, eventSlug, form]);
 
   useEffect(() => {
     if (autoSend && state === "idle") {
@@ -296,47 +263,51 @@ function ResendButton({
   }, [autoSend, sendFreshLink, state]);
 
   if (state === "sent") {
-    return (
-      <p class="alert alert-success mt-3">
-        A new confirmation link is on its way — please check your inbox (and spam folder).
-      </p>
-    );
+    return <Alert tone="ok">A new confirmation link is on its way — please check your inbox (and spam folder).</Alert>;
   }
 
-  if (!email && !registrationId) {
+  if (asksForEmail) {
     return (
       <form
-        class="mt-3"
+        noValidate
+        class="pk-stack pk-stack--snug pk-start"
         onSubmit={(event) => {
           event.preventDefault();
           void sendFreshLink();
         }}
+        {...form.handlers}
       >
-        <label class="form-label" for="confirmation-recovery-email">
-          Email address
-        </label>
-        <div class="d-flex gap-2 flex-wrap">
-          <input
-            id="confirmation-recovery-email"
-            class="form-control"
-            type="email"
-            autocomplete="email"
-            value={enteredEmail}
-            onInput={(event) => setEnteredEmail((event.currentTarget as HTMLInputElement).value)}
-            required
-          />
-          <button type="submit" class="btn btn-primary px-4" disabled={state === "sending"}>
-            {state === "error" ? "Try again" : "Send me a new link"}
-          </button>
+        <Field label="Email address" required {...form.of("email")}>
+          {(control) => (
+            <TextInput
+              {...control}
+              name="email"
+              type="email"
+              autocomplete="email"
+              value={enteredEmail}
+              onInput={(event) => setEnteredEmail((event.currentTarget as HTMLInputElement).value)}
+            />
+          )}
+        </Field>
+        {problem && <Alert tone="danger">{problem}</Alert>}
+        <div class="pk-cluster">
+          <Button type="submit" variant="primary" loading={state === "sending"}>
+            Send me a new link
+          </Button>
         </div>
       </form>
     );
   }
 
   return (
-    <button type="button" class="btn btn-primary px-4" onClick={sendFreshLink} disabled={state === "sending"}>
-      {state === "error" ? "Try again" : "Send me a new link"}
-    </button>
+    <div class="pk-stack pk-stack--snug">
+      {problem && <Alert tone="danger">{problem}</Alert>}
+      <div class="pk-cluster pk-cluster--center">
+        <Button variant="primary" loading={state === "sending"} onClick={() => void sendFreshLink()}>
+          Send me a new link
+        </Button>
+      </div>
+    </div>
   );
 }
 
@@ -347,12 +318,11 @@ function showExpiredPanel(
   eventSlug: string,
   token: string,
   registrationId: string | null,
-  statusEl: HTMLElement,
   firstName: string,
   eventName: string,
   email: string,
 ): void {
-  form.classList.add("d-none");
+  form.hidden = true;
 
   const expiredTitle = root.dataset["expiredTitle"] ?? "Your confirmation link needs refreshing";
   const expiredBody =
@@ -365,7 +335,7 @@ function showExpiredPanel(
   const container = document.createElement("div");
   render(
     <SuccessPanel icon="⏰" title={title}>
-      <p class="event-flow-success-body">
+      <p class="pk-muted">
         {greeting} {interpolate(expiredBody, firstName, eventName)}
       </p>
       <ResendButton
@@ -373,7 +343,6 @@ function showExpiredPanel(
         eventSlug={eventSlug}
         token={token}
         registrationId={registrationId}
-        statusEl={statusEl}
         email={email}
         autoSend={Boolean(email || registrationId)}
       />
@@ -392,10 +361,16 @@ async function main(): Promise<void> {
   const loadingEl = boot.root.querySelector<HTMLElement>("[data-confirm-loading]");
   const contentEl = boot.root.querySelector<HTMLElement>("[data-confirm-content]");
 
+  // The template hides this with the `hidden` attribute, so revealing it is
+  // the platform's own mechanism and no class has to be kept in step.
+  const revealContent = (): void => {
+    if (contentEl) contentEl.hidden = false;
+  };
+
   const token = boot.query.token;
   const registrationId = boot.query.id;
   if (!token) {
-    loadingEl?.classList.add("d-none");
+    if (loadingEl) loadingEl.hidden = true;
     setStatus(boot.statusEl, "Missing confirmation token — please use the link from your email.", true);
     return;
   }
@@ -411,8 +386,9 @@ async function main(): Promise<void> {
   let isExpired = false;
   let isRecoverable = false;
   try {
-    const info = await getJson<ConfirmInfoResponse>(
+    const info = await getJson(
       `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-info?token=${encodeURIComponent(token)}${registrationId ? `&id=${encodeURIComponent(registrationId)}` : ""}`,
+      registrationConfirmInfoResponseSchema,
     );
     firstName = info.firstName ?? "";
     lastName = info.lastName ?? "";
@@ -428,10 +404,10 @@ async function main(): Promise<void> {
   // If the token is already expired before the user clicks Confirm, show the
   // resend panel immediately rather than making them click through to an error.
   if (isExpired || isRecoverable) {
-    loadingEl?.classList.add("d-none");
+    if (loadingEl) loadingEl.hidden = true;
     // We need the form reference — reveal content briefly to get the element
     // then let showExpiredPanel hide it again.
-    contentEl?.classList.remove("d-none");
+    revealContent();
     showExpiredPanel(
       boot.root,
       boot.form,
@@ -439,7 +415,6 @@ async function main(): Promise<void> {
       boot.eventSlug,
       token,
       registrationId,
-      boot.statusEl,
       firstName,
       eventName,
       email,
@@ -453,17 +428,21 @@ async function main(): Promise<void> {
   if (eventName) fills["eventName"] = eventName;
   fillPlaceholders(boot.root, fills);
 
-  loadingEl?.classList.add("d-none");
-  contentEl?.classList.remove("d-none");
+  if (loadingEl) loadingEl.hidden = true;
+  revealContent();
 
   boot.form.addEventListener("submit", async (event) => {
     event.preventDefault();
 
     await withLoadingButton(findSubmitButton(boot.form), async () => {
       try {
-        const result = await postJson<ConfirmResponse>(
+        const result = await postJson(
           `${boot.apiBase}/events/${boot.eventSlug}/registrations/confirm-email`,
-          { token, ...(registrationId ? { id: registrationId } : {}) },
+          {
+            token,
+            ...(registrationId ? { id: registrationId } : {}),
+          },
+          registrationConfirmResponseSchema,
         );
         showConfirmedPanel(
           boot.root,
@@ -492,7 +471,6 @@ async function main(): Promise<void> {
             boot.eventSlug,
             token,
             registrationId,
-            boot.statusEl,
             firstName,
             eventName,
             email,

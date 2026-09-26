@@ -20,7 +20,7 @@ heroDescription: Preparing the PKI ecosystem for the quantum computing era.
 
 heroButton:
   label: Join the PQC Working Group
-  link: /join/
+  link: /portal/#/groups/pqc
 
 wgID: PQC
 color: blue
@@ -57,10 +57,6 @@ intro: >
   researchers, and algorithm experts to prepare the broader ecosystem for the quantum computing era.
   We publish practical guidance, host the annual PQC Conference, and actively track NIST
   standardization efforts to help organizations plan and execute their cryptographic migrations.
-
-chair:
-  name: Paul van Brouwershaven
-  viceChair: Sven Rajala
 
 focus:
   - title: Algorithm Migration

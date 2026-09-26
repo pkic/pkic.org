@@ -13,7 +13,6 @@ export const ATTENDANCE_TYPE_LABELS: Record<string, string> = {
 export const STATUS_LABELS: Record<string, string> = {
   registered: "Confirmed",
   cancelled: "Cancelled",
-  cancelled_unauthorized: "Cancelled (unauthorized)",
   pending_email_confirmation: "Pending confirmation",
 };
 

@@ -1969,7 +1969,7 @@ Follow us for more updates on [LinkedIn](https://www.linkedin.com/company/pki-co
 
 We are immensely grateful to our sponsors:
 
-{{< sponsors-level sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="all" >}}
+{{< sponsors-level event-slug="pqc-conference-kuala-lumpur-my-2025" sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="all" >}}
 
 Want to sponsor the PKI Consortium and/or our next event? Please visit our [sponsorship page](/sponsors/) or contact us at contact (at) pkic.org.
 
@@ -1979,7 +1979,7 @@ The conference featured a balanced program with strategic, informational, and ed
 
 {{< agenda default="2025-10-29" >}}
 
-{{< sponsors sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="Leader" height="20" max-width="60" >}}
+{{< sponsors event-slug="pqc-conference-kuala-lumpur-my-2025" sponsoring="Post-Quantum Cryptography Conference Kuala Lumpur 2025" level="Leader" height="20" max-width="60" >}}
 
 This conference was made possible through the support of the Post-Quantum Cryptography Working Group and the following organizations:
 

@@ -29,6 +29,11 @@ tags:
 title: Lenovo Enables Man-in-the-Middle Attacks Via Superfish Adware
 
 
+authorProfiles:
+  - name: Doug Beattie
+    organization: GlobalSign
+    role: VP Product Management
+    website: https://www.globalsign.com
 ---
 Lenovo is [selling computers][1] that contain the Superfish application which “supplements” the user’s SSL sessions to enable their adware application to deliver content transparently; however, due to poor security design this leaves users vulnerable to man-in-the-middle attacks.
 

@@ -1,7 +1,7 @@
 import { logInfo } from "../logging";
 import { resolveEventFrontendRoutes, type EventRecord } from "./events";
 
-type EventRouteSource = Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json">;
+type EventRouteSource = Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json" | "source_mode">;
 
 function buildUrl(appBaseUrl: string, path: string, query: Record<string, string | undefined | null>): string {
   const url = new URL(path, appBaseUrl);

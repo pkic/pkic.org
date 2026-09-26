@@ -17,10 +17,20 @@
 {{ $gradFrom := index ($card.gradient | default (slice "#1a3a2a" "#0a1f14")) 0 }}
 {{ $gradTo   := index ($card.gradient | default (slice "#1a3a2a" "#0a1f14")) 1 }}
 {{ $desc := $card.description | default .Params.description | default .Summary }}
+{{/*
+  The header gradient is authored per working group in front matter, so it has
+  to reach CSS as data. It does so as a rule keyed by the group's slug rather
+  than a `style` attribute, which the repository forbids: a custom property
+  belongs in a stylesheet with the rest of the component's definitions.
+  Equal card heights come from `height: 100%` on `.pkic-wg-spotlight` itself,
+  so the card no longer depends on a utility class its callers have to supply.
+*/}}
+{{ $slug := $wgID | lower | default "default" }}
 
-<article class="pkic-wg-spotlight h-100">
+<style>.pkic-wg-spotlight--{{ $slug }}{ {{ printf "--wg-a:%s;--wg-b:%s" $gradFrom $gradTo | safeCSS }} }</style>
+<article class="pkic-wg-spotlight pkic-wg-spotlight--{{ $slug }}">
   <a href="{{ .RelPermalink }}" class="pkic-wg-spotlight-header-link" tabindex="-1" aria-hidden="true">
-    <div class="pkic-wg-spotlight-header" style="--wg-a:{{ $gradFrom }};--wg-b:{{ $gradTo }};">
+    <div class="pkic-wg-spotlight-header">
       <span class="pkic-wg-spotlight-abbr">{{ $wgID }}</span>
       {{ partial "wg/icon.html" (dict "id" (lower ($card.icon | default $wgID)) "class" "pkic-wg-spotlight-icon") }}
     </div>

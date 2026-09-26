@@ -1,0 +1,556 @@
+// @vitest-environment jsdom
+import { render } from "preact";
+import { act } from "preact/test-utils";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { ScheduledWork } from "../../assets/ts/member-flows/portal/sections/system-operations/ScheduledWork";
+import { EmailOutbox } from "../../assets/ts/member-flows/portal/sections/system-operations/EmailOutbox";
+import { emailOutboxProcessSchema, emailOutboxResetFailedSchema } from "../../assets/shared/schemas/email-outbox";
+
+let container: HTMLDivElement | null = null;
+let toastArea: HTMLDivElement | null = null;
+
+function json(body: unknown): Response {
+  return new Response(JSON.stringify(body), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+function apiError(status: number, code: string, message: string): Response {
+  return new Response(JSON.stringify({ error: { code, message } }), {
+    status,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+/** The portal's toast target, so a failure path has somewhere to land. */
+function mountToastArea(): HTMLDivElement {
+  toastArea = document.createElement("div");
+  toastArea.id = "portal-toast-area";
+  document.body.append(toastArea);
+  return toastArea;
+}
+
+function button(root: ParentNode, label: string): HTMLButtonElement {
+  const found = [...root.querySelectorAll("button")].find((candidate) => candidate.textContent?.includes(label));
+  if (!found) throw new Error(`No button labelled ${label}`);
+  return found;
+}
+
+/**
+ * The page's own commands live in its `…` menu (#124), so reaching one means
+ * opening the menu named for the page and picking the item by its label.
+ */
+async function pageMenuItem(root: ParentNode, menu: string, label: string): Promise<HTMLButtonElement> {
+  const trigger = root.querySelector<HTMLButtonElement>(`button[aria-label="${menu}"]`);
+  if (!trigger) throw new Error(`No page menu named ${menu}`);
+  await act(async () => trigger.click());
+  const item = [...root.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+    (candidate) => candidate.textContent?.trim() === label,
+  );
+  if (!item) throw new Error(`No ${label} item in ${menu}`);
+  return item;
+}
+
+async function settle(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+afterEach(() => {
+  if (container) {
+    void act(() => render(null, container!));
+    container.remove();
+    container = null;
+  }
+  if (toastArea) {
+    toastArea.remove();
+    toastArea = null;
+  }
+  vi.unstubAllGlobals();
+});
+
+describe("portal Operations scheduled-work reads", () => {
+  it("loads only the bounded GET projection and makes no command request on mount", async () => {
+    const requests: Array<{ method: string; url: URL; body: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init?.method ?? (input instanceof Request ? input.method : "GET");
+        requests.push({ method, url, body: null });
+        if (url.pathname === "/api/v1/retention/due") {
+          return json({
+            items: [],
+            counts: { all: 0, outbox: 0, reminders: 0, cleanup: 0 },
+            page: { limit: 25, offset: 0, total: 0, hasMore: false },
+          });
+        }
+        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
+      }),
+    );
+
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() =>
+      render(
+        <ScheduledWork
+          canManageEmail={false}
+          canRunRetention={true}
+          canAnonymizeUsers={false}
+          canWriteMembership={false}
+          canApproveMembership={false}
+        />,
+        container!,
+      ),
+    );
+    await settle();
+
+    expect(requests.map(({ method, url }) => `${method} ${url.pathname}`)).toEqual(["GET /api/v1/retention/due"]);
+    expect(container.textContent).toContain("available only to staff holding that domain");
+    expect(
+      requests.some(
+        ({ url }) => url.pathname.startsWith("/api/v1/admin/") || url.pathname.startsWith("/api/v1/internal/"),
+      ),
+    ).toBe(false);
+  });
+});
+
+describe("portal Operations outbox reads", () => {
+  it("uses the canonical outbox projection and hides processing controls without email:manage", async () => {
+    const requests: Array<{ method: string; url: URL }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init?.method ?? (input instanceof Request ? input.method : "GET");
+        requests.push({ method, url });
+        if (url.pathname === "/api/v1/email/outbox") {
+          return json({
+            outbox: [],
+            page: { limit: 25, offset: 0, total: 0, hasMore: false },
+          });
+        }
+        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
+      }),
+    );
+
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<EmailOutbox canManage={false} />, container!));
+    await settle();
+
+    expect(requests.map(({ method, url }) => `${method} ${url.pathname}`)).toEqual(["GET /api/v1/email/outbox"]);
+    expect(container.textContent).toContain("Read only");
+    // The table names itself, so a page listing several tables does not read
+    // out several anonymous ones.
+    expect(container.querySelector("caption")?.textContent).toBe("Email outbox messages");
+    // No selection column at all without email:manage — not a disabled one.
+    expect(container.querySelectorAll("input[type=checkbox]")).toHaveLength(0);
+    expect(
+      [...container.querySelectorAll("button")].some((control) =>
+        /process|reset|retry/i.test(control.textContent ?? ""),
+      ),
+    ).toBe(false);
+    expect(
+      requests.some(
+        ({ url }) => url.pathname.startsWith("/api/v1/admin/") || url.pathname.startsWith("/api/v1/internal/"),
+      ),
+    ).toBe(false);
+  });
+
+  it("exposes bounded canonical process/reset commands and sends exact selected IDs", async () => {
+    const requests: Array<{ method: string; url: URL; body: unknown }> = [];
+    const failedId = "00000000-0000-4000-8000-000000000002";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init?.method ?? (input instanceof Request ? input.method : "GET");
+        const body = typeof init?.body === "string" ? JSON.parse(init.body) : null;
+        requests.push({ method, url, body });
+        if (url.pathname === "/api/v1/email/outbox") {
+          return json({
+            outbox: [
+              {
+                id: failedId,
+                eventSlug: null,
+                eventName: null,
+                templateKey: "notice",
+                templateVersion: 1,
+                recipientEmail: "failed@example.test",
+                recipientName: "Failed Recipient",
+                subject: "Notice",
+                messageType: "transactional",
+                provider: "test",
+                providerMessageId: null,
+                status: "failed",
+                attempts: 1,
+                sendAfter: "2026-01-01T00:00:00Z",
+                lastError: "provider unavailable",
+                createdAt: "2026-01-01T00:00:00Z",
+                updatedAt: "2026-01-01T00:00:00Z",
+                sentAt: null,
+                bccRecipientCount: 0,
+                hasCalendarInvite: false,
+                hasBadgeAttachment: false,
+                usesDirectBody: false,
+                hasCustomText: false,
+              },
+            ],
+            page: { limit: 25, offset: 0, total: 1, hasMore: false },
+          });
+        }
+        if (url.pathname === "/api/v1/email/outbox/process") {
+          return json({ success: true, processed: 1, failed: 0, skipped: 0 });
+        }
+        if (url.pathname === "/api/v1/email/outbox/reset-failed") {
+          return json({ success: true, reset: 1, processed: 1, failed: 0, skipped: 0 });
+        }
+        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
+      }),
+    );
+
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<EmailOutbox canManage />, container!));
+    await settle();
+
+    // The next-due batch is a command on the page as a whole, so it is in
+    // the page's menu rather than standing open in the table's toolbar.
+    expect(container.textContent).not.toContain("Process next 20 due");
+    const processItem = await pageMenuItem(container, "Email outbox actions", "Process next 20 due");
+    expect(container.textContent).not.toContain("Process all due");
+    await act(() => {
+      processItem.click();
+    });
+    await settle();
+    for (let attempt = 0; attempt < 3; attempt += 1) await settle();
+    const processRequest = requests.find(({ url }) => url.pathname === "/api/v1/email/outbox/process")!;
+    expect(processRequest.method).toBe("POST");
+    // Through the shared request contract, not a literal: a body that the
+    // endpoint would reject must fail here too.
+    expect(emailOutboxProcessSchema.parse(processRequest.body).limit).toBe(20);
+
+    // One fact per column (#124): the subject has a column of its own, the
+    // queue standing is a badge column that can be filtered, and the
+    // identifiers start hidden rather than crowding every row.
+    // The sort glyph rides in the head cell's text, so the head is matched by
+    // its start rather than its whole content.
+    const headers = [...container.querySelectorAll("thead th")].map((cell) => cell.textContent?.trim() ?? "");
+    for (const header of ["Recipient", "Subject", "Type", "Status", "Queued", "Due"]) {
+      expect(headers.some((candidate) => candidate.startsWith(header))).toBe(true);
+    }
+    for (const header of ["Attempts", "Sent", "References"]) {
+      expect(headers.some((candidate) => candidate.startsWith(header))).toBe(false);
+    }
+    expect(container.textContent).not.toContain(failedId);
+
+    // Selection is the design system's own checkbox column — the outbox is
+    // the one list whose API takes row ids — and each box is named after the
+    // message it selects.
+    const checkbox = container.querySelector<HTMLInputElement>('input.pk-table__checkbox[aria-label="Select Notice"]')!;
+    expect(checkbox).not.toBeNull();
+    await act(() => {
+      checkbox.click();
+    });
+    // The bulk commands live in the strip that appears with the selection,
+    // announcing its count, not in the always-on toolbar.
+    expect(container.querySelector('[role="status"]')?.textContent).toContain("1 of 1 selected");
+    const resetButton = button(container, "Reset failed selected");
+    await act(() => {
+      resetButton.click();
+    });
+    await settle();
+    const resetRequest = requests.find(({ url }) => url.pathname === "/api/v1/email/outbox/reset-failed")!;
+    expect(resetRequest.method).toBe("POST");
+    expect(emailOutboxResetFailedSchema.parse(resetRequest.body).ids).toEqual([failedId]);
+    expect(
+      requests.some(
+        ({ url }) => url.pathname.startsWith("/api/v1/admin/") || url.pathname.startsWith("/api/v1/internal/"),
+      ),
+    ).toBe(false);
+  });
+
+  it("reports a rejected process command and leaves the control usable", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname === "/api/v1/email/outbox") {
+          return json({
+            outbox: [],
+            page: { limit: 25, offset: 0, total: 0, hasMore: false },
+          });
+        }
+        if (url.pathname === "/api/v1/email/outbox/process") {
+          return apiError(503, "PROVIDER_UNAVAILABLE", "The email provider is not accepting messages.");
+        }
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }),
+    );
+
+    const toasts = mountToastArea();
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<EmailOutbox canManage />, container!));
+    await settle();
+
+    const processItem = await pageMenuItem(container, "Email outbox actions", "Process next 20 due");
+    await act(() => {
+      processItem.click();
+    });
+    for (let attempt = 0; attempt < 3; attempt += 1) await settle();
+
+    expect(toasts.textContent).toContain("The email provider is not accepting messages.");
+    // A failed command must hand the control back rather than stranding the
+    // page in its busy state.
+    const again = await pageMenuItem(container, "Email outbox actions", "Process next 20 due");
+    expect(again.disabled).toBe(false);
+    expect(again.getAttribute("aria-disabled")).not.toBe("true");
+  });
+});
+
+describe("portal Operations command visibility", () => {
+  async function renderScheduledWork(options: {
+    canManageEmail: boolean;
+    canRunRetention: boolean;
+    canAnonymizeUsers: boolean;
+    canWriteMembership: boolean;
+    canApproveMembership: boolean;
+  }): Promise<void> {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname === "/api/v1/retention/due") {
+          return json({
+            items: [],
+            counts: { all: 0, outbox: 0, reminders: 0, cleanup: 0 },
+            page: { limit: 25, offset: 0, total: 0, hasMore: false },
+          });
+        }
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }),
+    );
+    await act(() => render(<ScheduledWork {...options} />, container!));
+    await settle();
+  }
+
+  it("keeps preview readable while gating each operational command by its exact capability", async () => {
+    container = document.createElement("div");
+    document.body.append(container);
+
+    await renderScheduledWork({
+      canManageEmail: false,
+      canRunRetention: true,
+      canAnonymizeUsers: false,
+      canWriteMembership: false,
+      canApproveMembership: false,
+    });
+    expect(container.textContent).toContain("Preview reminders");
+    expect(container.textContent).not.toContain("Queue reminders");
+    expect(container.textContent).not.toContain("Queue chair digest");
+    expect(container.textContent).not.toContain("Run consultation batch");
+    expect(container.textContent).not.toContain("Run EC review batch");
+    expect(container.textContent).not.toContain("Run retention redaction");
+
+    await renderScheduledWork({
+      canManageEmail: true,
+      canRunRetention: true,
+      canAnonymizeUsers: false,
+      canWriteMembership: false,
+      canApproveMembership: false,
+    });
+    expect(container.textContent).toContain("Queue reminders");
+    // The chair digest queues member email, so it now requires membership:write
+    // rather than a blanket operational run grant.
+    expect(container.textContent).not.toContain("Queue chair digest");
+    expect(container.textContent).not.toContain("Run consultation batch");
+    expect(container.textContent).not.toContain("Run EC review batch");
+    expect(container.textContent).not.toContain("Run retention redaction");
+
+    await renderScheduledWork({
+      canManageEmail: true,
+      canRunRetention: true,
+      canAnonymizeUsers: true,
+      canWriteMembership: true,
+      canApproveMembership: true,
+    });
+    expect(container.textContent).toContain(
+      "Membership workflows and chair digests run through Settings → Scheduled jobs.",
+    );
+    expect(container.textContent).not.toContain("Run EC review batch");
+    expect(container.textContent).toContain("Run retention redaction");
+  });
+
+  it("posts reminder preview to the canonical read-only command route", async () => {
+    const requests: Array<{ method: string; url: URL; body: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init?.method ?? (input instanceof Request ? input.method : "GET");
+        const body = typeof init?.body === "string" ? JSON.parse(init.body) : null;
+        requests.push({ method, url, body });
+        if (url.pathname === "/api/v1/retention/due") {
+          return json({
+            items: [],
+            counts: { all: 0, outbox: 0, reminders: 0, cleanup: 0 },
+            page: { limit: 25, offset: 0, total: 0, hasMore: false },
+          });
+        }
+        if (url.pathname === "/api/v1/email/reminders/runs") {
+          return json({
+            success: true,
+            dryRun: true,
+            inviteRemindersQueued: 0,
+            speakerInviteRemindersQueued: 0,
+            presentationRemindersQueued: 0,
+            confirmationRemindersQueued: 0,
+            confirmationCancellationsProcessed: 0,
+            processed: 0,
+            preview: {
+              attendeeInvites: [],
+              speakerInvites: [],
+              coSpeakerInvites: [],
+              presentationUploads: [],
+              registrationConfirmations: [],
+            },
+          });
+        }
+        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
+      }),
+    );
+
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() =>
+      render(
+        <ScheduledWork
+          canManageEmail={false}
+          canRunRetention={true}
+          canAnonymizeUsers={false}
+          canWriteMembership={false}
+          canApproveMembership={false}
+        />,
+        container!,
+      ),
+    );
+    await settle();
+    const previewButton = [...container.querySelectorAll("button")].find((button) =>
+      button.textContent?.includes("Preview reminders"),
+    )!;
+    await act(() => {
+      previewButton.click();
+    });
+    await settle();
+    expect(requests.find(({ url }) => url.pathname === "/api/v1/email/reminders/runs")).toMatchObject({
+      method: "POST",
+      body: { limit: 120 },
+    });
+    expect(
+      requests.some(
+        ({ url }) => url.pathname.startsWith("/api/v1/admin/") || url.pathname.startsWith("/api/v1/internal/"),
+      ),
+    ).toBe(false);
+  });
+
+  it("names the panel, its read-only state, and the batch-size control", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(json({ items: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } }))),
+    );
+    mountToastArea();
+    const host = document.createElement("div");
+    container = host;
+    document.body.append(host);
+    await act(async () => {
+      render(
+        <ScheduledWork
+          canManageEmail={false}
+          canRunRetention={false}
+          canAnonymizeUsers={false}
+          canWriteMembership={false}
+          canApproveMembership={false}
+        />,
+        host,
+      );
+      await Promise.resolve();
+    });
+    await settle();
+
+    // The "Scheduled Work" tab already names the surface; the section is the
+    // named region and no heading repeats the tab. The read-only state is a
+    // word, not only a grey chip.
+    expect(container.querySelector('section[aria-label="Scheduled work"]')).not.toBeNull();
+    expect(container.querySelector(".pk-panel__title")?.textContent).toBe("Operational commands");
+    expect(container.querySelector(".pk-badge")?.textContent).toBe("Read only");
+
+    // The batch-size control owns a real label/for pair and its guidance is
+    // wired to it by aria-describedby rather than sitting loose beside it.
+    const label = [...container.querySelectorAll("label")].find((candidate) =>
+      candidate.textContent?.startsWith("Reminder batch size"),
+    );
+    expect(label).toBeDefined();
+    const input = container.querySelector<HTMLInputElement>(`#${label?.htmlFor ?? ""}`);
+    expect(input?.type).toBe("number");
+    const describedBy = input?.getAttribute("aria-describedby");
+    expect(describedBy).toBeTruthy();
+    expect(container.querySelector(`#${describedBy ?? ""}`)?.textContent).toContain("Between 1 and 500");
+  });
+
+  it("keeps the panel and its controls usable when the retention list fails to load", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() => Promise.resolve(apiError(500, "server_error", "HTTP 500"))),
+    );
+    mountToastArea();
+    const host = document.createElement("div");
+    container = host;
+    document.body.append(host);
+    await act(async () => {
+      render(
+        <ScheduledWork
+          canManageEmail
+          canRunRetention
+          canAnonymizeUsers={false}
+          canWriteMembership={false}
+          canApproveMembership={false}
+        />,
+        host,
+      );
+      await Promise.resolve();
+    });
+    await settle();
+
+    // The failure is stated in plain words, not raw transport phrasing.
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Something went wrong on our side.");
+    // And the surface around it survives, so the reader can retry.
+    expect(container.querySelector('section[aria-label="Scheduled work"]')).not.toBeNull();
+    expect(container.querySelector(".pk-panel__title")?.textContent).toBe("Operational commands");
+    const label = [...container.querySelectorAll("label")].find((candidate) =>
+      candidate.textContent?.startsWith("Reminder batch size"),
+    );
+    expect(container.querySelector<HTMLInputElement>(`#${label?.htmlFor ?? ""}`)?.disabled).toBe(false);
+  });
+});

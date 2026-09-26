@@ -3,7 +3,9 @@
 // ============================================================
 
 .blog-card {
-  background: #fff;
+  // A quiet surface and visible edge separate the card without a heavy gray fill.
+  background: var(--pk-surface);
+  border: 1px solid var(--pk-line-soft);
   border-radius: 1rem;
   overflow: hidden;
   box-shadow: 0 2px 12px rgba(0, 0, 0, 0.08);
@@ -232,7 +234,7 @@
 
   .blog-card-summary {
     font-size: 0.875rem;
-    color: $gray-600;
+    color: var(--pk-ink-muted);
     line-height: 1.5;
     margin-bottom: 0.75rem;
     // Lock in exactly 3 lines — min-height reserves space when text is short,
@@ -247,7 +249,7 @@
   .blog-card-author {
     margin-top: auto;
     padding-top: 0.75rem;
-    border-top: 1px solid $gray-100;
+    border-top: 1px solid var(--pk-line-soft);
     font-size: 0.8rem;
   }
 
@@ -281,20 +283,62 @@
 // Blog sidebar
 // ============================================================
 
+// The article/sidebar split. Replaces the `row` + `col-lg-9`/`col-lg-3` pair:
+// one grid declaration instead of a breakpoint class on each column.
+.blog-post-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--pk-6);
+  align-items: start;
+}
+
+@media (min-width: 992px) {
+  .blog-post-layout {
+    grid-template-columns: minmax(0, 3fr) minmax(15rem, 1fr);
+  }
+}
+
 .blog-sidebar {
   padding-left: 1.5rem;
 
   @media (max-width: 991px) {
     padding-left: 0;
     margin-top: 2rem;
-    border-top: 1px solid $gray-200;
+    border-top: 1px solid var(--pk-line-soft);
     padding-top: 2rem;
+  }
+}
+
+.blog-taxonomy-index {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(Min(100%, 19rem), 1fr));
+  gap: 0 var(--pk-6);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+
+  li {
+    border-bottom: 1px solid var(--pk-line-soft);
+  }
+
+  a {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--pk-3);
+    padding: var(--pk-3) 0;
+    color: var(--pk-ink);
+    text-decoration: none;
+
+    &:hover {
+      color: var(--pk-accent-ink);
+    }
   }
 }
 
 .blog-sidebar-reading-time {
   font-size: 0.82rem;
-  color: $gray-500;
+  color: var(--pk-ink-muted);
   margin-bottom: 1.25rem;
 }
 
@@ -307,11 +351,11 @@
   font-weight: 700 !important;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: $gray-400;
+  color: var(--pk-ink-muted);
   padding-top: 0 !important;
   margin-bottom: 0.75rem;
   padding-bottom: 0.4rem;
-  border-bottom: 1px solid $gray-100;
+  border-bottom: 1px solid var(--pk-line-soft);
 }
 
 .blog-sidebar-list {
@@ -322,7 +366,7 @@
 
   li {
     padding: 0.4rem 0;
-    border-bottom: 1px solid $gray-200;
+    border-bottom: 1px solid var(--pk-line-soft);
     line-height: 1.35;
 
     &:first-child {
@@ -335,31 +379,11 @@
   }
 
   a {
-    color: $gray-700;
+    color: var(--pk-ink-muted);
     text-decoration: none;
     &:hover {
-      color: $green;
+      color: var(--pk-accent-ink);
     }
-  }
-}
-
-// Tags rendered as Bootstrap badges in sidebar context get green pill styling
-.blog-sidebar-section .badge.bg-secondary {
-  display: inline-block;
-  font-size: 0.65rem !important;
-  font-weight: 700 !important;
-  letter-spacing: 0.05em;
-  text-transform: uppercase;
-  padding: 0.2em 0.55em !important;
-  border-radius: 999px !important;
-  background: $green-pale !important;
-  color: $green-deep !important;
-  text-decoration: none;
-  margin: 0.15rem 0.1rem;
-
-  &:hover {
-    background: $green !important;
-    color: #fff !important;
   }
 }
 
@@ -370,7 +394,7 @@
   align-items: flex-start;
   gap: 0.75rem;
   padding: 0.75rem 0;
-  border-bottom: 1px solid $gray-100;
+  border-bottom: 1px solid var(--pk-line-soft);
 
   &:last-child {
     border-bottom: none;
@@ -382,7 +406,7 @@
   height: 48px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid rgba(0, 0, 0, 0.07);
+  border: 2px solid var(--pk-line-soft);
   flex-shrink: 0;
 }
 
@@ -392,7 +416,8 @@
   justify-content: center;
   background: linear-gradient(135deg, $green 0%, $blue 100%);
   color: #fff;
-  font-size: 0.85rem;
+  // 40% of the 48px avatar above, the proportion the initials avatars share.
+  font-size: 1.2rem;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
@@ -412,7 +437,7 @@
 .blog-author-name {
   font-size: 0.87rem;
   font-weight: 700;
-  color: #111;
+  color: var(--pk-ink);
   line-height: 1.3;
   text-decoration: none;
   white-space: nowrap;
@@ -420,13 +445,13 @@
   text-overflow: ellipsis;
 
   &:hover {
-    color: $green;
+    color: var(--pk-accent-ink);
   }
 }
 
 .blog-author-role {
   font-size: 0.72rem;
-  color: $gray-500;
+  color: var(--pk-ink-muted);
   line-height: 1.4;
   margin-top: 0.1rem;
 }
@@ -439,20 +464,20 @@
   max-width: 100px;
   max-height: 26px;
   object-fit: contain;
-  filter: grayscale(1) contrast(0.65) brightness(0.95);
+  filter: var(--pk-member-logo-filter);
   transition: filter 0.18s;
 
   .blog-author-card:hover & {
-    filter: grayscale(0);
+    filter: var(--pk-member-logo-hover-filter);
   }
 }
 
 .blog-author-org-name {
   font-size: 0.75rem;
-  color: $gray-500;
+  color: var(--pk-ink-muted);
   text-decoration: none;
   &:hover {
-    color: $green;
+    color: var(--pk-accent-ink);
   }
 }
 
@@ -460,16 +485,17 @@
   display: flex;
   align-items: center;
   flex-shrink: 0;
-  // social.html renders .linkArea anchors with px-1 Bootstrap padding;
-  // nudge them left so icons sit snug against the name
-  margin-left: -0.1rem;
+  // social.html used to space its icons with a `px-1` on each anchor, which
+  // this rule then had to cancel with a negative margin. One gap here is the
+  // single decision that replaces both.
+  gap: var(--pk-2);
 
   a.linkArea {
-    color: $gray-400;
+    color: var(--pk-ink-muted);
     transition: color 0.15s;
 
     &:hover {
-      color: $gray-800;
+      color: var(--pk-ink);
     }
   }
 }
@@ -479,9 +505,9 @@
 // ============================================================
 
 .blog-post-nav {
-  border-top: 1px solid $gray-200;
+  border-top: 1px solid var(--pk-line);
   padding: 2rem 0;
-  background: #fff;
+  background: var(--pk-surface);
 }
 
 .blog-post-nav-inner {
@@ -499,17 +525,17 @@
   flex-direction: column;
   gap: 0.35rem;
   padding: 1rem 1.25rem;
-  border: 1px solid $gray-200;
+  border: 1px solid var(--pk-line-soft);
   border-radius: 0.75rem;
   text-decoration: none;
   color: inherit;
   transition:
     border-color 0.15s,
     box-shadow 0.15s;
-  background: $gray-100;
+  background: var(--pk-surface-raise);
 
   &:hover {
-    border-color: $green;
+    border-color: var(--pk-accent-ink);
     box-shadow: 0 2px 12px rgba(0, 0, 0, 0.07);
     color: inherit;
   }
@@ -527,7 +553,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: $green;
+  color: var(--pk-accent-ink);
 
   .blog-post-nav-next & {
     justify-content: flex-end;
@@ -537,7 +563,7 @@
 .blog-post-nav-title {
   font-size: 0.85rem;
   font-weight: 600;
-  color: $gray-800;
+  color: var(--pk-ink);
   line-height: 1.4;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -577,7 +603,7 @@
   width: 26px;
   height: 26px;
   border-radius: 50%;
-  border: 2px solid #fff;
+  border: 2px solid var(--pk-surface);
   flex-shrink: 0;
   font-size: 0.6rem;
   font-weight: 800;
@@ -600,21 +626,21 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: $gray-200;
-  color: $gray-600;
+  background: var(--pk-surface-raise);
+  color: var(--pk-ink-muted);
   font-size: 0.58rem;
 }
 
 .blog-author-avatars-names {
   font-size: 0.78rem;
-  color: $gray-600;
+  color: var(--pk-ink-muted);
   line-height: 1.3;
 
   a {
-    color: $gray-600;
+    color: inherit;
     text-decoration: none;
     &:hover {
-      color: $green;
+      color: var(--pk-accent-ink);
     }
   }
 }
@@ -651,10 +677,17 @@
 .blog-sidebar-sponsors {
   margin-top: 2rem;
   padding: 1.25rem 1.1rem 1rem;
-  background: $gray-100;
+  background: var(--pk-surface-raise);
   border-radius: 1rem;
-  border: 1px solid $gray-200;
+  border: 1px solid var(--pk-line-soft);
   z-index: 100; // stay well below the navbar (1040)
+
+  // Replaces `sticky-lg-top` and its inline `top` offset, which the site's
+  // strict CSP and the no-style-attribute rule both forbid.
+  @media (min-width: 992px) {
+    position: sticky;
+    top: 76px; // clears the fixed navbar
+  }
 }
 
 .blog-sidebar-sponsors-intro {
@@ -662,7 +695,7 @@
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: $gray-400;
+  color: var(--pk-ink-muted);
   text-align: center;
   margin-bottom: 1.1rem;
 }
@@ -678,7 +711,7 @@
   letter-spacing: 0.12em;
   text-transform: uppercase;
   text-align: center;
-  color: $gray-400;
+  color: var(--pk-ink-muted);
   margin-bottom: 0.5rem;
 }
 
@@ -708,13 +741,14 @@
 // Logo images — tier-specific max-dimensions so Diamond trumps Bronze
 .blog-sidebar-sponsor-logo {
   display: block;
+  height: clamp(18px, calc(8px * var(--sponsor-weight, 1)), 44px);
   width: auto;
   object-fit: contain;
-  filter: grayscale(0.15);
+  filter: var(--pk-member-logo-hover-filter);
   transition: filter 0.15s;
 
   .blog-sidebar-sponsor-link:hover & {
-    filter: grayscale(0);
+    filter: var(--pk-member-logo-hover-filter);
   }
 }
 
@@ -747,17 +781,17 @@
   text-align: center;
   padding-top: 0.5rem;
   margin-top: 0.5rem;
-  border-top: 1px solid $gray-200;
+  border-top: 1px solid var(--pk-line-soft);
 }
 
 .blog-sidebar-sponsors-all-link {
   font-size: 0.72rem;
   font-weight: 600;
-  color: $gray-400;
+  color: var(--pk-ink-muted);
   text-decoration: none;
 
   &:hover {
-    color: $green;
+    color: var(--pk-accent-ink);
   }
 }
 
@@ -779,123 +813,45 @@
   }
 }
 
-// ── Gradient cycling ──────────────────────────────────────────
-// Each .blog-card is the sole child of its col, so :nth-child on the card
-// always resolves to 1. Target the wrapping column instead.
-.row [class*="col-"]:nth-child(6n + 2) .news-card .blog-card-header--gradient {
-  background: linear-gradient(135deg, $blue-deep 0%, $purple-deep 100%);
-  &::before {
-    background: radial-gradient(
-      ellipse at 110% -10%,
-      rgba(90, 155, 213, 0.25) 0%,
-      transparent 55%
-    );
-  }
-}
-.row [class*="col-"]:nth-child(6n + 3) .news-card .blog-card-header--gradient {
-  background: linear-gradient(135deg, $purple-deep 0%, $green-deep 100%);
-  &::before {
-    background: radial-gradient(
-      ellipse at 110% -10%,
-      rgba(111, 66, 193, 0.25) 0%,
-      transparent 55%
-    );
-  }
-}
-.row [class*="col-"]:nth-child(6n + 4) .news-card .blog-card-header--gradient {
-  background: linear-gradient(135deg, $orange-dark 0%, $red-dark 100%);
-  &::before {
-    background: radial-gradient(
-      ellipse at 110% -10%,
-      rgba(237, 125, 49, 0.3) 0%,
-      transparent 55%
-    );
-  }
-}
-.row [class*="col-"]:nth-child(6n + 5) .news-card .blog-card-header--gradient {
-  background: linear-gradient(135deg, $red-deep 0%, $purple-deep 100%);
-  &::before {
-    background: radial-gradient(
-      ellipse at 110% -10%,
-      rgba(220, 53, 69, 0.25) 0%,
-      transparent 55%
-    );
-  }
-}
-.row [class*="col-"]:nth-child(6n) .news-card .blog-card-header--gradient {
-  background: linear-gradient(135deg, $green-dark 0%, $orange-dark 100%);
-  &::before {
-    background: radial-gradient(
-      ellipse at 110% -10%,
-      rgba(25, 135, 84, 0.3) 0%,
-      transparent 55%
-    );
-  }
-}
-
-// ── Card footer: logo (left) + domain link (right) ────────────
+// Publisher identity remains readable at narrow card widths.
 .news-card-footer {
   margin-top: auto;
   padding-top: 0.875rem;
-  border-top: 1px solid $gray-100;
+  border-top: 1px solid var(--pk-line-soft);
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 0.25rem;
   position: relative;
   z-index: 2; // above stretched-link so links are clickable
 }
 
-// Logo container — plain when fallback text, pill when real logo image
-.news-card-logo {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  min-height: 32px;
-
-  &--img {
-    border-radius: 4px;
-    padding: 0.2rem 0.4rem;
-  }
-}
-
-// The actual logo image — scoped inside .news-card to beat global [data-pagefind-body] img rules
-.news-card .news-card-logo-img {
-  display: block !important;
-  width: 80px !important;
-  height: 24px !important;
-  max-width: 80px !important;
-  max-height: 24px !important;
-  object-fit: contain;
-  object-position: left center;
-  // Make white/light logos readable on any background without a coloured pill
-  filter: drop-shadow(0 0 1px rgba(0, 0, 0, 0.35));
-}
-
-// Fallback when there's no logo: show the member name as small text
 .news-card-member-name {
   font-size: 0.78rem;
   font-weight: 600;
-  color: $gray-700;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 140px;
+  color: var(--pk-ink);
+  overflow-wrap: anywhere;
+  white-space: normal;
 }
 
 .news-card-domain {
+  // The headline's stretched link covers the whole card, so the domain link
+  // has to sit above that overlay to stay clickable.
+  position: relative;
+  z-index: 2;
   flex-shrink: 0;
   display: inline-flex;
   align-items: center;
   gap: 0.2rem;
   font-size: 0.72rem;
-  color: $gray-400;
+  color: var(--pk-ink-muted);
   text-decoration: none;
   transition: color 0.15s;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 
   &:hover {
-    color: $green;
+    color: var(--pk-accent-ink);
   }
   svg {
     flex-shrink: 0;
@@ -911,13 +867,13 @@
   font-weight: 700;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: $gray-700;
+  color: var(--pk-ink);
   margin-bottom: 1.25rem;
   // Reset gradient text treatment from global h2 rule
   background: none !important;
   -webkit-background-clip: unset !important;
   background-clip: unset !important;
-  -webkit-text-fill-color: $gray-700 !important;
+  -webkit-text-fill-color: var(--pk-ink) !important;
 
   svg {
     color: $amber;
@@ -925,9 +881,9 @@
   }
 
   &--plain {
-    color: $gray-500;
+    color: var(--pk-ink-muted);
     font-weight: 600;
-    -webkit-text-fill-color: $gray-500 !important;
+    -webkit-text-fill-color: var(--pk-ink-muted) !important;
     svg {
       display: none;
     }
@@ -936,5 +892,5 @@
 
 .news-spotlight {
   padding-bottom: 1rem;
-  border-bottom: 1px solid $gray-200;
+  border-bottom: 1px solid var(--pk-line-soft);
 }

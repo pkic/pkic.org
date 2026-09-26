@@ -1,57 +1,164 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
+import { resetDb } from "./helpers/reset-db";
 import { queryAll } from "./helpers/context";
+import { insertUser, insertOrganization, seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
+import { MEMBER_STATUSES } from "../assets/shared/schemas/membership-categories";
+
+beforeEach(async () => {
+  await resetDb();
+});
 
 describe("members model", () => {
-  it("supports individual and organization members with strict subject constraints", async () => {
-    const userId = crypto.randomUUID();
-    const organizationId = crypto.randomUUID();
-    const individualMemberId = crypto.randomUUID();
-    const organizationMemberId = crypto.randomUUID();
+  it("keeps one aggregate row per organization with multiple active identities", async () => {
+    const primaryUserId = await insertUser(env.DB, "primary@example.test");
+    const secondaryUserId = await insertUser(env.DB, "secondary@example.test");
+    const organizationId = await insertOrganization(env.DB, "PKI Org");
 
-    await env.DB.batch([
-      env.DB.prepare(`
-        INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, job_title, data_json, created_at, updated_at)
-        VALUES ('${userId}', 'member@example.test', 'member@example.test', 'Member', 'User', 'PKIC', 'Engineer', NULL, datetime('now'), datetime('now'))
-      `),
-      env.DB.prepare(`
-        INSERT INTO organizations (id, name, normalized_name, data_json, created_at, updated_at)
-        VALUES ('${organizationId}', 'PKI Org', 'pki-org', NULL, datetime('now'), datetime('now'))
-      `),
-      env.DB.prepare(`
-        INSERT INTO members (id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at)
-        VALUES ('${individualMemberId}', 'individual', '${userId}', NULL, 'active', 'standard', NULL, datetime('now'), datetime('now'))
-      `),
-      env.DB.prepare(`
-        INSERT INTO members (id, member_type, user_id, organization_id, status, tier, data_json, created_at, updated_at)
-        VALUES ('${organizationMemberId}', 'organization', NULL, '${organizationId}', 'active', 'sponsor', NULL, datetime('now'), datetime('now'))
-      `),
-    ]);
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
+    await addRepresentative(env.DB, memberId, primaryUserId);
+    await addRepresentative(env.DB, memberId, secondaryUserId);
 
-    const counts = (
+    // Exactly one aggregate row per organization — migration 0000's
+    // UNIQUE(organization_id) is untouched by this PR.
+    const aggregateCount = (
       await queryAll<{ total: number }>(
         env.DB,
-        "SELECT COUNT(*) AS total FROM members WHERE member_type IN ('individual', 'organization')",
+        "SELECT COUNT(*) AS total FROM members WHERE organization_id = ?",
+        organizationId,
       )
     )[0];
-    expect(Number(counts.total)).toBe(2);
+    expect(Number(aggregateCount.total)).toBe(1);
 
+    // Two acting identities from the same organization attach to that one aggregate.
+    const repCount = (
+      await queryAll<{ total: number }>(
+        env.DB,
+        `SELECT COUNT(*) AS total
+           FROM identities identity
+           JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+          WHERE capacity.member_id = ? AND identity.ended_at IS NULL AND identity.blocked_at IS NULL`,
+        memberId,
+      )
+    )[0];
+    expect(Number(repCount.total)).toBe(2);
+  });
+
+  it("individual category (org-less): user_id set, no organization_id", async () => {
+    const individualUserId = await insertUser(env.DB, "individual@example.test");
+    await env.DB.prepare(
+      `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
+         VALUES (?, 'individual', ?, 'active', datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), individualUserId)
+      .run();
+
+    const row = (
+      await queryAll<{ organization_id: string | null; user_id: string }>(
+        env.DB,
+        "SELECT organization_id, user_id FROM members WHERE user_id = ?",
+        individualUserId,
+      )
+    )[0];
+    expect(row.organization_id).toBeNull();
+    expect(row.user_id).toBe(individualUserId);
+  });
+
+  it("member_type is a plain individual/organization discriminator, not a category — the CHECK constraint rejects anything else", async () => {
+    const userId = await insertUser(env.DB);
     await expect(
       env.DB.prepare(
-        `
-        INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-        VALUES ('${crypto.randomUUID()}', 'individual', '${userId}', '${organizationId}', 'active', datetime('now'), datetime('now'));
-      `,
-      ).run(),
+        `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
+           VALUES (?, 'A', ?, 'active', datetime('now'), datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), userId)
+        .run(),
+    ).rejects.toThrow();
+  });
+
+  it("organization-type rows must have organization_id set and user_id NULL (mutual exclusivity CHECK)", async () => {
+    const organizationId = await insertOrganization(env.DB);
+    await expect(
+      env.DB.prepare(
+        `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
+           VALUES (?, 'organization', NULL, NULL, 'active', datetime('now'), datetime('now'))`,
+      )
+        .bind(crypto.randomUUID())
+        .run(),
     ).rejects.toThrow();
 
+    // Sanity: the valid form succeeds.
     await expect(
       env.DB.prepare(
-        `
-        INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
-        VALUES ('${crypto.randomUUID()}', 'individual', '${userId}', NULL, 'active', datetime('now'), datetime('now'));
-      `,
-      ).run(),
+        `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
+           VALUES (?, 'organization', NULL, ?, 'active', datetime('now'), datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), organizationId)
+        .run(),
+    ).resolves.toBeDefined();
+  });
+
+  it("UNIQUE(organization_id) is still enforced: an organization has at most one aggregate row", async () => {
+    const organizationId = await insertOrganization(env.DB);
+    await seedOrganizationAggregate(env.DB, organizationId, "A");
+
+    await expect(
+      env.DB.prepare(
+        `INSERT INTO members (id, member_type, user_id, organization_id, status, created_at, updated_at)
+           VALUES (?, 'organization', NULL, ?, 'active', datetime('now'), datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), organizationId)
+        .run(),
+    ).rejects.toThrow();
+  });
+
+  it("UNIQUE(user_id) is still enforced: a person has at most one individual aggregate row", async () => {
+    const userId = await insertUser(env.DB);
+    await env.DB.prepare(
+      `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
+         VALUES (?, 'individual', ?, 'active', datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), userId)
+      .run();
+
+    await expect(
+      env.DB.prepare(
+        `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
+           VALUES (?, 'individual', ?, 'active', datetime('now'), datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), userId)
+        .run(),
+    ).rejects.toThrow();
+  });
+
+  // Parity test (PR #1 review, phase1-2-review-20260817.md blocker 9):
+  // members.status has a DB-level CHECK constraint (migration 0000,
+  // deployed/immutable) mirroring the canonical MEMBER_STATUSES shared
+  // constant. Nothing previously proved these two stay in sync — this
+  // asserts the DB accepts every value the constant claims is valid and
+  // rejects one that isn't, so a future edit to MEMBER_STATUSES without a
+  // matching migration fails this test instead of silently drifting.
+  it("members.status CHECK constraint accepts exactly the canonical MEMBER_STATUSES values", async () => {
+    for (const status of MEMBER_STATUSES) {
+      const userId = await insertUser(env.DB);
+      await expect(
+        env.DB.prepare(
+          `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
+           VALUES (?, 'individual', ?, ?, datetime('now'), datetime('now'))`,
+        )
+          .bind(crypto.randomUUID(), userId, status)
+          .run(),
+      ).resolves.toBeDefined();
+    }
+
+    const userId = await insertUser(env.DB);
+    await expect(
+      env.DB.prepare(
+        `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
+         VALUES (?, 'individual', ?, 'not_a_real_status', datetime('now'), datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), userId)
+        .run(),
     ).rejects.toThrow();
   });
 });

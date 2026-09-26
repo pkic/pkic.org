@@ -1,0 +1,281 @@
+/**
+ * Organization contact role grants (primary and secondary contact) —
+ * ordinary `user_roles` rows scoped
+ * `context_type='organization'`, `context_id=members.id`, reusing the
+ * existing roles/user_roles RBAC system (consolidated migration 0035) instead of a
+ * second, bespoke role table.
+ *
+ * Each role is a singleton per organization
+ * (`uq_user_roles_single_holder_per_context`, consolidated migration 0035): assigning a
+ * new holder revokes the previous active grant in the same `db.batch()`.
+ */
+import { all, first } from "../../db/queries";
+import { nowIso } from "../../utils/time";
+import { uuid } from "../../utils/ids";
+import { AppError } from "../../errors";
+import type { DatabaseLike, StatementLike } from "../../types";
+import {
+  REPRESENTATIVE_ROLE_IDS,
+  isRepresentativeRoleId,
+  type RepresentativeRoleId,
+} from "../../../../assets/shared/schemas/representative-roles";
+
+export { REPRESENTATIVE_ROLE_IDS, isRepresentativeRoleId };
+export type { RepresentativeRoleId };
+
+/**
+ * Builds [revoke-previous-holder, insert-new-grant] statements for one of
+ * the two singleton organization-contact roles, without doing a preflight read
+ * of `identities` — for callers that are themselves inserting that exact
+ * identity row earlier in the same `db.batch()`.
+ * The migration-level identity trigger
+ * is the final execution-time guard for every caller, including this path.
+ */
+export function buildAssignRepresentativeRoleStatementsForNewRepresentative(
+  db: DatabaseLike,
+  input: {
+    memberId: string;
+    identityId: string;
+    userId: string;
+    roleId: RepresentativeRoleId;
+    grantedByUserId?: string | null;
+    assignmentId?: string;
+    now?: string;
+  },
+): StatementLike[] {
+  const now = input.now ?? nowIso();
+  return [
+    db
+      .prepare(
+        `UPDATE user_roles SET revoked_at = ?
+         WHERE context_type = 'organization' AND context_id = ? AND role_id = ? AND revoked_at IS NULL`,
+      )
+      .bind(now, input.memberId, input.roleId),
+    db
+      .prepare(
+        `INSERT INTO user_roles
+           (id, user_id, role_id, context_type, context_id, identity_id,
+            granted_by_user_id, single_holder_per_context, created_at)
+         VALUES (?, ?, ?, 'organization', ?, ?, ?, 1, ?)`,
+      )
+      .bind(
+        input.assignmentId ?? uuid(),
+        input.userId,
+        input.roleId,
+        input.memberId,
+        input.identityId,
+        input.grantedByUserId ?? null,
+        now,
+      ),
+  ];
+}
+
+/**
+ * Builds [revoke-previous-holder?, insert-new-grant] statements for one of
+ * the two singleton organization-contact roles. Throws before building any
+ * statement if `(userId, memberId)` has no active identity row.
+ * The migration-level trigger is also required because this preflight can
+ * become stale before the returned batch executes.
+ *
+ * Caller is responsible for executing the returned statements in the same
+ * `db.batch()` as any other write in the same operation (e.g. approval
+ * provisioning) — this function never executes anything itself.
+ */
+export async function buildAssignRepresentativeRoleStatements(
+  db: DatabaseLike,
+  input: {
+    memberId: string;
+    userId: string;
+    roleId: RepresentativeRoleId;
+    grantedByUserId?: string | null;
+    assignmentId?: string;
+    now?: string;
+  },
+): Promise<StatementLike[]> {
+  const identity = await first<{ id: string }>(
+    db,
+    `SELECT identity.id
+       FROM identities identity
+       JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+      WHERE capacity.member_id = ?
+        AND identity.user_id = ?
+        AND identity.started_at IS NOT NULL
+        AND identity.ended_at IS NULL
+        AND identity.blocked_at IS NULL
+      LIMIT 1`,
+    [input.memberId, input.userId],
+  );
+  if (!identity) {
+    throw new AppError(
+      422,
+      "NOT_ACTIVE_REPRESENTATIVE",
+      "Only an active representative of this organization can hold this role",
+    );
+  }
+  return buildAssignRepresentativeRoleStatementsForNewRepresentative(db, { ...input, identityId: identity.id });
+}
+
+/**
+ * Revokes the active grant of `roleId` for `memberId`. When `userId` is
+ * given, only that user's grant is revoked (a no-op UPDATE if that user
+ * isn't the current holder) — required whenever the caller is reacting to
+ * one specific representative leaving, since these roles are singletons
+ * per-organization but the removed representative may not be the current
+ * holder at all. Omit `userId` only when the caller genuinely means "clear
+ * whoever holds this role" (e.g. an explicit admin unassign action).
+ */
+export function buildRevokeRepresentativeRoleStatement(
+  db: DatabaseLike,
+  input: { memberId: string; roleId: RepresentativeRoleId; userId?: string; now?: string },
+): StatementLike {
+  const now = input.now ?? nowIso();
+  if (input.userId) {
+    return db
+      .prepare(
+        `UPDATE user_roles SET revoked_at = ?
+         WHERE context_type = 'organization' AND context_id = ? AND role_id = ? AND user_id = ? AND revoked_at IS NULL`,
+      )
+      .bind(now, input.memberId, input.roleId, input.userId);
+  }
+  return db
+    .prepare(
+      `UPDATE user_roles SET revoked_at = ?
+       WHERE context_type = 'organization' AND context_id = ? AND role_id = ? AND revoked_at IS NULL`,
+    )
+    .bind(now, input.memberId, input.roleId);
+}
+
+interface RoleHolderRow {
+  user_id: string;
+}
+
+/**
+ * The canonical active-holder predicate shared by role resolution and read-model
+ * projections. Keep the role, user, and representative aliases explicit because
+ * callers use this in both ordinary queries and derived-table projections.
+ */
+export function organizationContactRoleActivePredicate(
+  roleAlias = "ur",
+  userAlias = "u",
+  identityAlias = "identity",
+  nowPlaceholder = "?",
+): string {
+  return `${roleAlias}.revoked_at IS NULL
+       AND ${userAlias}.active = 1
+       AND ${identityAlias}.started_at IS NOT NULL
+       AND ${identityAlias}.ended_at IS NULL
+       AND ${identityAlias}.blocked_at IS NULL
+       AND (${roleAlias}.expires_at IS NULL OR datetime(${roleAlias}.expires_at) > datetime(${nowPlaceholder}))`;
+}
+
+/**
+ * A one-row-per-organization projection for the active primary contact.
+ * The current time remains a bound parameter.
+ */
+export function primaryContactProjection(): string {
+  return `(SELECT ur.context_id AS member_id, ur.user_id,
+          u.first_name, u.last_name, u.email
+     FROM user_roles ur
+     JOIN users u ON u.id = ur.user_id
+     JOIN identities identity ON identity.id = ur.identity_id AND identity.user_id = ur.user_id
+     JOIN identity_member_capacities capacity
+       ON capacity.identity_id = identity.id AND capacity.member_id = ur.context_id
+    WHERE ur.context_type = 'organization' AND ur.role_id = '${REPRESENTATIVE_ROLE_IDS.primaryContact}'
+      AND ${organizationContactRoleActivePredicate()}) AS primary_contact`;
+}
+
+/** The current active holder of a singleton representative role for an organization, or null. */
+export async function resolveRepresentativeRoleHolder(
+  db: DatabaseLike,
+  memberId: string,
+  roleId: RepresentativeRoleId,
+): Promise<string | null> {
+  const row = await first<RoleHolderRow>(
+    db,
+    `SELECT ur.user_id
+     FROM user_roles ur
+     JOIN users u ON u.id = ur.user_id
+     JOIN identities identity ON identity.id = ur.identity_id AND identity.user_id = ur.user_id
+     JOIN identity_member_capacities capacity
+       ON capacity.identity_id = identity.id AND capacity.member_id = ur.context_id
+     WHERE ur.context_type = 'organization' AND ur.context_id = ? AND ur.role_id = ?
+       AND ${organizationContactRoleActivePredicate()}
+     LIMIT 1`,
+    [memberId, roleId, nowIso()],
+  );
+  return row?.user_id ?? null;
+}
+
+export interface RepresentativeRoleHolders {
+  primaryContactUserId: string | null;
+  secondaryContactUserId: string | null;
+}
+
+export async function resolveRepresentativeRoleHolders(
+  db: DatabaseLike,
+  memberId: string,
+): Promise<RepresentativeRoleHolders> {
+  const rows = await all<{ role_id: string; user_id: string }>(
+    db,
+    `SELECT ur.role_id, ur.user_id
+     FROM user_roles ur
+     JOIN users u ON u.id = ur.user_id
+     JOIN identities identity ON identity.id = ur.identity_id AND identity.user_id = ur.user_id
+     JOIN identity_member_capacities capacity
+       ON capacity.identity_id = identity.id AND capacity.member_id = ur.context_id
+     WHERE ur.context_type = 'organization' AND ur.context_id = ?
+       AND ${organizationContactRoleActivePredicate()}
+       AND ur.role_id IN (?, ?)`,
+    [memberId, nowIso(), REPRESENTATIVE_ROLE_IDS.primaryContact, REPRESENTATIVE_ROLE_IDS.secondaryContact],
+  );
+  const byRole = new Map(rows.map((row) => [row.role_id, row.user_id]));
+  return {
+    primaryContactUserId: byRole.get(REPRESENTATIVE_ROLE_IDS.primaryContact) ?? null,
+    secondaryContactUserId: byRole.get(REPRESENTATIVE_ROLE_IDS.secondaryContact) ?? null,
+  };
+}
+
+/**
+ * Whether `actorUserId` is an active primary or secondary contact for at
+ * least one active organization that `targetUserId` currently represents.
+ * This is the canonical cross-user identity-management boundary for member
+ * self-service: ordinary coworkers and free-text organization names confer
+ * no authority.
+ */
+export async function isOrganizationContactForRepresentative(
+  db: DatabaseLike,
+  actorUserId: string,
+  targetUserId: string,
+): Promise<boolean> {
+  const row = await first<{ allowed: number }>(
+    db,
+    `SELECT 1 AS allowed
+       FROM user_roles ur
+       JOIN users actor ON actor.id = ur.user_id
+       JOIN identities actor_identity ON actor_identity.id = ur.identity_id AND actor_identity.user_id = ur.user_id
+       JOIN identity_member_capacities actor_capacity
+         ON actor_capacity.identity_id = actor_identity.id AND actor_capacity.member_id = ur.context_id
+       JOIN members m
+         ON m.id = ur.context_id AND m.status = 'active' AND m.organization_id IS NOT NULL
+       JOIN identity_member_capacities target_capacity ON target_capacity.member_id = m.id
+       JOIN identities target_identity
+         ON target_identity.id = target_capacity.identity_id
+        AND target_identity.user_id = ?
+        AND target_identity.started_at IS NOT NULL
+        AND target_identity.ended_at IS NULL
+        AND target_identity.blocked_at IS NULL
+      WHERE ur.user_id = ?
+        AND ur.context_type = 'organization'
+        AND ur.role_id IN (?, ?)
+        AND ${organizationContactRoleActivePredicate("ur", "actor", "actor_identity")}
+      LIMIT 1`,
+    [
+      targetUserId,
+      actorUserId,
+      REPRESENTATIVE_ROLE_IDS.primaryContact,
+      REPRESENTATIVE_ROLE_IDS.secondaryContact,
+      nowIso(),
+    ],
+  );
+  return row?.allowed === 1;
+}

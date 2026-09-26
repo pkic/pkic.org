@@ -1,0 +1,79 @@
+@layer components {
+  .pk-split-button {
+    display: inline-flex;
+    align-items: stretch;
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface-raise);
+    color: var(--pk-ink);
+  }
+
+  .pk-split-button--primary {
+    border-color: var(--pk-accent-strong);
+    background: var(--pk-accent-strong);
+    color: var(--pk-accent-on);
+  }
+
+  /* One outside border and one internal divider make the two hit targets read
+     as a single control. The menu remains free of overflow clipping. */
+  .pk-split-button .pk-btn,
+  .pk-split-button .pk-menu__trigger {
+    height: 100%;
+    margin: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .pk-split-button > .pk-btn {
+    border-radius: var(--pk-radius) 0 0 var(--pk-radius);
+  }
+
+  .pk-split-button__primary + .pk-menu {
+    border-inline-start: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+  }
+
+  .pk-split-button .pk-menu__trigger {
+    min-block-size: 100%;
+    padding: var(--pk-control-y) var(--pk-3);
+    border-radius: 0 var(--pk-radius) var(--pk-radius) 0;
+    aspect-ratio: auto;
+    cursor: pointer;
+  }
+
+  .pk-split-button:not(:has(.pk-split-button__primary)) .pk-menu__trigger {
+    border-radius: var(--pk-radius);
+  }
+
+  .pk-split-button--secondary .pk-btn:hover:not(:disabled, [aria-disabled="true"]),
+  .pk-split-button--secondary .pk-menu__trigger:hover,
+  .pk-split-button--secondary .pk-menu__trigger[aria-expanded="true"] {
+    background: var(--pk-surface-sunk);
+    color: var(--pk-ink);
+    filter: none;
+  }
+
+  .pk-split-button--primary .pk-btn:hover:not(:disabled, [aria-disabled="true"]),
+  .pk-split-button--primary .pk-menu__trigger:hover,
+  .pk-split-button--primary .pk-menu__trigger[aria-expanded="true"] {
+    background: color-mix(in srgb, var(--pk-accent-on) 12%, var(--pk-accent-strong));
+    color: var(--pk-accent-on);
+    filter: none;
+  }
+
+  .pk-split-button__menu-content {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-2);
+  }
+
+  .pk-split-button__caret {
+    width: 0.4rem;
+    height: 0.4rem;
+    border-inline-end: 1px solid currentColor;
+    border-block-end: 1px solid currentColor;
+    rotate: 45deg;
+    translate: 0 -0.1rem;
+  }
+}

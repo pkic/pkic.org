@@ -15,8 +15,14 @@ import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { run } from "../functions/_lib/db/queries";
 import { createInvite, declineInvite, acceptInvite } from "../functions/_lib/services/invites";
 import { onRequestGet as inviteInfo } from "../functions/api/v1/invites/[token]/info";
-import { onRequestPost as inviteAccept } from "../functions/api/v1/invites/[token]/accept";
-import { onRequestPost as inviteReminders } from "../functions/api/v1/invites/[token]/reminders";
+import app from "../functions/router";
+
+function mounted(c: any): Promise<Response> {
+  return app.fetch(c.req.raw, c.env, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
+}
+
+const inviteAccept = mounted;
+const inviteReminders = mounted;
 
 describe("invite info endpoint", () => {
   beforeEach(async () => {
@@ -31,7 +37,6 @@ describe("invite info endpoint", () => {
       inviteeEmail: "alice@example.test",
       inviteeFirstName: "Alice",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -62,7 +67,6 @@ describe("invite info endpoint", () => {
       inviteeEmail: "speaker@example.test",
       inviteeFirstName: "Bob",
       inviteType: "speaker",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -100,7 +104,6 @@ describe("invite info endpoint", () => {
       eventId,
       inviteeEmail: "done@example.test",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -122,7 +125,6 @@ describe("invite info endpoint", () => {
       eventId,
       inviteeEmail: "declined@example.test",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -149,15 +151,29 @@ describe("invite info endpoint", () => {
       .bind(inviterUserId)
       .run();
 
-    const { token } = await createInvite(env.DB, {
+    const { token, invite } = await createInvite(env.DB, {
       eventId,
       inviterUserId,
       inviteeEmail: "invitee@example.test",
       inviteeFirstName: "Invitee",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
+
+    for (let index = 0; index < 6; index += 1) {
+      const extraUserId = crypto.randomUUID();
+      await env.DB.batch([
+        env.DB.prepare(
+          `INSERT INTO users (id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'Inviter', 'user', 1, datetime('now'), datetime('now'))`,
+        ).bind(extraUserId, `inviter-${index}@example.test`, `inviter-${index}@example.test`, `Extra ${index}`),
+        env.DB.prepare(
+          `INSERT INTO invite_inviters
+             (id, invite_id, inviter_user_id, source_type, invited_at)
+           VALUES (?, ?, ?, 'test', ?)`,
+        ).bind(crypto.randomUUID(), invite.id, extraUserId, new Date(Date.now() + (index + 1) * 1_000).toISOString()),
+      ]);
+    }
 
     const response = await inviteInfo(
       createContext(env, new Request(`https://app.test/api/v1/invites/${token}/info`), { token }),
@@ -168,12 +184,13 @@ describe("invite info endpoint", () => {
       inviters: Array<{ firstName: string; lastName: string }>;
       totalInviters: number;
     };
-    expect(body.totalInviters).toBeGreaterThanOrEqual(1);
+    expect(body.totalInviters).toBe(7);
+    expect(body.inviters).toHaveLength(5);
     expect(body.inviters[0].firstName).toBe("Jane");
     expect(body.inviters[0].lastName).toBe("Smith");
   });
 
-  it("keeps a sent invite valid even when expires_at is in the past", async () => {
+  it("reports a still-sent invite as expired when its database expiry has passed", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
     const { token, invite } = await createInvite(env.DB, {
@@ -181,7 +198,6 @@ describe("invite info endpoint", () => {
       inviteeEmail: "still-valid@example.test",
       inviteeFirstName: "Still",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -193,10 +209,10 @@ describe("invite info endpoint", () => {
 
     expect(response.status).toBe(200);
     const body = (await response.json()) as { status: string };
-    expect(body.status).toBe("valid");
+    expect(body.status).toBe("expired");
   });
 
-  it("creates invites without a default expiry when ttlHours is omitted", async () => {
+  it("defaults invitation validity to the event start", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
     const { invite } = await createInvite(env.DB, {
@@ -209,7 +225,7 @@ describe("invite info endpoint", () => {
       invite.id,
     ]);
 
-    expect(rows[0].expires_at).toBeNull();
+    expect(rows[0].expires_at).toBe("2026-12-01T08:00:00.000Z");
   });
 });
 
@@ -233,7 +249,6 @@ describe("invite accept endpoint", () => {
       eventId,
       inviteeEmail: "speaker@example.test",
       inviteType: "speaker",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -266,7 +281,6 @@ describe("invite accept endpoint", () => {
       inviteeEmail: "attendee@example.test",
       inviteeFirstName: "Alice",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -310,7 +324,6 @@ describe("invite accept endpoint", () => {
       eventId,
       inviteeEmail: "real@example.test",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -343,19 +356,38 @@ describe("invite accept endpoint", () => {
   it("rejects accept with invalid/non-existent token", async () => {
     await seedEventAndAdmin(env.DB);
 
-    await expect(
-      inviteAccept(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/invites/bogus-token/accept", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({}),
-          }),
-          { token: "bogus-token" },
-        ),
+    const response = await inviteAccept(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/invites/bogus-token-0000/accept", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({}),
+        }),
+        { token: "bogus-token-0000" },
       ),
-    ).rejects.toMatchObject({ code: "INVITE_NOT_FOUND" });
+    );
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "INVITE_NOT_FOUND" } });
+  });
+
+  it("rejects malformed token syntax at the mounted validation boundary", async () => {
+    await seedEventAndAdmin(env.DB);
+
+    const response = await inviteAccept(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/invites/bad-token/accept", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({}),
+        }),
+        { token: "bad-token" },
+      ),
+    );
+
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "VALIDATION_ERROR" } });
   });
 });
 
@@ -371,7 +403,6 @@ describe("invite reminders endpoint", () => {
       eventId,
       inviteeEmail: "remind@example.test",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -401,7 +432,6 @@ describe("invite reminders endpoint", () => {
       eventId,
       inviteeEmail: "remind30@example.test",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -430,7 +460,6 @@ describe("invite reminders endpoint", () => {
       eventId,
       inviteeEmail: "resume@example.test",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -473,7 +502,6 @@ describe("invite reminders endpoint", () => {
       eventId,
       inviteeEmail: "unsub@example.test",
       inviteType: "attendee",
-      ttlHours: 48,
       signingSecret: "test-signing-secret",
     });
 
@@ -502,18 +530,18 @@ describe("invite reminders endpoint", () => {
   it("rejects with invalid token", async () => {
     await seedEventAndAdmin(env.DB);
 
-    await expect(
-      inviteReminders(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/invites/bad-token/reminders", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ action: "resume" }),
-          }),
-          { token: "bad-token" },
-        ),
+    const response = await inviteReminders(
+      createContext(
+        env,
+        new Request("https://app.test/api/v1/invites/bad-token-value0/reminders", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "resume" }),
+        }),
+        { token: "bad-token-value0" },
       ),
-    ).rejects.toMatchObject({ code: "INVITE_NOT_FOUND" });
+    );
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "INVITE_NOT_FOUND" } });
   });
 });

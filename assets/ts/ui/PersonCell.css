@@ -1,0 +1,51 @@
+@layer components {
+  .pk-person-cell {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-3);
+    min-width: 0;
+  }
+
+  .pk-person-cell--sm {
+    gap: var(--pk-2);
+  }
+
+  /*
+   * In a table, a person cell that is not the subject column is capped.
+   *
+   * The name and the address are set nowrap so they ellipsize, but an
+   * auto-layout table hands a cell its content's full width before the
+   * ellipsis has anything to do — one long address in a side column then
+   * takes the room the subject column was promised (the outbox recipient
+   * beside the subject). The cap turns the nowrap into a real ellipsis at a
+   * width a name rarely reaches; the subject column carries no cap.
+   */
+  .pk-table td:not(.pk-table__col--primary) .pk-person-cell {
+    max-width: 16rem;
+  }
+
+  .pk-person-cell__text {
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+  }
+
+  .pk-person-cell__name {
+    font-weight: 500;
+    color: var(--pk-ink);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.35;
+  }
+
+  .pk-person-cell__email {
+    font-size: var(--pk-text-xs);
+    color: var(--pk-ink-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    line-height: 1.35;
+  }
+}

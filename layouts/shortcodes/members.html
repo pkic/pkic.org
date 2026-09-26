@@ -1,3 +1,12 @@
+{{/*
+  members — the member and sponsor logo wall.
+
+  The wall's own frame (its white ground and its inset) belongs to
+  `.members-overview`, so the markup no longer carries a padding utility per
+  breakpoint. No `pk` root: that ground is still declared in `assets/scss`,
+  and the base layer, which beats the legacy layer, would repaint it with the
+  design system's canvas.
+*/}}
 {{ .Scratch.Set "date" (.Get "date") }}
 {{ .Scratch.Set "limit" (or (.Get "limit") "999999") }}
 
@@ -5,7 +14,7 @@
 <div class="pkic-section-label"><span>{{ . }}</span></div>
 {{ end }}
 <section class="members-overview {{ .Get "class"}}">
-    <div class="container-fluid px-2 px-md-3 py-4 text-center members">
+    <div class="members pk-center">
         {{ partial "members/wall.html" . }}
     </div>
 </section>

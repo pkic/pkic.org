@@ -1,0 +1,20 @@
+/*
+ * The chosen donation amount.
+ *
+ * This lives here rather than in `_donations.scss` because of the cascade
+ * order. The preset buttons are `pk-btn pk-btn--secondary`, which is
+ * `@layer components`, and the whole legacy stylesheet is wrapped in
+ * `@layer legacy` — so the fill declared there lost at any specificity and
+ * the chosen preset rendered exactly like the unchosen ones.
+ *
+ * It keys off `aria-pressed`, which `activatePreset` already sets, rather
+ * than a parallel class: the state is announced and drawn from one source.
+ */
+
+@layer components {
+  .donation-preset-btn[aria-pressed="true"] {
+    background: var(--pk-accent-strong);
+    border-color: var(--pk-accent-strong);
+    color: var(--pk-on-solid);
+  }
+}

@@ -16,6 +16,15 @@ params:
     heroImageLicenseURL: https://commons.m.wikimedia.org/wiki/File:Sunset_at_Kuala_Lumpur.jpg
     heroDescription: PQC Conference 2025 - Kuala Lumpur
     
+authorProfiles:
+  - name: Paul van Brouwershaven
+    organization: Digitorus
+    role: Founder and CEO
+    website: https://www.digitorus.com
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
+    assetdirectory: images/members/digitorus
 ---
 
 # Post-Quantum Cryptography Conference 2025

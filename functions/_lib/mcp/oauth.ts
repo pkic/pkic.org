@@ -4,49 +4,67 @@ import {
   type OAuthHelpers,
   type ResolveExternalTokenInput,
 } from "@cloudflare/workers-oauth-provider";
-import {
-  getAdminBySessionClaims,
-  getCachedAdminAuthTransport,
-  requestAdminMagicLink,
-  requireAdminFromRequest,
-  signAdminSessionToken,
-  verifyAdminMagicLink,
-  verifyAdminSessionToken,
-} from "../auth/admin";
-import { first, run } from "../db/queries";
+import { z } from "zod";
+import { permissionSchema } from "../../../assets/shared/schemas/permissions";
+import { getCachedAdminAuthTransport, requireAdminFromRequest } from "../auth/admin";
+import { resolveUserSessionFromRequest } from "../auth/user-session";
 import { AUTH_SCOPES, grantableScopesForActor, type AuthScope } from "../auth/scopes";
 import { getConfig, resolveAppBaseUrl } from "../config";
-import { processOutboxByIdBackground, queueEmail } from "../email/outbox";
+import { processOutboxByIdBackground } from "../email/outbox";
 import { AppError } from "../errors";
 import { getClientIp, getUserAgent, hashOptional, requireInternalSecret } from "../request";
 import { enforceRateLimit } from "../rate-limit";
-import { writeAuditLog } from "../services/audit";
-import { sha256Hex } from "../utils/crypto";
-import type { AuthAdmin, Env } from "../types";
+import { buildManagementLink } from "../services/management-links";
+import { requestUserSignInLink } from "../services/user-auth-flow";
+import type { AuthAdmin, Env, UserBackedAuthAdmin } from "../types";
 
-export const MCP_OAUTH_AUTHORIZE_PATH = "/api/v1/oauth/authorize";
-export const MCP_OAUTH_VERIFY_API_PATH = "/api/v1/oauth/verify-link";
-export const MCP_OAUTH_TOKEN_PATH = "/api/v1/oauth/token";
-export const MCP_OAUTH_REGISTER_PATH = "/api/v1/oauth/register";
-export const MCP_OAUTH_UI_PATH = "/admin/";
-
-const MCP_OAUTH_LOGIN_COOKIE_NAME = "pkic_mcp_oauth";
-const MCP_OAUTH_LOGIN_COOKIE_PATH = MCP_OAUTH_AUTHORIZE_PATH;
-const MCP_OAUTH_LOGIN_COOKIE_MAX_AGE_SECONDS = 10 * 60;
+export const MCP_OAUTH_AUTHORIZE_PATH = "/api/v1/auth/oauth/authorize";
+export const MCP_OAUTH_TOKEN_PATH = "/api/v1/auth/oauth/token";
+export const MCP_OAUTH_REGISTER_PATH = "/api/v1/auth/oauth/register";
+const MCP_OAUTH_MAX_RETURN_TO_LENGTH = 2048;
 
 const AUTH_SCOPE_SET = new Set<string>(AUTH_SCOPES);
 
-export type McpOAuthTransport = "oauth" | "bearer" | "cookie" | "api-key";
+const mcpOAuthPropsBaseSchema = {
+  id: z.string().min(1),
+  email: z.string().min(1),
+  role: z.string().min(1),
+  scopes: z.array(permissionSchema),
+};
 
-export interface McpOAuthProps {
-  adminId: string;
-  email: string;
-  role: string;
-  scopes: AuthScope[];
-  sessionId?: string;
-  sessionExpiresAt?: string;
-  state?: string | null;
-  authTransport: McpOAuthTransport;
+export const mcpOAuthPropsSchema = z.discriminatedUnion("identityType", [
+  z
+    .object({
+      identityType: z.literal("user"),
+      ...mcpOAuthPropsBaseSchema,
+      sessionId: z.string().min(1),
+      sessionExpiresAt: z.string().min(1),
+      state: z.string().nullable(),
+      authTransport: z.enum(["oauth", "bearer", "cookie"]),
+    })
+    .strict(),
+  z
+    .object({
+      identityType: z.literal("service"),
+      ...mcpOAuthPropsBaseSchema,
+      authTransport: z.literal("api-key"),
+    })
+    .strict(),
+]);
+
+export type McpOAuthProps = z.infer<typeof mcpOAuthPropsSchema>;
+export type McpUserOAuthProps = Extract<McpOAuthProps, { identityType: "user" }>;
+export type McpServiceOAuthProps = Extract<McpOAuthProps, { identityType: "service" }>;
+export type UserMcpOAuthTransport = McpUserOAuthProps["authTransport"];
+export type McpOAuthTransport = McpOAuthProps["authTransport"];
+
+export function parseMcpOauthProps(value: unknown): McpOAuthProps | undefined {
+  if (value === undefined) return undefined;
+  const parsed = mcpOAuthPropsSchema.safeParse(value);
+  if (!parsed.success) {
+    throw new AppError(500, "MCP_AUTH_PROPS_INVALID", "The MCP authorization context is invalid");
+  }
+  return parsed.data;
 }
 
 export type McpOAuthEnv = Env & {
@@ -60,54 +78,6 @@ function jsonResponse(data: unknown, status = 200): Response {
   });
 }
 
-function parseCookieHeader(cookieHeader: string): Map<string, string> {
-  const values = new Map<string, string>();
-  for (const part of cookieHeader.split(";")) {
-    const trimmed = part.trim();
-    if (!trimmed) continue;
-    const separatorIndex = trimmed.indexOf("=");
-    if (separatorIndex <= 0) continue;
-    const name = trimmed.slice(0, separatorIndex).trim();
-    const value = trimmed.slice(separatorIndex + 1).trim();
-    if (!name) continue;
-    values.set(name, decodeURIComponent(value));
-  }
-  return values;
-}
-
-function isSecureRequest(request: Request): boolean {
-  return new URL(request.url).protocol === "https:";
-}
-
-function getMcpOauthLoginToken(request: Request): string | null {
-  const cookieHeader = request.headers.get("cookie") ?? "";
-  if (!cookieHeader) return null;
-  return parseCookieHeader(cookieHeader).get(MCP_OAUTH_LOGIN_COOKIE_NAME) ?? null;
-}
-
-async function storeMcpOauthReturnTo(env: Env, magicLinkToken: string, returnTo: string): Promise<void> {
-  const tokenHash = await sha256Hex(magicLinkToken);
-  const storedReturnTo = sanitizeAuthorizeReturnTo(returnTo);
-  await run(env.DB, "UPDATE auth_magic_links SET return_to = ? WHERE token_hash = ?", [storedReturnTo, tokenHash]);
-}
-
-async function consumeMcpOauthReturnTo(env: Env, magicLinkToken: string): Promise<string> {
-  const tokenHash = await sha256Hex(magicLinkToken);
-  const row = await first<{ return_to: string | null }>(
-    env.DB,
-    `SELECT return_to
-     FROM auth_magic_links
-     WHERE token_hash = ?`,
-    [tokenHash],
-  );
-
-  if (!row?.return_to) {
-    throw new AppError(400, "MCP_OAUTH_RETURN_TO_MISSING", "Missing OAuth return target");
-  }
-
-  return sanitizeAuthorizeReturnTo(row.return_to);
-}
-
 export function isAuthScope(scope: string): scope is AuthScope {
   return AUTH_SCOPE_SET.has(scope);
 }
@@ -117,7 +87,9 @@ export function normalizeMcpOauthScopes(
   fallback: readonly AuthScope[] = AUTH_SCOPES,
 ): AuthScope[] {
   const normalized = scopes.filter(isAuthScope);
-  return [...new Set(normalized.length > 0 ? normalized : fallback)];
+  // An omitted scope list receives the documented default. A supplied but
+  // wholly invalid list must not be promoted to every supported permission.
+  return [...new Set(scopes.length === 0 ? fallback : normalized)];
 }
 
 export function buildMcpOauthProps(
@@ -125,49 +97,31 @@ export function buildMcpOauthProps(
   scopes: readonly AuthScope[],
   authTransport: McpOAuthTransport,
 ): McpOAuthProps {
+  const shared = { id: admin.id, email: admin.email, role: admin.role, scopes: [...scopes] };
+
+  if (admin.identityType === "service") {
+    if (authTransport !== "api-key") {
+      throw new AppError(500, "MCP_AUTH_TRANSPORT_INVALID", "A service actor must use the API-key transport");
+    }
+    return { identityType: "service", ...shared, authTransport };
+  }
+
+  if (authTransport === "api-key" || !admin.sessionId || !admin.expiresAt) {
+    throw new AppError(
+      500,
+      "MCP_AUTH_TRANSPORT_INVALID",
+      "A user-backed MCP actor requires a session-backed transport",
+    );
+  }
+
   return {
-    adminId: admin.id,
-    email: admin.email,
-    role: admin.role,
-    scopes: [...scopes],
+    identityType: "user",
+    ...shared,
     sessionId: admin.sessionId,
     sessionExpiresAt: admin.expiresAt,
     state: admin.state ?? null,
     authTransport,
   };
-}
-
-export function serializeMcpOauthLoginCookie(token: string, request: Request): string {
-  const parts = [
-    `${MCP_OAUTH_LOGIN_COOKIE_NAME}=${encodeURIComponent(token)}`,
-    `Path=${MCP_OAUTH_LOGIN_COOKIE_PATH}`,
-    "HttpOnly",
-    "SameSite=Strict",
-    `Max-Age=${MCP_OAUTH_LOGIN_COOKIE_MAX_AGE_SECONDS}`,
-  ];
-
-  if (isSecureRequest(request)) {
-    parts.push("Secure");
-  }
-
-  return parts.join("; ");
-}
-
-export function serializeExpiredMcpOauthLoginCookie(request: Request): string {
-  const parts = [
-    `${MCP_OAUTH_LOGIN_COOKIE_NAME}=`,
-    `Path=${MCP_OAUTH_LOGIN_COOKIE_PATH}`,
-    "HttpOnly",
-    "SameSite=Strict",
-    "Max-Age=0",
-    "Expires=Thu, 01 Jan 1970 00:00:00 GMT",
-  ];
-
-  if (isSecureRequest(request)) {
-    parts.push("Secure");
-  }
-
-  return parts.join("; ");
 }
 
 export function currentAuthorizeReturnTo(request: Request): string {
@@ -190,13 +144,11 @@ export function buildMcpOauthUiUrl(
   returnTo: string,
   error?: string,
 ): string {
-  const url = new URL(MCP_OAUTH_UI_PATH, resolveAppBaseUrl(env, request));
-  url.searchParams.set("flow", "mcp-oauth");
-  url.searchParams.set("return_to", sanitizeAuthorizeReturnTo(returnTo));
-  if (error) {
-    url.searchParams.set("error", error);
-  }
-  return url.toString();
+  return buildManagementLink(resolveAppBaseUrl(env, request), {
+    kind: "mcp-oauth",
+    returnTo: sanitizeAuthorizeReturnTo(returnTo),
+    error,
+  });
 }
 
 export function redirectToMcpOauthUi(
@@ -215,7 +167,8 @@ export function sanitizeAuthorizeReturnTo(value: string | null | undefined): str
     const url = new URL(value, "https://pkic.local");
     if (url.origin !== "https://pkic.local") return MCP_OAUTH_AUTHORIZE_PATH;
     if (url.pathname !== MCP_OAUTH_AUTHORIZE_PATH) return MCP_OAUTH_AUTHORIZE_PATH;
-    return `${url.pathname}${url.search}`;
+    const returnTo = `${url.pathname}${url.search}`;
+    return returnTo.length <= MCP_OAUTH_MAX_RETURN_TO_LENGTH ? returnTo : MCP_OAUTH_AUTHORIZE_PATH;
   } catch {
     return MCP_OAUTH_AUTHORIZE_PATH;
   }
@@ -230,21 +183,12 @@ export async function parseOauthRequestFromReturnTo(
   return oauthProvider.parseAuthRequest(new Request(url, { method: "GET", headers: request.headers }));
 }
 
-export async function requireMcpOauthAdmin(request: Request, env: Env): Promise<AuthAdmin | null> {
-  const token = getMcpOauthLoginToken(request);
-  if (!token || !env.INTERNAL_SIGNING_SECRET) {
-    return null;
-  }
-
-  const verified = await verifyAdminSessionToken(env.INTERNAL_SIGNING_SECRET, token);
-  if (!verified.ok) {
-    return null;
-  }
-
+export async function requireMcpOauthAdmin(request: Request, env: Env): Promise<UserBackedAuthAdmin | null> {
   try {
-    return await getAdminBySessionClaims(env.DB, verified.claims);
-  } catch {
-    return null;
+    return (await resolveUserSessionFromRequest(env.DB, request, env)).staff ?? null;
+  } catch (error) {
+    if (error instanceof AppError && (error.status === 401 || error.status === 403)) return null;
+    throw error;
   }
 }
 
@@ -254,27 +198,32 @@ export async function describeMcpAuthorization(
   returnTo: string,
 ): Promise<{
   authenticated: boolean;
+  authorized: boolean;
   returnTo: string;
   clientId: string;
   clientName: string;
   requestedScopes: AuthScope[];
   grantedScopes: AuthScope[];
-  adminEmail: string | null;
+  userEmail: string | null;
+  staffEmail: string | null;
 }> {
   const authRequest = await parseOauthRequestFromReturnTo(request, env.OAUTH_PROVIDER, returnTo);
   const clientInfo = await env.OAUTH_PROVIDER.lookupClient(authRequest.clientId);
-  const admin = await requireMcpOauthAdmin(request, env);
+  const session = await resolveUserSessionFromRequest(env.DB, request, env).catch(() => null);
+  const admin = session?.staff ?? null;
   const requestedScopes = normalizeMcpOauthScopes(authRequest.scope);
   const grantedScopes = admin ? grantedMcpOauthScopes(admin, requestedScopes) : [];
 
   return {
-    authenticated: admin !== null,
+    authenticated: session !== null,
+    authorized: admin !== null,
     returnTo,
     clientId: authRequest.clientId,
     clientName: clientInfo?.clientName ?? clientInfo?.clientId ?? authRequest.clientId,
     requestedScopes,
     grantedScopes,
-    adminEmail: admin?.email ?? null,
+    userEmail: session?.identity.email ?? null,
+    staffEmail: admin?.email ?? null,
   };
 }
 
@@ -331,93 +280,24 @@ export async function sendMcpAuthorizeMagicLink(options: {
     hashOptional(clientIp, secret),
     hashOptional(getUserAgent(options.request), secret),
   ]);
-  const magic = await requestAdminMagicLink(options.env.DB, {
+  const appBaseUrl = resolveAppBaseUrl(options.env, options.request);
+  const result = await requestUserSignInLink(options.env.DB, {
     email: options.email,
     ipHash,
     userAgentHash,
     ttlMinutes: config.magicLinkTtlMinutes,
+    signingSecret: secret,
+    magicLinkBaseUrl: buildManagementLink(appBaseUrl, {
+      kind: "mcp-oauth",
+      returnTo: sanitizeAuthorizeReturnTo(options.returnTo),
+    }),
   });
 
-  if (!magic.token || !magic.admin) {
+  if (!result.outboxId) {
     return;
   }
 
-  const appBaseUrl = resolveAppBaseUrl(options.env, options.request);
-  await storeMcpOauthReturnTo(options.env, magic.token, options.returnTo);
-  const magicLinkUrl = `${appBaseUrl}${MCP_OAUTH_UI_PATH}?flow=mcp-oauth&token=${encodeURIComponent(magic.token)}`;
-  const outboxId = await queueEmail(options.env.DB, {
-    templateKey: "admin_magic_link",
-    recipientEmail: magic.admin.email,
-    recipientUserId: null,
-    eventId: null,
-    messageType: "transactional",
-    subject: "Your PKI Consortium admin sign-in link",
-    data: {
-      email: magic.admin.email,
-      magicLinkUrl,
-      expiresInMinutes: config.magicLinkTtlMinutes,
-    },
-  });
-
-  await processOutboxByIdBackground(options.env.DB, options.env, outboxId);
-  await writeAuditLog(
-    options.env.DB,
-    "admin",
-    magic.admin.id,
-    "admin_magic_link_requested",
-    "admin_user",
-    magic.admin.id,
-    {
-      email: magic.admin.email,
-      channel: "mcp_oauth",
-    },
-  );
-}
-
-export async function verifyMcpAuthorizeMagicLink(
-  request: Request,
-  env: Env,
-): Promise<{ admin: AuthAdmin; sessionToken: string; expiresAt: string; returnTo: string }> {
-  const token = new URL(request.url).searchParams.get("token");
-  if (!token) {
-    throw new AppError(400, "MAGIC_LINK_INVALID", "Missing admin magic link token");
-  }
-
-  const secret = requireInternalSecret(env);
-  const [ipHash, userAgentHash] = await Promise.all([
-    hashOptional(getClientIp(request), secret),
-    hashOptional(getUserAgent(request), secret),
-  ]);
-  const verified = await verifyAdminMagicLink(env.DB, {
-    token,
-    sessionTtlHours: 8,
-    ipHash,
-    userAgentHash,
-  });
-
-  const admin: AuthAdmin = {
-    ...verified.admin,
-    scopes: [...AUTH_SCOPES],
-    sessionId: verified.sessionId,
-    expiresAt: verified.expiresAt,
-  };
-  const sessionToken = await signAdminSessionToken(secret, {
-    admin,
-    sessionId: verified.sessionId,
-    expiresAt: verified.expiresAt,
-    scopes: [...AUTH_SCOPES],
-  });
-  await writeAuditLog(env.DB, "admin", verified.admin.id, "admin_magic_link_verified", "admin_session", null, {
-    expiresAt: verified.expiresAt,
-    channel: "mcp_oauth",
-  });
-
-  return {
-    admin,
-    sessionToken,
-    expiresAt: verified.expiresAt,
-    returnTo: await consumeMcpOauthReturnTo(env, token),
-  };
+  options.executionCtx.waitUntil(processOutboxByIdBackground(options.env.DB, options.env, result.outboxId));
 }
 
 export function grantedMcpOauthScopes(admin: AuthAdmin, requestedScopes: readonly AuthScope[]): AuthScope[] {
@@ -431,6 +311,10 @@ export function toOAuthErrorResponse(error: unknown): Response {
 
   if (error instanceof AppError) {
     return jsonResponse({ error: { code: error.code, message: error.message } }, error.status);
+  }
+
+  if (error instanceof z.ZodError) {
+    return jsonResponse({ error: { code: "VALIDATION_ERROR", message: "Invalid OAuth request" } }, 400);
   }
 
   return jsonResponse({ error: { code: "OAUTH_ERROR", message: "Unexpected OAuth authorization error." } }, 500);

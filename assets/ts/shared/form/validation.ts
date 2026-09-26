@@ -1,42 +1,8 @@
-import { clearFieldErrors, findFieldErrorTarget } from "./validation-map";
-import { normalizedEmailSchema } from "../../../shared/schemas/api";
-
-// Domains that are common personal / consumer email providers.
-// When detected, we show an inline advisory — we do NOT block the submission.
-const PERSONAL_EMAIL_DOMAINS = new Set([
-  "gmail.com",
-  "googlemail.com",
-  "hotmail.com",
-  "hotmail.co.uk",
-  "hotmail.fr",
-  "hotmail.de",
-  "outlook.com",
-  "outlook.co.uk",
-  "live.com",
-  "live.co.uk",
-  "live.nl",
-  "live.de",
-  "msn.com",
-  "yahoo.com",
-  "yahoo.co.uk",
-  "yahoo.fr",
-  "yahoo.de",
-  "icloud.com",
-  "me.com",
-  "mac.com",
-  "aol.com",
-  "protonmail.com",
-  "proton.me",
-  "tutanota.com",
-  "tuta.io",
-  "gmx.com",
-  "gmx.de",
-  "gmx.net",
-  "mail.com",
-  "yandex.com",
-  "yandex.ru",
-  "zoho.com",
-]);
+import { clearFieldErrors, findControlFieldError, findFieldErrorTarget, setFieldMessage } from "./validation-map";
+import { applyFieldState, type FieldState } from "../../ui/field-state";
+import { normalizedEmailSchema } from "../../../shared/schemas/api-common";
+import { httpUrlSchema } from "../../../shared/schemas/urls";
+import { isPersonalEmailAddress } from "../../../shared/constants/email-domains";
 
 /**
  * Shows or hides the [data-email-warning] hint element based on whether
@@ -45,17 +11,18 @@ const PERSONAL_EMAIL_DOMAINS = new Set([
  */
 function applyEmailWarning(field: HTMLInputElement, form: HTMLFormElement): void {
   const warningEl = form.querySelector<HTMLElement>("[data-email-warning]");
-  const domain = field.value.trim().split("@")[1]?.toLowerCase() ?? "";
-  const isPersonal = domain.length > 0 && PERSONAL_EMAIL_DOMAINS.has(domain);
+  const isPersonal = isPersonalEmailAddress(field.value);
 
   if (isPersonal) {
-    // data attribute lets CSS neutralise Bootstrap's green :valid ring
+    // The advisory state reads this back: a personal domain is worth flagging
+    // but never blocks a submission, so it must not become `invalid`.
     field.dataset.personalEmail = "true";
-    if (warningEl) warningEl.classList.remove("d-none");
   } else {
     delete field.dataset.personalEmail;
-    if (warningEl) warningEl.classList.add("d-none");
   }
+
+  if (!warningEl) return;
+  warningEl.hidden = !isPersonal;
 }
 
 function applyEmailValidity(field: HTMLInputElement): void {
@@ -65,19 +32,94 @@ function applyEmailValidity(field: HTMLInputElement): void {
 
   const value = field.value.trim();
   if (value.length === 0) {
-    field.setCustomValidity("");
+    if (field.dataset.emailFormatError === "true") {
+      field.setCustomValidity("");
+      delete field.dataset.emailFormatError;
+    }
     return;
   }
 
   const result = normalizedEmailSchema.safeParse(value);
-  field.setCustomValidity(result.success ? "" : (result.error.issues[0]?.message ?? "Invalid email address"));
+  if (result.success) {
+    if (field.dataset.emailFormatError === "true") {
+      field.setCustomValidity("");
+      delete field.dataset.emailFormatError;
+    }
+    return;
+  }
+
+  field.setCustomValidity(result.error.issues[0]?.message ?? "Invalid email address");
+  field.dataset.emailFormatError = "true";
 }
 
-function writeFieldError(form: HTMLFormElement, name: string, message: string): void {
-  const target = findFieldErrorTarget(form, name);
-  if (target) {
-    target.textContent = message;
+/**
+ * A `type="url"` control is held to the shared link contract — HTTP(S) only,
+ * no userinfo — not merely to the browser's looser idea of a URL, so the
+ * field says the same thing the server will.
+ */
+function applyUrlValidity(field: HTMLInputElement): void {
+  if (field.type !== "url") return;
+
+  const value = field.value.trim();
+  const result = value.length === 0 ? null : httpUrlSchema.safeParse(value);
+  if (result === null || result.success) {
+    if (field.dataset.urlFormatError === "true") {
+      field.setCustomValidity("");
+      delete field.dataset.urlFormatError;
+    }
+    return;
   }
+
+  field.setCustomValidity(result.error.issues[0]?.message ?? "Invalid URL");
+  field.dataset.urlFormatError = "true";
+}
+
+export type FormControl = HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement;
+
+/** The shared-contract checks a control carries beyond its own constraints. */
+export function applyControlValidity(control: FormControl): void {
+  if (!(control instanceof HTMLInputElement)) return;
+  applyEmailValidity(control);
+  applyUrlValidity(control);
+}
+
+/**
+ * The state a control is in once it has been checked.
+ *
+ * A control the user has not filled in yet gets no state at all: an empty
+ * optional field is not a success, and marking every blank control green on
+ * page load is noise rather than feedback. Choice controls are excluded from
+ * the success mark because their `value` is the option's value whether or not
+ * it is selected, so it says nothing about whether the group was answered.
+ */
+export function fieldStateFor(control: FormControl): FieldState | null {
+  if (!control.checkValidity()) return "invalid";
+  if (control instanceof HTMLInputElement) {
+    if (control.dataset.personalEmail === "true") return "advisory";
+    if (control.type === "radio" || control.type === "checkbox") return null;
+  }
+  return control.value.trim().length > 0 ? "ok" : null;
+}
+
+/**
+ * Reports a control's validity through its field.
+ *
+ * The message and the state move together — the field group is what carries
+ * the colour and the mark, so writing the text alone leaves the control looking
+ * exactly as it did when it was correct.
+ */
+function reportField(form: HTMLFormElement, control: FormControl, message: string): void {
+  // Each consent card owns its own checkbox error. Reusing the collection's
+  // server-error slot puts a required term's message below the last (possibly
+  // optional) card, making that optional choice look mandatory.
+  if (control.name === "consents" && control.closest("[data-term-key]")) return;
+  const target = findControlFieldError(control) ?? findFieldErrorTarget(form, control.name);
+  if (message.length > 0) {
+    setFieldMessage(target, message, "invalid");
+    return;
+  }
+  setFieldMessage(target, "");
+  applyFieldState(control.closest(".pk-field"), fieldStateFor(control));
 }
 
 function validateNativeFields(form: HTMLFormElement): boolean {
@@ -90,13 +132,13 @@ function validateNativeFields(form: HTMLFormElement): boolean {
       continue;
     }
 
-    if (field instanceof HTMLInputElement) {
-      applyEmailValidity(field);
-    }
+    applyControlValidity(field);
 
     if (!field.checkValidity()) {
       allValid = false;
-      writeFieldError(form, field.name, field.validationMessage || "Invalid value");
+      reportField(form, field, field.validationMessage || "Invalid value");
+    } else {
+      reportField(form, field, "");
     }
   }
 
@@ -106,33 +148,29 @@ function validateNativeFields(form: HTMLFormElement): boolean {
 export function installLiveValidation(form: HTMLFormElement, _statusEl: HTMLElement): void {
   const handler = (event: Event) => {
     const target = event.target;
-    if (
-      !(
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLSelectElement ||
-        target instanceof HTMLTextAreaElement
-      )
-    ) {
+    if (!(
+      target instanceof HTMLInputElement ||
+      target instanceof HTMLSelectElement ||
+      target instanceof HTMLTextAreaElement
+    )) {
       return;
     }
     if (!target.name) {
       return;
     }
 
-    if (target instanceof HTMLInputElement) {
-      applyEmailValidity(target);
-      if (target.type === "email") {
-        applyEmailWarning(target, form);
-      }
+    applyControlValidity(target);
+    if (target instanceof HTMLInputElement && target.type === "email") {
+      applyEmailWarning(target, form);
     }
 
     if (target.checkValidity()) {
-      writeFieldError(form, target.name, "");
+      reportField(form, target, "");
       return;
     }
 
     form.classList.add("was-validated");
-    writeFieldError(form, target.name, target.validationMessage || "Invalid value");
+    reportField(form, target, target.validationMessage || "Invalid value");
     // Do NOT call setStatus here — per-field inline errors are sufficient
     // feedback during live typing. The global banner is reserved for
     // step-advance failures and submission errors only.
@@ -148,12 +186,18 @@ export function installLiveValidation(form: HTMLFormElement, _statusEl: HTMLElem
  * Call this when the user corrects their input and successfully advances a step.
  */
 export function clearStatus(target: HTMLElement): void {
-  if (target.dataset.state === "error") {
-    target.textContent = "";
+  if (target.dataset.state !== "error") return;
+  target.textContent = "";
+  // Mirrors setStatus: the element's own class list says which vocabulary it
+  // speaks, so a migrated banner is re-hidden rather than left showing.
+  if (target.classList.contains("pk-alert")) {
+    target.classList.add("pk-sr-only");
+    target.classList.remove("pk-alert--danger", "pk-alert--ok");
+  } else {
     target.classList.add("visually-hidden");
     target.classList.remove("alert-danger", "alert-success");
-    delete target.dataset.state;
   }
+  delete target.dataset.state;
 }
 
 export function validateBeforeSubmit(form: HTMLFormElement, _statusEl: HTMLElement): boolean {

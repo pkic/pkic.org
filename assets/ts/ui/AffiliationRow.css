@@ -1,0 +1,95 @@
+/*
+ * One tie in a list of ties.
+ *
+ * Rows separate with a rule rather than a gap, because the list is a history
+ * and the reader is comparing consecutive entries — a gap alone lets a long
+ * summary run into the next name.
+ */
+@layer components {
+  /*
+   * Mark, detail, and — when the tie can be managed — the menu that manages
+   * it. The actions track is `auto`, so a row without one gives the width back
+   * to the detail rather than reserving a gutter for a control that is not
+   * there.
+   */
+  .pk-affiliation {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: var(--pk-4);
+    align-items: start;
+  }
+
+  .pk-affiliation + .pk-affiliation {
+    padding-block-start: var(--pk-4);
+    border-block-start: 1px solid var(--pk-line-soft);
+  }
+
+  .pk-affiliation__media {
+    display: flex;
+  }
+
+  .pk-affiliation__actions {
+    display: flex;
+    flex: none;
+  }
+
+  .pk-affiliation__detail {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-1);
+    min-width: 0;
+  }
+
+  .pk-affiliation__name {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: var(--pk-2);
+  }
+
+  /* Same middot treatment as the profile header's facts: generated, so the
+     separator is never announced as content. */
+  .pk-affiliation__terms {
+    display: flex;
+    flex-wrap: wrap;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pk-affiliation__terms > li + li::before {
+    content: "·";
+    margin-inline: 0.4rem;
+    color: var(--pk-ink-faint);
+  }
+
+  .pk-affiliation__summary {
+    margin: 0;
+    max-width: 46rem;
+  }
+
+  /*
+   * The controls, and whatever they open, set slightly off the statement above
+   * so a row with an editor open still reads as one tie.
+   */
+  .pk-affiliation__footer {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-3);
+    margin-block-start: var(--pk-2);
+  }
+
+  /*
+   * A tie that has ended. Dimmed and desaturated together: opacity alone
+   * leaves a colour logo louder than a current one that happens to be grey.
+   * The dates in `terms` are what actually say it ended — this only stops a
+   * finished tie competing with a live one for attention.
+   */
+  .pk-affiliation--past {
+    opacity: 0.62;
+  }
+
+  .pk-affiliation--past .pk-affiliation__media {
+    filter: grayscale(1);
+  }
+}

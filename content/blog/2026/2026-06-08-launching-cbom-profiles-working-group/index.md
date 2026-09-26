@@ -9,6 +9,30 @@ authors:
 date: 2026-06-08T07:00:00+00:00
 keywords: [CBOM, Cryptographic Bill of Materials, BOM, SPDX, CycloneDX, PKI, PQC, crypto-agility, profile, working group, IBM, Michael Osborne]
 tags: [CBOM, PKI, PQC, Working Group]
+authorProfiles:
+  - name: Paul van Brouwershaven
+    organization: Digitorus
+    role: Founder and CEO
+    website: https://www.digitorus.com
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
+    assetdirectory: images/members/digitorus
+  - name: Michael Osborne
+    organization: IBM
+    role: CTO IBM Quantum Safe, IBM Research
+    website: https://www.ibm.com
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/michael-osborne-qsafe/
+    assetdirectory: images/members/ibm
+  - name: William (Bill) Turner
+    organization: William (Bill) Turner
+    role: Independent
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/william-bill-turner-7969691b/
+    assetdirectory: images/members/bill-turner
 ---
 
 The PKI Consortium is pleased to announce the launch of the [CBOM Profiles Working Group](/wg/cbom/) — a new initiative to bring neutral, open guidance to one of the most pressing gaps in the cryptographic asset management landscape.

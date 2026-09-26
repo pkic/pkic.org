@@ -1,0 +1,594 @@
+import { z } from "zod";
+import {
+  eventIdSchema,
+  frontendPathPattern,
+  jsonErrorResponse,
+  successResponseSchema,
+  utcInstantSchema,
+} from "./api-common";
+import {
+  eventAttendanceRegistrationsListResponseSchema,
+  eventAttendanceRegistrationsQuerySchema,
+} from "./event-registrations";
+import {
+  eventCreateSchema,
+  eventProfileCatalogResponseSchema,
+  eventResourceCoreSchema,
+  eventSettingsSchema,
+} from "./event-management";
+import { eventFormsResponseSchema } from "./forms";
+import {
+  eventConfigurationRevisionSchema,
+  eventDaysManagementReplaceResponseSchema,
+  eventDaysManagementReplaceSchema,
+  eventDaysManagementResponseSchema,
+  eventTermsReplaceSchema,
+  eventTermsReplaceResponseSchema,
+  eventTermsResponseSchema,
+} from "./event-configuration";
+import {
+  eventProfileKeySchema,
+  eventRegistrationPolicySchema,
+  eventSourceModeSchema,
+  eventVisibilitySchema,
+  standaloneEventProfileKeySchema,
+} from "./event-series";
+import { groupIdSchema, groupReferenceParamsSchema } from "./groups";
+import { databaseIdSchema } from "./identifiers";
+import { linksSchema } from "./links";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { attendeeRegistrationParticipationSchema, registrationSubmissionResponseSchema } from "./registration";
+import { eventGroupGrantSchemas } from "./resource-grants";
+import { proposalAccessSchema } from "./event-proposals";
+import { eventSponsorTiersReplaceSchema, eventSponsorTiersResponseSchema } from "./sponsorship-management";
+import {
+  eventAttendeeInvitesListResponseSchema,
+  eventInvitesListQuerySchema,
+  eventInviteResendSchema,
+  eventInviteResendResponseSchema,
+} from "./event-invites";
+import {
+  eventRegistrationAdmitResponseSchema,
+  eventRegistrationAttendanceDetailResponseSchema,
+  eventRegistrationSelectedDayAdmitSchema,
+  eventRegistrationDayAttendanceChangeSchema,
+  eventRegistrationManagerUpdateSchema,
+  eventRegistrationManagerUpdateResponseSchema,
+  eventRegistrationDayAttendanceResponseSchema,
+} from "./event-registration-detail";
+import { requiresSession } from "./route-contract";
+
+export const GROUP_EVENTS_SORT_COLUMNS = ["name", "starts_at", "next_occurrence_at", "created_at"] as const;
+
+export const groupEventsListQuerySchema = listQuerySchema(GROUP_EVENTS_SORT_COLUMNS).extend({
+  collection: z.enum(["events", "unscheduled_meetings"]).optional(),
+  profileKey: eventProfileKeySchema.optional(),
+  registrationPolicy: eventRegistrationPolicySchema.optional(),
+  sourceMode: eventSourceModeSchema.optional(),
+  from: utcInstantSchema.optional(),
+  to: utcInstantSchema.optional(),
+});
+export type GroupEventsListQuery = z.infer<typeof groupEventsListQuerySchema>;
+
+export const groupEventSchema = eventResourceCoreSchema.extend({
+  ownerGroupId: groupIdSchema,
+  seriesId: databaseIdSchema.nullable(),
+  basePath: z.string().trim().regex(frontendPathPattern).max(300).nullable(),
+  location: z.string().nullable(),
+  links: linksSchema,
+  nextOccurrenceAt: z.string().nullable(),
+  capabilities: z.array(eventGroupGrantSchemas.capabilitySchema).max(eventGroupGrantSchemas.capabilities.length),
+  /** Event-scoped proposal authority; never implies a generic event or group grant. */
+  proposalAccess: proposalAccessSchema.nullable().default(null),
+});
+export type GroupEvent = z.infer<typeof groupEventSchema>;
+
+export const groupEventsListResponseSchema = paginatedResponseSchema("events", groupEventSchema);
+export const groupEventDetailResponseSchema = z.object({ event: groupEventSchema });
+
+export const groupEventProfilesRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "List active event profiles available to a group manager",
+  description:
+    "Returns the active D1-backed event profile catalog. Meeting profiles are intentionally marked series-only.",
+  request: { params: groupReferenceParamsSchema },
+  responses: {
+    "200": {
+      description: "Active event profiles and their portal creation eligibility.",
+      content: { "application/json": { schema: eventProfileCatalogResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Effective group management permission is required."),
+    "404": jsonErrorResponse("Group not found or unavailable to this identity."),
+  },
+};
+
+export const groupEventParamsSchema = groupReferenceParamsSchema.extend({ eventId: eventIdSchema });
+const groupEventRegistrationParamsSchema = groupEventParamsSchema.extend({ registrationId: databaseIdSchema });
+const groupEventInviteParamsSchema = groupEventParamsSchema.extend({ inviteId: databaseIdSchema });
+export const groupEventTermsReplaceSchema = eventConfigurationRevisionSchema.extend({
+  configuration: eventTermsReplaceSchema,
+});
+export const groupEventTermsResponseSchema = eventTermsResponseSchema.extend({
+  eventUpdatedAt: utcInstantSchema,
+});
+export const groupEventTermsReplaceResponseSchema = eventTermsReplaceResponseSchema.extend({
+  eventUpdatedAt: utcInstantSchema,
+});
+
+export const groupEventDaysReplaceSchema = eventDaysManagementReplaceSchema;
+export const groupEventDaysResponseSchema = eventDaysManagementResponseSchema;
+export const groupEventDaysReplaceResponseSchema = eventDaysManagementReplaceResponseSchema;
+
+export const groupEventRegistrationSettingsResponseSchema = z.object({
+  eventUpdatedAt: utcInstantSchema,
+  registrationPolicy: eventRegistrationPolicySchema,
+});
+
+export const groupEventRegistrationSettingsUpdateSchema = z.object({
+  expectedUpdatedAt: utcInstantSchema,
+  registrationPolicy: eventRegistrationPolicySchema,
+});
+
+/** A portal-managed event always has the selected group as its owner. */
+export const groupEventCreateSchema = eventCreateSchema
+  .omit({
+    registrationMode: true,
+    venue: true,
+    virtualUrl: true,
+  })
+  .extend({
+    profileKey: standaloneEventProfileKeySchema,
+    registrationPolicy: z.literal("no_registration").default("no_registration"),
+    visibility: eventVisibilitySchema.default("group_members"),
+    location: eventSettingsSchema.shape.location,
+    links: linksSchema.optional(),
+  });
+type ParsedGroupEventCreateInput = z.infer<typeof groupEventCreateSchema>;
+export type GroupEventCreateInput = Omit<ParsedGroupEventCreateInput, "visibility"> & {
+  visibility?: ParsedGroupEventCreateInput["visibility"];
+};
+
+/** Optimistic concurrency keeps two group managers from silently overwriting each other. */
+export const groupEventSettingsUpdateSchema = eventSettingsSchema
+  .omit({
+    registrationPolicy: true,
+    venue: true,
+    virtualUrl: true,
+  })
+  .extend({
+    links: linksSchema.optional(),
+    expectedUpdatedAt: utcInstantSchema,
+  });
+export type GroupEventSettingsUpdateInput = z.infer<typeof groupEventSettingsUpdateSchema>;
+
+export const groupEventsListRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "List events available through a group",
+  description: "Access filtering, search, sorting, counting, and pagination are executed in D1.",
+  request: { params: groupReferenceParamsSchema, query: groupEventsListQuerySchema },
+  responses: {
+    "200": {
+      description: "A bounded page of group-owned and explicitly shared events.",
+      content: { "application/json": { schema: groupEventsListResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "404": jsonErrorResponse("Group not found or not visible."),
+  },
+};
+
+export const groupEventDetailRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Get one event available through a group",
+  request: { params: groupEventParamsSchema },
+  responses: {
+    "200": {
+      description: "The capability-filtered event projection.",
+      content: { "application/json": { schema: groupEventDetailResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+  },
+};
+
+export const groupEventRegistrationConfigRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Get registration configuration for a group event",
+  description:
+    "Returns the exact active event form placement, attendee terms, session types, and event-day attendance options.",
+  request: { params: groupEventParamsSchema },
+  responses: {
+    "200": {
+      description: "The registration configuration for the selected group event.",
+      content: { "application/json": { schema: eventFormsResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event registration access is required."),
+    "404": jsonErrorResponse("The event is not available through this group."),
+  },
+};
+
+export const groupEventTermsGetRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Get terms for a managed group event",
+  request: { params: groupEventParamsSchema },
+  responses: {
+    "200": {
+      description: "Active terms and the event revision used for optimistic updates.",
+      content: { "application/json": { schema: groupEventTermsResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "404": jsonErrorResponse("The event is not available through this group."),
+    "409": jsonErrorResponse("Meeting events must be configured through their meeting series."),
+  },
+};
+
+export const groupEventTermsReplaceRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Replace terms for a managed group event",
+  description: "Replaces all audience term sets in one guarded D1 batch with an optimistic event revision.",
+  request: {
+    params: groupEventParamsSchema,
+    body: { required: true, content: { "application/json": { schema: groupEventTermsReplaceSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "The terms were replaced and the event revision advanced.",
+      content: { "application/json": { schema: groupEventTermsReplaceResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "409": jsonErrorResponse("The event or management authority changed; reload and retry."),
+  },
+};
+
+export const groupEventDaysGetRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Get attendance days for a managed group event",
+  description: "Attendance counts are aggregated in D1 and returned with the event revision.",
+  request: { params: groupEventParamsSchema },
+  responses: {
+    "200": {
+      description: "Configured days, attendance counts, and the event revision.",
+      content: { "application/json": { schema: groupEventDaysResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "404": jsonErrorResponse("The event is not available through this group."),
+    "409": jsonErrorResponse("Meeting events must be configured through their meeting series."),
+  },
+};
+
+export const groupEventDaysReplaceRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Replace attendance days for a managed group event",
+  description: "Updates matching days in place and removes only unused omitted days in one guarded D1 batch.",
+  request: {
+    params: groupEventParamsSchema,
+    body: { required: true, content: { "application/json": { schema: groupEventDaysReplaceSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Updated days, the new event revision, and dates retained because registrations reference them.",
+      content: { "application/json": { schema: groupEventDaysReplaceResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "409": jsonErrorResponse("The event or management authority changed; reload and retry."),
+  },
+};
+
+export const groupEventRegistrationSettingsGetRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Get registration settings for a managed group event",
+  description:
+    "Returns the canonical registration policy. The attendee form placement is managed through the purpose-parameterized event-form routes.",
+  request: { params: groupEventParamsSchema },
+  responses: {
+    "200": {
+      description: "The event registration policy and its current event revision.",
+      content: { "application/json": { schema: groupEventRegistrationSettingsResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "404": jsonErrorResponse("The event is not available through this group."),
+    "409": jsonErrorResponse("Meeting events must be configured through their meeting series."),
+  },
+};
+
+export const groupEventRegistrationSettingsPutRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Update registration settings for a managed group event",
+  description: "Atomically updates the canonical registration policy for a managed group event.",
+  request: {
+    params: groupEventParamsSchema,
+    body: {
+      required: true,
+      content: { "application/json": { schema: groupEventRegistrationSettingsUpdateSchema } },
+    },
+  },
+  responses: {
+    "200": {
+      description: "Registration settings updated.",
+      content: { "application/json": { schema: groupEventRegistrationSettingsResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "404": jsonErrorResponse("The event is not available through this group."),
+    "409": jsonErrorResponse("The event or management authority changed; reload and retry."),
+    "422": jsonErrorResponse("Registration requires at least one required attendee term."),
+  },
+};
+
+export const groupEventCreateRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Create a group-owned event",
+  description: "Creates a portal-managed event owned by the selected group.",
+  request: {
+    params: groupReferenceParamsSchema,
+    body: { required: true, content: { "application/json": { schema: groupEventCreateSchema } } },
+  },
+  responses: {
+    "201": {
+      description: "Event created.",
+      content: { "application/json": { schema: groupEventDetailResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Effective group management permission is required."),
+    "409": jsonErrorResponse("The group state or event slug changed concurrently."),
+  },
+};
+
+export const groupEventSettingsUpdateRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Update a group event's settings",
+  description: "Updates one group-owned or explicitly managed event with an optimistic revision check.",
+  request: {
+    params: groupEventParamsSchema,
+    body: { required: true, content: { "application/json": { schema: groupEventSettingsUpdateSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Event settings updated.",
+      content: { "application/json": { schema: groupEventDetailResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "409": jsonErrorResponse("The event or management authority changed; reload and retry."),
+  },
+};
+
+export const groupEventSponsorTiersGetRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups", "Sponsorships"],
+  summary: "View sponsor attendee-data tiers for a managed group event",
+  request: { params: groupEventParamsSchema },
+  responses: {
+    "200": {
+      description: "Sponsor attendee-data tiers for the selected event.",
+      content: { "application/json": { schema: eventSponsorTiersResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "404": jsonErrorResponse("The event is not available through this group."),
+  },
+};
+
+export const groupEventSponsorTiersPutRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups", "Sponsorships"],
+  summary: "Replace sponsor attendee-data tiers for a managed group event",
+  request: {
+    params: groupEventParamsSchema,
+    body: { required: true, content: { "application/json": { schema: eventSponsorTiersReplaceSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Sponsor attendee-data tiers replaced.",
+      content: { "application/json": { schema: eventSponsorTiersResponseSchema } },
+    },
+    "400": jsonErrorResponse("Invalid sponsor tier configuration."),
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "404": jsonErrorResponse("The event is not available through this group."),
+    "409": jsonErrorResponse("Event management access changed while the settings were saved."),
+  },
+};
+
+const groupEventAttendeeInvitesListQuerySchema = eventInvitesListQuerySchema.omit({ type: true });
+export type GroupEventAttendeeInvitesListQuery = z.infer<typeof groupEventAttendeeInvitesListQuerySchema>;
+
+export const groupEventInvitesListRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups", "Event invites"],
+  summary: "List attendee invitations for a managed group event",
+  description: "Returns a bounded, attendee-only invitation projection with server-side search and pagination.",
+  request: { params: groupEventParamsSchema, query: groupEventAttendeeInvitesListQuerySchema },
+  responses: {
+    "200": {
+      description: "A bounded attendee invitation page.",
+      content: { "application/json": { schema: eventAttendeeInvitesListResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "404": jsonErrorResponse("The event is not available through this group."),
+  },
+};
+
+export const groupEventInviteResendRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups", "Event invites"],
+  summary: "Resend an attendee invitation",
+  description: "Re-queues an existing attendee invitation that has not been accepted or revoked.",
+  request: {
+    params: groupEventInviteParamsSchema,
+    body: { content: { "application/json": { schema: eventInviteResendSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Invitation resent.",
+      content: { "application/json": { schema: eventInviteResendResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "404": jsonErrorResponse("The attendee invitation is not available for this event."),
+    "409": jsonErrorResponse("The invitation cannot be resent in its current state."),
+  },
+};
+
+export const groupEventInviteRevokeRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups", "Event invites"],
+  summary: "Revoke an attendee invitation",
+  description: "Revokes a pending attendee invitation before it is accepted.",
+  request: { params: groupEventInviteParamsSchema },
+  responses: {
+    "200": {
+      description: "Invitation revoked.",
+      content: { "application/json": { schema: successResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "404": jsonErrorResponse("The attendee invitation is not available for this event."),
+    "409": jsonErrorResponse("The invitation is no longer pending."),
+  },
+};
+
+/** Reuses canonical list controls with an attendance-manager-only projection. */
+export const groupEventRegistrationsListRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "List group event attendees",
+  description: "Filtering, search, sorting, statistics, and pagination are executed in D1.",
+  request: { params: groupEventParamsSchema, query: eventAttendanceRegistrationsQuerySchema },
+  responses: {
+    "200": {
+      description: "A bounded attendee page for an event the selected group may manage.",
+      content: { "application/json": { schema: eventAttendanceRegistrationsListResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event attendance-management access is required."),
+    "404": jsonErrorResponse("The event is not available through this group."),
+  },
+};
+
+export const groupEventRegistrationDetailRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Get one group event attendee for attendance management",
+  description: "Returns only the identity and day attendance/waitlist fields needed by a group attendance manager.",
+  request: { params: groupEventRegistrationParamsSchema },
+  responses: {
+    "200": {
+      description: "The selected attendee's bounded attendance-management projection.",
+      content: { "application/json": { schema: eventRegistrationAttendanceDetailResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event attendance-management access is required."),
+    "404": jsonErrorResponse("The event or registration is not available through this group."),
+  },
+};
+
+export const groupEventRegistrationDayAttendancePatchRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Update one group event attendee's day attendance",
+  description: "Updates selected event days while preserving the day-level waitlist as the source of truth.",
+  request: {
+    params: groupEventRegistrationParamsSchema,
+    body: { required: true, content: { "application/json": { schema: eventRegistrationDayAttendanceChangeSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Day attendance updated.",
+      content: { "application/json": { schema: eventRegistrationDayAttendanceResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event attendance-management access is required."),
+    "404": jsonErrorResponse("The event, registration, or event day was not found."),
+    "409": jsonErrorResponse("The requested attendance transition conflicts with capacity or current state."),
+  },
+};
+
+export const groupEventRegistrationManagerUpdateRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Cancel one group event attendee's registration",
+  description:
+    "Ends the registration as a whole: held days are released, day waitlist rows are removed and the attendee is notified. Requires the event manage capability.",
+  request: {
+    params: groupEventRegistrationParamsSchema,
+    body: { required: true, content: { "application/json": { schema: eventRegistrationManagerUpdateSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Registration cancelled.",
+      content: { "application/json": { schema: eventRegistrationManagerUpdateResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse("Event management access is required."),
+    "404": jsonErrorResponse("The event or registration was not found."),
+    "409": jsonErrorResponse("The registration is already cancelled."),
+  },
+};
+
+export const groupEventRegistrationAdmissionCreateRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Admit selected days for a group event attendee",
+  description:
+    "The capacity_exempt mode requires effective event manage_attendance capability and every selected day to be actively waitlisted. The vip mode requires the stronger effective event manage capability, a reason, and explicitly selected days; it may override capacity without a waitlist row. Both modes recheck the exact capability in the protected D1 batch and queue the existing registration-update notification.",
+  request: {
+    params: groupEventRegistrationParamsSchema,
+    body: { required: true, content: { "application/json": { schema: eventRegistrationSelectedDayAdmitSchema } } },
+  },
+  responses: {
+    "200": {
+      description: "Selected days admitted.",
+      content: { "application/json": { schema: eventRegistrationAdmitResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated portal identity is required."),
+    "403": jsonErrorResponse(
+      "Effective event manage_attendance is required for waitlist admission; effective event manage is required for VIP admission.",
+    ),
+    "404": jsonErrorResponse("The event or registration is not available through this group."),
+    "409": jsonErrorResponse("The event or registration changed; reload and retry."),
+  },
+};
+
+export const groupEventRegistrationCreateRouteSchema = {
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Register the authenticated user for a group event",
+  description:
+    "Uses the verified session identity and the canonical event-registration workflow; submitted identity fields are not accepted.",
+  request: {
+    params: groupEventParamsSchema,
+    body: {
+      required: true,
+      content: { "application/json": { schema: attendeeRegistrationParticipationSchema } },
+    },
+  },
+  responses: {
+    "200": {
+      description: "Authenticated registration completed.",
+      content: { "application/json": { schema: registrationSubmissionResponseSchema } },
+    },
+    "403": jsonErrorResponse("The event does not permit registration through this group."),
+    "404": jsonErrorResponse("The event is not available through this group."),
+    "409": jsonErrorResponse("Registration state or capacity changed concurrently."),
+    "422": jsonErrorResponse("The profile, answers, attendance, or consent is incomplete."),
+  },
+};

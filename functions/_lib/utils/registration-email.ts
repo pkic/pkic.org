@@ -1,23 +1,13 @@
 import { all } from "../db/queries";
-import { parseJsonSafe } from "../utils/json";
-import { getActiveFormByPurpose } from "../services/forms";
+import { formatCustomAnswerValue, isCustomAnswerRecord } from "./custom-answer-display";
+import { resolveEventFormResponse } from "../services/forms";
 import type { DatabaseLike } from "../types";
+import type { EventFormResponseInput } from "../services/forms";
 import type { FormFieldDefinition } from "../services/forms/read";
 
 export interface CustomAnswerRow {
   label: string;
   displayValue: string;
-}
-
-function formatCustomAnswerValue(fieldType: string, value: unknown): string {
-  if (value === null || value === undefined) return "";
-  if (Array.isArray(value)) return (value as unknown[]).map(String).join(", ");
-  if (typeof value === "boolean") return value ? "Yes" : "No";
-  if (typeof value === "object") {
-    const range = value as { start?: string; end?: string };
-    if (range.start && range.end) return `${range.start} – ${range.end}`;
-  }
-  return String(value);
 }
 
 /**
@@ -29,7 +19,7 @@ export function buildCustomAnswerRows(
   customAnswers: Record<string, unknown> | null | undefined,
   formFields: FormFieldDefinition[] | null | undefined,
 ): CustomAnswerRow[] {
-  if (!customAnswers || !formFields?.length) return [];
+  if (!isCustomAnswerRecord(customAnswers) || !formFields?.length) return [];
   const rows: CustomAnswerRow[] = [];
   for (const field of formFields) {
     if (field.fieldType === "boolean") continue; // covered by acceptedTermsText
@@ -37,7 +27,7 @@ export function buildCustomAnswerRows(
     if (value === undefined || value === null || value === "") continue;
     rows.push({
       label: field.label,
-      displayValue: formatCustomAnswerValue(field.fieldType, value),
+      displayValue: formatCustomAnswerValue(value, field),
     });
   }
   return rows;
@@ -47,12 +37,12 @@ export function buildCustomAnswerVariables(
   customAnswers: Record<string, unknown> | null | undefined,
   formFields: FormFieldDefinition[] | null | undefined,
 ): Record<string, string> {
-  if (!customAnswers || !formFields?.length) return {};
+  if (!isCustomAnswerRecord(customAnswers) || !formFields?.length) return {};
   const vars: Record<string, string> = {};
   for (const field of formFields) {
     const value = customAnswers[field.key];
     if (value === undefined || value === null || value === "") continue;
-    vars[field.key] = formatCustomAnswerValue(field.fieldType, value);
+    vars[field.key] = formatCustomAnswerValue(value, field);
   }
   return vars;
 }
@@ -97,18 +87,15 @@ export async function getAcceptedTermsTextForRegistration(db: DatabaseLike, regi
 }
 
 /**
- * Fetch the active registration form for an event and map the stored
- * custom_answers_json to display rows with human-readable labels.
+ * Resolve the exact response set when available, then map its normalized
+ * answer values to human-readable rows. Current event configuration is used
+ * only for legacy registrations without a stored response-set attribution.
  */
 export async function getCustomAnswerRows(
   db: DatabaseLike,
-  eventId: string,
-  customAnswersJson: string | null | undefined,
+  input: Omit<EventFormResponseInput, "source">,
 ): Promise<CustomAnswerRow[]> {
-  if (!customAnswersJson) return [];
-  const form = await getActiveFormByPurpose(db, eventId, "event_registration");
-  if (!form) return [];
-  const parsed = parseJsonSafe<Record<string, unknown> | null>(customAnswersJson, null);
-  if (!parsed) return [];
-  return buildCustomAnswerRows(parsed, form.fields);
+  const response = await resolveEventFormResponse(db, { ...input, source: "registration" });
+  if (!response?.form) return [];
+  return buildCustomAnswerRows(response.answers, response.form.fields);
 }

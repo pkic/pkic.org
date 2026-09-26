@@ -20,15 +20,11 @@ menu:
     parent: consortium
     weight: 14
 
-# The membership list is automatically created from the membership data,
-# please check the folder `data/members`.
-#
-# https://github.com/pkic/pkic.github.io/tree/main/data/members
+# The member directory is populated from the portal-managed membership records.
 
 outputs:
   - html
   - og-card
-  - members-data
 ---
 
-{{< members class="d-none d-lg-block" >}}
+{{< members class="members-overview--wide-only" >}}

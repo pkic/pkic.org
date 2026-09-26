@@ -1,3 +1,4 @@
+import { eventFormsResponseSchema } from "../assets/shared/schemas/forms";
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
@@ -55,6 +56,21 @@ describe("event frontend routes and hydration contracts", () => {
     expect(withBasePath.proposalPath).toBe("/events/2026/pqc-conference-amsterdam-nl/propose/");
     expect(withBasePath.registrationManagePath).toBe("/events/2026/pqc-conference-amsterdam-nl/register/manage/");
     expect(withBasePath.proposalManagePath).toBe("/events/2026/pqc-conference-amsterdam-nl/propose/manage/");
+  });
+
+  it("keeps portal routes platform-owned when legacy frontend overrides exist", () => {
+    const portal = resolveEventFrontendRoutes({
+      slug: "portal-event",
+      base_path: "/events/2027/portal-event/",
+      starts_at: "2028-12-01T08:00:00.000Z",
+      source_mode: "portal",
+      settings_json: JSON.stringify({
+        frontend: { routes: { registration: "/attacker-controlled/", proposalManage: "/stale-path/" } },
+      }),
+    });
+
+    expect(portal.registrationPath).toBe("/events/2027/portal-event/register/");
+    expect(portal.proposalManagePath).toBe("/events/2027/portal-event/propose/manage/");
   });
 
   it("falls back to starts_at year when base_path is null", () => {
@@ -135,16 +151,14 @@ describe("event frontend routes and hydration contracts", () => {
     await seedEventAndAdmin(env.DB);
 
     const response = await app.fetch(
-      new Request("https://app.test/api/v1/events/pqc-2026/forms?purpose=event_registration"),
+      new Request("https://app.test/api/v1/events/pqc-2026/forms/placements/event_registration"),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
 
     expect(response.status).toBe(200);
-    const payload = (await response.json()) as {
-      purpose: string;
-      requiredTerms: Array<{ termKey: string; version: string; required: boolean }>;
-    };
+    const payload = eventFormsResponseSchema.parse(await response.json());
+    expect(payload.registrationPolicy).toBe("public");
 
     expect(payload.purpose).toBe("event_registration");
     expect(payload.requiredTerms.length).toBeGreaterThan(0);
@@ -190,7 +204,7 @@ describe("event frontend routes and hydration contracts", () => {
     ]);
 
     const registrationResponse = await app.fetch(
-      new Request("https://app.test/api/v1/events/pqc-2026/forms?purpose=event_registration"),
+      new Request("https://app.test/api/v1/events/pqc-2026/forms/placements/event_registration"),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -199,7 +213,7 @@ describe("event frontend routes and hydration contracts", () => {
     expect(registrationPayload.form?.key).toBe(registrationLinkedKey);
 
     const proposalResponse = await app.fetch(
-      new Request("https://app.test/api/v1/events/pqc-2026/forms?purpose=proposal_submission"),
+      new Request("https://app.test/api/v1/events/pqc-2026/forms/placements/proposal_submission"),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
@@ -228,7 +242,7 @@ describe("event frontend routes and hydration contracts", () => {
     ]);
 
     const response = await app.fetch(
-      new Request("https://app.test/api/v1/events/pqc-2026/forms?purpose=event_registration"),
+      new Request("https://app.test/api/v1/events/pqc-2026/forms/placements/event_registration"),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );

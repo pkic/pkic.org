@@ -1,0 +1,146 @@
+@layer components {
+  .pk-avatar {
+    /*
+     * The default size lives on the base class, not only on `--md`.
+     *
+     * Avatar emits a modifier only for the NON-default sizes, so a plain
+     * <Avatar name="..." /> carried just `pk-avatar`. With no
+     * `--pk-avatar-size` set, `width: var(--pk-avatar-size)` is invalid and
+     * falls back to `auto` — and inside a stretching column that made a
+     * 300-pixel circle. Every default-size avatar on the site was doing this.
+     */
+    --pk-avatar-size: 2.5rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: var(--pk-avatar-size);
+    height: var(--pk-avatar-size);
+    border-radius: 50%;
+    background: var(--pk-accent-soft);
+    flex-shrink: 0;
+    overflow: hidden;
+  }
+
+  .pk-avatar--sm {
+    --pk-avatar-size: 2rem;
+  }
+
+  .pk-avatar--md {
+    --pk-avatar-size: 2.5rem;
+  }
+
+  .pk-avatar--lg {
+    --pk-avatar-size: 3rem;
+  }
+
+  /* The portrait size a profile header uses, where the avatar is the subject
+     of the page rather than a marker in a row. */
+  .pk-avatar--xl {
+    --pk-avatar-size: 5.75rem;
+  }
+
+  .pk-avatar__img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+  }
+
+  /*
+   * An organization's mark. A logo is a drawing with edges of its own, so it
+   * is fitted inside the tile with a margin rather than cropped to fill it
+   * the way a portrait is, and the tile sits on the page's white so a wordmark
+   * on a transparent ground stays legible.
+   */
+  .pk-avatar--square {
+    border-radius: var(--pk-radius-sm);
+    background: var(--pk-surface);
+    border: 1px solid var(--pk-line);
+  }
+
+  .pk-avatar--square .pk-avatar__img {
+    object-fit: contain;
+    padding: 12%;
+    box-sizing: border-box;
+  }
+
+  .pk-avatar--square .pk-avatar__initials {
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-avatar__initials {
+    /*
+     * The letters are a proportion of the circle, not of the text around it.
+     *
+     * `0.65em` measured the inherited body size, so every avatar wore the same
+     * nine-pixel initials whatever its diameter: legible enough in a 2rem list
+     * marker, and two specks adrift in the 5.75rem portrait at the top of a
+     * record (#44). Two capitals at 40% of the diameter fill the round the way
+     * a cropped photograph does, and leave an even margin at every size —
+     * including any the caller sets `--pk-avatar-size` to.
+     */
+    font-size: calc(var(--pk-avatar-size) * 0.4);
+    font-weight: 700;
+    color: var(--pk-accent-ink);
+    line-height: 1;
+  }
+
+  /*
+   * A portrait carrying a standing: ring, then the label across its foot.
+   *
+   * The ring is two nested rounds — the tone, then a surface-coloured gap —
+   * so the brand gradient reads as a ring rather than a halo bleeding into
+   * the portrait. The label overlaps the foot deliberately: it belongs to the
+   * portrait, and set below it instead it would read as the first line of
+   * whatever follows.
+   */
+  .pk-avatar-standing {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    flex: none;
+  }
+
+  .pk-avatar-standing__ring {
+    display: block;
+    padding: 3px;
+    border-radius: 50%;
+    background: var(--pk-grad-brand);
+  }
+
+  .pk-avatar-standing__ring > .pk-avatar {
+    border: 3px solid var(--pk-surface);
+    box-sizing: content-box;
+  }
+
+  .pk-avatar-standing__label {
+    position: relative;
+    z-index: 1;
+    /* Pulled up over the ring's foot, and allowed to be wider than the
+       portrait — "Board member" is longer than any avatar is round. */
+    margin-block-start: -0.6rem;
+    padding: 0.25rem 0.55rem;
+    border: 2px solid var(--pk-surface);
+    border-radius: var(--pk-radius-pill);
+    background: var(--pk-accent);
+    color: var(--pk-accent-on);
+    font-size: var(--pk-text-2xs);
+    line-height: 1;
+    letter-spacing: var(--pk-tracking-label);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  /* Held before, not now. */
+  .pk-avatar-standing[data-tone="neutral"] .pk-avatar-standing__ring {
+    background: var(--pk-line-strong);
+  }
+
+  .pk-avatar-standing[data-tone="neutral"] .pk-avatar {
+    filter: grayscale(1);
+  }
+
+  .pk-avatar-standing[data-tone="neutral"] .pk-avatar-standing__label {
+    background: var(--pk-ink-faint);
+    color: var(--pk-on-solid);
+  }
+}

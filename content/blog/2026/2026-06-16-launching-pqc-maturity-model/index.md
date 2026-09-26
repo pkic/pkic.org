@@ -12,6 +12,15 @@ params:
     heroTitle: "Defining 'Quantum-Ready' for the Supply Chain: Introducing the PQC Maturity Model (PQCMM)"
     heroImage: pqcmm-cover.png
     heroDescription: Simplifying post-quantum readiness with a clear, shared framework for vendors and buyers.
+authorProfiles:
+  - name: Paul van Brouwershaven
+    organization: Digitorus
+    role: Founder and CEO
+    website: https://www.digitorus.com
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
+    assetdirectory: images/members/digitorus
 ---
 
 As organizations prepare for the post-quantum era, terms like *quantum-ready* and *quantum-safe* are being widely used by technology providers. However, without a common definition, these claims vary from vendor to vendor. This lack of standardization leaves procurement, supply chain, and risk management teams with the difficult task of deciphering what these claims actually mean for their organization's security.

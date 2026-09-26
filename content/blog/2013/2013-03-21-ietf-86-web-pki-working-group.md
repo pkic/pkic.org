@@ -29,6 +29,15 @@ tags:
 title: IETF 86 – Web PKI Working Group
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 At the [IETF 86 meeting in Orlando](https://www.ietf.org/meeting/86/index.html) last week, there was a working group meeting discussing the operations of the Web PKI. At the previous IETF 85 meeting a [birds-of-a-feather](http://ssl.entrust.net/blog/?p=1591) was held to discuss the purpose of having such a group. The result of the meeting was an established group with the [charter](https://datatracker.ietf.org/wg/wpkops/charter/) that states purposes such as:
 

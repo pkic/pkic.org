@@ -4,14 +4,14 @@ import OAuthProvider from "@cloudflare/workers-oauth-provider";
 import { createMcpHandler } from "agents/mcp";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import type { Hono } from "hono";
-import { signAdminSessionToken } from "../auth/admin";
+import { signMcpSessionToken } from "../auth/mcp-session";
 import { AUTH_SCOPES } from "../auth/scopes";
-import { filterOpenApiSpecForMcp } from "../openapi/mcp";
 import type { Env } from "../types";
 import {
   MCP_OAUTH_AUTHORIZE_PATH,
   MCP_OAUTH_REGISTER_PATH,
   MCP_OAUTH_TOKEN_PATH,
+  parseMcpOauthProps,
   resolveMcpExternalToken,
   type McpOAuthEnv,
   type McpOAuthProps,
@@ -23,7 +23,7 @@ export const MCP_OPENAPI_JSON_PATH = "/api/v1/mcp/openapi.json";
 
 interface McpWorkerOptions {
   app: Hono<{ Bindings: Env }>;
-  openApiSchema: Record<string, unknown>;
+  getMcpOpenApiSchema: (request: Request, env: Env) => Promise<Record<string, unknown>>;
 }
 
 function ttlSeconds(value: string | undefined, fallback: number): number {
@@ -65,6 +65,7 @@ function apiRequestFromMcp(
     const headers = new Headers({ accept: "application/json" });
     if (authorization) {
       headers.set("authorization", authorization);
+      headers.set("x-pkic-machine-auth", "mcp");
     }
 
     let requestBody: BodyInit | undefined;
@@ -95,27 +96,21 @@ async function authorizationHeaderForMcp(
     return request.headers.get("authorization");
   }
 
-  if (oauthProps.authTransport === "api-key") {
+  if (oauthProps.identityType === "service") {
     return request.headers.get("authorization");
   }
 
-  if (!env.INTERNAL_SIGNING_SECRET || !oauthProps.sessionId || !oauthProps.sessionExpiresAt) {
+  if (!env.INTERNAL_SIGNING_SECRET) {
     return null;
   }
 
-  const token = await signAdminSessionToken(env.INTERNAL_SIGNING_SECRET, {
-    admin: {
-      id: oauthProps.adminId,
-      email: oauthProps.email,
-      role: oauthProps.role,
-      scopes: oauthProps.scopes,
-      sessionId: oauthProps.sessionId,
-      expiresAt: oauthProps.sessionExpiresAt,
-      state: oauthProps.state ?? null,
-    },
-    sessionId: oauthProps.sessionId,
-    expiresAt: oauthProps.sessionExpiresAt,
-    state: oauthProps.state ?? null,
+  const token = await signMcpSessionToken(env.INTERNAL_SIGNING_SECRET, {
+    sub: oauthProps.id,
+    sid: oauthProps.sessionId,
+    exp: Math.floor(new Date(oauthProps.sessionExpiresAt).getTime() / 1000),
+    email: oauthProps.email,
+    role: oauthProps.role,
+    state: oauthProps.state ?? undefined,
     scopes: oauthProps.scopes,
   });
 
@@ -126,7 +121,7 @@ function createMcpResponse(options: McpWorkerOptions) {
   return async (request: Request, env: Env, ctx: ExecutionContext, oauthProps?: McpOAuthProps): Promise<Response> => {
     const authorization = await authorizationHeaderForMcp(request, env, oauthProps);
     const server = openApiMcpServer({
-      spec: filterOpenApiSpecForMcp(options.openApiSchema),
+      spec: await options.getMcpOpenApiSchema(request, env),
       executor: mcpExecutor(env),
       request: apiRequestFromMcp(options.app, request, env, ctx, authorization),
       name: "pkic-api",
@@ -145,7 +140,7 @@ export function createMcpWorkerFetch(
 
   class McpApiHandler extends WorkerEntrypoint<McpOAuthEnv> {
     fetch(request: Request): Promise<Response> {
-      return mcpResponse(request, this.env, this.ctx, this.ctx.props as McpOAuthProps | undefined);
+      return mcpResponse(request, this.env, this.ctx, parseMcpOauthProps(this.ctx.props));
     }
   }
 

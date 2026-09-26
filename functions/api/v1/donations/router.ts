@@ -1,14 +1,23 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
-import { onRequestPost as DonationsCheckoutPost_l } from "./checkout";
-import { DonationsPromoterPost } from "./promoter";
+import { DonationsCheckoutPost } from "./checkout";
 import { DonationsSessionGet } from "./session";
+import { DonationDetailGet } from "./[id]";
+import { DonationsList } from "./index";
+import { DonationPromotersCreate, DonationPromotersList } from "./promoters";
+import { DonationsSyncPost } from "./sync";
+import { onRequestGet as DonationCheckoutBadgeGet } from "./checkouts/[sessionId]/badge";
 
 const app = new Hono();
 export const openapi = fromHono(app);
 
-app.post("/checkout", DonationsCheckoutPost_l);
-openapi.post("/promoter", DonationsPromoterPost);
+openapi.post("/checkout", DonationsCheckoutPost);
+openapi.post("/promoters", DonationPromotersCreate);
+openapi.get("/promoters", DonationPromotersList);
 openapi.get("/session", DonationsSessionGet);
+openapi.post("/sync", DonationsSyncPost);
+app.get("/checkouts/:sessionId/badge", DonationCheckoutBadgeGet);
+openapi.get("/", DonationsList);
+openapi.get("/:id", DonationDetailGet);
 
 export default openapi;

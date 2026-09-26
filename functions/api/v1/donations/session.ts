@@ -10,20 +10,11 @@
  * data needed for the "I just donated X" badge is returned.
  */
 
-import { OpenAPIRoute } from "chanfana";
 import { donationSessionGetRouteSchema, donationSessionQuerySchema } from "../../../../assets/shared/schemas/donation";
 import { json } from "../../../_lib/http";
 import type { Env } from "../../../_lib/types";
-interface DonationBadgeRow {
-  gross_amount: number;
-  currency: string;
-  name: string;
-  source: string | null;
-  completed_at: string | null;
-  status: string;
-  payment_method_type: string | null;
-  session_expires_at: number | null;
-}
+import { openApiRoute } from "../../../_lib/openapi/route";
+import { getDonationBadgeBySession } from "../../../_lib/services/donations";
 
 export async function onRequestGet(c: any): Promise<Response> {
   const env: Env = c.env;
@@ -36,13 +27,7 @@ export async function onRequestGet(c: any): Promise<Response> {
   }
   const sessionId = query.data.session_id;
 
-  const row = await env.DB.prepare(
-    `SELECT gross_amount, currency, name, source, completed_at, status, payment_method_type, session_expires_at
-     FROM donations
-     WHERE checkout_session_id = ?`,
-  )
-    .bind(sessionId)
-    .first<DonationBadgeRow>();
+  const row = await getDonationBadgeBySession(env.DB, sessionId);
 
   if (!row) {
     // Either not found or not yet created (race condition at checkout)
@@ -85,10 +70,11 @@ export async function onRequestGet(c: any): Promise<Response> {
   });
 }
 
-export class DonationsSessionGet extends OpenAPIRoute {
-  schema = donationSessionGetRouteSchema;
-
-  async handle(c: any) {
-    return onRequestGet(c);
-  }
-}
+// Kept as a thin openApiRoute wrap around the untouched onRequestGet — that
+// function is imported directly by tests/donation-checkout.test.ts and
+// tests/donation-session-promoter-webhook.test.ts (bypassing chanfana
+// entirely), so its manual query-parsing/error-shape behavior can't change
+// here. GET has no request body, so wrapping it doesn't risk the
+// double-body-read hazard that rules out wrapping the POST endpoints in this
+// directory (see donations/promoters.ts).
+export const DonationsSessionGet = openApiRoute(donationSessionGetRouteSchema, (c: any) => onRequestGet(c));

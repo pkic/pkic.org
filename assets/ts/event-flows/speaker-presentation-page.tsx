@@ -1,111 +1,35 @@
 import { showHeadshotDisclaimer } from "../shared/headshot/upload";
-import { showManageLinkRecoveryForm } from "../shared/widgets/link-recovery";
-import { normalizeValidation } from "../shared/form/validation-map";
-import { bootstrap, setStatus } from "./boot";
-import { presentationUploadRequest } from "../../shared/presentation-upload";
-
-/** Matches the DB record shape returned directly by the GET endpoint. */
-interface PresentationTerm {
-  term_key: string;
-  version: string;
-  required: number | boolean;
-  display_text: string | null;
-  help_text: string | null;
-  content_ref: string | null;
-}
-
-const DEFAULT_PRESENTATION_TERMS = [
-  "I am authorised to share this presentation with the PKI Consortium.",
-  "The presentation does not contain confidential or commercially sensitive information that cannot be made public.",
-  "The presentation does not include unlicensed third-party material.",
-  "I accept that this presentation may be published on the event website and related materials.",
-  "The presentation does not contain unsolicited commercial messages or advertising.",
-];
-
-interface PresentationApiResponse {
-  speaker: {
-    role: string;
-    status: string;
-    confirmedAt: string | null;
-    declinedAt: string | null;
-    termsAcceptedAt: string | null;
-  };
-  proposal: {
-    id: string;
-    title: string;
-    proposalType: string;
-    status: string;
-    presentationDeadline: string | null;
-    presentationUploaded: boolean;
-    presentationUploadedAt: string | null;
-    presentationUploader: { firstName: string | null; lastName: string | null; uploadedAt: string } | null;
-    coSpeakers: Array<{ firstName: string | null; lastName: string | null; status: string }>;
-  };
-  presentationTerms: PresentationTerm[];
-  profile: {
-    firstName: string | null;
-    lastName: string | null;
-    email: string;
-  };
-}
-
-function showResendForm(root: HTMLElement, apiBase: string, eventSlug: string, introMessage?: string): void {
-  showManageLinkRecoveryForm({
-    root,
-    loadingSelector: "[data-speaker-loading]",
-    sectionSelector: "[data-resend-speaker-manage-section]",
-    buttonSelector: "[data-resend-speaker-manage-btn]",
-    statusSelector: "[data-resend-speaker-manage-status]",
-    emailSelector: "[data-resend-speaker-manage-email]",
-    endpoint: `${apiBase}/events/${eventSlug}/proposals/resend-speaker-manage-link`,
-    successMessage:
-      "If the details match an invited speaker, you will receive an email shortly. Please check your inbox (and spam folder).",
-    introMessage,
-  });
-}
+import { setStatus } from "./boot";
+import { presentationUploadRequest, DEFAULT_PRESENTATION_TERMS } from "../../shared/presentation-upload";
+import { loadSpeakerPageData } from "./speaker-link-recovery";
+import { getJson, requestJson } from "../shared/api-client";
+import { formatDate, formatDateTime } from "../shared/ui";
+import {
+  speakerSelfServiceReadResponseSchema,
+  speakerPresentationUploadResponseSchema,
+  type SpeakerSelfServiceReadResponse,
+} from "../../shared/schemas/speaker-self-service";
+import { proposalSpeakerAccessPath } from "../../shared/proposal-access-paths";
 
 async function main(): Promise<void> {
-  const boot = bootstrap("[data-event-speaker-presentation]");
-  if (!boot) return;
-
-  const token = boot.query.token?.trim() ?? null;
-  if (!token) {
-    showResendForm(boot.root, boot.apiBase, boot.eventSlug, "Missing speaker token. Request a fresh link below.");
-    return;
-  }
-
-  const loadingEl = boot.root.querySelector<HTMLElement>("[data-speaker-loading]");
-  const contentEl = boot.root.querySelector<HTMLElement>("[data-speaker-content]");
+  const loaded = await loadSpeakerPageData<SpeakerSelfServiceReadResponse>({
+    selector: "[data-event-speaker-presentation]",
+    request: async (token, boot) =>
+      getJson(proposalSpeakerAccessPath(boot.apiBase, token), speakerSelfServiceReadResponseSchema),
+  });
+  if (!loaded) return;
+  const { boot, token, data, loadingEl, contentEl } = loaded;
   const notAcceptedEl = boot.root.querySelector<HTMLElement>("[data-not-accepted-section]");
 
-  let data: PresentationApiResponse;
-  try {
-    const res = await fetch(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`);
-    if (!res.ok) {
-      const json = (await res.json()) as { error?: { message?: string } };
-      throw new Error(json.error?.message ?? `HTTP ${res.status}`);
-    }
-    data = (await res.json()) as PresentationApiResponse;
-  } catch (error) {
-    const normalized = normalizeValidation(error);
-    showResendForm(
-      boot.root,
-      boot.apiBase,
-      boot.eventSlug,
-      `${normalized.globalMessage} You can request a fresh link below.`,
-    );
-    return;
-  }
-
-  if (loadingEl) loadingEl.classList.add("d-none");
+  if (loadingEl) loadingEl.hidden = true;
 
   // If speaker is not accepted or proposal is not accepted, show not-accepted state
   if (data.speaker.status === "declined" || data.proposal.status !== "accepted") {
-    notAcceptedEl?.classList.remove("d-none");
+    if (notAcceptedEl) notAcceptedEl.hidden = false;
     return;
   }
 
-  if (contentEl) contentEl.classList.remove("d-none");
+  if (contentEl) contentEl.hidden = false;
 
   // Proposal summary
   const proposalTitleEl = boot.root.querySelector<HTMLElement>("[data-proposal-title]");
@@ -114,7 +38,7 @@ async function main(): Promise<void> {
   if (proposalTitleEl) proposalTitleEl.textContent = data.proposal.title;
   if (deadlineEl) {
     if (data.proposal.presentationDeadline) {
-      deadlineEl.textContent = `Presentation deadline: ${new Date(data.proposal.presentationDeadline).toLocaleString()}`;
+      deadlineEl.textContent = `Presentation deadline: ${formatDateTime(data.proposal.presentationDeadline)}`;
     } else {
       deadlineEl.textContent = "";
     }
@@ -125,13 +49,9 @@ async function main(): Promise<void> {
   const uploader = data.proposal.presentationUploader;
   if (coSpeakerNotice && uploader) {
     const uploaderName = [uploader.firstName, uploader.lastName].filter(Boolean).join(" ") || "A co-presenter";
-    const uploadedDate = new Date(uploader.uploadedAt).toLocaleDateString(undefined, {
-      year: "numeric",
-      month: "long",
-      day: "numeric",
-    });
+    const uploadedDate = formatDate(uploader.uploadedAt);
     coSpeakerNotice.textContent = `${uploaderName} already uploaded a presentation for this session on ${uploadedDate}. You only need to upload again if you want to replace it.`;
-    coSpeakerNotice.classList.remove("d-none");
+    coSpeakerNotice.hidden = false;
   }
 
   // Status message
@@ -148,17 +68,15 @@ async function main(): Promise<void> {
   // Presentation terms — use API terms or fall back to defaults
   const disclaimerTexts =
     data.presentationTerms && data.presentationTerms.length > 0
-      ? data.presentationTerms
-          .map((t) => t.display_text ?? t.term_key)
-          .filter((t): t is string => typeof t === "string")
+      ? data.presentationTerms.map((t) => t.displayText ?? t.termKey).filter((t): t is string => typeof t === "string")
       : DEFAULT_PRESENTATION_TERMS;
 
   // File upload with disclaimer
-  const presentationLabel = boot.root.querySelector<HTMLLabelElement>("[data-presentation-upload-label]");
+  const presentationButton = boot.root.querySelector<HTMLButtonElement>("[data-presentation-upload-label]");
   const presentationInput = boot.root.querySelector<HTMLInputElement>("[data-presentation-file]");
   const presentationUploadStatus = boot.root.querySelector<HTMLElement>("[data-presentation-upload-status]");
 
-  presentationLabel?.addEventListener("click", async (e) => {
+  presentationButton?.addEventListener("click", async (e) => {
     e.preventDefault();
     const accepted = await showHeadshotDisclaimer({
       title: "Before you upload your presentation",
@@ -178,16 +96,15 @@ async function main(): Promise<void> {
       if (presentationUploadStatus) presentationUploadStatus.textContent = "Uploading…";
       try {
         const upload = presentationUploadRequest(file);
-        const response = await fetch(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}/presentation`, {
-          method: "PUT",
-          ...upload,
-        });
-        const json = (await response.json()) as { success?: boolean; error?: { message?: string } };
-        if (!response.ok) throw new Error(json.error?.message ?? `HTTP ${response.status}`);
+        await requestJson(
+          proposalSpeakerAccessPath(boot.apiBase, token, "presentation"),
+          speakerPresentationUploadResponseSchema,
+          { method: "PUT", ...upload },
+        );
         if (presentationUploadStatus) presentationUploadStatus.textContent = "Presentation uploaded successfully.";
         if (presentationMsg)
           presentationMsg.textContent = "Presentation uploaded. You can replace it with a newer version if needed.";
-        if (coSpeakerNotice) coSpeakerNotice.classList.add("d-none");
+        if (coSpeakerNotice) coSpeakerNotice.hidden = true;
         setStatus(boot.statusEl, "Presentation uploaded successfully.");
       } catch (error) {
         if (presentationUploadStatus)

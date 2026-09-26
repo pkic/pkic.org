@@ -1,8 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { buildProposalAnswerRows } from "../../assets/ts/admin/sections/events/detail/proposal-detail-utils";
-import type { AdminFormDetailField } from "../../assets/ts/admin/types";
+import { buildProposalAnswerRows } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail-utils";
+import type { FormDetailField } from "../../assets/ts/member-flows/portal/sections/events/types";
 
-const formFields: AdminFormDetailField[] = [
+const formFields: FormDetailField[] = [
   {
     id: "field-audience",
     key: "audience",
@@ -10,8 +10,11 @@ const formFields: AdminFormDetailField[] = [
     fieldType: "text",
     required: true,
     options: null,
+    optionSource: null,
     validation: null,
     sortOrder: 1,
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    archivedAt: null,
   },
   {
     id: "field-format",
@@ -20,11 +23,14 @@ const formFields: AdminFormDetailField[] = [
     fieldType: "select",
     required: true,
     options: [
-      { value: "talk", label: "Talk" },
-      { value: "panel", label: "Panel discussion" },
+      { value: "talk", label: "Talk", active: true },
+      { value: "panel", label: "Panel discussion", active: true },
     ],
+    optionSource: null,
     validation: null,
     sortOrder: 2,
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    archivedAt: null,
   },
   {
     id: "field-tracks",
@@ -33,11 +39,14 @@ const formFields: AdminFormDetailField[] = [
     fieldType: "multi_select",
     required: false,
     options: [
-      { value: "pki", label: "PKI" },
-      { value: "policy", label: "Policy" },
+      { value: "pki", label: "PKI", active: true },
+      { value: "policy", label: "Policy", active: true },
     ],
+    optionSource: null,
     validation: null,
     sortOrder: 3,
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    archivedAt: null,
   },
   {
     id: "field-recording",
@@ -46,8 +55,11 @@ const formFields: AdminFormDetailField[] = [
     fieldType: "boolean",
     required: false,
     options: null,
+    optionSource: null,
     validation: null,
     sortOrder: 4,
+    updatedAt: "2026-01-01T00:00:00.000Z",
+    archivedAt: null,
   },
 ];
 

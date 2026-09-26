@@ -91,26 +91,26 @@
 }
 
 // ── WG Content Body Typography ────────────────────────────────────────────────
-// Applied to the main content column in wg-content.html and wg/single.html
+// Authored prose only; embedded shared components own their typography.
 [data-pagefind-body] {
   // Headings
-  h1,
-  h2,
-  h3,
-  h4,
-  h5,
-  h6 {
+  h1:not(:where(.pk *)),
+  h2:not(:where(.pk *)),
+  h3:not(:where(.pk *)),
+  h4:not(:where(.pk *)),
+  h5:not(:where(.pk *)),
+  h6:not(:where(.pk *)) {
     font-weight: 700;
     line-height: 1.25;
     scroll-margin-top: 5rem; // clear sticky nav
   }
 
-  h1 {
+  h1:not(:where(.pk *)) {
     font-size: 2rem;
     margin-top: 0;
     margin-bottom: 1rem;
   }
-  h2 {
+  h2:not(:where(.pk *)) {
     font-size: 1.5rem;
     margin-top: 2.5rem;
     margin-bottom: 0.75rem;
@@ -130,13 +130,13 @@
       background: none;
     }
   }
-  h3 {
+  h3:not(:where(.pk *)) {
     font-size: 1.2rem;
     margin-top: 2rem;
     margin-bottom: 0.5rem;
     color: var(--page-accent-2, var(--page-accent, var(--wg-color, #{$blue-dark})));
   }
-  h4 {
+  h4:not(:where(.pk *)) {
     font-size: 1rem;
     margin-top: 1.5rem;
     margin-bottom: 0.4rem;
@@ -144,14 +144,14 @@
   }
 
   // Paragraphs & links
-  p {
+  p:not(:where(.pk *, .callout-warning)) {
     margin-bottom: 1rem;
     line-height: 1.75;
-    color: #374151;
+    color: inherit;
   }
 
   // Restore white text inside dark blockquote cards
-  blockquote p {
+  blockquote p:not(:where(.pk *)) {
     color: inherit;
   }
 
@@ -159,7 +159,7 @@
   // (scoped to .wg-main-content, .wg-prose, .wg-data-body)
 
   // Inline code
-  code:not(pre code) {
+  code:not(pre code):not(:where(.pk *)) {
     background: #f0f4f8;
     border: 1px solid #d0d7de;
     border-radius: 0.3em;
@@ -169,7 +169,7 @@
   }
 
   // Code blocks
-  pre {
+  pre:not(:where(.pk *)) {
     background: #0d1117;
     border: 1px solid #30363d;
     border-radius: 0.5rem;
@@ -190,8 +190,8 @@
   // Block quotes handled by the global blockquote styles (dark card)
 
   // Lists
-  ul,
-  ol {
+  ul:not(:where(.pk *)),
+  ol:not(:where(.pk *)) {
     padding-left: 1.5rem;
     margin-bottom: 1rem;
 
@@ -207,80 +207,14 @@
     }
   }
 
-  // Tables — modern card style
-  table {
-    width: 100%;
-    border-collapse: separate;
-    border-spacing: 0;
-    margin: 2rem 0;
-    font-size: 0.875rem;
-    border-radius: 0.5rem;
-    overflow: hidden;
-    box-shadow:
-      0 1px 3px rgba(0, 0, 0, 0.1),
-      0 0 0 1px #e2e8f0;
-
-    thead {
-      background: #1e293b;
-      color: #e2e8f0;
-
-      th {
-        padding: 0.75rem 1rem;
-        font-weight: 600;
-        font-size: 0.78rem;
-        text-transform: uppercase;
-        letter-spacing: 0.05em;
-        text-align: left;
-        border: none;
-        white-space: nowrap;
-
-        &:first-child {
-          border-radius: 0.5rem 0 0 0;
-        }
-        &:last-child {
-          border-radius: 0 0.5rem 0 0;
-        }
-      }
-    }
-
-    tbody {
-      tr {
-        transition: background 0.12s;
-        border-bottom: 1px solid #e2e8f0;
-
-        &:last-child {
-          border-bottom: none;
-        }
-        &:hover {
-          background: #f8fafc;
-        }
-
-        &:nth-child(even) {
-          background: #f8fafc;
-          &:hover {
-            background: #eff6ff;
-          }
-        }
-      }
-
-      td {
-        padding: 0.7rem 1rem;
-        vertical-align: top;
-        border: none;
-        color: #374151;
-        line-height: 1.55;
-      }
-    }
-  }
-
-  // Highlight first-column of tables (label column)
-  table th:first-child + th + th,
-  table td:first-child {
-    font-weight: 500;
-  }
+  // Tables are the design system's: the Markdown table render hook draws
+  // `pk-table`, dressed by `assets/ts/ui/Table.css`. A card treatment with
+  // hard-coded slate colours used to sit here and win on specificity, so a
+  // row could be painted a token surface while its text stayed a fixed
+  // `#374151` — dark grey on near-black once the tokens flipped.
 
   // Horizontal rules
-  hr {
+  hr:not(:where(.pk *)) {
     border: none;
     border-top: 1px solid $gray-200;
     margin: 2rem 0;

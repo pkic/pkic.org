@@ -1,24 +1,34 @@
+import { badgeCacheMetadata } from "./badge-render-job-statements";
+import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./registrations/selected-identity";
 /**
  * OG badge pre-rendering service.
  *
- * Owns the resvg-wasm and font singletons (initialised once per worker
+ * Owns the resvg-wasm and font singletons (initialized once per worker
  * isolate) and exposes:
  *
  *   generateBadgePng      — fetch data + render SVG → PNG bytes
- *   prerenderAndCache     — generateBadgePng + write to R2 (silent on error)
+ *   renderAndCacheBadge   — generateBadgePng + write to R2 (throws on error)
+ *   prerenderAndCache     — background-safe wrapper around renderAndCacheBadge
  *   invalidateAndRerender — overwrite R2 for every badge owned by a user
  *   trySeedGravatarThenPrerender — try Gravatar on first-time users, then prerender
  *
- * All exported functions are safe to call via context.waitUntil() — they
- * swallow errors so a badge failure never breaks the primary request flow.
+ * Background helpers are safe to call via context.waitUntil(). Durable job
+ * processors use renderAndCacheBadge so failures remain observable/retryable.
  */
 
+import { ensureResvgWasm } from "../utils/resvg";
 import { renderBadgeSvg, renderDonationBadgeSvg, type BadgeRole } from "./og-badge";
 import { first, all } from "../db/queries";
-import { fetchGravatar } from "../utils/gravatar";
-import type { Env } from "../types";
+import { fetchGravatar } from "./gravatar";
+import type { DatabaseLike, Env } from "../types";
+import { fetchHeroImage, fetchStaticAsset, uint8ToBase64 } from "./og-badge-hero-image";
+import { validateRasterImage } from "../utils/image-format";
+import { STANDARD_HEADSHOT_MAX_BYTES } from "../../../assets/shared/schemas/images";
+import {
+  proposalSpeakerEffectiveHeadshotExpression,
+  proposalSpeakerEffectiveProfileColumns,
+} from "./proposal-speakers";
 
-type StaticAssetEnv = Pick<Env, "ASSETS" | "ASSETS_PUBLIC">;
 type BadgeRenderEnv = Pick<Env, "DB" | "SPEAKER_UPLOADS_BUCKET" | "ASSETS" | "ASSETS_PUBLIC" | "IMAGES">;
 type BadgeCacheEnv = Pick<
   Env,
@@ -28,71 +38,13 @@ type DonationRenderEnv = Pick<Env, "DB" | "ASSETS" | "ASSETS_PUBLIC">;
 
 // ─── WASM + font singletons (shared for the lifetime of the worker isolate) ──
 
-let wasmReady: Promise<(typeof import("@resvg/resvg-wasm"))["Resvg"]> | null = null;
-
 function ensureWasm(): Promise<(typeof import("@resvg/resvg-wasm"))["Resvg"]> {
-  if (!wasmReady) {
-    wasmReady = (async () => {
-      const [{ initWasm, Resvg }, wasmModule] = await Promise.all([
-        import("@resvg/resvg-wasm"),
-        import("@resvg/resvg-wasm/index_bg.wasm"),
-      ]);
-      await initWasm(wasmModule.default);
-      return Resvg;
-    })();
-  }
-  return wasmReady;
+  return ensureResvgWasm();
 }
 
 let fontBuffersCache: Promise<Uint8Array[]> | null = null;
 
-function isLoopbackHostname(hostname: string): boolean {
-  const normalized = hostname.toLowerCase();
-  return normalized === "localhost" || normalized === "127.0.0.1" || normalized === "::1" || normalized === "[::1]";
-}
-
-function getAssetBinding(env: StaticAssetEnv): Env["ASSETS"] | undefined {
-  return env.ASSETS ?? env.ASSETS_PUBLIC;
-}
-
-async function fetchStaticAsset(env: StaticAssetEnv, origin: string, path: string): Promise<Response> {
-  const request = new Request(new URL(path, origin).toString());
-  const binding = getAssetBinding(env);
-  if (binding) {
-    return binding.fetch(request);
-  }
-  return fetch(request);
-}
-
-function resolveHeroImageSource(raw: string, origin: string): { url: string; assetPath: string | null } {
-  const trimmed = raw.trim();
-  if (trimmed.startsWith("/")) {
-    return {
-      url: new URL(trimmed, origin).toString(),
-      assetPath: trimmed,
-    };
-  }
-
-  try {
-    const url = new URL(trimmed);
-    const appOrigin = new URL(origin).origin;
-    if (url.origin === appOrigin || isLoopbackHostname(url.hostname)) {
-      const assetPath = `${url.pathname}${url.search}${url.hash}`;
-      return {
-        url: new URL(assetPath, origin).toString(),
-        assetPath,
-      };
-    }
-    return { url: url.toString(), assetPath: null };
-  } catch {
-    return {
-      url: new URL(trimmed, origin).toString(),
-      assetPath: trimmed.startsWith("/") ? trimmed : `/${trimmed.replace(/^\/+/, "")}`,
-    };
-  }
-}
-
-function getFontBuffers(origin: string, env: StaticAssetEnv): Promise<Uint8Array[]> {
+function getFontBuffers(origin: string, env: Pick<Env, "ASSETS" | "ASSETS_PUBLIC">): Promise<Uint8Array[]> {
   if (!fontBuffersCache) {
     const p = Promise.all([
       fetchStaticAsset(env, origin, "/fonts/Roboto-Regular.ttf")
@@ -112,21 +64,6 @@ function getFontBuffers(origin: string, env: StaticAssetEnv): Promise<Uint8Array
   return fontBuffersCache;
 }
 
-// ─── Helpers ─────────────────────────────────────────────────────────────────
-
-/**
- * Fast Uint8Array → base64 without quadratic string re-allocation.
- * Chunks stay under V8's spread-argument stack limit (~32k args).
- */
-export function uint8ToBase64(bytes: Uint8Array): string {
-  const CHUNK = 0x8000;
-  let binary = "";
-  for (let i = 0; i < bytes.length; i += CHUNK) {
-    binary += String.fromCharCode(...bytes.subarray(i, i + CHUNK));
-  }
-  return btoa(binary);
-}
-
 function extractLocation(settingsJson: string): string | null {
   try {
     const s = JSON.parse(settingsJson) as Record<string, unknown>;
@@ -138,66 +75,20 @@ function extractLocation(settingsJson: string): string | null {
   return null;
 }
 
-function extractHeroImageUrl(settingsJson: string): string | null {
-  try {
-    const s = JSON.parse(settingsJson) as Record<string, unknown>;
-    if (typeof s.heroImageUrl === "string" && s.heroImageUrl) return s.heroImageUrl;
-  } catch {
-    /* ignore */
-  }
-  return null;
-}
-
-async function fetchHeroImage(
-  settingsJson: string,
-  origin: string,
-  env: Pick<Env, "ASSETS" | "ASSETS_PUBLIC" | "IMAGES">,
+export async function loadValidatedHeadshotDataUrl(
+  r2Key: string | null,
+  bucket: Env["SPEAKER_UPLOADS_BUCKET"],
 ): Promise<string | null> {
-  const raw = extractHeroImageUrl(settingsJson);
-  if (!raw) return null;
-  const source = resolveHeroImageSource(raw, origin);
-  try {
-    let res: Response;
-    if (source.assetPath) {
-      res = await fetchStaticAsset(env, origin, source.assetPath);
-      if (!res.ok) return null;
-
-      if (env.IMAGES && res.body) {
-        const transformed = await env.IMAGES.input(res.body)
-          .transform({ width: 1200, height: 630, fit: "cover" })
-          .output({ format: "jpeg", quality: 95 });
-        res = await transformed.response();
-      }
-    } else {
-      // Resize to badge dimensions and convert to JPEG before embedding.
-      // The hero is used as a dark-overlaid full-bleed background so quality 90
-      // is indistinguishable from the original at this display size.
-      // The `cf.image` option is a Cloudflare Worker-specific extension to fetch();
-      // it is silently ignored in non-CF environments (local dev) so no cast needed
-      // at runtime, but TypeScript doesn't know about it — hence the assertion.
-      res = await fetch(source.url, {
-        cf: { image: { width: 1200, height: 630, fit: "cover", format: "jpeg", quality: 95 } },
-      } as unknown as RequestInit);
-    }
-    if (!res.ok) return null;
-    const buf = await res.arrayBuffer();
-    const ct = res.headers.get("content-type") ?? "image/jpeg";
-    const mime = ct.split(";")[0].trim();
-    return `data:${mime};base64,${uint8ToBase64(new Uint8Array(buf))}`;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchHeadshot(r2Key: string | null, bucket: Env["SPEAKER_UPLOADS_BUCKET"]): Promise<string | null> {
   if (!r2Key || !bucket) return null;
   try {
     const obj = await bucket.get(r2Key);
     if (!obj) return null;
+    if (obj.size > STANDARD_HEADSHOT_MAX_BYTES) return null;
     const buf = await obj.arrayBuffer();
-    const ext = r2Key.split(".").pop()?.toLowerCase() ?? "";
-    const mime = ext === "png" ? "image/png" : ext === "webp" ? "image/webp" : "image/jpeg";
-    return `data:${mime};base64,${uint8ToBase64(new Uint8Array(buf))}`;
+    if (buf.byteLength > STANDARD_HEADSHOT_MAX_BYTES) return null;
+    const validation = validateRasterImage(buf);
+    if (!validation.ok) return null;
+    return `data:${validation.image.contentType};base64,${uint8ToBase64(new Uint8Array(buf))}`;
   } catch {
     return null;
   }
@@ -234,6 +125,29 @@ interface CodeRow {
   code: string;
 }
 
+/** Load the proposal-scoped public speaker representation used by badge rendering. */
+export async function getProposalSpeakerBadgeRenderData(
+  db: DatabaseLike,
+  proposalId: string,
+  userId: string,
+): Promise<SpeakerRow | null> {
+  return first<SpeakerRow>(
+    db,
+    `SELECT ${proposalSpeakerEffectiveProfileColumns("u", "ps", "", ["firstName", "lastName", "organizationName", "jobTitle"])},
+            ${proposalSpeakerEffectiveHeadshotExpression("u", "ps")} AS headshot_r2_key,
+            e.name AS event_name,
+            e.starts_at, e.ends_at, e.settings_json,
+            COALESCE(ps.role, 'speaker') AS speaker_role
+     FROM session_proposals sp
+     JOIN users u ON u.id = ?
+     JOIN events e ON e.id = sp.event_id
+     LEFT JOIN proposal_speakers ps
+       ON ps.proposal_id = sp.id AND ps.user_id = u.id
+     WHERE sp.id = ? AND sp.deleted_at IS NULL`,
+    [userId, proposalId],
+  );
+}
+
 // ─── Core generation ─────────────────────────────────────────────────────────
 
 const R2_KEY_PREFIX = "og-badges/";
@@ -262,45 +176,30 @@ export async function generateBadgePng(code: string, env: BadgeRenderEnv, origin
   if (ref.owner_type === "registration") {
     const row = await first<AttendeeRow>(
       env.DB,
-      `SELECT u.first_name, u.last_name, u.organization_name, u.job_title,
+      `SELECT u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title,
               u.headshot_r2_key,
               e.name   AS event_name,
               e.starts_at, e.ends_at, e.settings_json,
-              (
+              COALESCE(bro.role, (
                 SELECT ep2.role
-                FROM   event_participants ep2
+                FROM   event_participant_badge_roles ep2
                 WHERE  ep2.event_id = r.event_id
                   AND  ep2.user_id  = r.user_id
-                  AND  ep2.role    != 'attendee'
-                  AND  ep2.status   = 'active'
-                  AND (
-                    ep2.source_type != 'proposal'
-                    OR EXISTS (
-                      SELECT 1
-                      FROM session_proposals sp2
-                      WHERE sp2.id = ep2.source_ref
-                        AND sp2.status = 'accepted'
-                    )
-                  )
-                ORDER BY CASE ep2.role
-                  WHEN 'speaker'   THEN 1
-                  WHEN 'moderator' THEN 2
-                  WHEN 'panelist'  THEN 3
-                  WHEN 'organizer' THEN 4
-                  ELSE 5
-                END
+                ORDER BY ep2.priority ASC, ep2.role ASC
                 LIMIT 1
-              ) AS effective_role
+              )) AS effective_role
        FROM   registrations r
        JOIN   users  u ON u.id = r.user_id
+
        JOIN   events e ON e.id = r.event_id
+       LEFT JOIN registration_badge_role_overrides bro ON bro.registration_id = r.id
        WHERE  r.id = ?`,
       [ref.owner_id],
     );
     if (!row) return null;
 
     const [headshotDataUrl, heroImageDataUrl] = await Promise.all([
-      fetchHeadshot(row.headshot_r2_key, env.SPEAKER_UPLOADS_BUCKET),
+      loadValidatedHeadshotDataUrl(row.headshot_r2_key, env.SPEAKER_UPLOADS_BUCKET),
       fetchHeroImage(row.settings_json, origin, env),
     ]);
 
@@ -321,26 +220,11 @@ export async function generateBadgePng(code: string, env: BadgeRenderEnv, origin
     const userId = ref.created_by_user_id;
     if (!userId) return null;
 
-    const row = await first<SpeakerRow>(
-      env.DB,
-      `SELECT u.first_name, u.last_name, u.organization_name, u.job_title,
-              u.headshot_r2_key,
-              e.name    AS event_name,
-              e.starts_at, e.ends_at, e.settings_json,
-              COALESCE(ps.role, 'speaker') AS speaker_role
-       FROM   session_proposals sp
-       JOIN   users  u  ON u.id  = ?
-       JOIN   events e  ON e.id  = sp.event_id
-       LEFT   JOIN proposal_speakers ps
-              ON  ps.proposal_id = sp.id
-              AND ps.user_id     = u.id
-       WHERE  sp.id = ?`,
-      [userId, ref.owner_id],
-    );
+    const row = await getProposalSpeakerBadgeRenderData(env.DB, ref.owner_id, userId);
     if (!row) return null;
 
     const [headshotDataUrl, heroImageDataUrl] = await Promise.all([
-      fetchHeadshot(row.headshot_r2_key, env.SPEAKER_UPLOADS_BUCKET),
+      loadValidatedHeadshotDataUrl(row.headshot_r2_key, env.SPEAKER_UPLOADS_BUCKET),
       fetchHeroImage(row.settings_json, origin, env),
     ]);
 
@@ -384,7 +268,7 @@ async function pngToR2(
   customMetadata: Record<string, string>,
   env: Pick<Env, "ASSETS_BUCKET" | "IMAGES">,
 ): Promise<void> {
-  if (!env.ASSETS_BUCKET) return;
+  if (!env.ASSETS_BUCKET) throw new Error("ASSETS_BUCKET is required to cache an OG badge");
 
   if (env.IMAGES) {
     const pngStream = new ReadableStream<Uint8Array>({
@@ -409,6 +293,17 @@ async function pngToR2(
 }
 
 /**
+ * Render and atomically overwrite one cached badge. The previous R2 object is
+ * left in place until the replacement bytes have been generated successfully.
+ */
+export async function renderAndCacheBadge(code: string, env: BadgeCacheEnv, origin: string): Promise<void> {
+  const metadata = await badgeCacheMetadata(env.DB, code);
+  const png = await generateBadgePng(code, env, origin);
+  if (!png) throw new Error(`Badge source not found for referral code ${code}`);
+  await pngToR2(png, `${R2_KEY_PREFIX}${code}`, metadata, env);
+}
+
+/**
  * Generate the badge PNG, convert it to JPEG via the Cloudflare Images binding,
  * and store the JPEG at og-badges/{code}. Silently swallows errors so it is
  * always safe to call via context.waitUntil().
@@ -418,9 +313,7 @@ async function pngToR2(
  */
 export async function prerenderAndCache(code: string, env: BadgeCacheEnv, origin: string): Promise<void> {
   try {
-    const png = await generateBadgePng(code, env, origin);
-    if (!png || !env.ASSETS_BUCKET) return;
-    await pngToR2(png, `${R2_KEY_PREFIX}${code}`, { referralCode: code }, env);
+    await renderAndCacheBadge(code, env, origin);
   } catch {
     /* silent — badge pre-render must never break the primary flow */
   }

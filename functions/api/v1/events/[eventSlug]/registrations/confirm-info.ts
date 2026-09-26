@@ -1,26 +1,16 @@
+import type { ValidatedData } from "chanfana";
 import { json } from "../../../../../_lib/http";
-import { first } from "../../../../../_lib/db/queries";
 import { verifyDatabaseCapability } from "../../../../../_lib/services/capability-links";
 import { requireInternalSecret } from "../../../../../_lib/request";
+import { getRegistrationConfirmationInfo } from "../../../../../_lib/services/registrations/confirmation-info";
+import { requestDb } from "../../../../../_lib/db/context";
 
-interface ConfirmInfoRow {
-  first_name: string | null;
-  last_name: string | null;
-  email: string | null;
-  organization_name: string | null;
-  event_name: string;
-}
-
-interface ConfirmInfoResponse {
-  firstName: string | null;
-  lastName: string | null;
-  email: string | null;
-  organizationName: string | null;
-  eventName: string | null;
-  /** True when the confirmation token exists but has passed its expiry time. */
-  expired: boolean;
-  recoverable: boolean;
-}
+import {
+  registrationConfirmInfoResponseSchema,
+  type RegistrationConfirmInfoResponse,
+} from "../../../../../../assets/shared/schemas/registration";
+import { registrationConfirmInfoGetRouteSchema } from "../../../../../../assets/shared/schemas/route-contracts-registrations";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
 
 /**
  * GET /api/v1/events/:eventSlug/registrations/confirm-info?token=...
@@ -34,12 +24,15 @@ interface ConfirmInfoResponse {
  * or not found; the page degrades gracefully and the POST confirm step will
  * surface any real validation errors.
  */
-export async function onRequestGet(c: any): Promise<Response> {
+async function handleConfirmInfo(
+  c: any,
+  data: ValidatedData<typeof registrationConfirmInfoGetRouteSchema>,
+): Promise<Response> {
   c.set("sensitive", true);
-  const token = new URL(c.req.raw.url).searchParams.get("token");
-  const registrationId = new URL(c.req.raw.url).searchParams.get("id");
+  const token = data.query.token ?? null;
+  const registrationId = data.query.id ?? null;
 
-  const empty: ConfirmInfoResponse = {
+  const empty: RegistrationConfirmInfoResponse = {
     firstName: null,
     lastName: null,
     email: null,
@@ -50,11 +43,11 @@ export async function onRequestGet(c: any): Promise<Response> {
   };
 
   if (!token || token.trim().length === 0) {
-    return json(empty);
+    return json(registrationConfirmInfoResponseSchema.parse(empty));
   }
 
   const verified = await verifyDatabaseCapability({
-    db: c.env.DB,
+    db: requestDb(c),
     signingSecret: requireInternalSecret(c.env),
     purpose: "registration_confirm",
     token: token.trim(),
@@ -62,36 +55,32 @@ export async function onRequestGet(c: any): Promise<Response> {
   const resourceId = verified.ok ? verified.resourceId : registrationId;
 
   if (!resourceId || (registrationId && verified.ok && registrationId !== verified.resourceId)) {
-    return json(empty);
+    return json(registrationConfirmInfoResponseSchema.parse(empty));
   }
 
-  const row = await first<ConfirmInfoRow>(
-    c.env.DB,
-    `SELECT u.first_name, u.last_name, u.email, u.organization_name,
-            e.name AS event_name
-     FROM registrations r
-     JOIN users u ON u.id = r.user_id
-     JOIN events e ON e.id = r.event_id
-     WHERE r.id = ?
-       AND r.status = 'pending_email_confirmation'
-       AND e.slug = ?
-     LIMIT 1`,
-    [resourceId, c.req.param("eventSlug")],
-  );
+  const row = await getRegistrationConfirmationInfo(requestDb(c), data.params.eventSlug, resourceId);
 
   if (!row) {
-    return json(empty);
+    return json(registrationConfirmInfoResponseSchema.parse(empty));
   }
 
   const tokenMatches = verified.ok;
 
-  return json({
-    firstName: tokenMatches ? (row.first_name ?? null) : null,
-    lastName: tokenMatches ? (row.last_name ?? null) : null,
-    email: tokenMatches ? (row.email ?? null) : null,
-    organizationName: tokenMatches ? (row.organization_name ?? null) : null,
-    eventName: row.event_name,
-    expired: !tokenMatches,
-    recoverable: !tokenMatches,
-  } satisfies ConfirmInfoResponse);
+  return json(
+    registrationConfirmInfoResponseSchema.parse({
+      firstName: tokenMatches ? (row.first_name ?? null) : null,
+      lastName: tokenMatches ? (row.last_name ?? null) : null,
+      email: tokenMatches ? (row.email ?? null) : null,
+      organizationName: tokenMatches ? (row.organization_name ?? null) : null,
+      eventName: row.event_name,
+      expired: !tokenMatches,
+      recoverable: !tokenMatches,
+    } satisfies RegistrationConfirmInfoResponse),
+  );
 }
+
+export const EventsEventSlugRegistrationsConfirmInfoGet = openApiRoute(
+  registrationConfirmInfoGetRouteSchema,
+  handleConfirmInfo,
+  (c: any) => c.set("sensitive", true),
+);

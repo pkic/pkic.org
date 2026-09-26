@@ -1,4 +1,16 @@
-import { hmacSha256Hex } from "../utils/crypto";
+import { constantTimeEqual, hmacSha256Hex } from "../utils/crypto";
+import { parseBaseEmailAddress, parseTaggedInboundAddress } from "./tagged-address";
+
+const RSVP_MAC_TOKEN_LENGTH = 8;
+
+async function rsvpMacToken(secret: string, payload: string): Promise<string> {
+  const hex = (await hmacSha256Hex(secret, payload)).slice(0, 12);
+  const bytes = new Uint8Array(hex.match(/.{2}/g)!.map((byte) => Number.parseInt(byte, 16)));
+  return btoa(String.fromCharCode(...bytes))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/g, "");
+}
 
 /**
  * Returns a signed email address for RSVP and bounce tracking using sub-addressing.
@@ -22,21 +34,22 @@ export async function generateSignedRsvpAddress(
 ): Promise<string> {
   // HMAC payload uses canonical values (hyphens preserved)
   const payload = dayDate ? `${registrationId}-${dayDate}` : registrationId;
-  const hmac = await hmacSha256Hex(secret, payload);
-  const signature = hmac.substring(0, 8);
+  // Eight base64url characters encode a 48-bit truncated HMAC while fitting
+  // even the per-day address in the SMTP local-part limit.
+  const signature = await rsvpMacToken(secret, payload);
 
-  const [localPart, domain] = baseEmail.split("@");
-  if (!domain) throw new Error("Invalid base email");
-  // Strip any existing sub-address (e.g. if baseEmail is already a signed address)
-  const baseLocal = localPart.split("+")[0];
+  const base = parseBaseEmailAddress(baseEmail);
+  if (!base) throw new Error("Invalid base email");
+  const { baseLocal, domain } = base;
 
-  // sub-address appended: +{hex32}-{YYYYMMDD}-{hex8} = 1+32+1+8+1+8 = 51 chars
-  // RFC 5321 local-part limit is 64 chars, so base must be ≤ 13
-  const MAX_BASE_LOCAL = 13;
-  if (baseLocal.length > MAX_BASE_LOCAL) {
+  // Keep the complete local part within RFC 5321's 64-character limit.
+  const maxBaseLocal = dayDate
+    ? 64 - (1 + 32 + 1 + 8 + 1 + RSVP_MAC_TOKEN_LENGTH)
+    : 64 - (1 + 32 + 1 + RSVP_MAC_TOKEN_LENGTH);
+  if (baseLocal.length > maxBaseLocal) {
     throw new Error(
       `RSVP base email local part "${baseLocal}" is ${baseLocal.length} chars; ` +
-        `max allowed is ${MAX_BASE_LOCAL} to stay within the 64-char RFC 5321 limit.`,
+        `max allowed is ${maxBaseLocal} to stay within the 64-char RFC 5321 limit.`,
     );
   }
 
@@ -78,39 +91,32 @@ export async function verifySignedRsvpAddressFull(
   secret: string,
   baseEmail: string = "rsvp@mail.pkic.org",
 ): Promise<VerifiedRsvpAddress | null> {
-  const [baseLocal, baseDomain] = baseEmail.split("@");
-  if (!baseDomain) return null;
-
-  const parts = emailAddress.split("@");
-  if (parts.length !== 2) return null;
-  if (parts[1].toLowerCase() !== baseDomain.toLowerCase()) return null;
-
-  // Escape only the base local part (before any +)
-  const escapedLocal = baseLocal.split("+")[0].replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parsed = parseTaggedInboundAddress(emailAddress, baseEmail);
+  if (!parsed) return null;
 
   // ── Compact formats ────────────────────────────────────────────────────────
 
-  // Per-day: [base]+[hex32]-[YYYYMMDD]-[hex8]
-  const compactPerDayRegex = new RegExp(`^${escapedLocal}\\+([a-f0-9]{32})-(\\d{8})-([a-f0-9]{8})$`, "i");
-  const compactPerDayMatch = parts[0].match(compactPerDayRegex);
+  // Per-day: [base]+[hex32]-[YYYYMMDD]-[base64url8]
+  const compactPerDayRegex = new RegExp(`^([a-f0-9]{32})-(\\d{8})-([A-Za-z0-9_-]{${RSVP_MAC_TOKEN_LENGTH}})$`, "i");
+  const compactPerDayMatch = parsed.tag.match(compactPerDayRegex);
   if (compactPerDayMatch) {
     const registrationId = expandUuid(compactPerDayMatch[1].toLowerCase());
     const dayDate = expandDate(compactPerDayMatch[2]);
     const signature = compactPerDayMatch[3];
-    const expectedHmac = await hmacSha256Hex(secret, `${registrationId}-${dayDate}`);
-    if (expectedHmac.substring(0, 8).toLowerCase() === signature.toLowerCase()) {
+    const expectedSignature = await rsvpMacToken(secret, `${registrationId}-${dayDate}`);
+    if (await constantTimeEqual(expectedSignature, signature)) {
       return { registrationId, dayDate };
     }
   }
 
-  // Single: [base]+[hex32]-[hex8]
-  const compactSingleRegex = new RegExp(`^${escapedLocal}\\+([a-f0-9]{32})-([a-f0-9]{8})$`, "i");
-  const compactSingleMatch = parts[0].match(compactSingleRegex);
+  // Single: [base]+[hex32]-[base64url8]
+  const compactSingleRegex = new RegExp(`^([a-f0-9]{32})-([A-Za-z0-9_-]{${RSVP_MAC_TOKEN_LENGTH}})$`, "i");
+  const compactSingleMatch = parsed.tag.match(compactSingleRegex);
   if (compactSingleMatch) {
     const registrationId = expandUuid(compactSingleMatch[1].toLowerCase());
     const signature = compactSingleMatch[2];
-    const expectedHmac = await hmacSha256Hex(secret, registrationId);
-    if (expectedHmac.substring(0, 8).toLowerCase() === signature.toLowerCase()) {
+    const expectedSignature = await rsvpMacToken(secret, registrationId);
+    if (await constantTimeEqual(expectedSignature, signature)) {
       return { registrationId, dayDate: null };
     }
   }

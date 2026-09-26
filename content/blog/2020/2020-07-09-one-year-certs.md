@@ -36,6 +36,11 @@ tags:
 title: One Year Certs
 
 
+authorProfiles:
+  - name: Patrick Nohe
+    organization: GlobalSign
+    role: Senior Product Marketing Manager
+    website: https://www.globalsign.com
 ---
 ## Maximum SSL/TLS Certificate Validity is Now One Year
 

@@ -19,6 +19,11 @@ tags:
 title: The Advantages of Short-Lived SSL Certificates for the Enterprise
 
 
+authorProfiles:
+  - name: Doug Beattie
+    organization: GlobalSign
+    role: VP Product Management
+    website: https://www.globalsign.com
 ---
 **Short validity period certificates** are becoming ever more common to reduce the scope of data compromised if a server vulnerability is uncovered, such as [HeartBleed][1].  Good security practice dictates changing keys on a regular basis, normally annually, but if you want to limit your exposure further, you can replace your certificates and underlying keys more frequently.
 

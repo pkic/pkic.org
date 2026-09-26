@@ -1,0 +1,23 @@
+{{/*
+  application-status — the token-gated membership application status check.
+
+  `data-flow-status` carries `pk-alert pk-sr-only` because `setStatus()`
+  (assets/ts/shared/form/helpers.ts) branches on `pk-alert`: it drops
+  `pk-sr-only` and adds the tone modifier. Renaming either class here without
+  that helper is what makes a status banner nothing ever reveals.
+*/}}
+<div class="pk pk-stack" data-application-status data-module="member-flows/application-status-page" data-api-base="/api/v1">
+  <div data-flow-status class="pk-alert pk-sr-only" role="alert" aria-live="polite"></div>
+
+  <div data-link-help class="pk-stack pk-stack--snug">
+    <p>Open the status link in your membership application confirmation or update email. It includes everything needed to view your application securely.</p>
+    <p>If an older update email has an incomplete link, use your original confirmation email. If you cannot find it, <a href="mailto:{{ site.Params.email }}">contact us for help</a>.</p>
+  </div>
+  <div class="pk-cluster" data-status-retry hidden>
+    <button type="button" class="pk-btn pk-btn--primary">Try again</button>
+  </div>
+
+  <div data-status-result hidden>
+    <p class="pk-small">Loading your application…</p>
+  </div>
+</div>

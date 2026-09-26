@@ -2,21 +2,34 @@
 {{ partial "hero.html" . }}
 {{ partial "events/conference-schema.html" . }}
 
-<div class="{{ if not .Params.fullwidth }}container{{ else }}container-fluid{{ end }}">
-    <div class="row">
-        {{- if $.Page.FirstSection.Param "sideMenu" -}}
-        <nav id="sidebarMenu" class="col-md-4 col-lg-3 d-md-block bg-light sidebar collapse">
-            <div class="position-sticky p-3 sidebar-sticky">
-                {{ partial "menu.html" . }}
-            </div>
-        </nav>
-        <div id="content" class="col-md-8 ms-sm-auto col-lg-9 p-4" data-pagefind-body>
-        {{- else -}}
-        <div id="content" class="p-4" data-pagefind-body>
-        {{- end -}}
-            {{ .Content }}
+{{/* The sidebar split reuses `events-page-layout` / `events-page-menu` /
+     `events-page-menu-sticky` from assets/scss/_events-listing.scss, written
+     for exactly this `col-md-4 … d-md-block collapse` pattern when
+     layouts/events/list.html migrated. No `.pk` root: the page body is
+     authored markdown still styled by the legacy sheet. */}}
+{{/* Event pages are laid out in columns — a programme beside a venue, a
+     sponsor grid — and at the reading measure those columns compacted and
+     left the sides of a wide screen empty (#111). The wide measure is the
+     default; `fullwidth: false` opts a text-only page back to the reading
+     column. */}}
+{{- $container := cond (eq .Params.fullwidth false) "pk-container" "pk-container pk-container--wide" -}}
+{{- if $.Page.FirstSection.Param "sideMenu" -}}
+<div class="{{ $container }} pk-section events-page-layout">
+    <nav id="sidebarMenu" class="events-page-menu" aria-label="Section navigation">
+        <div class="events-page-menu-sticky">
+            {{ partial "menu.html" . }}
         </div>
+    </nav>
+    <div id="content" data-pagefind-body>
+        {{ .Content }}
     </div>
 </div>
+{{- else -}}
+<div class="{{ $container }} pk-section">
+    <div id="content" data-pagefind-body>
+        {{ .Content }}
+    </div>
+</div>
+{{- end -}}
 
 {{ end }}

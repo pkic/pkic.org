@@ -1,0 +1,415 @@
+// @vitest-environment jsdom
+import type { ComponentChildren } from "preact";
+import { render } from "preact";
+import { act } from "preact/test-utils";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import {
+  FORM_SUBMISSION_STATUSES,
+  formDetailResponseSchema,
+  formSubmissionStatsResponseSchema,
+  formSubmissionsResponseSchema,
+  formsListResponseSchema,
+} from "../../assets/shared/schemas/form-management";
+import {
+  EventFormResponses,
+  FormManagementDetail,
+  FormManagementList,
+} from "../../assets/ts/components/forms/management/FormManagement";
+import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
+import { isCurrentTab, tabs } from "./helpers/tabs";
+
+const mounted: HTMLElement[] = [];
+
+function mount(node: ComponentChildren): HTMLElement {
+  const container = document.createElement("div");
+  document.body.append(container);
+  mounted.push(container);
+  void act(() => render(node, container));
+  return container;
+}
+
+async function settle(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+function formListResponse(): Response {
+  return new Response(
+    JSON.stringify(
+      formsListResponseSchema.parse({
+        forms: [
+          {
+            id: "00000000-0000-4000-8000-000000000001",
+            key: "member-feedback",
+            scope_type: "global",
+            scope_ref: null,
+            purpose: "feedback",
+            status: "active",
+            title: "Member feedback",
+            description: null,
+            created_at: "2026-08-29T10:00:00.000Z",
+            updated_at: "2026-08-29T10:00:00.000Z",
+            event_slug: null,
+            event_name: null,
+            field_count: 2,
+            placement_count: 1,
+            submission_count: 4,
+          },
+        ],
+        page: { limit: 25, offset: 0, total: 1, hasMore: false },
+      }),
+    ),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
+
+function eventPlacementResponse(): Response {
+  return new Response(
+    JSON.stringify({
+      event: { id: "e0000000-0000-4000-8000-000000000001", slug: "pqc-2026", name: "PQC 2026" },
+      purpose: "proposal_submission",
+      form: {
+        id: "00000000-0000-4000-8000-000000000002",
+        key: "community-survey",
+        title: "Community survey",
+        description: null,
+        fields: [],
+      },
+      registrationPolicy: "public",
+      requiredTerms: [],
+      allowedSessionTypes: [],
+      eventDays: [],
+    }),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
+
+function eventResponseRequest(url: URL): Response {
+  if (url.pathname.endsWith("/forms/placements/proposal_submission")) return eventPlacementResponse();
+  if (url.pathname.endsWith("/forms/community-survey/submissions/stats")) return emptyStatsResponse();
+  if (url.pathname.endsWith("/forms/community-survey")) return communityFormDetailResponse();
+  throw new Error(`Unexpected request: ${url.pathname}`);
+}
+
+function communityFormDetailResponse(): Response {
+  return new Response(
+    JSON.stringify(
+      formDetailResponseSchema.parse({
+        form: {
+          id: "00000000-0000-4000-8000-000000000002",
+          key: "community-survey",
+          scope_type: "community",
+          scope_ref: "00000000-0000-4000-8000-000000000003",
+          purpose: "survey",
+          status: "active",
+          title: "Community survey",
+          description: null,
+          created_at: "2026-08-29T10:00:00.000Z",
+          updated_at: "2026-08-29T10:00:00.000Z",
+        },
+        fields: [],
+      }),
+    ),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
+
+function emptyStatsResponse(): Response {
+  return new Response(
+    JSON.stringify(
+      formSubmissionStatsResponseSchema.parse({
+        form: {
+          id: "form-2",
+          key: "community-survey",
+          title: "Community survey",
+          purpose: "survey",
+          placement: null,
+        },
+        total: 0,
+        stats: [],
+      }),
+    ),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
+
+function emptySubmissionsResponse(): Response {
+  return new Response(
+    JSON.stringify(
+      formSubmissionsResponseSchema.parse({
+        form: { id: "form-4", key: "member-feedback", title: "Member feedback", purpose: "feedback", placement: null },
+        submissions: [],
+        page: { limit: 25, offset: 0, total: 0, hasMore: false },
+      }),
+    ),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
+
+function globalFormDetailResponse(): Response {
+  return new Response(
+    JSON.stringify(
+      formDetailResponseSchema.parse({
+        form: {
+          id: "00000000-0000-4000-8000-000000000004",
+          key: "member-feedback",
+          scope_type: "global",
+          scope_ref: null,
+          purpose: "feedback",
+          status: "active",
+          title: "Member feedback",
+          description: null,
+          created_at: "2026-08-29T10:00:00.000Z",
+          updated_at: "2026-08-29T10:00:00.000Z",
+        },
+        fields: [],
+      }),
+    ),
+    { status: 200, headers: { "content-type": "application/json" } },
+  );
+}
+
+afterEach(() => {
+  for (const container of mounted.splice(0)) {
+    void act(() => render(null, container));
+    container.remove();
+  }
+  vi.unstubAllGlobals();
+});
+
+describe("portal form management", () => {
+  it("uses the canonical forms endpoint and keeps a reader read-only", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        return formListResponse();
+      }),
+    );
+
+    const container = mount(<FormManagementList />);
+    await settle();
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.pathname).toBe("/api/v1/forms");
+    expect(requests.some((request) => request.pathname.startsWith("/api/v1/admin/forms"))).toBe(false);
+    expect(container.textContent).toContain("Member feedback");
+    expect(container.textContent).not.toContain("New form");
+    expect(container.textContent).not.toContain("Archive/Delete");
+  });
+
+  it("keeps creation out of the list itself and exposes the contract's purpose and status filters", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        return formListResponse();
+      }),
+    );
+
+    const container = mount(<FormManagementList />);
+    await settle();
+
+    // The create action lives in the page header, not the list's toolbar:
+    // the list renders no "New form" control of its own.
+    expect(container.textContent).not.toContain("New form");
+
+    // The filters the API already accepts live in the Purpose and Status
+    // columns' menus, wired to the server params — not client-side row
+    // filtering, and not a row of selects above the table.
+    expect(container.querySelector('[role="toolbar"] select')).toBeNull();
+    expect(columnFilterOptions(container, "Status")).toEqual(["All statuses", "active", "inactive", "archived"]);
+
+    await chooseColumnFilter(container, "Purpose", "survey");
+    await settle();
+    expect(requests.at(-1)?.searchParams.get("purpose")).toBe("survey");
+    expect(columnFilterSummary(container, "Purpose")).toBe("survey");
+
+    await chooseColumnFilter(container, "Status", "archived");
+    await settle();
+    const lastRequest = requests.at(-1);
+    expect(lastRequest?.searchParams.get("purpose")).toBe("survey");
+    expect(lastRequest?.searchParams.get("status")).toBe("archived");
+    expect(lastRequest?.searchParams.get("offset")).toBe("0");
+  });
+
+  it("does not offer global mutations for a community-owned form", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        return url.pathname.endsWith("/submissions/stats") ? emptyStatsResponse() : communityFormDetailResponse();
+      }),
+    );
+
+    const container = mount(<FormManagementDetail formKey="community-survey" canWrite onBack={vi.fn()} />);
+    await settle();
+
+    expect(container.textContent).toContain("Community survey");
+    expect(container.textContent).not.toContain("Edit");
+    expect(container.textContent).not.toContain("Archive/Delete");
+  });
+
+  it("opens the tab named in a preset hash query instead of the default statistics tab", async () => {
+    const previousHash = window.location.hash;
+    window.location.hash = "#/forms/member-feedback?formTab=responses";
+    try {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL) => {
+          const url = new URL(
+            typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+            location.origin,
+          );
+          if (url.pathname.endsWith("/submissions/stats")) return emptyStatsResponse();
+          if (url.pathname.endsWith("/submissions")) return emptySubmissionsResponse();
+          return globalFormDetailResponse();
+        }),
+      );
+
+      const container = mount(<FormManagementDetail formKey="member-feedback" canWrite={false} onBack={vi.fn()} />);
+      await settle();
+
+      const activeTab = tabs(container).find(isCurrentTab);
+      expect(activeTab?.textContent).toBe("Responses");
+    } finally {
+      window.location.hash = previousHash;
+    }
+  });
+
+  it("opens the event's one configured form directly", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        return eventResponseRequest(url);
+      }),
+    );
+    const container = mount(<EventFormResponses eventSlug="pqc-2026" purpose="proposal_submission" />);
+    await settle();
+    await settle();
+    expect(requests[0]?.pathname).toBe("/api/v1/events/pqc-2026/forms/placements/proposal_submission");
+    expect(container.textContent).not.toContain("Forms linked to this event");
+    expect(container.textContent).toContain("Community survey");
+  });
+
+  it("states a failed load as a sentence in an alert region rather than an empty panel", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response("", { status: 503 })),
+    );
+
+    const container = mount(<FormManagementDetail formKey="member-feedback" canWrite onBack={vi.fn()} />);
+    await settle();
+
+    const alert = container.querySelector('[role="alert"]');
+    expect(alert?.textContent).toBe(
+      "Online services are temporarily unavailable. Keep this page open. If you were saving a change, check whether it completed before trying again.",
+    );
+    // The transport phrasing never reaches the reader, and nothing pretends
+    // the form loaded.
+    expect(container.textContent).not.toContain("HTTP 503");
+    expect(container.querySelector('[role="tab"]')).toBeNull();
+  });
+
+  it("wires each tab to the panel it controls, in both directions", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        return url.pathname.endsWith("/submissions/stats") ? emptyStatsResponse() : globalFormDetailResponse();
+      }),
+    );
+
+    const container = mount(<FormManagementDetail formKey="member-feedback" canWrite onBack={vi.fn()} />);
+    await settle();
+
+    const strip = container.querySelector('[role="tablist"]');
+    expect(strip?.getAttribute("aria-label")).toBe("Member feedback sections");
+
+    const selected = tabs(container).find(isCurrentTab);
+    const panelId = selected?.getAttribute("aria-controls");
+    expect(panelId).toBeTruthy();
+    const panel = [...container.querySelectorAll('[role="tabpanel"]')].find((element) => element.id === panelId);
+    expect(panel).toBeTruthy();
+    // And back the other way, so the panel is announced with the tab's name.
+    expect(panel?.getAttribute("aria-labelledby")).toBe(selected?.id);
+
+    // Exactly one tab is in the tab order; the arrows move within the strip.
+    const inTabOrder = tabs(container).filter((tab) => tab.tabIndex === 0);
+    expect(inTabOrder).toHaveLength(1);
+  });
+
+  it("names the forms table and makes the whole row a keyboard-reachable control that says which form it opens", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => formListResponse()),
+    );
+    const container = mount(<FormManagementList />);
+    await settle();
+
+    // A table with no caption is announced as "table"; this page can hold
+    // several.
+    expect(container.querySelector("caption")?.textContent).toBe("Configured forms");
+
+    const row = container.querySelector("tbody tr");
+    const action = row?.querySelector<HTMLAnchorElement>("a");
+    expect(action?.textContent).toBe("Open Member feedback");
+    expect(action?.getAttribute("href")).toBe("#/forms/member-feedback");
+    // Not a click handler on the <tr>: a row is not focusable and takes no
+    // Enter key.
+    expect(row?.hasAttribute("onclick")).toBe(false);
+  });
+
+  it("names the response filter bar and every control in it", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        return eventResponseRequest(url);
+      }),
+    );
+
+    const container = mount(<EventFormResponses eventSlug="pqc-2026" purpose="proposal_submission" />);
+    await settle();
+
+    const toolbar = container.querySelector('[role="toolbar"]');
+    expect(toolbar?.getAttribute("aria-label")).toBe("Response filters");
+
+    const statusFilter = toolbar?.querySelector("select");
+    expect(statusFilter?.getAttribute("aria-label")).toBe("Submission status");
+    // Every status the column can hold, and nothing else. It used to offer
+    // "Accepted" and "Rejected" — values `form_submissions.status` cannot
+    // take, so those two filters could only ever return nothing — while never
+    // offering `draft`, which it can (issue #24's shape).
+    expect([...statusFilter!.options].map((option) => option.value)).toEqual(["", ...FORM_SUBMISSION_STATUSES]);
+
+    // Attendance is a registration-only vocabulary, so it is absent here.
+    expect(toolbar?.querySelectorAll("select")).toHaveLength(1);
+  });
+});

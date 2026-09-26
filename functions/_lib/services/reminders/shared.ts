@@ -1,8 +1,77 @@
-import { all } from "../../db/queries";
-import { prepareBulkQueueInviteEmailStatements, type InviteEmailQueueRow } from "../../email/outbox";
-import { formatInvitePerson, type ProposalInviteEmailContext } from "../proposals";
+import { prepareBulkQueueInviteEmailChunkStatements, type InviteEmailQueueRow } from "../../email/outbox";
 import { attendeeRegistrationClosesAt, type DueInviteRow } from "../reminders-support";
 import type { DatabaseLike, StatementLike } from "../../types";
+import { prepareAuthorizationGuard } from "../../db/authorization-guard";
+import { stringifyJson } from "../../utils/json";
+import { effectiveProposalSpeakerInviteExpirySql, inactiveEffectiveInviteExpirySql } from "../../invite-validity";
+
+export interface SpeakerReminderRecipientSnapshot {
+  speakerId: string;
+  userId: string;
+  normalizedEmail: string;
+}
+
+/** Rechecks a bounded reminder slice against canonical speaker ownership/email in the commit batch. */
+export function prepareSpeakerReminderRecipientGuard(
+  db: DatabaseLike,
+  snapshots: SpeakerReminderRecipientSnapshot[],
+): StatementLike {
+  return prepareAuthorizationGuard(db, {
+    sql: `SELECT 1
+            WHERE NOT EXISTS (
+              SELECT 1
+                FROM json_each(?) candidate
+                LEFT JOIN proposal_speakers ps
+                  ON ps.id = json_extract(candidate.value, '$.speakerId')
+                LEFT JOIN users u ON u.id = ps.user_id
+               WHERE ps.id IS NULL
+                  OR ps.user_id != json_extract(candidate.value, '$.userId')
+                  OR u.normalized_email != json_extract(candidate.value, '$.normalizedEmail')
+            )`,
+    bindings: [stringifyJson(snapshots)],
+  });
+}
+
+export interface CoSpeakerInviteReminderSnapshot extends SpeakerReminderRecipientSnapshot {
+  proposalId: string;
+  proposalStatus: string;
+  eventId: string;
+  eventStartsAt: string | null;
+  eventEndsAt: string | null;
+  inviteExpiresAt: string | null;
+}
+
+/** Rechecks recipient, proposal state, and the event-bounded invitation deadline in one D1 batch. */
+export function prepareCoSpeakerInviteReminderGuard(
+  db: DatabaseLike,
+  snapshots: CoSpeakerInviteReminderSnapshot[],
+  now: string,
+): StatementLike {
+  return prepareAuthorizationGuard(db, {
+    sql: `SELECT 1
+            WHERE NOT EXISTS (
+              SELECT 1
+                FROM json_each(?) candidate
+                LEFT JOIN proposal_speakers ps
+                  ON ps.id = json_extract(candidate.value, '$.speakerId')
+                LEFT JOIN session_proposals sp ON sp.id = ps.proposal_id
+                LEFT JOIN events e ON e.id = sp.event_id
+                LEFT JOIN users u ON u.id = ps.user_id
+               WHERE ps.id IS NULL
+                  OR ps.user_id != json_extract(candidate.value, '$.userId')
+                  OR ps.proposal_id != json_extract(candidate.value, '$.proposalId')
+                  OR ps.status != 'invited'
+                  OR ps.invite_expires_at IS NOT json_extract(candidate.value, '$.inviteExpiresAt')
+                  OR u.normalized_email != json_extract(candidate.value, '$.normalizedEmail')
+                  OR sp.status != json_extract(candidate.value, '$.proposalStatus')
+                  OR e.id != json_extract(candidate.value, '$.eventId')
+                  OR e.starts_at IS NOT json_extract(candidate.value, '$.eventStartsAt')
+                  OR e.ends_at IS NOT json_extract(candidate.value, '$.eventEndsAt')
+                  OR (${inactiveEffectiveInviteExpirySql(effectiveProposalSpeakerInviteExpirySql("ps", "e"))})
+            )`,
+    bindings: [stringifyJson(snapshots), now],
+  });
+}
 
 /** Runs D1 statements in chunks of 500 to respect batch limits. */
 export async function batchStatements(db: DatabaseLike, stmts: StatementLike[]): Promise<void> {
@@ -16,28 +85,39 @@ export async function batchStatements(db: DatabaseLike, stmts: StatementLike[]):
 export async function batchQueueEmailsAndUpdateState(
   db: DatabaseLike,
   emailRows: InviteEmailQueueRow[],
-  stateStatements: StatementLike[],
+  stateStatements: Array<StatementLike | StatementLike[]>,
   queuedAt: string,
-): Promise<void> {
+  options: {
+    isExpectedConflict?: (error: unknown) => boolean;
+    prepareSliceStatements?: (start: number, end: number) => StatementLike[];
+  } = {},
+): Promise<number> {
   const MAX_ROWS = 250;
-  for (let i = 0; i < emailRows.length; i += MAX_ROWS) {
-    const emailSlice = emailRows.slice(i, i + MAX_ROWS);
-    const stateSlice = stateStatements.slice(i, i + MAX_ROWS);
-    await db.batch([...prepareBulkQueueInviteEmailStatements(db, emailSlice, queuedAt), ...stateSlice]);
-  }
-}
+  let committed = 0;
 
-export function isAttendeeInviteReminderAllowed(invite: DueInviteRow, nowMs = Date.now()): boolean {
-  if (invite.event_starts_at) {
-    const startsMs = new Date(invite.event_starts_at).getTime();
-    if (Number.isFinite(startsMs) && startsMs <= nowMs) return false;
+  const commitSlice = async (start: number, end: number): Promise<number> => {
+    const emailSlice = emailRows.slice(start, end);
+    const stateSlice = stateStatements
+      .slice(start, end)
+      .flatMap((statements) => (Array.isArray(statements) ? statements : [statements]));
+    try {
+      const emailStatements = prepareBulkQueueInviteEmailChunkStatements(db, emailSlice, queuedAt).map(
+        (chunk) => chunk.statement,
+      );
+      await db.batch([...(options.prepareSliceStatements?.(start, end) ?? []), ...emailStatements, ...stateSlice]);
+      return emailSlice.length;
+    } catch (error) {
+      if (!options.isExpectedConflict?.(error)) throw error;
+      if (emailSlice.length === 1) return 0;
+      const midpoint = start + Math.floor((end - start) / 2);
+      return (await commitSlice(start, midpoint)) + (await commitSlice(midpoint, end));
+    }
+  };
+
+  for (let i = 0; i < emailRows.length; i += MAX_ROWS) {
+    committed += await commitSlice(i, Math.min(i + MAX_ROWS, emailRows.length));
   }
-  const closesAt = attendeeRegistrationClosesAt(invite);
-  if (closesAt) {
-    const closesMs = new Date(closesAt).getTime();
-    if (Number.isFinite(closesMs) && closesMs <= nowMs) return false;
-  }
-  return true;
+  return committed;
 }
 
 export function attendeeEffectiveDeadline(invite: DueInviteRow): string | null {
@@ -53,84 +133,4 @@ export function attendeeEffectiveDeadline(invite: DueInviteRow): string | null {
     }
   }
   return minIso;
-}
-
-/**
- * Batch version of buildProposalInviteEmailContext. Fetches all required
- * data for multiple proposals in 3 queries instead of 3×N.
- */
-export async function bulkBuildProposalInviteEmailContexts(
-  db: DatabaseLike,
-  proposalIds: string[],
-): Promise<Map<string, ProposalInviteEmailContext>> {
-  if (proposalIds.length === 0) return new Map();
-
-  const proposalIdsJson = JSON.stringify(proposalIds);
-  const proposals = await all<{ id: string; title: string; abstract: string; proposer_user_id: string }>(
-    db,
-    `SELECT id, title, abstract, proposer_user_id FROM session_proposals
-     WHERE id IN (SELECT value FROM json_each(?))`,
-    [proposalIdsJson],
-  );
-
-  const proposerUserIds = [...new Set(proposals.map((p) => p.proposer_user_id).filter(Boolean))];
-  type UserRow = {
-    id: string;
-    email: string;
-    first_name: string | null;
-    last_name: string | null;
-    organization_name: string | null;
-  };
-  type SpeakerRow = {
-    proposal_id: string;
-    email: string;
-    first_name: string | null;
-    last_name: string | null;
-    organization_name: string | null;
-  };
-
-  const [proposerUsers, speakerRows] = await Promise.all([
-    proposerUserIds.length > 0
-      ? all<UserRow>(
-          db,
-          `SELECT id, email, first_name, last_name, organization_name FROM users WHERE id IN (SELECT value FROM json_each(?))`,
-          [JSON.stringify(proposerUserIds)],
-        )
-      : ([] as UserRow[]),
-    all<SpeakerRow>(
-      db,
-      `SELECT ps.proposal_id, u.email, u.first_name, u.last_name, u.organization_name
-       FROM proposal_speakers ps
-       JOIN users u ON u.id = ps.user_id
-       WHERE ps.proposal_id IN (SELECT value FROM json_each(?))
-       ORDER BY ps.created_at ASC`,
-      [proposalIdsJson],
-    ),
-  ]);
-
-  const proposerById = new Map(proposerUsers.map((u) => [u.id, u]));
-  const speakersByProposal = new Map<string, SpeakerRow[]>();
-  for (const s of speakerRows) {
-    const arr = speakersByProposal.get(s.proposal_id) ?? [];
-    arr.push(s);
-    speakersByProposal.set(s.proposal_id, arr);
-  }
-
-  const result = new Map<string, ProposalInviteEmailContext>();
-  for (const proposal of proposals) {
-    const proposer = proposerById.get(proposal.proposer_user_id);
-    const speakers = speakersByProposal.get(proposal.id) ?? [];
-    const speakerLineupText = speakers
-      .map((s) => `- ${formatInvitePerson(s.first_name, s.last_name, s.organization_name, s.email)}`)
-      .join("\n");
-    result.set(proposal.id, {
-      invitedByDisplay: proposer
-        ? formatInvitePerson(proposer.first_name, proposer.last_name, proposer.organization_name, proposer.email)
-        : "The proposer",
-      proposalTitle: proposal.title,
-      proposalAbstract: proposal.abstract,
-      speakerLineupText,
-    });
-  }
-  return result;
 }

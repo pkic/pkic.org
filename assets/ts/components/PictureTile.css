@@ -1,0 +1,143 @@
+/*
+ * PictureTile — a record's picture, and for editors the control that changes it.
+ *
+ * The veil naming the command is drawn over the picture only while the tile
+ * is hovered or focused, so at rest the tile reads as the logo and nothing
+ * else. The corner removal control stays visible and keyboard accessible.
+ */
+@layer components {
+  .pk-picture-tile {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--pk-2);
+  }
+
+  .pk-picture-tile__control,
+  .pk-picture-tile[role="img"] {
+    position: relative;
+    display: grid;
+    place-items: center;
+    width: 100%;
+    max-width: 14rem;
+    aspect-ratio: 16 / 9;
+    padding: var(--pk-3);
+    border: 1px solid var(--pk-line-soft);
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface);
+    color: var(--pk-ink);
+    overflow: hidden;
+  }
+
+  /*
+   * The record-header size. Square rather than 16/9: it sits beside a name the
+   * way a portrait does on a person's record, and the two headers should not
+   * start at different heights.
+   */
+  /* A person, not an organization: every other surface draws a face round,
+     and a portrait squared off reads as a logo. The veil and the initials
+     inherit the radius so the whole affordance keeps one silhouette. */
+  .pk-picture-tile--round .pk-picture-tile__control,
+  .pk-picture-tile--round[role="img"],
+  .pk-picture-tile--round .pk-picture-tile__img,
+  .pk-picture-tile--round .pk-picture-tile__initials,
+  .pk-picture-tile--round .pk-picture-tile__veil {
+    border-radius: 50%;
+  }
+
+  .pk-picture-tile--mark .pk-picture-tile__control,
+  .pk-picture-tile--mark[role="img"] {
+    width: 92px;
+    max-width: none;
+    aspect-ratio: 1;
+    padding: var(--pk-2);
+  }
+
+  .pk-picture-tile__control {
+    cursor: pointer;
+    font: inherit;
+  }
+
+  .pk-picture-tile__control:disabled {
+    cursor: progress;
+  }
+
+  .pk-picture-tile__img {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+  }
+
+  .pk-picture-tile__initials {
+    font-size: var(--pk-text-2xl);
+    font-weight: 700;
+    letter-spacing: 0.02em;
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-picture-tile__veil {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    background: color-mix(in srgb, var(--pk-ink) 72%, transparent);
+    color: var(--pk-on-solid);
+    font-size: var(--pk-text-sm);
+    font-weight: 600;
+    opacity: 0;
+    transition: opacity var(--pk-dur-fast) var(--pk-ease);
+  }
+
+  .pk-picture-tile__control:hover .pk-picture-tile__veil,
+  .pk-picture-tile__control:focus-visible .pk-picture-tile__veil,
+  .pk-picture-tile__control:disabled .pk-picture-tile__veil {
+    opacity: 1;
+  }
+
+  .pk-picture-tile__input {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  .pk-picture-tile__remove {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-end: 0;
+    z-index: 2;
+    display: grid;
+    place-items: center;
+    width: 1.75rem;
+    height: 1.75rem;
+    border: 1px solid var(--pk-line-strong);
+    border-radius: 50%;
+    background: var(--pk-surface);
+    color: var(--pk-ink);
+    font: inherit;
+    font-size: var(--pk-text-lg);
+    cursor: pointer;
+  }
+
+  /*
+   * At rest the tile is the picture and nothing else; the remove appears when
+   * the tile is hovered or holds focus (#89). It stays reachable by keyboard
+   * because focusing it is itself what reveals it.
+   */
+  .pk-picture-tile__remove {
+    opacity: 0;
+    transition: opacity var(--pk-dur-fast) var(--pk-ease);
+  }
+
+  .pk-picture-tile--editable:hover .pk-picture-tile__remove,
+  .pk-picture-tile--editable:focus-within .pk-picture-tile__remove,
+  .pk-picture-tile__remove:focus-visible {
+    opacity: 1;
+  }
+
+  .pk-picture-tile__remove:disabled {
+    cursor: progress;
+  }
+}

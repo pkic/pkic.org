@@ -1,0 +1,218 @@
+/*
+ * The signed-out portal screen.
+ *
+ * Two panels that fill the space between the site's own header and footer: a
+ * brand panel that says where the reader has arrived, and the card that signs
+ * them in. Below 52rem there is no room for two columns, so the brand panel
+ * becomes a band above the card and drops everything but its heading.
+ */
+
+.pk-login {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(26rem, 1fr));
+  align-items: stretch;
+  /*
+   * As tall as the space between the header and the footer — not the space
+   * between the header and the fold.
+   *
+   * Issue #33 reported a white band under the brand panel: the login block was
+   * only as tall as its content, so whatever the viewport had left over showed
+   * as page. Measuring against `100dvh` closed the band and opened a worse
+   * hole — the block then ran to the bottom of the screen and pushed the
+   * footer out of it, so every visit began with a scrollbar it did not need.
+   *
+   * The page decides instead. `body` is a column that is at least a screen
+   * tall, `main` takes the slack, and this fills `main`: with a short footer
+   * the block reaches the footer exactly, and with the tall one it is its own
+   * height and the footer follows immediately. Either way there is no band,
+   * and no scroll the content did not ask for.
+   */
+  min-height: 100%;
+  /*
+   * Inside the flex `#portal-app` below, a grid child takes its content width
+   * unless told otherwise — and a narrow container makes `auto-fit` collapse
+   * the two panels into one stacked column. Harmless anywhere else: an element
+   * that is not a flex item ignores it.
+   */
+  flex: 1;
+}
+
+/*
+ * Scoped by what is on the page rather than by a class the template would have
+ * to remember to set — the signed-out screen is the only place that needs the
+ * page itself to distribute height, and `.pk-login` is Preact's own marker for
+ * being on it.
+ */
+body:has(.pk-login) {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+}
+
+body:has(.pk-login) > main {
+  display: flex;
+  flex: 1 0 auto;
+}
+
+body:has(.pk-login) > main > #portal-app {
+  display: flex;
+  flex: 1;
+}
+
+.pk-login__backdrop {
+  position: relative;
+  overflow: hidden;
+  color: #fff;
+  background: linear-gradient(135deg, #0b2a1c 0%, #125c3c 32%, #20506e 66%, #7d4520 100%);
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: clamp(2rem, 6vh, 4rem);
+  padding: clamp(1.75rem, 4.5vw, 4.5rem);
+  box-sizing: border-box;
+}
+
+.pk-login__lede {
+  position: relative;
+  max-width: 30rem;
+}
+
+.pk-login__kicker {
+  margin: 0 0 var(--pk-3);
+  font-family: var(--pk-font-mono);
+  font-size: var(--pk-text-2xs);
+  text-transform: uppercase;
+  letter-spacing: var(--pk-tracking-label);
+  color: rgb(255 255 255 / 82%);
+}
+
+.pk-login__headline {
+  margin: 0;
+  font-size: clamp(1.9rem, 3.4vw, 2.9rem);
+  line-height: 1.06;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+
+.pk-login__blurb {
+  margin: var(--pk-4) 0 0;
+  font-size: var(--pk-text-md);
+  line-height: 1.6;
+  color: rgb(255 255 255 / 88%);
+  max-width: 26rem;
+  text-wrap: pretty;
+}
+
+.pk-login__facts {
+  position: relative;
+  margin: 0;
+  display: grid;
+  gap: var(--pk-4);
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  max-width: 34rem;
+}
+
+.pk-login__fact-value {
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1.1;
+}
+
+.pk-login__fact-label {
+  margin: 0.15rem 0 0;
+  font-size: var(--pk-text-sm);
+  color: rgb(255 255 255 / 88%);
+}
+
+.pk-login__panel {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(1.5rem, 4vw, 4rem) clamp(1.25rem, 4vw, 4rem);
+  box-sizing: border-box;
+}
+
+.pk-login__card-wrap {
+  width: 100%;
+  max-width: 26rem;
+}
+
+.pk-login__card {
+  background: var(--pk-surface);
+  border: 1px solid var(--pk-line-soft);
+  border-radius: var(--pk-radius-lg);
+  box-shadow: var(--pk-shadow-2);
+  overflow: hidden;
+}
+
+.pk-login__card-rule {
+  height: 3px;
+  background: var(--pk-stripe);
+}
+
+.pk-login__card-body {
+  padding: clamp(1.5rem, 3vw, 2.25rem);
+}
+
+.pk-login__title {
+  margin: 0;
+  font-size: var(--pk-text-2xl);
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+/* The card's own footer: what to do when you are not a member at all. */
+.pk-login__card-foot {
+  border-block-start: 1px solid var(--pk-line-soft);
+  background: var(--pk-surface-sunk);
+  padding: var(--pk-4) clamp(1.5rem, 3vw, 2.25rem);
+}
+
+.pk-login__note {
+  margin: 0;
+  text-align: center;
+}
+
+.pk-login__terms {
+  margin: var(--pk-4) 0 0;
+  text-align: center;
+}
+
+@media (max-width: 52rem) {
+  /*
+   * Stacked, the two panels are rows rather than columns, so a screen-height
+   * floor would stretch whichever of them has slack — usually the card, into
+   * a tall box around a short form. The band is a band; it takes the height
+   * its own words need.
+   */
+  .pk-login {
+    min-height: auto;
+  }
+
+  .pk-login__backdrop {
+    gap: var(--pk-4);
+  }
+
+  /*
+   * Stacked, the panel is a band in the middle of the page and needs its own
+   * bottom edge. Side by side it does not: the panel runs down to the site
+   * footer, whose first row already draws the consortium's stripe across the
+   * full width, and a second stripe directly above it reads as a doubled rule.
+   */
+  .pk-login__backdrop::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: 0;
+    height: 4px;
+    background: var(--pk-stripe);
+  }
+
+  /* Below two columns the panel is a band, and only the heading earns its
+     place — the supporting copy and the figures would push the card off. */
+  .pk-login__blurb,
+  .pk-login__facts {
+    display: none;
+  }
+}

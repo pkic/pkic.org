@@ -4,23 +4,31 @@
   Use {{< >}} syntax (raw inner content processed as YAML).
 
   Inner YAML:
-    cols: 3           (optional, default 3 — determines Bootstrap col width)
+    cols: 3           (optional, default 3 — how densely the cards pack)
     items:
       - quote:  "…"
         author: "Name"
-        role:   "Title — Organisation"
-*/}}
-{{- $yaml     := .Inner | transform.Unmarshal -}}
-{{- $colClass := div 12 ($yaml.cols | default 3 | int) -}}
+        role:   "Title — Organization"
 
-<div class="testimonials-grid row g-4">
+  `cols` no longer names a fixed column count: the grid fits as many columns as
+  the viewport allows at a minimum card width, so the same markup works on a
+  phone and a wide desktop. The number chooses that minimum width instead.
+
+  No `pk` root: the cards are still painted by `assets/scss` — a dark card on
+  the page's own ground — and the base layer, which beats the legacy layer,
+  would paint the grid itself with the design system's canvas.
+*/}}
+{{- $yaml := .Inner | transform.Unmarshal -}}
+{{- $cols := $yaml.cols | default 3 | int -}}
+{{- $density := "" -}}
+{{- if ge $cols 4 -}}{{- $density = " pk-grid--tight" -}}{{- else if le $cols 2 -}}{{- $density = " pk-grid--roomy" -}}{{- end -}}
+
+<div class="testimonials-grid pk-grid{{ $density }}">
   {{- range $yaml.items }}
-  <div class="col-md-{{ $colClass }}">
-    <div class="testimonial-card">
-      <p class="testimonial-quote">{{ .quote }}</p>
-      <div class="testimonial-author">{{ .author }}
-        {{- with .role }}<span class="testimonial-role">{{ . }}</span>{{ end }}
-      </div>
+  <div class="testimonial-card">
+    <p class="testimonial-quote">{{ .quote }}</p>
+    <div class="testimonial-author">{{ .author }}
+      {{- with .role }}<span class="testimonial-role">{{ . }}</span>{{ end }}
     </div>
   </div>
   {{- end }}

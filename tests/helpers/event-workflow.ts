@@ -30,9 +30,9 @@ export async function seedWorkflowEmailTemplates(db: DatabaseLike, adminId: stri
   await seedTemplate(
     db,
     adminId,
-    "admin_magic_link",
+    "user_magic_link",
     "Click [sign in]({{{magicLinkUrl}}}). Expires in {{expiresInMinutes}} minutes.",
-    "Admin sign-in link",
+    "User sign-in link",
   );
   await seedTemplate(
     db,
@@ -65,6 +65,13 @@ export async function seedWorkflowEmailTemplates(db: DatabaseLike, adminId: stri
   await seedTemplate(
     db,
     adminId,
+    "proposal_manage_link_transferred",
+    "You now manage **{{proposalTitle}}**. Manage: {{{manageUrl}}}.",
+    "Proposal management transferred",
+  );
+  await seedTemplate(
+    db,
+    adminId,
     "proposal_decision",
     "Decision for **{{proposalTitle}}**: {{finalStatus}}. {{decisionNote}}",
     "Proposal decision",
@@ -82,6 +89,20 @@ export async function seedWorkflowEmailTemplates(db: DatabaseLike, adminId: stri
     "registration_confirm_email",
     "Confirm registration: {{{confirmationUrl}}}. Manage: {{{manageUrl}}}. Share: {{{shareUrl}}}.",
     "Confirm registration",
+  );
+  await seedTemplate(
+    db,
+    adminId,
+    "registration_email_change",
+    "Confirm new email: {{{confirmationUrl}}}.",
+    "Confirm your new email address",
+  );
+  await seedTemplate(
+    db,
+    adminId,
+    "registration_email_change_notice",
+    "Account email change requested from {{currentEmail}} to {{newEmail}}.",
+    "Your account email change was requested",
   );
   await seedTemplate(
     db,

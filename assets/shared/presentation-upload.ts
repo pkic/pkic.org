@@ -1,3 +1,11 @@
+export const DEFAULT_PRESENTATION_TERMS = [
+  "I am authorized to share this presentation with the PKI Consortium.",
+  "The presentation does not contain confidential or commercially sensitive information that cannot be made public.",
+  "The presentation does not include unlicensed third-party material.",
+  "I accept that this presentation may be published on the event website and related materials.",
+  "The presentation does not contain unsolicited commercial messages or advertising.",
+];
+
 export const MAX_PRESENTATION_BYTES = 100 * 1024 * 1024;
 export const PRESENTATION_FILE_NAME_HEADER = "x-presentation-file-name";
 export const PRESENTATION_FILE_SIZE_HEADER = "x-presentation-file-size";

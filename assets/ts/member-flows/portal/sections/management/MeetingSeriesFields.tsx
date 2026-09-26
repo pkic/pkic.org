@@ -1,0 +1,356 @@
+import { MEETING_CALENDAR_HELP } from "../../../../../shared/meeting-calendar-policy";
+import {
+  MEETING_ENTRY_AUTHENTICATIONS,
+  type MeetingEntryPolicy,
+} from "../../../../../shared/schemas/meeting-entry-policy";
+import {
+  EVENT_GUEST_POLICIES,
+  EVENT_MEMBER_ELIGIBILITIES,
+  EVENT_PROFILE_LABELS,
+  EVENT_PROFILE_KEYS,
+  EVENT_REGISTRATION_POLICY_HELP,
+  EVENT_REGISTRATION_POLICY_LABELS,
+  EVENT_REGISTRATION_POLICIES,
+  EVENT_VISIBILITIES,
+  EVENT_VISIBILITY_LABELS,
+  type EventGuestPolicy,
+  type EventMemberEligibility,
+  type EventProfileKey,
+  type EventRegistrationPolicy,
+  type EventVisibility,
+} from "../../../../../shared/schemas/event-series";
+import { RecurrenceEditor } from "../../../../components/RecurrenceEditor";
+import { TimeZoneSelect } from "../../../../components/TimeZoneSelect";
+import type { FieldPresentation } from "../../../../hooks/useContractForm";
+import { Field } from "../../../../ui/Field";
+import { Select, TextInput } from "../../../../ui/TextControl";
+
+export interface MeetingSeriesDraft {
+  name: string;
+  profileKey: EventProfileKey;
+  startsAt: string;
+  recurrenceRule: string;
+  timezone: string;
+  durationMinutes: number;
+  location: string;
+  providerJoinUrl: string;
+  registrationPolicy: EventRegistrationPolicy;
+  visibility: EventVisibility;
+  memberEligibility: EventMemberEligibility;
+  guestPolicy: EventGuestPolicy;
+  meetingEntryPolicy: MeetingEntryPolicy;
+}
+
+/**
+ * Each option names the people it admits. "Owning group" named the record's
+ * relationship to the group, which a manager setting up a meeting had no
+ * way to read as "the members of this group" (#103).
+ */
+export const ELIGIBILITY_LABELS: Record<EventMemberEligibility, string> = {
+  owner_group: "Members of this group",
+  shared_groups: "Members of this group and of the groups it is shared with",
+  public: "Anyone",
+};
+
+export const GUEST_LABELS: Record<EventGuestPolicy, string> = {
+  none: "Not allowed",
+  occurrence_invitation: "Invite per occurrence",
+  public_registration: "Public registration",
+};
+
+function updateDraft<K extends keyof MeetingSeriesDraft>(
+  draft: MeetingSeriesDraft,
+  onChange: (draft: MeetingSeriesDraft) => void,
+  key: K,
+  value: MeetingSeriesDraft[K],
+): void {
+  onChange({ ...draft, [key]: value });
+}
+
+/**
+ * The fields describing a recurring meeting series, shared by the create form
+ * and the settings form.
+ *
+ * The three groups are the three decisions: what the meeting is, when it
+ * recurs, and who may attend. They are separate `pk-grid` blocks rather than
+ * one twelve-column row, so the columns reflow by how much room a field needs
+ * instead of by a breakpoint triplet written per field.
+ *
+ * Every control is inside a `Field`, which pairs the label and the control by
+ * generated id — the recurrence editor's fields and the time-zone input
+ * included — so no id here is the component's to choose.
+ */
+export function MeetingSeriesFields({
+  draft,
+  disabled = false,
+  scheduleLocked = false,
+  fieldProps = {},
+  onChange,
+}: {
+  draft: MeetingSeriesDraft;
+  disabled?: boolean;
+  scheduleLocked?: boolean;
+  fieldProps?: Partial<
+    Record<keyof MeetingSeriesDraft | "meetingEntryAuthentication" | "meetingEntryRememberDays", FieldPresentation>
+  >;
+  onChange: (draft: MeetingSeriesDraft) => void;
+}) {
+  const scheduleDisabled = disabled || scheduleLocked;
+
+  return (
+    <div class="pk pk-stack">
+      <p class="pk-muted">{MEETING_CALENDAR_HELP}</p>
+      <div class="pk-grid">
+        <Field {...fieldProps.name} label="Meeting name" required>
+          {(control) => (
+            <TextInput
+              {...control}
+              name="eventName"
+              value={draft.name}
+              disabled={disabled}
+              onInput={(event) => updateDraft(draft, onChange, "name", event.currentTarget.value)}
+            />
+          )}
+        </Field>
+        <Field {...fieldProps.profileKey} label="Event profile">
+          {(control) => (
+            <Select
+              {...control}
+              name="profileKey"
+              value={draft.profileKey}
+              disabled={disabled}
+              onChange={(event) =>
+                updateDraft(draft, onChange, "profileKey", event.currentTarget.value as EventProfileKey)
+              }
+            >
+              {EVENT_PROFILE_KEYS.map((profile) => (
+                <option key={profile} value={profile}>
+                  {EVENT_PROFILE_LABELS[profile]}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field {...fieldProps.startsAt} label="First occurrence" required>
+          {(control) => (
+            <TextInput
+              {...control}
+              type="datetime-local"
+              name="startsAt"
+              value={draft.startsAt}
+              disabled={scheduleDisabled}
+              onInput={(event) => updateDraft(draft, onChange, "startsAt", event.currentTarget.value)}
+            />
+          )}
+        </Field>
+      </div>
+
+      <div class="pk-grid pk-grid--roomy">
+        <RecurrenceEditor
+          value={draft.recurrenceRule}
+          disabled={scheduleDisabled}
+          referenceDate={draft.startsAt}
+          onChange={(value) => updateDraft(draft, onChange, "recurrenceRule", value)}
+        />
+        <Field {...fieldProps.timezone} label="Time zone" required>
+          {(control) => (
+            <TimeZoneSelect
+              {...control}
+              name="timezone"
+              value={draft.timezone}
+              disabled={scheduleDisabled}
+              onChange={(value) => updateDraft(draft, onChange, "timezone", value)}
+            />
+          )}
+        </Field>
+        <Field {...fieldProps.durationMinutes} label="Duration (minutes)" required>
+          {(control) => (
+            <TextInput
+              {...control}
+              type="number"
+              min={1}
+              max={10080}
+              name="durationMinutes"
+              value={draft.durationMinutes}
+              disabled={scheduleDisabled}
+              onInput={(event) => updateDraft(draft, onChange, "durationMinutes", Number(event.currentTarget.value))}
+            />
+          )}
+        </Field>
+      </div>
+
+      <div class="pk-grid">
+        <Field
+          {...fieldProps.registrationPolicy}
+          label="Registration"
+          help={EVENT_REGISTRATION_POLICY_HELP[draft.registrationPolicy]}
+        >
+          {(control) => (
+            <Select
+              {...control}
+              name="policy.registrationPolicy"
+              value={draft.registrationPolicy}
+              disabled={disabled}
+              onChange={(event) =>
+                updateDraft(draft, onChange, "registrationPolicy", event.currentTarget.value as EventRegistrationPolicy)
+              }
+            >
+              {EVENT_REGISTRATION_POLICIES.map((policy) => (
+                <option key={policy} value={policy}>
+                  {EVENT_REGISTRATION_POLICY_LABELS[policy]}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field
+          {...fieldProps.visibility}
+          label="Visibility"
+          help="Who can see the meeting listed at all: on the group's page, in the portal calendar, or publicly."
+        >
+          {(control) => (
+            <Select
+              {...control}
+              name="policy.visibility"
+              value={draft.visibility}
+              disabled={disabled}
+              onChange={(event) =>
+                updateDraft(draft, onChange, "visibility", event.currentTarget.value as EventVisibility)
+              }
+            >
+              {EVENT_VISIBILITIES.map((visibility) => (
+                <option key={visibility} value={visibility}>
+                  {EVENT_VISIBILITY_LABELS[visibility]}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field
+          {...fieldProps.memberEligibility}
+          label="Attendee eligibility"
+          help="Who may attend without a personal invitation. People from outside are covered by External guests."
+        >
+          {(control) => (
+            <Select
+              {...control}
+              name="policy.memberEligibility"
+              value={draft.memberEligibility}
+              disabled={disabled}
+              onChange={(event) =>
+                updateDraft(draft, onChange, "memberEligibility", event.currentTarget.value as EventMemberEligibility)
+              }
+            >
+              {EVENT_MEMBER_ELIGIBILITIES.map((eligibility) => (
+                <option key={eligibility} value={eligibility}>
+                  {ELIGIBILITY_LABELS[eligibility]}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        <Field {...fieldProps.guestPolicy} label="External guests">
+          {(control) => (
+            <Select
+              {...control}
+              name="policy.guestPolicy"
+              value={draft.guestPolicy}
+              disabled={disabled}
+              onChange={(event) =>
+                updateDraft(draft, onChange, "guestPolicy", event.currentTarget.value as EventGuestPolicy)
+              }
+            >
+              {EVENT_GUEST_POLICIES.map((policy) => (
+                <option key={policy} value={policy}>
+                  {GUEST_LABELS[policy]}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+      </div>
+
+      <div class="pk-grid">
+        <Field
+          {...fieldProps.meetingEntryAuthentication}
+          label="Meeting entry authentication"
+          help="Personal calendar links identify the invited person. Choose when this browser must verify that identity again."
+        >
+          {(control) => (
+            <Select
+              {...control}
+              name="policy.meetingEntryPolicy.authentication"
+              value={draft.meetingEntryPolicy.authentication}
+              disabled={disabled}
+              onChange={(event) =>
+                updateDraft(draft, onChange, "meetingEntryPolicy", {
+                  ...draft.meetingEntryPolicy,
+                  authentication: event.currentTarget.value as MeetingEntryPolicy["authentication"],
+                })
+              }
+            >
+              {MEETING_ENTRY_AUTHENTICATIONS.map((authentication) => (
+                <option key={authentication} value={authentication}>
+                  {authentication === "always" ? "Verify on every entry" : "Remember this browser"}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        {draft.meetingEntryPolicy.authentication === "remember_browser" && (
+          <Field
+            {...fieldProps.meetingEntryRememberDays}
+            label="Remember browser for (days)"
+            help="After this period, the attendee must verify again. Maximum 90 days."
+          >
+            {(control) => (
+              <TextInput
+                {...control}
+                type="number"
+                min={1}
+                max={90}
+                name="policy.meetingEntryPolicy.rememberDays"
+                value={draft.meetingEntryPolicy.rememberDays}
+                disabled={disabled}
+                onInput={(event) =>
+                  updateDraft(draft, onChange, "meetingEntryPolicy", {
+                    ...draft.meetingEntryPolicy,
+                    rememberDays: Number(event.currentTarget.value),
+                  })
+                }
+              />
+            )}
+          </Field>
+        )}
+      </div>
+
+      <Field {...fieldProps.location} label="Physical location">
+        {(control) => (
+          <TextInput
+            {...control}
+            name="location"
+            value={draft.location}
+            disabled={disabled}
+            onInput={(event) => updateDraft(draft, onChange, "location", event.currentTarget.value)}
+          />
+        )}
+      </Field>
+      <Field
+        {...fieldProps.providerJoinUrl}
+        label="Private meeting destination URL"
+        help="Never shown to attendees. They use their PKI meeting link, which records entry before redirecting here. Leave blank to keep the current destination when editing."
+      >
+        {(control) => (
+          <TextInput
+            {...control}
+            type="url"
+            name="providerJoinUrl"
+            value={draft.providerJoinUrl}
+            disabled={disabled}
+            onInput={(event) => updateDraft(draft, onChange, "providerJoinUrl", event.currentTarget.value)}
+          />
+        )}
+      </Field>
+    </div>
+  );
+}
