@@ -6,6 +6,18 @@ interface BatchGate {
   release: () => void;
 }
 
+/** Keep the same race gate when the Worker opens a request-scoped session. */
+function interceptDatabase(database: DatabaseLike, handler: ProxyHandler<DatabaseLike>): DatabaseLike {
+  return new Proxy(database, {
+    get(target, property, receiver) {
+      if (property === "withSession" && target.withSession) {
+        return (bookmark?: string) => interceptDatabase(target.withSession!(bookmark), handler);
+      }
+      return handler.get?.(target, property, receiver) ?? Reflect.get(target, property, receiver);
+    },
+  });
+}
+
 /** Pauses the next D1 batch after all pre-batch reads have completed. */
 export function gateNextBatch(database: DatabaseLike): BatchGate {
   let signalReached!: () => void;
@@ -17,7 +29,7 @@ export function gateNextBatch(database: DatabaseLike): BatchGate {
     release = resolve;
   });
   let gated = false;
-  const db = new Proxy(database, {
+  const db = interceptDatabase(database, {
     get(target, property, receiver) {
       if (property !== "batch") return Reflect.get(target, property, receiver);
       return async (...args: Parameters<DatabaseLike["batch"]>) => {
@@ -63,7 +75,7 @@ export function gateNextRun(database: DatabaseLike): BatchGate {
       },
     });
 
-  const db = new Proxy(database, {
+  const db = interceptDatabase(database, {
     get(target, property, receiver) {
       if (property !== "prepare") return Reflect.get(target, property, receiver);
       return (query: string) => wrapStatement(target.prepare(query));
@@ -79,7 +91,7 @@ export function gateBatchGroup(database: DatabaseLike, participants: number): Da
   const released = new Promise<void>((resolve) => {
     release = resolve;
   });
-  return new Proxy(database, {
+  return interceptDatabase(database, {
     get(target, property, receiver) {
       if (property !== "batch") return Reflect.get(target, property, receiver);
       return async (...args: Parameters<DatabaseLike["batch"]>) => {

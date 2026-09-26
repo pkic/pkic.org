@@ -1,6 +1,5 @@
 import eslint from "@eslint/js";
 import eslintConfigPrettier from "eslint-config-prettier";
-import eslintPluginPrettier from "eslint-plugin-prettier/recommended";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
@@ -158,9 +157,8 @@ export default tseslint.config(
       ],
     },
   },
+  // Formatting is enforced once by format:check in the complete check gate.
+  // Keep conflicting style rules disabled without running Prettier per file
+  // through ESLint's synchronous worker bridge as well.
   eslintConfigPrettier,
-  {
-    ...eslintPluginPrettier,
-    files: sourceTypeScriptFiles,
-  },
 );

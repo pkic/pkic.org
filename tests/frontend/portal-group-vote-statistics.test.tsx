@@ -76,6 +76,7 @@ async function settle(): Promise<void> {
 }
 
 afterEach(() => {
+  for (const container of document.body.children) render(null, container);
   document.body.replaceChildren();
   vi.unstubAllGlobals();
 });
@@ -210,6 +211,7 @@ describe("group vote statistics", () => {
       render(<GroupVoteSettings groupId={GROUP_ID} vote={managedVote()} onChanged={async () => {}} />, container),
     );
     await settle();
+    await act(() => vi.dynamicImportSettled());
     // The settings facet holds the lifecycle and the forms; the statistics
     // tab is what runs the statistics query, and only when it is opened.
     expect(requests.some((request) => request.endsWith("/statistics"))).toBe(false);

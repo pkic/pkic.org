@@ -43,6 +43,7 @@ export const NODE_UNIT_TEST_FILES = [
   "tests/proposal-route-policy.test.ts",
   "tests/provider-failure-safety.test.ts",
   "tests/security-primitives.test.ts",
+  "tests/scheduled-job-runner.test.ts",
   "tests/server-collection-controller.test.ts",
   "tests/session-policy.test.ts",
   "tests/shared-schema-composition.test.ts",

@@ -83,6 +83,12 @@ interface D1QueryResult {
 }
 
 function queryD1(persistTo: string, sql: string): Record<string, unknown>[] {
+  return queryD1Batch(persistTo, [sql])[0]!;
+}
+
+// Each CLI invocation starts workerd. Collect independent assertions in one
+// invocation while keeping execution on real D1 and preserving every result.
+function queryD1Batch(persistTo: string, queries: string[]): Record<string, unknown>[][] {
   const raw = runWrangler([
     "d1",
     "execute",
@@ -94,10 +100,11 @@ function queryD1(persistTo: string, sql: string): Record<string, unknown>[] {
     persistTo,
     "--json",
     "--command",
-    sql,
+    queries.join(";\n"),
   ]);
   const parsed = JSON.parse(raw) as D1QueryResult[];
-  return parsed[0]?.results ?? [];
+  expect(parsed).toHaveLength(queries.length);
+  return parsed.map((result) => result.results);
 }
 
 describe("migrate-members-yaml-to-d1 importer — fresh-D1 execution smoke test", () => {
@@ -186,37 +193,43 @@ memberType: H5
       runWrangler(["d1", "execute", "DB", "--env", "local", "--local", "--persist-to", persistTo, "--file", sqlFile]),
     ).not.toThrow();
 
-    expect(
-      queryD1(
-        persistTo,
-        `SELECT g.slug, e.profile_key FROM events e JOIN groups g ON g.id = e.owner_group_id
-      WHERE e.slug = 'pqc-conference-amsterdam-nl'`,
-      ),
-    ).toEqual([{ slug: "pqc", profile_key: "conference" }]);
-
-    const orgs = queryD1(persistTo, "SELECT id, normalized_name, links_json FROM organizations");
+    const [
+      events,
+      orgs,
+      domains,
+      memberAggregates,
+      categoryAssignments,
+      identities,
+      importedUserProfile,
+      primaryContactGrants,
+      sentinelUser,
+      foreignKeyViolations,
+    ] = queryD1Batch(persistTo, [
+      `SELECT g.slug, e.profile_key FROM events e JOIN groups g ON g.id = e.owner_group_id
+        WHERE e.slug = 'pqc-conference-amsterdam-nl'`,
+      "SELECT id, normalized_name, links_json FROM organizations",
+      "SELECT domain FROM organization_domain_claims",
+      "SELECT member_type, member_since FROM members ORDER BY member_type",
+      "SELECT category_code FROM member_category_assignments ORDER BY category_code",
+      `SELECT show_on_organization_profile, job_title, biography, links_json FROM identities
+        WHERE organization_id IS NOT NULL`,
+      "SELECT job_title, biography, links_json FROM users WHERE email = 'alice@acme.example'",
+      "SELECT role_id, single_holder_per_context FROM user_roles WHERE role_id = 'role-primary_contact'",
+      "SELECT email FROM users WHERE email = 'unmatched-bob@members.invalid'",
+      "PRAGMA foreign_key_check",
+    ]);
+    expect(events).toEqual([{ slug: "pqc", profile_key: "conference" }]);
     expect(orgs).toHaveLength(1);
     expect(orgs[0]!.links_json).toBe(JSON.stringify(["https://linkedin.com/company/acme"]));
 
-    const domains = queryD1(persistTo, "SELECT domain FROM organization_domain_claims");
     expect(domains.map((r) => r.domain)).toEqual(["acme.example"]);
 
-    const memberAggregates = queryD1(persistTo, "SELECT member_type, member_since FROM members ORDER BY member_type");
     expect(memberAggregates).toHaveLength(2);
     expect(memberAggregates[0]).toMatchObject({ member_type: "individual" });
     expect(memberAggregates[1]).toMatchObject({ member_type: "organization", member_since: "2020-01-01" });
 
-    const categoryAssignments = queryD1(
-      persistTo,
-      "SELECT category_code FROM member_category_assignments ORDER BY category_code",
-    );
     expect(categoryAssignments.map((r) => r.category_code)).toEqual(["A", "H5"]);
 
-    const identities = queryD1(
-      persistTo,
-      `SELECT show_on_organization_profile, job_title, biography, links_json FROM identities
-        WHERE organization_id IS NOT NULL`,
-    );
     expect(identities).toHaveLength(1);
     expect(identities[0]).toMatchObject({
       show_on_organization_profile: 1,
@@ -224,24 +237,15 @@ memberType: H5
       biography: null,
       links_json: JSON.stringify(["https://linkedin.com/in/alice-anderson"]),
     });
-    const importedUserProfile = queryD1(
-      persistTo,
-      "SELECT job_title, biography, links_json FROM users WHERE email = 'alice@acme.example'",
-    );
     expect(importedUserProfile).toEqual([{ job_title: null, biography: null, links_json: null }]);
 
-    const primaryContactGrants = queryD1(
-      persistTo,
-      `SELECT role_id, single_holder_per_context FROM user_roles WHERE role_id = 'role-primary_contact'`,
-    );
     expect(primaryContactGrants).toHaveLength(1);
     expect(primaryContactGrants[0]).toMatchObject({ single_holder_per_context: 1 });
 
     // No `unmatched-bob@members.invalid`-style row lacks its sentinel user.
-    const sentinelUser = queryD1(persistTo, "SELECT email FROM users WHERE email = 'unmatched-bob@members.invalid'");
     expect(sentinelUser).toHaveLength(1);
 
-    expect(queryD1(persistTo, "PRAGMA foreign_key_check")).toEqual([]);
+    expect(foreignKeyViolations).toEqual([]);
 
     // Approved reconciliation upgrades the existing placeholder in place and
     // adds an organization user whose email cannot be discovered by domain.
@@ -364,24 +368,17 @@ representatives:
     // alice@acme.example: claimed by another account's in-flight email change.
     // carol@acme.example: already an alternate address of a live account
     // whose login address is a different one.
-    queryD1(
-      persistTo,
+    queryD1Batch(persistTo, [
       `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at, pending_email)
        VALUES ('20000000-0000-4000-8000-000000000001', 'old@example.org', 'old@example.org', 'user', 1,
                '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', 'alice@acme.example')`,
-    );
-    queryD1(
-      persistTo,
       `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
        VALUES ('20000000-0000-4000-8000-000000000002', 'carol@other.example', 'carol@other.example', 'user', 1,
                '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
-    );
-    queryD1(
-      persistTo,
       `INSERT INTO user_emails (id, user_id, email, normalized_email, verified_at, created_at)
        VALUES ('20000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000002',
                'carol@acme.example', 'carol@acme.example', '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
-    );
+    ]);
 
     expect(() =>
       runWrangler(["d1", "execute", "DB", "--env", "local", "--local", "--persist-to", persistTo, "--file", sqlFile]),
@@ -389,39 +386,48 @@ representatives:
 
     // The reserved address stays reserved: no second account claims it, and
     // the account holding it keeps its own login address.
-    expect(queryD1(persistTo, "SELECT id FROM users WHERE normalized_email = 'alice@acme.example'")).toEqual([]);
-    expect(
-      queryD1(persistTo, "SELECT pending_email FROM users WHERE id = '20000000-0000-4000-8000-000000000001'"),
-    ).toEqual([{ pending_email: "alice@acme.example" }]);
+    const [
+      aliceAccounts,
+      pendingEmail,
+      carolAccounts,
+      organizationIdentities,
+      roles,
+      organizations,
+      reservations,
+      foreignKeyViolations,
+    ] = queryD1Batch(persistTo, [
+      "SELECT id FROM users WHERE normalized_email = 'alice@acme.example'",
+      "SELECT pending_email FROM users WHERE id = '20000000-0000-4000-8000-000000000001'",
+      "SELECT id FROM users WHERE normalized_email = 'carol@acme.example'",
+      `SELECT i.user_id AS user_id, i.job_title FROM identities i
+         JOIN users u ON u.id = i.user_id WHERE i.organization_id IS NOT NULL`,
+      "SELECT role_id, user_id FROM user_roles WHERE context_type = 'organization'",
+      "SELECT normalized_name FROM organizations",
+      EMAIL_RESERVATION_QUERY,
+      "PRAGMA foreign_key_check",
+    ]);
+    expect(aliceAccounts).toEqual([]);
+    expect(pendingEmail).toEqual([{ pending_email: "alice@acme.example" }]);
 
     // The alternate address belongs to a person who already has an account,
     // so the organization identity and role attach to that account instead
     // of to a duplicate one.
-    expect(queryD1(persistTo, "SELECT id FROM users WHERE normalized_email = 'carol@acme.example'")).toEqual([]);
-    expect(
-      queryD1(
-        persistTo,
-        `SELECT i.user_id AS user_id, i.job_title FROM identities i
-           JOIN users u ON u.id = i.user_id
-          WHERE i.organization_id IS NOT NULL`,
-      ),
-    ).toEqual([{ user_id: "20000000-0000-4000-8000-000000000002", job_title: "COO" }]);
+    expect(carolAccounts).toEqual([]);
+    expect(organizationIdentities).toEqual([{ user_id: "20000000-0000-4000-8000-000000000002", job_title: "COO" }]);
     // Carol is the second representative, so she holds the secondary
     // contact role; the primary contact grant belongs to Alice and stays
     // ungranted along with her account.
-    expect(queryD1(persistTo, `SELECT role_id, user_id FROM user_roles WHERE context_type = 'organization'`)).toEqual([
-      { role_id: "role-secondary_contact", user_id: "20000000-0000-4000-8000-000000000002" },
-    ]);
+    expect(roles).toEqual([{ role_id: "role-secondary_contact", user_id: "20000000-0000-4000-8000-000000000002" }]);
 
     // The organization itself imported, so one reserved address cost one
     // representative, not the batch.
-    expect(queryD1(persistTo, "SELECT normalized_name FROM organizations")).toEqual([{ normalized_name: "acme corp" }]);
+    expect(organizations).toEqual([{ normalized_name: "acme corp" }]);
 
     // And the address that got no account is reported, by address and holder.
-    expect(findEmailReservationConflicts(importedEmails, queryD1(persistTo, EMAIL_RESERVATION_QUERY))).toEqual([
+    expect(findEmailReservationConflicts(importedEmails, reservations)).toEqual([
       { email: "alice@acme.example", reservedBy: "old@example.org", reason: "pending_email_change" },
     ]);
-    expect(queryD1(persistTo, "PRAGMA foreign_key_check")).toEqual([]);
+    expect(foreignKeyViolations).toEqual([]);
   });
 
   it("is idempotent: running the generated SQL twice against the same D1 produces identical row counts and identities", () => {
@@ -521,27 +527,19 @@ sponsor:
     }
 
     function snapshot(): Record<string, Record<string, unknown>[]> {
-      return {
-        organizations: queryD1(persistTo, "SELECT id, normalized_name FROM organizations ORDER BY normalized_name"),
-        members: queryD1(persistTo, "SELECT id, member_type, organization_id, user_id FROM members ORDER BY id"),
-        categoryAssignments: queryD1(
-          persistTo,
-          "SELECT member_id, category_code FROM member_category_assignments ORDER BY member_id",
-        ),
-        identities: queryD1(persistTo, "SELECT id, organization_id, user_id FROM identities ORDER BY id"),
-        roles: queryD1(
-          persistTo,
+      const queries = {
+        organizations: "SELECT id, normalized_name FROM organizations ORDER BY normalized_name",
+        members: "SELECT id, member_type, organization_id, user_id FROM members ORDER BY id",
+        categoryAssignments: "SELECT member_id, category_code FROM member_category_assignments ORDER BY member_id",
+        identities: "SELECT id, organization_id, user_id FROM identities ORDER BY id",
+        roles:
           "SELECT id, user_id, role_id, context_id FROM user_roles WHERE context_type = 'organization' ORDER BY id",
-        ),
-        sponsorships: queryD1(
-          persistTo,
-          "SELECT id, sponsor_type, organization_id, event_id, tier FROM sponsorships ORDER BY id",
-        ),
-        groupMemberships: queryD1(
-          persistTo,
+        sponsorships: "SELECT id, sponsor_type, organization_id, event_id, tier FROM sponsorships ORDER BY id",
+        groupMemberships:
           "SELECT id, group_id, user_id, member_id, source, joined_at FROM group_memberships ORDER BY id",
-        ),
       };
+      const results = queryD1Batch(persistTo, Object.values(queries));
+      return Object.fromEntries(Object.keys(queries).map((name, index) => [name, results[index]!]));
     }
 
     runImport();
