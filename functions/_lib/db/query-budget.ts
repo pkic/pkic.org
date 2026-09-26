@@ -102,13 +102,10 @@ function wrapDatabase(db: DatabaseLike, budget: MutableD1QueryBudget): DatabaseL
     };
   }
   if (db.withSession) {
-    wrapped.withSession = (constraintOrBookmark?: string) => {
-      const session = db.withSession!(constraintOrBookmark);
-      return Object.assign(wrapDatabase(session, budget), {
-        getBookmark: session.getBookmark?.bind(session),
-      });
-    };
+    wrapped.withSession = (constraintOrBookmark?: string) =>
+      wrapDatabase(db.withSession!(constraintOrBookmark), budget);
   }
+  if (db.getBookmark) wrapped.getBookmark = db.getBookmark.bind(db);
   return wrapped;
 }
 

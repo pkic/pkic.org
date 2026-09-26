@@ -26,6 +26,7 @@ export function resilientDatabase(db: DatabaseLike): DatabaseLike {
     prepare: (query) => wrap(db.prepare(query)),
     batch: (batch) => execute("D1", () => db.batch(batch.map((statement) => statements.get(statement) ?? statement))),
     ...(db.exec ? { exec: (query: string) => execute("D1", () => db.exec!(query)) } : {}),
+    ...(db.getBookmark ? { getBookmark: () => db.getBookmark?.() ?? null } : {}),
     ...(db.withSession
       ? {
           withSession: (bookmark?: string) => {

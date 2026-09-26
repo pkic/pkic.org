@@ -16,6 +16,21 @@ function fakeDatabase(): { db: DatabaseLike; batch: ReturnType<typeof vi.fn> } {
 }
 
 describe("D1 query budget", () => {
+  it("preserves bookmarks on an existing session and shares the budget with newly opened sessions", async () => {
+    const raw = fakeDatabase();
+    const session = { ...raw.db, getBookmark: () => "consistent/bookmark" };
+    const withSession = vi.fn(() => session);
+    const wrapped = createD1QueryBudgetedDatabase({ ...raw.db, withSession }, 2);
+    const opened = wrapped.db.withSession!("prior/bookmark");
+    expect(withSession).toHaveBeenCalledWith("prior/bookmark");
+    expect(opened.getBookmark?.()).toBe("consistent/bookmark");
+    expect(createD1QueryBudgetedDatabase(session, 2).db.getBookmark?.()).toBe("consistent/bookmark");
+    await opened.prepare("SELECT 1").first();
+    await wrapped.db.prepare("SELECT 1").first();
+    expect(wrapped.budget.usedQueries()).toBe(2);
+    await expect(opened.prepare("SELECT 1").all()).rejects.toBeInstanceOf(D1QueryBudgetExceededError);
+  });
+
   it("counts run, all, and first executions rather than prepare/bind calls", async () => {
     const raw = fakeDatabase();
     const { db, budget } = createD1QueryBudgetedDatabase(raw.db, 3);

@@ -18,6 +18,7 @@ export interface DatabaseLike {
   batch(statements: StatementLike[]): Promise<D1StatementResult[]>;
   exec?(query: string): Promise<unknown>;
   withSession?(constraintOrBookmark?: string): DatabaseLike & { getBookmark?(): string | null };
+  getBookmark?(): string | null;
 }
 
 export interface R2ObjectLike {

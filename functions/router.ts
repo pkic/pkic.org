@@ -21,6 +21,7 @@ import { decorateOpenApiSpec, filterOpenApiSpecForMcp } from "./_lib/openapi/mcp
 import { OPENAPI_INFO, OPENAPI_TAGS, OPENAPI_TAG_GROUPS } from "./_lib/openapi/document";
 import { createMcpWorkerFetch, MCP_OPENAPI_JSON_PATH } from "./_lib/mcp/worker";
 import { getStaticAssetsBinding } from "./_lib/static-assets";
+import { primaryFirstDb, requestSessionDb } from "./_lib/db/session";
 
 const OPENAPI_JSON_PATH = "/api/v1/openapi.json";
 const DOCS_PATH = "/api/v1/docs";
@@ -133,7 +134,11 @@ export default {
     const paused = await availabilityResponse(request, env);
     if (paused) return paused;
     try {
-      return await fetchWithMcp(request, withDependencyHandling(env), ctx);
+      return await fetchWithMcp(
+        request,
+        withDependencyHandling({ ...env, DB: requestSessionDb(env.DB, request) }),
+        ctx,
+      );
     } catch (error) {
       return handleError(error);
     }
@@ -145,10 +150,10 @@ export default {
       throw new AppError(503, "SERVICE_UNAVAILABLE", "Online RSVP processing is temporarily paused");
     }
     // Inbound acceptance must wait for processing; waitUntil could acknowledge mail before D1 succeeds.
-    await processIncomingEmail(message, withDependencyHandling(env));
+    await processIncomingEmail(message, withDependencyHandling({ ...env, DB: primaryFirstDb(env.DB) }));
   },
   scheduled(controller: ScheduledController, env: Env, ctx: ExecutionContext): void {
     if (getAvailability(env, Date.now(), "background").mode === "normal")
-      ctx.waitUntil(runScheduledJob(controller, withDependencyHandling(env)));
+      ctx.waitUntil(runScheduledJob(controller, withDependencyHandling({ ...env, DB: primaryFirstDb(env.DB) })));
   },
 };
