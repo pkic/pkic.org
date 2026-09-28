@@ -242,8 +242,10 @@ export function EventEmailCampaign({
         body: JSON.stringify(buildPayload(preview.previewToken)),
       });
       const count = res.queuedRecipients;
-      notify(`Email queued for ${count} recipient${count !== 1 ? "s" : ""}`, "success");
-      setStatus(`Queued for ${count} recipients. Delivery continues in the background; you can leave this page.`);
+      notify(`Campaign accepted for ${count} recipient${count !== 1 ? "s" : ""}`, "success");
+      setStatus(
+        `${res.stagedRecipients} of ${count} recipients added to the outbox. The rest are saved; you can leave this page and check their progress in the Email outbox.`,
+      );
       setPreview(null);
       setPreviewConfirmed(false);
       setSubject("");

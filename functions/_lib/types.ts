@@ -110,6 +110,8 @@ export interface Env {
   SCHEDULED_WAITLIST_PROMOTION_LIMIT?: string;
   SCHEDULED_RSVP_ENFORCEMENT_LIMIT?: string;
   SCHEDULED_JOBS_PER_PASS?: string;
+  /** Preview uses its cron only to materialize accepted campaigns into the outbox. */
+  SCHEDULED_JOB_SCOPE?: "all" | "campaign_staging_only";
   SCHEDULED_DUE_WORK_MAX_PASSES?: string;
   SCHEDULED_DUE_WORK_MAX_MS?: string;
   /** Maximum D1 statements issued by one scheduled Worker invocation. */

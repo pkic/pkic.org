@@ -114,7 +114,11 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
   logInfo("SCHEDULED_JOB_STARTED", { cron: controller.cron, scheduledTime: controller.scheduledTime });
   try {
     const config = getConfig(env);
-    const outcome = await dispatchScheduledJobs(env, SCHEDULED_JOB_DEFINITIONS, {
+    const definitions =
+      config.scheduledJobScope === "campaign_staging_only"
+        ? SCHEDULED_JOB_DEFINITIONS.filter((definition) => definition.key === "event_email_campaigns")
+        : SCHEDULED_JOB_DEFINITIONS;
+    const outcome = await dispatchScheduledJobs(env, definitions, {
       maxJobsPerPass: config.scheduledJobsPerPass,
       d1QueryBudget: config.scheduledD1QueryBudget,
     });

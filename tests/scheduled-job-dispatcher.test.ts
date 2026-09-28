@@ -203,6 +203,39 @@ describe("scheduled job dispatcher", () => {
     // A job that derives its own wake time from domain state overrides the interval.
     expect(dueWork.next_run_at).toBe("2999-06-01T00:00:00.000Z");
   });
+
+  it("runs only the allowed campaign job when every scheduled job is overdue", async () => {
+    await env.DB.prepare("UPDATE scheduled_jobs SET next_run_at = '2000-01-01T00:00:00.000Z'").run();
+    let campaignRuns = 0;
+    const definitions: ScheduledJobDefinition[] = [
+      {
+        key: "event_email_campaigns",
+        leaseSeconds: 600,
+        run: async () => {
+          campaignRuns += 1;
+        },
+      },
+    ];
+
+    expect((await selectRunnableJobs(env.DB, 1, ["event_email_campaigns"])).map((row) => row.job_key)).toEqual([
+      "event_email_campaigns",
+    ]);
+    const before = await queryAll<{ last_run_at: string | null }>(
+      env.DB,
+      "SELECT last_run_at FROM scheduled_jobs WHERE job_key = 'due_work'",
+    );
+    const outcome = await dispatchScheduledJobs(env as never, definitions, {
+      maxJobsPerPass: 1,
+      d1QueryBudget: 900,
+    });
+    expect(outcome).toMatchObject({ ran: 1, failed: 0 });
+    expect(campaignRuns).toBe(1);
+    const other = await queryAll<{ last_run_at: string | null }>(
+      env.DB,
+      "SELECT last_run_at FROM scheduled_jobs WHERE job_key = 'due_work'",
+    );
+    expect(other[0]?.last_run_at).toBe(before[0]?.last_run_at);
+  });
 });
 
 describe("computed next wake", () => {

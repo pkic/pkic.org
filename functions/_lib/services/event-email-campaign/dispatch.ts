@@ -4,12 +4,17 @@ import { resolveTemplate } from "../../email/templates";
 import type { DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { getEventById } from "../events";
+import { prepareAuditLogWhen } from "../audit";
 import { prepareEventEmailCampaignPage } from "../event-email-campaign-queue";
 import { listCampaignRecipients } from "./audience";
 import { assertCampaignBroadcastSafety } from "./broadcast-safety";
 
 /** One scheduler pass; the outbox remains the sole owner of delivery retries. */
-export async function dispatchEventEmailCampaignPage(db: DatabaseLike): Promise<{ processed: number; queued: number }> {
+export async function dispatchEventEmailCampaignPage(
+  db: DatabaseLike,
+  campaignId?: string,
+  actorId?: string,
+): Promise<{ processed: number; queued: number }> {
   const campaign = await first<{
     id: string;
     event_id: string;
@@ -21,7 +26,9 @@ export async function dispatchEventEmailCampaignPage(db: DatabaseLike): Promise<
   }>(
     db,
     `SELECT id, event_id, input_json, app_base_url, cursor_email, processed_count, recipient_count
-    FROM event_email_campaigns WHERE status = 'queued' ORDER BY updated_at, id LIMIT 1`,
+    FROM event_email_campaigns WHERE status = 'queued' AND (? IS NULL OR id = ?)
+    ORDER BY updated_at, id LIMIT 1`,
+    [campaignId ?? null, campaignId ?? null],
   );
   if (!campaign) return { processed: 0, queued: 0 };
   const input = eventEmailCampaignPreviewInputSchema.parse(JSON.parse(campaign.input_json));
@@ -61,6 +68,20 @@ export async function dispatchEventEmailCampaignPage(db: DatabaseLike): Promise<
   const completed = emails.length < limit || campaign.processed_count + emails.length >= campaign.recipient_count;
   const results = await db.batch([
     ...page.statements,
+    ...(actorId
+      ? [
+          prepareAuditLogWhen(db, {
+            actorType: "admin",
+            actorId,
+            action: "event_email_campaign_page_staged",
+            entityType: "event_email_campaign",
+            entityId: campaign.id,
+            details: { processedRecipients: emails.length, stagedRecipients: page.queuedRecipients },
+            conditionSql: condition.sql,
+            conditionBindings: condition.bindings,
+          }),
+        ]
+      : []),
     db
       .prepare(
         `UPDATE event_email_campaigns SET cursor_email = ?, processed_count = processed_count + ?,
@@ -81,6 +102,31 @@ export async function dispatchEventEmailCampaignPage(db: DatabaseLike): Promise<
   return results.at(-1)?.meta?.changes
     ? { processed: emails.length, queued: page.queuedRecipients }
     : { processed: 0, queued: 0 };
+}
+
+/** Progress for an operator staging accepted campaigns in bounded requests. */
+export async function remainingEventEmailCampaignRecipients(db: DatabaseLike): Promise<number> {
+  const row = await first<{ remaining: number }>(
+    db,
+    `SELECT COALESCE(SUM(recipient_count - processed_count), 0) AS remaining
+     FROM event_email_campaigns WHERE status = 'queued'`,
+  );
+  return row?.remaining ?? 0;
+}
+
+/** One bounded scheduled pass; the cursor is committed after every page. */
+export async function dispatchEventEmailCampaignPages(
+  db: DatabaseLike,
+  maxPages: number,
+): Promise<{ processed: number; queued: number }> {
+  const summary = { processed: 0, queued: 0 };
+  for (let page = 0; page < maxPages; page += 1) {
+    const result = await dispatchEventEmailCampaignPage(db);
+    summary.processed += result.processed;
+    summary.queued += result.queued;
+    if (result.processed === 0) break;
+  }
+  return summary;
 }
 
 /** Bound cleanup as well as dispatch; expired previews must not retain addresses. */

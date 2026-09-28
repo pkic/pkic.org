@@ -21,4 +21,11 @@ describe("scheduled Worker cron contract", () => {
     expect(new Set(configured)).toEqual(new Set(ALL_SCHEDULED_CRONS));
     expect(configured).toHaveLength(ALL_SCHEDULED_CRONS.length);
   });
+
+  it("gives the stable preview Worker a campaign-only trigger", () => {
+    const wrangler = readFileSync(`${repositoryRoot}/wrangler.jsonc`, "utf8");
+    const preview = wrangler.slice(wrangler.indexOf('"preview": {'), wrangler.indexOf('"local": {'));
+    expect(preview).toContain('"crons": ["* * * * *"]');
+    expect(preview).toContain('"SCHEDULED_JOB_SCOPE": "campaign_staging_only"');
+  });
 });

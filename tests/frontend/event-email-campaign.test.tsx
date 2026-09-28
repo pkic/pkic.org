@@ -157,7 +157,8 @@ describe("event email campaign UI", () => {
   it("previews and creates a campaign through one canonical nested resource", async () => {
     const requests = stubCampaignFetch({
       previews: () => json(PREVIEW_BODY),
-      campaigns: () => json({ success: true, queuedRecipients: 1, queuedBatches: 1, mode: "personal" }, 202),
+      campaigns: () =>
+        json({ success: true, queuedRecipients: 1, queuedBatches: 1, stagedRecipients: 1, mode: "personal" }, 202),
     });
 
     const container = mount(<EventEmailCampaign campaignsPath={CAMPAIGN_PATH} daysPath={`${EVENT_PATH}/days`} />);

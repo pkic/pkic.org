@@ -168,6 +168,7 @@ describe("portal Operations outbox reads", () => {
 
   it("exposes bounded canonical process/reset commands and sends exact selected IDs", async () => {
     const requests: Array<{ method: string; url: URL; body: unknown }> = [];
+    let stageCalls = 0;
     const failedId = "00000000-0000-4000-8000-000000000002";
     vi.stubGlobal(
       "fetch",
@@ -214,6 +215,15 @@ describe("portal Operations outbox reads", () => {
         if (url.pathname === "/api/v1/email/outbox/process") {
           return json({ success: true, processed: 1, failed: 0, skipped: 0 });
         }
+        if (url.pathname === "/api/v1/email/campaigns/stage") {
+          stageCalls += 1;
+          return json({
+            success: true,
+            processedRecipients: 100,
+            stagedRecipients: 100,
+            remainingRecipients: stageCalls === 1 ? 100 : 0,
+          });
+        }
         if (url.pathname === "/api/v1/email/outbox/reset-failed") {
           return json({ success: true, reset: 1, processed: 1, failed: 0, skipped: 0 });
         }
@@ -241,6 +251,13 @@ describe("portal Operations outbox reads", () => {
     // Through the shared request contract, not a literal: a body that the
     // endpoint would reject must fail here too.
     expect(emailOutboxProcessSchema.parse(processRequest.body).limit).toBe(20);
+    const stageItem = await pageMenuItem(container, "Email outbox actions", "Add pending campaign messages");
+    await act(() => {
+      stageItem.click();
+    });
+    for (let attempt = 0; attempt < 5; attempt += 1) await settle();
+    expect(stageCalls).toBe(2);
+    expect(container.textContent).toContain("200 added in this run; 0 still waiting");
 
     // One fact per column (#124): the subject has a column of its own, the
     // queue standing is a badge column that can be filtered, and the

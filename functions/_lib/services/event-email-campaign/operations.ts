@@ -26,6 +26,7 @@ import {
 } from "./snapshots";
 import { verifyCampaignPreviewToken } from "./preview-token";
 import { buildPersonalCampaignTemplateData } from "./template-data";
+import { dispatchEventEmailCampaignPage } from "./dispatch";
 
 export interface EventEmailCampaignOperationOptions {
   actorId: string;
@@ -137,11 +138,15 @@ export async function createEventEmailCampaign(
     throw new AppError(400, "CAMPAIGN_NO_RECIPIENTS", "No recipients matched the selected filters.");
   }
   await acceptCampaignSnapshot(db, event, input, snapshot);
+  // Stage one bounded page before returning so a small campaign is visible in
+  // the outbox immediately. The persisted cursor lets larger campaigns resume.
+  const staged = await dispatchEventEmailCampaignPage(db, snapshot.id);
   return eventEmailCampaignResponseSchema.parse({
     success: true,
     queuedRecipients: snapshot.recipient_count,
     queuedBatches:
       input.sendMode === "bcc_batch" ? Math.ceil(snapshot.recipient_count / input.batchSize) : snapshot.recipient_count,
+    stagedRecipients: staged.queued,
     mode: input.sendMode,
   });
 }

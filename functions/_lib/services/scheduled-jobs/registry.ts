@@ -1,6 +1,6 @@
 import { runMembershipWorkflows } from "../membership/workflows/scheduled";
 import { processMembershipFeeCheckouts } from "../membership/workflows/fee-checkout";
-import { dispatchEventEmailCampaignPage, cleanExpiredCampaignSnapshots } from "../event-email-campaign/dispatch";
+import { dispatchEventEmailCampaignPages, cleanExpiredCampaignSnapshots } from "../event-email-campaign/dispatch";
 import { refreshMemberNews } from "../member-news/refresh";
 import { getConfig } from "../../config";
 import { runGoogleGroupsSyncPass } from "../membership/scheduled-jobs";
@@ -22,6 +22,8 @@ import type { ScheduledJobDefinition } from "./types";
 
 /** Ten minutes covers the longest observed pass with room for a slow D1. */
 const DEFAULT_LEASE_SECONDS = 600;
+/** At most 2,000 personal outbox rows per scheduled invocation. */
+const CAMPAIGN_PAGES_PER_PASS = 20;
 
 /**
  * Reconciliation floors for the deadline-driven jobs. These are the longest a
@@ -60,7 +62,7 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
     leaseSeconds: DEFAULT_LEASE_SECONDS,
     requiredPermissions: ["email:manage"],
     run: async ({ env }) => {
-      const summary = await dispatchEventEmailCampaignPage(env.DB);
+      const summary = await dispatchEventEmailCampaignPages(env.DB, CAMPAIGN_PAGES_PER_PASS);
       await cleanExpiredCampaignSnapshots(env.DB);
       return { summary };
     },

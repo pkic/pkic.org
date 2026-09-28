@@ -25,7 +25,9 @@ const MAX_BACKOFF_SECONDS = 86_400;
  * before selection — otherwise the job stays permanently "running" and is
  * never picked up again.
  */
-export async function reapAbandonedRuns(db: DatabaseLike): Promise<number> {
+export async function reapAbandonedRuns(db: DatabaseLike, jobKeys?: readonly ScheduledJobKey[]): Promise<number> {
+  if (jobKeys?.length === 0) return 0;
+  const scope = jobKeys ? ` AND job_key IN (${jobKeys.map(() => "?").join(", ")})` : "";
   const result = await run(
     db,
     `UPDATE scheduled_jobs
@@ -39,7 +41,8 @@ export async function reapAbandonedRuns(db: DatabaseLike): Promise<number> {
             next_run_at = ${NOW_SQL},
             updated_at = ${NOW_SQL}
       WHERE running_since IS NOT NULL
-        AND lease_expires_at <= ${NOW_SQL}`,
+        AND lease_expires_at <= ${NOW_SQL}${scope}`,
+    [...(jobKeys ?? [])],
   );
   const reaped = result.changes;
   if (reaped > 0) logInfo("SCHEDULED_JOB_RUNS_REAPED", { reaped });
@@ -47,17 +50,23 @@ export async function reapAbandonedRuns(db: DatabaseLike): Promise<number> {
 }
 
 /** Jobs that are due or explicitly woken, excluding paused and in-flight ones. */
-export async function selectRunnableJobs(db: DatabaseLike, limit: number): Promise<ScheduledJobRow[]> {
+export async function selectRunnableJobs(
+  db: DatabaseLike,
+  limit: number,
+  jobKeys?: readonly ScheduledJobKey[],
+): Promise<ScheduledJobRow[]> {
+  if (jobKeys?.length === 0) return [];
+  const scope = jobKeys ? ` AND job_key IN (${jobKeys.map(() => "?").join(", ")})` : "";
   return all<ScheduledJobRow>(
     db,
     `SELECT ${SCHEDULED_JOB_COLUMNS}
        FROM scheduled_jobs
       WHERE paused_at IS NULL
         AND running_since IS NULL
-        AND (wake_requested = 1 OR next_run_at <= ${NOW_SQL})
+        AND (wake_requested = 1 OR next_run_at <= ${NOW_SQL})${scope}
       ORDER BY next_run_at ASC, job_key ASC
       LIMIT ?`,
-    [limit],
+    [...(jobKeys ?? []), limit],
   );
 }
 
@@ -166,8 +175,9 @@ export async function dispatchScheduledJobs(
 ): Promise<{ reaped: number; ran: number; failed: number }> {
   if (getAvailability(env, Date.now(), "background").mode !== "normal") return { reaped: 0, ran: 0, failed: 0 };
   const byKey = new Map(definitions.map((definition) => [definition.key, definition]));
-  const reaped = await reapAbandonedRuns(env.DB);
-  const runnable = await selectRunnableJobs(env.DB, options.maxJobsPerPass);
+  const jobKeys = definitions.map((definition) => definition.key);
+  const reaped = await reapAbandonedRuns(env.DB, jobKeys);
+  const runnable = await selectRunnableJobs(env.DB, options.maxJobsPerPass, jobKeys);
 
   let ran = 0;
   let failed = 0;

@@ -8,6 +8,7 @@ import { EmailOutboxGet } from "./outbox";
 import { EmailOutboxProcessPost } from "./outbox/process";
 import { EmailOutboxResetFailedPost } from "./outbox/reset-failed";
 import { EmailSendgridWebhookPost } from "./sendgrid/webhook";
+import { EventEmailCampaignStagePost } from "./campaigns/stage";
 import type { RequestDbContext } from "../../../_lib/db/context";
 
 const app = new Hono<RequestDbContext>();
@@ -21,5 +22,6 @@ openapi.get("/outbox/:id", EmailOutboxDetailGet);
 openapi.post("/outbox/process", EmailOutboxProcessPost);
 openapi.post("/outbox/reset-failed", EmailOutboxResetFailedPost);
 openapi.post("/reminders/runs", EmailReminderRunCreate);
+openapi.post("/campaigns/stage", EventEmailCampaignStagePost);
 
 export default openapi;

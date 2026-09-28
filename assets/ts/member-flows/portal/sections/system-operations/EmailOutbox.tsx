@@ -1,6 +1,6 @@
 /**
- * Email outbox — the queue as the server reports it, plus the two bounded
- * commands that act on it.
+ * Email outbox — the queue as the server reports it, plus bounded commands
+ * to add campaign messages and process or retry delivery.
  *
  * This is the one portal list whose API takes a set of row ids (process
  * selected, reset failed), so it is the one list that earns selection
@@ -29,6 +29,7 @@ import {
   type EmailOutboxResponse,
   type EmailOutboxRow,
 } from "../../../../../shared/schemas/email-outbox";
+import { eventEmailCampaignStageResponseSchema } from "../../../../../shared/schemas/event-email-campaigns";
 import "../../../../ui/Content.css";
 // `pk-table__clamp` is defined in the table's own stylesheet, which rides a
 // lazy chunk: a surface that writes the class name pulls the sheet in itself.
@@ -163,6 +164,7 @@ const rowColumns: Column<EmailOutboxRow>[] = [
 export function EmailOutbox({ canManage }: { canManage: boolean }) {
   const [selected, setSelected] = useState<ReadonlySet<string>>(new Set());
   const [busy, setBusy] = useState(false);
+  const [stagingProgress, setStagingProgress] = useState<string | null>(null);
   const actionsRef = useRef<ApiTableActions | null>(null);
   // The rows last handed to the table, so a selection checkbox can be named
   // after its message, and the BulkBar can state the page's total.
@@ -195,6 +197,29 @@ export function EmailOutbox({ canManage }: { canManage: boolean }) {
     }
   }
 
+  async function stageCampaigns(): Promise<void> {
+    setBusy(true);
+    let staged = 0;
+    try {
+      for (;;) {
+        const result = await postJson("/api/v1/email/campaigns/stage", {}, eventEmailCampaignStageResponseSchema);
+        staged += result.stagedRecipients;
+        setStagingProgress(`${staged} added in this run; ${result.remainingRecipients} still waiting`);
+        await actionsRef.current?.reload();
+        if (result.remainingRecipients === 0) break;
+        if (result.processedRecipients === 0) {
+          toast("Another campaign run is active. The saved queue can continue in the background.", "success");
+          return;
+        }
+      }
+      toast(`Added ${staged} campaign recipient${staged === 1 ? "" : "s"} to the outbox.`, "success");
+    } catch (error) {
+      toast((error as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   /** Names a selection checkbox after the message it selects. */
   function rowLabel(key: string): string {
     const row = lastData.current?.outbox.find((candidate) => candidate.id === key);
@@ -218,6 +243,12 @@ export function EmailOutbox({ canManage }: { canManage: boolean }) {
               align="end"
               items={[
                 {
+                  id: "stage-campaigns",
+                  label: "Add pending campaign messages",
+                  disabled: busy,
+                  onSelect: () => void stageCampaigns(),
+                },
+                {
                   id: "process-due",
                   label: "Process next 20 due",
                   disabled: busy,
@@ -228,6 +259,11 @@ export function EmailOutbox({ canManage }: { canManage: boolean }) {
           ) : undefined
         }
       />
+      {stagingProgress && (
+        <p aria-live="polite" class="pk-small">
+          {stagingProgress}
+        </p>
+      )}
       {!canManage && (
         <div class="pk-cluster pk-cluster--end">
           <ToneBadge tone="neutral">Read only</ToneBadge>

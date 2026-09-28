@@ -137,6 +137,7 @@ export function getConfig(env: Env, request?: Request) {
     scheduledWaitlistPromotionLimit: parseIntOrDefault(env.SCHEDULED_WAITLIST_PROMOTION_LIMIT, 120),
     scheduledRsvpEnforcementLimit: Math.min(requestedRsvpLimit, rsvpStatementCeiling),
     scheduledJobsPerPass: Math.min(20, Math.max(1, parseIntOrDefault(env.SCHEDULED_JOBS_PER_PASS, 5))),
+    scheduledJobScope: env.SCHEDULED_JOB_SCOPE === "campaign_staging_only" ? "campaign_staging_only" : "all",
     scheduledDueWorkMaxPasses: parseIntOrDefault(env.SCHEDULED_DUE_WORK_MAX_PASSES, 50),
     scheduledDueWorkMaxMs: parseIntOrDefault(env.SCHEDULED_DUE_WORK_MAX_MS, 600_000),
     // D1 allows a finite number of statements per Worker invocation and

@@ -85,6 +85,13 @@ export type EventEmailCampaignPreviewResponse = z.infer<typeof eventEmailCampaig
 export const eventEmailCampaignResponseSchema = successResponseSchema.extend({
   queuedRecipients: z.number().int().nonnegative(),
   queuedBatches: z.number().int().nonnegative(),
+  stagedRecipients: z.number().int().nonnegative(),
   mode: eventEmailCampaignCreateInputSchema.shape.sendMode,
 });
 export type EventEmailCampaignResponse = z.infer<typeof eventEmailCampaignResponseSchema>;
+
+export const eventEmailCampaignStageResponseSchema = successResponseSchema.extend({
+  processedRecipients: z.number().int().nonnegative(),
+  stagedRecipients: z.number().int().nonnegative(),
+  remainingRecipients: z.number().int().nonnegative(),
+});

@@ -4,7 +4,9 @@ import {
   eventEmailCampaignPreviewInputSchema,
   eventEmailCampaignPreviewResponseSchema,
   eventEmailCampaignResponseSchema,
+  eventEmailCampaignStageResponseSchema,
 } from "./event-email-campaigns";
+import { z } from "zod";
 import { groupEventParamsSchema } from "./group-events";
 
 const previewResponses = {
@@ -22,7 +24,7 @@ const previewResponses = {
 
 const createResponses = {
   "202": {
-    description: "Campaign accepted into the durable email outbox.",
+    description: "Campaign accepted with its first bounded page staged in the durable email outbox.",
     content: { "application/json": { schema: eventEmailCampaignResponseSchema } },
   },
   "400": jsonErrorResponse("Invalid campaign content, token, or recipient set."),
@@ -49,8 +51,7 @@ export const eventEmailCampaignPreviewRouteSchema = {
 export const eventEmailCampaignCreateRouteSchema = {
   tags: ["Events", "Email campaigns"],
   summary: "Create an event email campaign",
-  description:
-    "Validates a fresh actor-bound preview and atomically queues the campaign through the durable email outbox.",
+  description: "Validates a fresh actor-bound preview, saves the campaign, and stages its first bounded outbox page.",
   request: {
     params: eventSlugParamsSchema,
     body: { content: { "application/json": { schema: eventEmailCampaignCreateInputSchema } }, required: true },
@@ -80,4 +81,21 @@ export const groupEventEmailCampaignCreateRouteSchema = {
     body: { content: { "application/json": { schema: eventEmailCampaignCreateInputSchema } }, required: true },
   },
   responses: createResponses,
+};
+
+export const eventEmailCampaignStageRouteSchema = {
+  tags: ["Email campaigns"],
+  summary: "Stage the next accepted campaign page in the email outbox",
+  description: "Stages at most one bounded page and reports durable progress. It never sends email.",
+  request: { body: { required: true, content: { "application/json": { schema: z.object({}) } } } },
+  responses: {
+    "200": {
+      description: "Campaign staging progress.",
+      content: { "application/json": { schema: eventEmailCampaignStageResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated staff session is required."),
+    "403": jsonErrorResponse("Email management permission is required."),
+    "409": jsonErrorResponse("Email management permission changed while staging."),
+  },
+  "x-pkic-auth": { required: true, scopes: ["email:read", "email:manage"] },
 };

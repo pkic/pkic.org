@@ -150,6 +150,9 @@
     "preview": {
       "name": "pkic-org-preview",
       "worker_loaders": [{ "binding": "LOADER" }],
+      "triggers": {
+        "crons": ["* * * * *"],
+      },
       "kv_namespaces": [
         {
           "binding": "OAUTH_KV",
@@ -246,6 +249,7 @@
         "PRESENTATION_REMINDER_LEAD_DAYS": "60",
         "SCHEDULED_REMINDER_LIMIT": "100",
         "SCHEDULED_OUTBOX_LIMIT": "100",
+        "SCHEDULED_JOB_SCOPE": "campaign_staging_only",
         "SCHEDULED_STORAGE_DELETION_LIMIT": "25",
         "SCHEDULED_WAITLIST_PROMOTION_LIMIT": "50",
         "SCHEDULED_RSVP_ENFORCEMENT_LIMIT": "25",
