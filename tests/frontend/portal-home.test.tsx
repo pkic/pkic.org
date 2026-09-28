@@ -48,7 +48,7 @@ function feeds(overrides: Record<string, unknown> = {}): Record<string, unknown>
     "/api/v1/users/current/votes": { votes: [], page: emptyPage },
     "/api/v1/users/current/forms": { forms: [], page: emptyPage },
     "/api/v1/users/current/organizations": { organizations: [], page: emptyPage },
-    "/api/v1/users/current/meetings": { occurrences: [], page: emptyPage },
+    "/api/v1/users/current/meetings/series": { series: [], page: emptyPage },
     "/api/v1/users/current/applications": { applications: [], page: emptyPage },
     "/api/v1/events": { events: [], page: emptyPage },
     ...overrides,
@@ -89,17 +89,20 @@ function audienceEventRow(overrides: Record<string, unknown> = {}): Record<strin
   };
 }
 
-function meetingOccurrence(overrides: Record<string, unknown> = {}): Record<string, unknown> {
+function meetingSeries(overrides: Record<string, unknown> = {}): Record<string, unknown> {
   return {
-    occurrenceId: "40000000-0000-4000-8000-000000000001",
     seriesId: "40000000-0000-4000-8000-000000000002",
     eventId: "40000000-0000-4000-8000-000000000003",
     groupId: "10000000-0000-4000-8000-000000000001",
     groupName: "Architecture Group",
     eventName: "Monthly sync",
-    startsAt: "2026-09-10T13:00:00.000Z",
-    endsAt: "2026-09-10T14:00:00.000Z",
-    status: "scheduled",
+    startsAt: "2026-10-09T13:00:00.000Z",
+    recurrenceRule: "FREQ=WEEKLY;INTERVAL=2",
+    timezone: "Europe/Amsterdam",
+    nextOccurrenceId: "40000000-0000-4000-8000-000000000001",
+    nextStartsAt: "2026-10-09T13:00:00.000Z",
+    nextEndsAt: "2026-10-09T14:00:00.000Z",
+    canJoin: true,
     ...overrides,
   };
 }
@@ -154,7 +157,7 @@ describe("portal landing", () => {
     portalSession.value = portalSessionFixture({ member: true });
     stubFeeds(
       feeds({
-        "/api/v1/users/current/meetings": { occurrences: [meetingOccurrence()], page: onePage },
+        "/api/v1/users/current/meetings/series": { series: [meetingSeries()], page: onePage },
         "/api/v1/users/current/organizations": { organizations: [organizationRow()], page: onePage },
       }),
     );
@@ -170,20 +173,55 @@ describe("portal landing", () => {
     const meetings = panelNamed(container, "Upcoming meetings").querySelector("ul");
     expect(meetings?.getAttribute("aria-label")).toBe("Upcoming meetings");
     expect(meetings?.textContent).toContain("Monthly sync");
+    expect(meetings?.textContent).toContain("Every other Friday");
+    expect(meetings?.textContent).toContain("Next:");
     const personalCalendar = panelNamed(container, "Upcoming meetings").querySelector(
-      'a[href*="/calendar.ics?personal=true"]',
+      'a[title="Download the full series calendar (.ics)"]',
     );
-    expect(personalCalendar?.getAttribute("aria-label")).toBe("Download my personal calendar (.ics)");
-    expect(personalCalendar?.getAttribute("title")).toBe("Download my personal calendar (.ics)");
+    expect(personalCalendar?.getAttribute("aria-label")).toBe("Download the full series calendar (.ics)");
+    expect(personalCalendar?.getAttribute("href")).toMatch(/calendar\.ics\?personal=true$/);
     expect(personalCalendar?.classList.contains("pk-btn--ghost")).toBe(true);
     expect(personalCalendar?.classList.contains("pk-btn--icon")).toBe(true);
     expect(personalCalendar?.textContent).toBe("");
     expect(personalCalendar?.querySelector("svg")).not.toBeNull();
-    expect(panelNamed(container, "Upcoming meetings").textContent).toContain("Do not forward it");
+    const nextOnly = [...meetings!.querySelectorAll("a")].find((link) => link.textContent?.includes("only the next"));
+    expect(nextOnly?.getAttribute("href")).toContain("occurrenceId=40000000-0000-4000-8000-000000000001");
+    expect(meetings?.textContent).not.toContain("Join meeting");
+    const footer = panelNamed(container, "Upcoming meetings").querySelector("footer");
+    expect(footer?.textContent).toContain("Do not forward it");
 
     // The "View all" affordance is a real link, not a click handler on a span.
     const viewAll = panelNamed(container, "Your organizations").querySelector("a[href='#/organizations']");
     expect(viewAll?.textContent).toBe("View all");
+  });
+
+  it("shows Join only when a meeting is about to start or running", async () => {
+    portalSession.value = portalSessionFixture({ member: true });
+    const startsSoon = new Date(Date.now() + 10 * 60_000).toISOString();
+    const startsLater = new Date(Date.now() + 60 * 60_000).toISOString();
+    stubFeeds(
+      feeds({
+        "/api/v1/users/current/meetings/series": {
+          series: [
+            meetingSeries({ nextStartsAt: startsSoon, nextEndsAt: new Date(Date.now() + 70 * 60_000).toISOString() }),
+            meetingSeries({
+              seriesId: "40000000-0000-4000-8000-000000000004",
+              nextOccurrenceId: "40000000-0000-4000-8000-000000000005",
+              nextStartsAt: startsLater,
+              nextEndsAt: new Date(Date.now() + 120 * 60_000).toISOString(),
+            }),
+          ],
+          page: { ...onePage, total: 2 },
+        },
+      }),
+    );
+
+    const container = mount();
+    await settle();
+    const panel = panelNamed(container, "Upcoming meetings");
+    const joins = [...panel.querySelectorAll("a")].filter((link) => link.textContent === "Join meeting");
+    expect(joins).toHaveLength(1);
+    expect(joins[0].getAttribute("href")).toContain("occurrence=40000000-0000-4000-8000-000000000001");
   });
 
   it("announces an empty panel through a status region rather than by looking empty", async () => {

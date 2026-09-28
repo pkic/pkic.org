@@ -1,7 +1,7 @@
 /** Cross-group self-participation feed: upcoming meeting occurrences reachable by the current user. */
 import { z } from "zod";
 import { utcInstantSchema } from "./api-common";
-import { eventOccurrenceStatusSchema } from "./event-series";
+import { eventOccurrenceStatusSchema, recurrenceRuleSchema, timeZoneSchema } from "./event-series";
 import { groupIdSchema } from "./groups";
 import { databaseIdSchema } from "./identifiers";
 import { paginatedResponseSchema, paginationQuerySchemaWithDefaults } from "./pagination";
@@ -36,3 +36,19 @@ export const currentUserMeetingsListResponseSchema = paginatedResponseSchema(
   memberMeetingOccurrenceSchema,
 );
 export type CurrentUserMeetingsListResponse = z.infer<typeof currentUserMeetingsListResponseSchema>;
+
+export const memberMeetingSeriesSchema = memberMeetingOccurrenceSchema
+  .pick({ seriesId: true, eventId: true, groupId: true, groupName: true, eventName: true })
+  .extend({
+    startsAt: utcInstantSchema,
+    recurrenceRule: recurrenceRuleSchema,
+    timezone: timeZoneSchema,
+    nextOccurrenceId: databaseIdSchema,
+    nextStartsAt: utcInstantSchema,
+    nextEndsAt: utcInstantSchema,
+    canJoin: z.boolean(),
+  });
+export type MemberMeetingSeries = z.infer<typeof memberMeetingSeriesSchema>;
+
+export const currentUserMeetingSeriesListQuerySchema = currentUserMeetingsListQuerySchema.omit({ seriesId: true });
+export const currentUserMeetingSeriesListResponseSchema = paginatedResponseSchema("series", memberMeetingSeriesSchema);

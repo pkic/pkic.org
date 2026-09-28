@@ -1,4 +1,9 @@
-import { currentUserMeetingsListQuerySchema, currentUserMeetingsListResponseSchema } from "./member-meetings";
+import {
+  currentUserMeetingsListQuerySchema,
+  currentUserMeetingsListResponseSchema,
+  currentUserMeetingSeriesListQuerySchema,
+  currentUserMeetingSeriesListResponseSchema,
+} from "./member-meetings";
 import { requiresSession } from "./route-contract";
 
 export const currentUserMeetingsListRouteSchema = {
@@ -12,6 +17,21 @@ export const currentUserMeetingsListRouteSchema = {
     "200": {
       description: "A bounded page of upcoming meeting occurrences.",
       content: { "application/json": { schema: currentUserMeetingsListResponseSchema } },
+    },
+    "401": { description: "A signed-in session is required." },
+    "403": { description: "The signed-in user has no active membership." },
+  },
+};
+
+export const currentUserMeetingSeriesListRouteSchema = {
+  ...requiresSession(),
+  tags: ["Users", "Meetings"],
+  summary: "List visible meeting series with their next scheduled occurrence",
+  request: { query: currentUserMeetingSeriesListQuerySchema },
+  responses: {
+    "200": {
+      description: "A bounded page of meeting series ordered by next occurrence.",
+      content: { "application/json": { schema: currentUserMeetingSeriesListResponseSchema } },
     },
     "401": { description: "A signed-in session is required." },
     "403": { description: "The signed-in user has no active membership." },

@@ -166,6 +166,19 @@ export function formatDateTimeInZone(value: string | null | undefined, timeZone:
   });
 }
 
+/** The agreed weekday and wall-clock time of a recurring meeting in its IANA zone. */
+export function formatWeekdayTimeInZone(value: string, timeZone: string): { weekday: string; time: string } {
+  const date = toDate(value);
+  if (!date) return { weekday: EMPTY, time: EMPTY };
+  const weekday = new Intl.DateTimeFormat(undefined, { weekday: "long", timeZone }).format(date);
+  const time = new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone,
+  }).format(date);
+  return { weekday, time };
+}
+
 /**
  * A friendly calendar span in the viewer's locale — "1–3 December 2026" style,
  * collapsing to a single date when the range covers one day. Dates render in

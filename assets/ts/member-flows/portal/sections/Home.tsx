@@ -1,4 +1,5 @@
 import { eventDestination } from "./events/event-destination";
+import "./Home.css";
 /**
  * The sign-in landing: the identity's consortium this week. Participation
  * comes first — things to vote on, answer, review, and attend — followed by
@@ -12,15 +13,22 @@ import { eventDestination } from "./events/event-destination";
  * the same vote a hand's width away from the first.
  */
 import type { ComponentChildren } from "preact";
+import { useEffect, useState } from "preact/hooks";
 import { Link } from "wouter";
 import type { z } from "zod";
 import { myApplicationsListResponseSchema } from "../../../../shared/schemas/me";
 import { currentUserFormsListResponseSchema } from "../../../../shared/schemas/member-forms";
-import { currentUserMeetingsListResponseSchema } from "../../../../shared/schemas/member-meetings";
+import {
+  currentUserMeetingSeriesListResponseSchema,
+  type MemberMeetingSeries,
+} from "../../../../shared/schemas/member-meetings";
 import { eventsListResponseSchema } from "../../../../shared/schemas/event-management";
 import { userOrganizationsListResponseSchema } from "../../../../shared/schemas/user-organizations";
 import { currentUserVotesListResponseSchema } from "../../../../shared/schemas/votes";
-import { formatDateTime } from "../../../../shared/format-date";
+import { formatDateTimeInZone, formatWeekdayTimeInZone } from "../../../../shared/format-date";
+import { meetingEntryUrl } from "../../../../shared/meeting-entry-navigation";
+import { MEETING_JOIN_ACTION_LEAD_MINUTES } from "../../../../shared/schemas/meeting-entry-policy";
+import { matchRecurrenceShape, describeRecurrenceShape } from "../../../components/RecurrenceEditor";
 import { Badge } from "../../../components/Badge";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { IconCalendarDownload } from "../../../components/icons";
@@ -43,10 +51,12 @@ function PanelCard({
   title,
   viewAll,
   children,
+  footer,
 }: {
   title: string;
   viewAll?: { href: string; label: string };
   children: ComponentChildren;
+  footer?: ComponentChildren;
 }) {
   return (
     <Panel>
@@ -61,6 +71,7 @@ function PanelCard({
         )}
       </PanelHeader>
       <PanelBody>{children}</PanelBody>
+      {footer && <footer class="pk-panel__body pk-home-meetings-footer">{footer}</footer>}
     </Panel>
   );
 }
@@ -143,56 +154,101 @@ function AttentionPanel() {
   );
 }
 
+function meetingSchedule(series: MemberMeetingSeries): string {
+  const shape = matchRecurrenceShape(series.recurrenceRule);
+  if (!shape || shape.mode === "none") return "";
+  if (shape.mode === "weekly") {
+    const { weekday, time } = formatWeekdayTimeInZone(series.startsAt, series.timezone);
+    const frequency =
+      shape.interval === 1 ? "Every" : shape.interval === 2 ? "Every other" : `Every ${shape.interval} weeks on`;
+    return `${frequency} ${weekday} at ${time} (${series.timezone})`;
+  }
+  const time = formatWeekdayTimeInZone(series.startsAt, series.timezone).time;
+  return `${describeRecurrenceShape(shape).replace(/\.$/, "")} at ${time} (${series.timezone})`;
+}
+
 function MeetingsPanel() {
+  const [now, setNow] = useState(() => Date.now());
   const meetings = useData(
-    () => getJson("/api/v1/users/current/meetings?limit=5", currentUserMeetingsListResponseSchema),
+    () => getJson("/api/v1/users/current/meetings/series?limit=5", currentUserMeetingSeriesListResponseSchema),
     [],
   );
-  const occurrences = meetings.data?.occurrences ?? [];
+  const series = meetings.data?.series ?? [];
+  useEffect(() => {
+    const timer = window.setInterval(() => {
+      const current = Date.now();
+      setNow(current);
+      if (meetings.data?.series.some((meeting) => Date.parse(meeting.nextEndsAt) <= current)) {
+        void meetings.reload();
+      }
+    }, 60_000);
+    return () => window.clearInterval(timer);
+  }, [meetings.data?.series, meetings.reload]);
 
   return (
-    <PanelCard title="Upcoming meetings">
+    <PanelCard
+      title="Upcoming meetings"
+      footer={
+        series.length > 0 && (
+          <span class="pk-small pk-muted">This calendar file contains your RSVP identity. Do not forward it.</span>
+        )
+      }
+    >
       <PanelState
         loading={meetings.loading}
         error={meetings.error}
         empty="No meetings are scheduled in your groups."
-        count={occurrences.length}
+        count={series.length}
       />
-      {occurrences.length > 0 && (
+      {series.length > 0 && (
         <ul class="pk-stack pk-stack--tight" aria-label="Upcoming meetings">
-          {occurrences.map((occurrence) => (
-            <li key={occurrence.occurrenceId} class="pk-stack pk-stack--tight">
+          {series.map((meeting) => (
+            <li key={meeting.seriesId} class="pk-stack pk-stack--tight">
               <div class="pk-cluster pk-cluster--nowrap">
                 <Link
-                  href={`/groups/${encodeURIComponent(occurrence.groupId)}/meetings/${encodeURIComponent(occurrence.seriesId)}`}
+                  href={`/groups/${encodeURIComponent(meeting.groupId)}/meetings/${encodeURIComponent(meeting.seriesId)}`}
                 >
-                  {occurrence.eventName}
+                  {meeting.eventName}
                 </Link>
                 <ButtonLink
                   variant="ghost"
                   size="sm"
                   icon
                   class="pk-push"
-                  aria-label="Download my personal calendar (.ics)"
-                  title="Download my personal calendar (.ics)"
-                  href={`/api/v1/groups/${encodeURIComponent(occurrence.groupId)}/meetings/series/${encodeURIComponent(occurrence.seriesId)}/calendar.ics?personal=true`}
+                  aria-label="Download the full series calendar (.ics)"
+                  title="Download the full series calendar (.ics)"
+                  href={`/api/v1/groups/${encodeURIComponent(meeting.groupId)}/meetings/series/${encodeURIComponent(meeting.seriesId)}/calendar.ics?personal=true`}
                 >
                   <IconCalendarDownload />
                 </ButtonLink>
               </div>
-              <span class="pk-small">{occurrence.groupName}</span>
+              <span class="pk-small">{meeting.groupName}</span>
+              {meetingSchedule(meeting) && <span class="pk-small">{meetingSchedule(meeting)}</span>}
               <div class="pk-cluster">
-                <span class="pk-small">{formatDateTime(occurrence.startsAt, { fullDate: true })}</span>
-                {formatRelativeDays(occurrence.startsAt) && (
-                  <span class="pk-small pk-push">({formatRelativeDays(occurrence.startsAt)})</span>
+                <span class="pk-small">
+                  {now >= Date.parse(meeting.nextStartsAt) ? "Happening now" : "Next"}:{" "}
+                  {formatDateTimeInZone(meeting.nextStartsAt, meeting.timezone)}
+                </span>
+                {formatRelativeDays(meeting.nextStartsAt) && (
+                  <span class="pk-small pk-push">({formatRelativeDays(meeting.nextStartsAt)})</span>
                 )}
               </div>
+              {meeting.canJoin &&
+                now >= Date.parse(meeting.nextStartsAt) - MEETING_JOIN_ACTION_LEAD_MINUTES * 60_000 &&
+                now < Date.parse(meeting.nextEndsAt) && (
+                  <ButtonLink href={meetingEntryUrl(meeting.nextOccurrenceId)} size="sm">
+                    Join meeting
+                  </ButtonLink>
+                )}
+              <a
+                class="pk-small"
+                href={`/api/v1/groups/${encodeURIComponent(meeting.groupId)}/meetings/series/${encodeURIComponent(meeting.seriesId)}/calendar.ics?personal=true&occurrenceId=${encodeURIComponent(meeting.nextOccurrenceId)}`}
+              >
+                Download only the next meeting (.ics)
+              </a>
             </li>
           ))}
         </ul>
-      )}
-      {occurrences.length > 0 && (
-        <p class="pk-small pk-muted">This calendar file contains your RSVP identity. Do not forward it.</p>
       )}
     </PanelCard>
   );

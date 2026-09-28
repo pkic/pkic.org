@@ -12,6 +12,7 @@ import applicationsRouter from "./applications/router";
 import organizationsRouter from "./organizations/router";
 import { CurrentUserVotesGet } from "./votes/index";
 import { CurrentUserMeetingsGet } from "./meetings/index";
+import { CurrentUserMeetingSeriesGet } from "./meetings/series";
 import { CurrentUserFormsGet } from "./forms/index";
 import { CurrentUserRegistrationsGet } from "./registrations/index";
 import { CurrentUserDonationsGet } from "./donations/index";
@@ -29,6 +30,7 @@ openapi.get("/notifications/preferences", CurrentUserNotificationPreferencesGet)
 openapi.patch("/notifications/preferences", CurrentUserNotificationPreferencesPatch);
 openapi.get("/votes", CurrentUserVotesGet);
 openapi.get("/meetings", CurrentUserMeetingsGet);
+openapi.get("/meetings/series", CurrentUserMeetingSeriesGet);
 openapi.get("/forms", CurrentUserFormsGet);
 openapi.get("/registrations", CurrentUserRegistrationsGet);
 openapi.get("/donations", CurrentUserDonationsGet);

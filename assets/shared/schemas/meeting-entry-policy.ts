@@ -1,5 +1,8 @@
 import { z } from "zod";
 
+/** Show the home-page Join action shortly before a scheduled occurrence begins. */
+export const MEETING_JOIN_ACTION_LEAD_MINUTES = 15;
+
 /** A personal calendar link identifies the invitee; this policy controls how recently the browser must be verified. */
 export const MEETING_ENTRY_AUTHENTICATIONS = ["remember_browser", "always"] as const;
 export const meetingEntryPolicySchema = z.object({

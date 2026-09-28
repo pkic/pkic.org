@@ -27,9 +27,51 @@ test("a member's Home shows their organization, application, and a pending revie
 
   await page.context().clearCookies();
   await signInToPortal(page, email);
+  const meetingStartsAt = new Date(Date.now() + 10 * 60_000).toISOString();
+  await page.route("**/api/v1/users/current/meetings/series**", async (route) => {
+    await route.fulfill({
+      json: {
+        series: [
+          {
+            seriesId: "40000000-0000-4000-8000-000000000002",
+            eventId: "40000000-0000-4000-8000-000000000003",
+            groupId: "10000000-0000-4000-8000-000000000001",
+            groupName: "Post-Quantum Cryptography Working Group",
+            eventName: "PQC Test Meeting",
+            startsAt: meetingStartsAt,
+            recurrenceRule: "FREQ=WEEKLY;INTERVAL=2",
+            timezone: "Europe/Amsterdam",
+            nextOccurrenceId: "40000000-0000-4000-8000-000000000001",
+            nextStartsAt: meetingStartsAt,
+            nextEndsAt: new Date(Date.now() + 70 * 60_000).toISOString(),
+            canJoin: true,
+          },
+        ],
+        page: { limit: 5, offset: 0, total: 1, hasMore: false },
+      },
+    });
+  });
   await page.goto("/portal/#/home");
+  await page.reload();
   await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
   await expect(page.getByText(`Welcome back, ${firstName}.`)).toBeVisible();
+
+  const meetingsPanel = page
+    .locator("section")
+    .filter({ has: page.getByRole("heading", { name: "Upcoming meetings" }) });
+  await expect(meetingsPanel.getByText("PQC Test Meeting")).toBeVisible();
+  await expect(meetingsPanel.getByText(/Every other .* at/)).toBeVisible();
+  await expect(meetingsPanel.getByRole("link", { name: "Download the full series calendar (.ics)" })).toHaveAttribute(
+    "href",
+    /calendar\.ics\?personal=true$/,
+  );
+  await expect(meetingsPanel.getByRole("link", { name: "Download only the next meeting (.ics)" })).toHaveAttribute(
+    "href",
+    /occurrenceId=40000000-0000-4000-8000-000000000001$/,
+  );
+  await expect(meetingsPanel.getByRole("link", { name: "Join meeting" })).toBeVisible();
+  await expect(meetingsPanel.locator("footer")).toContainText("Do not forward it.");
+  await meetingsPanel.screenshot({ path: test.info().outputPath("upcoming-meetings.png") });
 
   const attentionPanel = page
     .locator("section")

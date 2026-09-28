@@ -1,11 +1,17 @@
 import { configureMeetingOccurrence } from "./helpers/meeting-occurrence";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import { currentUserMeetingsListResponseSchema } from "../assets/shared/schemas/member-meetings";
+import {
+  currentUserMeetingsListResponseSchema,
+  currentUserMeetingSeriesListResponseSchema,
+} from "../assets/shared/schemas/member-meetings";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
 import { createGroupEventSeries } from "../functions/_lib/services/event-series";
-import { buildMemberMeetingsPageQuery } from "../functions/_lib/services/event-series/member-read-model";
+import {
+  buildMemberMeetingSeriesPageQuery,
+  buildMemberMeetingsPageQuery,
+} from "../functions/_lib/services/event-series/member-read-model";
 import { grantResourceToGroup } from "../functions/_lib/services/resource-grants";
 import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
@@ -104,6 +110,26 @@ describe("GET /api/v1/users/current/meetings", () => {
 
     // Reachable: caller belongs directly to the owner group.
     const ownedUpcoming = await createSeriesWithOccurrence(admin, ownerGroup.id, "2027-07-01T10:00:00.000Z");
+    await configureMeetingOccurrence(
+      env.DB,
+      admin,
+      ownerGroup.id,
+      ownedUpcoming.seriesId,
+      {
+        startsAt: "2027-07-01T10:00:00.000Z",
+        endsAt: "2027-07-01T11:00:00.000Z",
+        providerJoinUrl: "https://meet.example.test/room",
+      },
+      ENCRYPTION_SECRET,
+    );
+    const ownedSecond = await configureMeetingOccurrence(
+      env.DB,
+      admin,
+      ownerGroup.id,
+      ownedUpcoming.seriesId,
+      { startsAt: "2027-07-15T10:00:00.000Z", endsAt: "2027-07-15T11:00:00.000Z" },
+      ENCRYPTION_SECRET,
+    );
     // Not reachable: caller has no membership or grant into this group at all.
     const outsiderUpcoming = await createSeriesWithOccurrence(admin, outsiderGroup.id, "2027-07-02T10:00:00.000Z");
     // Reachable: shared with a group the caller belongs to via an event_group_grants "register" grant.
@@ -131,9 +157,9 @@ describe("GET /api/v1/users/current/meetings", () => {
     expect(occurrenceIds).not.toContain(outsiderUpcoming.occurrenceId);
     expect(occurrenceIds).not.toContain(cancelled.occurrenceId);
     expect(occurrenceIds).not.toContain(past.occurrenceId);
-    expect(page.page.total).toBe(2);
+    expect(page.page.total).toBe(3);
     // Sorted by start time ascending.
-    expect(occurrenceIds).toEqual([ownedUpcoming.occurrenceId, shared.occurrenceId]);
+    expect(occurrenceIds).toEqual([ownedUpcoming.occurrenceId, shared.occurrenceId, ownedSecond.id]);
     expect(page.occurrences.find((o) => o.occurrenceId === ownedUpcoming.occurrenceId)).toMatchObject({
       groupId: ownerGroup.id,
       groupName: ownerGroup.name,
@@ -152,7 +178,7 @@ describe("GET /api/v1/users/current/meetings", () => {
       ).json(),
     );
     expect(firstPage.occurrences).toHaveLength(1);
-    expect(firstPage.page).toMatchObject({ limit: 1, offset: 0, total: 2, hasMore: true });
+    expect(firstPage.page).toMatchObject({ limit: 1, offset: 0, total: 3, hasMore: true });
 
     const seriesPage = currentUserMeetingsListResponseSchema.parse(
       await (
@@ -163,11 +189,37 @@ describe("GET /api/v1/users/current/meetings", () => {
       ).json(),
     );
     expect(seriesPage.occurrences.map((occurrence) => occurrence.occurrenceId)).toEqual([ownedUpcoming.occurrenceId]);
-    expect(seriesPage.page.total).toBe(1);
+    expect(seriesPage.page.total).toBe(2);
+
+    const groupedResponse = await getAs(
+      token,
+      `/api/v1/users/current/meetings/series?from=${encodeURIComponent(NOW)}&limit=1`,
+    );
+    expect(groupedResponse.status, await groupedResponse.clone().text()).toBe(200);
+    const groupedFirst = currentUserMeetingSeriesListResponseSchema.parse(await groupedResponse.json());
+    expect(groupedFirst.page).toMatchObject({ limit: 1, offset: 0, total: 2, hasMore: true });
+    expect(groupedFirst.series[0]).toMatchObject({
+      seriesId: ownedUpcoming.seriesId,
+      nextOccurrenceId: ownedUpcoming.occurrenceId,
+      nextStartsAt: "2027-07-01T10:00:00.000Z",
+      timezone: "UTC",
+      canJoin: true,
+    });
+    const groupedSecond = currentUserMeetingSeriesListResponseSchema.parse(
+      await (
+        await getAs(token, `/api/v1/users/current/meetings/series?from=${encodeURIComponent(NOW)}&limit=1&offset=1`)
+      ).json(),
+    );
+    expect(groupedSecond.series.map((item) => item.seriesId)).toEqual([shared.seriesId]);
+    const duringMeeting = currentUserMeetingSeriesListResponseSchema.parse(
+      await (await getAs(token, "/api/v1/users/current/meetings/series?from=2027-07-01T10%3A30%3A00.000Z")).json(),
+    );
+    expect(duringMeeting.series[0].nextOccurrenceId).toBe(ownedUpcoming.occurrenceId);
   });
 
   it("rejects an unauthenticated caller and a session with no active membership", async () => {
     expect((await callApi(env, "/api/v1/users/current/meetings")).status).toBe(401);
+    expect((await callApi(env, "/api/v1/users/current/meetings/series")).status).toBe(401);
 
     const staffOnlyUserId = await insertUser(env.DB, `current-meetings-staff-${crypto.randomUUID()}@example.test`);
     await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(staffOnlyUserId).run();
@@ -177,17 +229,22 @@ describe("GET /api/v1/users/current/meetings", () => {
       `current-meetings-staff-${crypto.randomUUID()}`,
     );
     expect((await getAs(staffToken, "/api/v1/users/current/meetings")).status).toBe(403);
+    expect((await getAs(staffToken, "/api/v1/users/current/meetings/series")).status).toBe(403);
   });
 
   it("uses indexed plans for the cross-group occurrence union", async () => {
-    const pageQuery = buildMemberMeetingsPageQuery(crypto.randomUUID(), { from: NOW, limit: 20, offset: 0 });
-    const { pageSql, bindings } = buildOffsetPageSql(pageQuery);
-    const plan = await queryAll<{ detail: string }>(env.DB, `EXPLAIN QUERY PLAN ${pageSql}`, [
-      ...bindings,
-      pageQuery.limit,
-      pageQuery.offset,
-    ]);
-    const details = plan.map((row) => row.detail).join("\n");
-    expect(details).toMatch(/idx_event_occurrences_upcoming|idx_event_series_active/);
+    for (const pageQuery of [
+      buildMemberMeetingsPageQuery(crypto.randomUUID(), { from: NOW, limit: 20, offset: 0 }),
+      buildMemberMeetingSeriesPageQuery(crypto.randomUUID(), { from: NOW, limit: 20, offset: 0 }),
+    ]) {
+      const { pageSql, bindings } = buildOffsetPageSql(pageQuery);
+      const plan = await queryAll<{ detail: string }>(env.DB, `EXPLAIN QUERY PLAN ${pageSql}`, [
+        ...bindings,
+        pageQuery.limit,
+        pageQuery.offset,
+      ]);
+      const details = plan.map((row) => row.detail).join("\n");
+      expect(details).toMatch(/idx_event_occurrences_upcoming|idx_event_series_active/);
+    }
   });
 });
