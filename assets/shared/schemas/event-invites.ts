@@ -13,6 +13,13 @@ export const EVENT_INVITE_STATUSES = ["sent", "accepted", "declined", "expired",
 export const eventInviteStatusSchema = z.enum(EVENT_INVITE_STATUSES);
 export type EventInviteStatus = z.infer<typeof eventInviteStatusSchema>;
 
+/** Invitation history eligible for event updates; declines and revocations are excluded. */
+export const EVENT_INVITE_CAMPAIGN_STATUSES = [
+  "sent",
+  "accepted",
+  "expired",
+] as const satisfies readonly EventInviteStatus[];
+
 export const EVENT_INVITES_SORT_COLUMNS = ["invitee_email", "status", "created_at", "accepted_at"] as const;
 export const eventInvitesSortValueSchema = sortColumnSchema(EVENT_INVITES_SORT_COLUMNS);
 export const eventInvitesListQuerySchema = searchableListQuerySchema(eventInvitesSortValueSchema).extend({

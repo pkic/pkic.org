@@ -1,15 +1,15 @@
 // @vitest-environment jsdom
 /**
- * The event's Communications tab: the campaign composer for one audience,
- * with the audience a URL segment rather than a query parameter, and no
- * disclosure folded over the tab's whole purpose.
+ * The event's Communications section keeps the audience in the URL while
+ * selecting it with a labeled control.
  */
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GroupEventCommunications } from "../../assets/ts/member-flows/portal/sections/management/GroupEventCommunications";
 
-vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
+const navigate = vi.hoisted(() => vi.fn());
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", navigate] }));
 vi.mock("wouter", () => ({
   Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
     <a href={`#${href}`} {...rest}>
@@ -46,6 +46,7 @@ async function mount(audience?: string): Promise<HTMLDivElement> {
 }
 
 beforeEach(() => {
+  navigate.mockReset();
   vi.stubGlobal(
     "fetch",
     vi.fn((input: RequestInfo | URL) => {
@@ -76,31 +77,36 @@ describe("GroupEventCommunications", () => {
     expect(root.textContent).toContain("Email");
   });
 
-  it("names its tab set, so it is not one more anonymous strip on the page", async () => {
+  it("offers every campaign audience in one labeled selector", async () => {
     const root = await mount();
 
-    const nav = root.querySelector('nav[aria-label="Campaign audience"]');
-    expect(nav).not.toBeNull();
-    const tabs = [...root.querySelectorAll("a.pk-tabs__link")].map((tab) => tab.textContent);
-    expect(tabs).toEqual(["Attendees", "Speakers", "Invited attendees", "Invited speakers"]);
+    const control = root.querySelector<HTMLSelectElement>("select");
+    expect(control).not.toBeNull();
+    expect(root.querySelector(`label[for="${control?.id}"]`)?.textContent).toBe("Audience");
+    expect([...control!.options].map((option) => option.textContent)).toEqual([
+      "Attendees",
+      "Speakers",
+      "Invited attendees",
+      "Invited speakers",
+    ]);
   });
 
-  it("marks the current audience and gives each audience its own address", async () => {
+  it("selects the current audience and navigates to the chosen address", async () => {
     const root = await mount("speakers");
 
-    const [attendees, speakers] = root.querySelectorAll("a.pk-tabs__link");
-    expect(attendees.getAttribute("aria-current")).toBeNull();
-    expect(speakers.getAttribute("aria-current")).toBe("page");
-    // The audience is URL-addressed, so a link to the speaker campaign opens on it.
-    expect(attendees.getAttribute("href")).toBe("#/x/communications");
-    expect(speakers.getAttribute("href")).toBe("#/x/communications/speakers");
+    const control = root.querySelector<HTMLSelectElement>("select")!;
+    expect(control.value).toBe("speakers");
+    await act(() => {
+      control.value = "attendee_invitations";
+      control.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(navigate).toHaveBeenCalledWith("/x/communications/attendee_invitations");
   });
 
   it("falls back to attendees for an audience the contract does not know", async () => {
     const root = await mount("sponsors");
 
-    const [attendees] = root.querySelectorAll("a.pk-tabs__link");
-    expect(attendees.getAttribute("aria-current")).toBe("page");
+    expect(root.querySelector<HTMLSelectElement>("select")?.value).toBe("attendees");
   });
 
   it("carries no Bootstrap class names", async () => {
@@ -130,8 +136,6 @@ describe("GroupEventCommunications", () => {
 
     const root = await mount();
 
-    // The named tab set is still there for the reader to retry from; a failed
-    // load does not take the surface down with it.
-    expect(root.querySelector('nav[aria-label="Campaign audience"]')).not.toBeNull();
+    expect(root.querySelector<HTMLSelectElement>("select")?.value).toBe("attendees");
   });
 });

@@ -36,6 +36,9 @@ export type EventEmailCampaignDayWaitlistFilter = z.infer<typeof eventEmailCampa
 export const eventEmailCampaignSpeakerStatusFilterSchema = z.enum(["all", "confirmed", "invited", "pending"]);
 export type EventEmailCampaignSpeakerStatusFilter = z.infer<typeof eventEmailCampaignSpeakerStatusFilterSchema>;
 
+export const eventEmailCampaignInvitationStatusFilterSchema = z.enum(["all", "sent", "accepted", "expired"]);
+export type EventEmailCampaignInvitationStatusFilter = z.infer<typeof eventEmailCampaignInvitationStatusFilterSchema>;
+
 export const eventEmailCampaignSendModeSchema = z.enum(["personal", "bcc_batch"]);
 export type EventEmailCampaignSendMode = z.infer<typeof eventEmailCampaignSendModeSchema>;
 
@@ -46,6 +49,7 @@ export const eventEmailCampaignFilterSchema = z.object({
   dayDate: z.string().trim().max(20).optional(),
   dayWaitlistStatus: eventEmailCampaignDayWaitlistFilterSchema.optional(),
   speakerStatus: eventEmailCampaignSpeakerStatusFilterSchema.optional(),
+  invitationStatus: eventEmailCampaignInvitationStatusFilterSchema.optional(),
 });
 export type EventEmailCampaignFilter = z.infer<typeof eventEmailCampaignFilterSchema>;
 

@@ -1,10 +1,11 @@
+import { EVENT_INVITE_CAMPAIGN_STATUSES } from "../../../../assets/shared/schemas/event-invites";
 import { all } from "../../db/queries";
 import { AppError } from "../../errors";
 import { effectiveInviteExpirySql, inactiveEffectiveInviteExpirySql } from "../../invite-validity";
 import type { DatabaseLike } from "../../types";
 import type { CampaignAudienceFilter, CampaignEvent, CampaignRecipient } from "./types";
 
-/** The same current invitation audience is used at preview, snapshot, and delivery. */
+/** The same invited audience is used at preview, snapshot, and delivery. */
 export function invitationCampaignSelection(
   event: CampaignEvent,
   filter: CampaignAudienceFilter,
@@ -12,22 +13,33 @@ export function invitationCampaignSelection(
   recipientEmails?: string[],
 ) {
   const expiry = effectiveInviteExpirySql("i", "e");
+  const effectiveStatus = `CASE WHEN i.status = 'sent' AND (${inactiveEffectiveInviteExpirySql(expiry, "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')")})
+    THEN 'expired' ELSE i.status END`;
+  const invitationStatus = filter.invitationStatus ?? "all";
   return {
     sql: `WITH ranked AS (
       SELECT lower(trim(i.invitee_email)) AS email,
              i.invitee_first_name AS first_name, i.invitee_last_name AS last_name,
-             ROW_NUMBER() OVER (PARTITION BY lower(trim(i.invitee_email)) ORDER BY i.created_at DESC, i.id) AS rank
+             ${effectiveStatus} AS effective_status,
+             COALESCE(i.unsubscribe_future, 0) AS unsubscribe_future,
+             ROW_NUMBER() OVER (PARTITION BY lower(trim(i.invitee_email)) ORDER BY i.created_at DESC, i.id DESC) AS rank
       FROM invites i JOIN events e ON e.id = i.event_id
-      WHERE i.event_id = ? AND i.invite_type = ? AND i.status = 'sent'
-        AND COALESCE(i.unsubscribe_future, 0) = 0
-        AND NOT (${inactiveEffectiveInviteExpirySql(expiry, "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')")})
+      WHERE i.event_id = ? AND i.invite_type = ?
         AND (? IS NULL OR lower(trim(i.invitee_email)) IN (SELECT value FROM json_each(?)))
-    ) SELECT email, first_name, last_name FROM ranked WHERE rank = 1 ORDER BY email LIMIT ?`,
+    ) SELECT email, first_name, last_name FROM ranked
+      WHERE rank = 1
+        AND effective_status IN (${EVENT_INVITE_CAMPAIGN_STATUSES.map(() => "?").join(", ")})
+        AND (? = 'all' OR effective_status = ?)
+        AND unsubscribe_future = 0
+      ORDER BY email LIMIT ?`,
     bindings: [
       event.id,
       filter.audience === "attendee_invitations" ? "attendee" : "speaker",
       recipientEmails ? JSON.stringify(recipientEmails) : null,
       recipientEmails ? JSON.stringify(recipientEmails) : null,
+      ...EVENT_INVITE_CAMPAIGN_STATUSES,
+      invitationStatus,
+      invitationStatus,
       maxRecipients === null ? -1 : maxRecipients + 1,
     ],
   };

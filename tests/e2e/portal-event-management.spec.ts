@@ -72,6 +72,10 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await page.screenshot({ path: test.info().outputPath("event-attached-surface.png"), fullPage: true });
 
   await tab(detail, "Communications").click();
+  const audience = detail.getByLabel("Audience", { exact: true });
+  await audience.selectOption("attendee_invitations");
+  await expect(detail.getByRole("region", { name: "Invited attendees campaigns" })).toBeVisible();
+  await audience.selectOption("attendees");
   // Composing a campaign is a page of its own under the tab, with its own
   // address, rather than a form standing open on arrival.
   await detail.getByRole("link", { name: "New campaign" }).click();

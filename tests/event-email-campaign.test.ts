@@ -2,6 +2,7 @@ import {
   dispatchEventEmailCampaignPage,
   cleanExpiredCampaignSnapshots,
 } from "../functions/_lib/services/event-email-campaign/dispatch";
+import { eventEmailCampaignPreviewResponseSchema } from "../assets/shared/schemas/event-email-campaigns";
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { getEventBySlug } from "../functions/_lib/services/events";
@@ -129,7 +130,7 @@ describe("event email campaign recipients", () => {
   });
 
   it.each(["attendee", "speaker"] as const)(
-    "snapshots only open %s invitations and rechecks opt-outs before delivery",
+    "includes invited %s recipients after acceptance or expiry and rechecks opt-outs before delivery",
     async (type) => {
       const { eventId } = await seedEventAndAdmin(env.DB);
       const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1");
@@ -145,6 +146,8 @@ describe("event email campaign recipients", () => {
         { email: "late-optout@example.test", status: "sent", type },
         { email: "declined@example.test", status: "declined", type },
         { email: "accepted@example.test", status: "accepted", type },
+        { email: "expired@example.test", status: "expired", type },
+        { email: "optout@example.test", status: "sent", type },
         { email: "revoked@example.test", status: "revoked", type },
         { email: "other@example.test", status: "sent", type: type === "attendee" ? "speaker" : "attendee" },
       ];
@@ -156,6 +159,20 @@ describe("event email campaign recipients", () => {
           .bind(crypto.randomUUID(), eventId, recipient.email, recipient.type, crypto.randomUUID(), recipient.status)
           .run();
       }
+      for (const email of ["declined@example.test", "optout@example.test"]) {
+        await env.DB.prepare(
+          `INSERT INTO invites (id, event_id, invitee_email, invite_type, link_secret, status, source_type, created_at)
+           VALUES (?, ?, ?, ?, ?, 'accepted', 'direct', '2025-01-01T00:00:00.000Z')`,
+        )
+          .bind(crypto.randomUUID(), eventId, email, type, crypto.randomUUID())
+          .run();
+      }
+      await env.DB.prepare(
+        "UPDATE invites SET unsubscribe_future = 1 WHERE invitee_email = 'optout@example.test'",
+      ).run();
+      await env.DB.prepare(
+        "UPDATE invites SET expires_at = '2026-01-02T00:00:00.000Z' WHERE invitee_email = 'open@example.test'",
+      ).run();
       const input = {
         subjectOverride: "Invitation update",
         bodyContent: "Hello {{firstName}}, the event starts soon.",
@@ -170,8 +187,27 @@ describe("event email campaign recipients", () => {
         recipientCount: number;
         sampleRecipients: string[];
       };
-      expect(reviewed.recipientCount).toBe(2);
-      expect(reviewed.sampleRecipients).toEqual(["late-optout@example.test", "open@example.test"]);
+      expect(reviewed.recipientCount).toBe(4);
+      expect(reviewed.sampleRecipients).toEqual([
+        "accepted@example.test",
+        "expired@example.test",
+        "late-optout@example.test",
+        "open@example.test",
+      ]);
+      for (const [invitationStatus, sampleRecipients] of [
+        ["sent", ["late-optout@example.test"]],
+        ["accepted", ["accepted@example.test"]],
+        ["expired", ["expired@example.test", "open@example.test"]],
+      ] as const) {
+        const filtered = await campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns/previews", {
+          ...input,
+          filter: { ...input.filter, invitationStatus },
+        });
+        expect(filtered.status).toBe(200);
+        expect(eventEmailCampaignPreviewResponseSchema.parse(await filtered.json()).sampleRecipients).toEqual(
+          sampleRecipients,
+        );
+      }
       const create = await campaignRequest(env.DB, token, "/api/v1/events/pqc-2026/email/campaigns", {
         ...input,
         previewToken: reviewed.previewToken,
@@ -180,9 +216,13 @@ describe("event email campaign recipients", () => {
       await env.DB.prepare(
         "UPDATE invites SET unsubscribe_future = 1 WHERE invitee_email = 'late-optout@example.test'",
       ).run();
-      expect(await dispatchEventEmailCampaignPage(env.DB)).toEqual({ processed: 2, queued: 1 });
+      expect(await dispatchEventEmailCampaignPage(env.DB)).toEqual({ processed: 4, queued: 3 });
       const queued = await queryAll<{ recipient_email: string }>(env.DB, "SELECT recipient_email FROM email_outbox");
-      expect(queued).toEqual([{ recipient_email: "open@example.test" }]);
+      expect(queued).toEqual([
+        { recipient_email: "accepted@example.test" },
+        { recipient_email: "expired@example.test" },
+        { recipient_email: "open@example.test" },
+      ]);
     },
   );
 

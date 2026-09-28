@@ -23,6 +23,7 @@ import {
   type EventEmailCampaignDayWaitlistFilter,
   type EventEmailCampaignPreviewResponse,
   type EventEmailCampaignSendMode,
+  type EventEmailCampaignInvitationStatusFilter,
   type EventEmailCampaignSpeakerStatusFilter,
 } from "../../../shared/schemas/event-email-campaigns";
 import { EMAIL_MESSAGE_TYPE_OPTIONS } from "../../shared/email-type-options";
@@ -48,6 +49,7 @@ import {
 } from "../../../shared/schemas/event-registrations";
 import { ServerSearchSelect } from "../ServerSearchSelect";
 import { requestJson } from "../../shared/api-client";
+import { EventInvitationStatusFilter } from "./EventInvitationStatusFilter";
 import { emailTemplateCatalog, getEmailTemplateEditorVersion } from "../../shared/email-template-catalog";
 
 import "../../ui/Content.css";
@@ -122,6 +124,7 @@ export function EventEmailCampaign({
 
   // speaker filters
   const [speakerStatus, setSpeakerStatus] = useState<EventEmailCampaignSpeakerStatusFilter>("confirmed");
+  const [invitationStatus, setInvitationStatus] = useState<EventEmailCampaignInvitationStatusFilter>("all");
 
   // preview state
   const [preview, setPreview] = useState<EventEmailCampaignPreviewResponse | null>(null);
@@ -152,6 +155,7 @@ export function EventEmailCampaign({
     dayFilter,
     dayWaitlistStatus,
     speakerStatus,
+    invitationStatus,
   ]);
 
   function insertSnippet(snippet: string) {
@@ -201,6 +205,8 @@ export function EventEmailCampaign({
       base.filter.dayWaitlistStatus = dayWaitlistStatus;
     } else if (audience === "speakers") {
       base.filter.speakerStatus = speakerStatus;
+    } else if (isInvitationCampaignAudience(audience)) {
+      base.filter.invitationStatus = invitationStatus;
     }
     return base;
   }
@@ -413,7 +419,11 @@ export function EventEmailCampaign({
 
       {/* Filters */}
       {isInvitationCampaignAudience(audience) ? (
-        <p class="pk-small">Recipients are limited to open invitations and are checked again before delivery.</p>
+        <EventInvitationStatusFilter
+          value={invitationStatus}
+          onChange={setInvitationStatus}
+          field={form.of("filter.invitationStatus")}
+        />
       ) : audience === "attendees" ? (
         <div class="pk-grid">
           <Field label="Registration status">

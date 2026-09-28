@@ -7,6 +7,7 @@ import { emailMessageTypeSchema } from "../../assets/shared/schemas/api-common";
 import {
   eventEmailCampaignCreateInputSchema,
   eventEmailCampaignDayWaitlistFilterSchema,
+  eventEmailCampaignInvitationStatusFilterSchema,
   eventEmailCampaignPreviewInputSchema,
   eventEmailCampaignSendModeSchema,
   eventEmailCampaignSpeakerStatusFilterSchema,
@@ -308,6 +309,41 @@ describe("event email campaign UI", () => {
     expect(optionValues(controlFor<HTMLSelectElement>(speakers, "Speaker status"))).toEqual(
       eventEmailCampaignSpeakerStatusFilterSchema.options,
     );
+
+    const invitations = mount(
+      <EventEmailCampaign
+        campaignsPath={CAMPAIGN_PATH}
+        daysPath={`${EVENT_PATH}/days`}
+        audience="attendee_invitations"
+      />,
+    );
+    await settle();
+    expect(optionValues(controlFor<HTMLSelectElement>(invitations, "Invitation status"))).toEqual(
+      eventEmailCampaignInvitationStatusFilterSchema.options,
+    );
+  });
+
+  it("sends the selected invitation status through the campaign contract", async () => {
+    const requests = stubCampaignFetch({ previews: () => json(PREVIEW_BODY) });
+    const container = mount(
+      <EventEmailCampaign
+        campaignsPath={CAMPAIGN_PATH}
+        daysPath={`${EVENT_PATH}/days`}
+        audience="speaker_invitations"
+      />,
+    );
+    await settle();
+    const status = controlFor<HTMLSelectElement>(container, "Invitation status");
+    await act(() => {
+      status.value = "accepted";
+      status.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await composeAndPreview(container);
+    const request = requests.find((item) => item.method === "POST" && item.path.endsWith("/previews"));
+    expect(eventEmailCampaignPreviewInputSchema.parse(request?.body).filter).toMatchObject({
+      audience: "speaker_invitations",
+      invitationStatus: "accepted",
+    });
   });
 
   it("does not render campaign management without the server-provided manage capability", () => {
