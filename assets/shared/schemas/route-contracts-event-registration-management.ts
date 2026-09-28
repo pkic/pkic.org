@@ -13,7 +13,23 @@ import { registrationCapabilitySafeProjectionSchema, registrationManageSchema } 
 import { httpCapabilityUrlSchema, httpUrlSchema } from "./urls";
 import { requiresPermissions } from "./route-contract";
 
-const eventRegistrationParamsSchema = eventSlugParamsSchema.extend({ registrationId: databaseIdSchema });
+export const eventRegistrationParamsSchema = eventSlugParamsSchema.extend({ registrationId: databaseIdSchema });
+
+export const personalEventCalendarRouteSchema = {
+  tags: ["Event registrations"],
+  summary: "Download your event calendar",
+  description: "Returns the signed-in attendee's own registration calendar file.",
+  request: { params: eventRegistrationParamsSchema },
+  responses: {
+    "200": {
+      description: "Personal iCalendar file.",
+      content: { "text/calendar": { schema: z.string() } },
+    },
+    "401": { description: "Authentication required." },
+    "404": { description: "No active registration owned by this attendee." },
+  },
+  "x-pkic-auth": { required: true },
+};
 
 export const eventRegistrationManagementUpdateSchema = registrationManageSchema;
 export const eventRegistrationNotificationCreateSchema = z.object({ type: z.literal("confirmation") });

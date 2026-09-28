@@ -51,6 +51,9 @@ function feeds(overrides: Record<string, unknown> = {}): Record<string, unknown>
     "/api/v1/users/current/meetings/series": { series: [], page: emptyPage },
     "/api/v1/users/current/applications": { applications: [], page: emptyPage },
     "/api/v1/events": { events: [], page: emptyPage },
+    "/api/v1/users/current/registrations": { registrations: [], page: emptyPage },
+    "/api/v1/users/current/proposals": { proposals: [], page: emptyPage },
+    "/api/v1/users/current/donations": { donations: [], page: emptyPage },
     ...overrides,
   };
 }
@@ -150,7 +153,9 @@ describe("portal landing", () => {
     expect(root?.classList.contains("pk")).toBe(true);
     expect(root?.textContent).toContain("Welcome back, Robin.");
     // Nothing in the surface may reach back for the quarantined framework.
-    expect(container.innerHTML).not.toMatch(/class="[^"]*\b(card|card-body|list-unstyled|text-muted|d-flex)\b/);
+    expect(container.innerHTML).not.toMatch(
+      /class="[^"]*(?<![-\w])(card|card-body|list-unstyled|text-muted|d-flex)(?![-\w])/,
+    );
   });
 
   it("names every panel as a heading and every list for assistive technology", async () => {
@@ -166,7 +171,9 @@ describe("portal landing", () => {
     await settle();
 
     const headings = [...container.querySelectorAll("h3")].map((heading) => heading.textContent);
-    expect(headings).toEqual(["Needs your voice", "Upcoming meetings", "Upcoming events", "Your organizations"]);
+    expect(headings).toEqual(["Upcoming meetings", "Upcoming events"]);
+    expect(container.querySelector(".pk-home-all-clear")?.textContent).toContain("all caught up");
+    expect(container.querySelector('nav[aria-label="Quick links"] a[href="#/groups"]')).not.toBeNull();
 
     // A list of links with no name is announced as "list"; several of them on
     // one page are indistinguishable.
@@ -174,7 +181,7 @@ describe("portal landing", () => {
     expect(meetings?.getAttribute("aria-label")).toBe("Upcoming meetings");
     expect(meetings?.textContent).toContain("Monthly sync");
     expect(meetings?.textContent).toContain("Every other Friday");
-    expect(meetings?.textContent).toContain("Next:");
+    expect(meetings?.textContent).toContain("Next (your time):");
     const personalCalendar = panelNamed(container, "Upcoming meetings").querySelector(
       'a[title="Download the full series calendar (.ics)"]',
     );
@@ -184,15 +191,18 @@ describe("portal landing", () => {
     expect(personalCalendar?.classList.contains("pk-btn--icon")).toBe(true);
     expect(personalCalendar?.textContent).toBe("");
     expect(personalCalendar?.querySelector("svg")).not.toBeNull();
-    const nextOnly = [...meetings!.querySelectorAll("a")].find((link) => link.textContent?.includes("only the next"));
+    const nextOnly = meetings!.querySelector<HTMLAnchorElement>(
+      'a[aria-label="Download only the next meeting (.ics)"]',
+    );
     expect(nextOnly?.getAttribute("href")).toContain("occurrenceId=40000000-0000-4000-8000-000000000001");
+    expect(nextOnly?.classList.contains("pk-btn--icon")).toBe(true);
     expect(meetings?.textContent).not.toContain("Join meeting");
     const footer = panelNamed(container, "Upcoming meetings").querySelector("footer");
-    expect(footer?.textContent).toContain("Do not forward it");
+    expect(footer?.textContent).toContain("Do not share");
 
-    // The "View all" affordance is a real link, not a click handler on a span.
-    const viewAll = panelNamed(container, "Your organizations").querySelector("a[href='#/organizations']");
-    expect(viewAll?.textContent).toBe("View all");
+    const affiliation = container.querySelector(".pk-home-affiliation");
+    expect(affiliation?.querySelector('ul[aria-label="Your organizations"] a')?.textContent).toBe("Organization A");
+    expect(affiliation?.querySelector("a[href='#/organizations']")).toBeNull();
   });
 
   it("shows Join only when a meeting is about to start or running", async () => {
@@ -235,7 +245,7 @@ describe("portal landing", () => {
     const empty = events.querySelector('[role="status"]');
     expect(empty?.textContent).toContain("No upcoming events right now.");
     // A non-member sees only the panels that are theirs to see.
-    expect(container.querySelectorAll("h3")).toHaveLength(1);
+    expect(container.querySelectorAll(".pk-home-grid > section h3")).toHaveLength(1);
   });
 
   it("states a failed feed as a sentence in an alert region instead of an empty panel", async () => {
@@ -344,8 +354,9 @@ describe("portal landing", () => {
     const container = mount();
     await settle();
 
-    const organizations = panelNamed(container, "Your organizations");
+    const organizations = container.querySelector(".pk-home-affiliation")!;
     const badges = [...organizations.querySelectorAll(".pk-badge")].map((badge) => badge.textContent);
     expect(badges).toEqual(["Primary contact", "Contact"]);
+    expect(organizations.querySelector("a[href='#/organizations']")?.textContent).toBe("View all");
   });
 });

@@ -323,7 +323,7 @@ describe("portal navigation shell", () => {
     void act(() => userButton.click());
     await settle();
     const items = [...container.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
-    expect(items).toEqual(["My profile", "My participation", "Account settings", "Sign out"]);
+    expect(items).toEqual(["My profile", "Account settings", "Sign out"]);
   });
 
   it("nests subgroups beneath their listed parent and names an absent parent as context", async () => {
@@ -410,7 +410,7 @@ describe("portal navigation shell", () => {
     void act(() => userButton.click());
     await settle();
     const items = [...container.querySelectorAll('[role="menuitem"]')].map((item) => item.textContent);
-    expect(items).toEqual(["My profile", "Example Trust Services", "My participation", "Account settings", "Sign out"]);
+    expect(items).toEqual(["My profile", "Example Trust Services", "Account settings", "Sign out"]);
   });
 
   it("shows the headshot in the user button when one is available", async () => {

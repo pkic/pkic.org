@@ -7,7 +7,7 @@ import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./hel
 test.use({ actionTimeout: 15_000 });
 
 // Event-only identities deliberately have no staff or membership capacity.
-test("attendee opens the same registration from Events and participation history", async ({ page }, testInfo) => {
+test("attendee manages a registration and downloads a personal event calendar", async ({ page }, testInfo) => {
   const email = `portal-attendee-${Date.now()}@example.test`;
   const since = await capturedEmailCount();
   await registerInBrowser(page, email);
@@ -17,20 +17,24 @@ test("attendee opens the same registration from Events and participation history
   await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible();
   await signInToPortal(page, email);
   await expect(page).toHaveURL(/#\/events$/);
+  await page.goto("/portal/#/home");
+  const personalCalendar = page.getByRole("link", {
+    name: /Download your personal calendar for Post-Quantum Cryptography Conference/,
+  });
+  await expect(personalCalendar).toBeVisible();
+  const calendarResponse = await page.request.get((await personalCalendar.getAttribute("href")) ?? "");
+  expect(calendarResponse.status()).toBe(200);
+  expect(await calendarResponse.text()).toContain("BEGIN:VCALENDAR");
+  await page.goto("/portal/#/events");
   await page.getByRole("link", { name: "Open Post-Quantum Cryptography Conference", exact: true }).click();
   await page.getByRole("link", { name: "Manage registration", exact: true }).click();
   await expect(page.getByLabel("Email address", { exact: true })).toHaveValue(email);
   await expect(page.getByLabel("Country", { exact: true })).toHaveValue("US");
-  const recordUrl = page.url();
   await page.getByLabel("Job title", { exact: true }).fill("Updated attendee");
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
   await expect(page.getByText("Registration updated.", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("Job title", { exact: true })).toHaveValue("Updated attendee");
-  await page.getByRole("button", { name: "Account menu" }).click();
-  await page.getByRole("menuitem", { name: "My participation", exact: true }).click();
-  await page.getByRole("list", { name: "Event registrations" }).getByRole("link").click();
-  await expect(page).toHaveURL(recordUrl);
   page.once("dialog", (dialog) => dialog.accept());
   await page.getByRole("button", { name: "Cancel registration", exact: true }).click();
   await expect(page.getByRole("button", { name: "Restore registration" })).toBeVisible();
@@ -73,11 +77,7 @@ test("proposer and invited speaker manage their own event records without emaile
   await page.getByLabel("Title", { exact: true }).fill(title + " edited");
   await page.getByRole("button", { name: "Save proposal", exact: true }).click();
   await expect(page.getByText("Proposal updated.", { exact: true })).toBeVisible();
-  const recordUrl = page.url();
-  await page.getByRole("button", { name: "Account menu" }).click();
-  await page.getByRole("menuitem", { name: "My participation", exact: true }).click();
-  await page.getByRole("link", { name: title + " edited", exact: true }).click();
-  await expect(page).toHaveURL(recordUrl);
+  await page.reload();
   await expect(page.getByLabel("Title", { exact: true })).toHaveValue(title + " edited");
   await page.screenshot({ path: testInfo.outputPath("proposal-desktop.png"), fullPage: true });
   const context = await browser.newContext({ baseURL: new URL(page.url()).origin });

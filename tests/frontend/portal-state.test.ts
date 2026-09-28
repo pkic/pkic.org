@@ -86,11 +86,11 @@ describe("portal API interceptors", () => {
   });
 
   it("leaves the hash untouched when there is no saved return path", () => {
-    window.location.hash = "#/participation";
+    window.location.hash = "#/home";
 
     savePortalSession(SESSION);
 
-    expect(window.location.hash).toBe("#/participation");
+    expect(window.location.hash).toBe("#/home");
   });
 
   it("does not expose internal scope names and tells the user to sign in again", async () => {

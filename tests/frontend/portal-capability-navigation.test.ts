@@ -454,7 +454,6 @@ describe("portal capability-derived navigation", () => {
     // them — but the directory the sidebar entry leads to is not.
     expect(portalSectionEnabled(session, "users")).toBe(true);
     expect(labels).not.toContain("Users");
-    expect(portalSectionEnabled(session, "participation")).toBe(true);
     expect(labels).toContain("Groups");
     // Organizations are reached through the avatar menu and dashboard; the
     // sidebar entry is the permission-gated directory.

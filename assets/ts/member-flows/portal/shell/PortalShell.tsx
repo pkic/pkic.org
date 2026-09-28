@@ -24,7 +24,6 @@ import {
   MyOrganization,
   OrganizationDetail,
   Organizations,
-  Participation,
   RepresentedOrganizations,
   SettingsSection,
   SponsorWorkspace,
@@ -555,16 +554,6 @@ export function PortalShell() {
                 <Route key={from} path={from} component={() => <PortalRouteRedirect to={to} />} />
               ))}
             {access.hasMemberApplication && portalMemberApplicationRoutes()}
-            {access.hasParticipationRecord && (
-              <Route
-                path="/participation"
-                component={() => (
-                  <SectionWrapper>
-                    <Participation />
-                  </SectionWrapper>
-                )}
-              />
-            )}
             {access.hasAccountAccess && (
               <Route
                 path="/account"

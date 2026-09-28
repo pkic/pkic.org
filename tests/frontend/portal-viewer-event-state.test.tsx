@@ -3,8 +3,7 @@
  * The viewer's own standing for an event, as the Home panel and the events
  * overview render it.
  *
- * The row is a link to Participation, so what it announces is what a reader
- * hears before deciding to follow it. The Bootstrap version put the status
+ * When a record address is available, the row is a single link. The Bootstrap version put the status
  * behind `small text-muted` and spaced its fragments with `ms-2` margins; what
  * is asserted here is that the status is still a named badge rather than a
  * colour, that every fragment is inside the one link, and that a viewer with
@@ -66,11 +65,11 @@ describe("viewer event state", () => {
   });
 
   it("keeps every fragment inside the one link, so the row has a single target", () => {
-    const row = mount(<ViewerEventState viewer={viewer()} />);
+    const row = mount(<ViewerEventState viewer={viewer()} href="/events/pqc/registration" />);
 
     const links = row.querySelectorAll("a");
     expect(links).toHaveLength(1);
-    expect(links[0].getAttribute("href")).toBe("#/participation");
+    expect(links[0].getAttribute("href")).toBe("#/events/pqc/registration");
     // The badge, the attendance type and both day lists are all announced as
     // part of the link's own name rather than sitting loose beside it.
     expect(links[0].textContent).toContain("In person");
@@ -104,5 +103,6 @@ describe("viewer event state", () => {
     expect(row.textContent).not.toContain("Days:");
     expect(row.textContent).not.toContain("Waitlisted:");
     expect(row.querySelector(".pk-badge")?.textContent).toBe("Registered");
+    expect(row.querySelector("a")).toBeNull();
   });
 });

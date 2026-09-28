@@ -13,9 +13,6 @@ export const MyOrganization = lazy(() =>
 );
 export const Groups = lazy(() => import("../sections/Groups").then((module) => ({ default: module.Groups })));
 export const Home = lazy(() => import("../sections/Home").then((module) => ({ default: module.Home })));
-export const Participation = lazy(() =>
-  import("../sections/Participation").then((module) => ({ default: module.Participation })),
-);
 export const MyApplications = lazy(() =>
   import("../sections/MyApplications").then((module) => ({ default: module.MyApplications })),
 );

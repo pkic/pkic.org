@@ -232,12 +232,12 @@ for (const broadcast of [false, true]) {
       await expect(forwardedPage.locator("iframe")).toHaveCount(0);
       await forwardedPage.goto("/portal/#/home");
       const personalMeeting = forwardedPage.getByRole("listitem").filter({ hasText: eventName });
-      await expect(personalMeeting.getByRole("link", { name: "Download my personal calendar (.ics)" })).toBeVisible();
       await expect(
-        forwardedPage.getByText("This calendar file contains your RSVP identity. Do not forward it."),
+        personalMeeting.getByRole("link", { name: "Download the full series calendar (.ics)" }),
       ).toBeVisible();
+      await expect(forwardedPage.getByText("Personal calendar · Do not share")).toBeVisible();
       const personalDownloadReady = forwardedPage.waitForEvent("download");
-      await personalMeeting.getByRole("link", { name: "Download my personal calendar (.ics)" }).click();
+      await personalMeeting.getByRole("link", { name: "Download the full series calendar (.ics)" }).click();
       const personalDownload = await personalDownloadReady;
       expect(personalDownload.suggestedFilename()).toContain("-personal.ics");
       await forwardedPage.goto(joinUrl);

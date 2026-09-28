@@ -1,19 +1,18 @@
 /**
  * Home — the sign-in landing: participation that needs the reader's voice,
- * then upcoming activity, then the organizations and applications the
- * identity holds. Every panel reads its own bounded server page; this was
+ * then upcoming activity, with the represented organization in the header.
+ * Every panel reads its own bounded server page; this was
  * previously exercised only through `portal-personas.spec.ts`'s intercepted
  * fixtures, never against the real API a signed-in member actually gets.
  * @covers profile.11.5
+ * @covers profile.11.6
  */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { approveMemberThroughReview, uniqueSuffix } from "./helpers/membership";
 
-test("a member's Home shows their organization, application, and a pending review once one exists", async ({
-  page,
-}) => {
+test("a member's Home shows their organization and a pending review once one exists", async ({ page }) => {
   const suffix = uniqueSuffix();
   const email = `home-${suffix}@home-${suffix}.test`;
   const firstName = "Home";
@@ -70,29 +69,27 @@ test("a member's Home shows their organization, application, and a pending revie
     /occurrenceId=40000000-0000-4000-8000-000000000001$/,
   );
   await expect(meetingsPanel.getByRole("link", { name: "Join meeting" })).toBeVisible();
-  await expect(meetingsPanel.locator("footer")).toContainText("Do not forward it.");
+  await expect(meetingsPanel.locator("footer")).toContainText("Do not share");
   await meetingsPanel.screenshot({ path: test.info().outputPath("upcoming-meetings.png") });
 
-  const attentionPanel = page
-    .locator("section")
-    .filter({ has: page.getByRole("heading", { name: "Needs your voice" }) });
-  await expect(attentionPanel).toBeVisible();
-  await expect(attentionPanel.getByText("Nothing is waiting on you right now.")).toBeVisible();
+  await expect(page.getByText("You’re all caught up. Nothing needs your response right now.")).toBeVisible();
 
-  const organizationsPanel = page
-    .locator("section")
-    .filter({ has: page.getByRole("heading", { name: "Your organizations" }) });
-  await expect(organizationsPanel).toBeVisible();
-  const organizationLink = organizationsPanel.getByRole("link", { name: organizationName });
+  const affiliation = page.locator(".pk-home-affiliation");
+  await expect(affiliation).toBeVisible();
+  const organizationLink = affiliation.getByRole("link", { name: organizationName });
   await expect(organizationLink).toBeVisible();
-  await expect(organizationsPanel.getByText("Primary contact")).toBeVisible();
-  await expect(organizationsPanel.getByRole("link", { name: "View all" })).toBeVisible();
+  await expect(affiliation.getByText("Primary contact")).toBeVisible();
+  await expect(affiliation.getByRole("link", { name: "View all" })).toHaveCount(0);
+  await expect(
+    page.getByRole("navigation", { name: "Quick links" }).getByRole("link", { name: "Working groups" }),
+  ).toBeVisible();
 
-  const applicationsPanel = page
-    .locator("section")
-    .filter({ has: page.getByRole("heading", { name: "Your membership applications" }) });
-  await expect(applicationsPanel).toBeVisible();
-  await expect(applicationsPanel.getByRole("link", { name: /^Application from/ })).toBeVisible();
+  await page.evaluate(() => window.scrollTo(0, 0));
+  await page.screenshot({ path: test.info().outputPath("home-dashboard-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: test.info().outputPath("home-dashboard-mobile.png"), fullPage: true });
+  await page.setViewportSize({ width: 1440, height: 900 });
 
   // Nothing is waiting until a content review is actually pending — this
   // proves the panel is reading live organization state, not a snapshot from
@@ -141,10 +138,5 @@ test("an individual member with no represented organization sees the honest empt
   await page.goto("/portal/#/home");
   await expect(page.getByRole("heading", { name: "Home" })).toBeVisible();
 
-  const organizationsPanel = page
-    .locator("section")
-    .filter({ has: page.getByRole("heading", { name: "Your organizations" }) });
-  await expect(
-    organizationsPanel.getByText("You do not represent an organization. Individual participation works just the same."),
-  ).toBeVisible();
+  await expect(page.locator(".pk-home-affiliation").getByText("Participating as an individual")).toBeVisible();
 });

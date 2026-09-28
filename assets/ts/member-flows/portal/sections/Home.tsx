@@ -1,22 +1,10 @@
 import { eventDestination } from "./events/event-destination";
 import "./Home.css";
-/**
- * The sign-in landing: the identity's consortium this week. Participation
- * comes first — things to vote on, answer, review, and attend — followed by
- * upcoming activity and the organizations the user represents. Every panel
- * renders a bounded self-scoped server page; nothing aggregates client-side
- * beyond selecting from one fetched page.
- *
- * Open votes appear exactly once: a ballot waiting on the reader sits in
- * "Needs your voice", and the full record — including votes already cast —
- * lives on the participation page. A second "Open votes" panel used to repeat
- * the same vote a hand's width away from the first.
- */
+/** A personal landing with actionable work, upcoming dates, and useful paths. */
 import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { Link } from "wouter";
 import type { z } from "zod";
-import { myApplicationsListResponseSchema } from "../../../../shared/schemas/me";
 import { currentUserFormsListResponseSchema } from "../../../../shared/schemas/member-forms";
 import {
   currentUserMeetingSeriesListResponseSchema,
@@ -25,7 +13,7 @@ import {
 import { eventsListResponseSchema } from "../../../../shared/schemas/event-management";
 import { userOrganizationsListResponseSchema } from "../../../../shared/schemas/user-organizations";
 import { currentUserVotesListResponseSchema } from "../../../../shared/schemas/votes";
-import { formatDateTimeInZone, formatWeekdayTimeInZone } from "../../../../shared/format-date";
+import { formatDateTime, formatWeekdayTimeInZone } from "../../../../shared/format-date";
 import { meetingEntryUrl } from "../../../../shared/meeting-entry-navigation";
 import { MEETING_JOIN_ACTION_LEAD_MINUTES } from "../../../../shared/schemas/meeting-entry-policy";
 import { matchRecurrenceShape, describeRecurrenceShape } from "../../../components/RecurrenceEditor";
@@ -42,6 +30,8 @@ import { getJson } from "../../../shared/api-client";
 import { portalSession, profile } from "../state";
 import { fmt, formatDateRange, formatRelativeDays } from "../ui";
 import { ViewerEventState } from "./events/ViewerEventState";
+import { eventParticipantRecordPath } from "./events/event-participant-paths";
+import { portalSectionEnabled } from "../shell/portal-navigation";
 
 type MemberVote = z.infer<typeof currentUserVotesListResponseSchema>["votes"][number];
 type MemberForm = z.infer<typeof currentUserFormsListResponseSchema>["forms"][number];
@@ -49,29 +39,20 @@ type UserOrganization = z.infer<typeof userOrganizationsListResponseSchema>["org
 
 function PanelCard({
   title,
-  viewAll,
+  className,
   children,
   footer,
 }: {
   title: string;
-  viewAll?: { href: string; label: string };
+  className?: string;
   children: ComponentChildren;
   footer?: ComponentChildren;
 }) {
   return (
-    <Panel>
-      <PanelHeader title={title}>
-        {viewAll && (
-          // The size utility goes on a wrapper rather than on the anchor:
-          // `pk-small` also sets a muted ink, and utilities beat the base
-          // layer, so putting it on the link would drain the link colour.
-          <span class="pk-small">
-            <Link href={viewAll.href}>{viewAll.label}</Link>
-          </span>
-        )}
-      </PanelHeader>
+    <Panel class={["pk-home-card", className].filter(Boolean).join(" ")}>
+      <PanelHeader title={title} />
       <PanelBody>{children}</PanelBody>
-      {footer && <footer class="pk-panel__body pk-home-meetings-footer">{footer}</footer>}
+      {footer && <footer class="pk-home-meetings-footer">{footer}</footer>}
     </Panel>
   );
 }
@@ -123,11 +104,19 @@ function AttentionPanel() {
   const error = votes.error ?? forms.error ?? organizations.error;
   const count = openBallots.length + openSurveys.length + pendingReviews.length;
 
+  if (!loading && !error && count === 0) {
+    return (
+      <p class="pk-home-all-clear" role="status">
+        You’re all caught up. Nothing needs your response right now.
+      </p>
+    );
+  }
+
   return (
-    <PanelCard title="Needs your voice">
+    <PanelCard title="Needs your voice" className="pk-home-attention">
       <PanelState loading={loading} error={error} empty="Nothing is waiting on you right now." count={count} />
       {!loading && !error && count > 0 && (
-        <ul class="pk-stack pk-stack--tight" aria-label="Items waiting on you">
+        <ul class="pk-plain-list pk-stack pk-stack--tight" aria-label="Items waiting on you">
           {openBallots.map((vote) => (
             <li key={`vote-${vote.id}`} class="pk-cluster">
               <Link href={votePath(vote)}>Vote on: {vote.title}</Link>
@@ -186,14 +175,7 @@ function MeetingsPanel() {
   }, [meetings.data?.series, meetings.reload]);
 
   return (
-    <PanelCard
-      title="Upcoming meetings"
-      footer={
-        series.length > 0 && (
-          <span class="pk-small pk-muted">This calendar file contains your RSVP identity. Do not forward it.</span>
-        )
-      }
-    >
+    <PanelCard title="Upcoming meetings" footer={series.length > 0 && <span>Personal calendar · Do not share</span>}>
       <PanelState
         loading={meetings.loading}
         error={meetings.error}
@@ -201,7 +183,7 @@ function MeetingsPanel() {
         count={series.length}
       />
       {series.length > 0 && (
-        <ul class="pk-stack pk-stack--tight" aria-label="Upcoming meetings">
+        <ul class="pk-plain-list pk-stack pk-stack--snug" aria-label="Upcoming meetings">
           {series.map((meeting) => (
             <li key={meeting.seriesId} class="pk-stack pk-stack--tight">
               <div class="pk-cluster pk-cluster--nowrap">
@@ -226,12 +208,22 @@ function MeetingsPanel() {
               {meetingSchedule(meeting) && <span class="pk-small">{meetingSchedule(meeting)}</span>}
               <div class="pk-cluster">
                 <span class="pk-small">
-                  {now >= Date.parse(meeting.nextStartsAt) ? "Happening now" : "Next"}:{" "}
-                  {formatDateTimeInZone(meeting.nextStartsAt, meeting.timezone)}
+                  {now >= Date.parse(meeting.nextStartsAt) ? "Happening now" : "Next"} (your time):{" "}
+                  {formatDateTime(meeting.nextStartsAt, { zoneName: true })}
                 </span>
                 {formatRelativeDays(meeting.nextStartsAt) && (
                   <span class="pk-small pk-push">({formatRelativeDays(meeting.nextStartsAt)})</span>
                 )}
+                <ButtonLink
+                  variant="ghost"
+                  size="sm"
+                  icon
+                  aria-label="Download only the next meeting (.ics)"
+                  title="Download only the next meeting (.ics)"
+                  href={`/api/v1/groups/${encodeURIComponent(meeting.groupId)}/meetings/series/${encodeURIComponent(meeting.seriesId)}/calendar.ics?personal=true&occurrenceId=${encodeURIComponent(meeting.nextOccurrenceId)}`}
+                >
+                  <IconCalendarDownload />
+                </ButtonLink>
               </div>
               {meeting.canJoin &&
                 now >= Date.parse(meeting.nextStartsAt) - MEETING_JOIN_ACTION_LEAD_MINUTES * 60_000 &&
@@ -240,12 +232,6 @@ function MeetingsPanel() {
                     Join meeting
                   </ButtonLink>
                 )}
-              <a
-                class="pk-small"
-                href={`/api/v1/groups/${encodeURIComponent(meeting.groupId)}/meetings/series/${encodeURIComponent(meeting.seriesId)}/calendar.ics?personal=true&occurrenceId=${encodeURIComponent(meeting.nextOccurrenceId)}`}
-              >
-                Download only the next meeting (.ics)
-              </a>
             </li>
           ))}
         </ul>
@@ -270,14 +256,14 @@ function EventsPanel() {
         count={rows.length}
       />
       {rows.length > 0 && (
-        <ul class="pk-stack pk-stack--snug" aria-label="Upcoming events">
+        <ul class="pk-plain-list pk-stack pk-stack--snug" aria-label="Upcoming events">
           {rows.map((event) => {
             const relative = formatRelativeDays(event.startsAt);
             const viewer = "viewer" in event ? event.viewer : null;
             const basePath = eventDestination(event);
             return (
               <li key={event.id} class="pk-stack pk-stack--tight">
-                <div class="pk-cluster">
+                <div class="pk-home-event-heading">
                   {basePath ? (
                     // No utility class: `.pk-strong` painted the anchor in
                     // body ink, so the one clickable thing in the row was the
@@ -286,13 +272,36 @@ function EventsPanel() {
                   ) : (
                     <span class="pk-strong">{event.name}</span>
                   )}
-                  {event.startsAt && (
-                    <span class="pk-small">{formatDateRange(event.startsAt, event.endsAt, event.timezone)}</span>
+                  {event.participation?.registrationId && event.participation.registrationStatus === "registered" && (
+                    <ButtonLink
+                      variant="ghost"
+                      size="sm"
+                      icon
+                      aria-label={`Download your personal calendar for ${event.name} (.ics)`}
+                      title="Download your personal event calendar (.ics)"
+                      href={`/api/v1/events/${encodeURIComponent(event.slug)}/registrations/${encodeURIComponent(event.participation.registrationId)}/calendar.ics`}
+                    >
+                      <IconCalendarDownload />
+                    </ButtonLink>
                   )}
-                  {relative && <span class="pk-small">({relative})</span>}
-                  {"location" in event && event.location && <span class="pk-small">{event.location}</span>}
                 </div>
-                {viewer && <ViewerEventState viewer={viewer} />}
+                {event.startsAt && (
+                  <span class="pk-small">
+                    {formatDateRange(event.startsAt, event.endsAt, event.timezone)}
+                    {relative ? ` (${relative})` : ""}
+                  </span>
+                )}
+                {"location" in event && event.location && <span class="pk-small">{event.location}</span>}
+                {viewer && (
+                  <ViewerEventState
+                    viewer={viewer}
+                    href={
+                      event.participation?.registrationId
+                        ? eventParticipantRecordPath(event.slug, "registration", event.participation.registrationId)
+                        : undefined
+                    }
+                  />
+                )}
               </li>
             );
           })}
@@ -302,53 +311,22 @@ function EventsPanel() {
   );
 }
 
-function ApplicationsPanel() {
-  const applications = useData(
-    () => getJson("/api/v1/users/current/applications?limit=5", myApplicationsListResponseSchema),
-    [],
-  );
-  const rows = applications.data?.applications ?? [];
-  if (!applications.loading && !applications.error && rows.length === 0) return null;
-
-  return (
-    <PanelCard title="Your membership applications" viewAll={{ href: "/application", label: "View all" }}>
-      <PanelState
-        loading={applications.loading}
-        error={applications.error}
-        empty="No applications."
-        count={rows.length}
-      />
-      {rows.length > 0 && (
-        <ul class="pk-stack pk-stack--tight" aria-label="Your membership applications">
-          {rows.map((application) => (
-            <li key={application.id} class="pk-cluster">
-              <Link href="/application">Application from {fmt(application.createdAt)}</Link>
-              <Badge status={application.stage} />
-            </li>
-          ))}
-        </ul>
-      )}
-    </PanelCard>
-  );
-}
-
-function OrganizationsPanel() {
+function OrganizationAffiliation() {
   const organizations = useData(
     () => getJson("/api/v1/users/current/organizations?limit=6", userOrganizationsListResponseSchema),
     [],
   );
   const rows: UserOrganization[] = organizations.data?.organizations ?? [];
 
+  if (organizations.loading) return null;
+  if (organizations.error) return <ErrorAlert error={organizations.error} />;
   return (
-    <PanelCard title="Your organizations" viewAll={{ href: "/organizations", label: "View all" }}>
-      <PanelState
-        loading={organizations.loading}
-        error={organizations.error}
-        empty="You do not represent an organization. Individual participation works just the same."
-        count={rows.length}
-      />
-      {rows.length > 0 && (
-        <ul class="pk-stack pk-stack--tight" aria-label="Your organizations">
+    <div class="pk-home-affiliation">
+      <span class="pk-small pk-muted">{rows.length === 1 ? "Organization" : "Organizations"}</span>
+      {rows.length === 0 ? (
+        <span class="pk-small">Participating as an individual</span>
+      ) : (
+        <ul class="pk-inline-list" aria-label="Your organizations">
           {rows.map((organization) => (
             <li key={organization.organizationId} class="pk-cluster">
               <Link href={`/organizations/${encodeURIComponent(organization.organizationId)}`}>
@@ -363,7 +341,34 @@ function OrganizationsPanel() {
           ))}
         </ul>
       )}
-    </PanelCard>
+      {(rows.length > 1 || organizations.data?.page.hasMore) && <Link href="/organizations">View all</Link>}
+    </div>
+  );
+}
+
+function HomeShortcuts() {
+  const session = portalSession.value;
+  const links = [
+    portalSectionEnabled(session, "groups") && { label: "Working groups", href: "/groups", tone: "group" },
+    portalSectionEnabled(session, "events") && { label: "Events", href: "/events", tone: "event" },
+    portalSectionEnabled(session, "sponsors") && { label: "Sponsorships", href: "/sponsors", tone: "sponsor" },
+    portalSectionEnabled(session, "users") &&
+      session?.identity && {
+        label: "My profile",
+        href: `/users/${encodeURIComponent(session.identity.id)}`,
+        tone: "profile",
+      },
+  ].filter((link): link is { label: string; href: string; tone: string } => Boolean(link));
+
+  return (
+    <nav class="pk-home-shortcuts" aria-label="Quick links">
+      {links.map((link) => (
+        <Link key={link.href} href={link.href} class={`pk-home-shortcut pk-home-shortcut--${link.tone}`}>
+          <span>{link.label}</span>
+          <span aria-hidden="true">↗</span>
+        </Link>
+      ))}
+    </nav>
   );
 }
 
@@ -374,20 +379,15 @@ export function Home() {
 
   return (
     <div class="pk pk-stack">
-      <PageHeader
-        title="Home"
-        description={`${firstName ? `Welcome back, ${firstName}.` : "Welcome back."} Here is what is happening in your consortium.`}
-      />
-      {/* The panels flow into as many columns as `#portal-main` affords
-          instead of stacking down a capped reading measure that left the rest
-          of a wide screen empty. Source order is priority order: what needs
-          the reader's voice first, then what is coming up. */}
-      <div class="pk-grid pk-grid--roomy">
-        {isMember && <AttentionPanel />}
+      <div class="pk-home-intro">
+        <PageHeader title="Home" description={firstName ? `Welcome back, ${firstName}.` : "Welcome back."} />
+        {isMember && <OrganizationAffiliation />}
+        <HomeShortcuts />
+      </div>
+      {isMember && <AttentionPanel />}
+      <div class="pk-home-grid">
         {isMember && <MeetingsPanel />}
         <EventsPanel />
-        {isMember && <ApplicationsPanel />}
-        {isMember && <OrganizationsPanel />}
       </div>
     </div>
   );

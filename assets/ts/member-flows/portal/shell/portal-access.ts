@@ -32,7 +32,6 @@ export interface PortalAccess {
   hasAccountAccess: boolean;
   hasAdminCapacity: boolean;
   canReadAnalytics: boolean;
-  hasParticipationRecord: boolean;
 }
 
 export function derivePortalAccess(session: PortalSession | null): PortalAccess {
@@ -65,6 +64,5 @@ export function derivePortalAccess(session: PortalSession | null): PortalAccess 
     hasAccountAccess: portalSectionEnabled(session, "account"),
     hasAdminCapacity: Boolean(session?.staff),
     canReadAnalytics: portalHasGlobalPermission(session, "analytics:read"),
-    hasParticipationRecord: portalSectionEnabled(session, "participation"),
   };
 }

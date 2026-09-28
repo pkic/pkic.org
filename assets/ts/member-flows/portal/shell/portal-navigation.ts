@@ -65,7 +65,6 @@ export function portalHasSponsorWorkspace(session: PortalSession | null): boolea
 
 export type PortalSectionKey =
   | "home"
-  | "participation"
   | "groups"
   | "events"
   | "organizations"
@@ -114,7 +113,8 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     path: "/home",
     label: "Home",
     sidebar: true,
-    access: (session) => Boolean(session?.member || session?.staff),
+    access: (session) =>
+      Boolean(session?.member || session?.staff || session?.sponsors.length || session?.eventParticipation),
   },
   {
     section: "groups",
@@ -253,15 +253,6 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     access: (session) => portalHasGlobalPermission(session, "forms:read"),
   },
   {
-    // Participation records for any authenticated identity, member or not.
-    section: "participation",
-    path: "/participation",
-    label: "My participation",
-    sidebar: false,
-    access: (session) =>
-      Boolean(session?.member || session?.staff || session?.sponsors.length || session?.eventParticipation),
-  },
-  {
     // Superseded by the organization workspaces; the route redirects there.
     section: "organization",
     path: "/organization",
@@ -270,7 +261,7 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     access: (session) => Boolean(session?.member),
   },
   {
-    // Reached from the dashboard and the participation view, not the sidebar.
+    // Reached from the dashboard and account menu, not the sidebar.
     section: "application",
     path: "/application",
     label: "My Application",

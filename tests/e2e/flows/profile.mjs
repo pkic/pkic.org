@@ -32,15 +32,15 @@ export const PROFILE_FLOW = {
     },
     {
       id: "11.5",
-      title: "Home shows the organization, the application and a pending review once one exists",
+      title: "Home shows the organization, upcoming meetings, and a pending review once one exists",
       status: "covered",
       note: "And an individual member with no organization sees an honest empty state rather than a broken card.",
     },
     {
       id: "11.6",
-      title: "A freshly approved member sees their application and empty records elsewhere",
+      title: "A freshly approved member sees useful shortcuts and a clear response status",
       status: "covered",
-      note: "The first minute after approval is the one nobody designs for, and the one every new member sees.",
+      note: "The dashboard surfaces what needs attention without listing old application and activity history.",
     },
     {
       id: "11.7",

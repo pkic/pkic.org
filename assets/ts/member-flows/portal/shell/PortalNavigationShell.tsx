@@ -231,18 +231,6 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
                   navigate(`/organizations/${encodeURIComponent(organization.organizationId)}`);
                 },
               })),
-              ...(portalSectionEnabled(session, "participation")
-                ? [
-                    {
-                      id: "participation",
-                      label: "My participation",
-                      onSelect: () => {
-                        closeNavigation();
-                        navigate("/participation");
-                      },
-                    },
-                  ]
-                : []),
               ...(portalSectionEnabled(session, "account")
                 ? [
                     {
