@@ -1,8 +1,5 @@
 // @vitest-environment jsdom
-/**
- * The event's Communications section keeps the audience in the URL while
- * selecting it with a labeled control.
- */
+/** The event's Communications section opens a focused message composer. */
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -26,7 +23,7 @@ async function settle(): Promise<void> {
   });
 }
 
-async function mount(audience?: string): Promise<HTMLDivElement> {
+async function mount(composing = false): Promise<HTMLDivElement> {
   container = document.createElement("div");
   document.body.append(container);
   await act(async () => {
@@ -34,8 +31,8 @@ async function mount(audience?: string): Promise<HTMLDivElement> {
       <GroupEventCommunications
         groupId="group-1"
         eventId="event-1"
-        audience={audience}
-        audienceHref={(key) => (key === "attendees" ? "/x/communications" : `/x/communications/${key}`)}
+        composing={composing}
+        listPath="/x/communications"
       />,
       container!,
     );
@@ -69,44 +66,29 @@ afterEach(() => {
 });
 
 describe("GroupEventCommunications", () => {
-  it("shows the composer directly rather than behind a disclosure", async () => {
+  it("offers one message action without audience navigation on the landing page", async () => {
     const root = await mount();
 
     expect(root.querySelector("details")).toBeNull();
     expect(root.querySelector("summary")).toBeNull();
-    expect(root.textContent).toContain("Email");
+    expect(root.querySelector("select")).toBeNull();
+    expect(root.querySelector('a[href="#/x/communications/new"]')?.textContent).toContain("New message");
   });
 
-  it("offers every campaign audience in one labeled selector", async () => {
-    const root = await mount();
+  it("puts audience and filters inside the message form", async () => {
+    const root = await mount(true);
 
-    const control = root.querySelector<HTMLSelectElement>("select");
+    const control = [...root.querySelectorAll<HTMLSelectElement>("select")].find(
+      (item) => item.id && root.querySelector(`label[for="${item.id}"]`)?.textContent === "Audience",
+    );
     expect(control).not.toBeNull();
-    expect(root.querySelector(`label[for="${control?.id}"]`)?.textContent).toBe("Audience");
     expect([...control!.options].map((option) => option.textContent)).toEqual([
       "Attendees",
       "Speakers",
       "Invited attendees",
       "Invited speakers",
     ]);
-  });
-
-  it("selects the current audience and navigates to the chosen address", async () => {
-    const root = await mount("speakers");
-
-    const control = root.querySelector<HTMLSelectElement>("select")!;
-    expect(control.value).toBe("speakers");
-    await act(() => {
-      control.value = "attendee_invitations";
-      control.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    expect(navigate).toHaveBeenCalledWith("/x/communications/attendee_invitations");
-  });
-
-  it("falls back to attendees for an audience the contract does not know", async () => {
-    const root = await mount("sponsors");
-
-    expect(root.querySelector<HTMLSelectElement>("select")?.value).toBe("attendees");
+    expect(root.textContent).toContain("New event message");
   });
 
   it("carries no Bootstrap class names", async () => {
@@ -119,23 +101,5 @@ describe("GroupEventCommunications", () => {
         expect(bootstrap.test(name)).toBe(false);
       }
     }
-  });
-
-  it("survives a campaigns request that fails instead of rendering a blank panel", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(() =>
-        Promise.resolve(
-          new Response(JSON.stringify({ error: { code: "server_error", message: "Nope" } }), {
-            status: 500,
-            headers: { "content-type": "application/json" },
-          }),
-        ),
-      ),
-    );
-
-    const root = await mount();
-
-    expect(root.querySelector<HTMLSelectElement>("select")?.value).toBe("attendees");
   });
 });

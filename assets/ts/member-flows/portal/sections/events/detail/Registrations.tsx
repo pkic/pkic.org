@@ -359,7 +359,7 @@ export function Registrations({ slug, subTab }: { slug: string; subTab?: string 
         <EventEmailCampaign
           campaignsPath={`/api/v1/events/${encodeURIComponent(slug)}/email/campaigns`}
           daysPath={`/api/v1/events/${encodeURIComponent(slug)}/days`}
-          audience="attendees"
+          initialAudience="attendees"
           notify={toast}
         />
       )}

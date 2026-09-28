@@ -72,15 +72,32 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await page.screenshot({ path: test.info().outputPath("event-attached-surface.png"), fullPage: true });
 
   await tab(detail, "Communications").click();
-  const audience = detail.getByLabel("Audience", { exact: true });
-  await audience.selectOption("attendee_invitations");
-  await expect(detail.getByRole("region", { name: "Invited attendees campaigns" })).toBeVisible();
-  await audience.selectOption("attendees");
-  // Composing a campaign is a page of its own under the tab, with its own
-  // address, rather than a form standing open on arrival.
-  await detail.getByRole("link", { name: "New campaign" }).click();
+  await expect(detail.getByLabel("Audience", { exact: true })).toHaveCount(0);
+  await detail.getByRole("link", { name: "New message" }).click();
   await expect(page).toHaveURL(/\/communications\/new$/);
-  const communications = detail.getByRole("region", { name: "New attendees campaign" });
+  const communications = detail.getByRole("region", { name: "New event message" });
+  const audience = communications.getByLabel("Audience", { exact: true });
+  await audience.selectOption("attendee_invitations");
+  await expect(communications.getByLabel("Invitation status")).toBeVisible();
+  await expect(communications.getByText("Template helpers", { exact: true })).toHaveCount(0);
+  const subject = communications.getByPlaceholder("Email subject");
+  await communications.getByRole("button", { name: "Insert subject variable" }).click();
+  await page.getByRole("menuitem", { name: "eventName", exact: true }).click();
+  await expect(subject).toHaveValue("{{eventName}}");
+  await communications.getByRole("button", { name: "Markdown source", exact: true }).click();
+  await communications.getByRole("button", { name: "Insert variables and conditions" }).click();
+  await page.getByRole("menuitem", { name: "registrationUrl", exact: true }).click();
+  await expect(communications.getByRole("textbox", { name: "Message Markdown source" })).toHaveValue(
+    "{{registrationUrl}}",
+  );
+  await communications.getByRole("button", { name: "Visual editor", exact: true }).click();
+  const wideViewport = page.viewportSize()!;
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await communications.evaluate((element) => element.scrollWidth <= element.clientWidth + 1)).toBe(true);
+  await communications.screenshot({ path: test.info().outputPath("message-composer-mobile.png") });
+  await page.setViewportSize(wideViewport);
+  await communications.screenshot({ path: test.info().outputPath("message-composer-desktop.png") });
+  await audience.selectOption("attendees");
   await communications.getByPlaceholder("Email subject").fill("Workshop planning update");
   await communications.getByRole("textbox", { name: "Message", exact: true }).fill("Hello members");
   const campaignPreview = page.waitForResponse(

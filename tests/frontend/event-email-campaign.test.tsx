@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GroupEvent } from "../../assets/shared/schemas/group-events";
 import { emailMessageTypeSchema } from "../../assets/shared/schemas/api-common";
 import {
+  eventEmailCampaignAudienceSchema,
   eventEmailCampaignCreateInputSchema,
   eventEmailCampaignDayWaitlistFilterSchema,
   eventEmailCampaignInvitationStatusFilterSchema,
@@ -58,6 +59,14 @@ async function inputText(element: HTMLInputElement | HTMLTextAreaElement, value:
   await act(async () => {
     element.value = value;
     element.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
+async function chooseAudience(container: HTMLElement, value: string): Promise<void> {
+  const control = controlFor<HTMLSelectElement>(container, "Audience");
+  await act(() => {
+    control.value = value;
+    control.dispatchEvent(new Event("change", { bubbles: true }));
   });
 }
 
@@ -209,6 +218,7 @@ describe("event email campaign UI", () => {
     // label resolves to its control — the lookup fails exactly when the
     // for/id pair is broken.
     const names = [
+      "Audience",
       "Template",
       "Delivery mode",
       "Message type",
@@ -232,6 +242,9 @@ describe("event email campaign UI", () => {
     await act(async () => confirmationBox(container)!.click());
     const source = controlFor<HTMLTextAreaElement>(container, "Message");
     source.setSelectionRange(6, source.value.length);
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Insert variables and conditions"]')!.click();
+    });
     await clickButton(container, "firstName");
     expect(source.value).toBe("Hello {{firstName}}");
     await typeMarkdown(container, "Message", "Revised message for all attendees");
@@ -292,6 +305,13 @@ describe("event email campaign UI", () => {
     // which is exactly what issue #24 found missing elsewhere.
     const attendees = mount(<EventEmailCampaign campaignsPath={CAMPAIGN_PATH} daysPath={`${EVENT_PATH}/days`} />);
     await settle();
+    expect(optionValues(controlFor<HTMLSelectElement>(attendees, "Audience"))).toEqual(
+      eventEmailCampaignAudienceSchema.options,
+    );
+    expect(
+      controlFor(attendees, "Audience").compareDocumentPosition(controlFor(attendees, "Template")) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
     expect(optionValues(controlFor<HTMLSelectElement>(attendees, "Delivery mode"))).toEqual(
       eventEmailCampaignSendModeSchema.options,
     );
@@ -302,37 +322,22 @@ describe("event email campaign UI", () => {
       eventEmailCampaignDayWaitlistFilterSchema.options,
     );
 
-    const speakers = mount(
-      <EventEmailCampaign campaignsPath={CAMPAIGN_PATH} daysPath={`${EVENT_PATH}/days`} audience="speakers" />,
-    );
-    await settle();
-    expect(optionValues(controlFor<HTMLSelectElement>(speakers, "Speaker status"))).toEqual(
+    await chooseAudience(attendees, "speakers");
+    expect(optionValues(controlFor<HTMLSelectElement>(attendees, "Speaker status"))).toEqual(
       eventEmailCampaignSpeakerStatusFilterSchema.options,
     );
-
-    const invitations = mount(
-      <EventEmailCampaign
-        campaignsPath={CAMPAIGN_PATH}
-        daysPath={`${EVENT_PATH}/days`}
-        audience="attendee_invitations"
-      />,
-    );
-    await settle();
-    expect(optionValues(controlFor<HTMLSelectElement>(invitations, "Invitation status"))).toEqual(
+    await chooseAudience(attendees, "attendee_invitations");
+    expect(optionValues(controlFor<HTMLSelectElement>(attendees, "Invitation status"))).toEqual(
       eventEmailCampaignInvitationStatusFilterSchema.options,
     );
+    expect(attendees.textContent).not.toContain("Speaker status");
   });
 
   it("sends the selected invitation status through the campaign contract", async () => {
     const requests = stubCampaignFetch({ previews: () => json(PREVIEW_BODY) });
-    const container = mount(
-      <EventEmailCampaign
-        campaignsPath={CAMPAIGN_PATH}
-        daysPath={`${EVENT_PATH}/days`}
-        audience="speaker_invitations"
-      />,
-    );
+    const container = mount(<EventEmailCampaign campaignsPath={CAMPAIGN_PATH} daysPath={`${EVENT_PATH}/days`} />);
     await settle();
+    await chooseAudience(container, "speaker_invitations");
     const status = controlFor<HTMLSelectElement>(container, "Invitation status");
     await act(() => {
       status.value = "accepted";
@@ -344,6 +349,18 @@ describe("event email campaign UI", () => {
       audience: "speaker_invitations",
       invitationStatus: "accepted",
     });
+  });
+
+  it("keeps the draft but requires a new preview when the audience changes", async () => {
+    stubCampaignFetch({ previews: () => json(PREVIEW_BODY) });
+    const container = mount(<EventEmailCampaign campaignsPath={CAMPAIGN_PATH} daysPath={`${EVENT_PATH}/days`} />);
+    await composeAndPreview(container);
+    expect(confirmationBox(container)).not.toBeNull();
+
+    await chooseAudience(container, "attendee_invitations");
+    expect(confirmationBox(container)).toBeNull();
+    expect(controlFor<HTMLInputElement>(container, "Subject").value).toBe("Working group update");
+    expect(controlFor<HTMLSelectElement>(container, "Invitation status").value).toBe("all");
   });
 
   it("does not render campaign management without the server-provided manage capability", () => {

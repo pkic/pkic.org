@@ -22,6 +22,13 @@ export const SEND_MODE_LABELS: Record<EventEmailCampaignSendMode, string> = {
   bcc_batch: "Broadcast BCC",
 };
 
+export const AUDIENCE_LABELS: Record<EventEmailCampaignAudience, string> = {
+  attendees: "Attendees",
+  speakers: "Speakers",
+  attendee_invitations: "Invited attendees",
+  speaker_invitations: "Invited speakers",
+};
+
 export const DAY_WAITLIST_FILTER_LABELS: Record<EventEmailCampaignDayWaitlistFilter, string> = {
   all: "Any state",
   active: "Active waitlist",

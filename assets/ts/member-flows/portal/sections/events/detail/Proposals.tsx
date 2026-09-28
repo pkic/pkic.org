@@ -56,7 +56,7 @@ export function Proposals({ slug, subTab, canWrite }: { slug: string; subTab?: s
         <EventEmailCampaign
           campaignsPath={`/api/v1/events/${encodeURIComponent(slug)}/email/campaigns`}
           daysPath={`/api/v1/events/${encodeURIComponent(slug)}/days`}
-          audience="speakers"
+          initialAudience="speakers"
           notify={toast}
         />
       )}

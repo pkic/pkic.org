@@ -1,4 +1,5 @@
 import {
+  eventEmailCampaignAudienceSchema,
   isInvitationCampaignAudience,
   type EventEmailCampaignAudience,
 } from "../../../shared/schemas/event-email-campaigns";
@@ -12,6 +13,8 @@ import { Field } from "../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import { Select, TextInput } from "../../ui/TextControl";
 import { MarkdownEditor } from "../markdown-editor/MarkdownInput";
+import { IconBraces } from "../icons";
+import { Menu } from "../../ui/Menu";
 import type { MarkdownEditorHandle } from "../markdown-editor/MarkdownEditor";
 import {
   eventEmailCampaignDayWaitlistFilterSchema,
@@ -27,12 +30,14 @@ import {
   type EventEmailCampaignSpeakerStatusFilter,
 } from "../../../shared/schemas/event-email-campaigns";
 import { EMAIL_MESSAGE_TYPE_OPTIONS } from "../../shared/email-type-options";
-import { TEMPLATE_HELPERS, TEMPLATE_PARTIALS, type TemplateHelperItem } from "../../shared/email-template-helpers";
+import { type TemplateHelperItem } from "../../shared/email-template-helpers";
+import { bodyTemplateInsertions, subjectTemplateInsertions } from "../../shared/email-template-insertions";
+import { highlightTemplateSyntax } from "../../shared/email-template-syntax";
 import type { EmailMessageType } from "../../../shared/schemas/email-templates";
 import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../shared/email-preview-tabs";
 import {
+  AUDIENCE_LABELS,
   DAY_WAITLIST_FILTER_LABELS,
-  HELPER_CATEGORIES,
   PERSONAL_ONLY_HELPERS,
   SEND_MODE_LABELS,
   SPEAKER_STATUS_FILTER_LABELS,
@@ -53,53 +58,21 @@ import { EventInvitationStatusFilter } from "./EventInvitationStatusFilter";
 import { emailTemplateCatalog, getEmailTemplateEditorVersion } from "../../shared/email-template-catalog";
 
 import "../../ui/Content.css";
-
-/**
- * One template token, inserted at the caret.
- *
- * A tag that reads a recipient's own data cannot be honoured by a single BCC
- * message, so in broadcast mode the control is disabled rather than removed:
- * the vocabulary stays visible and the title says why it is unavailable.
- */
-function SnippetButton({
-  snippet,
-  label,
-  personal,
-  personalOnly,
-  onInsert,
-}: {
-  snippet: string;
-  label: string;
-  personal: boolean;
-  personalOnly?: boolean;
-  onInsert: (snippet: string) => void;
-}) {
-  const unavailable = Boolean(personalOnly) && !personal;
-  return (
-    <Button
-      size="sm"
-      disabled={unavailable}
-      title={unavailable ? "Only available in Personal mode" : snippet}
-      onClick={() => onInsert(snippet)}
-    >
-      {label}
-    </Button>
-  );
-}
+import "../../ui/OverlayEditor.css";
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
 export function EventEmailCampaign({
   campaignsPath,
   daysPath,
-  audience: defaultAudience = "attendees",
+  initialAudience = "attendees",
   notify = () => {},
   cancelHref,
   onSent,
 }: {
   campaignsPath: string;
   daysPath: string;
-  audience?: EventEmailCampaignAudience;
+  initialAudience?: EventEmailCampaignAudience;
   notify?: (message: string, type: "success" | "error") => void;
   /** The way back, when the composer is a page of its own. */
   cancelHref?: string;
@@ -114,7 +87,7 @@ export function EventEmailCampaign({
   const [batchSize, setBatchSize] = useState(500);
   const [subject, setSubject] = useState("");
   const [body, setBody] = useState("");
-  const [audience] = useState<EventEmailCampaignAudience>(defaultAudience);
+  const [audience, setAudience] = useState<EventEmailCampaignAudience>(initialAudience);
 
   // attendee filters
   const [attendeeStatus, setAttendeeStatus] = useState<EventRegistrationStatusFilter>("registered");
@@ -135,10 +108,17 @@ export function EventEmailCampaign({
   const [sending, setSending] = useState(false);
 
   const bodyEditor = useRef<MarkdownEditorHandle>(null);
+  const subjectPreRef = useRef<HTMLPreElement>(null);
   const [bodyRevision, setBodyRevision] = useState(0);
   const templateRequestIdRef = useRef(0);
   const availableHelperLabels = availableHelperLabelsForAudience(audience);
   const availablePartials = availablePartialsForAudience(audience);
+
+  useEffect(() => {
+    if (subjectPreRef.current) {
+      subjectPreRef.current.innerHTML = subject ? `${highlightTemplateSyntax(subject)}&nbsp;` : "";
+    }
+  }, [subject]);
 
   useEffect(() => {
     setPreview(null);
@@ -147,6 +127,7 @@ export function EventEmailCampaign({
     subject,
     body,
     templateKey,
+    audience,
     mode,
     messageType,
     batchSize,
@@ -160,6 +141,17 @@ export function EventEmailCampaign({
 
   function insertSnippet(snippet: string) {
     bodyEditor.current?.insertText(snippet);
+  }
+
+  function insertSubjectSnippet(snippet: string) {
+    const input = subjectPreRef.current?.parentElement?.querySelector("input");
+    const start = input?.selectionStart ?? subject.length;
+    const end = input?.selectionEnd ?? start;
+    setSubject(`${subject.slice(0, start)}${snippet}${subject.slice(end)}`);
+    requestAnimationFrame(() => {
+      input?.focus();
+      input?.setSelectionRange(start + snippet.length, start + snippet.length);
+    });
   }
 
   async function handleTemplateChange(key: string) {
@@ -271,16 +263,147 @@ export function EventEmailCampaign({
 
   const personal = mode === "personal";
 
-  function isHelperVisible(item: TemplateHelperItem): boolean {
+  function isHelperAvailable(item: TemplateHelperItem): boolean {
     return availableHelperLabels.has(item.label);
   }
 
-  function isHelperPersonalOnly(item: TemplateHelperItem): boolean {
-    return PERSONAL_ONLY_HELPERS.has(item.label);
-  }
+  const subjectInsertions = subjectTemplateInsertions(insertSubjectSnippet, isHelperAvailable).map((item) => ({
+    ...item,
+    disabled: !personal && PERSONAL_ONLY_HELPERS.has(item.id),
+  }));
+  const bodyInsertions = bodyTemplateInsertions(insertSnippet, isHelperAvailable, (partial) =>
+    availablePartials.has(partial.name),
+  ).map((item) => ({
+    ...item,
+    disabled: !personal && (PERSONAL_ONLY_HELPERS.has(item.id) || item.id === "partial-reg_details"),
+  }));
 
   return (
     <div class="pk pk-stack" {...form.handlers}>
+      <div class="pk-grid" aria-label="Audience and filters">
+        <Field label="Audience" {...form.of("filter.audience")}>
+          {(control) => (
+            <Select
+              {...control}
+              name="filter.audience"
+              value={audience}
+              onChange={(event) =>
+                setAudience(eventEmailCampaignAudienceSchema.parse((event.target as HTMLSelectElement).value))
+              }
+            >
+              {eventEmailCampaignAudienceSchema.options.map((option) => (
+                <option key={option} value={option}>
+                  {AUDIENCE_LABELS[option]}
+                </option>
+              ))}
+            </Select>
+          )}
+        </Field>
+        {isInvitationCampaignAudience(audience) ? (
+          <EventInvitationStatusFilter
+            value={invitationStatus}
+            onChange={setInvitationStatus}
+            field={form.of("filter.invitationStatus")}
+          />
+        ) : audience === "attendees" ? (
+          <>
+            <Field label="Registration status">
+              {(control) => (
+                <Select
+                  {...control}
+                  value={attendeeStatus}
+                  onChange={(e) =>
+                    setAttendeeStatus(eventRegistrationStatusFilterSchema.parse((e.target as HTMLSelectElement).value))
+                  }
+                >
+                  {EVENT_REGISTRATION_STATUS_FILTERS.map((status) => (
+                    <option key={status} value={status}>
+                      {status === "all" ? "All" : eventRegistrationStatusLabel(status)}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Field label="Attendance type">
+              {(control) => (
+                <Select
+                  {...control}
+                  value={attendanceType}
+                  onChange={(e) => setAttendanceType((e.target as HTMLSelectElement).value)}
+                >
+                  <option value="all">All types</option>
+                  <option value="in_person">In-person</option>
+                  <option value="virtual">Virtual</option>
+                  <option value="on_demand">On-demand</option>
+                </Select>
+              )}
+            </Field>
+            <Field label="Specific day">
+              {(control) => (
+                <Select
+                  {...control}
+                  value={dayFilter}
+                  onChange={(e) => setDayFilter((e.target as HTMLSelectElement).value)}
+                >
+                  <option value="">All days</option>
+                  {days.map((d) => {
+                    const dateKey = d.day_date ?? d.date ?? "";
+                    return (
+                      <option key={dateKey} value={dateKey}>
+                        {d.label ?? dateKey}
+                      </option>
+                    );
+                  })}
+                </Select>
+              )}
+            </Field>
+            <Field label="Day waitlist">
+              {(control) => (
+                <Select
+                  {...control}
+                  value={dayWaitlistStatus}
+                  onChange={(e) =>
+                    setDayWaitlistStatus(
+                      eventEmailCampaignDayWaitlistFilterSchema.parse((e.target as HTMLSelectElement).value),
+                    )
+                  }
+                >
+                  {eventEmailCampaignDayWaitlistFilterSchema.options.map((waitlistStatus) => (
+                    <option key={waitlistStatus} value={waitlistStatus}>
+                      {DAY_WAITLIST_FILTER_LABELS[waitlistStatus]}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+          </>
+        ) : (
+          <Field label="Speaker status">
+            {(control) => (
+              <Select
+                {...control}
+                value={speakerStatus}
+                onChange={(e) =>
+                  setSpeakerStatus(
+                    eventEmailCampaignSpeakerStatusFilterSchema.parse((e.target as HTMLSelectElement).value),
+                  )
+                }
+              >
+                {/* Reading the contract's order puts "All active" at the head
+                    of the list where the hand-written version led with
+                    "Confirmed"; the composer still opens on confirmed
+                    speakers, because that is what the state starts as. */}
+                {eventEmailCampaignSpeakerStatusFilterSchema.options.map((status) => (
+                  <option key={status} value={status}>
+                    {SPEAKER_STATUS_FILTER_LABELS[status]}
+                  </option>
+                ))}
+              </Select>
+            )}
+          </Field>
+        )}
+      </div>
+
       {/* Template + mode */}
       <div class="pk-grid">
         <Field label="Template">
@@ -345,184 +468,42 @@ export function EventEmailCampaign({
       {/* Subject */}
       <Field label="Subject" {...form.of("subjectOverride")}>
         {(control) => (
-          <TextInput
-            {...control}
-            type="text"
-            name="subjectOverride"
-            placeholder="Email subject"
-            value={subject}
-            onInput={(e) => setSubject((e.target as HTMLInputElement).value)}
-          />
+          <div class="pk-template-subject">
+            <div class="pk-overlay-editor">
+              <pre ref={subjectPreRef} aria-hidden="true" class="pk-overlay-editor__backdrop"></pre>
+              <TextInput
+                {...control}
+                class="pk-mono pk-overlay-editor__input"
+                type="text"
+                name="subjectOverride"
+                placeholder="Email subject"
+                value={subject}
+                onInput={(e) => setSubject((e.target as HTMLInputElement).value)}
+              />
+            </div>
+            <Menu label="Insert subject variable" align="end" items={subjectInsertions}>
+              <IconBraces />
+            </Menu>
+          </div>
         )}
       </Field>
 
-      {/* Body + variables sidebar: the message takes the width and the
-          helpers keep the column beside it. */}
-      <div class="pk-record">
-        <Field label="Message" help="Markdown, {{variables}}" {...form.of("bodyContent")}>
-          {(control) => (
-            <MarkdownEditor
-              {...control}
-              key={bodyRevision}
-              name="bodyContent"
-              label="Message"
-              initialValue={body}
-              initialMode="visual"
-              editorRef={bodyEditor}
-              onChange={setBody}
-            />
-          )}
-        </Field>
-        <Panel aria-label="Template helpers">
-          <PanelHeader title="Template helpers" headingLevel={4} />
-          <PanelBody class="pk-stack pk-stack--snug">
-            {HELPER_CATEGORIES.map((category) => {
-              const items = TEMPLATE_HELPERS.filter((item) => item.category === category && isHelperVisible(item));
-              if (items.length === 0) return null;
-              return (
-                <div key={category} class="pk-stack pk-stack--tight">
-                  <span class="pk-small pk-strong">{category}</span>
-                  <div class="pk-cluster">
-                    {items.map((item) => (
-                      <SnippetButton
-                        key={item.label}
-                        snippet={item.snippet}
-                        label={item.label}
-                        personal={personal}
-                        personalOnly={isHelperPersonalOnly(item)}
-                        onInsert={insertSnippet}
-                      />
-                    ))}
-                  </div>
-                </div>
-              );
-            })}
-            <div class="pk-stack pk-stack--tight">
-              <span class="pk-small pk-strong">Partials</span>
-              <div class="pk-cluster">
-                {TEMPLATE_PARTIALS.filter((partial) => availablePartials.has(partial.name)).map((partial) => (
-                  <SnippetButton
-                    key={partial.name}
-                    snippet={`{{> ${partial.name}}}`}
-                    label={partial.name}
-                    personal={personal}
-                    personalOnly={partial.name === "reg_details"}
-                    onInsert={insertSnippet}
-                  />
-                ))}
-              </div>
-            </div>
-            {!personal && <p class="pk-small">Recipient-specific tags are disabled in Broadcast BCC mode.</p>}
-          </PanelBody>
-        </Panel>
-      </div>
-
-      {/* Filters */}
-      {isInvitationCampaignAudience(audience) ? (
-        <EventInvitationStatusFilter
-          value={invitationStatus}
-          onChange={setInvitationStatus}
-          field={form.of("filter.invitationStatus")}
-        />
-      ) : audience === "attendees" ? (
-        <div class="pk-grid">
-          <Field label="Registration status">
-            {(control) => (
-              <Select
-                {...control}
-                value={attendeeStatus}
-                onChange={(e) =>
-                  setAttendeeStatus(eventRegistrationStatusFilterSchema.parse((e.target as HTMLSelectElement).value))
-                }
-              >
-                {EVENT_REGISTRATION_STATUS_FILTERS.map((status) => (
-                  <option key={status} value={status}>
-                    {status === "all" ? "All" : eventRegistrationStatusLabel(status)}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
-          <Field label="Attendance type">
-            {(control) => (
-              <Select
-                {...control}
-                value={attendanceType}
-                onChange={(e) => setAttendanceType((e.target as HTMLSelectElement).value)}
-              >
-                <option value="all">All types</option>
-                <option value="in_person">In-person</option>
-                <option value="virtual">Virtual</option>
-                <option value="on_demand">On-demand</option>
-              </Select>
-            )}
-          </Field>
-          <Field label="Specific day">
-            {(control) => (
-              <Select
-                {...control}
-                value={dayFilter}
-                onChange={(e) => setDayFilter((e.target as HTMLSelectElement).value)}
-              >
-                <option value="">All days</option>
-                {days.map((d) => {
-                  const dateKey = d.day_date ?? d.date ?? "";
-                  return (
-                    <option key={dateKey} value={dateKey}>
-                      {d.label ?? dateKey}
-                    </option>
-                  );
-                })}
-              </Select>
-            )}
-          </Field>
-          <Field label="Day waitlist">
-            {(control) => (
-              <Select
-                {...control}
-                value={dayWaitlistStatus}
-                onChange={(e) =>
-                  setDayWaitlistStatus(
-                    eventEmailCampaignDayWaitlistFilterSchema.parse((e.target as HTMLSelectElement).value),
-                  )
-                }
-              >
-                {eventEmailCampaignDayWaitlistFilterSchema.options.map((waitlistStatus) => (
-                  <option key={waitlistStatus} value={waitlistStatus}>
-                    {DAY_WAITLIST_FILTER_LABELS[waitlistStatus]}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
-        </div>
-      ) : (
-        <div class="pk-grid">
-          <Field label="Speaker status">
-            {(control) => (
-              <Select
-                {...control}
-                value={speakerStatus}
-                onChange={(e) =>
-                  setSpeakerStatus(
-                    eventEmailCampaignSpeakerStatusFilterSchema.parse((e.target as HTMLSelectElement).value),
-                  )
-                }
-              >
-                {/* Reading the contract's order puts "All active" at the head
-                    of the list where the hand-written version led with
-                    "Confirmed"; the composer still opens on confirmed
-                    speakers, because that is what the state starts as. */}
-                {eventEmailCampaignSpeakerStatusFilterSchema.options.map((status) => (
-                  <option key={status} value={status}>
-                    {SPEAKER_STATUS_FILTER_LABELS[status]}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
-        </div>
-      )}
+      <Field label="Message" help="Markdown, {{variables}}" {...form.of("bodyContent")}>
+        {(control) => (
+          <MarkdownEditor
+            {...control}
+            key={bodyRevision}
+            name="bodyContent"
+            label="Message"
+            initialValue={body}
+            initialMode="visual"
+            templateInsertions={bodyInsertions}
+            editorRef={bodyEditor}
+            onChange={setBody}
+          />
+        )}
+      </Field>
+      {!personal && <p class="pk-small">Recipient-specific insertions are unavailable in Broadcast BCC mode.</p>}
 
       {/* Preview panel */}
       {preview && (

@@ -358,16 +358,11 @@ export function GroupEventWorkspace({
             )}
 
             {activeTab === "communications" && (
-              // `…/communications/new` composes for attendees;
-              // `…/communications/speakers/new` for speakers.
               <GroupEventCommunications
                 groupId={groupId}
                 eventId={event.id}
-                audience={detailId === NEW_CAMPAIGN_SEGMENT ? undefined : detailId}
-                composing={detailId === NEW_CAMPAIGN_SEGMENT || detailTab === NEW_CAMPAIGN_SEGMENT}
-                audienceHref={(audience) =>
-                  audience === "attendees" ? tabPath("communications") : `${tabPath("communications")}/${audience}`
-                }
+                composing={detailId === NEW_CAMPAIGN_SEGMENT}
+                listPath={tabPath("communications")}
               />
             )}
 

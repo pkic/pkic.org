@@ -34,6 +34,12 @@
     width: 100%;
   }
 
+  /* A contract-backed subject field has a state mark. Keep it beside the
+     input text rather than over the insertion menu at the end of the row. */
+  .pk-field__control > .pk-template-subject + .pk-field__state {
+    right: 3rem;
+  }
+
   .pk-overlay-editor {
     position: relative;
   }

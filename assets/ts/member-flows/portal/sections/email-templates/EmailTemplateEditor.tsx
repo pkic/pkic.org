@@ -15,6 +15,7 @@ import { Select, TextInput, Textarea } from "../../../../ui/TextControl";
 import { postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
 import { highlightTemplateSyntax } from "../../../../shared/email-template-syntax";
+import { bodyTemplateInsertions, subjectTemplateInsertions } from "../../../../shared/email-template-insertions";
 import type { EmailTemplateVersion } from "../../../../../shared/schemas/email-templates";
 import {
   TEMPLATE_HELPERS,
@@ -379,11 +380,9 @@ export function TemplateEditor({
                     <Menu
                       label="Insert subject variable"
                       align="end"
-                      items={TEMPLATE_HELPERS.filter((item) => item.category === "Variables").map((item) => ({
-                        id: item.label,
-                        label: item.label,
+                      items={subjectTemplateInsertions((snippet) => insertSnippet(snippet, "subject")).map((item) => ({
+                        ...item,
                         disabled: !canWrite,
-                        onSelect: () => insertSnippet(item.snippet, "subject"),
                       }))}
                     >
                       <IconBraces />
@@ -402,21 +401,9 @@ export function TemplateEditor({
                       label="Body"
                       initialValue={body}
                       initialMode="visual"
-                      templateInsertions={[
-                        ...TEMPLATE_HELPERS.map((item) => ({
-                          id: item.label,
-                          label: item.label,
-                          disabled: !canWrite,
-                          onSelect: () => insertSnippet(item.snippet, "body"),
-                        })),
-                        ...TEMPLATE_PARTIALS.map((partial, index) => ({
-                          id: `partial-${partial.name}`,
-                          label: `${partial.name} — ${partial.description}`,
-                          separatorBefore: index === 0,
-                          disabled: !canWrite,
-                          onSelect: () => insertSnippet(`{{> ${partial.name}}}`, "body"),
-                        })),
-                      ]}
+                      templateInsertions={bodyTemplateInsertions((snippet) => insertSnippet(snippet, "body")).map(
+                        (item) => ({ ...item, disabled: !canWrite }),
+                      )}
                       editorRef={bodyEditor}
                       disabled={!canWrite}
                       onFocus={() => {
