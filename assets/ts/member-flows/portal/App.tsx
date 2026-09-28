@@ -38,6 +38,7 @@ import { McpAuthorization } from "./shell/McpAuthorization";
 import { meetingEntryReturnUrl } from "../../../shared/meeting-entry-navigation";
 import { MeetingEntryReturn } from "./shell/MeetingEntryReturn";
 import { useSessionExpiry } from "./use-session-expiry";
+import { useSessionActivity } from "./use-session-activity";
 
 async function verifyMagicLink(token: string): Promise<PortalSession> {
   const session = await postJson("/api/v1/auth/verify-link", { token }, userAuthEstablishedResponseSchema);
@@ -76,6 +77,7 @@ export function App() {
   }
 
   useSessionExpiry();
+  useSessionActivity();
 
   async function restartSignIn(): Promise<void> {
     setSessionError(null);

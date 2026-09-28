@@ -103,6 +103,7 @@ async function fulfillGroupRoute(route: Route, event: ReturnType<typeof groupEve
 const adminSessionResponse = userAuthSessionResponseSchema.parse({
   success: true,
   expiresAt: "2099-12-31T23:59:59.000Z",
+  idleExpiresAt: "2099-12-31T23:59:59.000Z",
   identity: { id: "10000000000000000000000000000001", email: "admin@pkic.org" },
   staff: {
     id: "admin-1",
@@ -117,6 +118,7 @@ const adminSessionResponse = userAuthSessionResponseSchema.parse({
     ],
     grants: [],
     expiresAt: null,
+    idleExpiresAt: "2099-12-31T23:59:59.000Z",
   },
 });
 

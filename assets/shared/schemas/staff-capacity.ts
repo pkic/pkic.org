@@ -16,5 +16,6 @@ export const publicStaffCapacitySchema = z.object({
   scopes: z.array(z.string().min(1)),
   grants: z.array(publicStaffGrantSchema),
   expiresAt: z.string().nullable(),
+  idleExpiresAt: z.string().optional(),
 });
 export type PublicStaffCapacity = z.infer<typeof publicStaffCapacitySchema>;

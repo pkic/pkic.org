@@ -13,6 +13,7 @@ export function portalSessionFixture(capacities: PortalSessionFixtureOptions): P
   return {
     success: true,
     expiresAt: "2099-01-01T00:00:00.000Z",
+    idleExpiresAt: "2099-01-01T00:00:00.000Z",
     identity,
     staffReauthenticationRequired: false,
     sponsors: [],
@@ -25,6 +26,7 @@ export function portalSessionFixture(capacities: PortalSessionFixtureOptions): P
             scopes: [],
             grants: capacities.grants ?? [],
             expiresAt: "2026-08-26T00:00:00.000Z",
+            idleExpiresAt: "2026-08-26T00:00:00.000Z",
           },
         }
       : {}),

@@ -6,6 +6,7 @@ import { publicStaffCapacity } from "./admin-identity";
 
 export function publicUserSession(result: UserSessionResult): {
   expiresAt: string;
+  idleExpiresAt: string;
   identity: { id: string; email: string };
   staff?: PublicStaffCapacity;
   staffReauthenticationRequired: boolean;
@@ -16,8 +17,16 @@ export function publicUserSession(result: UserSessionResult): {
 } {
   return {
     expiresAt: result.expiresAt,
+    idleExpiresAt: result.idleExpiresAt,
     identity: result.identity,
-    ...(result.staff ? { staff: publicStaffCapacity(result.staff) } : {}),
+    ...(result.staff
+      ? {
+          staff: {
+            ...publicStaffCapacity(result.staff),
+            idleExpiresAt: result.staffIdleExpiresAt!,
+          },
+        }
+      : {}),
     staffReauthenticationRequired: result.staffReauthenticationRequired ?? false,
     ...(result.member ? { member: result.member } : {}),
     sponsors: result.sponsors,

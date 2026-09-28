@@ -35,6 +35,7 @@ export const userIdentitySchema = z.object({
 
 const userCapacityFields = {
   expiresAt: utcInstantSchema,
+  idleExpiresAt: utcInstantSchema,
   identity: userIdentitySchema,
   staff: publicStaffCapacitySchema.optional(),
   /** The identity is still staff-eligible, but its shorter-lived elevation has ended. */

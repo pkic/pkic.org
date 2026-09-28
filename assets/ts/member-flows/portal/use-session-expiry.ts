@@ -6,8 +6,13 @@ export function useSessionExpiry(): void {
   const session = portalSession.value;
   useEffect(() => {
     if (!session) return;
-    const sessionDeadline = Date.parse(session.expiresAt);
-    const staffDeadline = session.staff?.expiresAt ? Date.parse(session.staff.expiresAt) : Number.POSITIVE_INFINITY;
+    const sessionDeadline = Math.min(Date.parse(session.expiresAt), Date.parse(session.idleExpiresAt));
+    const staffDeadline = session.staff
+      ? Math.min(
+          session.staff.expiresAt ? Date.parse(session.staff.expiresAt) : Number.POSITIVE_INFINITY,
+          session.staff.idleExpiresAt ? Date.parse(session.staff.idleExpiresAt) : Number.POSITIVE_INFINITY,
+        )
+      : Number.POSITIVE_INFINITY;
     const deadline = Math.min(sessionDeadline, staffDeadline);
     let timer: ReturnType<typeof setTimeout>;
     function check() {

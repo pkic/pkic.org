@@ -34,7 +34,11 @@ afterEach(async () => {
 async function signIn(milliseconds = 1000, staff = false, member = true) {
   const session = portalSessionFixture({ member, staff });
   session.expiresAt = new Date(Date.now() + milliseconds).toISOString();
-  if (session.staff) session.staff.expiresAt = new Date(Date.now() + 500).toISOString();
+  session.idleExpiresAt = session.expiresAt;
+  if (session.staff) {
+    session.staff.expiresAt = new Date(Date.now() + 500).toISOString();
+    session.staff.idleExpiresAt = session.staff.expiresAt;
+  }
   await act(async () => {
     savePortalSession(session);
     render(<Harness />, root);

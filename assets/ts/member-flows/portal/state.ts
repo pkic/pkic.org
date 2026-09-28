@@ -61,7 +61,7 @@ export function expireStaffCapacity(): void {
 }
 
 export function savePortalSession(next: PortalSession): void {
-  if (Date.parse(next.expiresAt) <= Date.now()) {
+  if (Math.min(Date.parse(next.expiresAt), Date.parse(next.idleExpiresAt)) <= Date.now()) {
     expirePortalSession();
     return;
   }

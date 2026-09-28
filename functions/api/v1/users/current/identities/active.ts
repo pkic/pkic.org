@@ -29,6 +29,7 @@ export const CurrentUserActiveIdentityPut = openApiRoute(
       exp: sessionExpiresAtToExp(switched.expiresAt!),
       identityId: switched.identityId,
       state: currentClaims?.ok ? currentClaims.claims.state : undefined,
+      staffLastActivityAt: currentClaims?.ok ? (currentClaims.claims.staffLastActivityAt ?? 0) : 0,
     });
 
     const response = jsonPrivate(await getMyProfile(db, switched));

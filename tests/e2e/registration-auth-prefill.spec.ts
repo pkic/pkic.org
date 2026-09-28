@@ -11,6 +11,7 @@ test("a signed-in nonmember sees saved contact details without an empty identity
       json: userAuthSessionResponseSchema.parse({
         success: true,
         expiresAt: "2099-12-31T23:59:59.000Z",
+        idleExpiresAt: "2099-12-31T23:59:59.000Z",
         identity: { id: USER_ID, email: "ada@example.test" },
         eventParticipation: true,
       }),

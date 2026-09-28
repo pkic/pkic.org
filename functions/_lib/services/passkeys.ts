@@ -22,9 +22,9 @@ import { nowIso } from "../utils/time";
 import { normalizeEmail } from "../validation";
 import { resolveIdentityCapacities } from "../auth/identity-capacities";
 import {
+  createEstablishedUserSessionResult,
   prepareUserSession,
   signUserSessionToken,
-  userStaffExpiresAt,
   type UserSessionResult,
 } from "../auth/user-session";
 import { resolveMemberSessionTtlHours } from "../auth/session-policy";
@@ -33,9 +33,6 @@ import {
   memberSignInAuthorizationEvidence,
   pendingIdentitySignInAuthorizationEvidence,
 } from "../auth/identity-capacities";
-import { AUTH_SCOPES } from "../auth/scopes";
-import { createUserBackedAuthAdmin } from "../auth/admin-identity";
-import { computeGrantsForUser } from "../auth/permissions";
 import { prepareAuthorizationGuard } from "../db/authorization-guard";
 import { sponsorUserSignInAuthorizationEvidence } from "../auth/sponsor-capacity";
 import { sessionExpiresAtToExp } from "../auth/session-engine";
@@ -507,31 +504,14 @@ export async function completePasskeyAuthentication(
     expiresAt: prepared.expiresAt,
     capacities,
   });
-  const session: UserSessionResult = {
+  const session: UserSessionResult = await createEstablishedUserSessionResult(db, prepared, {
     identity: resolved.identity,
-    sessionId: prepared.sessionId,
-    expiresAt: prepared.expiresAt,
-    ...(resolved.staff
-      ? {
-          staff: createUserBackedAuthAdmin({
-            id: resolved.staff.id,
-            email: resolved.staff.email,
-            role: resolved.staff.role,
-            scopes: resolved.staff.role === "admin" ? [...AUTH_SCOPES] : [],
-            grants: await computeGrantsForUser(db, resolved.staff.id, resolved.member?.memberId ?? null),
-            memberId: resolved.member?.memberId ?? null,
-            sessionId: prepared.sessionId,
-            expiresAt: userStaffExpiresAt(prepared.createdAt, prepared.expiresAt),
-          }),
-        }
-      : {}),
-    ...(resolved.member
-      ? { member: { ...resolved.member, sessionId: prepared.sessionId, expiresAt: prepared.expiresAt } }
-      : {}),
+    staff: resolved.staff,
+    member: resolved.member,
     sponsors: resolved.sponsors,
     pendingIdentityCount: resolved.pendingIdentityCount,
     eventParticipation: resolved.eventParticipation,
-  };
+  });
   const token = await signUserSessionToken(signingSecret, {
     sub: resolved.identity.id,
     sid: prepared.sessionId,

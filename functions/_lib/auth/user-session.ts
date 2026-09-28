@@ -7,14 +7,11 @@ import { hasEventParticipation, eventParticipantSignInEvidence } from "./event-p
  * The token only identifies the user/session and carries non-authoritative
  * context hints used by the read-replica and membership-context adapters.
  */
-import type { SponsorCapacity } from "../../../assets/shared/schemas/sponsor-access";
-import type { AuthMember, DatabaseLike, Env, StatementLike, UserBackedAuthAdmin } from "../types";
+import type { DatabaseLike, Env, StatementLike } from "../types";
 import { all, first } from "../db/queries";
 import { AppError } from "../errors";
 import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
-import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
-import { createUserBackedAuthAdmin } from "./admin-identity";
 import {
   findEligibleStaffUserById,
   staffSignInAuthorizationEvidence,
@@ -22,22 +19,14 @@ import {
   memberSignInAuthorizationEvidence,
   countPendingIdentitiesForUser,
   pendingIdentitySignInAuthorizationEvidence,
-  type EligibleStaffUser,
 } from "./identity-capacities";
-import { computeGrantsForUser } from "./permissions";
-import { AUTH_SCOPES } from "./scopes";
 import {
   assertSessionActive,
   fetchSessionRow,
-  getBearerToken,
-  getSessionCookieToken,
   prepareSessionRow,
-  serializeExpiredSessionCookie,
-  serializeSessionCookie,
   sessionExpiresAtToExp,
   type SessionTableConfig,
 } from "./session-engine";
-import { USER_SESSION_COOKIE_NAME, USER_SESSION_COOKIE_PATH, USER_SESSION_TOKEN_HEADER } from "./session-cookies";
 import {
   assertEmailAuthCapabilityEmail,
   commitEmailAuthRedemption,
@@ -54,92 +43,31 @@ import {
   sponsorUserSignInAuthorizationEvidence,
   verifySponsorSignInCapability,
 } from "./sponsor-capacity";
+import {
+  DEFAULT_USER_SESSION_IDLE_TTL_HOURS,
+  sessionIdleExpiresAt,
+  STAFF_SESSION_IDLE_TTL_HOURS,
+} from "./session-policy";
+import {
+  getUserSessionToken,
+  signUserSessionToken,
+  verifyUserSessionToken,
+  type UserSessionTokenClaims,
+} from "./user-session-token";
+import {
+  createEstablishedUserSessionResult,
+  createStaffSessionActor,
+  userStaffExpiresAt,
+  type UserSessionResult,
+} from "./user-session-result";
 
 const USER_SESSIONS: SessionTableConfig = { table: "sessions", subjectColumn: "user_id" };
-const STAFF_CAPACITY_TTL_HOURS = 8;
-const USER_SESSION_TOKEN_TYPE = "user-session";
-
-export interface UserSessionTokenClaims {
-  typ: typeof USER_SESSION_TOKEN_TYPE;
-  sub: string;
-  sid: string;
-  exp: number;
-  /** Non-authoritative selected acting-identity hint. Revalidated on every request. */
-  iid?: string;
-  /** Non-authoritative D1 read-replica bookmark hint. */
-  state?: string;
-}
-
-export interface UserSessionResult {
-  identity: { id: string; email: string };
-  sessionId: string;
-  expiresAt: string;
-  staff?: UserBackedAuthAdmin;
-  staffReauthenticationRequired?: boolean;
-  member?: AuthMember;
-  sponsors: SponsorCapacity[];
-  pendingIdentityCount: number;
-  eventParticipation?: boolean;
-}
 
 export interface PreparedUserSession {
   sessionId: string;
   expiresAt: string;
   createdAt: string;
   statement: StatementLike;
-}
-
-function isUserSessionClaims(claims: object): claims is UserSessionTokenClaims {
-  const candidate = claims as Partial<UserSessionTokenClaims>;
-  return (
-    candidate.typ === USER_SESSION_TOKEN_TYPE &&
-    typeof candidate.sub === "string" &&
-    typeof candidate.sid === "string" &&
-    typeof candidate.exp === "number" &&
-    (candidate.iid === undefined || typeof candidate.iid === "string") &&
-    (candidate.state === undefined || typeof candidate.state === "string")
-  );
-}
-
-export async function signUserSessionToken(
-  secret: string,
-  payload: Pick<UserSessionTokenClaims, "sub" | "sid" | "exp"> & { identityId?: string | null; state?: string | null },
-): Promise<string> {
-  return signJwt(secret, {
-    typ: USER_SESSION_TOKEN_TYPE,
-    sub: payload.sub,
-    sid: payload.sid,
-    exp: payload.exp,
-    ...(payload.identityId ? { iid: payload.identityId } : {}),
-    ...(payload.state ? { state: payload.state } : {}),
-  });
-}
-
-export async function verifyUserSessionToken(
-  secret: string,
-  token: string,
-): Promise<JwtVerifyResult<UserSessionTokenClaims>> {
-  const result = await verifyJwt<object>(secret, token);
-  if (!result.ok) return result;
-  return isUserSessionClaims(result.claims) ? { ok: true, claims: result.claims } : { ok: false, reason: "invalid" };
-}
-
-export function getUserSessionCookieToken(request: Request): string | null {
-  return getSessionCookieToken(request, USER_SESSION_COOKIE_NAME);
-}
-
-export function getUserSessionToken(request: Request): string | null {
-  return (
-    request.headers.get(USER_SESSION_TOKEN_HEADER) ?? getUserSessionCookieToken(request) ?? getBearerToken(request)
-  );
-}
-
-export function serializeUserSessionCookie(token: string, request: Request): string {
-  return serializeSessionCookie(USER_SESSION_COOKIE_NAME, USER_SESSION_COOKIE_PATH, token, request);
-}
-
-export function serializeExpiredUserSessionCookie(request: Request): string {
-  return serializeExpiredSessionCookie(USER_SESSION_COOKIE_NAME, USER_SESSION_COOKIE_PATH, request);
 }
 
 export function prepareUserSession(
@@ -150,31 +78,19 @@ export function prepareUserSession(
   return prepareSessionRow(db, USER_SESSIONS, userId, sessionTtlHours);
 }
 
-export function userStaffExpiresAt(createdAt: string, sessionExpiresAt: string): string {
-  const elevatedExpiresAt = new Date(new Date(createdAt).getTime() + STAFF_CAPACITY_TTL_HOURS * 60 * 60 * 1000);
-  const sessionExpiry = new Date(sessionExpiresAt);
-  return (elevatedExpiresAt < sessionExpiry ? elevatedExpiresAt : sessionExpiry).toISOString();
+function activityAtOrCreatedAt(activityAt: number | undefined, createdAt: string): number {
+  if (activityAt !== undefined) return activityAt;
+  const createdAtSeconds = Math.floor(new Date(createdAt).getTime() / 1000);
+  if (!Number.isSafeInteger(createdAtSeconds)) {
+    throw new AppError(401, "AUTH_INVALID", "Invalid user session activity timestamp");
+  }
+  return createdAtSeconds;
 }
 
-async function toStaff(
-  db: DatabaseLike,
-  staff: EligibleStaffUser,
-  sessionId: string,
-  expiresAt: string,
-  memberId: string | null,
-  state?: string | null,
-): Promise<UserBackedAuthAdmin> {
-  return createUserBackedAuthAdmin({
-    id: staff.id,
-    email: staff.email,
-    role: staff.role,
-    scopes: staff.role === "admin" ? [...AUTH_SCOPES] : [],
-    grants: await computeGrantsForUser(db, staff.id, memberId),
-    memberId,
-    sessionId,
-    expiresAt,
-    ...(state ? { state } : {}),
-  });
+function assertActivityActive(idleExpiresAt: string): void {
+  if (new Date(idleExpiresAt).getTime() <= Date.now()) {
+    throw new AppError(401, "AUTH_EXPIRED", "User session expired due to inactivity");
+  }
 }
 
 async function findActiveIdentity(
@@ -250,11 +166,11 @@ async function findCapabilitySignInIdentity(
 }
 
 /** Resolve identity and capacities from one session row and live D1 state. */
-export async function resolveUserSessionFromRequest(
+async function resolveUserSessionContext(
   db: DatabaseLike,
   request: Request,
   env: Pick<Env, "INTERNAL_SIGNING_SECRET">,
-): Promise<UserSessionResult> {
+): Promise<{ session: UserSessionResult; claims: UserSessionTokenClaims }> {
   const token = getUserSessionToken(request);
   if (!token) throw new AppError(401, "AUTH_REQUIRED", "Missing user session token");
   if (!env.INTERNAL_SIGNING_SECRET) {
@@ -272,6 +188,9 @@ export async function resolveUserSessionFromRequest(
     await fetchSessionRow(db, USER_SESSIONS, verified.claims.sid, verified.claims.sub),
     "user",
   );
+  const lastActivityAt = activityAtOrCreatedAt(verified.claims.lastActivityAt, row.createdAt);
+  const idleExpiresAt = sessionIdleExpiresAt(lastActivityAt, row.expiresAt, DEFAULT_USER_SESSION_IDLE_TTL_HOURS);
+  assertActivityActive(idleExpiresAt);
   const [identity, staff, member, sponsors, pendingIdentityCount, eventParticipation] = await Promise.all([
     findActiveIdentity(db, verified.claims.sub),
     findEligibleStaffUserById(db, verified.claims.sub),
@@ -284,24 +203,88 @@ export async function resolveUserSessionFromRequest(
     throw new AppError(401, "AUTH_INVALID", "This user session no longer has an active capacity");
   }
   const elevatedStaffExpiry = userStaffExpiresAt(row.createdAt, row.expiresAt);
-  const staffActive = new Date(elevatedStaffExpiry).getTime() > Date.now();
+  const staffLastActivityAt = activityAtOrCreatedAt(verified.claims.staffLastActivityAt, row.createdAt);
+  const staffIdleExpiresAt = sessionIdleExpiresAt(
+    staffLastActivityAt,
+    elevatedStaffExpiry,
+    STAFF_SESSION_IDLE_TTL_HOURS,
+  );
+  const staffActive = new Date(staffIdleExpiresAt).getTime() > Date.now();
   if (!staffActive && !member && sponsors.length === 0 && pendingIdentityCount === 0 && !eventParticipation) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This account has no active portal capacity");
   }
   const staffActor =
     staff && staffActive
-      ? await toStaff(db, staff, row.id, elevatedStaffExpiry, member?.memberId ?? null, verified.claims.state)
+      ? await createStaffSessionActor(
+          db,
+          staff,
+          row.id,
+          elevatedStaffExpiry,
+          member?.memberId ?? null,
+          verified.claims.state,
+        )
       : null;
   return {
-    identity: { id: identity.id, email: identity.email },
-    sessionId: row.id,
-    expiresAt: row.expiresAt,
-    ...(staffActor ? { staff: staffActor } : {}),
-    ...(staff && !staffActive ? { staffReauthenticationRequired: true } : {}),
-    ...(member ? { member: { ...member, sessionId: row.id, expiresAt: row.expiresAt } } : {}),
-    sponsors,
-    pendingIdentityCount,
-    eventParticipation,
+    claims: verified.claims,
+    session: {
+      identity: { id: identity.id, email: identity.email },
+      sessionId: row.id,
+      expiresAt: row.expiresAt,
+      idleExpiresAt,
+      ...(staffActor ? { staff: staffActor } : {}),
+      ...(staffActor ? { staffIdleExpiresAt } : {}),
+      ...(staff && !staffActive ? { staffReauthenticationRequired: true } : {}),
+      ...(member ? { member: { ...member, sessionId: row.id, expiresAt: row.expiresAt } } : {}),
+      sponsors,
+      pendingIdentityCount,
+      eventParticipation,
+    },
+  };
+}
+
+export async function resolveUserSessionFromRequest(
+  db: DatabaseLike,
+  request: Request,
+  env: Pick<Env, "INTERNAL_SIGNING_SECRET">,
+): Promise<UserSessionResult> {
+  return (await resolveUserSessionContext(db, request, env)).session;
+}
+
+export async function refreshUserSessionFromRequest(
+  db: DatabaseLike,
+  request: Request,
+  env: Pick<Env, "INTERNAL_SIGNING_SECRET">,
+): Promise<{ session: UserSessionResult; token: string }> {
+  const resolved = await resolveUserSessionContext(db, request, env);
+  const session = resolved.session;
+  const secret = env.INTERNAL_SIGNING_SECRET;
+  if (!secret) {
+    throw new AppError(401, "AUTH_REQUIRED", "Missing user session token");
+  }
+
+  const activityAt = Math.floor(Date.now() / 1000);
+  const idleExpiresAt = sessionIdleExpiresAt(activityAt, session.expiresAt, DEFAULT_USER_SESSION_IDLE_TTL_HOURS);
+  const staffIdleExpiresAt = session.staff
+    ? sessionIdleExpiresAt(activityAt, session.staff.expiresAt!, STAFF_SESSION_IDLE_TTL_HOURS)
+    : undefined;
+  const token = await signUserSessionToken(secret, {
+    sub: resolved.claims.sub,
+    sid: resolved.claims.sid,
+    exp: resolved.claims.exp,
+    identityId: resolved.claims.iid,
+    state: resolved.claims.state,
+    lastActivityAt: activityAt,
+    // An expired staff elevation can only be restored through authentication,
+    // never by refreshing the remaining member/sponsor session.
+    staffLastActivityAt: session.staff ? activityAt : (resolved.claims.staffLastActivityAt ?? 0),
+  });
+  return {
+    session: {
+      ...session,
+      idleExpiresAt,
+      ...(staffIdleExpiresAt ? { staffIdleExpiresAt } : {}),
+    },
+    token,
   };
 }
 
@@ -477,19 +460,14 @@ export async function redeemUserSignInCapability(
       prepared.statement,
     ],
   });
-  const staffExpiry = staff ? userStaffExpiresAt(prepared.createdAt, prepared.expiresAt) : null;
-  const session: UserSessionResult = {
+  const session = await createEstablishedUserSessionResult(db, prepared, {
     identity,
-    sessionId: prepared.sessionId,
-    expiresAt: prepared.expiresAt,
-    ...(staff && staffExpiry
-      ? { staff: await toStaff(db, staff, prepared.sessionId, staffExpiry, member?.memberId ?? null) }
-      : {}),
-    ...(member ? { member: { ...member, sessionId: prepared.sessionId, expiresAt: prepared.expiresAt } } : {}),
+    staff,
+    member,
     sponsors,
     pendingIdentityCount,
     eventParticipation,
-  };
+  });
   const token = await signUserSessionToken(payload.signingSecret, {
     sub: identity.id,
     sid: prepared.sessionId,
@@ -566,19 +544,14 @@ export async function redeemSponsorSignInCapability(
   }
   const pendingIdentityCount = await countPendingIdentitiesForUser(db, preparedUser.user.id);
   const eventParticipation = await hasEventParticipation(db, preparedUser.user.id);
-  const staffExpiry = staff ? userStaffExpiresAt(prepared.createdAt, prepared.expiresAt) : null;
-  const session: UserSessionResult = {
+  const session = await createEstablishedUserSessionResult(db, prepared, {
     identity: { id: preparedUser.user.id, email: preparedUser.user.email },
-    sessionId: prepared.sessionId,
-    expiresAt: prepared.expiresAt,
-    ...(staff && staffExpiry
-      ? { staff: await toStaff(db, staff, prepared.sessionId, staffExpiry, member?.memberId ?? null) }
-      : {}),
-    ...(member ? { member: { ...member, sessionId: prepared.sessionId, expiresAt: prepared.expiresAt } } : {}),
+    staff,
+    member,
     sponsors,
     pendingIdentityCount,
     eventParticipation,
-  };
+  });
   const token = await signUserSessionToken(payload.signingSecret, {
     sub: preparedUser.user.id,
     sid: prepared.sessionId,
@@ -588,4 +561,16 @@ export async function redeemSponsorSignInCapability(
   return { session, token };
 }
 
-export { USER_SESSION_COOKIE_NAME, USER_SESSION_COOKIE_PATH, USER_SESSION_TOKEN_HEADER } from "./session-cookies";
+export {
+  getUserSessionCookieToken,
+  getUserSessionToken,
+  serializeExpiredUserSessionCookie,
+  serializeUserSessionCookie,
+  signUserSessionToken,
+  verifyUserSessionToken,
+  USER_SESSION_COOKIE_NAME,
+  USER_SESSION_COOKIE_PATH,
+  USER_SESSION_TOKEN_HEADER,
+  type UserSessionTokenClaims,
+} from "./user-session-token";
+export { createEstablishedUserSessionResult, userStaffExpiresAt, type UserSessionResult } from "./user-session-result";
