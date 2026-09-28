@@ -244,7 +244,7 @@ export function EventEmailCampaign({
       const count = res.queuedRecipients;
       notify(`Campaign accepted for ${count} recipient${count !== 1 ? "s" : ""}`, "success");
       setStatus(
-        `${res.stagedRecipients} of ${count} recipients added to the outbox. The rest are saved; you can leave this page and check their progress in the Email outbox.`,
+        `${res.stagedRecipients} of ${count} recipients added to the outbox. Open the Email outbox to add any remaining campaign messages.`,
       );
       setPreview(null);
       setPreviewConfirmed(false);
