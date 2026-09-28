@@ -172,7 +172,9 @@ describe("portal landing", () => {
 
     const headings = [...container.querySelectorAll("h3")].map((heading) => heading.textContent);
     expect(headings).toEqual(["Upcoming meetings", "Upcoming events"]);
-    expect(container.querySelector(".pk-home-all-clear")?.textContent).toContain("all caught up");
+    expect([...container.querySelectorAll("h3")].some((heading) => heading.textContent === "Needs your voice")).toBe(
+      false,
+    );
     expect(container.querySelector('nav[aria-label="Quick links"] a[href="#/groups"]')).not.toBeNull();
 
     // A list of links with no name is announced as "list"; several of them on

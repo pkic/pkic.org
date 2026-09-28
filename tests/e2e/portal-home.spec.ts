@@ -72,7 +72,7 @@ test("a member's Home shows their organization and a pending review once one exi
   await expect(meetingsPanel.locator("footer")).toContainText("Do not share");
   await meetingsPanel.screenshot({ path: test.info().outputPath("upcoming-meetings.png") });
 
-  await expect(page.getByText("You’re all caught up. Nothing needs your response right now.")).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Needs your voice" })).toHaveCount(0);
 
   const affiliation = page.locator(".pk-home-affiliation");
   await expect(affiliation).toBeVisible();

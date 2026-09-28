@@ -1,66 +1,31 @@
 @layer components {
-  .pk-home-intro {
-    position: relative;
-    overflow: hidden;
+  .pk-home-intro .pk-panel__body {
     display: grid;
-    gap: var(--pk-4);
-    padding: var(--pk-5);
-    border: 1px solid var(--pk-line);
-    border-radius: var(--pk-radius-lg);
-    background: var(--pk-grad-sheen), linear-gradient(125deg, var(--pk-accent-soft), var(--pk-info-soft));
-  }
-
-  .pk-home-intro::before {
-    position: absolute;
-    inset: 0 0 auto;
-    height: 4px;
-    background: var(--pk-stripe);
-    content: "";
+    gap: var(--pk-3);
   }
 
   .pk-home-intro .pk-page-header__title {
     font-size: var(--pk-text-2xl);
   }
 
+  .pk-home-affiliation,
   .pk-home-shortcuts {
-    display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(min(100%, 10rem), 1fr));
-    gap: var(--pk-2);
-  }
-
-  .pk-home-shortcut {
     display: flex;
     align-items: center;
-    justify-content: space-between;
-    gap: var(--pk-2);
-    min-width: 0;
-    padding: var(--pk-3);
-    border: 1px solid var(--pk-line);
-    border-radius: var(--pk-radius);
-    background: var(--pk-surface);
-    color: var(--pk-ink);
-    font-weight: 600;
-    text-decoration: none;
+    flex-wrap: wrap;
+    gap: var(--pk-2) var(--pk-3);
   }
 
-  .pk-home-shortcut:hover {
-    border-color: var(--pk-accent-strong);
-    color: var(--pk-accent-ink);
+  .pk-home-shortcuts {
+    padding-top: var(--pk-3);
+    border-top: 1px solid var(--pk-line-soft);
   }
 
-  .pk-home-shortcut--group { box-shadow: inset 4px 0 var(--pk-accent-strong); }
-  .pk-home-shortcut--event { box-shadow: inset 4px 0 var(--pk-info); }
-  .pk-home-shortcut--sponsor { box-shadow: inset 4px 0 var(--pk-warn); }
-  .pk-home-shortcut--profile { box-shadow: inset 4px 0 var(--pk-ok); }
-
-  .pk-home-all-clear {
-    margin: 0;
-    padding: var(--pk-3) var(--pk-4);
-    border: 1px solid var(--pk-ok);
-    border-radius: var(--pk-radius);
-    background: var(--pk-ok-soft);
-    color: var(--pk-ok-ink);
-    font-size: var(--pk-text-sm);
+  .pk-home-affiliation .pk-inline-list,
+  .pk-home-shortcuts .pk-inline-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-2) var(--pk-3);
   }
 
   .pk-home-grid {
@@ -70,45 +35,10 @@
     gap: var(--pk-4);
   }
 
-  .pk-home-card .pk-panel__body {
-    padding: var(--pk-4);
-  }
-
-  .pk-home-attention .pk-panel__header {
-    background: var(--pk-warn-soft);
-  }
-
-  .pk-home-attention .pk-panel__title {
-    color: var(--pk-warn-ink);
-  }
-
-  .pk-home-card .pk-empty-state {
-    padding: var(--pk-2) 0;
-  }
-
   .pk-home-card .pk-empty-state__title {
     font-size: var(--pk-text-sm);
     font-weight: 500;
-  }
-
-  .pk-home-attention .pk-empty-state__title {
-    font-size: var(--pk-text-sm);
-    font-weight: 500;
-  }
-
-  .pk-home-affiliation {
-    display: flex;
-    align-items: center;
-    flex-wrap: wrap;
-    gap: var(--pk-2) var(--pk-3);
-    padding-top: var(--pk-3);
-    border-top: 1px solid var(--pk-line-soft);
-  }
-
-  .pk-home-affiliation .pk-inline-list {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--pk-2) var(--pk-3);
+    color: var(--pk-ink-muted);
   }
 
   .pk-home-event-heading {
@@ -126,17 +56,15 @@
     line-height: 1.3;
   }
 
-  .pk-home-grid .pk-home-card:first-child .pk-panel__header {
-    background: var(--pk-accent-soft);
-  }
-
-  .pk-home-grid .pk-home-card:last-child .pk-panel__header {
-    background: var(--pk-info-soft);
-  }
-
   @media (max-width: 52rem) {
     .pk-home-grid {
       grid-template-columns: minmax(0, 1fr);
+    }
+  }
+
+  @media (max-width: 48rem) {
+    .pk-home-meetings-footer {
+      padding-inline: var(--pk-3);
     }
   }
 }

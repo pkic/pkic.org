@@ -39,17 +39,15 @@ type UserOrganization = z.infer<typeof userOrganizationsListResponseSchema>["org
 
 function PanelCard({
   title,
-  className,
   children,
   footer,
 }: {
   title: string;
-  className?: string;
   children: ComponentChildren;
   footer?: ComponentChildren;
 }) {
   return (
-    <Panel class={["pk-home-card", className].filter(Boolean).join(" ")}>
+    <Panel class="pk-home-card">
       <PanelHeader title={title} />
       <PanelBody>{children}</PanelBody>
       {footer && <footer class="pk-home-meetings-footer">{footer}</footer>}
@@ -104,16 +102,10 @@ function AttentionPanel() {
   const error = votes.error ?? forms.error ?? organizations.error;
   const count = openBallots.length + openSurveys.length + pendingReviews.length;
 
-  if (!loading && !error && count === 0) {
-    return (
-      <p class="pk-home-all-clear" role="status">
-        You’re all caught up. Nothing needs your response right now.
-      </p>
-    );
-  }
+  if (!loading && !error && count === 0) return null;
 
   return (
-    <PanelCard title="Needs your voice" className="pk-home-attention">
+    <PanelCard title="Needs your voice">
       <PanelState loading={loading} error={error} empty="Nothing is waiting on you right now." count={count} />
       {!loading && !error && count > 0 && (
         <ul class="pk-plain-list pk-stack pk-stack--tight" aria-label="Items waiting on you">
@@ -349,25 +341,26 @@ function OrganizationAffiliation() {
 function HomeShortcuts() {
   const session = portalSession.value;
   const links = [
-    portalSectionEnabled(session, "groups") && { label: "Working groups", href: "/groups", tone: "group" },
-    portalSectionEnabled(session, "events") && { label: "Events", href: "/events", tone: "event" },
-    portalSectionEnabled(session, "sponsors") && { label: "Sponsorships", href: "/sponsors", tone: "sponsor" },
+    portalSectionEnabled(session, "groups") && { label: "Working groups", href: "/groups" },
+    portalSectionEnabled(session, "events") && { label: "Events", href: "/events" },
+    portalSectionEnabled(session, "sponsors") && { label: "Sponsorships", href: "/sponsors" },
     portalSectionEnabled(session, "users") &&
       session?.identity && {
         label: "My profile",
         href: `/users/${encodeURIComponent(session.identity.id)}`,
-        tone: "profile",
       },
-  ].filter((link): link is { label: string; href: string; tone: string } => Boolean(link));
+  ].filter((link): link is { label: string; href: string } => Boolean(link));
 
   return (
     <nav class="pk-home-shortcuts" aria-label="Quick links">
-      {links.map((link) => (
-        <Link key={link.href} href={link.href} class={`pk-home-shortcut pk-home-shortcut--${link.tone}`}>
-          <span>{link.label}</span>
-          <span aria-hidden="true">↗</span>
-        </Link>
-      ))}
+      <span class="pk-small pk-muted">Quick links</span>
+      <ul class="pk-inline-list">
+        {links.map((link) => (
+          <li key={link.href}>
+            <Link href={link.href}>{link.label}</Link>
+          </li>
+        ))}
+      </ul>
     </nav>
   );
 }
@@ -379,11 +372,13 @@ export function Home() {
 
   return (
     <div class="pk pk-stack">
-      <div class="pk-home-intro">
-        <PageHeader title="Home" description={firstName ? `Welcome back, ${firstName}.` : "Welcome back."} />
-        {isMember && <OrganizationAffiliation />}
-        <HomeShortcuts />
-      </div>
+      <Panel stripe class="pk-home-intro">
+        <PanelBody>
+          <PageHeader title="Home" description={firstName ? `Welcome back, ${firstName}.` : "Welcome back."} />
+          {isMember && <OrganizationAffiliation />}
+          <HomeShortcuts />
+        </PanelBody>
+      </Panel>
       {isMember && <AttentionPanel />}
       <div class="pk-home-grid">
         {isMember && <MeetingsPanel />}

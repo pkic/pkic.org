@@ -38,9 +38,9 @@ export const PROFILE_FLOW = {
     },
     {
       id: "11.6",
-      title: "A freshly approved member sees useful shortcuts and a clear response status",
+      title: "A freshly approved member sees useful shortcuts without empty activity panels",
       status: "covered",
-      note: "The dashboard surfaces what needs attention without listing old application and activity history.",
+      note: "The dashboard shows actionable work when it exists, without listing old application and activity history.",
     },
     {
       id: "11.7",
