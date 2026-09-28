@@ -31,6 +31,9 @@ interface DeclaredOperation {
 /** A well-formed identifier that matches no row, so path validation passes. */
 const ABSENT_ID = "00000000000000000000000000000000";
 const ABSENT_SLUG = "no-such-slug";
+// Each permission sweep calls every declared route in sequence. CI workerd
+// can take longer than Vitest's five-second default without any route failing.
+const ROUTE_SWEEP_TIMEOUT_MS = 30_000;
 
 function fillPath(path: string): string | null {
   // Only sweep paths whose parameters can be filled with something
@@ -108,41 +111,49 @@ describe("declared permissions are enforced", () => {
     expect(allowed).toEqual([]);
   });
 
-  it("refuses a signed-in caller who lacks the declared permission", async () => {
-    const allowed: string[] = [];
-    for (const operation of operations) {
-      if (operation.scopes.includes("analytics:read")) continue; // The outsider holds this one.
-      const response = await call(personaRequest(outsider, fillPath(operation.path)!));
-      // 403 is the boundary. 404 is acceptable only where the resource is
-      // resolved first and genuinely absent; anything 2xx means the declared
-      // permission is not actually enforced.
-      if (response.status < 400) allowed.push(`${operation.path} -> ${response.status}`);
-    }
-    expect(allowed).toEqual([]);
-  });
-
-  it("admits a caller holding exactly the declared permission and nothing else", async () => {
-    // The other half of the boundary, and the one a suite testing through a
-    // blanket administrator can never show: that a realistically scoped
-    // identity can actually do the job. An administrator holds everything, so
-    // it proves the route works for somebody — not that the permission the
-    // route declares is the permission it needs.
-    const refused: string[] = [];
-    for (const operation of operations) {
-      const holder = await seedPersona(
-        env.DB,
-        operation.scopes.map((scope) => onlyPersona(scope as Permission)),
-        { groupId: TEST_GROUPS.pqc, eventId: sweepEventId },
-      );
-      const response = await call(personaRequest(holder, fillPath(operation.path)!));
-      // 404 is fine: the identifiers match no row on purpose. 401 or 403 means
-      // the declared permission is not sufficient, so the declaration is wrong.
-      if (response.status === 401 || response.status === 403) {
-        refused.push(`${operation.path} declares ${operation.scopes.join(", ")} -> ${response.status}`);
+  it(
+    "refuses a signed-in caller who lacks the declared permission",
+    async () => {
+      const allowed: string[] = [];
+      for (const operation of operations) {
+        if (operation.scopes.includes("analytics:read")) continue; // The outsider holds this one.
+        const response = await call(personaRequest(outsider, fillPath(operation.path)!));
+        // 403 is the boundary. 404 is acceptable only where the resource is
+        // resolved first and genuinely absent; anything 2xx means the declared
+        // permission is not actually enforced.
+        if (response.status < 400) allowed.push(`${operation.path} -> ${response.status}`);
       }
-    }
-    expect(refused).toEqual([]);
-  });
+      expect(allowed).toEqual([]);
+    },
+    ROUTE_SWEEP_TIMEOUT_MS,
+  );
+
+  it(
+    "admits a caller holding exactly the declared permission and nothing else",
+    async () => {
+      // The other half of the boundary, and the one a suite testing through a
+      // blanket administrator can never show: that a realistically scoped
+      // identity can actually do the job. An administrator holds everything, so
+      // it proves the route works for somebody — not that the permission the
+      // route declares is the permission it needs.
+      const refused: string[] = [];
+      for (const operation of operations) {
+        const holder = await seedPersona(
+          env.DB,
+          operation.scopes.map((scope) => onlyPersona(scope as Permission)),
+          { groupId: TEST_GROUPS.pqc, eventId: sweepEventId },
+        );
+        const response = await call(personaRequest(holder, fillPath(operation.path)!));
+        // 404 is fine: the identifiers match no row on purpose. 401 or 403 means
+        // the declared permission is not sufficient, so the declaration is wrong.
+        if (response.status === 401 || response.status === 403) {
+          refused.push(`${operation.path} declares ${operation.scopes.join(", ")} -> ${response.status}`);
+        }
+      }
+      expect(refused).toEqual([]);
+    },
+    ROUTE_SWEEP_TIMEOUT_MS,
+  );
 
   it("names the personas it swept with", () => {
     expect(outsider.token).toBeTruthy();
