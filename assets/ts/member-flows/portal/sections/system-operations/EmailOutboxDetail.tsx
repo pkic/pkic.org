@@ -9,10 +9,19 @@ import { Spinner } from "../../../../components/Spinner";
 import { Badge } from "../../../../components/Badge";
 import { fmt } from "../../ui";
 
+function decodeOutboxRouteId(id: string): string {
+  try {
+    return decodeURIComponent(id);
+  } catch {
+    return id;
+  }
+}
+
 export function EmailOutboxDetail({ id }: { id: string }) {
+  const outboxId = decodeOutboxRouteId(id);
   const { data, error, loading } = useData(
-    () => getJson(`/api/v1/email/outbox/${encodeURIComponent(id)}`, emailOutboxDetailResponseSchema),
-    [id],
+    () => getJson(`/api/v1/email/outbox/${encodeURIComponent(outboxId)}`, emailOutboxDetailResponseSchema),
+    [outboxId],
   );
   const message = data?.message;
   return (

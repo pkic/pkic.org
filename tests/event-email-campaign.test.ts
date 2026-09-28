@@ -7,6 +7,7 @@ import {
   eventEmailCampaignPreviewResponseSchema,
   eventEmailCampaignResponseSchema,
 } from "../assets/shared/schemas/event-email-campaigns";
+import { emailOutboxResponseSchema } from "../assets/shared/schemas/email-outbox";
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import { getEventBySlug } from "../functions/_lib/services/events";
@@ -218,13 +219,26 @@ describe("event email campaign recipients", () => {
       "UPDATE invites SET unsubscribe_future = 1 WHERE invitee_email = 'late-optout@example.test'",
     ).run();
     expect(await dispatchEventEmailCampaignPage(env.DB)).toEqual({ processed: 0, queued: 0 });
-    const queued = await queryAll<{ recipient_email: string }>(env.DB, "SELECT recipient_email FROM email_outbox");
-    expect(queued).toEqual([
-      { recipient_email: "accepted@example.test" },
-      { recipient_email: "expired@example.test" },
-      { recipient_email: "late-optout@example.test" },
-      { recipient_email: "open@example.test" },
+    const queued = await queryAll<{ id: string; recipient_email: string }>(
+      env.DB,
+      "SELECT id, recipient_email FROM email_outbox",
+    );
+    expect(queued.map((row) => row.recipient_email)).toEqual([
+      "accepted@example.test",
+      "expired@example.test",
+      "late-optout@example.test",
+      "open@example.test",
     ]);
+    expect(queued.every((row) => /^[0-9a-f]{32}$/.test(row.id))).toBe(true);
+    const outbox = await app.fetch(
+      new Request("https://app.test/api/v1/email/outbox?sort=-createdAt&limit=25&offset=0", {
+        headers: { authorization: `Bearer ${token}` },
+      }),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(outbox.status).toBe(200);
+    expect(emailOutboxResponseSchema.parse(await outbox.json()).outbox).toHaveLength(4);
   });
 
   it("loads attendee details for a large event without per-recipient query batches", async () => {

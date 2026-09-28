@@ -5,7 +5,7 @@ import { signInToPortal } from "./helpers/portal-auth";
 
 test("staff inspect delivery failures and edit a scheduled job interval", async ({ page }) => {
   await signInToPortal(page, e2eAdminEmail("portal-email-templates"));
-  const id = "11111111111111111111111111111111";
+  const id = "11111111-1111-4111-8111-111111111111:alex@example.test";
   const message = {
     id,
     eventSlug: null,
@@ -32,7 +32,7 @@ test("staff inspect delivery failures and edit a scheduled job interval", async 
     usesDirectBody: false,
     hasCustomText: false,
   };
-  await page.route(`**/api/v1/email/outbox/${id}`, (route) => route.fulfill({ json: { message } }));
+  await page.route(`**/api/v1/email/outbox/${encodeURIComponent(id)}`, (route) => route.fulfill({ json: { message } }));
   await page.route("**/api/v1/email/outbox?*", (route) =>
     route.fulfill({
       json: emailOutboxResponseSchema.parse({
@@ -57,7 +57,7 @@ test("staff inspect delivery failures and edit a scheduled job interval", async 
   await page.screenshot({ path: test.info().outputPath("outbox-filter-submenu.png"), fullPage: true });
   await submenu.getByRole("menuitemradio", { name: "Failed", exact: true }).click();
   await page.getByRole("row").filter({ hasText: message.subject }).click();
-  await expect(page).toHaveURL(new RegExp(`/settings/email-outbox/${id}$`));
+  await expect(page).toHaveURL(new RegExp(`/settings/email-outbox/${encodeURIComponent(id)}$`));
 
   await expect(page.getByRole("heading", { name: "Review your organization profile" })).toBeVisible();
   await expect(page.getByRole("alert")).toContainText("Check the recipient address");

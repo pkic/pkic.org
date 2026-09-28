@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { authErrors, ok, requiresPermissions } from "./route-contract";
-import { booleanQueryFlagSchema, emailMessageTypeSchema, successResponseSchema } from "./api-common";
+import {
+  booleanQueryFlagSchema,
+  emailMessageTypeSchema,
+  normalizedEmailSchema,
+  successResponseSchema,
+} from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
@@ -25,6 +30,21 @@ export const emailOutboxStatusSchema = z.enum([
  */
 export const DIRECT_EMAIL_TEMPLATE_KEY = "__direct__";
 
+/** Campaign rows already queued with a campaign UUID and recipient address remain readable and actionable. */
+const legacyCampaignOutboxIdSchema = z
+  .string()
+  .max(291)
+  .refine((id) => {
+    const separator = id.indexOf(":");
+    return (
+      separator > 0 &&
+      z.uuid().safeParse(id.slice(0, separator)).success &&
+      normalizedEmailSchema.safeParse(id.slice(separator + 1)).success
+    );
+  });
+
+export const emailOutboxIdSchema = z.union([databaseIdSchema, legacyCampaignOutboxIdSchema]);
+
 export const EMAIL_OUTBOX_SORT_COLUMNS = ["recipient", "template", "status", "sendAfter", "createdAt"] as const;
 
 export const emailOutboxQuerySchema = listQuerySchema(EMAIL_OUTBOX_SORT_COLUMNS).extend({
@@ -36,11 +56,11 @@ export type EmailOutboxQuery = z.infer<typeof emailOutboxQuerySchema>;
 
 export const emailOutboxProcessSchema = z.object({
   limit: z.number().int().positive().max(500).default(20),
-  ids: z.array(databaseIdSchema).min(1).max(100).optional(),
+  ids: z.array(emailOutboxIdSchema).min(1).max(100).optional(),
 });
 
 export const emailOutboxResetFailedSchema = z.object({
-  ids: z.array(databaseIdSchema).min(1).max(100),
+  ids: z.array(emailOutboxIdSchema).min(1).max(100),
 });
 
 export const emailOutboxProcessResponseSchema = successResponseSchema.extend({
@@ -59,7 +79,7 @@ export type EmailOutboxProcessResponse = z.infer<typeof emailOutboxProcessRespon
 export type EmailOutboxResetFailedResponse = z.infer<typeof emailOutboxResetFailedResponseSchema>;
 
 export const emailOutboxRowSchema = z.object({
-  id: databaseIdSchema,
+  id: emailOutboxIdSchema,
   eventSlug: z.string().nullable(),
   eventName: z.string().nullable(),
   templateKey: z.string(),
@@ -139,7 +159,7 @@ export const emailOutboxDetailRouteSchema = {
   tags: ["Email"],
   ...requiresPermissions("email:read"),
   summary: "Read email delivery details",
-  request: { params: z.object({ id: databaseIdSchema }) },
+  request: { params: z.object({ id: emailOutboxIdSchema }) },
   responses: {
     ...ok("Email delivery details.", emailOutboxDetailResponseSchema),
     ...authErrors({ notFound: "Email message not found." }),

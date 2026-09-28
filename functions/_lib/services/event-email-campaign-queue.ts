@@ -2,6 +2,7 @@ import { isAttendeeCampaignAudience } from "../../../assets/shared/schemas/event
 import { prepareBulkQueueEmailChunkStatements } from "../email/outbox";
 import { DIRECT_EMAIL_TEMPLATE_KEY, directEmailBodyPayload } from "../email/direct-body";
 import type { DatabaseLike, StatementLike } from "../types";
+import { sha256Hex } from "../utils/crypto";
 import { buildEventEmailVariables, type EventRecord } from "./events";
 import { proposalPageUrl, registrationPageUrl } from "./frontend-links";
 import { registrationManageCapability } from "./registrations/capability-urls";
@@ -9,6 +10,11 @@ import { buildPersonalCampaignTemplateData } from "./event-email-campaign/templa
 import { chunkRecipients } from "./event-email-campaign/batching";
 import { findBroadcastOnlyTemplateRefs } from "./event-email-campaign/broadcast-safety";
 import type { EventEmailCampaignInput, CampaignDeliveryPage } from "./event-email-campaign/types";
+
+async function campaignOutboxIdentity(campaignId: string, email: string) {
+  const idempotencyKey = `event-campaign:${campaignId}:${email}`;
+  return { outboxId: (await sha256Hex(idempotencyKey)).slice(0, 32), idempotencyKey };
+}
 
 /** Builds a bounded outbox page for the campaign use case to commit with its cursor. */
 export async function prepareEventEmailCampaignPage(
@@ -53,8 +59,7 @@ export async function prepareEventEmailCampaignPage(
             ).manageUrl
           : undefined;
       rows.push({
-        outboxId: `${campaignId}:${recipient.email}`,
-        idempotencyKey: `event-campaign:${campaignId}:${recipient.email}`,
+        ...(await campaignOutboxIdentity(campaignId, recipient.email)),
         eventId: event.id,
         templateKey,
         recipientEmail: recipient.email,
@@ -78,8 +83,7 @@ export async function prepareEventEmailCampaignPage(
       const to = chunk[0];
       if (!to) continue;
       rows.push({
-        outboxId: `${campaignId}:${to.email}`,
-        idempotencyKey: `event-campaign:${campaignId}:${to.email}`,
+        ...(await campaignOutboxIdentity(campaignId, to.email)),
         eventId: event.id,
         templateKey,
         recipientEmail: to.email,
