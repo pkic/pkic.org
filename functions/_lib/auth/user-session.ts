@@ -75,6 +75,7 @@ export interface UserSessionResult {
   sessionId: string;
   expiresAt: string;
   staff?: UserBackedAuthAdmin;
+  staffReauthenticationRequired?: boolean;
   member?: AuthMember;
   sponsors: SponsorCapacity[];
   pendingIdentityCount: number;
@@ -296,6 +297,7 @@ export async function resolveUserSessionFromRequest(
     sessionId: row.id,
     expiresAt: row.expiresAt,
     ...(staffActor ? { staff: staffActor } : {}),
+    ...(staff && !staffActive ? { staffReauthenticationRequired: true } : {}),
     ...(member ? { member: { ...member, sessionId: row.id, expiresAt: row.expiresAt } } : {}),
     sponsors,
     pendingIdentityCount,

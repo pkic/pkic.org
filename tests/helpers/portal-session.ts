@@ -14,6 +14,7 @@ export function portalSessionFixture(capacities: PortalSessionFixtureOptions): P
     success: true,
     expiresAt: "2099-01-01T00:00:00.000Z",
     identity,
+    staffReauthenticationRequired: false,
     sponsors: [],
     pendingIdentityCount: capacities.pendingIdentityCount ?? 0,
     ...(capacities.staff

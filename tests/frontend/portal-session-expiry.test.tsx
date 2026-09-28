@@ -31,8 +31,8 @@ afterEach(async () => {
   clearAuth();
   vi.useRealTimers();
 });
-async function signIn(milliseconds = 1000, staff = false) {
-  const session = portalSessionFixture({ member: true, staff });
+async function signIn(milliseconds = 1000, staff = false, member = true) {
+  const session = portalSessionFixture({ member, staff });
   session.expiresAt = new Date(Date.now() + milliseconds).toISOString();
   if (session.staff) session.staff.expiresAt = new Date(Date.now() + 500).toISOString();
   await act(async () => {
@@ -60,7 +60,7 @@ it("checks the deadline immediately when a suspended page returns", async () => 
   });
   expect(root.textContent).toBe("Sign in");
 });
-it("uses the earlier staff deadline and cancels an old session timer after sign-in", async () => {
+it("removes expired staff authority, keeps another capacity signed in, and cancels an old session timer", async () => {
   await signIn(1000);
   await signIn(5000);
   await act(async () => {
@@ -68,6 +68,15 @@ it("uses the earlier staff deadline and cancels an old session timer after sign-
   });
   expect(root.textContent).toContain("Private organization");
   await signIn(5000, true);
+  await act(async () => {
+    await vi.advanceTimersByTimeAsync(500);
+  });
+  expect(root.textContent).toContain("Private organization");
+  expect(portalSession.value?.staff).toBeUndefined();
+  expect(portalSession.value?.staffReauthenticationRequired).toBe(true);
+});
+it("signs out a staff-only identity when its sole capacity expires", async () => {
+  await signIn(5000, true, false);
   await act(async () => {
     await vi.advanceTimersByTimeAsync(500);
   });

@@ -8,6 +8,7 @@ export function publicUserSession(result: UserSessionResult): {
   expiresAt: string;
   identity: { id: string; email: string };
   staff?: PublicStaffCapacity;
+  staffReauthenticationRequired: boolean;
   member?: AuthMember;
   sponsors: SponsorCapacity[];
   pendingIdentityCount: number;
@@ -17,6 +18,7 @@ export function publicUserSession(result: UserSessionResult): {
     expiresAt: result.expiresAt,
     identity: result.identity,
     ...(result.staff ? { staff: publicStaffCapacity(result.staff) } : {}),
+    staffReauthenticationRequired: result.staffReauthenticationRequired ?? false,
     ...(result.member ? { member: result.member } : {}),
     sponsors: result.sponsors,
     pendingIdentityCount: result.pendingIdentityCount,

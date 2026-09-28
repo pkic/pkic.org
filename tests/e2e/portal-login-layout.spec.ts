@@ -33,7 +33,7 @@ for (const viewport of [
   });
 }
 
-test("an idle expired session removes private portal content and returns to sign-in", async ({ page }) => {
+test("an expired administrator elevation keeps member access and offers a fresh sign-in", async ({ page }) => {
   const { signInToPortal } = await import("./helpers/portal-auth");
   const { e2eAdminEmail } = await import("../helpers/e2e-admin");
   const { userAuthSessionResponseSchema } = await import("../../assets/shared/schemas/user-auth");
@@ -45,7 +45,10 @@ test("an idle expired session removes private portal content and returns to sign
   const session = userAuthSessionResponseSchema.parse(await response.json());
   const deadline = Math.min(Date.parse(session.expiresAt), Date.parse(session.staff?.expiresAt ?? session.expiresAt));
   await page.clock.fastForward(Math.max(0, deadline - Date.now()) + 2000);
-  await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible();
+  await expect(page.getByRole("alert")).toContainText("Administrator access expired");
+  await expect(page.getByText("You are still signed in with your other portal access.")).toBeVisible();
   await expect(page.getByRole("heading", { name: "Organizations", exact: true })).toHaveCount(0);
+  await page.getByRole("button", { name: "Sign out and sign in again" }).click();
+  await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible();
   expect(await page.evaluate(() => sessionStorage.getItem("pkic_portal_return_path"))).toBe("#/organizations");
 });

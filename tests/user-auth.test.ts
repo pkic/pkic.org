@@ -100,9 +100,23 @@ describe("canonical user authentication", () => {
       expiresAt: persistedSession.expires_at,
       identity: { email: "admin@pkic.org" },
       staff: expect.any(Object),
+      staffReauthenticationRequired: false,
       member: expect.any(Object),
     });
     expect(await queryAll(env.DB, "SELECT id FROM sessions")).toHaveLength(1);
+
+    await env.DB.prepare("UPDATE sessions SET created_at = ?")
+      .bind(new Date(Date.now() - 9 * 60 * 60 * 1000).toISOString())
+      .run();
+    const expiredElevation = await call("/api/v1/auth/session", { headers: { cookie } });
+    expect(expiredElevation.status).toBe(200);
+    const expiredElevationBody = await expiredElevation.json();
+    expect(expiredElevationBody).toMatchObject({
+      identity: { email: "admin@pkic.org" },
+      staffReauthenticationRequired: true,
+      member: expect.any(Object),
+    });
+    expect(expiredElevationBody).not.toHaveProperty("staff");
   });
 
   it.each(["/api/v1/admin/auth/request-link", "/api/v1/auth/member/request-link", "/api/v1/auth/portal/request-link"])(

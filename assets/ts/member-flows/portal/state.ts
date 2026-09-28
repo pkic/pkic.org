@@ -38,6 +38,28 @@ export function clearMemberProfile(): void {
   profile.value = null;
 }
 
+function hasNonStaffCapacity(session: PortalSession): boolean {
+  return Boolean(
+    session.member || session.sponsors.length > 0 || session.pendingIdentityCount > 0 || session.eventParticipation,
+  );
+}
+
+/**
+ * Removes expired staff authority from the rendered portal immediately. A
+ * second live capacity may continue using the same identity session, but the
+ * UI must say why its management features disappeared.
+ */
+export function expireStaffCapacity(): void {
+  const session = portalSession.value;
+  if (!session?.staff) return;
+  if (!hasNonStaffCapacity(session)) {
+    expirePortalSession();
+    return;
+  }
+  const { staff: _expiredStaff, ...remaining } = session;
+  portalSession.value = { ...remaining, staffReauthenticationRequired: true };
+}
+
 export function savePortalSession(next: PortalSession): void {
   if (Date.parse(next.expiresAt) <= Date.now()) {
     expirePortalSession();
