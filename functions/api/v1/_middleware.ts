@@ -1,6 +1,6 @@
 import { hasAuthenticationCredential } from "../../_lib/auth/session-cookies";
 
-const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
+const PUBLIC_CACHE_CONTROL = "public";
 const NO_STORE_CACHE_CONTROL = "no-store, max-age=0";
 
 function isPublicCacheableGet(pathname: string): boolean {

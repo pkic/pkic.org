@@ -324,7 +324,7 @@ describe("POST /api/v1/sponsors/inquiries", () => {
       );
 
       expect(response.status).toBe(200);
-      expect(response.headers.get("cache-control")).toContain("s-maxage=900");
+      expect(response.headers.get("cache-control")).toBe("public");
       await expect(response.json()).resolves.toEqual({
         sponsorType: "consortium",
         visibility: "public",

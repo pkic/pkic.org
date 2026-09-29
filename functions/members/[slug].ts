@@ -24,7 +24,7 @@ import type { DatabaseLike, Env } from "../_lib/types";
 // shadowed by an organization-slug lookup even though they match this
 // route's single-segment `/:slug` pattern.
 const RESERVED_SLUGS = new Set(["profile", "independent"]);
-const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900";
+const PUBLIC_CACHE_CONTROL = "public";
 
 /**
  * Registered as a single catch-all (`functions/members/router.ts`'s

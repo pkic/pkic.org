@@ -6,7 +6,7 @@ import { getStaticAssetsBinding } from "../_lib/static-assets";
 import type { Env } from "../_lib/types";
 
 const app = new Hono<{ Bindings: Env }>();
-const CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
+const CACHE_CONTROL = "public";
 app.get("*", async (c) => {
   const url = new URL(c.req.url);
   if (["/news/feed", "/news/feed/", "/news/feed/index.xml"].includes(url.pathname)) {

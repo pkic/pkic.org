@@ -11,7 +11,7 @@ import { json } from "../../../_lib/http";
 import { getPublicMemberById } from "../../../_lib/services/membership/directory";
 import { memberDetailRouteSchema } from "../../../../assets/shared/schemas/members-directory";
 
-const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
+const PUBLIC_CACHE_CONTROL = "public";
 
 export async function onRequestGet(c: any): Promise<Response> {
   const id = c.req.param("id");

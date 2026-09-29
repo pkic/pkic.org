@@ -7,6 +7,6 @@ import { openApiRoute } from "../../../_lib/openapi/route";
 export const VoteGet = openApiRoute(publicVoteGetRouteSchema, async (c: any, data) => {
   const vote = await getPublicVoteBySlug(c.env.DB, data.params.slug);
   const response = json(publicVoteGetResponseSchema.parse({ vote }));
-  response.headers.set("cache-control", "public, max-age=60, s-maxage=300, stale-while-revalidate=60");
+  response.headers.set("cache-control", "public");
   return response;
 });

@@ -59,7 +59,7 @@ ${items}
     status: 200,
     headers: {
       "content-type": "application/rss+xml; charset=utf-8",
-      "cache-control": "public, max-age=300, s-maxage=900, stale-while-revalidate=60",
+      "cache-control": "public",
     },
   });
 });

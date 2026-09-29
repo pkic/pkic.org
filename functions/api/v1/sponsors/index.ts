@@ -28,7 +28,7 @@ import {
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { openApiRoute } from "../../../_lib/openapi/route";
 
-const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
+const PUBLIC_CACHE_CONTROL = "public";
 
 export const SponsorsGet = openApiRoute(sponsorsCollectionRouteSchema, async (c: AdminContext, data) => {
   if (data.query.visibility === "all") {

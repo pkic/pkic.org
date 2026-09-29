@@ -14,6 +14,6 @@ export const VotesGet = openApiRoute(publicVotesListRouteSchema, async (c: any, 
       page: buildPageInfo(data.query.limit, data.query.offset, total, votes.length),
     }),
   );
-  response.headers.set("cache-control", "public, max-age=60, s-maxage=300, stale-while-revalidate=60");
+  response.headers.set("cache-control", "public");
   return response;
 });

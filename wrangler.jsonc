@@ -108,6 +108,8 @@
         // Validate schedule edits with pnpm maintenance:preview <schedule.json>; deployment publishes this snapshot.
         "MAINTENANCE_SCHEDULE": "{\"version\":1,\"windows\":[]}",
         "APP_BASE_URL": "https://pkic.org",
+        "PUBLIC_READ_BROWSER_TTL_SECONDS": "3600",
+        "PUBLIC_READ_CDN_TTL_SECONDS": "86400",
         "HUGO_VERSION": "0.160.1",
         "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
         "DEFAULT_REFERRAL_CODE_LENGTH": "7",
@@ -234,6 +236,8 @@
         // Validate schedule edits with pnpm maintenance:preview <schedule.json>; deployment publishes this snapshot.
         "MAINTENANCE_SCHEDULE": "{\"version\":1,\"windows\":[]}",
         "APP_BASE_URL": "https://pkic-org-preview.pkic.workers.dev",
+        "PUBLIC_READ_BROWSER_TTL_SECONDS": "3600",
+        "PUBLIC_READ_CDN_TTL_SECONDS": "86400",
         "HUGO_VERSION": "0.160.1",
         "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
         "DEFAULT_REFERRAL_CODE_LENGTH": "7",
@@ -363,6 +367,8 @@
         // Validate schedule edits with pnpm maintenance:preview <schedule.json>; deployment publishes this snapshot.
         "MAINTENANCE_SCHEDULE": "{\"version\":1,\"windows\":[]}",
         "DEV_STATIC_ORIGIN": "http://127.0.0.1:13131",
+        "PUBLIC_READ_BROWSER_TTL_SECONDS": "3600",
+        "PUBLIC_READ_CDN_TTL_SECONDS": "86400",
         "HUGO_VERSION": "0.160.1",
         "DEFAULT_MIN_PROPOSAL_REVIEWS": "2",
         "DEFAULT_REFERRAL_CODE_LENGTH": "7",

@@ -29,7 +29,7 @@ import { provisionMember } from "../../../_lib/services/membership-management-li
 import { requireMembershipStaffPermission } from "./authorization";
 import { requirePermission } from "../../../_lib/auth/permissions";
 
-const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
+const PUBLIC_CACHE_CONTROL = "public";
 
 /**
  * One endpoint, two projections, chosen by what the caller asked for — not by

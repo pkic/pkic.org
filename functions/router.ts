@@ -23,7 +23,11 @@ import { createMcpWorkerFetch, MCP_OPENAPI_JSON_PATH } from "./_lib/mcp/worker";
 import { getStaticAssetsBinding } from "./_lib/static-assets";
 import { primaryFirstDb, requestSessionDb } from "./_lib/db/session";
 import { WorkerEntrypoint } from "cloudflare:workers";
-import { isPublicReadCacheCandidate, publicReadCacheResponse } from "./_lib/cache/public-read";
+import {
+  conditionalPublicReadResponse,
+  isAnonymousReadRequest,
+  publicReadCacheResponse,
+} from "./_lib/cache/public-read";
 
 const OPENAPI_JSON_PATH = "/api/v1/openapi.json";
 const DOCS_PATH = "/api/v1/docs";
@@ -119,13 +123,13 @@ function handleHttpRequest(request: Request, env: Env, ctx: ExecutionContext): P
 /** This entrypoint is reached only after the uncached gateway checks the request. */
 export class PublicRead extends WorkerEntrypoint<Env> {
   async fetch(request: Request): Promise<Response> {
-    if (!isPublicReadCacheCandidate(request)) {
+    if (!isAnonymousReadRequest(request)) {
       return new Response(null, { status: 404, headers: { "cache-control": "no-store" } });
     }
     try {
-      return publicReadCacheResponse(await handleHttpRequest(request, this.env, this.ctx));
+      return await publicReadCacheResponse(await handleHttpRequest(request, this.env, this.ctx), this.env);
     } catch (error) {
-      return publicReadCacheResponse(handleError(error));
+      return await publicReadCacheResponse(handleError(error), this.env);
     }
   }
 }
@@ -154,12 +158,20 @@ export default {
     const paused = await availabilityResponse(request, env);
     if (paused) return paused;
     try {
-      if (isPublicReadCacheCandidate(request)) {
+      if (isAnonymousReadRequest(request)) {
         const cacheContext = ctx as ExecutionContext & {
-          exports?: { PublicRead: { fetch(request: Request): Promise<Response> } };
+          exports?: { PublicRead: { fetch(request: Request, init: { cf: { cacheKey: string } }): Promise<Response> } };
         };
         if (cacheContext.exports && "PublicRead" in cacheContext.exports) {
-          return await cacheContext.exports.PublicRead.fetch(request);
+          const headers = new Headers(request.headers);
+          headers.delete("if-none-match");
+          headers.delete("if-modified-since");
+          const cacheRequest = new Request(request, { method: "GET", headers });
+          const response = await cacheContext.exports.PublicRead.fetch(cacheRequest, { cf: { cacheKey: request.url } });
+          const conditional = conditionalPublicReadResponse(request, response);
+          return request.method === "HEAD" && conditional.status === 200
+            ? new Response(null, conditional)
+            : conditional;
         }
       }
       return await handleHttpRequest(request, env, ctx);

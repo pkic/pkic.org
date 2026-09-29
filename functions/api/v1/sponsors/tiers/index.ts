@@ -9,7 +9,7 @@ import {
   sponsorTiersRouteSchema,
 } from "../../../../../assets/shared/schemas/sponsors";
 
-const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
+const PUBLIC_CACHE_CONTROL = "public";
 
 export const SponsorTiersGet = openApiRoute(sponsorTiersRouteSchema, async (c: AdminContext, data) => {
   if (data.query.includeInactive) {

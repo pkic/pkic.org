@@ -101,7 +101,7 @@ describe("D1 member news cache and public rendering", () => {
     expect(html).toContain("Older articles");
     expect(html).toContain("data-local-time-date-only");
     expect(html).toContain("Sponsor Highlights");
-    expect(htmlResponse.headers.get("cache-control")).toContain("s-maxage=900");
+    expect(htmlResponse.headers.get("cache-control")).toBe("public");
     const feedResponse = await newsRouter.request("https://portal.example.test/news/feed/", {}, env);
     const parsed = new XMLParser().parse(await feedResponse.text(), true);
     expect(parsed.rss.channel.item).toHaveLength(3);
@@ -146,7 +146,7 @@ describe("D1 member news cache and public rendering", () => {
     const head = await newsRouter.request("https://portal.example.test/news/", { method: "HEAD" }, bindings);
     expect(head.status).toBe(200);
     expect(await head.text()).toBe("");
-    expect(head.headers.get("cache-control")).toContain("s-maxage=900");
+    expect(head.headers.get("cache-control")).toBe("public");
   });
 
   it("retains last successful articles after a failure and hides changed feeds and ended members", async () => {
