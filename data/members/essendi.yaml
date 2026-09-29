@@ -1,10 +1,10 @@
 id: essendi
 name: essendi it Group
 slogan: We secure connected worlds
-website: https://www.essendi.de/en
+website: https://www.essendi-it.com/en
 # Business domains for email
 organizationDomains:
-  - essendi.de
+  - essendi-it.com
 # Short description, longer content can be placed in `content/members/`
 description: Building a Secure Basis for Trust. essendi it Group is a European and Swiss expert in digital security, helping organizations manage cryptographic assets and prepare for a quantum-safe future.
 
@@ -20,19 +20,19 @@ sponsor:
 
 # Blog posts
 blog:
-  url: https://www.essendi.de/en/magazine/
-  feed: https://www.essendi.de/en/feed/
+  url: https://www.essendi-it.com/en/magazine/
+  feed: https://www.essendi-it.com/en/feed/
   language: en_US
 
 # Press Releases
 press:
-  url: https://www.essendi.de/en/news/
+  url: https://www.essendi-it.com/en/news/
   feed:
   language: en_US
 
 # Careers
 careers:
-  url: https://www.essendi.de/karriere/
+  url: https://www.essendi-it.com/karriere/
   feed:
   language: de
 
@@ -41,8 +41,8 @@ social:
   x:
   facebook:
   instagram: https://www.instagram.com/essendi_it/
-  linkedin: https://www.linkedin.com/company/essendi-it-gmbh/
-  youtube: https://www.youtube.com/@essendixc
+  linkedin: https://www.linkedin.com/company/essendi-it-group/
+  youtube: https://www.youtube.com/@essendiit
 
 # Here you can list those who represent or have represented the member.
 #
