@@ -587,19 +587,9 @@ data:
             locations:
               - plenary
 
-          - title: "Project Hail Merkle: Rethinking Qualified Trust Services with Merkle Tree Certificates"
+          - title: To be announced
             description: |
-              Digital trust is entering a new phase. For decades, certificates have been the invisible backbone of secure digital interactions: reliable, proven, and essential. But the environment around them is changing fast. Trust ecosystems are becoming larger, more connected, more automated, and more demanding. The question is no longer only how we protect trust. It is how we scale it, prove it, and govern it in a world of growing complexity.
-
-              This talk explores the emerging concept of Merkle Tree Certificates and asks a fundamental question: could this be the next major step in the evolution of digital trust, especially for qualified trust services? Merkle-tree-based approaches promise a new way of thinking about certificates. By embedding certificate-related information into cryptographically protected structures, they can enable more efficient proofs, greater transparency, and new models for validation at scale. What sounds like a technical refinement may in fact signal something much bigger: a shift from isolated certificate objects to more dynamic, auditable, and internet-scale trust architectures.
-
-              For the world of qualified trust services, this is especially significant. Here, trust is never just a technical matter. It is also legal certainty, regulatory compliance, operational reliability, and public confidence. That is why the real opportunity, and the real challenge, lies not only in the cryptography itself, but in the question of how such new models could fit into highly regulated trust environments. Can innovation deliver more transparency and scalability without weakening assurance, accountability, or supervision?
-
-              The talk connects these developments to the future of qualified electronic signatures, seals, website authentication, and emerging wallet-based ecosystems. It highlights both the promise and the unresolved questions: interoperability, standardization, liability, governance, and the broader impact on trust frameworks that were built for a different era.
-
-              Ultimately, this session is not just about a new certificate concept. It is about the future architecture of trust. As digital infrastructures evolve, trust services must evolve with them. Merkle Tree Certificates may be one of the technologies that help define that next chapter, where trust becomes not only secure, but also scalable, transparent, and ready for the demands of the next digital decade.
-            speakers:
-              - Kim Nguyen
+              Session details will be announced soon.
             locations:
               - blue_hall
 
@@ -1413,9 +1403,19 @@ data:
             locations:
               - plenary
 
-          - title: To be announced
+          - title: "Project Hail Merkle: Rethinking Qualified Trust Services with Merkle Tree Certificates"
             description: |
-              Session details will be announced soon.
+              Digital trust is entering a new phase. For decades, certificates have been the invisible backbone of secure digital interactions: reliable, proven, and essential. But the environment around them is changing fast. Trust ecosystems are becoming larger, more connected, more automated, and more demanding. The question is no longer only how we protect trust. It is how we scale it, prove it, and govern it in a world of growing complexity.
+
+              This talk explores the emerging concept of Merkle Tree Certificates and asks a fundamental question: could this be the next major step in the evolution of digital trust, especially for qualified trust services? Merkle-tree-based approaches promise a new way of thinking about certificates. By embedding certificate-related information into cryptographically protected structures, they can enable more efficient proofs, greater transparency, and new models for validation at scale. What sounds like a technical refinement may in fact signal something much bigger: a shift from isolated certificate objects to more dynamic, auditable, and internet-scale trust architectures.
+
+              For the world of qualified trust services, this is especially significant. Here, trust is never just a technical matter. It is also legal certainty, regulatory compliance, operational reliability, and public confidence. That is why the real opportunity, and the real challenge, lies not only in the cryptography itself, but in the question of how such new models could fit into highly regulated trust environments. Can innovation deliver more transparency and scalability without weakening assurance, accountability, or supervision?
+
+              The talk connects these developments to the future of qualified electronic signatures, seals, website authentication, and emerging wallet-based ecosystems. It highlights both the promise and the unresolved questions: interoperability, standardization, liability, governance, and the broader impact on trust frameworks that were built for a different era.
+
+              Ultimately, this session is not just about a new certificate concept. It is about the future architecture of trust. As digital infrastructures evolve, trust services must evolve with them. Merkle Tree Certificates may be one of the technologies that help define that next chapter, where trust becomes not only secure, but also scalable, transparent, and ready for the demands of the next digital decade.
+            speakers:
+              - Kim Nguyen
             locations:
               - blue_hall
 
