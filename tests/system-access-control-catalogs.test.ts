@@ -115,6 +115,41 @@ describe("Permission subjects and targets", () => {
     });
     const organizationId = await insertOrganization(env.DB, "Context Organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId);
+    const meetingId = "event-meeting-catalog";
+    await env.DB.prepare(
+      `INSERT INTO events (id, slug, name, timezone, created_at, updated_at)
+       VALUES (?, 'catalog-meeting', 'Catalog Meeting', 'Etc/UTC', '2026-09-29T00:00:00.000Z', '2026-09-29T00:00:00.000Z')`,
+    )
+      .bind(meetingId)
+      .run();
+
+    for (const [contextType, id, name] of [
+      ["event", expect.any(String), "PQC Conference 2026"],
+      ["event", meetingId, "Catalog Meeting"],
+      ["group", group.id, "Catalog Group"],
+      ["organization", memberId, "Context Organization"],
+    ]) {
+      const response = await call(
+        adminToken,
+        `/api/v1/permissions/targets?contextType=${contextType}&limit=25&offset=0&sort=name`,
+      );
+      expect(response.status).toBe(200);
+      const initial = permissionTargetsListResponseSchema.parse(await response.json());
+      expect(initial.targets).toContainEqual({ id, type: contextType, name });
+      expect(initial.targets.every((target) => target.type === contextType)).toBe(true);
+      expect(initial.targets.length).toBeLessThanOrEqual(25);
+      expect(initial.page).toEqual({ limit: 25, offset: 0, total: initial.targets.length, hasMore: false });
+
+      const lastPage = await call(
+        adminToken,
+        `/api/v1/permissions/targets?contextType=${contextType}&limit=25&offset=${initial.page.total}&sort=name`,
+      );
+      expect(lastPage.status).toBe(200);
+      expect(permissionTargetsListResponseSchema.parse(await lastPage.json())).toEqual({
+        targets: [],
+        page: { limit: 25, offset: initial.page.total, total: initial.page.total, hasMore: false },
+      });
+    }
 
     const events = permissionTargetsListResponseSchema.parse(
       await (await call(adminToken, "/api/v1/permissions/targets?contextType=event&q=PQC&limit=1")).json(),
