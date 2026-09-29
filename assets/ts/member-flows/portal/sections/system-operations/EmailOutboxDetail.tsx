@@ -1,4 +1,4 @@
-import { emailOutboxDetailResponseSchema } from "../../../../../shared/schemas/email-outbox";
+import { DIRECT_EMAIL_TEMPLATE_KEY, emailOutboxDetailResponseSchema } from "../../../../../shared/schemas/email-outbox";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { Alert } from "../../../../ui/Alert";
@@ -54,8 +54,11 @@ export function EmailOutboxDetail({ id }: { id: string }) {
                 },
                 { term: "Status", value: <Badge status={message.status} /> },
                 {
-                  term: "Template",
-                  value: `${message.templateKey}${message.templateVersion === null ? "" : ` v${message.templateVersion}`}`,
+                  term: message.usesDirectBody ? "Source template" : "Template",
+                  value:
+                    message.templateKey === DIRECT_EMAIL_TEMPLATE_KEY
+                      ? "None"
+                      : `${message.templateKey}${message.templateVersion === null ? "" : ` v${message.templateVersion}`}`,
                 },
                 { term: "Event", value: message.eventName || "—" },
                 { term: "Attempts", value: String(message.attempts) },
@@ -68,6 +71,24 @@ export function EmailOutboxDetail({ id }: { id: string }) {
                 { term: "Message ID", value: message.id },
               ]}
             />
+            {message.bodyContent !== null && (
+              <section class="pk-stack pk-stack--tight" aria-label="Queued message">
+                <h2>Queued message</h2>
+                <p class="pk-small">
+                  This message is stored in the outbox. Recipient variables are filled in when it is sent.
+                </p>
+                <pre class="pk-code-block pk-small pk-break">{message.bodyContent}</pre>
+              </section>
+            )}
+            {message.bodyContent === null && message.customText !== null && (
+              <section class="pk-stack pk-stack--tight" aria-label="Custom message text">
+                <h2>Custom message text</h2>
+                <p class="pk-small">
+                  This text is stored with the outbox message and applied to the template when it is sent.
+                </p>
+                <pre class="pk-code-block pk-small pk-break">{message.customText}</pre>
+              </section>
+            )}
           </PanelBody>
         </Panel>
       )}

@@ -154,7 +154,12 @@ export const emailOutboxResetFailedRouteSchema = {
   },
 };
 
-export const emailOutboxDetailResponseSchema = z.object({ message: emailOutboxRowSchema });
+export const emailOutboxDetailResponseSchema = z.object({
+  message: emailOutboxRowSchema.extend({
+    bodyContent: z.string().nullable(),
+    customText: z.string().nullable(),
+  }),
+});
 export const emailOutboxDetailRouteSchema = {
   tags: ["Email"],
   ...requiresPermissions("email:read"),

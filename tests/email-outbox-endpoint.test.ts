@@ -5,6 +5,7 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { queueEmail } from "../functions/_lib/email/outbox";
+import { directEmailBodyPayload } from "../functions/_lib/email/direct-body";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
 import {
   emailOutboxDetailResponseSchema,
@@ -72,6 +73,34 @@ describe("GET /api/v1/email/outbox", () => {
       { waitUntil() {}, passThroughOnException() {} } as any,
     );
     expect(anonymous.status).toBe(401);
+  });
+
+  it("shows the edited campaign message instead of implying the source template will replace it", async () => {
+    const { eventId } = await setupAdmin();
+    const id = await queueEmail(env.DB, {
+      eventId,
+      templateKey: "msg_dear_firstname",
+      recipientEmail: "leigh@example.test",
+      subject: "Message from PKI Consortium",
+      messageType: "promotional",
+      data: {
+        firstName: "Leigh",
+        ...directEmailBodyPayload("Dear {{firstName}},\n\nThis is the edited message."),
+        token: "private-capability",
+      },
+    });
+
+    const response = await callAdmin(`/api/v1/email/outbox/${id}`);
+    expect(response.status).toBe(200);
+    const { message } = emailOutboxDetailResponseSchema.parse(await response.json());
+    expect(message).toMatchObject({
+      templateKey: "msg_dear_firstname",
+      usesDirectBody: true,
+      subject: "Message from PKI Consortium",
+      bodyContent: "Dear {{firstName}},\n\nThis is the edited message.",
+      customText: null,
+    });
+    expect(JSON.stringify(message)).not.toContain("private-capability");
   });
 
   it("lists and manages campaign rows queued before outbox IDs became opaque", async () => {

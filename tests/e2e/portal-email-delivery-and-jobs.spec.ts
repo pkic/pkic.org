@@ -3,7 +3,7 @@ import { test, expect } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 
-test("staff inspect delivery failures and edit a scheduled job interval", async ({ page }) => {
+test("staff inspect the queued message and delivery failure", async ({ page }) => {
   await signInToPortal(page, e2eAdminEmail("portal-email-templates"));
   const id = "11111111-1111-4111-8111-111111111111:alex@example.test";
   const message = {
@@ -29,8 +29,10 @@ test("staff inspect delivery failures and edit a scheduled job interval", async 
     bccRecipientCount: 0,
     hasCalendarInvite: false,
     hasBadgeAttachment: false,
-    usesDirectBody: false,
+    usesDirectBody: true,
     hasCustomText: false,
+    bodyContent: "Dear {{firstName}},\n\nThis is the edited message.",
+    customText: null,
   };
   await page.route(`**/api/v1/email/outbox/${encodeURIComponent(id)}`, (route) => route.fulfill({ json: { message } }));
   await page.route("**/api/v1/email/outbox?*", (route) =>
@@ -61,12 +63,18 @@ test("staff inspect delivery failures and edit a scheduled job interval", async 
 
   await expect(page.getByRole("heading", { name: "Review your organization profile" })).toBeVisible();
   await expect(page.getByRole("alert")).toContainText("Check the recipient address");
+  await expect(page.getByRole("region", { name: "Queued message" })).toContainText("This is the edited message.");
+  await expect(page.getByText("Source template")).toBeVisible();
   for (const width of [1440, 390]) {
     await page.setViewportSize({ width, height: 1000 });
     await expect(page.getByText("Alex Example <alex@example.test>", { exact: true })).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: test.info().outputPath(`email-delivery-${width}.png`), fullPage: true });
   }
+});
+
+test("staff edit a scheduled job interval", async ({ page }) => {
+  await signInToPortal(page, e2eAdminEmail("portal-email-templates"));
   await page.goto("/portal/#/settings/scheduled-jobs");
   await page.getByRole("button", { name: "Actions for Retention", exact: true }).click();
   await page.getByRole("menuitem", { name: "Edit schedule", exact: true }).click();
