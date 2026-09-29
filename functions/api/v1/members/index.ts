@@ -29,8 +29,6 @@ import { provisionMember } from "../../../_lib/services/membership-management-li
 import { requireMembershipStaffPermission } from "./authorization";
 import { requirePermission } from "../../../_lib/auth/permissions";
 
-const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
-
 /**
  * One endpoint, two projections, chosen by what the caller asked for — not by
  * who the caller happens to be.
@@ -64,14 +62,12 @@ export const MembersGet = openApiRoute(membersListRouteSchema, async (c: any, da
   }
 
   const { members, total } = await listPublicMembers(c.env.DB, data.query);
-  const response = json(
+  return json(
     publicMembersListResponseSchema.parse({
       members,
       page: buildPageInfo(data.query.limit, data.query.offset, total, members.length),
     }),
   );
-  response.headers.set("cache-control", PUBLIC_CACHE_CONTROL);
-  return response;
 });
 
 export const MemberProvision = openApiRoute(memberProvisionRouteSchema, async (c: AdminContext, data) => {

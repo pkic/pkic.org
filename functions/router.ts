@@ -22,6 +22,12 @@ import { OPENAPI_INFO, OPENAPI_TAGS, OPENAPI_TAG_GROUPS } from "./_lib/openapi/d
 import { createMcpWorkerFetch, MCP_OPENAPI_JSON_PATH } from "./_lib/mcp/worker";
 import { getStaticAssetsBinding } from "./_lib/static-assets";
 import { primaryFirstDb, requestSessionDb } from "./_lib/db/session";
+import { WorkerEntrypoint } from "cloudflare:workers";
+import {
+  conditionalPublicReadResponse,
+  isAnonymousReadRequest,
+  publicReadCacheResponse,
+} from "./_lib/cache/public-read";
 
 const OPENAPI_JSON_PATH = "/api/v1/openapi.json";
 const DOCS_PATH = "/api/v1/docs";
@@ -110,6 +116,24 @@ app.route("/events", events_Router);
 // Build the MCP fetch handler after OpenAPI routes are registered.
 const fetchWithMcp = createMcpWorkerFetch({ app, getMcpOpenApiSchema });
 
+function handleHttpRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  return fetchWithMcp(request, withDependencyHandling({ ...env, DB: requestSessionDb(env.DB, request) }), ctx);
+}
+
+/** This entrypoint is reached only after the uncached gateway checks the request. */
+export class PublicRead extends WorkerEntrypoint<Env> {
+  async fetch(request: Request): Promise<Response> {
+    if (!isAnonymousReadRequest(request)) {
+      return new Response(null, { status: 404, headers: { "cache-control": "no-store" } });
+    }
+    try {
+      return await publicReadCacheResponse(await handleHttpRequest(request, this.env, this.ctx), this.env);
+    } catch (error) {
+      return await publicReadCacheResponse(handleError(error), this.env);
+    }
+  }
+}
+
 async function runScheduledJob(controller: ScheduledController, env: Env): Promise<void> {
   logInfo("SCHEDULED_JOB_STARTED", { cron: controller.cron, scheduledTime: controller.scheduledTime });
   try {
@@ -134,11 +158,23 @@ export default {
     const paused = await availabilityResponse(request, env);
     if (paused) return paused;
     try {
-      return await fetchWithMcp(
-        request,
-        withDependencyHandling({ ...env, DB: requestSessionDb(env.DB, request) }),
-        ctx,
-      );
+      if (isAnonymousReadRequest(request)) {
+        const cacheContext = ctx as ExecutionContext & {
+          exports?: { PublicRead: { fetch(request: Request, init: { cf: { cacheKey: string } }): Promise<Response> } };
+        };
+        if (cacheContext.exports && "PublicRead" in cacheContext.exports) {
+          const headers = new Headers(request.headers);
+          headers.delete("if-none-match");
+          headers.delete("if-modified-since");
+          const cacheRequest = new Request(request, { method: "GET", headers });
+          const response = await cacheContext.exports.PublicRead.fetch(cacheRequest, { cf: { cacheKey: request.url } });
+          const conditional = conditionalPublicReadResponse(request, response);
+          return request.method === "HEAD" && conditional.status === 200
+            ? new Response(null, conditional)
+            : conditional;
+        }
+      }
+      return await handleHttpRequest(request, env, ctx);
     } catch (error) {
       return handleError(error);
     }

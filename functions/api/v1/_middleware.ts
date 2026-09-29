@@ -1,15 +1,6 @@
 import { hasAuthenticationCredential } from "../../_lib/auth/session-cookies";
 
-const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
 const NO_STORE_CACHE_CONTROL = "no-store, max-age=0";
-
-function isPublicCacheableGet(pathname: string): boolean {
-  return (
-    pathname === "/api/v1/events" ||
-    /^\/api\/v1\/events\/[^/]+$/.test(pathname) ||
-    /^\/api\/v1\/events\/[^/]+\/terms$/.test(pathname)
-  );
-}
 
 /**
  * Returns true for staff-only and signed integration routes that must never be
@@ -46,8 +37,6 @@ function applyResponsePolicy(request: Request, response: Response, sensitive?: b
 
   if (isSensitive || !["GET", "HEAD"].includes(method)) {
     response.headers.set("cache-control", NO_STORE_CACHE_CONTROL);
-  } else if (isPublicCacheableGet(pathname)) {
-    response.headers.set("cache-control", PUBLIC_CACHE_CONTROL);
   }
 
   if (isSensitive) {

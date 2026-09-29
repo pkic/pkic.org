@@ -9,21 +9,22 @@ import join_Router from "./join/router";
 import { MemberCapacityDelete, MemberCapacityGrant, MemberCapacitiesList, MemberCapacityUpdate } from "./capacities";
 import { MemberPatch, MemberProvision } from "./index";
 import type { RequestDbContext } from "../../../_lib/db/context";
+import { publicReadRoute } from "../../../_lib/cache/public-read";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 openapi.route("/applications", applications_Router);
 openapi.route("/join", join_Router);
-openapi.get("/", MembersGet);
+openapi.get("/", publicReadRoute(MembersGet));
 openapi.post("/", MemberProvision);
-openapi.get("/wall", MembersWallGet);
+openapi.get("/wall", publicReadRoute(MembersWallGet));
 openapi.get("/capacities", MemberCapacitiesList);
 openapi.post("/capacities", MemberCapacityGrant);
 openapi.patch("/capacities/:id", MemberCapacityUpdate);
 openapi.delete("/capacities/:id", MemberCapacityDelete);
 openapi.get("/:id/logo", MembersIdLogoGet);
 openapi.patch("/:id", MemberPatch);
-openapi.get("/:id", MembersIdGet);
+openapi.get("/:id", publicReadRoute(MembersIdGet));
 
 export default openapi;

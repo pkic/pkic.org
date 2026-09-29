@@ -51,6 +51,9 @@ export type R2BucketLike = R2Bucket;
 
 export interface Env {
   DB: DatabaseLike;
+  /** Browser and CDN lifetimes for public dynamic read responses. */
+  PUBLIC_READ_BROWSER_TTL_SECONDS?: string;
+  PUBLIC_READ_CDN_TTL_SECONDS?: string;
   SERVICE_MODE?: "normal" | "maintenance" | "emergency" | string;
   /** Versioned deployment snapshot: evaluated without D1 or a provider status feed. */
   MAINTENANCE_SCHEDULE?: string;

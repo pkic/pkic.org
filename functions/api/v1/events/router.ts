@@ -3,11 +3,12 @@ import { fromHono } from "chanfana";
 import eventSlug_Router from "./[eventSlug]/router";
 import { EventsListGet } from "./index";
 import { EventImportsCreate } from "./imports/index";
+import { publicReadRoute } from "../../../_lib/cache/public-read";
 
 const app = new Hono();
 export const openapi = fromHono(app);
 
-openapi.get("/", EventsListGet);
+openapi.get("/", publicReadRoute(EventsListGet));
 // Reserved collection segments are registered before the event-slug router so
 // they cannot be captured as a slug, matching the groups router convention.
 openapi.post("/imports", EventImportsCreate);

@@ -4,16 +4,20 @@ import { readMemberNews, readSponsorNews } from "../_lib/services/member-news/re
 import { renderMemberNews, renderMemberNewsFeed } from "../_lib/services/member-news/render";
 import { getStaticAssetsBinding } from "../_lib/static-assets";
 import type { Env } from "../_lib/types";
+import { markPublicRead } from "../_lib/cache/public-read";
 
 const app = new Hono<{ Bindings: Env }>();
-const CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
 app.get("*", async (c) => {
   const url = new URL(c.req.url);
   if (["/news/feed", "/news/feed/", "/news/feed/index.xml"].includes(url.pathname)) {
     const page = await readMemberNews(c.env.DB, memberNewsQuerySchema.parse({ limit: 25 }));
-    return new Response(await renderMemberNewsFeed(page.articles, url.origin), {
-      headers: { "content-type": "application/rss+xml; charset=utf-8", "cache-control": CACHE_CONTROL },
-    });
+    const canonicalOrigin = c.env.APP_BASE_URL ? new URL(c.env.APP_BASE_URL).origin : url.origin;
+    return markPublicRead(
+      c.req.raw,
+      new Response(await renderMemberNewsFeed(page.articles, canonicalOrigin), {
+        headers: { "content-type": "application/rss+xml; charset=utf-8" },
+      }),
+    );
   }
   const assets = getStaticAssetsBinding(c.env);
   if (!assets) return c.text("News is temporarily unavailable.", 503);
@@ -40,7 +44,9 @@ app.get("*", async (c) => {
   for (const name of ["etag", "last-modified", "content-length", "content-range", "accept-ranges", "cf-cache-status"]) {
     headers.delete(name);
   }
-  headers.set("cache-control", CACHE_CONTROL);
-  return new Response(c.req.method === "HEAD" ? null : response.body, { status: response.status, headers });
+  return markPublicRead(
+    c.req.raw,
+    new Response(c.req.method === "HEAD" ? null : response.body, { status: response.status, headers }),
+  );
 });
 export default app;

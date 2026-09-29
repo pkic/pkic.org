@@ -19,6 +19,7 @@
 import { first } from "../_lib/db/queries";
 import { getStaticAssetsBinding } from "../_lib/static-assets";
 import type { DatabaseLike, Env } from "../_lib/types";
+import { markPublicRead } from "../_lib/cache/public-read";
 
 // The two real static sub-paths under public/members/ — must never be
 // shadowed by an organization-slug lookup even though they match this
@@ -57,5 +58,8 @@ export async function onRequestGet(c: any): Promise<Response> {
   }
 
   const shellUrl = new URL("/members/profile/", c.req.raw.url);
-  return binding.fetch(new Request(shellUrl, c.req.raw));
+  const shell = await binding.fetch(new Request(shellUrl, c.req.raw));
+  if (!shell.ok) return shell;
+  const headers = new Headers(shell.headers);
+  return markPublicRead(c.req.raw, new Response(shell.body, { status: shell.status, headers }));
 }
