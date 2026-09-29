@@ -7,7 +7,56 @@
  * that embed it.
  */
 import { describe, expect, it } from "vitest";
-import { userRoleAssignSchema, accessGrantCreateSchema } from "../assets/shared/schemas/access-control";
+import {
+  userRoleAssignSchema,
+  accessGrantCreateSchema,
+  permissionTargetsListQuerySchema,
+  permissionTargetSchema,
+} from "../assets/shared/schemas/access-control";
+
+describe("permission target catalog queries", () => {
+  it.each(["event", "group", "organization"])("allows browsing %s targets before searching", (contextType) => {
+    expect(permissionTargetsListQuerySchema.parse({ contextType, limit: "25", offset: "0", sort: "name" })).toEqual({
+      contextType,
+      limit: 25,
+      offset: 0,
+      sort: "name",
+    });
+  });
+
+  it("retains bounded search validation", () => {
+    expect(permissionTargetsListQuerySchema.parse({ contextType: "event", q: "  Conference  " }).q).toBe("Conference");
+    for (const q of ["", " ", "x".repeat(255)]) {
+      expect(permissionTargetsListQuerySchema.safeParse({ contextType: "event", q }).success).toBe(false);
+    }
+  });
+});
+
+describe("permission target identifiers", () => {
+  it.each([crypto.randomUUID(), "event-meeting-board", `event-meeting-${"a".repeat(100)}`])(
+    "accepts the event identifier %s in catalogs and assignment forms",
+    (id) => {
+      expect(permissionTargetSchema.parse({ id, type: "event", name: "Example meeting" }).id).toBe(id);
+      expect(userRoleAssignSchema.parse({ roleId: "role-admin", contextType: "event", contextId: id }).contextId).toBe(
+        id,
+      );
+      expect(
+        accessGrantCreateSchema.parse({
+          userId: crypto.randomUUID(),
+          permission: "events:read",
+          contextType: "event",
+          contextId: id,
+        }).contextId,
+      ).toBe(id);
+    },
+  );
+
+  it.each(["group", "organization"])("keeps generated identifiers for %s targets", (type) => {
+    expect(permissionTargetSchema.safeParse({ id: "event-meeting-board", type, name: "Example" }).success).toBe(false);
+    const id = crypto.randomUUID();
+    expect(permissionTargetSchema.parse({ id, type, name: "Example" }).id).toBe(id);
+  });
+});
 
 describe("access-control contextTypeSchema", () => {
   it("userRoleAssignSchema accepts context_type='organization' for a representative-role grant", () => {

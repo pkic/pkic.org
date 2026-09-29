@@ -7,6 +7,7 @@ import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { tab } from "./helpers/tabs";
+import { permissionTargetsListResponseSchema, userRoleAssignSchema } from "../../assets/shared/schemas/access-control";
 
 const PERMISSIONS_API = "/api/v1/permissions";
 const ROLES_API = "/api/v1/roles";
@@ -107,6 +108,64 @@ test("permitted staff manage a custom role through the Settings portal", async (
   await acceptConfirmDialog(page, "Delete role");
   expect((await deleteResponse).status()).toBe(200);
   await expect(roleRow).toHaveCount(0);
+
+  // Keep assignment history on a separate role: previously assigned roles cannot be deleted.
+  await page.getByRole("button", { name: "New role" }).click();
+  await createCard.getByLabel("Name").fill(`${roleName}_event`);
+  await createCard.getByRole("button", { name: "Create role" }).click();
+  await expect(page.getByRole("heading", { name: `${roleName}_event`, level: 3 })).toBeVisible();
+
+  const assignForm = page.getByRole("form", { name: "Assign this role" });
+  const staffEmail = e2eAdminEmail("portal-access-control");
+  await assignForm.getByLabel("Search for a user").fill(staffEmail);
+  await page
+    .getByRole("group", { name: "Matching users" })
+    .getByRole("button", { name: new RegExp(staffEmail) })
+    .click();
+  const targetsResponse = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      url.pathname === `${PERMISSIONS_API}/targets` &&
+      url.searchParams.get("contextType") === "event" &&
+      !url.searchParams.has("q")
+    );
+  });
+  await assignForm.getByLabel("Target", { exact: true }).selectOption("event");
+  const targets = await targetsResponse;
+  expect(targets.status()).toBe(200);
+  const { targets: events } = permissionTargetsListResponseSchema.parse(await targets.json());
+  expect(events.length).toBeGreaterThan(0);
+  const event = events.find((target) => target.id.startsWith("event-meeting-"));
+  expect(event, "migration-seeded meeting events are selectable").toBeDefined();
+  if (!event) throw new Error("The migrated meeting fixture is missing");
+  const eventPicker = assignForm.getByRole("combobox", { name: "Event", exact: true });
+  await eventPicker.click();
+  await expect(page.getByRole("option", { name: event.name, exact: true })).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("event-role-picker.png"), fullPage: true });
+  await eventPicker.fill("no-such-event-for-role-assignment");
+  await expect(page.getByRole("status").filter({ hasText: "No matches for" })).toBeVisible();
+  await eventPicker.fill("");
+  await expect(page.getByRole("option", { name: event.name, exact: true })).toBeVisible();
+  await page.getByRole("option", { name: event.name, exact: true }).click();
+  const assignmentResponse = page.waitForResponse(
+    (response) =>
+      /^\/api\/v1\/users\/[^/]+\/roles$/.test(new URL(response.url()).pathname) &&
+      response.request().method() === "POST",
+  );
+  await assignForm.getByRole("button", { name: "Assign", exact: true }).click();
+  const assignment = await assignmentResponse;
+  expect(assignment.status()).toBe(201);
+  expect(userRoleAssignSchema.parse(assignment.request().postDataJSON())).toMatchObject({
+    contextType: "event",
+    contextId: event.id,
+  });
+  await expect(page.getByText("Role assigned", { exact: true })).toBeVisible();
+  await page.reload();
+  const assignmentRow = page.getByRole("row").filter({ hasText: staffEmail });
+  await expect(assignmentRow).toContainText(`event:${event.id}`);
+  await runRowAction(page, assignmentRow, "Unassign role");
+  await acceptConfirmDialog(page, "Unassign role");
+  await expect(assignmentRow).toHaveCount(0);
 
   // The former "Staff" tab is now labeled People, without renaming the
   // underlying user_roles-backed schema fields it reads and writes.

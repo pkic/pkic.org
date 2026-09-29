@@ -3,9 +3,9 @@
  * ("access grants"), roles, and user_roles (role assignment).
  */
 import { z } from "zod";
-import { trimmedString, utcInstantSchema } from "./api-common";
+import { eventIdSchema, trimmedString, utcInstantSchema } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
-import { listQuerySchema, paginatedResponseSchema, searchTermSchema } from "./pagination";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { permissionSchema } from "./permissions";
 import { userCatalogListQuerySchema, userCatalogListResponseSchema } from "./user-catalog";
 
@@ -39,7 +39,8 @@ export const userRoleIdParamsSchema = z.object({
 
 const scopedContextFields = {
   contextType: authorizationContextTypeSchema.nullable().optional(),
-  contextId: trimmedString(1, 80).nullable().optional(),
+  // Event contexts include natural IDs; every selectable event must also fit the assignment form.
+  contextId: eventIdSchema.nullable().optional(),
   expiresAt: utcInstantSchema.nullable().optional(),
 };
 
@@ -467,15 +468,17 @@ export const permissionTargetsListQuerySchema = listQuerySchema(PERMISSION_TARGE
   maxLimit: 50,
 }).extend({
   contextType: authorizationContextTypeSchema,
-  q: searchTermSchema,
 });
 export type PermissionTargetsListQuery = z.infer<typeof permissionTargetsListQuerySchema>;
 
-export const permissionTargetSchema = z.object({
-  id: databaseIdSchema,
-  type: authorizationContextTypeSchema,
-  name: z.string(),
-});
+const permissionTargetBaseSchema = z.object({ name: z.string() });
+export const permissionTargetSchema = z.discriminatedUnion("type", [
+  permissionTargetBaseSchema.extend({ type: z.literal("event"), id: eventIdSchema }),
+  permissionTargetBaseSchema.extend({
+    type: authorizationContextTypeSchema.exclude(["event"]),
+    id: databaseIdSchema,
+  }),
+]);
 export type PermissionTarget = z.infer<typeof permissionTargetSchema>;
 export const permissionTargetsListResponseSchema = paginatedResponseSchema("targets", permissionTargetSchema);
 
