@@ -22,6 +22,8 @@ import { OPENAPI_INFO, OPENAPI_TAGS, OPENAPI_TAG_GROUPS } from "./_lib/openapi/d
 import { createMcpWorkerFetch, MCP_OPENAPI_JSON_PATH } from "./_lib/mcp/worker";
 import { getStaticAssetsBinding } from "./_lib/static-assets";
 import { primaryFirstDb, requestSessionDb } from "./_lib/db/session";
+import { WorkerEntrypoint } from "cloudflare:workers";
+import { isPublicReadCacheCandidate, publicReadCacheResponse } from "./_lib/cache/public-read";
 
 const OPENAPI_JSON_PATH = "/api/v1/openapi.json";
 const DOCS_PATH = "/api/v1/docs";
@@ -110,6 +112,24 @@ app.route("/events", events_Router);
 // Build the MCP fetch handler after OpenAPI routes are registered.
 const fetchWithMcp = createMcpWorkerFetch({ app, getMcpOpenApiSchema });
 
+function handleHttpRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  return fetchWithMcp(request, withDependencyHandling({ ...env, DB: requestSessionDb(env.DB, request) }), ctx);
+}
+
+/** This entrypoint is reached only after the uncached gateway checks the request. */
+export class PublicRead extends WorkerEntrypoint<Env> {
+  async fetch(request: Request): Promise<Response> {
+    if (!isPublicReadCacheCandidate(request)) {
+      return new Response(null, { status: 404, headers: { "cache-control": "no-store" } });
+    }
+    try {
+      return publicReadCacheResponse(await handleHttpRequest(request, this.env, this.ctx));
+    } catch (error) {
+      return publicReadCacheResponse(handleError(error));
+    }
+  }
+}
+
 async function runScheduledJob(controller: ScheduledController, env: Env): Promise<void> {
   logInfo("SCHEDULED_JOB_STARTED", { cron: controller.cron, scheduledTime: controller.scheduledTime });
   try {
@@ -134,11 +154,15 @@ export default {
     const paused = await availabilityResponse(request, env);
     if (paused) return paused;
     try {
-      return await fetchWithMcp(
-        request,
-        withDependencyHandling({ ...env, DB: requestSessionDb(env.DB, request) }),
-        ctx,
-      );
+      if (isPublicReadCacheCandidate(request)) {
+        const cacheContext = ctx as ExecutionContext & {
+          exports?: { PublicRead: { fetch(request: Request): Promise<Response> } };
+        };
+        if (cacheContext.exports && "PublicRead" in cacheContext.exports) {
+          return await cacheContext.exports.PublicRead.fetch(request);
+        }
+      }
+      return await handleHttpRequest(request, env, ctx);
     } catch (error) {
       return handleError(error);
     }

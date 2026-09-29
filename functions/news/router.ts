@@ -11,7 +11,8 @@ app.get("*", async (c) => {
   const url = new URL(c.req.url);
   if (["/news/feed", "/news/feed/", "/news/feed/index.xml"].includes(url.pathname)) {
     const page = await readMemberNews(c.env.DB, memberNewsQuerySchema.parse({ limit: 25 }));
-    return new Response(await renderMemberNewsFeed(page.articles, url.origin), {
+    const canonicalOrigin = c.env.APP_BASE_URL ? new URL(c.env.APP_BASE_URL).origin : url.origin;
+    return new Response(await renderMemberNewsFeed(page.articles, canonicalOrigin), {
       headers: { "content-type": "application/rss+xml; charset=utf-8", "cache-control": CACHE_CONTROL },
     });
   }

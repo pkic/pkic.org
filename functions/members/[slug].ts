@@ -24,6 +24,7 @@ import type { DatabaseLike, Env } from "../_lib/types";
 // shadowed by an organization-slug lookup even though they match this
 // route's single-segment `/:slug` pattern.
 const RESERVED_SLUGS = new Set(["profile", "independent"]);
+const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900";
 
 /**
  * Registered as a single catch-all (`functions/members/router.ts`'s
@@ -57,5 +58,9 @@ export async function onRequestGet(c: any): Promise<Response> {
   }
 
   const shellUrl = new URL("/members/profile/", c.req.raw.url);
-  return binding.fetch(new Request(shellUrl, c.req.raw));
+  const shell = await binding.fetch(new Request(shellUrl, c.req.raw));
+  if (!shell.ok) return shell;
+  const headers = new Headers(shell.headers);
+  headers.set("cache-control", PUBLIC_CACHE_CONTROL);
+  return new Response(shell.body, { status: shell.status, headers });
 }
