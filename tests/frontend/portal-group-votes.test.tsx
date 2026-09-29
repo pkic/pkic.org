@@ -24,6 +24,7 @@ vi.mock("wouter", () => ({
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const VOTE_ID = "b0000000-0000-4000-8000-000000000001";
+const mounted: HTMLElement[] = [];
 
 function voteSummary() {
   return {
@@ -54,8 +55,12 @@ async function settle(): Promise<void> {
   });
 }
 
-afterEach(() => {
-  document.body.replaceChildren();
+afterEach(async () => {
+  for (const container of mounted.splice(0)) {
+    // Unmount first so the Markdown editor releases its DOM observer and timers.
+    await act(() => render(null, container));
+    container.remove();
+  }
   vi.unstubAllGlobals();
 });
 
@@ -105,6 +110,7 @@ describe("selected-group vote participation", () => {
     );
 
     const container = document.createElement("div");
+    mounted.push(container);
     document.body.append(container);
     await act(() =>
       render(<GroupVotes groupId={GROUP_ID} canManage={false} canParticipate voteSegment={VOTE_ID} />, container),
@@ -168,6 +174,7 @@ describe("selected-group vote participation", () => {
     );
 
     const container = document.createElement("div");
+    mounted.push(container);
     document.body.append(container);
     await act(() =>
       render(
@@ -252,6 +259,7 @@ describe("selected-group vote participation", () => {
     );
 
     const container = document.createElement("div");
+    mounted.push(container);
     document.body.append(container);
     await act(() =>
       render(
