@@ -4,10 +4,6 @@ import { json } from "../../../../_lib/http";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { getPublicGroupDirectory } from "../../../../_lib/services/groups/public-directory";
 
-const PUBLIC_CACHE_CONTROL = "public";
-
 export const GroupDirectoryGet = openApiRoute(groupDirectoryRouteSchema, async (c: AdminContext, data) => {
-  const response = json(await getPublicGroupDirectory(requestDb(c), data.params.groupId));
-  response.headers.set("cache-control", PUBLIC_CACHE_CONTROL);
-  return response;
+  return json(await getPublicGroupDirectory(requestDb(c), data.params.groupId));
 });

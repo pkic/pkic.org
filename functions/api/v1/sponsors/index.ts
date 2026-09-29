@@ -28,8 +28,6 @@ import {
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { openApiRoute } from "../../../_lib/openapi/route";
 
-const PUBLIC_CACHE_CONTROL = "public";
-
 export const SponsorsGet = openApiRoute(sponsorsCollectionRouteSchema, async (c: AdminContext, data) => {
   if (data.query.visibility === "all") {
     const { db } = await requireStaffPermission(c, "sponsorships:read");
@@ -44,9 +42,7 @@ export const SponsorsGet = openApiRoute(sponsorsCollectionRouteSchema, async (c:
 
   const body = sponsorsCollectionResponseSchema.parse(await listPublicSponsors(c.env.DB, data.query));
 
-  const response = json(body);
-  response.headers.set("cache-control", PUBLIC_CACHE_CONTROL);
-  return response;
+  return json(body);
 });
 
 export const SponsorsCreate = openApiRoute(sponsorshipCreateRouteSchema, async (c: AdminContext, data) => {
@@ -72,7 +68,5 @@ export const SponsorsCreate = openApiRoute(sponsorshipCreateRouteSchema, async (
 
 export const SponsorsDisplayGet = openApiRoute(sponsorsDisplayRouteSchema, async (c: any, data) => {
   const body = sponsorsDisplayResponseSchema.parse(await listPublicSponsorDisplay(c.env.DB, data.query));
-  const response = json(body);
-  response.headers.set("cache-control", PUBLIC_CACHE_CONTROL);
-  return response;
+  return json(body);
 });

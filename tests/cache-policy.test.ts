@@ -18,7 +18,7 @@ function createMiddlewareContext(request: Request, nextResponse: Response): Page
 }
 
 describe("cache policy middleware", () => {
-  it("adds public cache headers to anonymous read endpoints", async () => {
+  it("does not declare anonymous reads public solely from their URL", async () => {
     const response = await apiMiddlewareOnRequest(
       createMiddlewareContext(
         new Request("https://app.test/api/v1/events/pqc-2026/terms"),
@@ -26,13 +26,13 @@ describe("cache policy middleware", () => {
       ),
     );
 
-    expect(response.headers.get("cache-control")).toContain("public");
+    expect(response.headers.has("cache-control")).toBe(false);
 
     for (const path of ["/api/v1/events", "/api/v1/events/public-workshop"]) {
       const eventResponse = await apiMiddlewareOnRequest(
         createMiddlewareContext(new Request(`https://app.test${path}`), new Response("{}", { status: 200 })),
       );
-      expect(eventResponse.headers.get("cache-control")).toContain("public");
+      expect(eventResponse.headers.has("cache-control")).toBe(false);
     }
   });
 
@@ -114,13 +114,13 @@ describe("cache policy middleware", () => {
     },
   );
 
-  it("does not disable public caching for unrelated cookies", async () => {
+  it("preserves an explicitly public response for unrelated cookies", async () => {
     const response = await apiMiddlewareOnRequest(
       createMiddlewareContext(
         new Request("https://app.test/api/v1/events/pqc-2026/terms", {
           headers: { cookie: "theme=dark" },
         }),
-        new Response("{}", { status: 200 }),
+        new Response("{}", { status: 200, headers: { "cache-control": "public" } }),
       ),
     );
 

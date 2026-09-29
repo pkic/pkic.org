@@ -24,6 +24,7 @@ import eventForms_Router from "./forms/[formKey]/router";
 import type { RequestDbContext } from "../../../../_lib/db/context";
 import { requestDb } from "../../../../_lib/db/context";
 import { requireUserBackedAdminFromRequest } from "../../../../_lib/auth/admin";
+import { publicReadRoute } from "../../../../_lib/cache/public-read";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -63,7 +64,7 @@ openapi.post("/proposals", EventsEventSlugProposalsPost);
 openapi.get("/proposals", EventProposalsListGet);
 openapi.post("/registrations", EventsEventSlugRegistrationsPost);
 openapi.post("/speakers/invitations", EventSpeakerInvitationsPost);
-openapi.get("/terms", TermsGet);
+openapi.get("/terms", publicReadRoute(TermsGet));
 openapi.get("/sponsors/tiers", EventSponsorTiersGet);
 openapi.put("/sponsors/tiers", EventSponsorTiersPut);
 openapi.get("/roles", EventTeamRolesList);
@@ -78,7 +79,7 @@ openapi.route("/registrations", registrations_Router);
 openapi.get("/days", EventDaysGet);
 openapi.put("/days", EventDaysPut);
 openapi.patch("/settings", EventSettingsPatch);
-openapi.get("/", EventDetailGet);
+openapi.get("/", publicReadRoute(EventDetailGet));
 app.all("/registrations", () => methodNotAllowed(["GET", "POST"]));
 
 export default openapi;

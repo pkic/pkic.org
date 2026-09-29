@@ -9,8 +9,6 @@ import {
   sponsorTiersRouteSchema,
 } from "../../../../../assets/shared/schemas/sponsors";
 
-const PUBLIC_CACHE_CONTROL = "public";
-
 export const SponsorTiersGet = openApiRoute(sponsorTiersRouteSchema, async (c: AdminContext, data) => {
   if (data.query.includeInactive) {
     const { db } = await requireStaffPermission(c, "sponsorships:read");
@@ -24,13 +22,11 @@ export const SponsorTiersGet = openApiRoute(sponsorTiersRouteSchema, async (c: A
 
   const sponsorType = data.query.sponsorType ?? "consortium";
   const tiers = await listActiveSponsorshipTierNames(c.env.DB, sponsorType);
-  const response = json(
+  return json(
     publicSponsorTiersResponseSchema.parse({
       visibility: "public",
       sponsorType,
       tiers: tiers.map((tier) => ({ tier })),
     }),
   );
-  response.headers.set("cache-control", PUBLIC_CACHE_CONTROL);
-  return response;
 });

@@ -19,12 +19,12 @@
 import { first } from "../_lib/db/queries";
 import { getStaticAssetsBinding } from "../_lib/static-assets";
 import type { DatabaseLike, Env } from "../_lib/types";
+import { markPublicRead } from "../_lib/cache/public-read";
 
 // The two real static sub-paths under public/members/ — must never be
 // shadowed by an organization-slug lookup even though they match this
 // route's single-segment `/:slug` pattern.
 const RESERVED_SLUGS = new Set(["profile", "independent"]);
-const PUBLIC_CACHE_CONTROL = "public";
 
 /**
  * Registered as a single catch-all (`functions/members/router.ts`'s
@@ -61,6 +61,5 @@ export async function onRequestGet(c: any): Promise<Response> {
   const shell = await binding.fetch(new Request(shellUrl, c.req.raw));
   if (!shell.ok) return shell;
   const headers = new Headers(shell.headers);
-  headers.set("cache-control", PUBLIC_CACHE_CONTROL);
-  return new Response(shell.body, { status: shell.status, headers });
+  return markPublicRead(c.req.raw, new Response(shell.body, { status: shell.status, headers }));
 }

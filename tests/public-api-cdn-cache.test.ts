@@ -1,9 +1,27 @@
 import { describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import { isAnonymousReadRequest, publicReadCacheResponse } from "../functions/_lib/cache/public-read";
+import { isAnonymousReadRequest, markPublicRead, publicReadCacheResponse } from "../functions/_lib/cache/public-read";
 import worker from "../functions/router";
 
 describe("public API CDN cache gateway", () => {
+  it("marks only anonymous, nonsensitive successful route responses public", () => {
+    const url = "https://pkic.org/api/v1/members";
+    expect(markPublicRead(new Request(url), new Response("public")).headers.get("cache-control")).toBe("public");
+    for (const request of [
+      new Request(url, { headers: { authorization: "Bearer staff" } }),
+      new Request(url, { headers: { cookie: "pkic_session=staff" } }),
+    ]) {
+      expect(markPublicRead(request, new Response("staff")).headers.has("cache-control")).toBe(false);
+    }
+    expect(markPublicRead(new Request(url), new Response("sensitive"), true).headers.has("cache-control")).toBe(false);
+    expect(
+      markPublicRead(
+        new Request(url),
+        new Response("private", { headers: { "cache-control": "private" } }),
+      ).headers.get("cache-control"),
+    ).toBe("private");
+  });
+
   it("returns the cached entrypoint response without running the API handler", async () => {
     let calls = 0;
     let cacheKey = "";

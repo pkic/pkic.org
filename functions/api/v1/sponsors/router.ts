@@ -14,16 +14,17 @@ import { SponsorsIdLogoDelete, SponsorsIdLogoGet, SponsorsIdLogoPut } from "./[i
 import { SponsorStageUpdate } from "./[id]/stage";
 import { SponsorSettlementCreate } from "./[id]/settlements";
 import { SponsorAttendeesList } from "./[sponsorshipId]/events/[eventId]/attendees";
+import { publicReadRoute } from "../../../_lib/cache/public-read";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
-openapi.get("/", SponsorsGet);
+openapi.get("/", publicReadRoute(SponsorsGet));
 openapi.post("/", SponsorsCreate);
-openapi.get("/display", SponsorsDisplayGet);
+openapi.get("/display", publicReadRoute(SponsorsDisplayGet));
 openapi.post("/inquiries", SponsorInquiriesCreate);
 openapi.post("/checkouts", SponsorCheckoutCreate);
-openapi.get("/tiers", SponsorTiersGet);
+openapi.get("/tiers", publicReadRoute(SponsorTiersGet));
 openapi.patch("/tiers/:id", SponsorTierUpdate);
 openapi.post("/access-links", SponsorAccessLinksCreate);
 openapi.get("/companies", SponsorCompaniesGet);

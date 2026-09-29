@@ -8,12 +8,10 @@ import { openApiRoute } from "../../../_lib/openapi/route";
 export const VotesGet = openApiRoute(publicVotesListRouteSchema, async (c: any, data) => {
   const { votes, total } = await listPublicVotes(c.env.DB, data.query);
 
-  const response = json(
+  return json(
     publicVotesListResponseSchema.parse({
       votes,
       page: buildPageInfo(data.query.limit, data.query.offset, total, votes.length),
     }),
   );
-  response.headers.set("cache-control", "public");
-  return response;
 });

@@ -1,5 +1,6 @@
 import { hasAuthenticationCredential } from "../auth/session-cookies";
 import type { Env } from "../types";
+import { OpenAPIRoute } from "chanfana";
 
 const DEFAULT_BROWSER_TTL_SECONDS = 3600;
 const DEFAULT_CDN_TTL_SECONDS = 86400;
@@ -12,6 +13,27 @@ function ttl(value: string | undefined, fallback: number): number {
 /** Authenticate before consulting the shared cache; the response policy decides what is public. */
 export function isAnonymousReadRequest(request: Request): boolean {
   return (request.method === "GET" || request.method === "HEAD") && !hasAuthenticationCredential(request);
+}
+
+/** Route registration opts a successful, caller-independent read into the shared policy. */
+export function markPublicRead(request: Request, response: Response, sensitive = false): Response {
+  if (!isAnonymousReadRequest(request) || sensitive || response.status !== 200 || response.headers.has("set-cookie")) {
+    return response;
+  }
+  if (/\b(?:private|no-store|no-cache)\b/i.test(response.headers.get("cache-control") ?? "")) return response;
+  const result = new Response(response.body, response);
+  result.headers.set("cache-control", "public");
+  return result;
+}
+
+export function publicReadRoute<Route extends typeof OpenAPIRoute>(route: Route): Route {
+  const BaseRoute: typeof OpenAPIRoute = route;
+  return class extends BaseRoute {
+    async handle(context: any): Promise<Response> {
+      const response = (await super.handle(context)) as Response;
+      return markPublicRead(context.req.raw, response, context.get?.("sensitive") === true);
+    }
+  } as Route;
 }
 
 /** Never let a response without an explicit public policy populate Workers Cache. */
