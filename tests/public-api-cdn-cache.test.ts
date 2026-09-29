@@ -63,8 +63,18 @@ describe("public API CDN cache gateway", () => {
       new Response("failure", { status: 500, headers: { "cache-control": "public, max-age=300" } }),
       new Response("private", { headers: { "cache-control": "private, max-age=300" } }),
       new Response("cookie", { headers: { "cache-control": "public, max-age=300", "set-cookie": "x=y" } }),
+      new Response("cdn", {
+        headers: {
+          "cache-control": "private, max-age=300",
+          "cdn-cache-control": "public, max-age=900",
+          "cloudflare-cdn-cache-control": "public, max-age=900",
+        },
+      }),
     ]) {
-      expect(publicReadCacheResponse(response).headers.get("cache-control")).toBe("no-store, max-age=0");
+      const result = publicReadCacheResponse(response);
+      expect(result.headers.get("cache-control")).toBe("no-store, max-age=0");
+      expect(result.headers.has("cdn-cache-control")).toBe(false);
+      expect(result.headers.has("cloudflare-cdn-cache-control")).toBe(false);
     }
 
     const result = publicReadCacheResponse(

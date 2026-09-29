@@ -35,6 +35,8 @@ export function publicReadCacheResponse(response: Response): Response {
   const result = new Response(response.body, response);
   const policy = result.headers.get("cache-control") ?? "";
   if (!response.ok || !/(?:^|,)\s*public(?:\s*,|$)/i.test(policy) || result.headers.has("set-cookie")) {
+    result.headers.delete("cloudflare-cdn-cache-control");
+    result.headers.delete("cdn-cache-control");
     result.headers.set("cache-control", "no-store, max-age=0");
   }
   result.headers.delete("x-request-id");
