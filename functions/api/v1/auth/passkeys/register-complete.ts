@@ -24,7 +24,7 @@ export async function onRequestPost(c: AdminContext): Promise<Response> {
   const actor = await requireAnyActorFromRequest(requestDb(c), c.req.raw, c.env);
   const body = await parseJsonBody(c.req, passkeyRegisterCompleteSchema);
 
-  const passkey = await completePasskeyRegistration(requestDb(c), c.env, actor, {
+  const passkey = await completePasskeyRegistration(requestDb(c), c.env, c.req.raw.url, actor, {
     challengeToken: body.challengeToken,
     response: body.response,
     deviceName: body.deviceName,

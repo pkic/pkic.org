@@ -100,6 +100,7 @@ interface BeginResponse {
   options: {
     challenge: string;
     rp?: { id?: string };
+    rpId?: string;
     authenticatorSelection?: { residentKey?: string; userVerification?: string };
     userVerification?: string;
   };
@@ -161,6 +162,98 @@ describe("passkeys (WebAuthn)", () => {
     expect(body.options.authenticatorSelection?.residentKey).toBe("required");
     expect(body.options.authenticatorSelection?.userVerification).toBe("required");
     expect(body.challengeToken).toBeTruthy();
+  });
+
+  it("registers and signs in on a branch preview with the shared preview RP ID", async () => {
+    const rpId = "pkic.workers.dev";
+    const origin = "https://agent-public-upstream-curated-20260923-pkic-org.pkic.workers.dev";
+    const previewEnv = {
+      ...env,
+      WEBAUTHN_RP_ID: rpId,
+      WEBAUTHN_ORIGIN: "https://pkic-org-preview.pkic.workers.dev",
+      WEBAUTHN_PREVIEW_WORKER_NAME: "pkic-org",
+    };
+    const previewCall = (url: string, path: string, init: RequestInit = {}, bearer?: string) => {
+      const headers = new Headers(init.headers);
+      if (bearer) headers.set("authorization", `Bearer ${bearer}`);
+      if (init.body) headers.set("content-type", "application/json");
+      return app.fetch(
+        new Request(`${url}${path}`, { ...init, headers }),
+        previewEnv as any,
+        {
+          passThroughOnException: () => {},
+          waitUntil: () => {},
+        } as any,
+      );
+    };
+
+    const unsupportedBegin = await previewCall(
+      "https://other-worker.pkic.workers.dev",
+      "/api/v1/auth/passkeys/authenticate/begin",
+    );
+    expect(unsupportedBegin.status).toBe(400);
+    await expect(unsupportedBegin.json()).resolves.toMatchObject({ error: { code: "PASSKEY_ORIGIN_INVALID" } });
+
+    const stableBegin = await previewCall(
+      "https://pkic-org-preview.pkic.workers.dev",
+      "/api/v1/auth/passkeys/authenticate/begin",
+    );
+    expect(stableBegin.status).toBe(200);
+    expect(((await stableBegin.json()) as BeginResponse).options.rpId).toBe(rpId);
+
+    const registrationBeginResponse = await previewCall(
+      origin,
+      "/api/v1/auth/passkeys/register/begin",
+      { method: "POST" },
+      token,
+    );
+    expect(registrationBeginResponse.status).toBe(200);
+    const registrationBegin = (await registrationBeginResponse.json()) as BeginResponse;
+    expect(registrationBegin.options.rp?.id).toBe(rpId);
+
+    const authenticator = await createMockAuthenticator();
+    const registration = await buildRegistrationResponse(authenticator, {
+      challenge: registrationBegin.options.challenge,
+      rpId,
+      origin,
+    });
+    const registrationBody = JSON.stringify({
+      challengeToken: registrationBegin.challengeToken,
+      response: registration,
+    });
+    const otherWorker = await previewCall(
+      "https://other-worker.pkic.workers.dev",
+      "/api/v1/auth/passkeys/register/complete",
+      { method: "POST", body: registrationBody },
+      token,
+    );
+    expect(otherWorker.status).toBe(400);
+    await expect(otherWorker.json()).resolves.toMatchObject({ error: { code: "PASSKEY_ORIGIN_INVALID" } });
+
+    const registrationComplete = await previewCall(
+      origin,
+      "/api/v1/auth/passkeys/register/complete",
+      { method: "POST", body: registrationBody },
+      token,
+    );
+    expect(registrationComplete.status).toBe(201);
+
+    const authenticationBeginResponse = await previewCall(origin, "/api/v1/auth/passkeys/authenticate/begin");
+    expect(authenticationBeginResponse.status).toBe(200);
+    const authenticationBegin = (await authenticationBeginResponse.json()) as BeginResponse;
+    expect(authenticationBegin.options.rpId).toBe(rpId);
+    const assertion = await buildAuthenticationResponse(authenticator, {
+      challenge: authenticationBegin.options.challenge,
+      rpId,
+      origin,
+      signCount: 1,
+    });
+    const authenticationComplete = await previewCall(origin, "/api/v1/auth/passkeys/authenticate/complete", {
+      method: "POST",
+      body: JSON.stringify({ challengeToken: authenticationBegin.challengeToken, response: assertion }),
+    });
+    expect(authenticationComplete.status).toBe(200);
+    expect(passkeyAuthenticateCompleteResponseSchema.parse(await authenticationComplete.json()).staff?.id).toBe(userId);
   });
 
   it("rejects the shared API key from user-owned passkey endpoints", async () => {

@@ -178,6 +178,8 @@ export interface Env {
   WEBAUTHN_RP_NAME?: string;
   /** WebAuthn expected origin (scheme + host, e.g. "https://pkic.org"). */
   WEBAUTHN_ORIGIN?: string;
+  /** Worker name whose Cloudflare branch preview URLs may verify passkeys. */
+  WEBAUTHN_PREVIEW_WORKER_NAME?: string;
   /** Member (non-admin) magic-link session TTL, hours. Defaults to 720 (30 days). */
   MEMBER_SESSION_TTL_HOURS?: string;
   /** Google Workspace service account email used to sign Directory API JWTs. */

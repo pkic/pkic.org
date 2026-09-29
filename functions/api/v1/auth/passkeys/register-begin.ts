@@ -17,6 +17,6 @@ import { openApiRoute } from "../../../../_lib/openapi/route";
 
 export const PasskeyRegisterBegin = openApiRoute(passkeyRegisterBeginRouteSchema, async (c: AdminContext) => {
   const actor = await requireAnyActorFromRequest(requestDb(c), c.req.raw, c.env);
-  const result = await beginPasskeyRegistration(requestDb(c), c.env, actor);
+  const result = await beginPasskeyRegistration(requestDb(c), c.env, c.req.raw.url, actor);
   return jsonNoStore(result);
 });

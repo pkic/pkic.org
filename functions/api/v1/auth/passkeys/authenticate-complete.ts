@@ -22,7 +22,7 @@ export const PasskeyAuthenticateComplete = openApiRoute(
     const body = data.body;
     const db = requestDb(c);
 
-    const verified = await completePasskeyAuthentication(db, c.env, {
+    const verified = await completePasskeyAuthentication(db, c.env, c.req.raw.url, {
       challengeToken: body.challengeToken,
       response: body.response,
     });

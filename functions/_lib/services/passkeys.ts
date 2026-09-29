@@ -112,13 +112,42 @@ function toSummary(row: PasskeyCredentialRow): PasskeySummary {
   };
 }
 
-type WebAuthnEnv = Pick<Env, "WEBAUTHN_RP_ID" | "WEBAUTHN_RP_NAME" | "WEBAUTHN_ORIGIN" | "INTERNAL_SIGNING_SECRET">;
+type WebAuthnEnv = Pick<
+  Env,
+  "WEBAUTHN_RP_ID" | "WEBAUTHN_RP_NAME" | "WEBAUTHN_ORIGIN" | "WEBAUTHN_PREVIEW_WORKER_NAME" | "INTERNAL_SIGNING_SECRET"
+>;
+
+function expectedPasskeyOrigin(env: WebAuthnEnv, requestUrl: string): string {
+  const configuredOrigin = requireEnvVar(env.WEBAUTHN_ORIGIN, "WEBAUTHN_ORIGIN");
+  const requestOrigin = new URL(requestUrl);
+  if (requestOrigin.origin === configuredOrigin) return configuredOrigin;
+
+  const workerName = env.WEBAUTHN_PREVIEW_WORKER_NAME;
+  const rpId = requireEnvVar(env.WEBAUTHN_RP_ID, "WEBAUTHN_RP_ID");
+  const previewSuffix = workerName && `-${workerName}.${rpId}`;
+  const alias =
+    previewSuffix && requestOrigin.hostname.endsWith(previewSuffix)
+      ? requestOrigin.hostname.slice(0, -previewSuffix.length)
+      : "";
+  if (
+    requestOrigin.protocol === "https:" &&
+    requestOrigin.port === "" &&
+    alias.length > 0 &&
+    /^[a-z0-9](?:[a-z0-9-]*[a-z0-9])?$/.test(alias)
+  ) {
+    return requestOrigin.origin;
+  }
+
+  throw new AppError(400, "PASSKEY_ORIGIN_INVALID", "Passkeys are unavailable on this hostname");
+}
 
 export async function beginPasskeyRegistration(
   db: DatabaseLike,
   env: WebAuthnEnv,
+  requestUrl: string,
   actor: { id: string; email: string },
 ): Promise<{ options: Record<string, unknown>; challengeToken: string }> {
+  expectedPasskeyOrigin(env, requestUrl);
   const rpId = requireEnvVar(env.WEBAUTHN_RP_ID, "WEBAUTHN_RP_ID");
   const rpName = requireEnvVar(env.WEBAUTHN_RP_NAME, "WEBAUTHN_RP_NAME");
   const signingSecret = requireEnvVar(env.INTERNAL_SIGNING_SECRET, "INTERNAL_SIGNING_SECRET");
@@ -157,11 +186,12 @@ export async function beginPasskeyRegistration(
 export async function completePasskeyRegistration(
   db: DatabaseLike,
   env: WebAuthnEnv,
+  requestUrl: string,
   actor: { id: string; kind: "user" },
   payload: { challengeToken: string; response: RegistrationResponseInput; deviceName?: string | null },
 ): Promise<PasskeySummary> {
   const rpId = requireEnvVar(env.WEBAUTHN_RP_ID, "WEBAUTHN_RP_ID");
-  const origin = requireEnvVar(env.WEBAUTHN_ORIGIN, "WEBAUTHN_ORIGIN");
+  const origin = expectedPasskeyOrigin(env, requestUrl);
   const signingSecret = requireEnvVar(env.INTERNAL_SIGNING_SECRET, "INTERNAL_SIGNING_SECRET");
 
   const claims = await verifyPasskeyChallengeToken(signingSecret, payload.challengeToken, "registration");
@@ -302,8 +332,10 @@ export async function persistVerifiedPasskeyCredential(
 }
 
 export async function beginPasskeyAuthentication(
-  env: Pick<Env, "WEBAUTHN_RP_ID" | "INTERNAL_SIGNING_SECRET">,
+  env: WebAuthnEnv,
+  requestUrl: string,
 ): Promise<{ options: Record<string, unknown>; challengeToken: string }> {
+  expectedPasskeyOrigin(env, requestUrl);
   const rpId = requireEnvVar(env.WEBAUTHN_RP_ID, "WEBAUTHN_RP_ID");
   const signingSecret = requireEnvVar(env.INTERNAL_SIGNING_SECRET, "INTERNAL_SIGNING_SECRET");
 
@@ -330,11 +362,12 @@ export interface PasskeyAuthenticationResult {
 
 export async function completePasskeyAuthentication(
   db: DatabaseLike,
-  env: Pick<Env, "WEBAUTHN_RP_ID" | "WEBAUTHN_ORIGIN" | "INTERNAL_SIGNING_SECRET" | "MEMBER_SESSION_TTL_HOURS">,
+  env: WebAuthnEnv & Pick<Env, "MEMBER_SESSION_TTL_HOURS">,
+  requestUrl: string,
   payload: { challengeToken: string; response: AuthenticationResponseInput },
 ): Promise<PasskeyAuthenticationResult> {
   const rpId = requireEnvVar(env.WEBAUTHN_RP_ID, "WEBAUTHN_RP_ID");
-  const origin = requireEnvVar(env.WEBAUTHN_ORIGIN, "WEBAUTHN_ORIGIN");
+  const origin = expectedPasskeyOrigin(env, requestUrl);
   const signingSecret = requireEnvVar(env.INTERNAL_SIGNING_SECRET, "INTERNAL_SIGNING_SECRET");
 
   const claims = await verifyPasskeyChallengeToken(signingSecret, payload.challengeToken, "authentication");

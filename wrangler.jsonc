@@ -268,9 +268,10 @@
         "RSVP_INBOUND_EMAIL_MAX_BYTES": "5242880",
         "FROM_NAME": "PKI Consortium (Preview)",
         "STRIPE_PUBLISHABLE_KEY": "pk_test_51TADczLT173BlQwOCJAhV0Mf5xxJXJWG9VWkprhXUSJZTaYdqr5vJynipzUfCglU93cIoCBBNOkviwhOqQ3ZFPNk00cxzuEyMH",
-        "WEBAUTHN_RP_ID": "pkic-org-preview.pkic.workers.dev",
+        "WEBAUTHN_RP_ID": "pkic.workers.dev",
         "WEBAUTHN_RP_NAME": "PKI Consortium (Preview)",
         "WEBAUTHN_ORIGIN": "https://pkic-org-preview.pkic.workers.dev",
+        "WEBAUTHN_PREVIEW_WORKER_NAME": "pkic-org",
       },
       "browser": {
         "binding": "BROWSER",

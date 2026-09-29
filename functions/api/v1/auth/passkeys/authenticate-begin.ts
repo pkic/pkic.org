@@ -11,6 +11,6 @@ import type { AdminContext } from "../../../../_lib/db/context";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 
 export const PasskeyAuthenticateBegin = openApiRoute(passkeyAuthenticateBeginRouteSchema, async (c: AdminContext) => {
-  const result = await beginPasskeyAuthentication(c.env);
+  const result = await beginPasskeyAuthentication(c.env, c.req.raw.url);
   return jsonNoStore(result);
 });
