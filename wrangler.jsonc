@@ -97,7 +97,7 @@
         // Set true only after provisioning TURNSTILE_SITE_KEY, TURNSTILE_HOSTNAMES
         // (exact frontend hostnames), and the TURNSTILE_SECRET Worker secret.
         // Keep preview and production configuration separate. False disables the gate.
-        "TURNSTILE_ENABLED": "false",
+        "TURNSTILE_ENABLED": "true",
         "TURNSTILE_SITE_KEY": "0x4AAAAAAE6XHgcF51m-GKnM",
         "TURNSTILE_HOSTNAMES": "pkic.org",
         // Emergency mode never expires. Planned windows require both UTC instants.
