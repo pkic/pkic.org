@@ -7,7 +7,7 @@ import {
   sponsorshipResponseSchema,
   SPONSORSHIP_PIPELINE_STAGES,
 } from "../../../../../../shared/schemas/sponsorship-management";
-import { fmtDate, toast } from "../../../ui";
+import { fmtCalendarDate, toast } from "../../../ui";
 import type { Sponsorship, SponsorshipPipelineStage } from "../../../../../../shared/schemas/sponsorship-management";
 import type { ApiTableActions } from "../../../../../components/ApiDataTable";
 import { Badge, statusLabel } from "../../../../../components/Badge";
@@ -107,7 +107,7 @@ export function SponsorshipDetail({
       ) : null,
     },
     { term: "Assigned staff", value: sponsorship.assignedToName },
-    { term: "Renewal date", value: sponsorship.renewalDate ? fmtDate(sponsorship.renewalDate) : null },
+    { term: "Renewal date", value: sponsorship.renewalDate ? fmtCalendarDate(sponsorship.renewalDate) : null },
     { term: "Notes", value: sponsorship.notes ? <Markdown markdown={sponsorship.notes} /> : null },
   ];
 
@@ -133,7 +133,7 @@ export function SponsorshipDetail({
         facts={[
           sponsorship.eventName,
           sponsorship.contactEmail ? (sponsorship.contactName ?? sponsorship.contactEmail) : null,
-          sponsorship.renewalDate ? `Renews ${fmtDate(sponsorship.renewalDate)}` : null,
+          sponsorship.renewalDate ? `Renews ${fmtCalendarDate(sponsorship.renewalDate)}` : null,
         ].filter((fact): fact is string => Boolean(fact))}
         actions={canWrite ? <Menu label="Sponsorship actions" align="end" items={commands} /> : undefined}
       />

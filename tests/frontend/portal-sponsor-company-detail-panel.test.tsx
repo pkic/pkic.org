@@ -24,6 +24,8 @@ import {
   type SponsorshipCompany,
   type SponsorshipsListResponse,
 } from "../../assets/shared/schemas/sponsorship-management";
+import { OrganizationSponsorships } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationSponsorships";
+import { OrganizationSponsorshipStanding } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationSponsorshipStanding";
 import { CompanyDetailPanel } from "../../assets/ts/member-flows/portal/sections/sponsors/management/CompanyDetailPanel";
 
 const ORGANIZATION_ID = "00000000-0000-4000-8000-000000000001";
@@ -121,6 +123,21 @@ async function panel(company: SponsorshipCompany = COMPANY): Promise<HTMLElement
 }
 
 describe("one company's sponsorship list", () => {
+  it.each(["2027-01-01", "2028-02-29", "2027-03-14"])(
+    "preserves renewal calendar date %s across company and organization views",
+    async (renewalDate) => {
+      stubList([sponsorship({ renewalDate })]);
+      const company = await panel();
+      const organization = mount(<OrganizationSponsorships organizationId={ORGANIZATION_ID} />);
+      const standing = mount(<OrganizationSponsorshipStanding organizationId={ORGANIZATION_ID} canWrite={false} />);
+      await settle();
+      const expected = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: "UTC" }).format(
+        new Date(`${renewalDate}T00:00:00Z`),
+      );
+      for (const view of [company, organization, standing]) expect(view.textContent).toContain(expected);
+    },
+  );
+
   it("asks the sponsorships endpoint for this company's bounded page", async () => {
     const requested = stubList();
     await panel();

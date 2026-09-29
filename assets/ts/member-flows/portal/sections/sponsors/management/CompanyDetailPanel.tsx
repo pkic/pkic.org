@@ -10,7 +10,7 @@ import { Badge, statusLabel } from "../../../../../components/Badge";
 import { EmptyState } from "../../../../../components/EmptyState";
 import type { Column } from "../../../../../components/Table";
 import { PageHeader } from "../../../../../ui/PageHeader";
-import { fmtDate } from "../../../ui";
+import { fmtCalendarDate } from "../../../ui";
 import { usePortalHashLocation } from "../../../hash-location";
 import { companyDetailParams } from "./companyKey";
 
@@ -78,7 +78,7 @@ export function CompanyDetailPanel({ selectedCompany }: { selectedCompany: Spons
       header: "Renewal",
       // The shared formatter already says "—" for a sponsorship with no
       // renewal date, so the column states no absence of its own.
-      cell: (row) => fmtDate(row.renewalDate),
+      cell: (row) => fmtCalendarDate(row.renewalDate),
       width: "fit",
       sort: { asc: "renewalDate", desc: "-renewalDate", defaultDirection: "asc" },
     },
