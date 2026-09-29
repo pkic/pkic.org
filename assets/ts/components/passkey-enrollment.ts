@@ -42,7 +42,19 @@ export function usePasskeyEnrollment() {
       );
       return null;
     } catch (reason) {
-      return (reason as Error).message;
+      if (reason instanceof Error || reason instanceof DOMException) {
+        // SimpleWebAuthn wraps browser refusals in an Error with the DOMException as its cause.
+        const cause = reason instanceof Error ? reason.cause : undefined;
+        const name = cause instanceof Error || cause instanceof DOMException ? cause.name : reason.name;
+        if (name === "NotAllowedError") {
+          return "Passkey creation was canceled or declined. Unlock your password manager or choose another passkey provider, then try again.";
+        }
+        if (name === "InvalidStateError") {
+          return "This provider already has a passkey for your account. Use the existing passkey to sign in, or choose another provider.";
+        }
+        if (reason.message.trim()) return reason.message;
+      }
+      return "The passkey could not be added. Check your password manager or device and try again.";
     } finally {
       setEnrolling(false);
     }

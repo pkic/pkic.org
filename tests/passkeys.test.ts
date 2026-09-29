@@ -101,7 +101,8 @@ interface BeginResponse {
     challenge: string;
     rp?: { id?: string };
     rpId?: string;
-    authenticatorSelection?: { residentKey?: string; userVerification?: string };
+    user?: { id: string; name: string; displayName: string };
+    authenticatorSelection?: { residentKey?: string; userVerification?: string; authenticatorAttachment?: string };
     userVerification?: string;
   };
   challengeToken: string;
@@ -159,6 +160,12 @@ describe("passkeys (WebAuthn)", () => {
     const body = (await response.json()) as BeginResponse;
     expect(body.options.challenge).toBeTruthy();
     expect(body.options.rp?.id).toBe(RP_ID);
+    // Providers need a readable account label, not the library's empty default.
+    expect(body.options.user).toMatchObject({
+      name: "passkey-user@example.test",
+      displayName: "passkey-user@example.test",
+    });
+    expect(body.options.authenticatorSelection?.authenticatorAttachment).toBeUndefined();
     expect(body.options.authenticatorSelection?.residentKey).toBe("required");
     expect(body.options.authenticatorSelection?.userVerification).toBe("required");
     expect(body.challengeToken).toBeTruthy();

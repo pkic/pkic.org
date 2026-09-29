@@ -31,6 +31,7 @@ export function PasskeySettings({
 }) {
   const [passkeys, setPasskeys] = useState<PasskeySummary[] | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [enrollmentError, setEnrollmentError] = useState<string | null>(null);
   const [deviceName, setDeviceName] = useState("");
   const { enroll, enrolling } = usePasskeyEnrollment();
   const passkeysSupported = typeof window !== "undefined" && browserSupportsWebAuthn();
@@ -50,9 +51,10 @@ export function PasskeySettings({
 
   async function handleEnroll(event: Event) {
     event.preventDefault();
+    setEnrollmentError(null);
     const failure = await enroll(deviceName);
     if (failure) {
-      showToast(toastTargetId, failure, "error");
+      setEnrollmentError(failure);
       return;
     }
     showToast(toastTargetId, "Passkey added", "success");
@@ -87,9 +89,11 @@ export function PasskeySettings({
       <PanelHeader title={title} headingLevel={2} />
       <PanelBody class="pk-stack">
         <p class="pk-small pk-muted">
-          Passkeys let you sign in with Touch ID, Face ID, or a hardware security key instead of a magic link. You can
-          register more than one device.
+          Save a passkey in your password manager, on your device with Touch ID or Face ID, or on a hardware security
+          key. Choose where to save it when prompted. You can add more than one passkey.
         </p>
+
+        {enrollmentError && <Alert tone="danger">{enrollmentError}</Alert>}
 
         {passkeysSupported ? (
           <form onSubmit={handleEnroll} class="pk-cluster">

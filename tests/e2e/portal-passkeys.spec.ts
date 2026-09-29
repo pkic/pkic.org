@@ -26,13 +26,13 @@ const DEVICE_NAME = "E2E virtual authenticator";
  * the `residentKey: "required"` / `userVerification: "required"` policy the
  * registration options ask for.
  */
-async function attachVirtualAuthenticator(page: Page): Promise<void> {
+async function attachVirtualAuthenticator(page: Page, transport: "internal" | "usb"): Promise<void> {
   const client = await page.context().newCDPSession(page);
   await client.send("WebAuthn.enable");
   await client.send("WebAuthn.addVirtualAuthenticator", {
     options: {
       protocol: "ctap2",
-      transport: "internal",
+      transport,
       hasResidentKey: true,
       hasUserVerification: true,
       isUserVerified: true,
@@ -53,36 +53,59 @@ async function enrollPasskey(page: Page, deviceName: string): Promise<void> {
   await expect(page.getByRole("cell", { name: deviceName, exact: true })).toBeVisible();
 }
 
-test("a passkey can be registered, used to sign in, and removed", async ({ page }) => {
-  await attachVirtualAuthenticator(page);
-  await signInToPortal(page, PASSKEY_EMAIL);
-  await openAccountSettings(page);
+for (const transport of ["internal", "usb"] as const) {
+  test(`a ${transport} passkey can be registered, used to sign in, and removed`, async ({ page }, testInfo) => {
+    await attachVirtualAuthenticator(page, transport);
+    await signInToPortal(page, PASSKEY_EMAIL);
+    await openAccountSettings(page);
 
-  await enrollPasskey(page, DEVICE_NAME);
-  // A freshly registered credential has never been asserted.
-  await expect(page.getByText("Never")).toBeVisible();
+    // A failed attempt stays beside the form and leaves the account usable.
+    await page.route("**/api/v1/auth/passkeys/register/begin", (route) =>
+      route.fulfill({
+        status: 400,
+        contentType: "application/json",
+        body: JSON.stringify({
+          error: { code: "PASSKEY_UNAVAILABLE", message: "Passkey provider unavailable. Try again." },
+        }),
+      }),
+    );
+    await page.getByRole("button", { name: "Add a passkey" }).click();
+    await expect(page.getByRole("alert").filter({ hasText: "Passkey provider unavailable" })).toBeVisible();
+    await page.screenshot({ path: testInfo.outputPath("enrollment-error.png"), fullPage: true });
+    await page.unroute("**/api/v1/auth/passkeys/register/begin");
 
-  // ── Sign in with the passkey alone ───────────────────────────────────────
-  // Dropping the cookies leaves the authenticator holding the credential but
-  // the browser holding no session, which is the state a returning user is in.
-  await page.context().clearCookies();
-  await page.goto("/portal/");
-  await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible({ timeout: 15_000 });
+    const registration = page.waitForResponse((response) => response.url().endsWith("/passkeys/register/begin"));
+    await enrollPasskey(page, DEVICE_NAME);
+    const { options } = await (await registration).json();
+    expect(options.user.displayName).toBe(PASSKEY_EMAIL);
+    expect(options.authenticatorSelection.authenticatorAttachment).toBeUndefined();
+    await expect(page.getByRole("alert").filter({ hasText: "Passkey provider unavailable" })).toHaveCount(0);
+    await page.screenshot({ path: testInfo.outputPath("passkey-added.png"), fullPage: true });
+    // A freshly registered credential has never been asserted.
+    await expect(page.getByText("Never")).toBeVisible();
 
-  await page.getByRole("button", { name: "Sign in with a passkey" }).click();
-  await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toHaveCount(0, { timeout: 20_000 });
-  await expect(page.locator("#portal-root")).toBeVisible({ timeout: 15_000 });
+    // ── Sign in with the passkey alone ───────────────────────────────────────
+    // Dropping the cookies leaves the authenticator holding the credential but
+    // the browser holding no session, which is the state a returning user is in.
+    await page.context().clearCookies();
+    await page.goto("/portal/");
+    await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible({ timeout: 15_000 });
 
-  // The session is a real one, not just a dismissed login screen.
-  await openAccountSettings(page);
-  await expect(page.getByRole("cell", { name: DEVICE_NAME, exact: true })).toBeVisible();
-  // The assertion that just signed the user in is recorded against the credential.
-  await expect(page.getByText("Never")).toHaveCount(0);
+    await page.getByRole("button", { name: "Sign in with a passkey" }).click();
+    await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toHaveCount(0, { timeout: 20_000 });
+    await expect(page.locator("#portal-root")).toBeVisible({ timeout: 15_000 });
 
-  // ── Removal ──────────────────────────────────────────────────────────────
-  const row = page.getByRole("row").filter({ hasText: DEVICE_NAME });
-  await runRowAction(page, row, "Remove");
-  await acceptConfirmDialog(page, "Remove passkey");
-  await expect(page.getByText("Passkey removed")).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByRole("cell", { name: DEVICE_NAME, exact: true })).toHaveCount(0);
-});
+    // The session is a real one, not just a dismissed login screen.
+    await openAccountSettings(page);
+    await expect(page.getByRole("cell", { name: DEVICE_NAME, exact: true })).toBeVisible();
+    // The assertion that just signed the user in is recorded against the credential.
+    await expect(page.getByText("Never")).toHaveCount(0);
+
+    // ── Removal ──────────────────────────────────────────────────────────────
+    const row = page.getByRole("row").filter({ hasText: DEVICE_NAME });
+    await runRowAction(page, row, "Remove");
+    await acceptConfirmDialog(page, "Remove passkey");
+    await expect(page.getByText("Passkey removed")).toBeVisible({ timeout: 15_000 });
+    await expect(page.getByRole("cell", { name: DEVICE_NAME, exact: true })).toHaveCount(0);
+  });
+}
