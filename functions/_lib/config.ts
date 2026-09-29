@@ -1,8 +1,62 @@
 import type { Env } from "./types";
+import {
+  RSVP_ENFORCEMENT_D1_SAFETY_MARGIN,
+  RSVP_ENFORCEMENT_MAX_ACTION_STATEMENTS,
+  RSVP_ENFORCEMENT_SELECTION_STATEMENTS,
+} from "../../assets/shared/constants/rsvp-enforcement";
 
 function parseIntOrDefault(value: string | undefined, defaultValue: number): number {
   const parsed = Number.parseInt(value ?? "", 10);
   return Number.isFinite(parsed) ? parsed : defaultValue;
+}
+
+export const DEFAULT_RSVP_INBOUND_EMAIL_MAX_BYTES = 5 * 1024 * 1024;
+export const DEFAULT_CSV_EXPORT_MAX_ROWS = 5_000;
+export const DEFAULT_CSV_EXPORT_MAX_BYTES = 8 * 1024 * 1024;
+export const DEFAULT_APPLICATION_DOCUMENT_MAX_BYTES = 20 * 1024 * 1024;
+export const DEFAULT_APPLICATION_DOCUMENT_MAX_COUNT = 20;
+export const DEFAULT_APPLICATION_DOCUMENT_TOTAL_MAX_BYTES = 100 * 1024 * 1024;
+
+export function getRsvpInboundEmailMaxBytes(env: Pick<Env, "RSVP_INBOUND_EMAIL_MAX_BYTES">): number {
+  return Math.min(
+    25 * 1024 * 1024,
+    Math.max(64 * 1024, parseIntOrDefault(env.RSVP_INBOUND_EMAIL_MAX_BYTES, DEFAULT_RSVP_INBOUND_EMAIL_MAX_BYTES)),
+  );
+}
+
+export function getCsvExportLimits(env: Pick<Env, "CSV_EXPORT_MAX_ROWS" | "CSV_EXPORT_MAX_BYTES">) {
+  return {
+    maxRows: Math.min(25_000, Math.max(1, parseIntOrDefault(env.CSV_EXPORT_MAX_ROWS, DEFAULT_CSV_EXPORT_MAX_ROWS))),
+    maxBytes: Math.min(
+      32 * 1024 * 1024,
+      Math.max(64 * 1024, parseIntOrDefault(env.CSV_EXPORT_MAX_BYTES, DEFAULT_CSV_EXPORT_MAX_BYTES)),
+    ),
+  };
+}
+
+export function getApplicationDocumentLimits(
+  env: Pick<
+    Env,
+    "APPLICATION_DOCUMENT_MAX_BYTES" | "APPLICATION_DOCUMENT_MAX_COUNT" | "APPLICATION_DOCUMENT_TOTAL_MAX_BYTES"
+  >,
+) {
+  return {
+    maxFileBytes: Math.min(
+      25 * 1024 * 1024,
+      Math.max(1, parseIntOrDefault(env.APPLICATION_DOCUMENT_MAX_BYTES, DEFAULT_APPLICATION_DOCUMENT_MAX_BYTES)),
+    ),
+    maxDocumentCount: Math.min(
+      100,
+      Math.max(1, parseIntOrDefault(env.APPLICATION_DOCUMENT_MAX_COUNT, DEFAULT_APPLICATION_DOCUMENT_MAX_COUNT)),
+    ),
+    maxTotalBytes: Math.min(
+      500 * 1024 * 1024,
+      Math.max(
+        1,
+        parseIntOrDefault(env.APPLICATION_DOCUMENT_TOTAL_MAX_BYTES, DEFAULT_APPLICATION_DOCUMENT_TOTAL_MAX_BYTES),
+      ),
+    ),
+  };
 }
 
 function toOrigin(value: string | undefined): string | null {
@@ -48,6 +102,16 @@ export function resolveAppBaseUrl(env: Pick<Env, "APP_BASE_URL">, request?: Requ
 }
 
 export function getConfig(env: Env, request?: Request) {
+  const scheduledD1QueryBudget = Math.min(950, Math.max(1, parseIntOrDefault(env.SCHEDULED_D1_QUERY_BUDGET, 900)));
+  const requestedRsvpLimit = Math.min(250, Math.max(0, parseIntOrDefault(env.SCHEDULED_RSVP_ENFORCEMENT_LIMIT, 25)));
+  const rsvpStatementCeiling = Math.max(
+    0,
+    Math.floor(
+      (scheduledD1QueryBudget - RSVP_ENFORCEMENT_D1_SAFETY_MARGIN - RSVP_ENFORCEMENT_SELECTION_STATEMENTS) /
+        RSVP_ENFORCEMENT_MAX_ACTION_STATEMENTS,
+    ),
+  );
+
   return {
     appBaseUrl: resolveAppBaseUrl(env, request),
     minProposalReviews: parseIntOrDefault(env.DEFAULT_MIN_PROPOSAL_REVIEWS, 2),
@@ -68,10 +132,36 @@ export function getConfig(env: Env, request?: Request) {
     ),
     scheduledReminderLimit: parseIntOrDefault(env.SCHEDULED_REMINDER_LIMIT, 120),
     scheduledOutboxLimit: parseIntOrDefault(env.SCHEDULED_OUTBOX_LIMIT, 120),
+    scheduledBadgeRenderLimit: Math.min(25, Math.max(0, parseIntOrDefault(env.SCHEDULED_BADGE_RENDER_LIMIT, 5))),
+    scheduledStorageDeletionLimit: parseIntOrDefault(env.SCHEDULED_STORAGE_DELETION_LIMIT, 25),
     scheduledWaitlistPromotionLimit: parseIntOrDefault(env.SCHEDULED_WAITLIST_PROMOTION_LIMIT, 120),
+    scheduledRsvpEnforcementLimit: Math.min(requestedRsvpLimit, rsvpStatementCeiling),
+    scheduledJobsPerPass: Math.min(20, Math.max(1, parseIntOrDefault(env.SCHEDULED_JOBS_PER_PASS, 5))),
     scheduledDueWorkMaxPasses: parseIntOrDefault(env.SCHEDULED_DUE_WORK_MAX_PASSES, 50),
     scheduledDueWorkMaxMs: parseIntOrDefault(env.SCHEDULED_DUE_WORK_MAX_MS, 600_000),
-    scheduledDueWorkMaxSubrequests: parseIntOrDefault(env.SCHEDULED_DUE_WORK_MAX_SUBREQUESTS, 9_000),
+    // D1 allows a finite number of statements per Worker invocation and
+    // counts each statement in batch(). Keep explicit headroom for logging
+    // and platform/runtime behavior rather than attempting to infer this
+    // from row counts or HTTP subrequests.
+    scheduledD1QueryBudget,
+    scheduledOnHoldReminderLimit: Math.min(
+      500,
+      Math.max(0, parseIntOrDefault(env.SCHEDULED_ON_HOLD_REMINDER_LIMIT, 100)),
+    ),
+    scheduledGoogleGroupsSyncLimit: Math.min(
+      25,
+      Math.max(0, parseIntOrDefault(env.SCHEDULED_GOOGLE_GROUPS_SYNC_LIMIT, 25)),
+    ),
+    scheduledSponsorshipDueWorkLimit: parseIntOrDefault(env.SCHEDULED_SPONSORSHIP_DUE_WORK_LIMIT, 100),
+    scheduledVoteDueWorkLimit: Math.min(250, Math.max(0, parseIntOrDefault(env.SCHEDULED_VOTE_DUE_WORK_LIMIT, 50))),
+    scheduledVoteNotificationLimit: Math.min(
+      500,
+      Math.max(0, parseIntOrDefault(env.SCHEDULED_VOTE_NOTIFICATION_LIMIT, 100)),
+    ),
+    scheduledMeetingInvitationLimit: Math.min(
+      5_000,
+      Math.max(0, parseIntOrDefault(env.SCHEDULED_MEETING_INVITATION_LIMIT, 500)),
+    ),
     sendgridApiBase: env.SENDGRID_API_BASE ?? "https://api.sendgrid.com/v3/mail/send",
   };
 }

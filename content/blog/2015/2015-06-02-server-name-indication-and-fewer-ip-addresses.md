@@ -18,6 +18,15 @@ tags:
 title: Server Name Indication and Fewer IP Addresses
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 You have a dilemma. You want to continue to deploy your web service but are running out of IPv4 addresses. You consider deploying multiple virtual servers that will use the same IP address. However, your thought is that you can only have one SSL certificate per IP address. How will you make your service secure?
 

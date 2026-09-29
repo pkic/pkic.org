@@ -1,0 +1,63 @@
+/*
+ * Badge.
+ *
+ * One layout rule plus six tone rules. Each tone sets the same three local
+ * properties, so the pill, its border and its dot move together and a retuned
+ * tone is a one-line change.
+ */
+
+@layer components {
+  .pk-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.4rem;
+    padding: calc(var(--pk-control-y) * 0.5) var(--pk-control-x);
+    background: var(--tone-soft);
+    color: var(--tone-ink);
+    border: 1px solid color-mix(in srgb, var(--tone) 25%, transparent);
+    border-radius: var(--pk-radius-pill);
+    font-size: var(--pk-text-xs);
+    line-height: 1.35;
+    white-space: nowrap;
+  }
+
+  .pk-badge--ok {
+    --tone: var(--pk-ok);
+    --tone-ink: var(--pk-ok-ink);
+    --tone-soft: var(--pk-ok-soft);
+  }
+  .pk-badge--warn {
+    --tone: var(--pk-warn);
+    --tone-ink: var(--pk-warn-ink);
+    --tone-soft: var(--pk-warn-soft);
+  }
+  .pk-badge--danger {
+    --tone: var(--pk-danger);
+    --tone-ink: var(--pk-danger-ink);
+    --tone-soft: var(--pk-danger-soft);
+  }
+  .pk-badge--info {
+    --tone: var(--pk-info);
+    --tone-ink: var(--pk-info-ink);
+    --tone-soft: var(--pk-info-soft);
+  }
+  .pk-badge--neutral {
+    --tone: var(--pk-ink-muted);
+    --tone-ink: var(--pk-ink);
+    --tone-soft: var(--pk-surface-sunk);
+  }
+  .pk-badge--accent {
+    --tone: var(--pk-accent);
+    --tone-ink: var(--pk-accent-ink);
+    --tone-soft: var(--pk-accent-soft);
+  }
+
+  .pk-badge--dot::before {
+    content: "";
+    flex: none;
+    width: 0.375rem;
+    height: 0.375rem;
+    background: var(--tone);
+    border-radius: 50%;
+  }
+}

@@ -32,6 +32,16 @@ tags:
 title: Perfect Forward Secrecy
 
 
+authorProfiles:
+  - name: Rick Andrews
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 Recent revelations from Edward Snowden about pervasive government surveillance have led to many questions about the safety of communications using the SSL/TLS protocol. Such communications are generally safe from eavesdroppers, as long as certain precautions are observed. For example, configuring your web server to avoid using SSL2 and SSL3, favoring newer versions of TLS like TLS 1.2, selecting strong ciphersuites, etc.
 

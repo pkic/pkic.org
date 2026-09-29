@@ -1,0 +1,1479 @@
+import { env } from "cloudflare:workers";
+import { beforeEach, describe, expect, it } from "vitest";
+import {
+  eventAttendanceListQuerySchema,
+  eventOccurrenceGuestsListQuerySchema,
+  eventOccurrencesListQuerySchema,
+  eventSeriesListQuerySchema,
+} from "../assets/shared/schemas/event-series";
+import { groupEventsListQuerySchema } from "../assets/shared/schemas/group-events";
+import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
+import { first } from "../functions/_lib/db/queries";
+import { prepareValidatedAttendeeRegistration } from "../functions/_lib/services/attendee-registration";
+import {
+  buildGroupEventSeriesPageQuery,
+  buildOccurrenceGuestsPageQuery,
+  buildOccurrenceAttendancePageQuery,
+  buildSeriesOccurrencesPageQuery,
+  createGroupEventSeries,
+  getGroupEventSeries,
+  inviteOccurrenceGuest,
+  listOccurrenceAttendance,
+  listOccurrenceGuests,
+  materializeSeriesOccurrences,
+  updateGroupEventSeries,
+} from "../functions/_lib/services/event-series";
+import {
+  buildGroupEventsPageQuery,
+  getGroupEvent,
+  listGroupEvents,
+} from "../functions/_lib/services/events/group-read-model";
+import { submitGroupEventRegistration } from "../functions/_lib/services/events/group-registration";
+import { getEventById, replaceEventTerms } from "../functions/_lib/services/events";
+import { createGroup, joinGroup } from "../functions/_lib/services/groups";
+import { commitRegistrationSubmission } from "../functions/_lib/services/registration-submission";
+import {
+  prepareGroupEventRegistrationGuard,
+  prepareVerifiedRegistrationUserGuard,
+} from "../functions/_lib/services/registrations/authorization";
+import {
+  grantResourceToGroup,
+  liveGroupResourceContextAccess,
+  revokeResourceGroupGrant,
+} from "../functions/_lib/services/resource-grants";
+import { createManagedForm, createManagedFormPlacement } from "../functions/_lib/services/forms";
+import type { DatabaseLike, Env, UserBackedAuthAdmin } from "../functions/_lib/types";
+import { callApi } from "./helpers/app";
+import { createAdminSession, createMemberSession } from "./helpers/auth";
+import { mutateBeforeNextBatch, mutateBeforeNextStatement } from "./helpers/database-races";
+import { insertOrgRepresentative, insertUser } from "./helpers/membership";
+import { userRecordColumns, type UserRecord } from "../functions/_lib/services/users";
+import { resetDb } from "./helpers/reset-db";
+import { seedPersona } from "./personas/seed";
+import { queryAll } from "./helpers/context";
+
+interface Fixture {
+  admin: UserBackedAuthAdmin;
+  adminToken: string;
+  ownerId: string;
+  granteeId: string;
+  outsiderId: string;
+  eventId: string;
+  eventSlug: string;
+  seriesId: string;
+  seriesUpdatedAt: string;
+  memberId: string;
+  memberEmail: string;
+  memberToken: string;
+  leader: UserBackedAuthAdmin;
+  leaderToken: string;
+}
+
+async function userActor(label: string, role = "user"): Promise<UserBackedAuthAdmin> {
+  const email = `${label}-${crypto.randomUUID()}@example.test`;
+  const id = await insertUser(env.DB, email);
+  await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
+  return { identityType: "user", id, email, role };
+}
+
+async function createFixture(): Promise<Fixture> {
+  const admin = await userActor("group-event-admin", "admin");
+  const owner = await createGroup(env.DB, admin, {
+    typeKey: "working_group",
+    name: `Event owner ${crypto.randomUUID()}`,
+    visibility: "authenticated",
+    eligibilityMode: "open",
+  });
+  const grantee = await createGroup(env.DB, admin, {
+    typeKey: "working_group",
+    name: `Event grantee ${crypto.randomUUID()}`,
+    visibility: "authenticated",
+    eligibilityMode: "open",
+  });
+  const outsider = await createGroup(env.DB, admin, {
+    typeKey: "working_group",
+    name: `Event outsider ${crypto.randomUUID()}`,
+    visibility: "authenticated",
+    eligibilityMode: "open",
+  });
+  const memberEmail = `group-event-member-${crypto.randomUUID()}@example.test`;
+  const member = await insertOrgRepresentative(env.DB, { category: "A", email: memberEmail });
+  await env.DB.prepare("UPDATE users SET first_name = 'Test', last_name = 'Member' WHERE id = ?")
+    .bind(member.userId)
+    .run();
+  await joinGroup(env.DB, grantee.id, {
+    actorUserId: member.userId,
+    targetUserId: member.userId,
+    selection: { mode: "all_eligible", confirmed: true },
+    source: "self_service",
+    allowManaged: false,
+  });
+  // The grantee group's chair. Sharing is decided by the resource grant, so
+  // this identity must not be able to reach an event the grant does not cover
+  // — which only means something if it is a real chair rather than an
+  // administrator who could reach it either way.
+  const leaderPersona = await seedPersona(env.DB, "groupLead", { groupId: grantee.id });
+  const leader: UserBackedAuthAdmin = {
+    identityType: "user",
+    id: leaderPersona.userId,
+    email: leaderPersona.email,
+    role: "user",
+    memberId: leaderPersona.capacities[0]!.memberId,
+  };
+  const series = await createGroupEventSeries(env.DB, admin, owner.id, {
+    eventName: "Shared architecture workshop",
+    eventSlug: `shared-architecture-${crypto.randomUUID()}`,
+    profileKey: "workshop",
+    policy: {
+      registrationPolicy: "optional",
+      memberEligibility: "shared_groups",
+      guestPolicy: "public_registration",
+    },
+    startsAt: "2027-01-10T10:00:00.000Z",
+    recurrenceRule: "FREQ=WEEKLY;COUNT=2",
+    timezone: "Europe/Amsterdam",
+    durationMinutes: 60,
+    location: "Online",
+    providerType: null,
+  });
+  await env.DB.prepare("UPDATE events SET links_json = ? WHERE id = ?")
+    .bind(JSON.stringify(["https://example.test/workshop"]), series.eventId)
+    .run();
+  await replaceEventTerms(env.DB, series.eventId, "attendee", [
+    { termKey: "meeting-terms", version: "1", displayText: "I accept the meeting terms" },
+  ]);
+  return {
+    admin,
+    adminToken: await createAdminSession(env.DB, admin.id, `group-event-admin-${crypto.randomUUID()}`),
+    ownerId: owner.id,
+    granteeId: grantee.id,
+    outsiderId: outsider.id,
+    eventId: series.eventId,
+    eventSlug: series.eventSlug,
+    seriesId: series.id,
+    seriesUpdatedAt: series.updatedAt,
+    memberId: member.userId,
+    memberEmail,
+    memberToken: await createMemberSession(env.DB, member.userId, `group-event-member-${crypto.randomUUID()}`),
+    leader,
+    leaderToken: leaderPersona.token!,
+  };
+}
+
+function authenticatedRequest(token: string, path: string, init: RequestInit = {}): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set("authorization", `Bearer ${token}`);
+  if (init.body) headers.set("content-type", "application/json");
+  return callApi(env, path, { ...init, headers });
+}
+
+function authenticatedRequestWithDatabase(
+  db: DatabaseLike,
+  token: string,
+  path: string,
+  init: RequestInit = {},
+): Promise<Response> {
+  const headers = new Headers(init.headers);
+  headers.set("authorization", `Bearer ${token}`);
+  if (init.body) headers.set("content-type", "application/json");
+  return callApi({ ...env, DB: db } as Env, path, { ...init, headers });
+}
+
+function registrationSubmissionMetadata() {
+  return {
+    clientIp: null,
+    userAgent: null,
+    appBaseUrl: "https://example.test",
+    signingSecret: "test-signing-secret",
+    config: {
+      maxPendingConfirmationReminders: 12,
+      pendingConfirmationReminderIntervalDays: 2,
+      confirmationLinkTtlHours: 24,
+      referralCodeLength: 8,
+    },
+  };
+}
+
+beforeEach(resetDb);
+
+describe("group event sharing", () => {
+  it("separates unscheduled meeting containers from ordinary group events", async () => {
+    const fixture = await createFixture();
+    const draftId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO events
+      (id, slug, name, timezone, owner_group_id, profile_key, source_mode, created_at, updated_at)
+      VALUES (?, 'draft-meeting', 'Unscheduled meeting', 'UTC', ?, 'meeting', 'portal',
+        '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
+    )
+      .bind(draftId, fixture.ownerId)
+      .run();
+    const base = `/api/v1/groups/${fixture.ownerId}/events`;
+    const events = await authenticatedRequest(fixture.adminToken, `${base}?collection=events`);
+    expect(events.status).toBe(200);
+    expect(await events.json()).toMatchObject({ events: [{ id: fixture.eventId }], page: { total: 1 } });
+    const drafts = await authenticatedRequest(fixture.adminToken, `${base}?collection=unscheduled_meetings`);
+    expect(drafts.status).toBe(200);
+    expect(await drafts.json()).toMatchObject({ events: [{ id: draftId, seriesId: null }], page: { total: 1 } });
+    const input = {
+      existingEventId: draftId,
+      eventSlug: "draft-meeting",
+      eventName: "Scheduled meeting",
+      profileKey: "meeting" as const,
+      policy: {
+        registrationPolicy: "no_registration" as const,
+        visibility: "group_members" as const,
+        memberEligibility: "owner_group" as const,
+        guestPolicy: "occurrence_invitation" as const,
+      },
+      startsAt: "2027-01-10T10:00:00.000Z",
+      recurrenceRule: "FREQ=WEEKLY;COUNT=2",
+      timezone: "UTC",
+      durationMinutes: 60,
+    };
+    await expect(createGroupEventSeries(env.DB, fixture.admin, fixture.granteeId, input)).rejects.toMatchObject({
+      status: 409,
+    });
+    const series = await createGroupEventSeries(env.DB, fixture.admin, fixture.ownerId, input);
+    expect(series.eventId).toBe(draftId);
+    expect(series.eventSlug).toBe("draft-meeting");
+    await expect(createGroupEventSeries(env.DB, fixture.admin, fixture.ownerId, input)).rejects.toMatchObject({
+      status: 409,
+    });
+    const after = await authenticatedRequest(fixture.adminToken, `${base}?collection=unscheduled_meetings`);
+    expect(await after.json()).toMatchObject({ events: [], page: { total: 0 } });
+  });
+
+  it("discovers and reads an event only through the selected member grant context", async () => {
+    const fixture = await createFixture();
+    const occurrenceId = crypto.randomUUID();
+    await env.DB.prepare(
+      `UPDATE event_occurrences SET id = ? WHERE series_id = ? AND starts_at = '2027-01-10T10:00:00.000Z'`,
+    )
+      .bind(occurrenceId, fixture.seriesId)
+      .run();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+
+    const occurrenceQuery = buildSeriesOccurrencesPageQuery(
+      fixture.granteeId,
+      liveGroupResourceContextAccess({ userId: fixture.memberId }, fixture.granteeId),
+      fixture.seriesId,
+      eventOccurrencesListQuerySchema.parse({ status: "scheduled", limit: 20 }),
+    );
+    const occurrenceSql = buildOffsetPageSql(occurrenceQuery);
+    const occurrencePlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${occurrenceSql.pageSql}`)
+      .bind(...occurrenceSql.bindings, occurrenceQuery.limit, occurrenceQuery.offset)
+      .all<{ detail: string }>();
+    expect(occurrencePlan.results.map((row) => row.detail).join("\n")).toContain(
+      "idx_event_occurrences_series_status_start",
+    );
+
+    const guestQuery = buildOccurrenceGuestsPageQuery(
+      fixture.seriesId,
+      occurrenceId,
+      eventOccurrenceGuestsListQuerySchema.parse({ q: "guest", active: "true", limit: 20 }),
+    );
+    const guestSql = buildOffsetPageSql(guestQuery);
+    const guestPlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${guestSql.pageSql}`)
+      .bind(...guestSql.bindings, guestQuery.limit, guestQuery.offset)
+      .all<{ detail: string }>();
+    expect(guestPlan.results.map((row) => row.detail).join("\n")).toContain("idx_event_occurrence_guests_series");
+
+    const query = buildGroupEventsPageQuery(
+      fixture.granteeId,
+      { member: true, manager: false },
+      groupEventsListQuerySchema.parse({ q: "architecture", limit: 20 }),
+      { userId: fixture.leader.id },
+    );
+    const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(query);
+    const [pagePlan, countPlan] = await Promise.all([
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${pageSql}`)
+        .bind(...bindings, query.limit, query.offset)
+        .all<{ detail: string }>(),
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${countSql}`)
+        .bind(...countBindings)
+        .all<{ detail: string }>(),
+    ]);
+    const plan = [...pagePlan.results, ...countPlan.results].map((row) => row.detail).join("\n");
+    expect(plan).toContain("idx_events_owner_profile");
+    expect(plan).toContain("idx_event_group_grants_group");
+
+    const seriesQuery = buildGroupEventSeriesPageQuery(
+      fixture.granteeId,
+      { member: true, manager: false },
+      eventSeriesListQuerySchema.parse({ q: "architecture", profileKey: "workshop", limit: 20 }),
+    );
+    const seriesSql = buildOffsetPageSql(seriesQuery);
+    const [seriesPagePlan, seriesCountPlan] = await Promise.all([
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${seriesSql.pageSql}`)
+        .bind(...seriesSql.bindings, seriesQuery.limit, seriesQuery.offset)
+        .all<{ detail: string }>(),
+      env.DB.prepare(`EXPLAIN QUERY PLAN ${seriesSql.countSql}`)
+        .bind(...seriesSql.countBindings)
+        .all<{ detail: string }>(),
+    ]);
+    const seriesPlanText = [...seriesPagePlan.results, ...seriesCountPlan.results].map((row) => row.detail).join("\n");
+    expect(seriesPlanText).toContain("idx_events_owner_profile");
+    expect(seriesPlanText).toContain("idx_event_group_grants_group");
+
+    const list = await authenticatedRequest(
+      fixture.memberToken,
+      `/api/v1/groups/${fixture.granteeId}/events?q=architecture&profileKey=workshop&sort=name&limit=20`,
+    );
+    expect(list.status, await list.clone().text()).toBe(200);
+    expect(await list.json()).toMatchObject({
+      events: [
+        {
+          id: fixture.eventId,
+          ownerGroupId: fixture.ownerId,
+          registrationPolicy: "optional",
+          location: "Online",
+          links: ["https://example.test/workshop"],
+          capabilities: ["view", "register"],
+        },
+      ],
+      page: { total: 1, hasMore: false },
+    });
+
+    const detail = await authenticatedRequest(
+      fixture.memberToken,
+      `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}`,
+    );
+    expect(detail.status, await detail.clone().text()).toBe(200);
+    expect(await detail.json()).toMatchObject({ event: { id: fixture.eventId, capabilities: ["view", "register"] } });
+
+    const seriesPath = `/api/v1/groups/${fixture.granteeId}/meetings/series`;
+    const anonymousSeries = await callApi(env, seriesPath);
+    expect(anonymousSeries.status).toBe(401);
+
+    const seriesList = await authenticatedRequest(
+      fixture.memberToken,
+      `${seriesPath}?q=architecture&profileKey=workshop&sort=event_name&limit=20`,
+    );
+    expect(seriesList.status, await seriesList.clone().text()).toBe(200);
+    expect(await seriesList.json()).toMatchObject({
+      series: [
+        {
+          id: fixture.seriesId,
+          ownerGroupId: fixture.ownerId,
+          profileKey: "workshop",
+          capabilities: ["view", "register"],
+        },
+      ],
+      page: { total: 1, hasMore: false },
+    });
+
+    // The single record is the list row, fetched on its own: same
+    // capabilities, same occurrence count, so the record page and the list
+    // never disagree about what the viewer may do.
+    const seriesDetail = await authenticatedRequest(fixture.memberToken, `${seriesPath}/${fixture.seriesId}`);
+    expect(seriesDetail.status, await seriesDetail.clone().text()).toBe(200);
+    expect(await seriesDetail.json()).toMatchObject({
+      series: {
+        id: fixture.seriesId,
+        ownerGroupId: fixture.ownerId,
+        profileKey: "workshop",
+        capabilities: ["view", "register"],
+        occurrenceCount: 2,
+      },
+    });
+
+    const calendar = await authenticatedRequest(fixture.memberToken, `${seriesPath}/${fixture.seriesId}/calendar.ics`);
+    expect(calendar.status, await calendar.clone().text()).toBe(200);
+    expect(calendar.headers.get("content-type")).toContain("text/calendar");
+    expect(await calendar.text()).toContain(`UID:${fixture.seriesId}@pkic.org`);
+
+    const occurrences = await authenticatedRequest(
+      fixture.memberToken,
+      `${seriesPath}/${fixture.seriesId}/occurrences?status=scheduled&limit=20`,
+    );
+    expect(occurrences.status, await occurrences.clone().text()).toBe(200);
+    expect(await occurrences.json()).toMatchObject({
+      occurrences: expect.arrayContaining([expect.objectContaining({ id: occurrenceId, seriesId: fixture.seriesId })]),
+      page: { total: 2, hasMore: false },
+    });
+
+    const filteredOccurrences = await authenticatedRequest(
+      fixture.memberToken,
+      `${seriesPath}/${fixture.seriesId}/occurrences?q=absent-location&limit=1`,
+    );
+    expect(filteredOccurrences.status).toBe(200);
+    expect(await filteredOccurrences.json()).toMatchObject({ occurrences: [], page: { total: 0, hasMore: false } });
+
+    const wrongContext = await authenticatedRequest(
+      fixture.memberToken,
+      `/api/v1/groups/${fixture.outsiderId}/events/${fixture.eventId}`,
+    );
+    expect(wrongContext.status).toBe(404);
+    const wrongSeriesContext = `/api/v1/groups/${fixture.outsiderId}/meetings/series`;
+    const wrongSeriesList = await authenticatedRequest(fixture.memberToken, wrongSeriesContext);
+    expect(wrongSeriesList.status).toBe(200);
+    expect(await wrongSeriesList.json()).toMatchObject({ series: [], page: { total: 0 } });
+    expect((await authenticatedRequest(fixture.memberToken, `${wrongSeriesContext}/${fixture.seriesId}`)).status).toBe(
+      404,
+    );
+    expect(
+      (await authenticatedRequest(fixture.memberToken, `${wrongSeriesContext}/${fixture.seriesId}/calendar.ics`))
+        .status,
+    ).toBe(404);
+    expect(
+      (await authenticatedRequest(fixture.memberToken, `${wrongSeriesContext}/${fixture.seriesId}/occurrences`)).status,
+    ).toBe(404);
+
+    await revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    const revoked = await authenticatedRequest(fixture.memberToken, `/api/v1/groups/${fixture.granteeId}/events`);
+    expect(revoked.status).toBe(200);
+    expect(await revoked.json()).toMatchObject({ events: [], page: { total: 0 } });
+    const revokedSeries = await authenticatedRequest(fixture.memberToken, seriesPath);
+    expect(revokedSeries.status).toBe(200);
+    expect(await revokedSeries.json()).toMatchObject({ series: [], page: { total: 0 } });
+    expect(
+      (await authenticatedRequest(fixture.memberToken, `${seriesPath}/${fixture.seriesId}/calendar.ics`)).status,
+    ).toBe(404);
+    expect(
+      (await authenticatedRequest(fixture.memberToken, `${seriesPath}/${fixture.seriesId}/occurrences`)).status,
+    ).toBe(404);
+  });
+
+  it("does not return a shared event when its grant is revoked before list or detail evaluation", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    const viewer = { userId: fixture.memberId };
+    const query = groupEventsListQuerySchema.parse({ limit: 20 });
+
+    const list = await listGroupEvents(
+      mutateBeforeNextBatch(env.DB, async () => {
+        await env.DB.prepare(
+          "DELETE FROM event_group_grants WHERE event_id = ? AND group_id = ? AND capability = 'register'",
+        )
+          .bind(fixture.eventId, fixture.granteeId)
+          .run();
+      }),
+      viewer,
+      fixture.granteeId,
+      query,
+    );
+    expect(list).toEqual({ events: [], total: 0 });
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    await expect(
+      getGroupEvent(
+        mutateBeforeNextStatement(env.DB, async () => {
+          await env.DB.prepare(
+            "DELETE FROM event_group_grants WHERE event_id = ? AND group_id = ? AND capability = 'register'",
+          )
+            .bind(fixture.eventId, fixture.granteeId)
+            .run();
+        }),
+        viewer,
+        fixture.granteeId,
+        fixture.eventId,
+      ),
+    ).rejects.toMatchObject({ code: "EVENT_NOT_FOUND" });
+  });
+
+  it("does not let participant filters reveal inactive series while managers can request them explicitly", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    await updateGroupEventSeries(env.DB, fixture.admin, fixture.ownerId, fixture.seriesId, {
+      active: false,
+      expectedUpdatedAt: fixture.seriesUpdatedAt,
+    });
+
+    const participantPath = `/api/v1/groups/${fixture.granteeId}/meetings/series?active=false`;
+    const participant = await authenticatedRequest(fixture.memberToken, participantPath);
+    expect(participant.status, await participant.clone().text()).toBe(200);
+    expect(await participant.json()).toMatchObject({ series: [], page: { total: 0 } });
+
+    const managerPath = `/api/v1/groups/${fixture.ownerId}/meetings/series?active=false`;
+    const manager = await authenticatedRequest(fixture.adminToken, managerPath);
+    expect(manager.status, await manager.clone().text()).toBe(200);
+    expect(await manager.json()).toMatchObject({
+      series: [{ id: fixture.seriesId, active: false }],
+      page: { total: 1 },
+    });
+  });
+
+  it("keeps attendance management separate from member participation", async () => {
+    const fixture = await createFixture();
+    const occurrenceId = crypto.randomUUID();
+    const confirmationId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `UPDATE event_occurrences SET id = ? WHERE series_id = ? AND starts_at = '2027-01-10T10:00:00.000Z'`,
+      ).bind(occurrenceId, fixture.seriesId),
+      env.DB.prepare(
+        `INSERT INTO event_occurrence_join_confirmations
+           (id, occurrence_id, user_id, guest_id, name_snapshot, affiliation_snapshot,
+            join_count, confirmed_at, created_at, updated_at)
+         VALUES (?, ?, ?, NULL, 'Test Member', 'Example Organization', 1,
+                 datetime('now'), datetime('now'), datetime('now'))`,
+      ).bind(confirmationId, occurrenceId, fixture.memberId),
+    ]);
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage_attendance",
+    });
+
+    const memberList = await authenticatedRequest(fixture.memberToken, `/api/v1/groups/${fixture.granteeId}/events`);
+    expect(memberList.status).toBe(200);
+    expect(await memberList.json()).toMatchObject({ events: [], page: { total: 0 } });
+    const memberSeries = await authenticatedRequest(
+      fixture.memberToken,
+      `/api/v1/groups/${fixture.granteeId}/meetings/series`,
+    );
+    expect(memberSeries.status).toBe(200);
+    expect(await memberSeries.json()).toMatchObject({ series: [], page: { total: 0 } });
+
+    const leaderList = await authenticatedRequest(fixture.leaderToken, `/api/v1/groups/${fixture.granteeId}/events`);
+    expect(leaderList.status, await leaderList.clone().text()).toBe(200);
+    expect(await leaderList.json()).toMatchObject({
+      events: [{ id: fixture.eventId, capabilities: ["view", "manage_attendance"] }],
+      page: { total: 1 },
+    });
+    const leaderSeries = await authenticatedRequest(
+      fixture.leaderToken,
+      `/api/v1/groups/${fixture.granteeId}/meetings/series`,
+    );
+    expect(leaderSeries.status, await leaderSeries.clone().text()).toBe(200);
+    expect(await leaderSeries.json()).toMatchObject({
+      series: [{ id: fixture.seriesId, capabilities: ["view", "manage_attendance"] }],
+      page: { total: 1 },
+    });
+
+    const attendancePath = `/api/v1/groups/${fixture.granteeId}/meetings/series/${fixture.seriesId}/occurrences/${occurrenceId}/attendance`;
+    const attendanceQuery = buildOccurrenceAttendancePageQuery(
+      occurrenceId,
+      eventAttendanceListQuerySchema.parse({ q: "example", verified: "false", limit: 20 }),
+    );
+    const attendanceSql = buildOffsetPageSql(attendanceQuery);
+    const attendancePlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${attendanceSql.pageSql}`)
+      .bind(...attendanceSql.bindings, attendanceQuery.limit, attendanceQuery.offset)
+      .all<{ detail: string }>();
+    expect(attendancePlan.results.map((row) => row.detail).join("\n")).toContain("idx_event_occurrence_attendance");
+
+    const memberAttendance = await authenticatedRequest(fixture.memberToken, attendancePath);
+    expect(memberAttendance.status).toBe(403);
+
+    const attendance = await authenticatedRequest(fixture.leaderToken, `${attendancePath}?q=example&verified=false`);
+    expect(attendance.status, await attendance.clone().text()).toBe(200);
+    expect(await attendance.json()).toMatchObject({
+      confirmations: [{ id: confirmationId, attendanceVerifiedAt: null }],
+      page: { total: 1 },
+    });
+
+    const verified = await authenticatedRequest(fixture.leaderToken, `${attendancePath}/${confirmationId}`, {
+      method: "PUT",
+      body: JSON.stringify({ source: "manual", note: "Verified by the delegated group lead" }),
+    });
+    expect(verified.status, await verified.clone().text()).toBe(200);
+    expect(await verified.json()).toMatchObject({
+      confirmation: { id: confirmationId, attendanceVerificationSource: "manual" },
+    });
+    expect(
+      await env.DB.prepare(
+        `SELECT scope_type, scope_id FROM audit_log
+          WHERE action = 'event_occurrence_attendance_verified' AND entity_id = ?`,
+      )
+        .bind(confirmationId)
+        .first(),
+    ).toEqual({ scope_type: "group", scope_id: fixture.granteeId });
+
+    await env.DB.prepare(
+      `CREATE TRIGGER test_event_attendance_zero_change
+       BEFORE UPDATE ON event_occurrence_join_confirmations
+       BEGIN
+         SELECT RAISE(IGNORE);
+       END`,
+    ).run();
+    const lostUpdate = await authenticatedRequest(fixture.leaderToken, `${attendancePath}/${confirmationId}`, {
+      method: "PUT",
+      body: JSON.stringify({ source: "manual", note: "This simulated update must not report success" }),
+    });
+    expect(lostUpdate.status).toBe(409);
+    expect(await lostUpdate.json()).toMatchObject({ error: { code: "MEETING_JOIN_CONFIRMATION_CHANGED" } });
+    await env.DB.prepare("DROP TRIGGER test_event_attendance_zero_change").run();
+    expect(
+      await env.DB.prepare(
+        `SELECT COUNT(*) AS total FROM audit_log
+          WHERE action = 'event_occurrence_attendance_verified' AND entity_id = ?`,
+      )
+        .bind(confirmationId)
+        .first("total"),
+    ).toBe(1);
+
+    await revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage_attendance",
+    });
+    const revoked = await authenticatedRequest(fixture.leaderToken, attendancePath);
+    expect(revoked.status).toBe(403);
+    await expect(
+      env.DB.prepare(
+        `INSERT INTO event_resource_management_guards
+           (id, event_id, group_id, required_capability, actor_user_id, trusted_service, created_at)
+         VALUES (?, ?, ?, 'manage_attendance', ?, 0, datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), fixture.eventId, fixture.granteeId, fixture.admin.id)
+        .run(),
+    ).rejects.toThrow("EVENT_RESOURCE_MANAGEMENT_CONTEXT_CHANGED");
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage",
+    });
+    const impliedManagement = await authenticatedRequest(fixture.leaderToken, attendancePath);
+    expect(impliedManagement.status, await impliedManagement.clone().text()).toBe(200);
+
+    await expect(
+      env.DB.prepare(
+        `INSERT INTO event_resource_management_guards
+           (id, event_id, group_id, required_capability, actor_user_id, trusted_service, created_at)
+         VALUES (?, ?, ?, 'unknown_capability', ?, 0, datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), fixture.eventId, fixture.granteeId, fixture.admin.id)
+        .run(),
+    ).rejects.toThrow("EVENT_RESOURCE_MANAGEMENT_CONTEXT_CHANGED");
+
+    await env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(fixture.admin.id).run();
+    await expect(
+      env.DB.prepare(
+        `INSERT INTO event_resource_management_guards
+           (id, event_id, group_id, required_capability, actor_user_id, trusted_service, created_at)
+         VALUES (?, ?, ?, 'manage_attendance', ?, 0, datetime('now'))`,
+      )
+        .bind(crypto.randomUUID(), fixture.eventId, fixture.granteeId, fixture.admin.id)
+        .run(),
+    ).rejects.toThrow("EVENT_RESOURCE_MANAGEMENT_CONTEXT_CHANGED");
+  });
+
+  it("revalidates guest and attendance list authority in the same D1 batch as the page queries", async () => {
+    const fixture = await createFixture();
+    const occurrenceId = crypto.randomUUID();
+    await env.DB.prepare(
+      `UPDATE event_occurrences SET id = ? WHERE series_id = ? AND starts_at = '2027-01-10T10:00:00.000Z'`,
+    )
+      .bind(occurrenceId, fixture.seriesId)
+      .run();
+    await inviteOccurrenceGuest(
+      env.DB,
+      fixture.admin,
+      fixture.ownerId,
+      fixture.seriesId,
+      occurrenceId,
+      {
+        email: `list-race-${crypto.randomUUID()}@example.test`,
+        name: "List Race Guest",
+        expiresAt: "2027-01-10T10:30:00.000Z",
+      },
+      "https://app.test",
+    );
+    await env.DB.prepare(
+      `INSERT INTO event_occurrence_join_confirmations
+         (id, occurrence_id, user_id, guest_id, name_snapshot, affiliation_snapshot,
+          join_count, confirmed_at, created_at, updated_at)
+       VALUES (?, ?, ?, NULL, 'List Race Member', 'Example Organization', 1,
+               datetime('now'), datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), occurrenceId, fixture.memberId)
+      .run();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage",
+    });
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage_attendance",
+    });
+
+    expect(
+      (
+        await listOccurrenceGuests(env.DB, fixture.leader, fixture.granteeId, fixture.seriesId, occurrenceId, {
+          limit: 20,
+          offset: 0,
+        })
+      ).total,
+    ).toBe(1);
+    const guestRaceDb = mutateBeforeNextBatch(env.DB, () =>
+      revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+        granteeGroupId: fixture.granteeId,
+        capability: "manage",
+      }),
+    );
+    await expect(
+      listOccurrenceGuests(guestRaceDb, fixture.leader, fixture.granteeId, fixture.seriesId, occurrenceId, {
+        limit: 20,
+        offset: 0,
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_MANAGEMENT_CONTEXT_CHANGED" });
+
+    expect(
+      (
+        await listOccurrenceAttendance(env.DB, fixture.leader, fixture.granteeId, fixture.seriesId, occurrenceId, {
+          limit: 20,
+          offset: 0,
+        })
+      ).total,
+    ).toBe(1);
+    const attendanceRaceDb = mutateBeforeNextBatch(env.DB, () =>
+      revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+        granteeGroupId: fixture.granteeId,
+        capability: "manage_attendance",
+      }),
+    );
+    await expect(
+      listOccurrenceAttendance(attendanceRaceDb, fixture.leader, fixture.granteeId, fixture.seriesId, occurrenceId, {
+        limit: 20,
+        offset: 0,
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_ATTENDANCE_MANAGEMENT_CONTEXT_CHANGED" });
+  });
+
+  it("requires exact delegated event management and revalidates it atomically", async () => {
+    const fixture = await createFixture();
+    const occurrenceId = crypto.randomUUID();
+    await env.DB.prepare(
+      `UPDATE event_occurrences SET id = ? WHERE series_id = ? AND starts_at = '2027-01-10T10:00:00.000Z'`,
+    )
+      .bind(occurrenceId, fixture.seriesId)
+      .run();
+    const seriesPath = `/api/v1/groups/${fixture.granteeId}/meetings/series/${fixture.seriesId}`;
+    const occurrencePath = `${seriesPath}/occurrences/${occurrenceId}`;
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage_attendance",
+    });
+    const attendanceOnlyUpdate = await authenticatedRequest(fixture.leaderToken, seriesPath, {
+      method: "PATCH",
+      body: JSON.stringify({
+        eventName: "Must not be changed by attendance management",
+        expectedUpdatedAt: fixture.seriesUpdatedAt,
+      }),
+    });
+    expect(attendanceOnlyUpdate.status).toBe(403);
+    expect((await authenticatedRequest(fixture.leaderToken, `${occurrencePath}/guests`)).status).toBe(403);
+
+    await revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage_attendance",
+    });
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage",
+    });
+    const managedUpdate = await authenticatedRequest(fixture.leaderToken, seriesPath, {
+      method: "PATCH",
+      body: JSON.stringify({
+        eventName: "Delegated architecture workshop",
+        expectedUpdatedAt: fixture.seriesUpdatedAt,
+      }),
+    });
+    expect(managedUpdate.status, await managedUpdate.clone().text()).toBe(200);
+    const managedSeries = (await managedUpdate.json<{ series: { updatedAt: string } }>()).series;
+    const materialized = await authenticatedRequest(fixture.leaderToken, `${seriesPath}/materialize`, {
+      method: "POST",
+      body: JSON.stringify({ through: "2027-01-24T10:00:00.000Z", maxOccurrences: 10 }),
+    });
+    expect(materialized.status, await materialized.clone().text()).toBe(200);
+    expect(await materialized.json()).toMatchObject({ created: 0, existing: 2 });
+
+    const createdOccurrence = await authenticatedRequest(fixture.leaderToken, `${seriesPath}/occurrences`, {
+      method: "POST",
+      body: JSON.stringify({
+        startsAt: "2099-02-01T10:00:00.000Z",
+        endsAt: "2099-02-01T11:00:00.000Z",
+      }),
+    });
+    expect(createdOccurrence.status, await createdOccurrence.clone().text()).toBe(201);
+    const createdOccurrenceBody = await createdOccurrence.json<{ occurrence: { id: string; updatedAt: string } }>();
+    const createdOccurrenceId = createdOccurrenceBody.occurrence.id;
+    const createdOccurrencePath = `${seriesPath}/occurrences/${createdOccurrenceId}`;
+    const occurrenceUpdate = await authenticatedRequest(fixture.leaderToken, createdOccurrencePath, {
+      method: "PATCH",
+      body: JSON.stringify({
+        locationOverride: "Delegated room",
+        expectedUpdatedAt: createdOccurrenceBody.occurrence.updatedAt,
+      }),
+    });
+    expect(occurrenceUpdate.status, await occurrenceUpdate.clone().text()).toBe(200);
+
+    const guestInvite = await authenticatedRequest(fixture.leaderToken, `${createdOccurrencePath}/guests`, {
+      method: "POST",
+      body: JSON.stringify({
+        email: `delegated-guest-${crypto.randomUUID()}@example.test`,
+        name: "Delegated Guest",
+      }),
+    });
+    expect(guestInvite.status, await guestInvite.clone().text()).toBe(201);
+    const invitedGuest = (await guestInvite.json<{ guest: { id: string; expiresAt: string } }>()).guest;
+    expect(invitedGuest.expiresAt).toBe("2099-02-01T10:00:00.000Z");
+    const guestId = invitedGuest.id;
+    const overlongGuest = await authenticatedRequest(fixture.leaderToken, `${createdOccurrencePath}/guests`, {
+      method: "POST",
+      body: JSON.stringify({
+        email: `overlong-guest-${crypto.randomUUID()}@example.test`,
+        name: "Overlong Guest",
+        expiresAt: "2099-02-01T11:00:00.001Z",
+      }),
+    });
+    expect(overlongGuest.status).toBe(400);
+    expect(await overlongGuest.json()).toMatchObject({ error: { code: "INVITE_EXPIRY_AFTER_EVENT" } });
+    expect((await authenticatedRequest(fixture.leaderToken, `${createdOccurrencePath}/guests`)).status).toBe(200);
+    const guestRevoke = await authenticatedRequest(fixture.leaderToken, `${createdOccurrencePath}/guests/${guestId}`, {
+      method: "DELETE",
+    });
+    expect(guestRevoke.status, await guestRevoke.clone().text()).toBe(200);
+
+    const scopedActions = await env.DB.prepare(
+      `SELECT action, scope_id FROM audit_log
+        WHERE scope_type = 'group' AND scope_id = ?
+          AND action IN ('event_series_updated', 'event_occurrence_created', 'event_occurrence_updated',
+                         'event_series_materialized', 'event_guest_invited',
+                         'event_guest_revoked')
+        ORDER BY action`,
+    )
+      .bind(fixture.granteeId)
+      .all<{ action: string; scope_id: string }>();
+    expect(scopedActions.results.map((row) => row.action)).toEqual([
+      "event_guest_invited",
+      "event_guest_revoked",
+      "event_occurrence_created",
+      "event_occurrence_updated",
+      "event_series_materialized",
+      "event_series_updated",
+    ]);
+
+    const wrongContext = await authenticatedRequest(
+      fixture.leaderToken,
+      `/api/v1/groups/${fixture.outsiderId}/meetings/series/${fixture.seriesId}`,
+      {
+        method: "PATCH",
+        body: JSON.stringify({ eventName: "Wrong context", expectedUpdatedAt: managedSeries.updatedAt }),
+      },
+    );
+    expect(wrongContext.status).toBe(403);
+
+    await revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage",
+    });
+    expect(
+      (
+        await authenticatedRequest(fixture.leaderToken, seriesPath, {
+          method: "PATCH",
+          body: JSON.stringify({ eventName: "Revoked context", expectedUpdatedAt: managedSeries.updatedAt }),
+        })
+      ).status,
+    ).toBe(403);
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage",
+    });
+    const racingGrantDb = mutateBeforeNextBatch(env.DB, () =>
+      revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+        granteeGroupId: fixture.granteeId,
+        capability: "manage",
+      }),
+    );
+    await expect(
+      updateGroupEventSeries(racingGrantDb, fixture.leader, fixture.granteeId, fixture.seriesId, {
+        eventName: "Grant race must roll back",
+        expectedUpdatedAt: (await getGroupEventSeries(env.DB, fixture.ownerId, fixture.seriesId)).updatedAt,
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_MANAGEMENT_CONTEXT_CHANGED" });
+    expect(await env.DB.prepare("SELECT name FROM events WHERE id = ?").bind(fixture.eventId).first("name")).toBe(
+      "Delegated architecture workshop",
+    );
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage",
+    });
+    const occurrenceCount = await env.DB.prepare("SELECT COUNT(*) AS total FROM event_occurrences WHERE series_id = ?")
+      .bind(fixture.seriesId)
+      .first<number>("total");
+    const racingMaterializeDb = mutateBeforeNextBatch(env.DB, () =>
+      revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+        granteeGroupId: fixture.granteeId,
+        capability: "manage",
+      }),
+    );
+    await expect(
+      materializeSeriesOccurrences(racingMaterializeDb, fixture.leader, fixture.granteeId, fixture.seriesId, {
+        through: "2027-01-24T10:00:00.000Z",
+        maxOccurrences: 10,
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_MANAGEMENT_CONTEXT_CHANGED" });
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS total FROM event_occurrences WHERE series_id = ?")
+        .bind(fixture.seriesId)
+        .first<number>("total"),
+    ).toBe(occurrenceCount);
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "manage",
+    });
+    const racingLeadershipDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE user_id = ? AND context_id = ?")
+        .bind(fixture.leader.id, fixture.granteeId)
+        .run(),
+    );
+    await expect(
+      updateGroupEventSeries(racingLeadershipDb, fixture.leader, fixture.granteeId, fixture.seriesId, {
+        eventName: "Leadership race must roll back",
+        expectedUpdatedAt: (await getGroupEventSeries(env.DB, fixture.ownerId, fixture.seriesId)).updatedAt,
+      }),
+    ).rejects.toMatchObject({ code: "EVENT_MANAGEMENT_CONTEXT_CHANGED" });
+    expect(await env.DB.prepare("SELECT name FROM events WHERE id = ?").bind(fixture.eventId).first("name")).toBe(
+      "Delegated architecture workshop",
+    );
+  });
+
+  it("registers the verified session identity without accepting identity overrides", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    const path = `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registrations`;
+    const identityOverride = await authenticatedRequest(fixture.memberToken, path, {
+      method: "POST",
+      body: JSON.stringify({
+        email: "someone-else@example.test",
+        attendanceType: "virtual",
+        consents: [{ termKey: "meeting-terms", version: "1" }],
+      }),
+    });
+    expect(identityOverride.status).toBe(400);
+
+    const registered = await authenticatedRequest(fixture.memberToken, path, {
+      method: "POST",
+      body: JSON.stringify({
+        attendanceType: "virtual",
+        consents: [{ termKey: "meeting-terms", version: "1" }],
+      }),
+    });
+    expect(registered.status, await registered.clone().text()).toBe(200);
+    expect(await registered.json()).toMatchObject({
+      success: true,
+      status: "registered",
+      manageToken: null,
+      manageUrl: null,
+    });
+    expect(
+      await env.DB.prepare(
+        `SELECT user_id, registration_group_id, status, confirmation_link_secret
+           FROM registrations WHERE event_id = ?`,
+      )
+        .bind(fixture.eventId)
+        .first(),
+    ).toEqual({
+      user_id: fixture.memberId,
+      registration_group_id: fixture.granteeId,
+      status: "registered",
+      confirmation_link_secret: null,
+    });
+    const audit = await env.DB.prepare(
+      `SELECT scope_type, scope_id, details_json
+         FROM audit_log WHERE action = 'registration_created' AND actor_id = ?`,
+    )
+      .bind(fixture.memberId)
+      .first<{ scope_type: string; scope_id: string; details_json: string }>();
+    expect(audit).toMatchObject({ scope_type: "group", scope_id: fixture.granteeId });
+    expect(JSON.parse(audit!.details_json)).toMatchObject({
+      registrationGroupId: { from: null, to: fixture.granteeId },
+    });
+  });
+
+  it("bounds registration configuration to an authenticated register-capable group context", async () => {
+    const fixture = await createFixture();
+    const path = `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registration-config`;
+
+    expect((await callApi(env, path)).status).toBe(401);
+    expect((await authenticatedRequest(fixture.memberToken, path)).status).toBe(404);
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "view",
+    });
+    expect((await authenticatedRequest(fixture.memberToken, path)).status).toBe(403);
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    const available = await authenticatedRequest(fixture.memberToken, path);
+    expect(available.status, await available.clone().text()).toBe(200);
+
+    await env.DB.prepare("UPDATE events SET source_mode = 'legacy', owner_group_id = NULL WHERE id = ?")
+      .bind(fixture.eventId)
+      .run();
+    expect((await authenticatedRequest(fixture.memberToken, path)).status).toBe(404);
+  });
+
+  it("returns no registration configuration when register access changes after preflight", async () => {
+    const fixture = await createFixture();
+    const path = `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registration-config`;
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    expect((await callApi(env, `/api/v1/events/${fixture.eventSlug}/forms/placements/event_registration`)).status).toBe(
+      200,
+    );
+
+    const revokedGrantDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        `DELETE FROM event_group_grants
+          WHERE event_id = ? AND group_id = ? AND capability = 'register'`,
+      )
+        .bind(fixture.eventId, fixture.granteeId)
+        .run(),
+    );
+    const revokedGrant = await authenticatedRequestWithDatabase(revokedGrantDb, fixture.memberToken, path);
+    expect(revokedGrant.status).toBe(403);
+    expect(await revokedGrant.json()).toMatchObject({
+      error: { code: "EVENT_REGISTRATION_ACCESS_REQUIRED" },
+    });
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    const revokedMembershipDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        "UPDATE group_memberships SET left_at = joined_at WHERE group_id = ? AND user_id = ? AND left_at IS NULL",
+      )
+        .bind(fixture.granteeId, fixture.memberId)
+        .run(),
+    );
+    const revokedMembership = await authenticatedRequestWithDatabase(revokedMembershipDb, fixture.memberToken, path);
+    expect(revokedMembership.status).toBe(403);
+    expect(await revokedMembership.json()).toMatchObject({
+      error: { code: "EVENT_REGISTRATION_ACCESS_REQUIRED" },
+    });
+  });
+
+  it("rolls back the canonical group adapter when grant, membership, or ownership changes before commit", async () => {
+    const fixture = await createFixture();
+    const input = {
+      attendanceType: "virtual" as const,
+      consents: [{ termKey: "meeting-terms", version: "1" }],
+    };
+    const viewer = { userId: fixture.memberId };
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+
+    const grantRaceDb = mutateBeforeNextBatch(env.DB, () =>
+      revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+        granteeGroupId: fixture.granteeId,
+        capability: "register",
+      }),
+    );
+    await expect(
+      submitGroupEventRegistration(
+        grantRaceDb,
+        env,
+        viewer,
+        fixture.granteeId,
+        fixture.eventId,
+        input,
+        registrationSubmissionMetadata(),
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "EVENT_REGISTRATION_CONTEXT_CHANGED" });
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    const membershipRaceDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare(
+        "UPDATE group_memberships SET left_at = '9999-12-31T23:59:59.999Z' WHERE group_id = ? AND user_id = ? AND left_at IS NULL",
+      )
+        .bind(fixture.granteeId, fixture.memberId)
+        .run(),
+    );
+    await expect(
+      submitGroupEventRegistration(
+        membershipRaceDb,
+        env,
+        viewer,
+        fixture.granteeId,
+        fixture.eventId,
+        input,
+        registrationSubmissionMetadata(),
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "EVENT_REGISTRATION_CONTEXT_CHANGED" });
+
+    await env.DB.prepare("UPDATE group_memberships SET left_at = NULL WHERE group_id = ? AND user_id = ?")
+      .bind(fixture.granteeId, fixture.memberId)
+      .run();
+    const ownershipRaceDb = mutateBeforeNextBatch(env.DB, () =>
+      env.DB.prepare("UPDATE events SET source_mode = 'legacy', owner_group_id = NULL WHERE id = ?")
+        .bind(fixture.eventId)
+        .run(),
+    );
+    await expect(
+      submitGroupEventRegistration(
+        ownershipRaceDb,
+        env,
+        viewer,
+        fixture.granteeId,
+        fixture.eventId,
+        input,
+        registrationSubmissionMetadata(),
+      ),
+    ).rejects.toMatchObject({ status: 409, code: "EVENT_REGISTRATION_CONTEXT_CHANGED" });
+
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS total FROM registrations WHERE event_id = ?")
+        .bind(fixture.eventId)
+        .first<number>("total"),
+    ).toBe(0);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS total FROM consent_acceptances WHERE event_id = ?")
+        .bind(fixture.eventId)
+        .first<number>("total"),
+    ).toBe(0);
+  });
+
+  it("rejects disabled, ungranted, public, and concurrently revoked registration paths", async () => {
+    const fixture = await createFixture();
+    const groupPath = `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registrations`;
+    const payload = {
+      attendanceType: "virtual" as const,
+      consents: [{ termKey: "meeting-terms", version: "1" }],
+    };
+    const ungranted = await authenticatedRequest(fixture.memberToken, groupPath, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    expect(ungranted.status).toBe(404);
+
+    const publicAttempt = await callApi(env, `/api/v1/events/${fixture.eventSlug}/registrations`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        firstName: "Public",
+        lastName: "Visitor",
+        email: "visitor@example.test",
+        ...payload,
+      }),
+    });
+    expect(publicAttempt.status).toBe(403);
+
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    const prepared = await prepareValidatedAttendeeRegistration(
+      env.DB,
+      {
+        firstName: "Test",
+        lastName: "Member",
+        email: fixture.memberEmail,
+        ...payload,
+      },
+      {
+        event: { id: fixture.eventId, source_mode: (await getEventById(env.DB, fixture.eventId)).source_mode },
+        invite: null,
+        sourceType: "direct",
+        sourceRef: `group:${fixture.granteeId}`,
+        ip: null,
+        userAgent: null,
+        signingSecret: "test-signing-secret",
+        pendingConfirmationDeadlineHours: 24,
+        confirmationTtlHours: 24,
+        referralCodeLength: 8,
+        verifiedIdentity: { userId: fixture.memberId, registrationGroupId: fixture.granteeId },
+      },
+    );
+    await revokeResourceGroupGrant(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    await expect(commitRegistrationSubmission(env.DB, prepared.prepared)).rejects.toMatchObject({
+      status: 409,
+      code: "EVENT_REGISTRATION_CONTEXT_CHANGED",
+    });
+    const count = await env.DB.prepare("SELECT COUNT(*) AS count FROM registrations WHERE event_id = ?")
+      .bind(fixture.eventId)
+      .first<{ count: number }>();
+    expect(count?.count).toBe(0);
+
+    await env.DB.prepare("UPDATE events SET registration_mode = 'no_registration' WHERE id = ?")
+      .bind(fixture.eventId)
+      .run();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    const disabled = await authenticatedRequest(fixture.memberToken, groupPath, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    expect(disabled.status).toBe(403);
+  });
+
+  it("never admits a global form placement for portal group registration", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    const globalForm = await createManagedForm(
+      env.DB,
+      fixture.admin.id,
+      { type: "global", ref: null },
+      {
+        key: `global-registration-${crypto.randomUUID()}`,
+        purpose: "event_registration",
+        title: "Global registration form",
+        status: "active",
+        fields: [{ key: "global_only", label: "Global only", fieldType: "text", required: true, sortOrder: 0 }],
+      },
+    );
+    const configPath = `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registration-config`;
+    const withoutPlacement = await authenticatedRequest(fixture.memberToken, configPath);
+    expect(withoutPlacement.status, await withoutPlacement.clone().text()).toBe(200);
+    expect(((await withoutPlacement.json()) as { form: unknown }).form).toBeNull();
+
+    const unknownConsent = await authenticatedRequest(
+      fixture.memberToken,
+      `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registrations`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          attendanceType: "virtual",
+          consents: [{ termKey: "not-an-active-term", version: "1" }],
+        }),
+      },
+    );
+    expect(unknownConsent.status).toBe(400);
+    expect(((await unknownConsent.json()) as { error: { code: string } }).error.code).toBe("CONSENT_INVALID");
+
+    const invalidSubmission = await authenticatedRequest(
+      fixture.memberToken,
+      `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registrations`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          attendanceType: "virtual",
+          customAnswers: { global_only: "must not be accepted" },
+          consents: [{ termKey: "meeting-terms", version: "1" }],
+        }),
+      },
+    );
+    expect(invalidSubmission.status).toBe(400);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM registrations WHERE event_id = ?")
+        .bind(fixture.eventId)
+        .first<{ count: number }>("count"),
+    ).toBe(0);
+
+    const placement = await createManagedFormPlacement(env.DB, fixture.admin.id, globalForm.id, {
+      ownerGroupId: fixture.ownerId,
+      contextType: "event",
+      contextRef: fixture.eventId,
+      audience: "attendee",
+      active: true,
+    });
+    const withPlacement = await authenticatedRequest(fixture.memberToken, configPath);
+    expect(withPlacement.status, await withPlacement.clone().text()).toBe(200);
+    expect(((await withPlacement.json()) as { form: unknown }).form).toBeNull();
+
+    const registered = await authenticatedRequest(
+      fixture.memberToken,
+      `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registrations`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          attendanceType: "virtual",
+          customAnswers: { global_only: "exact placement" },
+          consents: [{ termKey: "meeting-terms", version: "1" }],
+        }),
+      },
+    );
+    expect(registered.status, await registered.clone().text()).toBe(400);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM registrations WHERE event_id = ?")
+        .bind(fixture.eventId)
+        .first<{ count: number }>("count"),
+    ).toBe(0);
+
+    // The same route/service pair deliberately preserves Hugo compatibility:
+    // once this shared event is marked Hugo-authored, the legacy form
+    // definition is consistently displayed and accepted by submission.
+    await env.DB.prepare("UPDATE events SET source_mode = 'hugo' WHERE id = ?").bind(fixture.eventId).run();
+    const hugoConfig = await authenticatedRequest(fixture.memberToken, configPath);
+    expect(hugoConfig.status, await hugoConfig.clone().text()).toBe(200);
+    expect(((await hugoConfig.json()) as { form: unknown }).form).toMatchObject({ key: globalForm.key });
+    const hugoRegistered = await authenticatedRequest(
+      fixture.memberToken,
+      `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registrations`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          attendanceType: "virtual",
+          customAnswers: { global_only: "Hugo compatibility" },
+          consents: [{ termKey: "meeting-terms", version: "1" }],
+        }),
+      },
+    );
+    expect(hugoRegistered.status, await hugoRegistered.clone().text()).toBe(200);
+    expect(
+      await env.DB.prepare("SELECT form_placement_id FROM registrations WHERE event_id = ?")
+        .bind(fixture.eventId)
+        .first<{ form_placement_id: string }>("form_placement_id"),
+    ).toBe(placement.id);
+  });
+
+  it("rejects registration when verified identity or attendee terms change before commit", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    const payload = {
+      firstName: "Test",
+      lastName: "Member",
+      email: fixture.memberEmail,
+      attendanceType: "virtual" as const,
+      consents: [{ termKey: "meeting-terms", version: "1" }],
+    };
+    const buildOptions = async () => {
+      const user = await first<UserRecord>(env.DB, `SELECT ${userRecordColumns()} FROM users WHERE id = ?`, [
+        fixture.memberId,
+      ]);
+      if (!user) throw new Error("test user missing");
+      return {
+        event: { id: fixture.eventId, source_mode: (await getEventById(env.DB, fixture.eventId)).source_mode },
+        invite: null,
+        sourceType: "direct",
+        sourceRef: `group:${fixture.granteeId}`,
+        ip: null,
+        userAgent: null,
+        signingSecret: "test-signing-secret",
+        pendingConfirmationDeadlineHours: 24,
+        confirmationTtlHours: 24,
+        referralCodeLength: 8,
+        verifiedIdentity: { userId: fixture.memberId, registrationGroupId: fixture.granteeId },
+        authorizationGuards: [
+          prepareVerifiedRegistrationUserGuard(env.DB, user),
+          prepareGroupEventRegistrationGuard(env.DB, {
+            eventId: fixture.eventId,
+            groupId: fixture.granteeId,
+            userId: fixture.memberId,
+          }),
+        ],
+      };
+    };
+    const identityPrepared = await prepareValidatedAttendeeRegistration(env.DB, payload, await buildOptions());
+    await env.DB.prepare("UPDATE users SET first_name = 'Changed' WHERE id = ?").bind(fixture.memberId).run();
+    await expect(commitRegistrationSubmission(env.DB, identityPrepared.prepared)).rejects.toMatchObject({
+      status: 409,
+      code: "EVENT_REGISTRATION_CONTEXT_CHANGED",
+    });
+
+    const termsPrepared = await prepareValidatedAttendeeRegistration(
+      env.DB,
+      { ...payload, firstName: "Changed" },
+      await buildOptions(),
+    );
+    await env.DB.prepare("UPDATE event_terms SET version = '2' WHERE event_id = ? AND term_key = 'meeting-terms'")
+      .bind(fixture.eventId)
+      .run();
+    await expect(commitRegistrationSubmission(env.DB, termsPrepared.prepared)).rejects.toMatchObject({
+      status: 409,
+      code: "EVENT_REGISTRATION_CONTEXT_CHANGED",
+    });
+
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS total FROM registrations WHERE event_id = ?")
+        .bind(fixture.eventId)
+        .first<number>("total"),
+    ).toBe(0);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS total FROM consent_acceptances WHERE event_id = ?")
+        .bind(fixture.eventId)
+        .first<number>("total"),
+    ).toBe(0);
+    expect(
+      await env.DB.prepare(
+        "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'registration_created' AND actor_id = ?",
+      )
+        .bind(fixture.memberId)
+        .first<number>("total"),
+    ).toBe(0);
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS total FROM email_outbox WHERE recipient_user_id = ?")
+        .bind(fixture.memberId)
+        .first<number>("total"),
+    ).toBe(0);
+  });
+
+  /*
+   * An event that does not take registrations at all.
+   *
+   * The group path folds `registration_mode <> 'no_registration'` into the
+   * same atomic authorization guard as live membership and the register grant,
+   * so all three refusals arrive as EVENT_REGISTRATION_ACCESS_REQUIRED. The
+   * public path checks the mode separately and says EVENT_REGISTRATION_DISABLED.
+   *
+   * The single code is the price of re-checking everything in one statement at
+   * commit time, which is what stops a grant revoked mid-request from landing
+   * a registration. What matters here is that it is refused and nothing is
+   * written; the caller being told "access" when the truth is "this event does
+   * not register anybody" is a diagnosability cost worth knowing about.
+   */
+  it("refuses a registration for an event that does not use registration", async () => {
+    const fixture = await createFixture();
+    await grantResourceToGroup(env.DB, fixture.admin, fixture.ownerId, "event", fixture.eventId, {
+      granteeGroupId: fixture.granteeId,
+      capability: "register",
+    });
+    await env.DB.prepare("UPDATE events SET registration_mode = 'no_registration' WHERE id = ?")
+      .bind(fixture.eventId)
+      .run();
+
+    const response = await authenticatedRequest(
+      fixture.memberToken,
+      `/api/v1/groups/${fixture.granteeId}/events/${fixture.eventId}/registrations`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          attendanceType: "virtual",
+          consents: [{ termKey: "meeting-terms", version: "1" }],
+        }),
+      },
+    );
+
+    expect(response.status).toBe(403);
+    expect(await response.json()).toMatchObject({ error: { code: "EVENT_REGISTRATION_ACCESS_REQUIRED" } });
+    expect(
+      await queryAll<{ total: number }>(env.DB, "SELECT COUNT(*) AS total FROM registrations WHERE event_id = ?", [
+        fixture.eventId,
+      ]),
+    ).toEqual([{ total: 0 }]);
+  });
+});

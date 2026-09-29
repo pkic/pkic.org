@@ -1,0 +1,387 @@
+// @vitest-environment jsdom
+import { render, type ComponentChild, type ComponentChildren } from "preact";
+import { act } from "preact/test-utils";
+import { afterEach, describe, expect, it, vi } from "vitest";
+// The record's facets are routed links; the mock renders them as anchors so
+// the test can read their addresses without a router.
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
+vi.mock("wouter", () => ({
+  Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
+    <a href={`#${href}`} {...rest}>
+      {children}
+    </a>
+  ),
+}));
+import { ApplicationDetailView } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationDetailView";
+import { ApplicationsList } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationsList";
+import { ApplicationTimelineCard } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationTimelineCard";
+import { chooseColumnFilter, columnFilterSummary } from "./helpers/column-menu";
+import { menuItemNamed } from "./helpers/row-actions";
+
+const APPLICATION_ID = "00000000-0000-4000-8000-000000000201";
+const NOW = "2026-08-27T12:00:00.000Z";
+
+const detail = {
+  id: APPLICATION_ID,
+  applicantEmail: "applicant@example.test",
+  applicantName: "Example Applicant",
+  organizationName: "Example Organization",
+  membershipCategory: "F",
+  currentRequirement: null,
+  membershipCategoryLabel: "General Member",
+  stage: "processing" as const,
+  onHoldSubtype: null,
+  assignedToUserId: null,
+  createdAt: NOW,
+  updatedAt: NOW,
+  stageEnteredAt: NOW,
+  answers: {},
+  requestedWorkingGroups: [],
+  events: [],
+  communications: [],
+};
+
+const categories = [
+  {
+    code: "F" as const,
+    label: "General Member",
+    description: null,
+    displayOrder: 60,
+    isIndividual: false,
+    requiresUniversityEmail: false,
+    isVoting: true,
+    active: true,
+    workflowVersionId: null,
+    revision: 0,
+    updatedAt: NOW,
+  },
+];
+
+let container: HTMLElement | null = null;
+const mounted: HTMLElement[] = [];
+
+function json(value: unknown): Response {
+  return new Response(JSON.stringify(value), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  });
+}
+
+async function settle(): Promise<void> {
+  await act(async () => {
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
+}
+
+function mount(node: ComponentChild): HTMLElement {
+  container = document.createElement("div");
+  document.body.append(container);
+  mounted.push(container);
+  void act(() => render(node, container!));
+  return container;
+}
+
+/** The record at one of its facets, with the fetch stub the test installed. */
+function mountDetail(props: { canWrite: boolean; canApprove: boolean; tab?: string }): HTMLElement {
+  return mount(<ApplicationDetailView applicationId={APPLICATION_ID} categories={categories} {...props} />);
+}
+
+afterEach(() => {
+  for (const node of mounted.splice(0)) {
+    void act(() => render(null, node));
+    node.remove();
+  }
+  container = null;
+  vi.unstubAllGlobals();
+});
+
+describe("portal membership-application management", () => {
+  it("lists the D1 category label through only the canonical server-side collection API", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        return json({
+          applications: [detail],
+          page: { limit: 50, offset: 0, total: 1, hasMore: false },
+        });
+      }),
+    );
+
+    const page = mount(<ApplicationsList />);
+    await settle();
+
+    expect(page.textContent).toContain("General Member");
+    expect(page.textContent).toContain("(F)");
+    const rowLink = page.querySelector<HTMLAnchorElement>("tbody .pk-table__row-link");
+    expect(rowLink?.getAttribute("href")).toBe(`#/membership/applications/${detail.id}`);
+
+    // Two reads of the same collection: the list itself, and the consultation
+    // queue's one-row count probe beside it. Nothing else.
+    expect(requests).toHaveLength(1);
+    const list = requests.find((url) => !url.searchParams.has("stage"));
+    expect(list?.pathname).toBe("/api/v1/members/applications");
+    expect(list?.searchParams.get("limit")).toBe("50");
+    expect(list?.searchParams.get("offset")).toBe("0");
+    expect(list?.searchParams.get("sort")).toBe("-created_at");
+    expect(requests.every((url) => !url.pathname.startsWith("/api/v1/admin/"))).toBe(true);
+  });
+
+  it("narrows by stage from the Stage column, sends it to the collection query, without a separate consultation queue", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        // The queue's count probe reads `page.total` off a one-row page; the
+        // list itself is empty at every stage.
+        const total = url.searchParams.get("limit") === "1" ? 3 : 0;
+        return json({ applications: [], page: { limit: 50, offset: 0, total, hasMore: false } });
+      }),
+    );
+
+    const page = mount(<ApplicationsList />);
+    await settle();
+
+    // No select above the table: the stage filter is the Stage column's own.
+    expect(page.querySelector('[role="toolbar"] select')).toBeNull();
+    // And the table names itself, so several tables on one page are told apart.
+    expect(page.querySelector("caption")?.textContent).toBe("Membership applications");
+    // The default view is the server default: no `stage` on the list request.
+    expect(requests.some((url) => !url.searchParams.has("stage"))).toBe(true);
+
+    await chooseColumnFilter(page, "Stage", "Processing");
+    await settle();
+
+    expect(requests.at(-1)?.searchParams.get("stage")).toBe("processing");
+    expect(requests.at(-1)?.searchParams.get("limit")).toBe("50");
+    expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
+    expect(columnFilterSummary(page, "Stage")).toBe("Processing");
+    expect(page.querySelector('[role="status"].pk-alert')).toBeNull();
+  });
+
+  it("says nothing about the consultation queue while it is empty", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ applications: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } })),
+    );
+
+    const page = mount(<ApplicationsList />);
+    await settle();
+
+    expect(page.querySelector('[role="status"].pk-alert')).toBeNull();
+    expect(page.textContent).not.toContain("queued for member consultation");
+  });
+
+  it("states a refused application listing as a sentence instead of an empty table", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ message: "no" }), {
+            status: 403,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+
+    const page = mount(<ApplicationsList />);
+    await settle();
+
+    const alert = page.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("You don't have access to this.");
+    expect(alert?.textContent).not.toContain("HTTP 403");
+    expect(page.querySelector("table")).toBeNull();
+  });
+
+  it("heads the detail view with the applicant's name and a way back to the list", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname.endsWith("/documents")) {
+          return json({ documents: [], page: { limit: 10, offset: 0, total: 0, hasMore: false } });
+        }
+        return json(detail);
+      }),
+    );
+
+    const page = mount(
+      <ApplicationDetailView
+        applicationId={APPLICATION_ID}
+        categories={categories}
+        canWrite={false}
+        canApprove={false}
+      />,
+    );
+    await settle();
+
+    // The name used to be a `<span>` carrying a legacy heading class, so the
+    // page it heads had no heading at all in the outline.
+    const heading = page.querySelector("h2");
+    expect(heading?.textContent).toBe("Example Applicant");
+    // Every card below it is a section titled one rung down, so the outline
+    // does not skip a level.
+    expect([...page.querySelectorAll("h3")].length).toBeGreaterThan(0);
+
+    // The way back is the header's trail, not a back button dressed as one.
+    const trail = page.querySelector('nav[aria-label="Breadcrumb"]');
+    expect(trail).not.toBeNull();
+    const backLink = trail!.querySelector<HTMLAnchorElement>("a");
+    expect(backLink?.textContent).toBe("Membership applications");
+    expect(backLink?.getAttribute("href")).toBe("#/membership/applications");
+  });
+
+  it("announces a detail that could not be loaded rather than rendering an empty page", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(JSON.stringify({ error: "Forbidden" }), {
+            status: 403,
+            headers: { "content-type": "application/json" },
+          }),
+      ),
+    );
+
+    const page = mount(
+      <ApplicationDetailView applicationId={APPLICATION_ID} categories={categories} canWrite canApprove />,
+    );
+    await settle();
+
+    // A blocking failure interrupts, and says what happened in English rather
+    // than in transport phrasing.
+    const alert = page.querySelector('[role="alert"]');
+    expect(alert?.textContent).toContain("You don't have access to this");
+    expect(page.textContent).not.toContain("HTTP 403");
+    expect(page.querySelector("h2")).toBeNull();
+  });
+
+  it("keeps a read-only reviewer view free of write and approval controls", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        if (url.pathname.endsWith("/documents")) {
+          return json({ documents: [], page: { limit: 10, offset: 0, total: 0, hasMore: false } });
+        }
+        return json(detail);
+      }),
+    );
+
+    const page = mount(
+      <ApplicationDetailView
+        applicationId={APPLICATION_ID}
+        categories={categories}
+        canWrite={false}
+        canApprove={false}
+      />,
+    );
+    await settle();
+
+    expect(page.textContent).toContain("Example Applicant");
+    expect(page.textContent).toContain("General Member");
+    expect(page.textContent).not.toContain("Approve & run onboarding");
+    // No commands at all: the record offers a reader no actions menu (#109).
+    expect(page.querySelector('button[aria-label="Application actions"]')).toBeNull();
+    const correspondence = mountDetail({ canWrite: false, canApprove: false, tab: "communications" });
+    await settle();
+    expect(correspondence.textContent).not.toContain("Send communication");
+    expect(correspondence.textContent).not.toContain("Add internal note");
+    expect(requests.every((url) => url.pathname.startsWith("/api/v1/members/applications"))).toBe(true);
+  });
+
+  it("renders write and approval controls only for their respective capabilities", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname.endsWith("/documents")) {
+          return json({ documents: [], page: { limit: 10, offset: 0, total: 0, hasMore: false } });
+        }
+        return json(detail);
+      }),
+    );
+
+    const page = mount(
+      <ApplicationDetailView applicationId={APPLICATION_ID} categories={categories} canWrite canApprove />,
+    );
+    await settle();
+
+    expect(page.textContent).toContain("Review workflow and objections");
+    // Editing is a command in the record's menu; correspondence and the
+    // council's decisions are facets of their own, reached by tab (#109).
+    const commands = page.querySelector<HTMLButtonElement>('button[aria-label="Application actions"]');
+    expect(commands).not.toBeNull();
+    await act(async () => commands!.click());
+    expect(menuItemNamed(page, "Edit application…")).not.toBeNull();
+    const tabs = [...page.querySelectorAll('[aria-label="Application sections"] a')].map((tab) => tab.textContent);
+    expect(tabs).toEqual(["Application", "Communications", "Review workflow and objections"]);
+    const correspondence = mountDetail({ canWrite: true, canApprove: true, tab: "communications" });
+    await settle();
+    expect(correspondence.textContent).toContain("Send communication");
+    expect(correspondence.textContent).toContain("Add internal note");
+  });
+});
+
+describe("the application timeline card", () => {
+  it("reads each stage change in the product's own words, not in stored keys", () => {
+    const card = mount(
+      <ApplicationTimelineCard
+        detail={{
+          ...detail,
+          events: [
+            { fromStage: null, toStage: "submitted", actorUserId: null, note: null, createdAt: NOW },
+            {
+              fromStage: "processing",
+              toStage: "processing",
+              actorUserId: null,
+              note: "Escalated",
+              createdAt: NOW,
+            },
+          ],
+        }}
+      />,
+    );
+
+    const entries = [...card.querySelectorAll("li")].map((item) => item.textContent);
+    expect(entries[0]).toContain("Not yet in a stage");
+    expect(entries[0]).toContain("Submitted");
+    expect(entries[1]).toContain("Processing");
+    expect(entries[1]).toContain("Processing");
+    expect(card.textContent).not.toContain("processing");
+    // The arrow is decorative; a word carries the direction for anyone who
+    // cannot see it.
+    expect(card.querySelector('[aria-hidden="true"]')?.textContent?.trim()).toBe("→");
+    expect(card.querySelector(".pk-sr-only")?.textContent).toBe("to");
+    // The card is a named region among the several this screen renders.
+    expect(card.querySelector('[aria-label="Timeline"]')).not.toBeNull();
+  });
+
+  it("announces an application with no history as a status region rather than an empty list", () => {
+    const card = mount(<ApplicationTimelineCard detail={{ ...detail, events: [] }} />);
+
+    expect(card.querySelector('[role="status"].pk-empty-state')?.textContent).toContain("No stage changes yet.");
+    expect(card.querySelector("ul")).toBeNull();
+  });
+});

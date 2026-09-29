@@ -18,6 +18,15 @@ tags:
 title: What the Latest Firefox Update Means for SSL Certificates
 
 
+authorProfiles:
+  - name: Tim Callan
+    organization: Sectigo
+    role: Chief Compliance Officer at Sectigo
+    website: https://www.sectigo.com/
+    social:
+      linkedin: https://www.linkedin.com/in/tim-callan
+      soundcloud: https://soundcloud.com/tim-callan/tracks
+    assetdirectory: images/members/sectigo
 ---
 Last month marked the release of Firefox 66, the newest iteration of the ever-popular web browser.  The update adds a number of interesting new features, including improvements to content loading and extension storage, auto-play sound blocking, and support for the AV1 codec (on the Windows version at least).  The search feature has also been improved, and, as is typical of browser updates, a number of known security vulnerabilities have been patched.
 

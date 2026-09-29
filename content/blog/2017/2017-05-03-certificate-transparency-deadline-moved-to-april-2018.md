@@ -19,6 +19,15 @@ tags:
 title: Certificate Transparency Deadline Moved to April 2018
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 [Google just announced][1] they will not be enforcing certificate transparency (CT) logging for all new TLS certificates until April 2018. In a previous [blog post][2], we advised that Google provided a new policy, which required new TLS certificates to be published to the CT logs in order for the domain to be trusted by Chrome.
 

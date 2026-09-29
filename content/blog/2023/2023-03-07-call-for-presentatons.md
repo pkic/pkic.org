@@ -9,6 +9,15 @@ categories:
 keyword: [pqc, qsc, post-quantum, quantum-safe, cryptography, hardware, solutions, software, conference]
 tags: [Post-Quantum Cryptography, PQC, Conference]
 
+authorProfiles:
+  - name: Paul van Brouwershaven
+    organization: Digitorus
+    role: Founder and CEO
+    website: https://www.digitorus.com
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
+    assetdirectory: images/members/digitorus
 ---
 
 ## Call for Presentations
@@ -29,4 +38,4 @@ If you have any questions, please contact us at feedback@pkic.org.
 
 Thank you for your interest and we look forward to hearing from you! 
 
-{{< sponsors sponsoring="Post-Quantum Cryptography Conference Amsterdam 2023" level="all" height="20" max-width="60" rows=true >}}
+{{< sponsors event-slug="pqc-conference-amsterdam-nl-2023" sponsoring="Post-Quantum Cryptography Conference Amsterdam 2023" level="all" height="20" max-width="60" rows=true >}}

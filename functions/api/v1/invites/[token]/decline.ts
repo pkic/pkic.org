@@ -1,14 +1,18 @@
-import { parseJsonBody } from "../../../../_lib/validation";
 import { json } from "../../../../_lib/http";
 import { resolveAppBaseUrl } from "../../../../_lib/config";
-import { declineInvite, findInviteByToken, createInvite } from "../../../../_lib/services/invites";
-import { buildEventEmailVariables } from "../../../../_lib/services/events";
-import { first } from "../../../../_lib/db/queries";
-import { processOutboxByIdBackground, queueEmail } from "../../../../_lib/email/outbox";
-import { proposalPageUrl, registrationPageUrl, inviteDeclineUrl } from "../../../../_lib/services/frontend-links";
-import { inviteDeclineSchema } from "../../../../../assets/shared/schemas/api";
+import { declineAndForwardInvite as executeInviteDecline } from "../../../../_lib/services/invite-decline";
+import { processOutboxByIdBackground } from "../../../../_lib/email/outbox";
+import { inviteDeclineSchema } from "../../../../../assets/shared/schemas/registration";
+import {
+  inviteDeclineRedirectRouteSchema,
+  inviteDeclineRouteSchema,
+} from "../../../../../assets/shared/schemas/invites";
 import { requireInternalSecret } from "../../../../_lib/request";
-import { queuedCapabilityToken } from "../../../../_lib/services/capability-links";
+import { openApiRoute } from "../../../../_lib/openapi/route";
+import type { AdminContext } from "../../../../_lib/db/context";
+import type { z } from "zod";
+
+type InviteDeclineBody = z.infer<typeof inviteDeclineSchema>;
 
 // ── GET: Redirect to the Hugo-managed decline page ───────────────────────────
 // The form UI lives at the event-specific /invite/decline/ Hugo page driven by
@@ -16,119 +20,50 @@ import { queuedCapabilityToken } from "../../../../_lib/services/capability-link
 // old API-URL links; all new invite emails use the event-specific URL produced
 // by inviteDeclineUrl(appBaseUrl, event, token).
 
-export async function onRequestGet(c: any): Promise<Response> {
+function redirectInviteDecline(c: AdminContext, token: string, inviteId?: string): Response {
+  c.set?.("sensitive", true);
   const origin = resolveAppBaseUrl(c.env, c.req.raw);
   const url = new URL("/invite/decline/", origin);
-  url.searchParams.set("token", c.req.param("token"));
-  const inviteId = new URL(c.req.raw.url).searchParams.get("id");
+  url.searchParams.set("token", token);
   if (inviteId) {
     url.searchParams.set("id", inviteId);
   }
   return Response.redirect(url.toString(), 302);
 }
 
+export const InviteDeclineGet = openApiRoute(
+  inviteDeclineRedirectRouteSchema,
+  (c: AdminContext, data) => redirectInviteDecline(c, data.params.token, data.query.id),
+  (c: AdminContext) => c.set?.("sensitive", true),
+);
+
 // ── POST: Decline (with optional forwarding) ──────────────────────────────────
 
-export async function onRequestPost(c: any): Promise<Response> {
-  const body = await parseJsonBody(c.req, inviteDeclineSchema);
-  const signingSecret = requireInternalSecret(c.env);
-  const inviteId = new URL(c.req.raw.url).searchParams.get("id");
-  const invite = await findInviteByToken(c.env.DB, c.req.param("token"), signingSecret, inviteId);
-
-  // Forward the invite to nominated contacts before declining
-  const forwardedEmails: string[] = [];
-  if (body.forwards && body.forwards.length > 0) {
-    const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-
-    const event = await first<{
-      id: string;
-      name: string;
-      slug: string;
-      base_path: string | null;
-      starts_at: string | null;
-      settings_json: string;
-    }>(c.env.DB, "SELECT id, name, slug, base_path, starts_at, settings_json FROM events WHERE id = ?", [
-      invite.event_id,
-    ]);
-
-    if (event) {
-      for (const contact of body.forwards) {
-        try {
-          const { invite: newInvite, isNew } = await createInvite(c.env.DB, {
-            eventId: invite.event_id,
-            inviteeEmail: contact.email,
-            inviteeFirstName: contact.firstName ?? null,
-            inviteeLastName: contact.lastName ?? null,
-            inviteType: invite.invite_type,
-            sourceType: "declined-forward",
-          });
-
-          // Do not send a new email if the contact already has an active invite.
-          if (!isNew) continue;
-          const queuedInviteToken = queuedCapabilityToken("invite", newInvite.id);
-          const registrationUrl =
-            invite.invite_type === "attendee"
-              ? registrationPageUrl(appBaseUrl, event, {
-                  invite: queuedInviteToken,
-                  inviteId: newInvite.id,
-                  source: "invite",
-                })
-              : undefined;
-          const proposalUrl =
-            invite.invite_type === "speaker"
-              ? proposalPageUrl(appBaseUrl, event, {
-                  invite: queuedInviteToken,
-                  inviteId: newInvite.id,
-                  source: "speaker_invite_forward",
-                })
-              : undefined;
-          const declineUrl = inviteDeclineUrl(appBaseUrl, event, queuedInviteToken, newInvite.id);
-
-          const outboxId = await queueEmail(c.env.DB, {
-            eventId: event.id,
-            templateKey: invite.invite_type === "speaker" ? "speaker_invite" : "attendee_invite",
-            recipientEmail: newInvite.invitee_email,
-            messageType: "transactional",
-            subject:
-              invite.invite_type === "speaker" ? `Speaker invitation: ${event.name}` : `Invitation: ${event.name}`,
-            capabilityLinkValues: [registrationUrl, proposalUrl, declineUrl],
-            data: {
-              ...buildEventEmailVariables(event, appBaseUrl),
-              firstName: newInvite.invitee_first_name ?? "",
-              lastName: newInvite.invitee_last_name ?? "",
-              registrationUrl,
-              proposalUrl,
-              declineUrl,
-            },
-          });
-
-          c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
-          forwardedEmails.push(contact.email);
-        } catch {
-          // Skip contacts that are unsubscribed or already have active invites — continue with the rest
-        }
-      }
-    }
-  }
-
-  await declineInvite(c.env.DB, {
-    inviteId: invite.id,
-    reasonCode: body.reasonCode,
-    reasonNote: body.reasonNote,
-    unsubscribeFuture: body.unsubscribeFuture,
-    npsScore: body.npsScore,
+async function handleInviteDecline(
+  c: AdminContext,
+  token: string,
+  inviteId: string | undefined,
+  body: InviteDeclineBody,
+): Promise<Response> {
+  c.set?.("sensitive", true);
+  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
+  const result = await executeInviteDecline(c.env.DB, {
+    token,
+    inviteId,
+    body,
+    signingSecret: requireInternalSecret(c.env),
+    appBaseUrl,
   });
 
-  return json({ success: true, forwarded: forwardedEmails });
+  for (const outboxId of result.outboxIds) {
+    c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
+  }
+
+  return json({ success: true, forwarded: result.forwardedEmails });
 }
 
-export async function onRequest(c: any): Promise<Response> {
-  c.set("sensitive", true);
-  if (c.req.raw.method === "GET") {
-    return onRequestGet(c);
-  }
-  if (c.req.raw.method !== "POST") {
-    return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-  }
-  return onRequestPost(c);
-}
+export const InviteDeclinePost = openApiRoute(
+  inviteDeclineRouteSchema,
+  (c: AdminContext, data) => handleInviteDecline(c, data.params.token, data.query.id, data.body),
+  (c: AdminContext) => c.set?.("sensitive", true),
+);

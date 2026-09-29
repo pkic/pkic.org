@@ -1,0 +1,59 @@
+/*
+ * PageHeader.
+ *
+ * The title leads, context hangs off its baseline, actions keep to the right
+ * and drop below on a phone. Vertical rhythm is the header's own; the page's
+ * stack gap separates it from what follows.
+ */
+
+@layer components {
+  .pk-page-header {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-2);
+  }
+
+  .pk-page-header__row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--pk-4);
+    flex-wrap: wrap;
+  }
+
+  .pk-page-header__subject {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-3);
+    flex-wrap: wrap;
+    min-width: 0;
+  }
+
+  .pk-page-header__title {
+    margin: 0;
+    font-size: var(--pk-text-xl);
+    font-weight: 650;
+    color: var(--pk-ink);
+    overflow-wrap: anywhere;
+  }
+
+  .pk-page-header__context {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-2);
+  }
+
+  .pk-page-header__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+    flex: none;
+  }
+
+  .pk-page-header__description {
+    margin: 0;
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink-muted);
+    max-width: 65ch;
+  }
+}

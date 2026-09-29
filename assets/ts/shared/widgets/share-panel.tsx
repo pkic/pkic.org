@@ -1,5 +1,5 @@
 /**
- * Renders a personalised sharing panel into a container element.
+ * Renders a personalized sharing panel into a container element.
  *
  * Psychology applied:
  *  - Peak-End Rule: presenting the share prompt at the successful conclusion
@@ -12,16 +12,42 @@
  *    giving registrants a sense of forward momentum.
  *  - Endowment Effect: showing the OG badge image makes the share link feel
  *    personally owned — registrants are more likely to share something that
- *    already has their name on it.
+ *    already has their name on it, so the badge leads the panel.
+ *
+ * Design system notes (phase 5):
+ *  - The surface is a `Panel`, so its frame, ground and padding come from the
+ *    system rather than from `.event-flow-share` in `assets/scss`, whose rules
+ *    for this panel are now unreferenced. It renders
+ *    inside `SuccessPanel`, which centers its children, hence `pk-start`.
+ *  - Every invite row control carries its own label. The version this replaces
+ *    had one `aria-hidden` header strip and three `aria-label`s per row, so a
+ *    reader tabbing through ten rows heard "Email address" ten times with no
+ *    way to tell which row they were in.
+ *  - The copy-link outcome is a `role="status"` line rather than a relabelled
+ *    button: changing a control's accessible name under the reader's cursor
+ *    moves the goalposts mid-interaction.
  */
 import { render } from "preact";
-import { useState, useCallback, useRef, useEffect } from "preact/hooks";
+import { useState, useCallback, useId, useRef, useEffect } from "preact/hooks";
 import { IconLinkedIn, IconXTwitter, IconBluesky, IconReddit } from "../../components/icons";
 import { parseContactText } from "../invite-parser";
 import type { ParsedContact } from "../invite-parser";
+import { registrationInviteCreateSchema, peerInviteResultSchema } from "../../../shared/schemas/registration";
+import { postJson, ApiClientError } from "../api-client";
+import { Alert } from "../../ui/Alert";
+import { Button, ButtonLink } from "../../ui/Button";
+import { Field } from "../../ui/Field";
+import { Panel, PanelBody } from "../../ui/Panel";
+import { Spinner } from "../../ui/Spinner";
+import { TextInput, Textarea } from "../../ui/TextControl";
+// `pk-mono` and `pk-framed` are written as class names here rather than
+// reached through a component, so this module has to pull their stylesheet
+// into its own chunk.
+import "../../ui/Content.css";
 
 export interface SharePanelOptions {
   shareUrl: string;
+  badgeVersion?: string;
   eventName: string;
   firstName?: string | null;
   lastName?: string | null;
@@ -46,7 +72,7 @@ function extractOgBadgeUrl(shareUrl: string): string | null {
     const match = shareUrl.match(/\/r\/([A-Za-z0-9]+)(?:[?#]|$)/);
     if (!match) return null;
     const origin = new URL(shareUrl).origin;
-    return `${origin}/api/v1/og/${match[1]}`;
+    return `${origin}/api/v1/registrations/referrals/${match[1]}/badge`;
   } catch {
     return null;
   }
@@ -83,116 +109,92 @@ function OgBadge({
   }, []);
 
   return (
-    <>
-      <div class="event-flow-share-og-preview" data-og-badge-container>
-        <div class="event-flow-share-og-loading" data-og-badge-loading hidden={!loading}>
-          <span class="spinner-border spinner-border-sm text-secondary" role="status" aria-hidden="true" />
-          <span class="text-muted small">Generating badge…</span>
-        </div>
-        <img
-          ref={imgRef}
-          src={ogBadgeUrl}
-          alt={`Your personal invite badge for ${eventName}`}
-          class="event-flow-share-og-img"
-          data-og-badge-img
-          width={600}
-          height={315}
-        />
+    <div class="pk-stack pk-stack--tight">
+      {/* The indicator sits above the picture rather than over it: an overlay
+          would need an absolutely positioned box, and the system has no
+          utility for one. Spinner carries its own role="status", so the wait
+          is announced instead of being a silent grey rectangle. */}
+      <div class="pk-cluster pk-cluster--center" data-og-badge-loading hidden={!loading}>
+        <Spinner size="sm" label="Generating your badge…" />
       </div>
-      <div class="event-flow-share-og-actions text-center mt-2 mb-1">
-        <a
-          href={`${ogBadgeUrl}?download=1&name=${encodeURIComponent(badgeFilename)}`}
+      <img
+        ref={imgRef}
+        src={ogBadgeUrl}
+        alt={`Your personal invite badge for ${eventName}`}
+        class="pk-framed"
+        data-og-badge-img
+        width={600}
+        height={315}
+      />
+      <div class="pk-cluster pk-cluster--center">
+        <ButtonLink
+          href={`${ogBadgeUrl}${ogBadgeUrl.includes("?") ? "&" : "?"}download=1&name=${encodeURIComponent(badgeFilename)}`}
           download={badgeFilename}
-          class="btn btn-sm btn-outline-secondary"
-          aria-label="Download your personal badge image"
+          size="sm"
         >
-          ⬇ Download badge
-        </a>
+          <span aria-hidden="true">⬇</span> Download badge
+        </ButtonLink>
       </div>
-    </>
+    </div>
   );
 }
 
 function CopyLinkRow({ shareUrl }: { shareUrl: string }) {
-  const [copied, setCopied] = useState<boolean | null>(null);
+  const [copyStatus, setCopyStatus] = useState("");
 
   const handleCopy = useCallback(() => {
     navigator.clipboard.writeText(shareUrl).then(
-      () => {
-        setCopied(true);
-        setTimeout(() => setCopied(null), 2000);
-      },
-      () => {
-        setCopied(false);
-      },
+      () => setCopyStatus("Link copied to your clipboard."),
+      () => setCopyStatus("Could not copy automatically — select the link above and copy it."),
     );
   }, [shareUrl]);
 
   return (
-    <div class="event-flow-share-link-row">
-      <input
-        type="text"
-        class="form-control form-control-sm event-flow-share-link-input"
-        value={shareUrl}
-        readOnly
-        aria-label="Your unique sharing link"
-      />
-      <button
-        type="button"
-        class="btn btn-outline-secondary btn-sm event-flow-share-copy-btn"
-        onClick={handleCopy}
-        data-share-copy
-        aria-label="Copy sharing link"
-      >
-        {copied === true ? "Copied!" : copied === false ? "Copy failed" : "Copy link"}
-      </button>
+    <div class="pk-stack pk-stack--snug">
+      <Field label="Your unique sharing link" help="Registrations made through this link are credited to you.">
+        {(control) => <TextInput {...control} class="pk-mono" value={shareUrl} readOnly />}
+      </Field>
+      <div class="pk-cluster">
+        <Button size="sm" onClick={handleCopy}>
+          Copy link
+        </Button>
+        <p class="pk-small" role="status">
+          {copyStatus}
+        </p>
+      </div>
     </div>
   );
 }
 
 function SocialLinks({
-  linkedinUrl: _linkedinUrl,
   twitterUrl,
   blueskyUrl,
   redditUrl,
 }: {
-  linkedinUrl: string;
   twitterUrl: string;
   blueskyUrl: string;
   redditUrl: string;
 }) {
   return (
-    <div class="event-flow-share-socials">
-      <span class="event-flow-share-socials-label">Share on:</span>
-      <a
+    <div class="pk-cluster">
+      <span class="pk-small">Share on:</span>
+      <ButtonLink
         href={twitterUrl}
         target="_blank"
         rel="noopener noreferrer"
-        class="btn btn-sm btn-outline-secondary event-flow-share-social-btn"
+        size="sm"
         aria-label="Share on X / Twitter"
       >
         <IconXTwitter />X
-      </a>
-      <a
-        href={blueskyUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        class="btn btn-sm btn-outline-secondary event-flow-share-social-btn"
-        aria-label="Share on Bluesky"
-      >
+      </ButtonLink>
+      <ButtonLink href={blueskyUrl} target="_blank" rel="noopener noreferrer" size="sm" aria-label="Share on Bluesky">
         <IconBluesky />
         Bluesky
-      </a>
-      <a
-        href={redditUrl}
-        target="_blank"
-        rel="noopener noreferrer"
-        class="btn btn-sm btn-outline-secondary event-flow-share-social-btn"
-        aria-label="Share on Reddit"
-      >
+      </ButtonLink>
+      <ButtonLink href={redditUrl} target="_blank" rel="noopener noreferrer" size="sm" aria-label="Share on Reddit">
         <IconReddit />
         Reddit
-      </a>
+      </ButtonLink>
     </div>
   );
 }
@@ -208,12 +210,14 @@ interface InviteRowData {
 
 function InviteRow({
   row,
+  position,
   showRemove,
   onChange,
   onRemove,
   onPasteEmail,
 }: {
   row: InviteRowData;
+  position: number;
   showRemove: boolean;
   onChange: (id: number, field: keyof Omit<InviteRowData, "id">, value: string) => void;
   onRemove: (id: number) => void;
@@ -230,45 +234,45 @@ function InviteRow({
   );
 
   return (
-    <div class="event-flow-invite-row">
-      <input
-        type="text"
-        class="form-control form-control-sm"
+    <div class="pk-grid pk-grid--tight">
+      <TextInput
         placeholder="First (opt.)"
         value={row.firstName}
         onInput={(e) => onChange(row.id, "firstName", (e.target as HTMLInputElement).value)}
-        aria-label="First name (optional)"
+        aria-label={`Invite ${position} first name (optional)`}
         autocomplete="off"
       />
-      <input
-        type="text"
-        class="form-control form-control-sm"
+      <TextInput
         placeholder="Last (opt.)"
         value={row.lastName}
         onInput={(e) => onChange(row.id, "lastName", (e.target as HTMLInputElement).value)}
-        aria-label="Last name (optional)"
+        aria-label={`Invite ${position} last name (optional)`}
         autocomplete="off"
       />
-      <input
+      <TextInput
         type="email"
-        class="form-control form-control-sm"
         placeholder="colleague@example.com"
         value={row.email}
         onInput={(e) => onChange(row.id, "email", (e.target as HTMLInputElement).value)}
         onPaste={handlePaste}
-        aria-label="Email address"
+        aria-label={`Invite ${position} email address`}
         autocomplete="off"
       />
-      {showRemove && (
-        <button
-          type="button"
-          class="event-flow-invite-remove-btn"
-          onClick={() => onRemove(row.id)}
-          aria-label="Remove row"
-        >
-          ×
-        </button>
-      )}
+      {/* Named per row: "Remove row" repeated ten times gives a reader no way
+          to tell which one they are about to delete. */}
+      <div class="pk-cluster pk-cluster--end">
+        {showRemove && (
+          <Button
+            size="sm"
+            variant="danger-quiet"
+            icon
+            aria-label={`Remove invite ${position}`}
+            onClick={() => onRemove(row.id)}
+          >
+            <span aria-hidden="true">×</span>
+          </Button>
+        )}
+      </div>
     </div>
   );
 }
@@ -288,9 +292,12 @@ function makeRow(entry?: ParsedContact): InviteRowData {
 function InvitePanel({ manageToken, eventSlug }: { manageToken: string; eventSlug: string }) {
   const [expanded, setExpanded] = useState(false);
   const [rows, setRows] = useState<InviteRowData[]>(() => [makeRow()]);
-  const [status, setStatus] = useState<{ message: string; type: "success" | "danger" } | null>(null);
+  const [status, setStatus] = useState<{ message: string; tone: "ok" | "danger" } | null>(null);
   const [sending, setSending] = useState(false);
   const fieldsRef = useRef<HTMLDivElement>(null);
+  // Generated rather than fixed: two share panels can share a page, and a
+  // duplicated id would point both toggles at the same set of fields.
+  const fieldsId = useId();
 
   const showRemove = rows.length > 1;
 
@@ -383,12 +390,12 @@ function InvitePanel({ manageToken, eventSlug }: { manageToken: string; eventSlu
       .filter((i) => i.email);
 
     if (!invites.length) {
-      setStatus({ message: "Please enter at least one email address.", type: "danger" });
+      setStatus({ message: "Please enter at least one email address.", tone: "danger" });
       return;
     }
     const badEmail = invites.find((i) => !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(i.email));
     if (badEmail) {
-      setStatus({ message: `"${badEmail.email}" doesn't look like a valid email address.`, type: "danger" });
+      setStatus({ message: `"${badEmail.email}" doesn't look like a valid email address.`, tone: "danger" });
       return;
     }
 
@@ -396,79 +403,58 @@ function InvitePanel({ manageToken, eventSlug }: { manageToken: string; eventSlu
     setStatus(null);
 
     try {
-      const response = await fetch(`/api/v1/events/${eventSlug}/invites`, {
-        method: "POST",
-        headers: { "content-type": "application/json", authorization: `Bearer ${manageToken}` },
-        body: JSON.stringify({ invites }),
+      const payload = registrationInviteCreateSchema.parse({ invites });
+      const data = await postJson(`/api/v1/events/${eventSlug}/invites`, payload, peerInviteResultSchema, {
+        authorization: `Bearer ${manageToken}`,
       });
-      const data = (await response.json()) as Record<string, unknown>;
-      if (!response.ok) {
-        const msg =
-          ((data?.error as Record<string, unknown>)?.message as string | undefined) ??
-          "Something went wrong. Please try again.";
-        setStatus({ message: msg, type: "danger" });
-        return;
-      }
-      const count = (data?.created as unknown[])?.length ?? invites.length;
+      const count = data.created.length;
       setStatus({
-        message: `✓ Sent ${count} invitation${count !== 1 ? "s" : ""}! They'll receive a registration link shortly.`,
-        type: "success",
+        message: `Sent ${count} invitation${count !== 1 ? "s" : ""}. They'll receive a registration link shortly.`,
+        tone: "ok",
       });
       setRows([makeRow()]);
-    } catch {
-      setStatus({ message: "Could not send invites. Please try again later.", type: "danger" });
+    } catch (error) {
+      setStatus({
+        message: error instanceof ApiClientError ? error.message : "Could not send invites. Please try again later.",
+        tone: "danger",
+      });
     } finally {
       setSending(false);
     }
   }, [rows, eventSlug, manageToken]);
 
   return (
-    <div class="event-flow-invite" data-invite-panel>
-      <button
-        type="button"
-        class="btn btn-outline-secondary event-flow-share-primary-btn"
-        onClick={toggleExpanded}
-        aria-expanded={expanded}
-        aria-controls="event-flow-invite-fields"
-        data-invite-toggle
-      >
-        ✉️ Invite by email
-      </button>
+    <div class="pk-stack pk-stack--snug">
+      <div class="pk-cluster">
+        <Button onClick={toggleExpanded} aria-expanded={expanded} aria-controls={fieldsId}>
+          <span aria-hidden="true">✉️</span> Invite by email
+        </Button>
+      </div>
 
-      <div
-        id="event-flow-invite-fields"
-        class="event-flow-invite-fields"
-        hidden={!expanded}
-        ref={fieldsRef}
-        data-invite-fields
-      >
-        <p class="event-flow-invite-copy">
+      <div id={fieldsId} class="pk-stack pk-stack--snug" hidden={!expanded} ref={fieldsRef}>
+        <p class="pk-small">
           We'll send a personal invitation on your behalf — they'll receive a direct registration link. Paste a list
           below or fill in rows one by one.
         </p>
-        <div class="event-flow-invite-paste-zone">
-          <textarea
-            class="form-control form-control-sm"
-            rows={2}
-            placeholder={"alice@example.net\nBob Smith <bob@example.com>\ncarol.jones@co.example…"}
-            aria-label="Paste email addresses to add"
-            onPaste={handlePasteArea}
-          />
-          <p class="event-flow-invite-paste-hint">
-            Names inferred from dotted addresses or &ldquo;Name &lt;email&gt;&rdquo; format.
-          </p>
-        </div>
-        <div class="event-flow-invite-thead" aria-hidden="true">
-          <span>First name</span>
-          <span>Last name</span>
-          <span>Email *</span>
-          <span />
-        </div>
-        <div class="event-flow-invite-list" data-invite-list>
-          {rows.map((row) => (
+        <Field
+          label="Paste email addresses to add"
+          help={'Names are inferred from dotted addresses or the "Name <email>" format.'}
+        >
+          {(control) => (
+            <Textarea
+              {...control}
+              rows={2}
+              placeholder={"alice@example.net\nBob Smith <bob@example.com>\ncarol.jones@co.example…"}
+              onPaste={handlePasteArea}
+            />
+          )}
+        </Field>
+        <div class="pk-stack pk-stack--snug">
+          {rows.map((row, index) => (
             <InviteRow
               key={row.id}
               row={row}
+              position={index + 1}
               showRemove={showRemove}
               onChange={updateRow}
               onRemove={removeRow}
@@ -476,27 +462,17 @@ function InvitePanel({ manageToken, eventSlug }: { manageToken: string; eventSlu
             />
           ))}
         </div>
-        <div class="event-flow-invite-actions mt-2 d-flex gap-2 flex-wrap align-items-center">
+        <div class="pk-cluster">
           {rows.length < MAX_INVITES && (
-            <button type="button" class="btn btn-sm btn-outline-secondary" onClick={() => addRow()} data-invite-add>
-              + Add row
-            </button>
+            <Button size="sm" onClick={() => addRow()}>
+              Add row
+            </Button>
           )}
-          <button
-            type="button"
-            class="btn btn-sm btn-page-accent"
-            onClick={handleSend}
-            disabled={sending}
-            data-invite-send
-          >
+          <Button size="sm" variant="primary" loading={sending} onClick={() => void handleSend()}>
             {sending ? "Sending…" : "Send invites"}
-          </button>
+          </Button>
         </div>
-        {status && (
-          <p class={`event-flow-invite-status mt-2 small text-${status.type}`} data-invite-status aria-live="polite">
-            {status.message}
-          </p>
-        )}
+        {status && <Alert tone={status.tone}>{status.message}</Alert>}
       </div>
     </div>
   );
@@ -516,38 +492,45 @@ function SharePanelInner({ options }: { options: SharePanelOptions }) {
   const twitterUrl = `https://twitter.com/intent/tweet?text=${twitterText}`;
   const blueskyUrl = `https://bsky.app/intent/compose?text=${blueskyText}`;
   const redditUrl = `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl)}&title=${redditTitle}`;
-  const ogBadgeUrl = extractOgBadgeUrl(shareUrl);
+  const baseBadgeUrl = extractOgBadgeUrl(shareUrl);
+  const ogBadgeUrl =
+    baseBadgeUrl && options.badgeVersion
+      ? `${baseBadgeUrl}?v=${encodeURIComponent(options.badgeVersion)}`
+      : baseBadgeUrl;
   const badgeFilename = `attendee-badge-${nameSlug(options.firstName, options.lastName)}.png`;
 
   const canInvite = Boolean(manageToken && eventSlug);
 
   return (
-    <div class="event-flow-share">
-      {ogBadgeUrl && <OgBadge ogBadgeUrl={ogBadgeUrl} eventName={eventName} badgeFilename={badgeFilename} />}
+    <Panel class="pk pk-start">
+      <PanelBody class="pk-stack pk-stack--snug">
+        {ogBadgeUrl && <OgBadge ogBadgeUrl={ogBadgeUrl} eventName={eventName} badgeFilename={badgeFilename} />}
 
-      <p class="event-flow-share-heading">Invite a colleague — seats are limited</p>
-      <p class="event-flow-share-copy">
-        In-person spots fill fast. Every registration through your personal link helps us prioritise attendees and shape
-        the programme.
-      </p>
+        <h3>Invite a colleague — seats are limited</h3>
+        <p class="pk-small">
+          In-person spots fill fast. Every registration through your personal link helps us prioritize attendees and
+          shape the program.
+        </p>
 
-      <div class="event-flow-share-ctas">
-        <a
-          href={linkedinUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          class="btn btn-page-accent event-flow-share-primary-btn"
-          aria-label="Share on LinkedIn"
-        >
-          <IconLinkedIn />
-          Share on LinkedIn
-        </a>
+        <div class="pk-cluster">
+          <ButtonLink
+            href={linkedinUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            variant="primary"
+            aria-label="Share on LinkedIn"
+          >
+            <IconLinkedIn />
+            Share on LinkedIn
+          </ButtonLink>
+        </div>
+
         {canInvite && <InvitePanel manageToken={manageToken as string} eventSlug={eventSlug as string} />}
-      </div>
 
-      <CopyLinkRow shareUrl={shareUrl} />
-      <SocialLinks linkedinUrl={linkedinUrl} twitterUrl={twitterUrl} blueskyUrl={blueskyUrl} redditUrl={redditUrl} />
-    </div>
+        <CopyLinkRow shareUrl={shareUrl} />
+        <SocialLinks twitterUrl={twitterUrl} blueskyUrl={blueskyUrl} redditUrl={redditUrl} />
+      </PanelBody>
+    </Panel>
   );
 }
 
@@ -557,7 +540,7 @@ export function renderSharePanel(container: HTMLElement, options: SharePanelOpti
 
 /**
  * Busts the R2 cache on the OG badge image inside a share panel and shows the
- * loading spinner until the freshly-rendered PNG arrives.
+ * loading indicator until the freshly-rendered PNG arrives.
  */
 export function refreshSharePanelBadge(panelContainer: HTMLElement): void {
   const img = panelContainer.querySelector<HTMLImageElement>("[data-og-badge-img]");

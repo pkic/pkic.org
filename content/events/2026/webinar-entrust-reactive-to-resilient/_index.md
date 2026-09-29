@@ -10,6 +10,7 @@ layout: webinar
 params:
   eventType: webinar
   sponsor: entrust
+  sponsorName: Entrust
 
   heroTitle: "From Reactive to Resilient: Regaining Control of Today's Cryptographic Complexity"
   heroDescription: "Online | Sponsored webinar by Entrust"

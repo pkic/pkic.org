@@ -1,5 +1,5 @@
 {{/*
-  row.html — Bootstrap row wrapper for use in Markdown content.
+  row.html — a wrapping horizontal group for use in Markdown content.
 
   Use with the percent-sign syntax so inner Markdown is rendered:
     {{% row %}}
@@ -7,12 +7,13 @@
     {{% col size="5" sticky="true" %}} ... {{% /col %}}
     {{% /row %}}
 
-  Parameters (all optional):
-    gap   — Bootstrap g-* gutter value (default: 4)
-    align — Bootstrap align-items-* value, e.g. "start", "center" (default: none)
+  Spacing between the columns is the track's own decision, so the shortcode
+  takes no gutter or alignment argument: one rule in the stylesheet rather
+  than one per call site.
+
+  The content grid owns both track widths and spacing. It deliberately keeps
+  the familiar 12-column authoring API without depending on Bootstrap.
 */}}
-{{- $gap   := .Get "gap"   | default "4" -}}
-{{- $align := .Get "align" | default "" -}}
-<div class="row g-{{ $gap }}{{ with $align }} align-items-{{ . }}{{ end }}">
+<div class="content-row">
 {{ .Inner }}
 </div>

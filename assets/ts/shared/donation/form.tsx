@@ -1,21 +1,25 @@
 /**
- * Donation form logic — initialises the donation widget rendered by the
+ * Donation form logic — initializes the donation widget rendered by the
  * `donation-form.html` Hugo shortcode.
  *
- * On load it auto-detects the visitor's country via `/api/v1/geo` and maps
+ * On load it auto-detects the visitor's country via `/api/v1/geolocation/country` and maps
  * it to a default currency. The donor can switch currencies via a `<select>`.
  * Preset amount buttons (50/100/250/500/1000) and a custom-amount input are
  * provided. Clicking "Donate" creates a Stripe Checkout Session via the
  * backend and mounts Stripe Embedded Checkout inline.
  *
- * Donor identity (name, email, organisation) is collected in the form and
+ * Donor identity (name, email, organization) is collected in the form and
  * submitted to the backend for tax-reporting purposes. When context is
  * available (e.g. the user just registered for an event) the fields are
  * pre-filled via data attributes or URL query parameters.
  */
 import { render } from "preact";
+
+import "./donation-presets.css";
 import { postJson, getJson } from "../api-client";
 import { donationCheckoutSchema } from "../../../shared/schemas/donation";
+import { donationCheckoutEmbeddedResponseSchema } from "../../../shared/schemas/donation";
+import { geolocationCountryResponseSchema } from "../../../shared/schemas/geolocation";
 import {
   CURRENCIES,
   currencyForCountry,
@@ -34,7 +38,7 @@ interface DonationConfig {
   name?: string;
   /** Pre-fill the Stripe Checkout email field. */
   email?: string;
-  /** Pre-fill the donor's organisation. */
+  /** Pre-fill the donor's organization. */
   organizationName?: string;
   /** URL path or label indicating where the donation was initiated. */
   source?: string;
@@ -45,7 +49,7 @@ interface DonationConfig {
 }
 
 /**
- * Initialise every `[data-donation-form]` element on the page.
+ * Initialize every `[data-donation-form]` element on the page.
  * Called at module-level (deferred script).
  */
 export function initDonationForms(): void {
@@ -55,7 +59,7 @@ export function initDonationForms(): void {
 }
 
 /**
- * Initialise a single donation form root element.
+ * Initialize a single donation form root element.
  * Safe to call on dynamically injected elements (e.g. in the registration
  * success panel) after the DOM is already loaded.
  */
@@ -83,8 +87,8 @@ async function initForm(root: HTMLElement): Promise<void> {
   // ── Detect currency from geo ───────────────────────────────────────────
   let defaultCurrency = "usd";
   try {
-    const geo = await getJson<{ country: string | null }>(`${API_BASE}/geo`);
-    defaultCurrency = currencyForCountry(geo.country);
+    const geolocationCountry = await getJson(`${API_BASE}/geolocation/country`, geolocationCountryResponseSchema);
+    defaultCurrency = currencyForCountry(geolocationCountry.country);
   } catch {
     // Geo detection is best-effort; default to USD
   }
@@ -110,6 +114,11 @@ async function initForm(root: HTMLElement): Promise<void> {
   const checkoutContainer = widget?.querySelector<HTMLElement>("[data-donation-checkout]") ?? null;
   const checkoutMount = widget?.querySelector<HTMLElement>("[data-donation-checkout-mount]") ?? null;
   const backBtn = widget?.querySelector<HTMLButtonElement>("[data-donation-back]") ?? null;
+  let checkoutAttemptId = crypto.randomUUID();
+
+  root.addEventListener("input", () => {
+    checkoutAttemptId = crypto.randomUUID();
+  });
 
   if (!currencySelect || !presetContainer || !customInput || !donateBtn) return;
 
@@ -205,6 +214,7 @@ async function initForm(root: HTMLElement): Promise<void> {
     try {
       const smallestUnit = toSmallestUnit(selectedAmount, selectedCurrency);
       const payload = donationCheckoutSchema.parse({
+        checkoutAttemptId,
         amount: smallestUnit,
         currency: selectedCurrency,
         name,
@@ -215,10 +225,7 @@ async function initForm(root: HTMLElement): Promise<void> {
         metadata: config.source ? { source: config.source } : undefined,
         embedded: true,
       });
-      const res = await postJson<{ clientSecret: string; publishableKey: string }>(
-        `${API_BASE}/donations/checkout`,
-        payload,
-      );
+      const res = await postJson(`${API_BASE}/donations/checkout`, payload, donationCheckoutEmbeddedResponseSchema);
       await mountEmbeddedCheckout(res.clientSecret, res.publishableKey);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
@@ -289,7 +296,15 @@ async function initForm(root: HTMLElement): Promise<void> {
     if (!statusEl) return;
     statusEl.textContent = msg;
     statusEl.hidden = false;
-    statusEl.className = `donation-form-status small mt-2 ${isError ? "text-danger" : "text-success"}`;
+    // Assigning `className` wholesale used to repaint this element after the
+    // page had rendered, putting Bootstrap back into markup the gate had
+    // certified as clean. The tone is a modifier now, and the element keeps
+    // the classes its own markup gave it.
+    statusEl.classList.add("pk-alert");
+    statusEl.classList.toggle("pk-alert--danger", isError);
+    statusEl.classList.toggle("pk-alert--ok", !isError);
+    // A failure interrupts; a confirmation does not.
+    statusEl.setAttribute("role", isError ? "alert" : "status");
   }
 
   function clearStatus(): void {
@@ -345,7 +360,7 @@ function PresetButtons({ currencyCode }: { currencyCode: string }) {
         <button
           key={amt}
           type="button"
-          class={`btn btn-outline-secondary donation-preset-btn${amt === defaultConverted ? " donation-preset-btn--popular" : ""}`}
+          class={`pk-btn pk-btn--secondary donation-preset-btn${amt === defaultConverted ? " donation-preset-btn--popular" : ""}`}
           data-preset-amount={amt}
         >
           {amt === defaultConverted && <span class="donation-preset-popular-label">Most popular</span>}
@@ -363,14 +378,12 @@ function renderPresets(container: HTMLElement, currencyCode: string): void {
 function activatePreset(container: HTMLElement, amount: number): void {
   container.querySelectorAll<HTMLButtonElement>("[data-preset-amount]").forEach((btn) => {
     const isMatch = Number(btn.dataset.presetAmount) === amount;
-    btn.classList.toggle("active", isMatch);
     btn.setAttribute("aria-pressed", String(isMatch));
   });
 }
 
 function clearPresetSelection(container: HTMLElement): void {
   container.querySelectorAll<HTMLButtonElement>("[data-preset-amount]").forEach((btn) => {
-    btn.classList.remove("active");
     btn.setAttribute("aria-pressed", "false");
   });
 }

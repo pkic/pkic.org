@@ -1,0 +1,23 @@
+{{/* Authorship and affiliation belong to the post, independent of current membership. */}}
+{{- $profiles := .Params.authorprofiles | default slice -}}
+{{- $items := slice -}}
+{{- $seen := slice -}}
+{{- range .Params.authors -}}
+  {{- $name := . -}}
+  {{- if in $seen $name -}}{{- continue -}}{{- end -}}
+  {{- $seen = $seen | append $name -}}
+  {{- $profile := dict "name" $name -}}
+  {{- range $profiles -}}
+    {{- if eq .name $name -}}{{- $profile = . -}}{{- break -}}{{- end -}}
+  {{- end -}}
+  {{- $headshot := false -}}
+  {{- $logo := false -}}
+  {{- with $profile.assetdirectory -}}
+    {{- $headshot = resources.GetMatch (printf "%s/%s.*" . ($name | urlize)) -}}
+    {{- $logo = resources.GetMatch (printf "%s/%s.*" . (path.Base .)) -}}
+  {{- end -}}
+  {{- with $profile.image -}}{{- $headshot = resources.Get . -}}{{- end -}}
+  {{- with $profile.logo -}}{{- $logo = resources.Get . -}}{{- end -}}
+  {{- $items = $items | append (merge $profile (dict "name" $name "headshot" $headshot "orgLogo" $logo)) -}}
+{{- end -}}
+{{- return $items -}}

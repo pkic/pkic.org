@@ -6,6 +6,23 @@ date: 2021-07-12T7:43:06+00:00
 categories:
 tags: [PKI, PKIC, CASC]
 
+authorProfiles:
+  - name: Paul van Brouwershaven
+    organization: Digitorus
+    role: Founder and CEO
+    website: https://www.digitorus.com
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
+    assetdirectory: images/members/digitorus
+  - name: Chris Bailey
+    organization: AppViewX
+    role: Board Member
+    website: https://www.appviewx.com/
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/christophertmbailey/
+    assetdirectory: images/members/appviewx
 ---
 
 ## Meeting the Challenge of Security and Trust

@@ -27,6 +27,15 @@ tags:
 title: Secure Your Website with HSTS
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 Is your website secure? One thing to consider is securing your website with [HTTP Strict Transport Security (HSTS)][1].
 

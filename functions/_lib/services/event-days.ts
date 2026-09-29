@@ -1,8 +1,9 @@
-import { all, first, run } from "../db/queries";
+import { all } from "../db/queries";
 import { AppError } from "../errors";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, StatementLike } from "../types";
+import type { AttendanceType } from "../../../assets/shared/schemas/registration";
 
 // Open-ended: any string that matches a configured attendance option value.
 export type DayAttendanceType = string;
@@ -25,6 +26,7 @@ export interface EventDayRecord {
   in_person_capacity: number | null;
   sort_order: number;
   attendance_options_json: string | null;
+  capacity_revision: number;
 }
 
 export interface DayAttendanceSelection {
@@ -32,9 +34,15 @@ export interface DayAttendanceSelection {
   attendanceType: DayAttendanceType;
 }
 
+const EVENT_DAYS_LIST_SQL = `SELECT id, event_id, day_date, label, starts_at, ends_at, in_person_capacity, sort_order,
+  attendance_options_json, capacity_revision
+  FROM event_days
+  WHERE event_id = ?
+  ORDER BY sort_order ASC, day_date ASC`;
+
 /**
  * Parses the attendance options for a day from its JSON column.
- * Falls back to a legacy default (in_person + on_demand) using the
+ * Falls back to the legacy core options using the
  * in_person_capacity column when no options have been configured.
  */
 export function resolveAttendanceOptions(
@@ -50,31 +58,79 @@ export function resolveAttendanceOptions(
       // fall through to legacy default
     }
   }
-  // Legacy default: in-person (capped) + on-demand (unlimited)
+  // Legacy default: the three core modes, with capacity applying only in person.
   return [
     { value: "in_person", label: "In-person", capacity: day.in_person_capacity ?? null },
+    { value: "virtual", label: "Virtual", capacity: null },
     { value: "on_demand", label: "On-demand", capacity: null },
   ];
 }
 
 export async function listEventDays(db: DatabaseLike, eventId: string): Promise<EventDayRecord[]> {
-  return all<EventDayRecord>(
-    db,
-    `SELECT id, event_id, day_date, label, starts_at, ends_at, in_person_capacity, sort_order, attendance_options_json
-     FROM event_days
-     WHERE event_id = ?
-     ORDER BY sort_order ASC, day_date ASC`,
-    [eventId],
-  );
+  return all<EventDayRecord>(db, EVENT_DAYS_LIST_SQL, [eventId]);
+}
+
+export const CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL = `SELECT rda.event_day_id, rda.attendance_type, COUNT(*) AS count
+  FROM event_days day
+  JOIN registration_day_attendance rda ON rda.event_day_id = day.id
+  JOIN registrations r ON r.id = rda.registration_id AND r.event_id = day.event_id
+  WHERE day.event_id = ? AND r.status = 'registered'
+  GROUP BY rda.event_day_id, rda.attendance_type`;
+
+/** Management projection with registered attendance counts grouped in D1, not in the browser. */
+export async function listConfiguredEventDaysWithCounts(db: DatabaseLike, eventId: string) {
+  const [daysResult, countsResult] = await db.batch([
+    db.prepare(EVENT_DAYS_LIST_SQL).bind(eventId),
+    db.prepare(CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL).bind(eventId),
+  ]);
+  const days = (daysResult.results ?? []) as unknown as EventDayRecord[];
+  const counts = (countsResult.results ?? []) as unknown as Array<{
+    event_day_id: string;
+    attendance_type: string;
+    count: number;
+  }>;
+  const countByDay = new Map<string, Record<string, number>>();
+  for (const row of counts) {
+    const attendanceCounts = countByDay.get(row.event_day_id) ?? {};
+    attendanceCounts[row.attendance_type] = row.count;
+    countByDay.set(row.event_day_id, attendanceCounts);
+  }
+  return days.map((day) => ({
+    id: day.id,
+    date: day.day_date,
+    label: day.label,
+    startsAt: day.starts_at,
+    endsAt: day.ends_at,
+    sortOrder: day.sort_order,
+    attendanceOptions: resolveAttendanceOptions(day),
+    attendanceCounts: countByDay.get(day.id) ?? {},
+  }));
 }
 
 export async function getRegistrationDayAttendance(
   db: DatabaseLike,
   registrationId: string,
-): Promise<Array<{ dayDate: string; attendanceType: DayAttendanceType; label: string | null }>> {
-  return all<{ dayDate: string; attendanceType: DayAttendanceType; label: string | null }>(
+): Promise<
+  Array<{
+    dayDate: string;
+    attendanceType: DayAttendanceType;
+    label: string | null;
+    /** When the day was first held on this registration. */
+    heldSince: string;
+    /** When the day's attendance last changed. */
+    changedAt: string;
+  }>
+> {
+  return all<{
+    dayDate: string;
+    attendanceType: DayAttendanceType;
+    label: string | null;
+    heldSince: string;
+    changedAt: string;
+  }>(
     db,
-    `SELECT ed.day_date AS dayDate, rda.attendance_type AS attendanceType, ed.label AS label
+    `SELECT ed.day_date AS dayDate, rda.attendance_type AS attendanceType, ed.label AS label,
+            rda.created_at AS heldSince, rda.updated_at AS changedAt
      FROM registration_day_attendance rda
      JOIN event_days ed ON ed.id = rda.event_day_id
      WHERE rda.registration_id = ?
@@ -104,9 +160,7 @@ function normalizeSelections(selections?: DayAttendanceSelection[]): DayAttendan
   return normalized;
 }
 
-export function deriveEventAttendanceType(
-  selections?: DayAttendanceSelection[],
-): "in_person" | "virtual" | "on_demand" | null {
+export function deriveEventAttendanceType(selections?: DayAttendanceSelection[]): AttendanceType | null {
   if (!selections || selections.length === 0) {
     return null;
   }
@@ -122,85 +176,6 @@ export function deriveEventAttendanceType(
   return "on_demand";
 }
 
-export async function enforceDayCapacity(
-  db: DatabaseLike,
-  payload: {
-    eventId: string;
-    selections?: DayAttendanceSelection[];
-    excludeRegistrationId?: string;
-  },
-): Promise<void> {
-  const selections = normalizeSelections(payload.selections);
-  if (selections.length === 0) {
-    return;
-  }
-
-  const eventDays = await listEventDays(db, payload.eventId);
-  if (eventDays.length === 0) {
-    return;
-  }
-
-  const dayMap = new Map(eventDays.map((day) => [day.day_date, day]));
-
-  for (const selection of selections) {
-    const day = dayMap.get(selection.dayDate);
-    if (!day) {
-      throw new AppError(400, "DAY_NOT_CONFIGURED", `Day '${selection.dayDate}' is not configured for this event`);
-    }
-
-    const options = resolveAttendanceOptions(day);
-    const allowedValues = options.map((o) => o.value);
-    if (!allowedValues.includes(selection.attendanceType)) {
-      throw new AppError(
-        400,
-        "ATTENDANCE_TYPE_INVALID",
-        `Attendance type '${selection.attendanceType}' is not a valid option for ${selection.dayDate}. Allowed: ${allowedValues.join(", ")}`,
-        { dayDate: selection.dayDate, attendanceType: selection.attendanceType, allowedValues },
-      );
-    }
-
-    const chosenOption = options.find((o) => o.value === selection.attendanceType);
-    const capacity = chosenOption?.capacity ?? null;
-    if (capacity === null || capacity <= 0) {
-      // unlimited or not enforced
-      continue;
-    }
-
-    const row = await first<{ total: number }>(
-      db,
-      `SELECT COUNT(*) AS total
-       FROM registration_day_attendance rda
-       JOIN registrations r ON r.id = rda.registration_id
-       WHERE r.event_id = ?
-         AND rda.event_day_id = ?
-         AND rda.attendance_type = ?
-         AND r.status IN ('pending_email_confirmation', 'registered')
-         AND (? IS NULL OR r.id <> ?)`,
-      [
-        payload.eventId,
-        day.id,
-        selection.attendanceType,
-        payload.excludeRegistrationId ?? null,
-        payload.excludeRegistrationId ?? null,
-      ],
-    );
-
-    const total = Number(row?.total ?? 0);
-    if (total >= capacity) {
-      throw new AppError(
-        409,
-        "DAY_CAPACITY_REACHED",
-        `Capacity reached for '${selection.attendanceType}' on ${selection.dayDate}`,
-        {
-          dayDate: selection.dayDate,
-          attendanceType: selection.attendanceType,
-          capacity,
-        },
-      );
-    }
-  }
-}
-
 /**
  * Returns a single-query count of confirmed registrations per (event_day_id, attendance_type)
  * for a given event. Used by form endpoints to compute spotsRemainingPercent without N+1 queries.
@@ -212,9 +187,10 @@ export async function countRegisteredByEventDay(
   const rows = await all<{ event_day_id: string; attendance_type: string; total: number }>(
     db,
     `SELECT rda.event_day_id, rda.attendance_type, COUNT(*) AS total
-     FROM registration_day_attendance rda
-     JOIN registrations r ON r.id = rda.registration_id
-     WHERE r.event_id = ?
+     FROM event_days day
+     JOIN registration_day_attendance rda ON rda.event_day_id = day.id
+     JOIN registrations r ON r.id = rda.registration_id AND r.event_id = day.event_id
+     WHERE day.event_id = ?
        AND r.status IN ('pending_email_confirmation', 'registered')
      GROUP BY rda.event_day_id, rda.attendance_type`,
     [eventId],
@@ -235,8 +211,24 @@ export async function replaceRegistrationDayAttendance(
     selections?: DayAttendanceSelection[];
     changedBy?: string;
     recordHistory?: boolean;
+    configuredEventDays?: EventDayRecord[];
   },
 ): Promise<void> {
+  const statements = await prepareReplaceRegistrationDayAttendanceStatements(db, payload);
+  if (statements.length > 0) await db.batch(statements);
+}
+
+export async function prepareReplaceRegistrationDayAttendanceStatements(
+  db: DatabaseLike,
+  payload: {
+    registrationId: string;
+    eventId: string;
+    selections?: DayAttendanceSelection[];
+    changedBy?: string;
+    recordHistory?: boolean;
+    configuredEventDays?: EventDayRecord[];
+  },
+): Promise<StatementLike[]> {
   const selections = normalizeSelections(payload.selections);
   const previousRows = await all<{ event_day_id: string; attendance_type: string }>(
     db,
@@ -245,7 +237,7 @@ export async function replaceRegistrationDayAttendance(
   );
   const previousByDayId = new Map(previousRows.map((row) => [row.event_day_id, row.attendance_type]));
 
-  const eventDays = await listEventDays(db, payload.eventId);
+  const eventDays = payload.configuredEventDays ?? (await listEventDays(db, payload.eventId));
   const dayMap = new Map(eventDays.map((day) => [day.day_date, day]));
   const nextByDayId = new Map<string, string>();
 
@@ -254,53 +246,87 @@ export async function replaceRegistrationDayAttendance(
     if (!day) {
       throw new AppError(400, "DAY_NOT_CONFIGURED", `Day '${selection.dayDate}' is not configured for this event`);
     }
+    if (!resolveAttendanceOptions(day).some((option) => option.value === selection.attendanceType)) {
+      throw new AppError(
+        400,
+        "DAY_ATTENDANCE_TYPE_NOT_CONFIGURED",
+        `Attendance type '${selection.attendanceType}' is not configured for day '${selection.dayDate}'`,
+      );
+    }
 
     nextByDayId.set(day.id, selection.attendanceType);
   }
 
-  await run(db, "DELETE FROM registration_day_attendance WHERE registration_id = ?", [payload.registrationId]);
-  if (selections.length === 0 && previousByDayId.size === 0) {
-    return;
-  }
-
-  for (const selection of selections) {
-    const day = dayMap.get(selection.dayDate);
-    if (!day) continue;
-
-    await run(
-      db,
-      `INSERT INTO registration_day_attendance (
-        id, registration_id, event_day_id, attendance_type, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?)`,
-      [uuid(), payload.registrationId, day.id, selection.attendanceType, nowIso(), nowIso()],
-    );
-  }
-
-  if (payload.recordHistory === false) {
-    return;
-  }
-
-  const changedBy = payload.changedBy ?? "system";
-  const changedAt = nowIso();
   const allDayIds = new Set([...previousByDayId.keys(), ...nextByDayId.keys()]);
-  for (const dayId of allDayIds) {
-    const fromType = previousByDayId.get(dayId) ?? null;
-    const toType = nextByDayId.get(dayId) ?? null;
-    if (fromType === toType) continue;
-    await run(
-      db,
-      `INSERT INTO registration_attendance_history (
-         id, registration_id, event_day_id, from_type, to_type, changed_by, changed_at
-       ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
-      [
-        uuid(),
-        payload.registrationId,
-        dayId,
-        fromType ?? "not_attending",
-        toType ?? "not_attending",
-        changedBy,
-        changedAt,
-      ],
+  if (
+    allDayIds.size === previousByDayId.size &&
+    [...allDayIds].every((dayId) => previousByDayId.get(dayId) === nextByDayId.get(dayId))
+  ) {
+    return [];
+  }
+
+  // Only the days that change are written. Rewriting the whole roster —
+  // delete every row, insert every row — gave each day the timestamp of the
+  // registration's last change rather than its own, so a record could not
+  // say when one day was added or last moved (#113). A day that stays as it
+  // was keeps its row, its `created_at` (when it was first held) and its
+  // `updated_at` (when it last changed).
+  const now = nowIso();
+  const statements: StatementLike[] = [];
+  for (const dayId of previousByDayId.keys()) {
+    if (nextByDayId.has(dayId)) continue;
+    statements.push(
+      db
+        .prepare("DELETE FROM registration_day_attendance WHERE registration_id = ? AND event_day_id = ?")
+        .bind(payload.registrationId, dayId),
     );
   }
+  for (const [dayId, attendanceType] of nextByDayId) {
+    const previous = previousByDayId.get(dayId);
+    if (previous === attendanceType) continue;
+    statements.push(
+      previous === undefined
+        ? db
+            .prepare(
+              `INSERT INTO registration_day_attendance (
+                 id, registration_id, event_day_id, attendance_type, created_at, updated_at
+               ) VALUES (?, ?, ?, ?, ?, ?)`,
+            )
+            .bind(uuid(), payload.registrationId, dayId, attendanceType, now, now)
+        : db
+            .prepare(
+              `UPDATE registration_day_attendance SET attendance_type = ?, updated_at = ?
+                WHERE registration_id = ? AND event_day_id = ?`,
+            )
+            .bind(attendanceType, now, payload.registrationId, dayId),
+    );
+  }
+
+  if (payload.recordHistory !== false) {
+    const changedBy = payload.changedBy ?? "system";
+    for (const dayId of allDayIds) {
+      const fromType = previousByDayId.get(dayId) ?? null;
+      const toType = nextByDayId.get(dayId) ?? null;
+      if (fromType === toType) continue;
+      statements.push(
+        db
+          .prepare(
+            `INSERT INTO registration_attendance_history (
+               id, registration_id, event_day_id, from_type, to_type, changed_by, changed_at
+             ) VALUES (?, ?, ?, ?, ?, ?, ?)`,
+          )
+          .bind(
+            uuid(),
+            payload.registrationId,
+            dayId,
+            fromType ?? "not_attending",
+            toType ?? "not_attending",
+            changedBy,
+            now,
+          ),
+      );
+    }
+  }
+
+  return statements;
 }

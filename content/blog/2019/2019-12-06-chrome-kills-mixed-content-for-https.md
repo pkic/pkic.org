@@ -19,6 +19,15 @@ tags:
 title: Chrome Kills Mixed Content for HTTPS
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 In a phased approach, Chrome plans to block mixed content on secure websites to improve user security. [Most browsers already block some mixed content such as scripts and iframes by default.][1] Chrome is amping it up by gradually taking steps to also block images, audio recordings and videos, according to a recent [Google Security blog][2]. Preventing mixed content to load will eventually result in HTTPS websites losing their security indicator downgrading the site to HTTP, which alerts visitors that the site is not secure.
 

@@ -12,7 +12,7 @@ menu:
 
 ---
 
-{{% row gap="5" %}}
+{{% row %}}
 {{% col size="7" %}}
 
 The PKI Consortium is a **Utah non-profit** that advances trust in digital communications through open collaboration, education, and community events.

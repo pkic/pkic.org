@@ -16,6 +16,20 @@ tags:
 title: Why We Need to Move to SHA-2
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
+  - name: Clayton Smith
+    organization: Entrust
+    role: Software Security Architect
+    website: https://www.entrust.com/
+    assetdirectory: images/members/entrust
 ---
 Previously, we advised that the [SSL industry must move to the SHA-2 hashing algorithm][1] for certificate signatures. We thought it would be helpful to provide the reasoning behind the position.
 

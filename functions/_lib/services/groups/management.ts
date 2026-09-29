@@ -1,0 +1,426 @@
+import type {
+  Group,
+  GroupCategoryRulesReplaceInput,
+  GroupCreateInput,
+  GroupType,
+  GroupTypesListQuery,
+  GroupUpdateInput,
+} from "../../../../assets/shared/schemas/groups";
+import { serializeLinks } from "../../../../assets/shared/schemas/links";
+import {
+  isAuthorizationGuardFailure,
+  prepareAuthorizationGuard,
+  type AuthorizationEvidence,
+} from "../../db/authorization-guard";
+import { queryPage } from "../../db/pagination";
+import { first } from "../../db/queries";
+import { buildD1TextSearchFilter } from "../../db/search";
+import { resolveMappedOrderBy } from "../../db/sort";
+import { AppError } from "../../errors";
+import type { AuthAdmin, DatabaseLike, StatementLike } from "../../types";
+import { uuid } from "../../utils/ids";
+import { nowIso } from "../../utils/time";
+import { isAuditChangeGuardFailure, prepareScopedAuditLog, prepareScopedAuditLogAfterOneChange } from "../audit";
+import { prepareAutomaticGroupEnrollmentForGroupStatements } from "./automatic-enrollment-group";
+import {
+  canEnableLocalOnlyGovernance,
+  prepareGroupManagementAuthorizationGuard,
+  requireGlobalGroupManagement,
+  requireGroupManagement,
+} from "./governance";
+import { listMembershipCategories } from "../membership/categories";
+import { getGroup } from "./read-model";
+import { firstFreeSlug, slugifyOr } from "../../../../assets/shared/slug";
+
+interface GroupTypeRow {
+  key: string;
+  singular_label: string;
+  plural_label: string;
+  description: string | null;
+  default_governance_inheritance_mode: GroupType["defaultGovernanceInheritanceMode"];
+  default_eligibility_mode: GroupType["defaultEligibilityMode"];
+  default_automatic_enrollment_mode: GroupType["defaultAutomaticEnrollmentMode"];
+  default_allow_automatic_opt_out: number;
+  default_visibility: GroupType["defaultVisibility"];
+  lead_title: string;
+  deputy_lead_title: string;
+  active: number;
+  sort_order: number;
+}
+
+const GROUP_TYPE_SELECT = `SELECT gt.key, gt.singular_label, gt.plural_label, gt.description,
+  gt.default_governance_inheritance_mode, gt.default_eligibility_mode,
+  gt.default_automatic_enrollment_mode, gt.default_allow_automatic_opt_out,
+  gt.default_visibility, gt.lead_title, gt.deputy_lead_title, gt.active, gt.sort_order`;
+
+function mapGroupType(row: GroupTypeRow): GroupType {
+  return {
+    key: row.key,
+    singularLabel: row.singular_label,
+    pluralLabel: row.plural_label,
+    description: row.description,
+    defaultGovernanceInheritanceMode: row.default_governance_inheritance_mode,
+    defaultEligibilityMode: row.default_eligibility_mode,
+    defaultAutomaticEnrollmentMode: row.default_automatic_enrollment_mode,
+    defaultAllowAutomaticOptOut: row.default_allow_automatic_opt_out === 1,
+    defaultVisibility: row.default_visibility,
+    leadershipTitles: { lead: row.lead_title, deputyLead: row.deputy_lead_title },
+    active: row.active === 1,
+    sortOrder: row.sort_order,
+  };
+}
+
+export async function listGroupTypes(
+  db: DatabaseLike,
+  query: GroupTypesListQuery,
+): Promise<{ groupTypes: GroupType[]; total: number }> {
+  const search = query.q
+    ? buildD1TextSearchFilter(query.q, ["gt.key", "gt.singular_label", "gt.plural_label", "gt.description"])
+    : null;
+  const conditions: string[] = [];
+  const bindings: unknown[] = [];
+  if (search) {
+    conditions.push(search.sql);
+    bindings.push(...search.bindings);
+  }
+  if (query.active !== undefined) {
+    conditions.push("gt.active = ?");
+    bindings.push(query.active ? 1 : 0);
+  }
+  const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
+  const { rows, total } = await queryPage<GroupTypeRow>(db, {
+    source: {
+      selectSql: GROUP_TYPE_SELECT,
+      fromSql: `FROM group_types gt ${where}`,
+      bindings,
+    },
+    orderBy: resolveMappedOrderBy(
+      query.sort,
+      { sort_order: "gt.sort_order", singular_label: "gt.singular_label COLLATE NOCASE", key: "gt.key" },
+      "gt.sort_order ASC",
+      "gt.key ASC",
+    ),
+    limit: query.limit,
+    offset: query.offset,
+  });
+  return { groupTypes: rows.map(mapGroupType), total };
+}
+
+async function availableSlug(db: DatabaseLike, requested: string): Promise<string> {
+  return firstFreeSlug(slugifyOr(requested, "group"), async (candidate) =>
+    Boolean(await first(db, "SELECT id FROM groups WHERE slug = ?", [candidate])),
+  );
+}
+
+async function requireActiveGroupType(db: DatabaseLike, key: string): Promise<GroupTypeRow> {
+  const type = await first<GroupTypeRow>(
+    db,
+    `${GROUP_TYPE_SELECT} FROM group_types gt WHERE gt.key = ? AND gt.active = 1`,
+    [key],
+  );
+  if (!type) throw new AppError(400, "GROUP_TYPE_INVALID", "The selected group type is not active");
+  return type;
+}
+
+async function requireParent(db: DatabaseLike, parentGroupId: string): Promise<void> {
+  if (!(await first(db, "SELECT id FROM groups WHERE id = ? AND active = 1", [parentGroupId]))) {
+    throw new AppError(400, "GROUP_PARENT_INVALID", "The selected parent group is not active");
+  }
+}
+
+function translateGroupWriteError(error: unknown): never {
+  if (isAuthorizationGuardFailure(error)) {
+    throw new AppError(409, "GROUP_MANAGEMENT_CHANGED", "Group management permission changed before commit");
+  }
+  if (isAuditChangeGuardFailure(error)) {
+    throw new AppError(409, "GROUP_CHANGED", "The group changed before this update committed");
+  }
+  const message = error instanceof Error ? error.message : String(error);
+  if (message.includes("UNIQUE constraint failed: groups.slug")) {
+    throw new AppError(409, "GROUP_SLUG_EXISTS", "A group with this slug already exists");
+  }
+  if (
+    message.includes("group hierarchy cycle") ||
+    message.includes("parent_group_id IS NULL OR parent_group_id <> id")
+  ) {
+    throw new AppError(409, "GROUP_HIERARCHY_CYCLE", "A group cannot contain itself through its parent hierarchy");
+  }
+  if (
+    message.includes("automatic enrollment groups must be top-level") ||
+    message.includes("automatic enrollment groups cannot be structural parents") ||
+    message.includes("a structural parent cannot enable automatic enrollment")
+  ) {
+    throw new AppError(
+      409,
+      "GROUP_AUTOMATIC_ENROLLMENT_HIERARCHY",
+      "Automatic-enrollment groups must be top-level and cannot be structural parents",
+    );
+  }
+  throw error;
+}
+
+export async function createGroup(db: DatabaseLike, actor: AuthAdmin, input: GroupCreateInput): Promise<Group> {
+  const type = await requireActiveGroupType(db, input.typeKey);
+  if (input.parentGroupId) {
+    await requireParent(db, input.parentGroupId);
+    await requireGroupManagement(db, actor, input.parentGroupId);
+  } else {
+    await requireGlobalGroupManagement(db, actor);
+  }
+  const governanceMode = input.governanceInheritanceMode ?? type.default_governance_inheritance_mode;
+  if (input.parentGroupId && governanceMode === "local_only") {
+    throw new AppError(
+      409,
+      "GROUP_LOCAL_LEADERSHIP_REQUIRED",
+      "Create the group with inherited governance, assign local leadership, then enable local-only governance",
+    );
+  }
+  const id = uuid();
+  const at = nowIso();
+  const slug = input.slug ?? (await availableSlug(db, input.name));
+  try {
+    await db.batch([
+      prepareGroupManagementAuthorizationGuard(
+        db,
+        actor,
+        input.parentGroupId ? [input.parentGroupId] : [],
+        input.parentGroupId ? "effective" : "global",
+      ),
+      db
+        .prepare(
+          `INSERT INTO groups
+             (id, type_key, parent_group_id, name, abbreviated_name, slug, description, links_json, visibility,
+              governance_inheritance_mode, eligibility_mode, automatic_enrollment_mode,
+              allow_automatic_opt_out, public_leadership, public_roster, min_endorsers_for_ballot,
+              active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
+        )
+        .bind(
+          id,
+          input.typeKey,
+          input.parentGroupId ?? null,
+          input.name,
+          input.abbreviatedName ?? null,
+          slug,
+          input.description ?? null,
+          serializeLinks(input.links ?? []),
+          input.visibility ?? type.default_visibility,
+          governanceMode,
+          input.eligibilityMode ?? type.default_eligibility_mode,
+          input.automaticEnrollmentMode ?? type.default_automatic_enrollment_mode,
+          (input.allowAutomaticOptOut ?? type.default_allow_automatic_opt_out === 1) ? 1 : 0,
+          input.publicLeadership ? 1 : 0,
+          input.publicRoster ? 1 : 0,
+          input.minEndorsersForBallot ?? 0,
+          at,
+          at,
+        ),
+      prepareScopedAuditLog(db, { type: "group", id }, "admin", actor.id, "group_created", "group", id, {
+        name: input.name,
+        typeKey: input.typeKey,
+        parentGroupId: input.parentGroupId ?? null,
+      }),
+    ]);
+  } catch (error) {
+    translateGroupWriteError(error);
+  }
+  const created = await getGroup(db, id);
+  if (!created) throw new AppError(500, "GROUP_CREATE_FAILED", "Failed to load the created group");
+  return created;
+}
+
+function activeLocalLeadershipEvidence(groupId: string): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1 FROM user_roles
+           WHERE context_type = 'group' AND context_id = ?
+             AND role_id IN ('role-group_lead', 'role-group_deputy_lead')
+             AND revoked_at IS NULL
+             AND (expires_at IS NULL OR expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+           LIMIT 1`,
+    bindings: [groupId],
+  };
+}
+
+async function assertLocalOnlyTransition(db: DatabaseLike, actor: AuthAdmin, groupId: string): Promise<void> {
+  if (!(await canEnableLocalOnlyGovernance(db, actor, groupId))) {
+    throw new AppError(
+      403,
+      "GROUP_INHERITED_MANAGEMENT_REQUIRED",
+      "Only inherited or global management may enable local-only governance",
+    );
+  }
+  if (
+    !(await first(
+      db,
+      `SELECT id FROM user_roles
+        WHERE context_type = 'group' AND context_id = ?
+          AND role_id IN ('role-group_lead', 'role-group_deputy_lead')
+          AND revoked_at IS NULL
+          AND (expires_at IS NULL OR expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+        LIMIT 1`,
+      [groupId],
+    ))
+  ) {
+    throw new AppError(
+      409,
+      "GROUP_LOCAL_LEADERSHIP_REQUIRED",
+      "Assign local leadership before enabling local-only governance",
+    );
+  }
+}
+
+export async function updateGroup(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupIdOrSlug: string,
+  patch: GroupUpdateInput,
+): Promise<Group> {
+  const existing = await getGroup(db, groupIdOrSlug);
+  if (!existing) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
+  await requireGroupManagement(db, actor, existing.id);
+  if (patch.typeKey) await requireActiveGroupType(db, patch.typeKey);
+  if (patch.parentGroupId !== undefined && patch.parentGroupId !== existing.parentGroup?.id) {
+    if (patch.parentGroupId) {
+      await requireParent(db, patch.parentGroupId);
+      await requireGroupManagement(db, actor, patch.parentGroupId);
+    } else {
+      await requireGlobalGroupManagement(db, actor);
+    }
+  }
+  if (patch.governanceInheritanceMode === "local_only" && existing.governanceInheritanceMode !== "local_only") {
+    await assertLocalOnlyTransition(db, actor, existing.id);
+  }
+  const { expectedRevision = existing.revision, ...changes } = patch;
+
+  const setters: string[] = [];
+  const bindings: unknown[] = [];
+  const add = (column: string, value: unknown) => {
+    setters.push(`${column} = ?`);
+    bindings.push(value);
+  };
+  if (changes.typeKey !== undefined) add("type_key", changes.typeKey);
+  if (changes.parentGroupId !== undefined) add("parent_group_id", changes.parentGroupId);
+  if (changes.name !== undefined) add("name", changes.name);
+  if (changes.abbreviatedName !== undefined) add("abbreviated_name", changes.abbreviatedName);
+  if (changes.slug !== undefined) add("slug", changes.slug);
+  if (changes.description !== undefined) add("description", changes.description);
+  if (changes.links !== undefined) add("links_json", serializeLinks(changes.links));
+  if (changes.visibility !== undefined) add("visibility", changes.visibility);
+  if (changes.active !== undefined) add("active", changes.active ? 1 : 0);
+  if (changes.governanceInheritanceMode !== undefined)
+    add("governance_inheritance_mode", changes.governanceInheritanceMode);
+  if (changes.eligibilityMode !== undefined) add("eligibility_mode", changes.eligibilityMode);
+  if (changes.automaticEnrollmentMode !== undefined) add("automatic_enrollment_mode", changes.automaticEnrollmentMode);
+  if (changes.allowAutomaticOptOut !== undefined) add("allow_automatic_opt_out", changes.allowAutomaticOptOut ? 1 : 0);
+  if (changes.publicLeadership !== undefined) add("public_leadership", changes.publicLeadership ? 1 : 0);
+  if (changes.publicRoster !== undefined) add("public_roster", changes.publicRoster ? 1 : 0);
+  if (changes.minEndorsersForBallot !== undefined) add("min_endorsers_for_ballot", changes.minEndorsersForBallot);
+  if (setters.length === 0) return existing;
+  const at = nowIso();
+  add("updated_at", at);
+  setters.push("revision = revision + 1");
+  try {
+    const statements: StatementLike[] = [
+      prepareGroupManagementAuthorizationGuard(db, actor, [existing.id]),
+      ...(changes.parentGroupId !== undefined && changes.parentGroupId !== existing.parentGroup?.id
+        ? [
+            prepareGroupManagementAuthorizationGuard(
+              db,
+              actor,
+              changes.parentGroupId ? [changes.parentGroupId] : [],
+              changes.parentGroupId ? "effective" : "global",
+            ),
+          ]
+        : []),
+      ...(changes.governanceInheritanceMode === "local_only" && existing.governanceInheritanceMode !== "local_only"
+        ? [
+            prepareGroupManagementAuthorizationGuard(db, actor, [existing.id], "inherited_or_global"),
+            prepareAuthorizationGuard(db, activeLocalLeadershipEvidence(existing.id)),
+          ]
+        : []),
+      db
+        .prepare(`UPDATE groups SET ${setters.join(", ")} WHERE id = ? AND revision = ?`)
+        .bind(...bindings, existing.id, expectedRevision),
+      prepareScopedAuditLogAfterOneChange(
+        db,
+        { type: "group", id: existing.id },
+        "admin",
+        actor.id,
+        "group_updated",
+        "group",
+        existing.id,
+        changes,
+      ),
+    ];
+    if (
+      changes.active !== undefined ||
+      changes.eligibilityMode !== undefined ||
+      changes.automaticEnrollmentMode !== undefined ||
+      changes.allowAutomaticOptOut !== undefined
+    ) {
+      statements.push(...prepareAutomaticGroupEnrollmentForGroupStatements(db, existing.id, at));
+    }
+    await db.batch(statements);
+  } catch (error) {
+    translateGroupWriteError(error);
+  }
+  const updated = await getGroup(db, existing.id);
+  if (!updated) throw new AppError(500, "GROUP_UPDATE_FAILED", "Failed to load the updated group");
+  return updated;
+}
+
+export async function replaceGroupCategoryRules(
+  db: DatabaseLike,
+  actor: AuthAdmin,
+  groupIdOrSlug: string,
+  input: GroupCategoryRulesReplaceInput,
+): Promise<Group> {
+  const group = await getGroup(db, groupIdOrSlug);
+  if (!group) throw new AppError(404, "GROUP_NOT_FOUND", "Group not found");
+  await requireGroupManagement(db, actor, group.id);
+  const categories = new Set((await listMembershipCategories(db)).map((category) => category.code));
+  if (input.rules.some((rule) => !categories.has(rule.membershipCategory)))
+    throw new AppError(422, "INVALID_MEMBERSHIP_CATEGORY", "Choose categories from the current membership catalog");
+  const at = nowIso();
+  const statements: StatementLike[] = [
+    prepareGroupManagementAuthorizationGuard(db, actor, [group.id]),
+    db
+      .prepare(
+        `UPDATE groups
+            SET revision = revision + 1, updated_at = ?
+          WHERE id = ? AND revision = ?`,
+      )
+      .bind(at, group.id, input.expectedRevision ?? group.revision),
+    prepareScopedAuditLogAfterOneChange(
+      db,
+      { type: "group", id: group.id },
+      "admin",
+      actor.id,
+      "group_category_rules_replaced",
+      "group",
+      group.id,
+      { rules: input.rules },
+    ),
+    db.prepare("DELETE FROM group_membership_category_rules WHERE group_id = ?").bind(group.id),
+    ...input.rules.map((rule) =>
+      db
+        .prepare(
+          `INSERT INTO group_membership_category_rules
+             (group_id, membership_category_code, permits_join, automatic_enrollment, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?)`,
+        )
+        .bind(group.id, rule.membershipCategory, rule.permitsJoin ? 1 : 0, rule.automaticEnrollment ? 1 : 0, at, at),
+    ),
+    ...prepareAutomaticGroupEnrollmentForGroupStatements(db, group.id, at),
+  ];
+  try {
+    await db.batch(statements);
+  } catch (error) {
+    if (error instanceof Error && error.message.includes("FOREIGN KEY constraint failed"))
+      throw new AppError(409, "MEMBERSHIP_CATEGORY_CHANGED", "The membership catalog changed; reload and retry");
+    translateGroupWriteError(error);
+  }
+  const updated = await getGroup(db, group.id);
+  if (!updated) throw new AppError(500, "GROUP_UPDATE_FAILED", "Failed to load the updated group");
+  return updated;
+}

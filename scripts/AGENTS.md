@@ -5,3 +5,4 @@
 - Scripts and importers target the final schema only. Do not preserve support for an undeployed intermediate migration state.
 - Generated SQL requires a fresh-D1 execution smoke test, and reconciliation requires idempotency tests.
 - Use `pnpm exec` for repository-local binaries.
+- Keep one-time import tools only while a target environment still needs the cutover. Confirm the preview and production migration ledgers and data state before removing them.

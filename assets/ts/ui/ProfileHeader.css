@@ -1,0 +1,115 @@
+/*
+ * The record's identity block.
+ *
+ * It carries its own surface rather than expecting a `Panel` around it: the
+ * stripe and the sheen belong to this block, and asking every record page to
+ * hand-build them is how two record pages stop looking alike.
+ */
+@layer components {
+  .pk-profile-header {
+    background: var(--pk-surface);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-lg);
+    overflow: hidden;
+  }
+
+  .pk-profile-header__stripe {
+    height: 4px;
+    background: var(--pk-stripe);
+  }
+
+  .pk-profile-header__body {
+    display: grid;
+    /* Portrait, then everything the subject is called, then the commands. The
+       middle column is the only one that may grow, and `minmax(0,1fr)` is what
+       lets a long lede wrap instead of pushing the actions off the edge. */
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    gap: var(--pk-4);
+    align-items: start;
+    padding: var(--pk-4);
+    background-image: var(--pk-grad-sheen);
+  }
+
+  .pk-profile-header__media {
+    display: flex;
+    justify-content: center;
+  }
+
+  .pk-profile-header__identity {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-2);
+    min-width: 0;
+  }
+
+  .pk-profile-header__name {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-2);
+  }
+
+  .pk-profile-header__title {
+    margin: 0;
+    font-size: var(--pk-text-2xl);
+    line-height: 1.15;
+    color: var(--pk-ink);
+  }
+
+  .pk-profile-header__pill {
+    padding: 0.1rem 0.45rem;
+    border: 1px solid var(--pk-info);
+    border-radius: var(--pk-radius-pill);
+    background: var(--pk-info-soft);
+    color: var(--pk-info-ink);
+    font-size: var(--pk-text-2xs);
+    line-height: 1.2;
+    white-space: nowrap;
+  }
+
+  .pk-profile-header__lede {
+    margin: 0;
+  }
+
+  /*
+   * The facts read as one line separated by middots, but they are a list, so
+   * the separator is generated rather than written into the content — a
+   * screen reader announces four facts, not "Utrecht dot Member since June".
+   */
+  .pk-profile-header__facts {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pk-profile-header__facts > li + li::before {
+    content: "·";
+    margin-inline-end: var(--pk-3);
+    color: var(--pk-ink-faint);
+  }
+
+  .pk-profile-header__actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-2);
+  }
+
+  /*
+   * Narrow: the portrait and the name stack, and the commands drop to their
+   * own row at the start edge. A three-column grid at this width leaves the
+   * name a few characters wide between a portrait and two buttons.
+   */
+  @media (max-width: 48rem) {
+    .pk-profile-header__body {
+      grid-template-columns: auto minmax(0, 1fr);
+    }
+
+    .pk-profile-header__actions {
+      grid-column: 1 / -1;
+    }
+  }
+}

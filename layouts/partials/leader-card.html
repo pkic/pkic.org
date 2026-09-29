@@ -1,13 +1,31 @@
 {{/*
-  leader-card.html — thin wrapper that calls person-card.html.
-  Used for WG chair sidebars and any other narrow context.
+  leader-card.html — a person named on a page, resolved through the member
+  they act for.
+
+  Was a build-time scan of every file under data/members/ to find a
+  representative by name, then their headshot and their organization's logo
+  out of assets/images/members/ (#8). It is now a mount for
+  member-flows/member-person-card, which reads the public member profile —
+  the same organization and the same live representatives the member's own
+  page shows. The parameters are unchanged.
 
   Parameters (pass as a dict):
-    name        string  — Full name (required)
-    role        string  — Role label, e.g. "PQC Chair", "CA Vice Chair" (required)
-    color       string  — Accent colour for initials fallback (optional, default "green")
-    affiliation string  — Member ID override (optional)
-    from        string  — ISO date: role start (optional)
-    till        string  — ISO date: role end (optional)
+    name        string — Full name (required)
+    role        string — Role label, e.g. "Speaker", "PQC Chair" (required)
+    affiliation string — The member's public id or slug (required: without
+                         it there is nobody to look the person up among)
+    color       string — Accent colour for the initials fallback (optional)
+    size        string — "sm" for the compact avatar (optional)
 */}}
-{{- partial "person-card.html" . -}}
+{{- if and .name .affiliation -}}
+<div
+  data-member-person
+  data-module="member-flows/member-person-card"
+  data-api-base="/api/v1"
+  data-member="{{ .affiliation }}"
+  data-person-name="{{ .name }}"
+  data-role="{{ .role }}"
+  data-color="{{ .color | default "green" }}"
+  {{ with .size }}data-size="{{ . }}"{{ end }}
+></div>
+{{- end -}}

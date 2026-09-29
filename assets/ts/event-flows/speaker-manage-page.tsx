@@ -1,116 +1,34 @@
+import { mountMarkdownField } from "../components/markdown-editor/mount-markdown-field";
 import { render } from "preact";
-import { getJson, patchJson, postJson } from "../shared/api-client";
+import { Alert } from "../ui/Alert";
+import { getJson, patchJson } from "../shared/api-client";
+import { formatDateTime } from "../shared/ui";
 import { normalizeValidation } from "../shared/form/validation-map";
-import { renderProfileLinks, type ProfileLinksWidget } from "../shared/widgets/profile-links";
+import { renderProfileLinks, normalizeProfileLinks, type ProfileLinksWidget } from "../shared/widgets/profile-links";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/widgets/consents";
-import { showManageLinkRecoveryForm } from "../shared/widgets/link-recovery";
 import { withLoadingButton } from "../shared/form/submit";
-import { bootstrap, setStatus } from "./boot";
+import { setStatus } from "./boot";
 import { wireTokenHeadshotSection } from "./registration-manage-headshot";
-import type { RequiredTerm } from "../shared/types";
-import { formatStatusLabel, statusBadgeClass, findSubmitButton } from "../shared/form/helpers";
-
-interface SpeakerManageResponse {
-  speaker: {
-    role: string;
-    status: string;
-    confirmedAt: string | null;
-    declinedAt: string | null;
-    termsAcceptedAt: string | null;
-  };
-  proposal: {
-    id: string;
-    title: string;
-    proposalType: string;
-    status: string;
-    presentationDeadline: string | null;
-    presentationUploaded: boolean;
-    presentationUploadedAt: string | null;
-    presentationUploader: { firstName: string | null; lastName: string | null; uploadedAt: string } | null;
-    coSpeakers: Array<{ firstName: string | null; lastName: string | null; status: string }>;
-    presentationUrl: string | null;
-  };
-  profile: {
-    firstName: string | null;
-    lastName: string | null;
-    email: string;
-    organizationName: string | null;
-    jobTitle: string | null;
-    biography: string | null;
-    links: Array<{ label?: string; url?: string } | string>;
-    headshotUploaded: boolean;
-    headshotUpdatedAt: string | null;
-    headshotUrl: string | null;
-  };
-}
-
-interface TermsApiResponse {
-  terms: RequiredTerm[];
-}
-
-function normalizeLinks(raw: SpeakerManageResponse["profile"]["links"]): string[] {
-  return raw
-    .map((entry) => {
-      if (typeof entry === "string") return entry;
-      if (entry && typeof entry === "object" && typeof entry.url === "string") return entry.url;
-      return "";
-    })
-    .map((v) => v.trim())
-    .filter(Boolean)
-    .slice(0, 10);
-}
-
-function showResendSpeakerManageLinkForm(
-  root: HTMLElement,
-  apiBase: string,
-  eventSlug: string,
-  introMessage?: string,
-): void {
-  showManageLinkRecoveryForm({
-    root,
-    loadingSelector: "[data-speaker-loading]",
-    sectionSelector: "[data-resend-speaker-manage-section]",
-    buttonSelector: "[data-resend-speaker-manage-btn]",
-    statusSelector: "[data-resend-speaker-manage-status]",
-    emailSelector: "[data-resend-speaker-manage-email]",
-    endpoint: `${apiBase}/events/${eventSlug}/proposals/resend-speaker-manage-link`,
-    successMessage:
-      "If the details match an invited speaker, you will receive an email shortly. Please check your inbox (and spam folder).",
-    introMessage,
-  });
-}
+import { eventTermsResponseSchema, type RequiredTerm } from "../../shared/schemas/forms";
+import { readField, formatStatusLabel, statusBadgeToneClass, findSubmitButton } from "../shared/form/helpers";
+import { loadSpeakerPageData } from "./speaker-link-recovery";
+import {
+  speakerSelfServiceReadResponseSchema,
+  speakerParticipationResponseSchema,
+  type SpeakerSelfServiceReadResponse,
+} from "../../shared/schemas/speaker-self-service";
+import { successResponseSchema } from "../../shared/schemas/api-common";
+import { speakerProfilePatchSchema, speakerParticipationPatchSchema } from "../../shared/schemas/proposal-management";
+import { proposalSpeakerAccessPath } from "../../shared/proposal-access-paths";
 
 async function main(): Promise<void> {
-  const boot = bootstrap("[data-event-speaker-manage]");
-  if (!boot) return;
-
-  const token = boot.query.token?.trim() ?? null;
-  if (!token) {
-    showResendSpeakerManageLinkForm(
-      boot.root,
-      boot.apiBase,
-      boot.eventSlug,
-      "Missing speaker token. Request a fresh link below.",
-    );
-    return;
-  }
-
-  const loadingEl = boot.root.querySelector<HTMLElement>("[data-speaker-loading]");
-  const contentEl = boot.root.querySelector<HTMLElement>("[data-speaker-content]");
-
-  let data: SpeakerManageResponse;
-  try {
-    data = await getJson<SpeakerManageResponse>(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`);
-  } catch (error) {
-    const normalized = normalizeValidation(error);
-    showResendSpeakerManageLinkForm(
-      boot.root,
-      boot.apiBase,
-      boot.eventSlug,
-      `${normalized.globalMessage} You can request a fresh link below.`,
-    );
-    return;
-  }
+  const loaded = await loadSpeakerPageData<SpeakerSelfServiceReadResponse>({
+    selector: "[data-event-speaker-manage]",
+    request: async (token, boot) =>
+      getJson(proposalSpeakerAccessPath(boot.apiBase, token), speakerSelfServiceReadResponseSchema),
+  });
+  if (!loaded) return;
+  const { boot, token, data, loadingEl, contentEl } = loaded;
 
   // Summary
   const proposalTitle = boot.root.querySelector<HTMLElement>("[data-proposal-title]");
@@ -122,11 +40,11 @@ async function main(): Promise<void> {
   if (proposalType) proposalType.textContent = data.proposal.proposalType.replace(/_/g, " ");
   if (proposalStatus) {
     proposalStatus.textContent = formatStatusLabel(data.proposal.status);
-    proposalStatus.className = `badge rounded-pill px-2 py-1 ${statusBadgeClass(data.proposal.status)}`;
+    proposalStatus.className = statusBadgeToneClass(data.proposal.status);
   }
   if (deadlineRow) {
     if (data.proposal.presentationDeadline) {
-      deadlineRow.textContent = `Presentation deadline: ${new Date(data.proposal.presentationDeadline).toLocaleString()}`;
+      deadlineRow.textContent = `Presentation deadline: ${formatDateTime(data.proposal.presentationDeadline)}`;
     } else {
       deadlineRow.textContent = "Presentation upload opens after acceptance.";
     }
@@ -142,29 +60,36 @@ async function main(): Promise<void> {
   const profileSection = boot.root.querySelector<HTMLElement>("[data-profile-section]");
   const presentationLink = boot.root.querySelector<HTMLElement>("[data-presentation-link]");
 
+  /*
+   * Visibility is the `hidden` attribute, which is what the template now
+   * carries on every panel this module reveals. The class it replaces was
+   * Bootstrap's `d-none`, and a `display: none !important` utility cannot be
+   * out-ranked by the attribute — so the two had to move together or the
+   * panels would have become unhideable.
+   */
   function toggleEditableSections(isEnabled: boolean): void {
-    headshotSection?.classList.toggle("d-none", !isEnabled);
-    profileSection?.classList.toggle("d-none", !isEnabled);
+    if (headshotSection) headshotSection.hidden = !isEnabled;
+    if (profileSection) profileSection.hidden = !isEnabled;
   }
 
   if (speakerStatusBadge) {
     speakerStatusBadge.textContent = formatStatusLabel(data.speaker.status);
-    speakerStatusBadge.className = `badge rounded-pill px-2 py-1 ${statusBadgeClass(data.speaker.status)}`;
+    speakerStatusBadge.className = statusBadgeToneClass(data.speaker.status);
   }
 
   if (data.speaker.status === "invited") {
-    confirmPanel?.classList.remove("d-none");
+    if (confirmPanel) confirmPanel.hidden = false;
     toggleEditableSections(false);
   } else if (data.speaker.status === "confirmed") {
-    confirmedMsg?.classList.remove("d-none");
+    if (confirmedMsg) confirmedMsg.hidden = false;
     toggleEditableSections(true);
     if (data.proposal.status === "accepted") {
       const anchor = presentationLink?.querySelector<HTMLAnchorElement>("a");
       if (anchor && data.proposal.presentationUrl) anchor.href = data.proposal.presentationUrl;
-      presentationLink?.classList.remove("d-none");
+      if (presentationLink) presentationLink.hidden = false;
     }
   } else if (data.speaker.status === "declined") {
-    declinedMsg?.classList.remove("d-none");
+    if (declinedMsg) declinedMsg.hidden = false;
     toggleEditableSections(false);
   }
 
@@ -175,20 +100,24 @@ async function main(): Promise<void> {
 
   if (confirmForm && consentContainer && data.speaker.status === "invited") {
     try {
-      const termsResponse = await getJson<TermsApiResponse>(
+      const termsResponse = await getJson(
         `${boot.apiBase}/events/${encodeURIComponent(boot.eventSlug)}/terms?audience=speaker`,
+        eventTermsResponseSchema,
       );
       speakerTerms = termsResponse.terms ?? [];
       renderConsentInputs(consentContainer, speakerTerms);
     } catch (error) {
       console.error("Failed to load speaker terms", error);
-      render(<p class="text-danger small mb-0">Could not load required terms right now.</p>, consentContainer);
+      render(<Alert tone="danger">Could not load required terms right now.</Alert>, consentContainer);
     }
   }
 
   confirmForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
-    confirmForm.classList.add("was-validated");
+    // `syncConsentValidation` is what shows an unaccepted term: it calls
+    // `checkValidity()`, and each consent card listens for the platform's own
+    // `invalid` event. Nothing on this form was ever drawn by Bootstrap's
+    // `was-validated`, so the class went rather than being translated.
     syncConsentValidation(confirmForm);
 
     const consents = readConsentValues(confirmForm);
@@ -200,10 +129,11 @@ async function main(): Promise<void> {
 
     await withLoadingButton(findSubmitButton(confirmForm), async () => {
       try {
-        await postJson(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`, {
-          action: "confirm",
-          consents,
-        });
+        await patchJson(
+          proposalSpeakerAccessPath(boot.apiBase, token, "participation"),
+          speakerParticipationPatchSchema.parse({ status: "confirmed", consents }),
+          speakerParticipationResponseSchema,
+        );
         window.location.reload();
       } catch (error) {
         const normalized = normalizeValidation(error);
@@ -218,18 +148,22 @@ async function main(): Promise<void> {
   const declineReason = boot.root.querySelector<HTMLTextAreaElement>("#decline-reason");
 
   declineOpen?.addEventListener("click", () => {
-    declinePanel?.classList.remove("d-none");
+    if (declinePanel) declinePanel.hidden = false;
   });
   declineCancel?.addEventListener("click", () => {
-    declinePanel?.classList.add("d-none");
+    if (declinePanel) declinePanel.hidden = true;
   });
   declineConfirm?.addEventListener("click", async () => {
     await withLoadingButton(declineConfirm, async () => {
       try {
-        await postJson(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`, {
-          action: "decline",
-          reason: declineReason?.value.trim() || undefined,
-        });
+        await patchJson(
+          proposalSpeakerAccessPath(boot.apiBase, token, "participation"),
+          speakerParticipationPatchSchema.parse({
+            status: "declined",
+            reason: declineReason?.value.trim() || undefined,
+          }),
+          speakerParticipationResponseSchema,
+        );
         window.location.reload();
       } catch (error) {
         const normalized = normalizeValidation(error);
@@ -252,14 +186,14 @@ async function main(): Promise<void> {
   let linksWidget: ProfileLinksWidget | null = null;
 
   function showProfileEditForm(): void {
-    profileSavedState?.classList.add("d-none");
-    profileFormWrap?.classList.remove("d-none");
+    if (profileSavedState) profileSavedState.hidden = true;
+    if (profileFormWrap) profileFormWrap.hidden = false;
     firstNameField?.focus();
   }
 
   function showProfileSavedState(): void {
-    profileFormWrap?.classList.add("d-none");
-    profileSavedState?.classList.remove("d-none");
+    if (profileFormWrap) profileFormWrap.hidden = true;
+    if (profileSavedState) profileSavedState.hidden = false;
   }
 
   profileEditButton?.addEventListener("click", showProfileEditForm);
@@ -269,23 +203,28 @@ async function main(): Promise<void> {
   if (organizationField) organizationField.value = data.profile.organizationName ?? "";
   if (jobTitleField) jobTitleField.value = data.profile.jobTitle ?? "";
   if (bioField) bioField.value = data.profile.biography ?? "";
+  await mountMarkdownField(bioField ?? null, "Biography", speakerProfilePatchSchema.shape.biography);
   if (linksContainer) {
     linksWidget = renderProfileLinks(linksContainer, "links", { max: 10 });
-    linksWidget.setLinks(normalizeLinks(data.profile.links));
+    linksWidget.setLinks(normalizeProfileLinks(data.profile.links));
   }
 
   profileForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
     await withLoadingButton(findSubmitButton(profileForm), async () => {
       try {
-        await patchJson(`${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}`, {
-          firstName: firstNameField?.value.trim() || null,
-          lastName: lastNameField?.value.trim() || null,
-          organizationName: organizationField?.value.trim() || null,
-          jobTitle: jobTitleField?.value.trim() || null,
-          biography: bioField?.value.trim() || "",
-          links: (linksWidget?.getLinks() ?? []).map((url) => ({ label: url, url })),
-        });
+        await patchJson(
+          proposalSpeakerAccessPath(boot.apiBase, token, "profile"),
+          speakerProfilePatchSchema.parse({
+            firstName: firstNameField?.value.trim() || null,
+            lastName: lastNameField?.value.trim() || null,
+            organizationName: organizationField?.value.trim() || null,
+            jobTitle: jobTitleField?.value.trim() || null,
+            biography: readField(profileForm!, "biography"),
+            links: linksWidget?.getLinks() ?? [],
+          }),
+          successResponseSchema,
+        );
         setStatus(boot.statusEl, "Profile updated.");
         showProfileSavedState();
       } catch (error) {
@@ -297,17 +236,15 @@ async function main(): Promise<void> {
   });
 
   if (data.speaker.status === "declined") {
-    headshotSection?.classList.add("d-none");
-    profileSection?.classList.add("d-none");
+    toggleEditableSections(false);
   } else {
-    headshotSection?.classList.remove("d-none");
-    profileSection?.classList.remove("d-none");
+    toggleEditableSections(true);
     wireTokenHeadshotSection({
       root: boot.root,
       initialHeadshotUrl: data.profile.headshotUrl,
       statusEl: boot.statusEl,
-      uploadUrl: `${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}/headshot`,
-      deleteUrl: `${boot.apiBase}/proposals/speaker/${encodeURIComponent(token)}/headshot`,
+      uploadUrl: proposalSpeakerAccessPath(boot.apiBase, token, "headshot"),
+      deleteUrl: proposalSpeakerAccessPath(boot.apiBase, token, "headshot"),
       emptyLabel: "No headshot uploaded yet.",
       uploadSuccessStatus: "Headshot uploaded successfully.",
       deleteSuccessStatus: "Headshot removed successfully.",
@@ -315,8 +252,8 @@ async function main(): Promise<void> {
     });
   }
 
-  if (loadingEl) loadingEl.classList.add("d-none");
-  if (contentEl) contentEl.classList.remove("d-none");
+  if (loadingEl) loadingEl.hidden = true;
+  if (contentEl) contentEl.hidden = false;
 }
 
 void main();

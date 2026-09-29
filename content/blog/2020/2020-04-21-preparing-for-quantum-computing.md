@@ -21,6 +21,12 @@ tags:
 title: Preparing for Quantum Computing
 
 
+authorProfiles:
+  - name: Diana Gruhn
+    organization: Entrust
+    role: Director of Product Marketing
+    website: https://www.entrust.com/
+    assetdirectory: images/members/entrust
 ---
 Quantum computing is advancing, and while experts are not sure when there will be a quantum computer powerful enough to break the RSA and ECC cryptographic algorithms that are currently in use, many are operating under the assumption that this can happen within a 10-15 year timeframe. This is a general timeline because there is no way to know when this will occur – it could happen sooner or it could happen later.
 

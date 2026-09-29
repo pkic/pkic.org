@@ -22,7 +22,10 @@
     {{- $sponsorshipURL := partial "utils/resolve-url.html" (dict "page" $page "value" $sponsorshipPath) -}}
     {{- $organizerURL := partial "utils/resolve-url.html" (dict "page" $page "value" $organizerPath) -}}
 
-<div class="d-none" itemscope itemtype="https://schema.org/ConferenceEvent">
+{{/* Microdata only — nothing here is meant to be read on the page, so it uses
+     the platform's own `hidden` attribute rather than a class that means the
+     same thing. Nothing toggles it. */}}
+<div hidden itemscope itemtype="https://schema.org/ConferenceEvent">
   <meta itemprop="name" content="{{ $eventTitle }}">
   <link itemprop="url" href="{{ $page.Permalink }}">
   <link itemprop="mainEntityOfPage" href="{{ $page.Permalink }}">

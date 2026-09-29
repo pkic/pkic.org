@@ -1,8 +1,14 @@
 // ── Event countdown timer ─────────────────────────────────────────────────
+// The block owns its own outer margin (it used to ask Bootstrap for `my-5`)
+// and feeds the page accent into `--pk-accent`, so the design-system primary
+// button inside it derives the same colour `.btn-page-accent` used to paint.
 .event-countdown {
+  --pk-accent: var(--page-accent, #{$green});
+
   background: linear-gradient(135deg, $gray-900 0%, #1a3a5c 100%);
   border-radius: 1.5rem;
   padding: 2.5rem 1.5rem 2rem;
+  margin-block: var(--pk-7);
   text-align: center;
   color: #fff;
   box-shadow:
@@ -60,8 +66,16 @@
     padding-top: 0.05em;
   }
 
+  // The row owns the gap between its buttons and its distance from the
+  // counter, replacing the `mt-4` / `ms-2` the markup used to carry.
   .countdown-cta {
-    .btn {
+    display: flex;
+    flex-wrap: wrap;
+    justify-content: center;
+    gap: var(--pk-3);
+    margin-top: var(--pk-5);
+
+    .pk-btn {
       font-weight: 700;
       letter-spacing: 0.03em;
     }
@@ -90,7 +104,9 @@
   border-radius: 1.25rem;
   overflow: hidden;
   margin: 2rem 0;
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.2),
+    inset 0 1px 0 rgba(255, 255, 255, 0.1);
   border: 1px solid rgba(255, 255, 255, 0.05);
 
   @media (min-width: 768px) {
@@ -140,6 +156,43 @@
     letter-spacing: 0.05em;
     text-transform: uppercase;
     color: rgba(255, 255, 255, 0.7);
+  }
+}
+
+@mixin dark-stat-grid {
+  .stat-grid {
+    background: var(--pk-surface);
+    border-color: var(--pk-line-soft);
+    border-radius: var(--pk-radius-lg);
+    box-shadow: none;
+
+    .stat-grid-item {
+      border-color: var(--pk-line-soft);
+
+      &:hover {
+        background: var(--pk-surface-raise);
+      }
+    }
+
+    .stat-grid-number {
+      background: none;
+      color: var(--pk-accent-ink);
+      -webkit-text-fill-color: currentColor;
+    }
+
+    .stat-grid-label {
+      color: var(--pk-ink-muted);
+    }
+  }
+}
+
+:root[data-theme="dark"] {
+  @include dark-stat-grid;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    @include dark-stat-grid;
   }
 }
 
@@ -386,15 +439,7 @@ blockquote::after {
   left: 0;
   right: 0;
   height: 4px;
-  background: linear-gradient(
-    to right,
-    $green,
-    $teal,
-    $blue,
-    $yellow,
-    $orange,
-    $red
-  );
+  background: linear-gradient(to right, $green, $teal, $blue, $yellow, $orange, $red);
   border-radius: 0 0 1.25rem 1.25rem;
 }
 
@@ -410,14 +455,14 @@ blockquote::after {
 .callout-warning {
   display: block;
   // Reset all the dark-card blockquote styles
-  background: $red-pale;
-  color: $red-deep;
+  background: var(--pk-danger-soft);
+  color: var(--pk-danger-ink);
   font-size: 0.95rem;
   font-style: normal;
   font-weight: 400;
   padding: 1rem 1.25rem;
   border-radius: 0.625rem;
-  border: 1px solid rgba($red-dark, 0.3);
+  border: 1px solid color-mix(in srgb, var(--pk-danger) 35%, var(--pk-line));
   box-shadow: none;
   overflow: visible;
   transition: none;
@@ -430,7 +475,11 @@ blockquote::after {
 
   // Reset the decorative " from blockquote::before
   &::before {
-    content: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='20' height='20' fill='%23b02a37' viewBox='0 0 16 16'%3E%3Cpath d='M7.938 2.016A.13.13 0 0 1 8.002 2a.13.13 0 0 1 .063.016.146.146 0 0 1 .054.057l6.857 11.667c.036.06.035.124.002.183a.163.163 0 0 1-.054.06.116.116 0 0 1-.066.017H1.146a.115.115 0 0 1-.066-.017.163.163 0 0 1-.054-.06.176.176 0 0 1 .002-.183L7.884 2.073a.147.147 0 0 1 .054-.057zm1.044-.45a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566z'/%3E%3Cpath d='M7.002 12a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 5.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995z'/%3E%3C/svg%3E") !important;
+    content: "" !important;
+    width: 20px;
+    height: 20px;
+    background: currentColor !important;
+    mask: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Cpath d='M7.938 2.016A.13.13 0 0 1 8.002 2a.13.13 0 0 1 .063.016.146.146 0 0 1 .054.057l6.857 11.667c.036.06.035.124.002.183a.163.163 0 0 1-.054.06.116.116 0 0 1-.066.017H1.146a.115.115 0 0 1-.066-.017.163.163 0 0 1-.054-.06.176.176 0 0 1 .002-.183L7.884 2.073a.147.147 0 0 1 .054-.057zm1.044-.45a1.13 1.13 0 0 0-1.96 0L.165 13.233c-.457.778.091 1.767.98 1.767h13.713c.889 0 1.438-.99.98-1.767L8.982 1.566z'/%3E%3Cpath d='M7.002 12a1 1 0 1 1 2 0 1 1 0 0 1-2 0zM7.1 5.995a.905.905 0 1 1 1.8 0l-.35 3.507a.552.552 0 0 1-1.1 0L7.1 5.995z'/%3E%3C/svg%3E") center / contain no-repeat;
     position: static !important;
     top: unset !important;
     left: unset !important;
@@ -438,9 +487,8 @@ blockquote::after {
     color: inherit !important;
     opacity: 1 !important;
     font-family: inherit;
-    background: none;
-    float: left;
-    margin-right: 0.875rem;
+    display: block;
+    flex-shrink: 0;
     line-height: 1;
     pointer-events: none;
     user-select: none;
@@ -450,8 +498,19 @@ blockquote::after {
     content: none;
   }
 
-  p:last-child {
-    margin-bottom: 0;
+  > p {
+    margin-block: 0;
+  }
+}
+
+// A Markdown paragraph callout keeps its inline emphasis in the text flow.
+p.callout-warning {
+  display: block;
+
+  &::before {
+    display: inline-block;
+    vertical-align: text-bottom;
+    margin-inline-end: var(--pk-3);
   }
 }
 
@@ -524,8 +583,19 @@ blockquote::after {
   padding: 1.5rem;
 }
 
+// Prose heading typography belongs outside shared design-system roots.
+// Components use the same heading rules on the public site and in the portal.
+// Keep the exclusion at zero specificity so authored card styles still win.
 // H2: gradient text from accent → accent-2, creating visual interest without a solid color wall
-main h2 {
+@mixin readable-dark-headings {
+  main :is(h2, h3, h4, h5, h6):not(:where(.pk *)) {
+    background: none;
+    color: var(--pk-ink);
+    -webkit-text-fill-color: currentColor;
+  }
+}
+
+main h2:not(:where(.pk *)) {
   font-size: 1.5em;
   font-weight: 700 !important;
   background: linear-gradient(
@@ -547,8 +617,18 @@ main h2 {
   }
 }
 
+:root[data-theme="dark"] {
+  @include readable-dark-headings;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    @include readable-dark-headings;
+  }
+}
+
 // H3: solid companion color — muted, never alarming
-main h3 {
+main h3:not(:where(.pk *)) {
   font-size: 1.15em;
   font-weight: 600 !important;
   color: var(--page-accent-2, var(--page-accent, var(--wg-color, #{$blue-dark})));
@@ -557,7 +637,7 @@ main h3 {
   padding-top: 0;
 }
 
-main h4 {
+main h4:not(:where(.pk *)) {
   font-size: 1em;
   font-weight: 600 !important;
   color: $gray-600;
@@ -566,7 +646,7 @@ main h4 {
   padding-top: 0;
 }
 
-main h5 {
+main h5:not(:where(.pk *)) {
   font-size: 0.9em;
   font-weight: 600 !important;
   color: $gray-500;
@@ -575,7 +655,7 @@ main h5 {
   margin-top: 1em;
 }
 
-main h6 {
+main h6:not(:where(.pk *)) {
   font-size: 0.85em;
   font-weight: 600 !important;
   color: $gray-500;
@@ -599,9 +679,13 @@ main :is(h2, h3, h4):hover .header-link {
 // Scoped to known content containers so it never affects navbars, sidebars, related-topic panels, etc.
 // At rest: a very faint 1px hint — just enough to read as a link, not enough to crowd a list.
 // On hover: the stroke sweeps to full width and brightens, then a light glint races across it.
-:is(#content, .wg-main-content, .wg-prose, .wg-data-body) a:not(.btn):not([class]):not(:has(img)) {
+:is(#content, .wg-main-content, .wg-prose, .wg-data-body) a:not([class]):not(:has(img)) {
   position: relative;
-  color: color-mix(in srgb, var(--page-accent) 55%, #1a2332);
+  // Mixed toward the page's ink, not toward a fixed near-black. The accent is
+  // darkened for a light ground and lightened for a dark one by the same
+  // declaration; against the hex it stayed dark on the dark theme and prose
+  // links measured 3.02:1.
+  color: color-mix(in srgb, var(--page-accent) 55%, var(--pk-ink));
   text-decoration: none;
   padding-bottom: 4px;
   background-image: linear-gradient(
@@ -654,7 +738,7 @@ main :is(h2, h3, h4):hover .header-link {
 
 // Links inside dark pull-quote contexts — same brush-stroke technique as body-copy
 // links but adapted to white-on-dark. Covers all known content containers.
-:is(#content, .wg-main-content, .wg-prose, .wg-data-body) :is(blockquote, .callout-info) a:not(.btn):not([class]):not(:has(img)) {
+:is(#content, .wg-main-content, .wg-prose, .wg-data-body) :is(blockquote, .callout-info) a:not([class]):not(:has(img)) {
   position: relative;
   color: rgba(255, 255, 255, 0.85);
   text-decoration: none;
@@ -680,13 +764,7 @@ main :is(h2, h3, h4):hover .header-link {
     left: -20%;
     width: 25%;
     height: 2px;
-    background: linear-gradient(
-      90deg,
-      transparent,
-      rgba(255, 255, 255, 0.8) 40%,
-      white 60%,
-      transparent
-    );
+    background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.8) 40%, white 60%, transparent);
     opacity: 0;
     pointer-events: none;
   }
@@ -747,7 +825,7 @@ main :is(h2, h3, h4):hover .header-link {
   flex-shrink: 0;
 }
 
-@include media-breakpoint-up(xs) {
+@media (min-width: 0) {
   .agenda-time {
     width: 90px;
     min-width: 90px;
@@ -761,7 +839,7 @@ main :is(h2, h3, h4):hover .header-link {
   }
 }
 
-@include media-breakpoint-up(lg) {
+@media (min-width: 992px) {
   .agenda-time {
     width: 100px;
     min-width: 100px;
@@ -773,14 +851,6 @@ main :is(h2, h3, h4):hover .header-link {
     min-width: 280px;
     flex: 1;
   }
-}
-
-#agenda-tabs .nav-link {
-  background: var(--bs-success-bg-subtle);
-}
-#agenda-tabs .active {
-  background: var(--bs-light);
-  font-weight: bold;
 }
 
 @keyframes member-marquee {
@@ -799,12 +869,56 @@ main :is(h2, h3, h4):hover .header-link {
 }
 
 self-assessment {
-  --pkimm-sticky-top-offset: calc(
-    var(--pkic-navbar-height, 57px) + 44px + 1.5rem
-  ); // navbar + wg-section-nav (44px)
+  --pkimm-sticky-top-offset: calc(var(--pkic-navbar-height, 57px) + 44px + 1.5rem); // navbar + wg-section-nav (44px)
 
   .pkimm-tabs {
     z-index: 150 !important; // below wg-section-nav (1030) so its dropdowns render on top
+  }
+}
+
+// ── Live stream shortcode ────────────────────────────────────────────────
+// Replaces the `row g-0 / col-lg-8 order-lg-1 sticky-lg-top / ratio-16x9 /
+// col-lg-4` grid the markup used to ask Bootstrap for. One grid declaration
+// on the surface, gaps from the space scale, and `aspect-ratio` for the
+// player instead of the padding-top ratio hack.
+.livestream-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--pk-4);
+  align-items: start;
+}
+
+.livestream-player {
+  aspect-ratio: 16 / 9;
+}
+
+// The chat has no intrinsic ratio; it is a column beside the player, and on a
+// narrow screen a readable slice below it.
+.livestream-chat {
+  height: 60vh;
+}
+
+.livestream-player iframe,
+.livestream-chat iframe {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+@media (min-width: 992px) {
+  .livestream-layout {
+    grid-template-columns: minmax(0, 2fr) minmax(18rem, 1fr);
+  }
+
+  // What `sticky-lg-top` did: the player stays put while the chat scrolls.
+  .livestream-player {
+    position: sticky;
+    top: var(--pkic-navbar-height, 57px);
+  }
+
+  .livestream-chat {
+    height: calc(100vh - var(--pkic-navbar-height, 57px) - 2rem);
   }
 }
 

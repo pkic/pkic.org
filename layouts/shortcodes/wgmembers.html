@@ -1,6 +1,18 @@
-{{ $wg := .Get 0 }}
-{{ range hugo.Data.members }}
-    {{ if in .workingGroups $wg }}
-    <a {{ with $.Site.GetPage (printf "/members/%s" .id) }} href="{{ .RelPermalink }}" {{ else }}  href="{{ .website }}" target="_blank" {{ end }} title="{{.name}} - {{ .slogan }}">{{ .name }}</a>, 
-    {{ end }}
-{{ end }}
+{{/*
+  wgmembers — the member organizations participating in a working group.
+
+  Was a build-time loop over hugo.Data.members, which listed whoever was in a
+  YAML file rather than whoever is in the group (#8). It is now a mount for
+  member-flows/group-members-widget, which reads the same public group
+  directory endpoint the chair widget does, so a charter page names the room
+  from D1 and follows it without a rebuild.
+
+  Positional arg 0 is the group slug, as before — the shortcode calls in
+  the charter pages are unchanged.
+*/}}
+<span
+  data-group-members
+  data-module="member-flows/group-members-widget"
+  data-api-base="/api/v1"
+  data-group-slug="{{ .Get 0 | lower }}"
+></span>

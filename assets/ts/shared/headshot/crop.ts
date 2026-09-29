@@ -8,12 +8,12 @@
  * Returns a JPEG Blob if the user confirmed, or null if they cancelled.
  */
 
-import { mountModalTemplate } from "../modal-template";
+import { dismissModalDialog, mountModalTemplate, openModalDialog } from "../modal-template";
 
 const CROP_OUTPUT_SIZE = 1024; // px — square output
 
 /**
- * Opens the image in a full-screen crop modal.
+ * Opens the image in a modal crop dialog.
  * Resolves with a JPEG Blob on confirm, or null on cancel.
  */
 export function cropHeadshot(file: File): Promise<Blob | null> {
@@ -31,32 +31,34 @@ export function cropHeadshot(file: File): Promise<Blob | null> {
 }
 
 function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void, fail: (error: Error) => void): void {
-  // ── Get or create modal from template ──────────────────────────────────────
-  const modal = mountModalTemplate("crop-headshot-template", "crop-headshot-modal", "Crop headshot");
-  if (!modal) {
+  // ── Get or create dialog from template ─────────────────────────────────────
+  const dialog = mountModalTemplate("crop-headshot-template", "crop-headshot-modal", "Crop headshot");
+  if (!dialog) {
     fail(new Error("Crop modal template not found. Please reload the page and try again."));
     return;
   }
 
-  const overlay = modal.querySelector(".crop-headshot-overlay") as HTMLElement | null;
-  const viewport = modal.querySelector(".crop-headshot-viewport") as HTMLElement | null;
+  const viewport = dialog.querySelector(".crop-headshot-viewport") as HTMLElement | null;
   const imgEl = viewport?.querySelector("img") as HTMLImageElement | null;
-  const slider = modal.querySelector(".crop-headshot-slider") as HTMLInputElement | null;
-  const cancelBtn = modal.querySelector(".crop-headshot-cancel") as HTMLButtonElement | null;
-  const confirmBtn = modal.querySelector(".crop-headshot-confirm") as HTMLButtonElement | null;
+  const slider = dialog.querySelector(".crop-headshot-slider") as HTMLInputElement | null;
+  const cancelBtn = dialog.querySelector(".crop-headshot-cancel") as HTMLButtonElement | null;
+  const confirmBtn = dialog.querySelector(".crop-headshot-confirm") as HTMLButtonElement | null;
 
-  if (!overlay || !viewport || !imgEl || !slider || !cancelBtn || !confirmBtn) {
-    console.error("Crop headshot template is incomplete", { overlay, viewport, imgEl, slider, cancelBtn, confirmBtn });
-    modal.remove();
+  if (!viewport || !imgEl || !slider || !cancelBtn || !confirmBtn) {
+    console.error("Crop headshot template is incomplete", { viewport, imgEl, slider, cancelBtn, confirmBtn });
+    dialog.remove();
     fail(new Error("Crop modal is missing required elements. Please reload the page and try again."));
     return;
   }
 
-  const modalEl = modal;
+  const dialogEl = dialog;
   const imageEl = imgEl;
 
   imgEl.src = img.src;
-  modal.classList.add("active");
+  // Opened before anything is measured: a `<dialog>` is `display: none` until
+  // it is, and a viewport measured while it is hidden is zero wide, which puts
+  // the initial scale — and therefore the whole crop — at infinity.
+  openModalDialog(dialog);
 
   // ── Initial scale (cover) ─────────────────────────────────────────────────
   const viewportSize = Math.round(viewport.getBoundingClientRect().width);
@@ -151,14 +153,21 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void,
   );
 
   // ── Event handlers ────────────────────────────────────────────────────────
+  /** The one way out: the dialog comes down, focus goes back to whatever
+   *  opened it, and the caller is answered. */
   function dismiss(blob: Blob | null): void {
-    modalEl.remove();
+    dismissModalDialog(dialogEl);
     done(blob);
   }
 
   cancelBtn.addEventListener("click", () => dismiss(null), { once: true });
-  overlay.addEventListener("click", (e) => {
-    if (e.target === overlay) dismiss(null);
+
+  // Escape and the platform's close request both arrive as `cancel`, and both
+  // mean the same thing here as the Cancel button: no cropped image. It is
+  // prevented so dismissal goes through the path that restores focus.
+  dialogEl.addEventListener("cancel", (e) => {
+    e.preventDefault();
+    dismiss(null);
   });
 
   confirmBtn.addEventListener(
@@ -181,7 +190,7 @@ function showCropModal(img: HTMLImageElement, done: (blob: Blob | null) => void,
       canvas.toBlob(
         (blob) => {
           if (!blob) {
-            modal.remove();
+            dismissModalDialog(dialogEl);
             fail(new Error("Failed to encode cropped image. Please try a different file."));
             return;
           }

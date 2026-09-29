@@ -1,0 +1,26 @@
+{{/*
+  members/logo-wall-og.html — mount point for the client-fetched member logo
+  wall behind a social card (all.og-card.html).
+
+  Replaces that template's two build-time collections: the members section's
+  own pages plus assets/images/members/ for the home and /members/ cards, and
+  hugo.Data.members filtered on a workingGroups field for a working group's
+  card (#8). Both listed whoever was in a YAML file rather than whoever is a
+  member.
+
+  Fetching is possible here for the same reason wg/chairs-og-card.html beside
+  it fetches: functions/og/[...path].ts screenshots this page with
+  `waitUntil: networkidle0`, which waits for the read and the logo loads it
+  starts before capturing. A card whose wall comes back empty renders without
+  one, which is what the old template did when it found no logos.
+
+  Params (dict): workingGroup (optional slug — omit for the whole membership).
+*/}}
+<div
+  data-member-logo-wall
+  data-module="member-flows/member-logo-wall"
+  data-api-base="/api/v1"
+  {{ with .workingGroup }}data-working-group="{{ . }}"{{ end }}
+  data-container-class="og-member-wall-bg"
+  data-logo-class="og-member-logo"
+></div>

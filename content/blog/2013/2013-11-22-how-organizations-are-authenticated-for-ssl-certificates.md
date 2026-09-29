@@ -31,6 +31,14 @@ tags:
 title: How Organizations Are Authenticated for SSL Certificates
 
 
+authorProfiles:
+  - name: Kirk Hall
+    organization: Entrust
+    role: Director, Policy & Compliance
+    website: https://www.entrust.com/
+    social:
+      linkedin: https://www.linkedin.com/in/kirk-hall-30098965/
+    assetdirectory: images/members/entrust
 ---
 Certification Authorities (CAs) are trusted third parties that authenticate customers before issuing SSL certificates to secure their servers.
 

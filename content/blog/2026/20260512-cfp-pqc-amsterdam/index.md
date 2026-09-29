@@ -13,6 +13,23 @@ params:
     heroTitle: "Call for Proposals: Post-Quantum Cryptography Conference in Amsterdam, December 1-3, 2026"
     heroImage: amsterdam-nl.png
     heroDescription: The Call for Proposals is now open.
+authorProfiles:
+  - name: Chris Bailey
+    organization: AppViewX
+    role: Board Member
+    website: https://www.appviewx.com/
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/christophertmbailey/
+    assetdirectory: images/members/appviewx
+  - name: Paul van Brouwershaven
+    organization: Digitorus
+    role: Founder and CEO
+    website: https://www.digitorus.com
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
+    assetdirectory: images/members/digitorus
 ---
 
 The Post-Quantum Cryptography Conference is returning to Europe (Amsterdam, December 1-3, 2026), and our Call for Proposals is now open at [pkic.org/call](/call).

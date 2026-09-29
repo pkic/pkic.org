@@ -23,6 +23,15 @@ tags:
 title: Public Key Pinning
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 The current browser-certification authority (CA) trust model allows a website owner to obtain its SSL certificate from any one of a number of CAs. That flexibility also means that a certificate mis-issued by a CA other than the authorized CA chosen by the website owner, would also be accepted as trustworthy by browsers.
 

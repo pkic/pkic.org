@@ -1,0 +1,36 @@
+{{- $page := .page -}} {{- $fieldKey := .fieldKey -}}
+<section class="membership-legal-card" data-membership-legal-field="{{ $fieldKey }}">
+  <header class="membership-legal-card-header">
+    <p>
+      Review the
+      <a href="{{ $page.RelPermalink }}" target="_blank" rel="noopener noreferrer">{{ $page.Title }}</a>, then confirm
+      your agreement below.
+    </p>
+  </header>
+  <div class="membership-legal-card-scroll" tabindex="0" aria-label="{{ $page.Title }} document">
+    <article class="membership-legal-document">
+      {{- range $page.Pages }}
+      <h3>{{ .Title }}</h3>
+      {{ .Content }} {{- end }} {{ $page.Content }}
+    </article>
+  </div>
+  {{/* The acceptance is a fixed footer outside the scrolling document. It
+       remains part of the card and the field, so validation state and its
+       message still share one surface without a visual gap. */}}
+  <div class="membership-legal-acceptance pk-field">
+    <div class="pk-check">
+      <input
+        class="pk-check__input"
+        type="checkbox"
+        id="custom-{{ $fieldKey }}"
+        name="custom.{{ $fieldKey }}"
+        data-membership-legal-input
+        required
+      />
+      <label class="pk-check__label pk-strong" for="custom-{{ $fieldKey }}" data-membership-legal-label
+        >I agree to the membership terms in this document</label
+      >
+    </div>
+    <p class="pk-field__message" data-field-error="{{ $fieldKey }}" aria-live="polite" hidden></p>
+  </div>
+</section>

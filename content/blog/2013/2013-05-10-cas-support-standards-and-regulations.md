@@ -23,6 +23,15 @@ tags:
 title: CAs Support Standards and Regulations
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 There is an industry myth that certification authorities (CAs) are not regulated. In fact publicly-trusted SSL CAs support the development of industry regulations and have been audited annually to ensure compliance to the many requirements.
 

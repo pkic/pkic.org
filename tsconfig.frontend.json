@@ -8,6 +8,7 @@
     "strict": true,
     "noImplicitAny": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,
     "noUnusedLocals": true,
     "skipLibCheck": true,
     "allowJs": false,
@@ -21,6 +22,8 @@
     "assets/ts/**/*.ts",
     "assets/ts/**/*.tsx",
     "assets/shared/**/*.ts",
-    "tests/frontend/**/*.ts"
+    "assets/design/**/*.ts",
+    "tests/frontend/**/*.ts",
+    "tests/frontend/**/*.tsx"
   ]
 }

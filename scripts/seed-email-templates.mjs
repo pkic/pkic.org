@@ -1,24 +1,28 @@
 import fs from "node:fs";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
-import { createHash, randomUUID } from "node:crypto";
+import { pathToFileURL } from "node:url";
 import YAML from "yaml";
+import { buildWranglerD1ExecuteArgs, parseSeedCliArgs } from "./lib/seed-cli.mjs";
+import { sqlString } from "./lib/sql.mjs";
+import { buildTemplateSqlStatements } from "./lib/email-template-seed-sql.mjs";
 
 const DEFAULT_CONFIG_PATH = path.join(process.cwd(), "scripts", "seed-event.yaml");
 const DEFAULT_BUCKET = process.env.ASSETS_BUCKET_NAME ?? "pkic-assets";
 const DEFAULT_ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? "admin@pkic.org";
-const DEFAULT_LAYOUT_HTML = `<!doctype html>
+export const DEFAULT_LAYOUT_HTML = `<!doctype html>
 <html lang="en" xmlns:v="urn:schemas-microsoft-com:vml" xmlns:o="urn:schemas-microsoft-com:office:office">
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta http-equiv="X-UA-Compatible" content="IE=edge">
-  <meta name="color-scheme" content="light dark">
-  <meta name="supported-color-schemes" content="light dark">
+  <meta name="color-scheme" content="light only">
+  <meta name="supported-color-schemes" content="light">
   <meta name="x-apple-disable-message-reformatting">
   <meta name="format-detection" content="telephone=no,address=no,email=no,date=no,url=no">
   <!--[if mso]><noscript><xml><o:OfficeDocumentSettings><o:PixelsPerInch>96</o:PixelsPerInch></o:OfficeDocumentSettings></xml></noscript><![endif]-->
   <style>
+    :root{color-scheme:light only;supported-color-schemes:light}
     body,table,td,a{-webkit-text-size-adjust:100%;-ms-text-size-adjust:100%}
     table,td{mso-table-lspace:0pt;mso-table-rspace:0pt}
     img{-ms-interpolation-mode:bicubic;border:0;height:auto;line-height:100%;outline:none;text-decoration:none}
@@ -42,8 +46,8 @@ const DEFAULT_LAYOUT_HTML = `<!doctype html>
     .eb blockquote p{margin:0;color:#4b5563;font-style:italic}
     .eb blockquote strong{color:#374151}
     .eb blockquote a{color:#374151;text-decoration:underline}
-    .eb code{font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;padding:2px 7px;border-radius:4px;color:#0d1b2a;border:1px solid #e5e9ef}
-    .eb pre{background:#f8fafc;border:1px solid #e5e9ef;border-radius:6px;padding:16px;font-size:13px;overflow:auto;margin:0 0 16px}
+    .eb code{font-family:'Courier New',Courier,monospace;font-size:13px;background:#f1f5f9;padding:2px 7px;border-radius:4px;color:#0d1b2a;border:1px solid #e5e9ef;overflow-wrap:anywhere;word-break:break-word}
+    .eb pre{background:#f8fafc;border:1px solid #e5e9ef;border-radius:6px;padding:16px;font-size:13px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;word-break:break-word;margin:0 0 16px}
     .eb table{width:100%;border-collapse:collapse;margin:0 0 20px}
     .eb th{background:#f8fafc;border-bottom:2px solid #e5e9ef;color:#0d1b2a;font-size:13px;font-weight:700;padding:10px 14px;text-align:left}
     .eb td{border-bottom:1px solid #f0f4f8;color:#374151;font-size:14px;padding:10px 14px;vertical-align:top}
@@ -66,31 +70,6 @@ const DEFAULT_LAYOUT_HTML = `<!doctype html>
       .ef{padding:20px 24px!important}
       .eh{padding:24px!important}
     }
-    @media (prefers-color-scheme:dark){
-      body,.ow{background-color:#0f172a!important}
-      .eb{background-color:#1e2235!important;color:#d1d5db!important}
-      .eb h1{color:#f9fafb!important}
-      .eb h2{color:#f9fafb!important;border-bottom-color:#374151!important}
-      .eb h3{color:#4ade80!important}
-      .eb p{color:#d1d5db!important}
-      .eb a{color:#4ade80!important}
-      .eb strong{color:#f9fafb!important}
-      .eb em{color:#9ca3af!important}
-      .eb ul,.eb ol,.eb li{color:#d1d5db!important}
-      .eb hr{border-top-color:#374151!important}
-      .eb blockquote{background:#1a2744!important;border-left-color:#4ade80!important}
-      .eb blockquote p{color:#9ca3af!important}
-      .eb blockquote strong{color:#d1d5db!important}
-      .eb blockquote a{color:#9ca3af!important}
-      .eb code{background:#0f172a!important;color:#e2e8f0!important;border-color:#374151!important}
-      .eb pre{background:#0f172a!important;border-color:#374151!important}
-      .eb th{background:#263148!important;color:#f9fafb!important;border-bottom-color:#374151!important}
-      .eb td{border-bottom-color:#374151!important;color:#d1d5db!important}
-      .notice-success{background:#0f2a1c!important;color:#86efac!important}
-      .notice-warning{background:#2a1f0f!important;color:#fbbf24!important}
-      .notice-info{background:#0f1f3a!important;color:#93c5fd!important}
-      .notice-danger{background:#2a0f0f!important;color:#fca5a5!important}
-    }
   </style>
 </head>
 <body id="body" style="margin:0;padding:0;background-color:#f0f4f8;font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,sans-serif;">
@@ -101,8 +80,8 @@ const DEFAULT_LAYOUT_HTML = `<!doctype html>
         <table role="presentation" border="0" cellpadding="0" cellspacing="0" width="660" class="ew" style="max-width:660px;width:100%;border-radius:10px;overflow:hidden;box-shadow:0 2px 4px rgba(0,0,0,0.05),0 8px 32px rgba(0,0,0,0.08);">
           <tr>
             <td class="eh" align="center" style="background-color:#000000;padding:28px 40px;text-align:center;">
-              <a href="{{baseUrl}}" target="_blank" style="text-decoration:none;display:inline-block;line-height:1;">
-                <img src="{{baseUrl}}/img/logo-white.png" width="160" alt="PKI Consortium" style="display:block;width:160px;max-width:160px;height:auto;border:0;">
+              <a href="{{brandBaseUrl}}" target="_blank" style="text-decoration:none;display:inline-block;line-height:1;">
+                <img src="{{brandBaseUrl}}/img/logo-white.png" width="160" alt="PKI Consortium" style="display:block;width:160px;max-width:160px;height:auto;border:0;">
               </a>
             </td>
           </tr>
@@ -125,11 +104,11 @@ const DEFAULT_LAYOUT_HTML = `<!doctype html>
                 <tr>
                   <td align="center" style="font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:12px;line-height:1.6;color:#6b7280;text-align:center;">
                     <p style="margin:0 0 8px;">
-                      <a href="{{baseUrl}}" target="_blank" style="color:#4ade80;text-decoration:none;font-weight:600;">pkic.org</a>
+                      <a href="{{brandBaseUrl}}" target="_blank" style="color:#4ade80;text-decoration:none;font-weight:600;">pkic.org</a>
                       <span style="color:#374151;">&nbsp;&nbsp;&middot;&nbsp;&nbsp;</span>
-                      <a href="{{baseUrl}}/privacy/" target="_blank" style="color:#6b7280;text-decoration:none;">Privacy Policy</a>
+                      <a href="{{brandBaseUrl}}/privacy/" target="_blank" style="color:#6b7280;text-decoration:none;">Privacy Policy</a>
                       <span style="color:#374151;">&nbsp;&nbsp;&middot;&nbsp;&nbsp;</span>
-                      <a href="{{baseUrl}}/join/" target="_blank" style="color:#6b7280;text-decoration:none;">Become a Member</a>
+                      <a href="{{brandBaseUrl}}/join/" target="_blank" style="color:#6b7280;text-decoration:none;">Become a Member</a>
                     </p>
                     <p style="margin:0;color:#4b5563;font-size:11px;">&copy; PKI Consortium &mdash; Advancing trust and security in digital infrastructure.</p>
                   </td>
@@ -144,9 +123,9 @@ const DEFAULT_LAYOUT_HTML = `<!doctype html>
 </body>
 </html>`;
 
-// NOTE: shared email partials are seeded here and managed via the admin UI.
+// NOTE: shared email partials are seeded here and managed through the portal.
 // Keep these in sync with the editor labels and the partial loader.
-const DEFAULT_TEMPLATES = [
+export const DEFAULT_TEMPLATES = [
   {
     key: "email_layout",
     subjectTemplate: null,
@@ -154,8 +133,67 @@ const DEFAULT_TEMPLATES = [
     content: DEFAULT_LAYOUT_HTML,
   },
   // ─────────────────────────────────────────────────────────────────────────
+  // Shared PKI Consortium description
+  // Variables: brandBaseUrl
+  // Partials:  {{> about_pkic}}
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    key: "partial_about_pkic",
+    subjectTemplate: null,
+    contentType: "markdown",
+    content: `**About the PKI Consortium**
+
+The PKI Consortium is a vendor-neutral community of PKI practitioners dedicated to advancing trust, security, and interoperability in digital infrastructure. [Learn more &rarr;]({{brandBaseUrl}}/about/)
+`,
+  },
+  // ─────────────────────────────────────────────────────────────────────────
+  // Shared registration details
+  // Variables: registration and custom-answer fields
+  // Partials:  {{> reg_details}}
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    key: "partial_reg_details",
+    subjectTemplate: null,
+    contentType: "markdown",
+    content: `## Your registration details
+
+> {{#if firstName}}**Name:** {{firstName}} {{lastName}}<br>
+> {{/if}}{{#if email}}**Email:** {{email}}<br>
+> {{/if}}{{#if organizationName}}**Organization:** {{organizationName}}<br>
+> {{/if}}{{#if jobTitle}}**Title / Role:** {{jobTitle}}<br>
+> {{/if}}{{#each dayAttendance}}**{{dayLabel}}:** {{attendanceLabel}} — {{statusLabel}}<br>
+> {{/each}}{{#if attendanceLabel}}**Attendance:** {{attendanceLabel}}<br>
+> {{/if}}{{#each customAnswerRows}}**{{label}}:** {{displayValue}}<br>
+> {{/each}}{{#if acceptedTermsText}}**Terms agreed:**<br>
+> - {{acceptedTermsText}}{{/if}}
+`,
+  },
+  // ─────────────────────────────────────────────────────────────────────────
+  // Shared, event-derived sponsors block
+  // Variables: eventUrl, sponsorsImageUrl
+  // Partials:  {{> sponsors_block}}
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    key: "partial_sponsors_block",
+    subjectTemplate: null,
+    contentType: "html",
+    content: `{{#if sponsorsImageUrl}}
+<table role="presentation" border="0" cellpadding="0" cellspacing="0" width="100%" style="border-top:1px solid #e5e9ef;margin:28px 0 0;">
+  <tr>
+    <td align="center" style="padding:24px 0 8px;">
+      <p style="margin:0 0 16px;font-family:'Segoe UI','Helvetica Neue',Helvetica,Arial,sans-serif;font-size:11px;color:#6b7280;text-transform:uppercase;letter-spacing:0.08em;font-weight:600;">Event sponsors</p>
+      <a href="{{eventUrl}}" target="_blank" style="display:block;text-decoration:none;">
+        <img src="{{sponsorsImageUrl}}" alt="Event sponsors" width="504" style="display:block;max-width:100%;height:auto;border:0;">
+      </a>
+    </td>
+  </tr>
+</table>
+{{/if}}
+`,
+  },
+  // ─────────────────────────────────────────────────────────────────────────
   // Shared donation request block
-  // Variables: baseUrl
+  // Variables: brandBaseUrl
   // Partials:  {{> donation_request}}
   // ─────────────────────────────────────────────────────────────────────────
   {
@@ -168,9 +206,9 @@ const DEFAULT_TEMPLATES = [
 
 If what we do is valuable to you or your organization, please consider a voluntary contribution — any amount helps us keep membership, conferences, and resources open to the widest possible audience.
 
-<div class="cta-secondary"><a href="{{baseUrl}}/donate/">Support the PKI Consortium &rarr;</a></div>
+<div class="cta-secondary"><a href="{{brandBaseUrl}}/donate/">Support the PKI Consortium &rarr;</a></div>
 
-<div class="notice notice-info">Contributions to the PKI Consortium are <strong>entirely voluntary</strong> and are not a ticket, fee, or payment for goods or services. The PKI Consortium is a <strong>501(c)(6) nonprofit business league</strong> — donations are <strong>not deductible as charitable contributions</strong> for U.S. federal income tax purposes. Consult your tax advisor regarding any applicable treatment in your jurisdiction.<br><br>Does your organization want to make a bigger impact? Sponsors directly fund free, open events for the global PKI and security community — <a href="{{baseUrl}}/sponsors/">explore sponsorship opportunities at pkic.org/sponsors/</a>.</div>
+<div class="notice notice-info">Contributions to the PKI Consortium are <strong>entirely voluntary</strong> and are not a ticket, fee, or payment for goods or services. The PKI Consortium is a <strong>501(c)(6) nonprofit business league</strong> — donations are <strong>not deductible as charitable contributions</strong> for U.S. federal income tax purposes. Consult your tax advisor regarding any applicable treatment in your jurisdiction.<br><br>Does your organization want to make a bigger impact? Sponsors directly fund free, open events for the global PKI and security community — <a href="{{brandBaseUrl}}/sponsors/">explore sponsorship opportunities at pkic.org/sponsors/</a>.</div>
 `,
   },
   // ─────────────────────────────────────────────────────────────────────────
@@ -400,14 +438,14 @@ This is a friendly reminder that your registration for **{{eventName}}** is not 
 
   // ─────────────────────────────────────────────────────────────────────────
   // 12. RSVP warning / follow-up
-  // Variables: firstName, event_name, manage_url
+  // Variables: firstName, event_name, event_day, manage_url
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "rsvp_warning",
-    subjectTemplate: "Action required: Your in-person registration for {{event_name}} is at risk",
+    subjectTemplate: "Action required: Your in-person attendance for {{event_name}} on {{event_day}} is at risk",
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
 
-We noticed that the calendar invitation for **{{event_name}}** was recently declined or removed from your calendar.
+We noticed that the calendar invitation for **{{event_name}} on {{event_day}}** was recently declined or removed from your calendar.
 
 As a nonprofit, the PKI Consortium covers significant costs for catering and venue space ($150–$300 per attendee, per day) to keep this event fully funded by sponsors and free for attendees. Because in-person capacity is strictly limited, it's incredibly important that we know exactly who will be attending.
 
@@ -415,27 +453,27 @@ If you are still planning to join us in person, please confirm your attendance u
 
 <div class="cta"><a href="{{manage_url}}">Re-confirm my in-person attendance &rarr;</a></div>
 
-If your plans have changed and you intended to decline, you do not need to do anything. We will adjust your registration automatically so you can still participate virtually, and your seat will be given to someone else. Thank you for your understanding and cooperation!
+If your plans have changed and you intended to decline, you do not need to do anything. We will update this event day only, and your other selected days will remain unchanged. Thank you for your understanding and cooperation!
 `,
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 13. RSVP downgrade / cancellation notice
-  // Variables: firstName, event_name, action_taken, new_attendance_type, new_status, manage_url
+  // 13. RSVP day-attendance update notice
+  // Variables: firstName, event_name, event_day, action_taken, new_attendance_type, manage_url
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "rsvp_downgraded",
-    subjectTemplate: "Update: Your registration for {{event_name}} has been changed",
+    subjectTemplate: "Update: Your attendance for {{event_name}} on {{event_day}} has been changed",
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
 
-Following up on our previous email regarding your declined calendar invitation, your registration for **{{event_name}}** has now been automatically updated.
+Following up on our previous email regarding your declined calendar invitation, your attendance for **{{event_name}} on {{event_day}}** has now been automatically updated.
 
 Because we did not receive an in-person confirmation, we have released your seat to another community member on the waitlist.
 
-{{#if eq new_status "cancelled"}}
-<div class="notice notice-warning"><strong>Your registration has been cancelled.</strong> Because there is no virtual option available for this event, we had to cancel your registration completely to allow another community member to attend.</div>
+{{#if eq new_attendance_type "not_attending"}}
+<div class="notice notice-warning"><strong>You are no longer registered to attend this event day.</strong> Your registration and selections for any other event days remain unchanged.</div>
 {{else}}
-<div class="notice notice-info"><strong>Your attendance type has been updated to {{new_attendance_type}}.</strong> Your registration remains active and you will receive access details closer to the event.</div>
+<div class="notice notice-info"><strong>Your attendance type for this event day has been updated to {{new_attendance_type}}.</strong> Your registration and other event-day selections remain unchanged.</div>
 {{/if}}
 
 If this was done in error and you still wish to attend in person, please use your [registration management link]({{manage_url}}) to review and update your registration, subject to remaining availability.
@@ -489,12 +527,12 @@ Join security experts, researchers, and industry leaders to explore the latest d
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
 
 {{#if isReminder}}
-<div class="notice notice-warning">A quick follow-up on your speaker invitation for <strong>{{eventName}}</strong>.{{#if daysUntilExpiry}}{{#if lte daysUntilExpiry "2"}} This opportunity closes in {{daysUntilExpiry}} day(s).{{else}} We'd be excited to feature your perspective in this programme.{{/if}}{{/if}}</div>
+<div class="notice notice-warning">A quick follow-up on your speaker invitation for <strong>{{eventName}}</strong>.{{#if daysUntilExpiry}}{{#if lte daysUntilExpiry "2"}} This opportunity closes in {{daysUntilExpiry}} day(s).{{else}} We'd be excited to feature your perspective in this program.{{/if}}{{/if}}</div>
 {{/if}}
 
 {{#if inviterName}}You have been personally nominated by **{{inviterName}}** to speak at **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org).{{else}}We would be honoured to have you present at **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org).{{/if}}
 
-We believe your expertise would be a valuable contribution to the programme. We invite you to submit a proposal for a session, workshop, or roundtable.
+We believe your expertise would be a valuable contribution to the program. We invite you to submit a proposal for a session, workshop, or roundtable.
 
 {{#if isReminder}}If this topic matters to you, we'd hate for you to miss the chance to help shape the conversation on stage.{{/if}}
 
@@ -533,6 +571,24 @@ If you have any questions or would like to discuss your proposal first, please [
     subjectTemplate: "Message from PKI Consortium",
     content: `{{message}}`,
   },
+  {
+    key: "msg_attendee_inperson_check_plans",
+    subjectTemplate: "Cannot attend {{eventName}} in person? Pass your seat to someone on the waitlist.",
+    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Registrant,{{/if}}
+
+{{eventName}} is currently full, and people on the waitlist are hoping to attend. **If your plans have changed and you can no longer join us in person, please update your registration as soon as possible.** Switching to virtual or on-demand attendance frees your seat for someone waiting.
+
+<div class="notice notice-info">Every unused seat is both an unnecessary event expense and a missed opportunity for someone on the waitlist.</div>
+
+<div class="cta"><a href="{{manageUrl}}">Manage your registration &rarr;</a></div>
+
+{{> reg_details}}
+
+Thank you for helping us make room for everyone waiting for a spot.
+
+{{> sponsors_block}}
+`,
+  },
 
   // ─────────────────────────────────────────────────────────────────────────
   // 6. Proposal submitted
@@ -544,7 +600,7 @@ If you have any questions or would like to discuss your proposal first, please [
     subjectTemplate: "Proposal received: {{proposalTitle}}",
     content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Proposer,{{/if}}
 
-Thank you for submitting your proposal to **{{eventName}}**. We have successfully received it and our programme committee will begin reviewing submissions shortly.
+Thank you for submitting your proposal to **{{eventName}}**. We have successfully received it and our program committee will begin reviewing submissions shortly.
 
 ---
 
@@ -570,7 +626,7 @@ Thank you for submitting your proposal to **{{eventName}}**. We have successfull
 
 ## What happens next?
 
-1. **Review** — Our programme committee will evaluate all submissions.
+1. **Review** — Our program committee will evaluate all submissions.
 2. **Decision** — You will receive an email with the outcome once a decision has been made.
 3. **Preparation** *(if accepted)* — We will be in touch with scheduling and logistical details.
 
@@ -583,6 +639,18 @@ Encourage colleagues to attend by sharing your referral link: [{{shareUrl}}]({{s
 Thank you for contributing to **{{eventName}}** and the broader PKI community!
 
 {{> donation_request}}
+`,
+  },
+  {
+    key: "proposal_manage_link_transferred",
+    subjectTemplate: "You now manage proposal: {{proposalTitle}}",
+    content: `{{#if firstName}}Dear {{firstName}},{{else}}Hello,{{/if}}
+
+You are now responsible for managing **{{proposalTitle}}** for **{{eventName}}**.
+
+[Manage the proposal &rarr;]({{manageUrl}})
+
+This link replaces the previous proposer's management link. Keep it private.
 `,
   },
 
@@ -602,10 +670,10 @@ We have completed our review of your proposal submitted to **{{eventName}}**.
 ## Decision: {{proposalTitle}}
 
 {{#if eq finalStatus "accepted"}}
-<div class="notice notice-success">&#127881; <strong>Congratulations — your proposal has been accepted!</strong><br>We are pleased to include <strong>{{proposalTitle}}</strong> in the programme for {{eventName}}. Our team will be in touch with scheduling, AV requirements, and speaker logistics.</div>
+<div class="notice notice-success">&#127881; <strong>Congratulations — your proposal has been accepted!</strong><br>We are pleased to include <strong>{{proposalTitle}}</strong> in the program for {{eventName}}. Our team will be in touch with scheduling, AV requirements, and speaker logistics.</div>
 {{/if}}
 {{#if eq finalStatus "rejected"}}
-<div class="notice notice-danger">Thank you for your submission. After careful consideration, we regret to inform you that <strong>{{proposalTitle}}</strong> was not selected for this event's programme.<br>We truly appreciate the time and effort you invested, and we hope you will consider submitting again for a future event.</div>
+<div class="notice notice-danger">Thank you for your submission. After careful consideration, we regret to inform you that <strong>{{proposalTitle}}</strong> was not selected for this event's program.<br>We truly appreciate the time and effort you invested, and we hope you will consider submitting again for a future event.</div>
 {{/if}}
 {{#if eq finalStatus "waitlisted"}}
 <div class="notice notice-warning">&#9203; Your proposal <strong>{{proposalTitle}}</strong> has been placed on the <strong>waitlist</strong>. We may still be able to include it if a slot becomes available, and will keep you informed.</div>
@@ -613,7 +681,7 @@ We have completed our review of your proposal submitted to **{{eventName}}**.
 
 {{#if decisionNote}}
 
-**Note from the programme committee:**
+**Note from the program committee:**
 
 > {{decisionNote}}
 
@@ -707,6 +775,24 @@ Your profile can be updated at any time up until the event.
   },
 
   // ─────────────────────────────────────────────────────────────────────────
+  // Profile reminders are independent from proposal decisions.
+  {
+    key: "speaker_profile_reminder",
+    subjectTemplate: "Please review your speaker profile — {{eventName}}",
+    content: `{{#if firstName}}Dear {{firstName}},{{else}}Dear Speaker,{{/if}}
+
+{{#if eq proposalDecisionStatus "accepted"}}Your session **{{proposalTitle}}** has been accepted for **{{eventName}}**. Please review your speaker profile so we can prepare the program.{{else}}
+{{#if eq proposalDecisionStatus "waitlisted"}}Your proposal **{{proposalTitle}}** is on the waitlist for **{{eventName}}**. Please review your speaker profile while we check program availability. This reminder does not confirm a place in the program.{{else}}
+{{#if eq proposalDecisionStatus "needs-work"}}Updates are requested for your proposal **{{proposalTitle}}** for **{{eventName}}**. Please address the committee's feedback and review your speaker profile. The proposal has not been accepted.{{else}}Your proposal **{{proposalTitle}}** is awaiting a decision for **{{eventName}}**. Please review your speaker profile to help the committee assess the submission. This reminder is not an acceptance.{{/if}}
+{{/if}}
+{{/if}}
+
+{{#if requiresConfirmation}}You have been invited to participate as a speaker. Follow the link below to confirm or decline your participation and review your profile.{{else}}Please check that your biography and headshot are up to date.{{/if}}
+
+[Review my speaker profile]({{profileUrl}})
+`,
+  },
+
   // 13. Presentation upload request
   // Sent to all speakers when a proposal is accepted.
   // Variables: eventName, firstName, proposalTitle, uploadUrl, deadline
@@ -722,7 +808,7 @@ Your profile can be updated at any time up until the event.
 
 We are looking forward to your session **{{proposalTitle}}** at **{{eventName}}**!
 
-Please upload your presentation slides by the deadline below so our team can prepare the AV setup and programme materials.
+Please upload your presentation slides by the deadline below so our team can prepare the AV setup and program materials.
 
 {{#if deadline}}<div class="notice notice-warning">&#128197; <strong>Upload deadline: {{deadline}}</strong></div>{{/if}}
 
@@ -761,21 +847,17 @@ If you have any issues uploading or need to request an extension, please [contac
   },
 
   // ─────────────────────────────────────────────────────────────────────────
-  // 8. Admin magic link
+  // 8. User magic link
   // Variables: email, magicLinkUrl, expiresInMinutes
   // ─────────────────────────────────────────────────────────────────────────
   {
-    key: "admin_magic_link",
-    subjectTemplate: "Your PKI Consortium admin sign-in link",
-    content: `A sign-in link was requested for the **PKI Consortium** administration panel.
+    key: "user_magic_link",
+    subjectTemplate: "Your PKI Consortium sign-in link",
+    content: `A sign-in link was requested for the **PKI Consortium portal**.
 
-<div class="cta-navy"><a href="{{magicLinkUrl}}">Sign in to admin panel &rarr;</a></div>
+<div class="cta-navy"><a href="{{magicLinkUrl}}">Sign in to the portal &rarr;</a></div>
 
 <div class="notice notice-warning">&#9888;&#65039; <strong>Security notice</strong><br>&bull; This link is valid for <strong>{{expiresInMinutes}} minutes</strong> only.<br>&bull; It can only be used <strong>once</strong> and is tied to <code>{{email}}</code>.<br>&bull; If you did not request this link, ignore this email immediately.</div>
-
-If the button above does not work, copy and paste the following URL into your browser:
-
-\`{{magicLinkUrl}}\`
 `,
   },
 
@@ -801,7 +883,7 @@ Every dollar we raise lets us keep our conferences **free and open** to security
 ### Your donation details
 
 > **Name:** {{name}}
-> {{#if organizationName}}**Organisation:** {{organizationName}}
+> {{#if organizationName}}**Organization:** {{organizationName}}
 > {{/if}}**Amount:** {{formattedAmount}}
 
 <div class="notice notice-success">&#10003; Payment confirmed. A receipt from our payment processor will be sent separately to <strong>{{email}}</strong>.</div>
@@ -887,93 +969,37 @@ The PKI Consortium team
 `,
   },
 ];
-function sqlString(value) {
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
-function toSqlNullableText(value) {
-  if (value === null || value === undefined || String(value).trim().length === 0) {
-    return "NULL";
-  }
-  return sqlString(value);
-}
-
+// A normal seed only establishes the baseline catalog. Use --replace
+// deliberately when an existing active version must be archived and replaced.
 function parseArgs(argv) {
-  const parsed = {
-    mode: "local",
-    database: process.env.D1_DATABASE_NAME ?? "pkic-db",
-    wranglerEnv: null,
-    persistTo: null,
-    configPath: DEFAULT_CONFIG_PATH,
-    bucket: DEFAULT_BUCKET,
-    adminEmail: DEFAULT_ADMIN_EMAIL,
-    onlyTemplates: [],
-    ifMissing: false,
-  };
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    const next = argv[index + 1];
-
-    if (arg === "--remote") {
-      parsed.mode = "remote";
-      continue;
-    }
-    if (arg === "--local") {
-      parsed.mode = "local";
-      continue;
-    }
-
-    if (arg === "--db" && next) {
-      parsed.database = next;
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--env" && next) {
-      parsed.wranglerEnv = next;
-      index += 1;
-      continue;
-    }
-
-    if ((arg === "--config" || arg === "--file") && next) {
-      parsed.configPath = path.isAbsolute(next) ? next : path.join(process.cwd(), next);
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--bucket" && next) {
-      parsed.bucket = next;
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--admin-email" && next) {
-      parsed.adminEmail = next;
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--persist-to" && next) {
-      parsed.persistTo = next;
-      index += 1;
-      continue;
-    }
-
-    if ((arg === "--only-template" || arg === "--template") && next) {
-      parsed.onlyTemplates.push(...next.split(",").map((value) => value.trim()).filter(Boolean));
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--if-missing") {
-      parsed.ifMissing = true;
-      continue;
-    }
-
-  }
-
-  return parsed;
+  return parseSeedCliArgs(
+    argv,
+    {
+      configPath: DEFAULT_CONFIG_PATH,
+      bucket: DEFAULT_BUCKET,
+      adminEmail: DEFAULT_ADMIN_EMAIL,
+      onlyTemplates: [],
+      ifMissing: true,
+    },
+    ({ arg, next, parsed }) => {
+      if ((arg === "--only-template" || arg === "--template") && next) {
+        parsed.onlyTemplates.push(
+          ...next
+            .split(",")
+            .map((value) => value.trim())
+            .filter(Boolean),
+        );
+        return 1;
+      }
+      if (arg === "--if-missing") {
+        parsed.ifMissing = true;
+      }
+      if (arg === "--replace") {
+        parsed.ifMissing = false;
+      }
+      return 0;
+    },
+  );
 }
 
 function loadConfig(configPath) {
@@ -983,10 +1009,6 @@ function loadConfig(configPath) {
 
   const raw = fs.readFileSync(configPath, "utf8");
   return YAML.parse(raw) ?? {};
-}
-
-function sha256Hex(value) {
-  return createHash("sha256").update(value).digest("hex");
 }
 
 function runWrangler(args, options = {}) {
@@ -1031,15 +1053,11 @@ function parseWranglerJsonOutput(output) {
     }
   }
 
-  throw new Error(
-    `Unable to parse Wrangler JSON output. First output lines:\n${lines.slice(0, 6).join("\n")}`,
-  );
+  throw new Error(`Unable to parse Wrangler JSON output. First output lines:\n${lines.slice(0, 6).join("\n")}`);
 }
 
 function seedConfig(config, cli) {
-  const configured = Array.isArray(config?.emailTemplates?.templates)
-    ? config.emailTemplates.templates
-    : [];
+  const configured = Array.isArray(config?.emailTemplates?.templates) ? config.emailTemplates.templates : [];
 
   const merged = new Map();
   for (const item of DEFAULT_TEMPLATES) {
@@ -1078,13 +1096,7 @@ function seedConfig(config, cli) {
 
 function ensureAdminExists(cli) {
   const queryArgs = [
-    "wrangler",
-    "d1",
-    "execute",
-    cli.database,
-    ...(cli.wranglerEnv ? ["--env", cli.wranglerEnv] : []),
-    cli.mode === "remote" ? "--remote" : "--local",
-    ...(cli.persistTo ? [`--persist-to=${cli.persistTo}`] : []),
+    ...buildWranglerD1ExecuteArgs(cli),
     "--command",
     `SELECT id FROM users WHERE normalized_email = ${sqlString(cli.adminEmail.trim().toLowerCase())} LIMIT 1;`,
     "--json",
@@ -1100,66 +1112,6 @@ function ensureAdminExists(cli) {
   }
 }
 
-function buildTemplateSqlStatements(cli, templates) {
-  const statements = [];
-  const normalizedAdminEmail = cli.adminEmail.trim().toLowerCase();
-
-  for (const template of templates) {
-    if (cli.ifMissing) {
-      statements.push(`
-INSERT INTO email_template_versions (
-  id, template_key, version, subject_template, body, content_type, r2_object_key,
-  checksum_sha256, status, created_by_user_id, created_at
-)
-SELECT
-  ${sqlString(randomUUID())},
-  ${sqlString(template.key)},
-  COALESCE((SELECT MAX(version) FROM email_template_versions WHERE template_key = ${sqlString(template.key)}), 0) + 1,
-  ${toSqlNullableText(template.subjectTemplate)},
-  ${sqlString(template.content)},
-  ${sqlString(template.contentType ?? 'markdown')},
-  NULL,
-  ${sqlString(sha256Hex(template.content))},
-  'active',
-  (SELECT id FROM users WHERE normalized_email = ${sqlString(normalizedAdminEmail)} LIMIT 1),
-  datetime('now')
-WHERE NOT EXISTS (
-  SELECT 1
-  FROM email_template_versions
-  WHERE template_key = ${sqlString(template.key)}
-    AND status = 'active'
-);
-`);
-      continue;
-    }
-
-    statements.push(`
-UPDATE email_template_versions
-SET status = 'archived'
-WHERE template_key = ${sqlString(template.key)} AND status = 'active';
-
-INSERT INTO email_template_versions (
-  id, template_key, version, subject_template, body, content_type, r2_object_key,
-  checksum_sha256, status, created_by_user_id, created_at
-)
-SELECT
-  ${sqlString(randomUUID())},
-  ${sqlString(template.key)},
-  COALESCE((SELECT MAX(version) FROM email_template_versions WHERE template_key = ${sqlString(template.key)}), 0) + 1,
-  ${toSqlNullableText(template.subjectTemplate)},
-  ${sqlString(template.content)},
-  ${sqlString(template.contentType ?? 'markdown')},
-  NULL,
-  ${sqlString(sha256Hex(template.content))},
-  'active',
-  (SELECT id FROM users WHERE normalized_email = ${sqlString(normalizedAdminEmail)} LIMIT 1),
-  datetime('now');
-`);
-  }
-
-  return statements.join("\n");
-}
-
 function main() {
   const cli = parseArgs(process.argv.slice(2));
   const config = loadConfig(cli.configPath);
@@ -1172,17 +1124,7 @@ function main() {
   ensureAdminExists(cli);
 
   const sql = buildTemplateSqlStatements(cli, seed.templates);
-  const executeArgs = [
-    "wrangler",
-    "d1",
-    "execute",
-    cli.database,
-    ...(cli.wranglerEnv ? ["--env", cli.wranglerEnv] : []),
-    cli.mode === "remote" ? "--remote" : "--local",
-    ...(cli.persistTo ? [`--persist-to=${cli.persistTo}`] : []),
-    "--command",
-    sql,
-  ];
+  const executeArgs = [...buildWranglerD1ExecuteArgs(cli), "--command", sql];
 
   runWrangler(executeArgs);
   console.log(
@@ -1190,4 +1132,6 @@ function main() {
   );
 }
 
-main();
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main();
+}

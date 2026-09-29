@@ -16,7 +16,7 @@
  *      OR the display label differs significantly from the snake_case name.
  *
  * Unknown types fall back to labelFromKey() (e.g. "new_method" → "New Method"),
- * so nothing breaks when Stripe expands their catalogue.
+ * so nothing breaks when Stripe expands its catalog.
  *
  * SCOPE: only methods that can produce payment_status='unpaid' on a Checkout
  * Session are relevant here.  Bank redirects (iDEAL, Bancontact, EPS, P24,

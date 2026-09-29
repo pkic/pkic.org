@@ -28,25 +28,28 @@
 >
 
   {{/* Skeleton shown while the personalisation fetch is in-flight */}}
-  <div data-confirm-loading class="my-3" aria-hidden="true">
-    <p class="placeholder-glow mb-2"><span class="placeholder col-8 fs-5"></span></p>
-    <p class="placeholder-glow mb-4"><span class="placeholder col-10"></span></p>
-    <p class="placeholder-glow"><span class="placeholder col-4 placeholder-lg btn btn-success"></span></p>
+  <div data-confirm-loading class="pk-stack pk-stack--snug" aria-hidden="true">
+    <span class="pk-skeleton pk-skeleton--lg"></span>
+    <span class="pk-skeleton"></span>
+    <span class="pk-skeleton pk-skeleton--lg"></span>
   </div>
 
   {{/* Personalised intro + form — hidden until the API fetch completes */}}
-  <div data-confirm-content class="d-none">
-    <p class="lead mb-4">
+  {{/* Hidden with the platform's own attribute rather than a class, so the
+       script that reveals it sets `hidden = false` and nothing has to know
+       which stylesheet drew it. */}}
+  <div data-confirm-content hidden>
+    <p class="pk-lede">
       Hi <span data-placeholder="firstName">there</span>, you&rsquo;re one click away!
       Click the button below to verify your email address and confirm your registration for
       the <strong><span data-placeholder="eventName">event</span></strong>.
     </p>
-    <form class="row g-3 needs-validation" novalidate>
-      <div class="col-12">
-        <button type="submit" class="btn btn-success px-4">Confirm my registration &rarr;</button>
+    <form class="pk-stack needs-validation" novalidate>
+      <div class="pk-cluster">
+        <button type="submit" class="pk-btn pk-btn--primary pk-btn--lg">Confirm my registration</button>
       </div>
     </form>
   </div>
 
-  <p data-flow-status class="alert visually-hidden mt-3 mb-0" role="status" aria-live="polite"></p>
+  <p data-flow-status class="pk-alert pk-sr-only" role="status" aria-live="polite"></p>
 </div>

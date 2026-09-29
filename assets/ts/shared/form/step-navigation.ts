@@ -31,7 +31,6 @@ export function installStepNavigation(
   const backBtn = root.querySelector<HTMLButtonElement>("[data-step-back]");
   const nextBtn = root.querySelector<HTMLButtonElement>("[data-step-next]");
   const submitBtn = form.querySelector<HTMLButtonElement>("button[type='submit']");
-  const fillEl = root.querySelector<HTMLElement>("[data-step-fill]");
 
   if (stepEls.length < 2) return;
 
@@ -66,10 +65,6 @@ export function installStepNavigation(
       }
     });
 
-    if (fillEl) {
-      fillEl.style.width = `${((current - 1) / (total - 1)) * 100}%`;
-    }
-
     if (backBtn) backBtn.hidden = current === 1;
     if (nextBtn) nextBtn.hidden = current === total;
     if (submitBtn) submitBtn.hidden = current !== total;
@@ -90,15 +85,15 @@ export function installStepNavigation(
     let hasErrors = false;
 
     for (const field of fields) {
+      const errorTarget =
+        field.name === "consents" && field.closest("[data-term-key]") ? null : findFieldErrorTarget(form, field.name);
       if (!field.checkValidity()) {
         hasErrors = true;
-        const errorTarget = findFieldErrorTarget(form, field.name);
         if (errorTarget) {
           errorTarget.textContent = field.validationMessage || "Required";
         }
         if (!firstInvalid) firstInvalid = field;
       } else {
-        const errorTarget = findFieldErrorTarget(form, field.name);
         if (errorTarget) errorTarget.textContent = "";
       }
     }
@@ -108,18 +103,12 @@ export function installStepNavigation(
       firstInvalid?.focus();
     }
 
-    // Sync consent card visual states for any consent checkboxes in this step.
-    // Runs unconditionally so cards go green/red as the user progresses.
-    for (const cb of Array.from(stepEl.querySelectorAll<HTMLInputElement>("input.event-flow-consent-native-check"))) {
-      const card = cb.closest<HTMLElement>(".event-flow-consent-card");
-      if (!card) continue;
-      if (cb.required && !cb.checked) {
-        card.classList.add("is-invalid");
-      } else {
-        card.classList.remove("is-invalid");
-      }
-    }
-
+    // Consent cards need no separate pass. They are ordinary checkboxes in
+    // this step, so the `checkValidity()` above already fired the platform's
+    // `invalid` event at each one that has not been agreed to, and each card
+    // shows its own message from that. This used to add and remove Bootstrap's
+    // `is-invalid` on the card element instead — a second copy of the state,
+    // drawn only by the legacy stylesheet.
     return !hasErrors;
   }
 

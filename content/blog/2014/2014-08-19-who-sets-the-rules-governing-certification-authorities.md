@@ -45,6 +45,14 @@ tags:
 title: Who Sets the Rules Governing Certification Authorities?
 
 
+authorProfiles:
+  - name: Kirk Hall
+    organization: Entrust
+    role: Director, Policy & Compliance
+    website: https://www.entrust.com/
+    social:
+      linkedin: https://www.linkedin.com/in/kirk-hall-30098965/
+    assetdirectory: images/members/entrust
 ---
 Every time something positive is published about SSL and encryption,such as Google’s recent decision making use of _https_ encryption a favorable rating factor for a website, or negative, such as the Heartbleed issue – bloggers and others always post questions about public Certification Authorities (CAs), including general questions on who sets the rules that govern CAs. Some bloggers seem to assume there are no rules or standards, and that CAs can operate without any requirements or limitations at all — that’s incorrect.
 

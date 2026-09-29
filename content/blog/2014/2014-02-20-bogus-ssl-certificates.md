@@ -18,6 +18,15 @@ tags:
 title: Bogus SSL Certificates
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 [Netcraft](http://news.netcraft.com/archives/2014/02/12/fake-ssl-certificates-deployed-across-the-internet.html) has published an article stating they have found many bogus SSL certificates. In this case, a bogus certificate is [self-signed](https://casecurity.org/2013/04/02/self-signed-certificates-dont-deliver-trust/) (i.e., not issued from a legitimate certification authority) and replicates an SSL certificate of a large, popular website.
 

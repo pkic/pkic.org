@@ -7,6 +7,15 @@ categories:
 keyword: [trust list, trusted list, ltl, lotl, root store, pki]
 tags: [LTL]
 
+authorProfiles:
+  - name: Paul van Brouwershaven
+    organization: Digitorus
+    role: Founder and CEO
+    website: https://www.digitorus.com
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
+    assetdirectory: images/members/digitorus
 ---
 
 ## List of Trust Lists

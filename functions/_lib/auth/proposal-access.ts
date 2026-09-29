@@ -1,44 +1,43 @@
-import { all } from "../db/queries";
-import { normalizeEmail } from "../validation";
+import { hasPermission } from "./permissions";
 import type { AuthAdmin, DatabaseLike } from "../types";
-
-const REVIEW_PERMISSIONS = new Set(["organizer", "program_committee", "moderator"]);
-const FINALIZE_PERMISSIONS = new Set(["organizer"]);
 
 export interface ProposalAccess {
   eventPermissions: string[];
+  canRead: boolean;
   canReview: boolean;
   canFinalize: boolean;
+  canEditAcceptedAbstract: boolean;
+  canCancelAcceptedProposal: boolean;
 }
 
 /**
  * Resolve proposal moderation capabilities for a user on a specific event.
- * Global admins keep full access; event permissions are still returned for UI hints.
+ *
+ * Backed by `user_roles`/`permission_grants` via
+ * `hasPermission`, not the dropped `event_permissions` table (see migration
+ * 0035). `proposals:score` (program_committee, event_moderator)
+ * grants review; `proposals:manage` (event_organizer, program_committee)
+ * grants finalize. These are separate capabilities: custom roles must
+ * explicitly receive `proposals:score` to author reviews. Seeded roles retain
+ * both permissions, matching the old REVIEW_PERMISSIONS/FINALIZE_PERMISSIONS
+ * sets. Global admins keep full access via hasPermission's role bypass.
  */
 export async function getProposalAccessForEvent(
-  db: DatabaseLike,
+  _db: DatabaseLike,
   eventId: string,
   actor: AuthAdmin,
 ): Promise<ProposalAccess> {
-  const normalizedEmail = normalizeEmail(actor.email);
-  const permissionRows = await all<{ permission: string }>(
-    db,
-    `SELECT permission
-     FROM event_permissions
-     WHERE event_id = ?
-       AND (user_id = ? OR user_email = ?)
-     ORDER BY permission ASC`,
-    [eventId, actor.id, normalizedEmail],
-  );
-
-  const eventPermissions = permissionRows.map((row) => row.permission);
-
-  const hasReviewPermission = eventPermissions.some((permission) => REVIEW_PERMISSIONS.has(permission));
-  const hasFinalizePermission = eventPermissions.some((permission) => FINALIZE_PERMISSIONS.has(permission));
+  const context = { type: "event", id: eventId };
+  const eventPermissions = (actor.grants ?? [])
+    .filter((grant) => grant.contextType === context.type && grant.contextId === context.id)
+    .map((grant) => grant.permission);
 
   return {
     eventPermissions,
-    canReview: actor.role === "admin" || hasReviewPermission,
-    canFinalize: actor.role === "admin" || hasFinalizePermission,
+    canRead: hasPermission(actor, "proposals:read", context),
+    canReview: hasPermission(actor, "proposals:score", context),
+    canFinalize: hasPermission(actor, "proposals:manage", context),
+    canEditAcceptedAbstract: hasPermission(actor, "proposals:edit_accepted_abstract", context),
+    canCancelAcceptedProposal: hasPermission(actor, "proposals:cancel_accepted", context),
   };
 }

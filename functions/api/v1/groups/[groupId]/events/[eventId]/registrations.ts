@@ -1,0 +1,218 @@
+import {
+  groupEventRegistrationCreateRouteSchema,
+  groupEventRegistrationAdmissionCreateRouteSchema,
+  groupEventRegistrationDayAttendancePatchRouteSchema,
+  groupEventRegistrationDetailRouteSchema,
+  groupEventRegistrationManagerUpdateRouteSchema,
+  groupEventRegistrationsListRouteSchema,
+} from "../../../../../../../assets/shared/schemas/group-events";
+import {
+  groupEventRegistrationExportRouteSchema,
+  groupEventRegistrationPromotionsCreateRouteSchema,
+} from "../../../../../../../assets/shared/schemas/group-event-registration-operations";
+import { eventAttendanceRegistrationsListResponseSchema } from "../../../../../../../assets/shared/schemas/event-registrations";
+import {
+  eventRegistrationAdmitResponseSchema,
+  eventRegistrationAttendanceDetailResponseSchema,
+  eventRegistrationDayAttendanceResponseSchema,
+  eventRegistrationManagerUpdateResponseSchema,
+} from "../../../../../../../assets/shared/schemas/event-registration-detail";
+import { registrationSubmissionResponseSchema } from "../../../../../../../assets/shared/schemas/registration";
+import { getConfig, getCsvExportLimits, resolveAppBaseUrl } from "../../../../../../_lib/config";
+import { csvResponse } from "../../../../../../_lib/csv";
+import { requestDb, type AdminContext } from "../../../../../../_lib/db/context";
+import { json } from "../../../../../../_lib/http";
+import { openApiRoute } from "../../../../../../_lib/openapi/route";
+import { getClientIp, getUserAgent, requireInternalSecret } from "../../../../../../_lib/request";
+import { submitGroupEventRegistration } from "../../../../../../_lib/services/events/group-registration";
+import { listGroupManagedEventRegistrations } from "../../../../../../_lib/services/events/group-management";
+import { buildRegistrationCsvWithAudit } from "../../../../../../_lib/services/registrations/export";
+import { promoteEventWaitlistWithNotifications } from "../../../../../../_lib/services/registrations/waitlist-promotions";
+import {
+  admitGroupManagedEventRegistration,
+  cancelGroupManagedEventRegistration,
+  getGroupManagedEventRegistration,
+  updateGroupManagedEventRegistrationDayAttendance,
+} from "../../../../../../_lib/services/registrations/group-attendee-management";
+import { processOutboxByIdBackground } from "../../../../../../_lib/email/outbox";
+import { eventRegistrationPromotionsResponseSchema } from "../../../../../../../assets/shared/schemas/event-registrations";
+import { requireGroupManagementActor, requireGroupResourceContext } from "../../../group-resource-context";
+import { requireManagedGroupEventContext } from "./management-context";
+
+export const GroupEventRegistrationCreate = openApiRoute(
+  groupEventRegistrationCreateRouteSchema,
+  async (c: AdminContext, data) => {
+    const db = requestDb(c);
+    const request = c.req.raw;
+    const { group, viewer } = await requireGroupResourceContext(db, request, c.env, data.params.groupId);
+    const config = getConfig(c.env, request);
+    const result = await submitGroupEventRegistration(db, c.env, viewer, group.id, data.params.eventId, data.body, {
+      clientIp: getClientIp(request),
+      userAgent: getUserAgent(request),
+      appBaseUrl: resolveAppBaseUrl(c.env, request),
+      signingSecret: requireInternalSecret(c.env),
+      config: {
+        maxPendingConfirmationReminders: config.maxPendingConfirmationReminders,
+        pendingConfirmationReminderIntervalDays: config.pendingConfirmationReminderIntervalDays,
+        confirmationLinkTtlHours: config.confirmationLinkTtlHours,
+        referralCodeLength: config.referralCodeLength,
+      },
+    });
+    for (const task of result.backgroundTasks) c.executionCtx.waitUntil(task);
+    return json(registrationSubmissionResponseSchema.parse(result.response));
+  },
+);
+
+export const GroupEventRegistrationsList = openApiRoute(
+  groupEventRegistrationsListRouteSchema,
+  async (c: AdminContext, data) => {
+    const db = requestDb(c);
+    const context = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
+    const { event, result } = await listGroupManagedEventRegistrations(
+      db,
+      requireGroupManagementActor(context),
+      context.group.id,
+      data.params.eventId,
+      data.query,
+    );
+    return json(
+      eventAttendanceRegistrationsListResponseSchema.parse({
+        event,
+        registrations: result.registrations,
+        stats: result.stats,
+        page: {
+          limit: data.query.limit,
+          offset: data.query.offset,
+          total: result.total,
+          hasMore: data.query.offset + result.registrations.length < result.total,
+        },
+      }),
+    );
+  },
+);
+
+export const GroupEventRegistrationPromotionsCreate = openApiRoute(
+  groupEventRegistrationPromotionsCreateRouteSchema,
+  async (c: AdminContext, data) => {
+    const context = await requireManagedGroupEventContext(c, data.params.groupId, data.params.eventId);
+    const promoted = await promoteEventWaitlistWithNotifications(context.db, {
+      event: context.event,
+      appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
+      claimWindowHours: getConfig(c.env, c.req.raw).waitlistClaimWindowHours,
+      source: {
+        actorType: "admin",
+        actorId: context.actor.id,
+        auditAction: "admin_waitlist_promoted",
+        source: "group_event_registration_management",
+      },
+    });
+    c.executionCtx.waitUntil(
+      Promise.all(promoted.outboxIds.map((outboxId) => processOutboxByIdBackground(context.rawDb, c.env, outboxId))),
+    );
+    return json(
+      eventRegistrationPromotionsResponseSchema.parse({
+        success: true,
+        dayRegistrationOffers: promoted.dayRegistrationOffers,
+        affectedRegistrations: promoted.affectedRegistrations,
+      }),
+    );
+  },
+);
+
+export const GroupEventRegistrationExportGet = openApiRoute(
+  groupEventRegistrationExportRouteSchema,
+  async (c: AdminContext, data) => {
+    const context = await requireManagedGroupEventContext(c, data.params.groupId, data.params.eventId);
+    const result = await buildRegistrationCsvWithAudit(
+      context.db,
+      { id: context.event.id, source_mode: context.event.source_mode ?? null },
+      context.actor.id,
+      getCsvExportLimits(c.env),
+    );
+    return csvResponse(result.csv, `${context.event.slug}-attendees.csv`);
+  },
+);
+
+export const GroupEventRegistrationDetailGet = openApiRoute(
+  groupEventRegistrationDetailRouteSchema,
+  async (c: AdminContext, data) => {
+    const db = requestDb(c);
+    const context = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
+    const result = await getGroupManagedEventRegistration(
+      db,
+      requireGroupManagementActor(context),
+      context.group.id,
+      data.params.eventId,
+      data.params.registrationId,
+    );
+    return json(eventRegistrationAttendanceDetailResponseSchema.parse(result));
+  },
+);
+
+export const GroupEventRegistrationDayAttendancePatch = openApiRoute(
+  groupEventRegistrationDayAttendancePatchRouteSchema,
+  async (c: AdminContext, data) => {
+    const db = requestDb(c);
+    const context = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
+    const result = await updateGroupManagedEventRegistrationDayAttendance(
+      db,
+      requireGroupManagementActor(context),
+      context.group.id,
+      data.params.eventId,
+      data.params.registrationId,
+      data.body,
+      resolveAppBaseUrl(c.env, c.req.raw),
+    );
+    if (result.outboxId) {
+      c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, result.outboxId));
+    }
+    return json(eventRegistrationDayAttendanceResponseSchema.parse({ success: true }));
+  },
+);
+
+export const GroupEventRegistrationManagerUpdate = openApiRoute(
+  groupEventRegistrationManagerUpdateRouteSchema,
+  async (c: AdminContext, data) => {
+    const db = requestDb(c);
+    const context = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
+    const result = await cancelGroupManagedEventRegistration(
+      db,
+      requireGroupManagementActor(context),
+      context.group.id,
+      data.params.eventId,
+      data.params.registrationId,
+      resolveAppBaseUrl(c.env, c.req.raw),
+    );
+    if (result.outboxId) {
+      c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, result.outboxId));
+    }
+    return json(eventRegistrationManagerUpdateResponseSchema.parse({ success: true, ...result.registration }));
+  },
+);
+
+export const GroupEventRegistrationAdmissionCreate = openApiRoute(
+  groupEventRegistrationAdmissionCreateRouteSchema,
+  async (c: AdminContext, data) => {
+    const db = requestDb(c);
+    const context = await requireGroupResourceContext(db, c.req.raw, c.env, data.params.groupId);
+    const result = await admitGroupManagedEventRegistration(
+      db,
+      requireGroupManagementActor(context),
+      context.group.id,
+      data.params.eventId,
+      data.params.registrationId,
+      data.body,
+      resolveAppBaseUrl(c.env, c.req.raw),
+    );
+    if (result.outboxId) {
+      c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, result.outboxId));
+    }
+    return json(
+      eventRegistrationAdmitResponseSchema.parse({
+        success: true,
+        registration: result.registration,
+        admittedDayDates: result.admittedDayDates,
+      }),
+    );
+  },
+);

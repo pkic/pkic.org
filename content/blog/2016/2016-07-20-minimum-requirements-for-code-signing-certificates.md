@@ -28,6 +28,15 @@ tags:
 title: Minimum Requirements for Code Signing Certificates
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 It is time for an update on the Baseline Requirements for Code Signing.
 

@@ -34,10 +34,19 @@ taxonomies:
   series: series
   author: authors
 
-# Ignore all hidden files/folders and AI instruction files from static site generation
+# Ignore hidden files/folders and AI instruction files from static site generation.
+#
+# These are matched against each file's ABSOLUTE path, which is why the two
+# hidden-file rules used to be wrong in opposite directions: "^\\." could never
+# match a path beginning with "/", and "/\\." matched any ancestor directory
+# too — so a checkout under a dot-directory (a git worktree in .claude/worktrees,
+# say) ignored the entire site and Hugo emitted 14 pages instead of 300-odd,
+# silently, taking the build and CSS-budget gates with it.
+#
+# Anchoring on Hugo's own roots keeps the intent — no .drafts, no .github,
+# no .well-known — while leaving where the repository happens to live out of it.
 ignoreFiles:
-  - "^\\."                                       # Matches root-level hidden files/folders (.github, .cursorrules, .ai)
-  - "/\\."                                       # Matches nested hidden files/folders (content/posts/.drafts/)
+  - "/(archetypes|assets|content|data|i18n|layouts|static)/([^/]+/)*\\." # Hidden files/folders inside the site
   - "(^|/)(AGENTS|CLAUDE|COPILOT|PROMPTS)\\.md$" # Matches exact instruction files anywhere
   - wg/pkimm/(extensions|integrations)/pkimm-model/
   - wg/pkimm/(extensions|integrations)/scripts/
@@ -163,15 +172,40 @@ module:
   imports:
     - path: github.com/gohugoio/hugo-mod-bootstrap-scss/v5
 
+  # Apply the filter at Hugo's unified-file-system boundary. Git ignores these
+  # files too, but Hugo must not parse or publish metadata present in a local
+  # checkout on filesystems that create AppleDouble sidecars.
+  mounts:
+    - source: archetypes
+      target: archetypes
+      files: &siteFiles
+        - "! ._*"
+        - "! **/._*"
+        - "! .AppleDouble/**"
+        - "! **/.AppleDouble/**"
+    - source: assets
+      target: assets
+      files: *siteFiles
+    - source: content
+      target: content
+      files: *siteFiles
+    - source: data
+      target: data
+      files: *siteFiles
+    - source: i18n
+      target: i18n
+      files: *siteFiles
+    - source: layouts
+      target: layouts
+      files: *siteFiles
+    - source: static
+      target: static
+      files: *siteFiles
+
 outputFormats:
   rss:
     mediatype: application/rss
     path: feed
-  news:
-    baseName: index
-    path: /news/feed/
-    isPlainText: false
-    mediaType: application/rss
   og-card:
     mediatype: text/html
     baseName: og-card
@@ -213,16 +247,10 @@ outputFormats:
     baseName: agenda
     isPlainText: true
     notAlternative: true
-  members-data:
-    mediatype: application/json
-    isPlainText: true
-    baseName: members-data
-    notAlternative: true
 
 outputs:
   home:
     - html
-    - news
     - redirects
     - og-card
   page:
@@ -244,8 +272,7 @@ server:
         X-Frame-Options: DENY
         X-Content-Type-Options: nosniff
         Referrer-Policy: strict-origin-when-cross-origin
-        Content-Security-Policy:
-          default-src 'none'; form-action 'self'; base-uri 'self';
+        Content-Security-Policy: default-src 'none'; form-action 'self'; base-uri 'self';
           block-all-mixed-content;
           style-src 'unsafe-inline' 'self';
           font-src 'self';
@@ -258,8 +285,7 @@ server:
 
     - for: /questions.html
       values:
-        Content-Security-Policy:
-          default-src 'none'; form-action 'self'; base-uri 'self';
+        Content-Security-Policy: default-src 'none'; form-action 'self'; base-uri 'self';
           block-all-mixed-content;
           style-src 'unsafe-inline' 'self';
           font-src 'self';

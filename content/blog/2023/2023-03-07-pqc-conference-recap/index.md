@@ -12,6 +12,15 @@ resources:
 - src: 'photos/*'
   title: 'Conference photo #:counter'
 
+authorProfiles:
+  - name: Paul van Brouwershaven
+    organization: Digitorus
+    role: Founder and CEO
+    website: https://www.digitorus.com
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
+    assetdirectory: images/members/digitorus
 ---
 
 **The PKI Consortium recently held its first Post-Quantum Cryptography conference, which attracted a thousand registrations. With a hundred attendees onsite and over six hundred attendees watching the live stream, it was a resounding success.**

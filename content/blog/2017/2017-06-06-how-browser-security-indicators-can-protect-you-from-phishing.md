@@ -28,6 +28,22 @@ tags:
 title: How Browser Security Indicators Can Protect You from Phishing
 
 
+authorProfiles:
+  - name: Kirk Hall
+    organization: Entrust
+    role: Director, Policy & Compliance
+    website: https://www.entrust.com/
+    social:
+      linkedin: https://www.linkedin.com/in/kirk-hall-30098965/
+    assetdirectory: images/members/entrust
+  - name: Chris Bailey
+    organization: Entrust
+    role: VP of Strategy and Business Development – Certificate Services
+    website: https://www.entrust.com/
+    social:
+      x: null
+      linkedin: null
+    assetdirectory: images/members/entrust
 ---
 ---
 The media is full of stories about how phishing sites are moving rapidly to encryption using anonymous, free DV certificates they use to imitate login pages for popular sites, such as _**paypal.com**_.

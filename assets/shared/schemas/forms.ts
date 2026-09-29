@@ -1,0 +1,317 @@
+import { z } from "zod";
+import { databaseIdSchema } from "./identifiers";
+import { eventSlugParamsSchema, successResponseSchema, utcInstantSchema } from "./api-common";
+import { formFieldOptionsSchema, formFieldRulesSchema } from "./form-field-rules";
+import { addDuplicateStringIssues } from "./refinements";
+import { proposalTypeSchema } from "./proposal-management";
+import { eventDayReadModelSchema, eventSummarySchema, requiredTermSchema } from "./event-read-models";
+import { eventRegistrationPolicySchema } from "./event-series";
+import { groupIdSchema } from "./groups";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+
+export {
+  eventAttendanceOptionSchema,
+  eventDayReadModelSchema,
+  eventSummarySchema,
+  requiredTermSchema,
+} from "./event-read-models";
+import { publicOperation } from "./route-contract";
+export type { EventDayReadModel, EventSummary, RequiredTerm } from "./event-read-models";
+
+export const FORM_PURPOSES = [
+  "event_registration",
+  "proposal_submission",
+  "survey",
+  "feedback",
+  "application",
+] as const;
+export const formPurposeSchema = z.enum(FORM_PURPOSES);
+export type FormPurpose = z.infer<typeof formPurposeSchema>;
+
+export const EVENT_FORM_PURPOSES = ["event_registration", "proposal_submission"] as const;
+export const eventFormsPurposeSchema = z.enum(EVENT_FORM_PURPOSES);
+export type EventFormsPurpose = z.infer<typeof eventFormsPurposeSchema>;
+
+export const FORM_STATUSES = ["active", "inactive", "archived"] as const;
+export const formStatusSchema = z.enum(FORM_STATUSES);
+export type FormStatus = z.infer<typeof formStatusSchema>;
+
+export const FORM_FIELD_TYPES = [
+  "text",
+  "textarea",
+  "select",
+  "multi_select",
+  "boolean",
+  "number",
+  "date",
+  "email",
+  "url",
+] as const;
+export const formFieldTypeSchema = z.enum(FORM_FIELD_TYPES);
+export type FormFieldType = z.infer<typeof formFieldTypeSchema>;
+
+/**
+ * Optional server-owned option catalogs for choice fields. The source name is
+ * deliberately a small, typed vocabulary while the database column remains
+ * open text so adding a catalog does not require a table rebuild.
+ */
+export const FORM_FIELD_OPTION_SOURCES = ["active_working_groups"] as const;
+export const formFieldOptionSourceSchema = z.enum(FORM_FIELD_OPTION_SOURCES);
+export type FormFieldOptionSource = z.infer<typeof formFieldOptionSourceSchema>;
+
+/** Canonical form-authoring field input shared by every management context. */
+export const formFieldInputSchema = z
+  .object({
+    id: databaseIdSchema.optional(),
+    key: z
+      .string()
+      .trim()
+      .min(1)
+      .max(80)
+      .regex(/^[a-z][a-z0-9_]*$/),
+    label: z.string().trim().min(1).max(200),
+    fieldType: formFieldTypeSchema,
+    required: z.boolean().default(false),
+    sortOrder: z.number().int().min(0).max(9999).default(0),
+    options: formFieldOptionsSchema.optional(),
+    optionSource: formFieldOptionSourceSchema.nullable().optional(),
+    validation: formFieldRulesSchema.optional(),
+  })
+  .superRefine((field, context) => {
+    if (!field.optionSource) return;
+    if (field.fieldType !== "select" && field.fieldType !== "multi_select") {
+      context.addIssue({
+        code: "custom",
+        path: ["optionSource"],
+        message: "Dynamic option sources are only supported for select fields",
+      });
+    }
+    if (field.options && field.options.length > 0) {
+      context.addIssue({
+        code: "custom",
+        path: ["options"],
+        message: "A field cannot use static options and a dynamic option source together",
+      });
+    }
+  });
+
+/** Reused when a focused form context narrows the canonical creation shape. */
+export function addDuplicateFormFieldIssues(
+  value: { fields?: Array<{ key: string }> },
+  context: z.RefinementCtx,
+): void {
+  addDuplicateStringIssues(value.fields ?? [], context, {
+    value: (field) => field.key,
+    path: (index) => ["fields", index, "key"],
+    label: "Field key",
+  });
+}
+
+/**
+ * Canonical editable form shape before the cross-field duplicate-key policy.
+ * Focused management contexts compose this object rather than copying its
+ * fields, then apply the same policy after narrowing `purpose`.
+ */
+export const formDefinitionCreateBaseSchema = z.object({
+  key: z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .regex(/^[a-z][a-z0-9-]*$/),
+  purpose: formPurposeSchema,
+  title: z.string().trim().min(2).max(200),
+  description: z.string().trim().min(2).max(1000).optional(),
+  status: formStatusSchema.default("active"),
+  fields: z.array(formFieldInputSchema).max(50).default([]),
+});
+
+/** Canonical editable form definition; placement ownership is supplied by the route context. */
+export const formDefinitionCreateSchema = formDefinitionCreateBaseSchema.superRefine(addDuplicateFormFieldIssues);
+
+export const formDefinitionUpdateSchema = z
+  .object({
+    title: z.string().trim().min(2).max(200).optional(),
+    description: z.string().trim().min(2).max(1000).nullable().optional(),
+    status: formStatusSchema.optional(),
+    fields: z.array(formFieldInputSchema).max(50).optional(),
+  })
+  .superRefine(addDuplicateFormFieldIssues);
+
+export type FormDefinitionCreateInput = z.infer<typeof formDefinitionCreateSchema>;
+export type FormDefinitionUpdateInput = z.infer<typeof formDefinitionUpdateSchema>;
+
+/** Canonical form-field read model shared by API responses and frontends. */
+export const formFieldDefinitionSchema = z.object({
+  id: databaseIdSchema,
+  key: z.string(),
+  label: z.string(),
+  fieldType: formFieldTypeSchema,
+  required: z.boolean(),
+  options: formFieldOptionsSchema.nullable(),
+  optionSource: formFieldOptionSourceSchema.nullable(),
+  validation: formFieldRulesSchema.nullable(),
+  sortOrder: z.number(),
+  updatedAt: z.string(),
+  archivedAt: z.string().nullable(),
+});
+
+/** The common form projection embedded in registration and proposal detail responses. */
+export const activeFormSummarySchema = z.object({
+  id: databaseIdSchema,
+  title: z.string(),
+  description: z.string().nullable(),
+  fields: z.array(formFieldDefinitionSchema),
+});
+
+export type FormFieldDefinition = z.infer<typeof formFieldDefinitionSchema>;
+export type ActiveFormSummary = z.infer<typeof activeFormSummarySchema>;
+
+export const FORM_PLACEMENT_CONTEXT_TYPES = ["installation", "group", "event", "organization"] as const;
+export const formPlacementContextTypeSchema = z.enum(FORM_PLACEMENT_CONTEXT_TYPES);
+export const formPlacementSchema = z.object({
+  id: databaseIdSchema,
+  formId: databaseIdSchema,
+  ownerGroupId: groupIdSchema.nullable(),
+  contextType: formPlacementContextTypeSchema,
+  contextRef: z.string().nullable(),
+  audience: z.string().trim().min(1).max(100),
+  active: z.boolean(),
+  opensAt: z.string().nullable(),
+  closesAt: z.string().nullable(),
+  createdAt: z.string(),
+  updatedAt: z.string(),
+});
+export type FormPlacement = z.infer<typeof formPlacementSchema>;
+const formPlacementInputShape = {
+  ownerGroupId: groupIdSchema.nullable(),
+  contextType: formPlacementContextTypeSchema,
+  contextRef: z.string().trim().min(1).max(200).nullable(),
+  audience: z.string().trim().min(1).max(100),
+  active: z.boolean(),
+  opensAt: utcInstantSchema.nullable().optional(),
+  closesAt: utcInstantSchema.nullable().optional(),
+};
+
+function addPlacementIssues(
+  placement: {
+    contextType?: FormPlacement["contextType"];
+    contextRef?: string | null;
+    opensAt?: string | null;
+    closesAt?: string | null;
+  },
+  context: z.RefinementCtx,
+): void {
+  if (placement.contextType === "installation" && placement.contextRef !== undefined && placement.contextRef !== null) {
+    context.addIssue({
+      code: "custom",
+      path: ["contextRef"],
+      message: "Installation placements cannot have a context reference",
+    });
+  }
+  if (placement.contextType && placement.contextType !== "installation" && placement.contextRef === null) {
+    context.addIssue({ code: "custom", path: ["contextRef"], message: "This placement context requires a reference" });
+  }
+  if (placement.opensAt && placement.closesAt && placement.opensAt >= placement.closesAt) {
+    context.addIssue({ code: "custom", path: ["closesAt"], message: "Closing time must be after opening time" });
+  }
+}
+
+export const formPlacementCreateSchema = z
+  .object(formPlacementInputShape)
+  .extend({
+    ownerGroupId: formPlacementInputShape.ownerGroupId.default(null),
+    contextRef: formPlacementInputShape.contextRef.default(null),
+    active: formPlacementInputShape.active.default(true),
+  })
+  .superRefine(addPlacementIssues);
+export const formPlacementUpdateSchema = z.object(formPlacementInputShape).partial().superRefine(addPlacementIssues);
+/**
+ * The window a placement accepts responses in, as a shape a caller can extend.
+ *
+ * A shape rather than a schema because the schemas that carry it also carry
+ * something else — an event's optimistic revision, say — and a refined object
+ * schema cannot be extended or picked from once its rules are attached.
+ * `addPlacementIssues` is exported alongside so whoever composes it keeps the
+ * one rule that matters: a close must be after its open.
+ */
+export const formSubmissionWindowShape = {
+  opensAt: formPlacementInputShape.opensAt,
+  closesAt: formPlacementInputShape.closesAt,
+  active: formPlacementInputShape.active.optional(),
+};
+
+export { addPlacementIssues };
+
+export const formPlacementPolicyUpdateSchema = z
+  .strictObject(formPlacementInputShape)
+  .omit({ ownerGroupId: true })
+  .partial()
+  .superRefine(addPlacementIssues);
+export const formPlacementsListQuerySchema = listQuerySchema(["audience", "opens_at", "created_at"] as const).extend({
+  ownerGroupId: groupIdSchema.optional(),
+  contextType: formPlacementContextTypeSchema.optional(),
+  contextRef: z.string().trim().min(1).max(200).optional(),
+  active: z.enum(["true", "false"]).optional(),
+});
+export const formPlacementsListResponseSchema = paginatedResponseSchema("placements", formPlacementSchema);
+export const formPlacementCreateResponseSchema = successResponseSchema.extend({ placement: formPlacementSchema });
+export type FormPlacementCreateInput = z.infer<typeof formPlacementCreateSchema>;
+export type FormPlacementUpdateInput = z.infer<typeof formPlacementUpdateSchema>;
+export type FormPlacementsListQuery = z.infer<typeof formPlacementsListQuerySchema>;
+
+export const eventAudienceSchema = z.enum(["attendee", "speaker"]);
+
+export const eventFormPlacementParamsSchema = eventSlugParamsSchema.extend({
+  purpose: eventFormsPurposeSchema,
+});
+
+export const eventFormsResponseSchema = z.object({
+  event: eventSummarySchema,
+  registrationPolicy: eventRegistrationPolicySchema,
+  purpose: eventFormsPurposeSchema,
+  form: activeFormSummarySchema.extend({ key: z.string() }).nullable(),
+  requiredTerms: z.array(requiredTermSchema),
+  allowedSessionTypes: z.array(proposalTypeSchema).max(20),
+  eventDays: z.array(eventDayReadModelSchema),
+});
+
+export const eventTermsQuerySchema = z.object({ audience: eventAudienceSchema.default("attendee") });
+export const eventTermsResponseSchema = z.object({
+  event: eventFormsResponseSchema.shape.event,
+  audience: eventAudienceSchema,
+  terms: z.array(requiredTermSchema),
+});
+
+export const eventTermsGetRouteSchema = {
+  ...publicOperation(),
+  tags: ["Events"],
+  summary: "Get event terms",
+  description: "Returns the required terms and conditions for a given event.",
+  request: { params: eventSlugParamsSchema, query: eventTermsQuerySchema },
+  responses: {
+    "200": {
+      description: "Returns the terms.",
+      content: { "application/json": { schema: eventTermsResponseSchema } },
+    },
+  },
+};
+
+export type EventFormsResponse = z.infer<typeof eventFormsResponseSchema>;
+export const eventFormPlacementGetRouteSchema = {
+  ...publicOperation(),
+  tags: ["Events"],
+  summary: "Get an event form placement",
+  description: "Returns the form placed for one event purpose with its terms, session types, and attendance options.",
+  request: {
+    params: eventFormPlacementParamsSchema,
+  },
+  responses: {
+    "200": {
+      description: "The resolved event form placement.",
+      content: { "application/json": { schema: eventFormsResponseSchema } },
+    },
+    "400": { description: "Invalid form purpose." },
+    "404": { description: "Event not found." },
+  },
+};

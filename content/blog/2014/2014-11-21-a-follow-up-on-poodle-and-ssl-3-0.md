@@ -36,6 +36,15 @@ title: A Follow-up on POODLE and SSL 3.0
 aliases:
 - a-follow-up-on-poodle-and-ssl-3-0
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 In October 2014, [Google announced POODLE][1], an SSL 3.0 protocol attack.
 

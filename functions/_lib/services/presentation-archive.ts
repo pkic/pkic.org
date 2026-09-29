@@ -68,9 +68,12 @@ function archiveEntryName(
 export async function listEventPresentations(
   db: DatabaseLike,
   eventId: string,
-  options: { includeAllVersions?: boolean } = {},
+  options: { includeAllVersions?: boolean; proposalIds?: readonly string[] } = {},
 ): Promise<EventPresentationArchiveItem[]> {
   const currentVersionCondition = options.includeAllVersions ? "" : "AND pv.is_current = 1";
+  const proposalCondition = options.proposalIds?.length
+    ? `AND sp.id IN (${options.proposalIds.map(() => "?").join(", ")})`
+    : "";
   const rows = await all<EventPresentationArchiveRow>(
     db,
     `SELECT
@@ -88,10 +91,11 @@ export async function listEventPresentations(
       AND pv.deleted_at IS NULL
       ${currentVersionCondition}
      WHERE sp.event_id = ?
+       ${proposalCondition}
        AND sp.status = 'accepted'
        AND sp.deleted_at IS NULL
      ORDER BY LOWER(sp.title), sp.id, pv.version_number`,
-    [eventId],
+    [eventId, ...(options.proposalIds ?? [])],
   );
 
   return rows.map((row) => ({

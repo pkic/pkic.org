@@ -11,4 +11,8 @@
 - Use `CHECK` only for durable structural invariants. Do not freeze changeable statuses, categories, roles, or feature policy into a table definition.
 - Use reference tables when database enforcement of an evolvable vocabulary is valuable; otherwise enforce it through the shared domain schema on every write path with Vitest coverage.
 - Add required constraints and indexes when the schema is first introduced.
+- Store instants as `TEXT` ISO-8601 UTC with an explicit `Z`. In SQL use `strftime('%Y-%m-%dT%H:%M:%fZ','now')`.
+- Never use `datetime('now')`, `date('now')`, or `CURRENT_TIMESTAMP` for a stored instant, including in seed rows and backfills. They produce a space-separated value with no `Z`, and because these columns are compared as text, `' '` sorts before `'T'`: every such row then sorts ahead of every application-written row and drops out of ISO range filters. This silently breaks the shared `ORDER BY created_at, id` pagination tie-break.
+- Store a local wall clock as a UTC instant plus a sibling `TEXT` column holding the IANA time zone identifier. Do not store fixed offsets, abbreviations, or a naive local string.
+- Store calendar dates as `TEXT` `YYYY-MM-DD` and keep them distinct from instants.
 - Migrations must apply to an empty database and a production-shaped fixture. Importers must target only the final schema.

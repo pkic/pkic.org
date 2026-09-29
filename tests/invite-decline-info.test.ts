@@ -5,7 +5,11 @@ import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { run } from "../functions/_lib/db/queries";
 import { createInvite } from "../functions/_lib/services/invites";
 import { onRequestGet as declineInfoGet } from "../functions/api/v1/invites/[token]/decline-info";
-import { onRequestPost as declinePost } from "../functions/api/v1/invites/[token]/decline";
+import app from "../functions/router";
+
+function declinePost(c: any): Promise<Response> {
+  return app.fetch(c.req.raw, c.env, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
+}
 
 describe("invite decline-info", () => {
   beforeEach(async () => {
@@ -19,7 +23,6 @@ describe("invite decline-info", () => {
       inviteeEmail: "info-valid@example.test",
       inviteeFirstName: "Alice",
       inviteType: "attendee",
-      ttlHours: 24,
       signingSecret: "test-signing-secret",
     });
 
@@ -40,7 +43,6 @@ describe("invite decline-info", () => {
       eventId,
       inviteeEmail: "info-declined@example.test",
       inviteType: "attendee",
-      ttlHours: 24,
       signingSecret: "test-signing-secret",
     });
 
@@ -79,14 +81,13 @@ describe("invite decline-info", () => {
     expect(data.status).toBe("invalid");
   });
 
-  it("keeps decline-info valid even when expires_at is in the past", async () => {
+  it("reports decline-info as expired when a sent invite's database expiry has passed", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
     const { token, invite } = await createInvite(env.DB, {
       eventId,
       inviteeEmail: "decline-past-expiry@example.test",
       inviteType: "attendee",
-      ttlHours: 24,
       signingSecret: "test-signing-secret",
     });
 
@@ -98,7 +99,7 @@ describe("invite decline-info", () => {
 
     expect(response.status).toBe(200);
     const data = (await response.json()) as { status: string };
-    expect(data.status).toBe("valid");
+    expect(data.status).toBe("expired");
   });
 
   it("stores npsScore when included in POST", async () => {
@@ -108,7 +109,6 @@ describe("invite decline-info", () => {
       eventId,
       inviteeEmail: "nps-test@example.test",
       inviteType: "attendee",
-      ttlHours: 24,
       signingSecret: "test-signing-secret",
     });
 

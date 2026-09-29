@@ -26,6 +26,15 @@ tags:
 title: What Will Happen With SHA-1 and Browser Users on January 1st, 2016?
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 On January 1, 2016, the public trust certification authorities (CAs) will stop issuing SHA-1 signed SSL/TLS certificates. What will happen?
 

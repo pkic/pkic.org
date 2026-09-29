@@ -26,6 +26,15 @@ tags:
 title: Stricter Standards for SSL Server Test Coming in 2017
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 This is a good time to offer a reminder that the CASC has a great tool for secure server testing, the [SSL Server Test][1]. The tool grades your server installation and reviews the: certificate, protocol support, key exchange and cipher strength for security against standards and known vulnerabilities.
 

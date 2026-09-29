@@ -324,8 +324,11 @@ body {
     font-weight: 900;
   }
 
-  // LinkedIn link is not clickable in a static image — hide it
-  .person-card-linkedin {
+  // A link is not clickable in a static image, so it is not a link — it is
+  // ink spent on something the viewer cannot use. This hid the class the card
+  // used to write; the card writes the shared marked list now, and hiding the
+  // old name hid nothing.
+  .pk-link-list {
     display: none;
   }
 }

@@ -1,7 +1,16 @@
+/**
+@covers event.3.2
+ * @covers event.3.2.a
+ * @covers event.3.6
+ * @covers event.3.8
+ */
 import { mkdirSync, readFileSync } from "node:fs";
 import { expect, test } from "@playwright/test";
 import type { CapturedEmail } from "./global-setup";
 import type { Page } from "@playwright/test";
+import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { expectStaffSessionLanding, signInAsE2eStaff } from "./helpers/staff-auth";
+import { tab } from "./helpers/tabs";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 
@@ -10,19 +19,49 @@ function sendgridServer(): string {
 }
 
 async function setNativeChecked(page: Page, selector: string): Promise<void> {
-  const el = page.locator(selector);
-  await el.scrollIntoViewIfNeeded();
-  await el.evaluate((input) => {
-    (input as HTMLInputElement).click();
-  });
+  const input = page.locator(selector);
+  await expect(input).toHaveCount(1);
+  const id = await input.getAttribute("id");
+  const label = id ? page.locator(`label[for="${id}"]`) : input.locator("xpath=ancestor::label[1]");
+  if (await label.count()) {
+    await label.click();
+  } else {
+    await input.check();
+  }
+  await expect(input).toBeChecked();
 }
 
-async function clickConsentCard(page: Page, text: string): Promise<void> {
-  const card = page.locator("div.event-flow-consent-card").filter({ hasText: text });
-  await card.scrollIntoViewIfNeeded();
-  await card.evaluate((element) => {
-    (element as HTMLElement).click();
-  });
+/*
+ * Consent terms.
+ *
+ * These used to be a `div[role=checkbox]` with a click handler, located by the
+ * `event-flow-consent-card` class and driven with a synthetic click that
+ * asserted nothing about the result. `ConsentCard.tsx` renders a real
+ * `<input type="checkbox">` with a real `<label>` now, so a term is addressed
+ * by its accessible name and `check()` both drives it and asserts it ended up
+ * checked.
+ */
+async function agreeToTerm(page: Page, labelText: string): Promise<void> {
+  const term = page.getByRole("checkbox", { name: new RegExp(labelText.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"), "i") });
+  await expect(term).toHaveCount(1);
+  await term.check();
+}
+
+/*
+ * Every term of a flow at once, for the speaker steps that gate on all of them.
+ *
+ * `data-term-key` is the flow's own record of which term a card is — the one
+ * attribute `ConsentCard.tsx` documents as fixed — so it, and not the card's
+ * styling, is what identifies a consent here.
+ */
+async function agreeToAllTerms(page: Page): Promise<void> {
+  const terms = page.locator("[data-term-key] input[type='checkbox']");
+  await terms.first().waitFor({ state: "visible", timeout: 10_000 });
+  const count = await terms.count();
+  expect(count).toBeGreaterThan(0);
+  for (let i = 0; i < count; i++) {
+    await terms.nth(i).check();
+  }
 }
 
 // ── Error and network monitoring ──────────────────────────────────────────────
@@ -239,12 +278,14 @@ async function fillRegistrationStep1(
   page: Page,
   values: { firstName: string; lastName: string; email: string },
 ): Promise<void> {
+  await expect(page.locator("[data-event-registration] [data-step-next]")).toBeEnabled();
+  await expect(page.locator("[data-event-registration] form")).toBeVisible();
   await page.getByLabel("First name").fill(values.firstName);
   await page.getByLabel("Last name").fill(values.lastName);
   await page.getByLabel("Work email").fill(values.email);
+  await expect(page.getByLabel("Work email")).toHaveValue(values.email);
   await page.getByRole("button", { name: /Continue/i }).click();
-  // Wait for step 2 day-attendance inputs to be rendered by Preact (API-driven)
-  await page.locator("input[id^='dayAttendance-']").first().waitFor({ state: "attached", timeout: 15_000 });
+  await expect(page.locator("[data-day-attendance] label").first()).toBeVisible({ timeout: 15_000 });
 }
 
 async function fillRegistrationStep2(page: Page): Promise<void> {
@@ -264,18 +305,24 @@ async function fillRegistrationStep3(page: Page, options?: { dietaryRestriction?
   await page.getByRole("button", { name: /Continue/i }).click();
 }
 
-async function fillRegistrationStep4(page: Page, expectedEmail?: string): Promise<void> {
+async function fillRegistrationStep3WithoutQuestions(page: Page): Promise<void> {
+  await page.getByRole("button", { name: /Continue/i }).click();
+}
+
+async function fillRegistrationStep4(page: Page, expectedEmail?: string, expectProfileDetails = true): Promise<void> {
   await expect(page.locator("[data-registration-review]")).toBeVisible();
   if (expectedEmail) {
     await expect(page.locator("[data-registration-review-email]")).toHaveText(expectedEmail);
     await expect(page.locator("label[for='registration-email-review-confirmed']")).toContainText(expectedEmail);
   }
   await expect(page.locator("[data-registration-review]")).toContainText("Contact");
-  await expect(page.locator("[data-registration-review]")).toContainText("Profile details");
+  if (expectProfileDetails) {
+    await expect(page.locator("[data-registration-review]")).toContainText("Profile details");
+  }
   await setNativeChecked(page, "#registration-email-review-confirmed");
-  await clickConsentCard(page, "privacy policy");
-  await clickConsentCard(page, "code of conduct");
-  await clickConsentCard(page, "photos and videos");
+  await agreeToTerm(page, "privacy policy");
+  await agreeToTerm(page, "code of conduct");
+  await agreeToTerm(page, "photos and videos");
   await page.getByRole("button", { name: /Submit registration/i }).click();
 }
 
@@ -297,9 +344,9 @@ async function fillInviteRegistration(
   await expect(page.locator("[data-registration-review]")).toContainText("Interests (topics)");
   await expect(page.locator("[data-registration-review]")).toContainText("None provided");
   await setNativeChecked(page, "#registration-email-review-confirmed");
-  await clickConsentCard(page, "privacy policy");
-  await clickConsentCard(page, "code of conduct");
-  await clickConsentCard(page, "photos and videos");
+  await agreeToTerm(page, "privacy policy");
+  await agreeToTerm(page, "code of conduct");
+  await agreeToTerm(page, "photos and videos");
   await page.getByRole("button", { name: /Submit registration/i }).click();
 }
 
@@ -309,13 +356,7 @@ async function fillProposal(
 ): Promise<void> {
   const type = options.type ?? "talk";
   // Step 1: accept all speaker consent terms
-  const consentCards = page.locator("div.event-flow-consent-card");
-  await consentCards.first().waitFor({ state: "visible", timeout: 10_000 });
-  const count = await consentCards.count();
-  for (let i = 0; i < count; i++) {
-    await consentCards.nth(i).scrollIntoViewIfNeeded();
-    await consentCards.nth(i).evaluate((el) => (el as HTMLElement).click());
-  }
+  await agreeToAllTerms(page);
   await page.getByRole("button", { name: /Continue/i }).click();
   await page.getByLabel("First name").fill("Priya");
   await page.getByLabel("Last name").fill("Proposal");
@@ -346,17 +387,20 @@ async function fillProposal(
   await page.getByRole("button", { name: /Continue/i }).click();
 
   if (options.proposerPresenting) {
-    const proposerCard = page.locator(".proposal-speaker-card").filter({ hasText: "You — as a speaker" });
+    // Located by the region name the card exposes, not by a class: the class
+    // was a legacy stylesheet's and left with the Bootstrap migration, and a
+    // name is what a reader actually uses to tell the cards apart.
+    const proposerCard = page.getByRole("region", { name: "You — as a speaker", exact: true });
     await expect(proposerCard).toBeVisible();
     await expect(proposerCard.locator('input[name="proposerSpeakerRole"][value="moderator"]')).toBeChecked();
     await proposerCard
-      .locator('textarea[name="proposerBio"]')
+      .getByRole("textbox", { name: "Bio", exact: true })
       .fill("Moderator biography with enough detail to satisfy validation for this panel proposal.");
   }
 
   if (options.addPanelist) {
     await page.locator("[data-add-speaker]").click();
-    const panelistCard = page.locator(".proposal-speaker-card").filter({ hasText: "Speaker 1" });
+    const panelistCard = page.getByRole("region", { name: "Speaker 1", exact: true });
     await expect(panelistCard).toBeVisible();
     await panelistCard.locator('input[name="speaker.1.firstName"]').fill("Panelist");
     await panelistCard.locator('input[name="speaker.1.lastName"]').fill("One");
@@ -367,109 +411,164 @@ async function fillProposal(
       .locator('input[name="speaker.1.role"][value="panelist"]')
       .evaluate((el) => (el as HTMLInputElement).click());
     await panelistCard
-      .locator('textarea[name="speaker.1.bio"]')
+      .getByRole("textbox", { name: "Bio", exact: true })
       .fill("Panelist biography with enough detail to satisfy validation and represent a real panel participant.");
   }
 }
 
-async function signInAsAdmin(page: Page): Promise<void> {
-  await page.goto("/admin/");
-  await expect(page.locator("#form-magic")).toBeVisible({ timeout: 10_000 });
-
-  await page.locator("#inp-email").fill("admin@pkic.org");
-  await page.locator("#btn-send").click();
-  await expect(page.locator("#magic-sent")).toBeVisible({ timeout: 10_000 });
-
-  const magicEmail = await waitForEmail("admin@pkic.org", "sign-in");
-  const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
-
-  await page.goto(magicUrl);
-  await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
+async function signInAsAdmin(page: Page, scope: "browser-waitlist" | "browser-presentation"): Promise<void> {
+  await signInAsE2eStaff(page, e2eAdminEmail(scope));
 }
 
-async function setEventDayInPersonCapacity(
-  page: Page,
-  eventSlug: string,
-  dayDate: string,
-  capacity: number,
-): Promise<void> {
+async function createPortalWaitlistEvent(page: Page): Promise<{ eventId: string; slug: string; groupId: string }> {
+  const groupId = "20000000-0000-4000-8000-000000000001";
+  const slug = `e2e-waitlist-${Date.now()}-${test.info().workerIndex}`;
   const result = await page.evaluate(
-    async ({ eventSlug: slug, dayDate: date, capacity: nextCapacity }) => {
-      const headers = {
-        "content-type": "application/json",
+    async ({ groupId, slug }) => {
+      type ApiBody = {
+        event?: { id: string; updatedAt: string };
+        eventUpdatedAt?: string;
+        error?: unknown;
       };
-
-      const getResponse = await fetch(`/api/v1/admin/events/${slug}/days`, { headers, credentials: "same-origin" });
-      const getBody = (await getResponse.json()) as {
-        days?: Array<{
-          date: string;
-          label: string | null;
-          startsAt: string | null;
-          endsAt: string | null;
-          sortOrder: number;
-          attendanceOptions: Array<{ value: string; label: string; capacity?: number | null }>;
-        }>;
-      };
-
-      if (!getResponse.ok || !getBody.days) {
-        return { ok: false, getStatus: getResponse.status, putStatus: 0, reason: "get_failed" };
+      async function request(path: string, init: RequestInit): Promise<{ status: number; body: ApiBody }> {
+        const response = await fetch(path, {
+          ...init,
+          headers: { "content-type": "application/json", ...(init.headers ?? {}) },
+          credentials: "same-origin",
+        });
+        const text = await response.text();
+        const body = (() => {
+          try {
+            return JSON.parse(text) as ApiBody;
+          } catch {
+            return { error: text };
+          }
+        })();
+        return { status: response.status, body };
       }
 
-      const days = getBody.days.map((day) => ({
-        date: day.date,
-        label: day.label ?? undefined,
-        startTime: day.startsAt
-          ? new Intl.DateTimeFormat("en-GB", {
-              timeZone: "Europe/Amsterdam",
-              hour: "2-digit",
-              minute: "2-digit",
-              hourCycle: "h23",
-            }).format(new Date(day.startsAt))
-          : undefined,
-        endTime: day.endsAt
-          ? new Intl.DateTimeFormat("en-GB", {
-              timeZone: "Europe/Amsterdam",
-              hour: "2-digit",
-              minute: "2-digit",
-              hourCycle: "h23",
-            }).format(new Date(day.endsAt))
-          : undefined,
-        sortOrder: day.sortOrder,
-        attendanceOptions: day.attendanceOptions.map((option) =>
-          option.value === "in_person" && day.date === date ? { ...option, capacity: nextCapacity } : option,
-        ),
-      }));
-
-      const putResponse = await fetch(`/api/v1/admin/events/${slug}/days`, {
-        method: "PUT",
-        headers,
-        credentials: "same-origin",
-        body: JSON.stringify({ days }),
+      const created = await request(`/api/v1/groups/${groupId}/events`, {
+        method: "POST",
+        body: JSON.stringify({
+          slug,
+          name: `E2E waitlist event ${slug}`,
+          timezone: "Europe/Amsterdam",
+          startsAt: "2026-12-01T09:00:00.000Z",
+          endsAt: "2026-12-03T17:00:00.000Z",
+          profileKey: "workshop",
+          registrationPolicy: "no_registration",
+          inviteLimitAttendee: 5,
+        }),
       });
+      if (created.status !== 201 || !created.body?.event?.id) {
+        throw new Error(`Portal event creation failed (${created.status}): ${JSON.stringify(created.body)}`);
+      }
+      const eventId = created.body.event.id as string;
 
-      const putBody = (await putResponse.json()) as {
-        days?: Array<{ date: string; attendanceOptions: Array<{ value: string; capacity?: number | null }> }>;
-      };
-      const updatedCapacity = putBody.days
-        ?.find((day) => day.date === date)
-        ?.attendanceOptions.find((option) => option.value === "in_person")?.capacity;
+      const terms = await request(`/api/v1/groups/${groupId}/events/${eventId}/terms`, {
+        method: "PUT",
+        body: JSON.stringify({
+          expectedUpdatedAt: created.body.event.updatedAt,
+          configuration: {
+            attendee: [
+              { termKey: "privacy_policy", version: "1", required: true, displayText: "I agree to the privacy policy" },
+              {
+                termKey: "code_of_conduct",
+                version: "1",
+                required: true,
+                displayText: "I agree to the code of conduct",
+              },
+              {
+                termKey: "photos_and_videos",
+                version: "1",
+                required: true,
+                displayText: "I agree to photos and videos",
+              },
+            ],
+            speaker: [],
+            presentation: [],
+          },
+        }),
+      });
+      if (terms.status !== 200 || !terms.body?.eventUpdatedAt) {
+        throw new Error(`Portal event terms failed (${terms.status}): ${JSON.stringify(terms.body)}`);
+      }
 
-      return {
-        ok: putResponse.ok,
-        getStatus: getResponse.status,
-        putStatus: putResponse.status,
-        updatedCapacity: updatedCapacity ?? null,
-        reason: putResponse.ok ? null : "put_failed",
-      };
+      const days = await request(`/api/v1/groups/${groupId}/events/${eventId}/days`, {
+        method: "PUT",
+        body: JSON.stringify({
+          expectedUpdatedAt: terms.body.eventUpdatedAt,
+          configuration: {
+            days: [
+              {
+                date: "2026-12-01",
+                label: "Tuesday 1 December 2026",
+                startTime: "09:00",
+                endTime: "17:00",
+                sortOrder: 0,
+                attendanceOptions: [
+                  { value: "in_person", label: "In person", capacity: 1 },
+                  { value: "on_demand", label: "On demand" },
+                ],
+              },
+              {
+                date: "2026-12-02",
+                label: "Wednesday 2 December 2026",
+                startTime: "09:00",
+                endTime: "17:00",
+                sortOrder: 1,
+                attendanceOptions: [{ value: "on_demand", label: "On demand" }],
+              },
+              {
+                date: "2026-12-03",
+                label: "Thursday 3 December 2026",
+                startTime: "09:00",
+                endTime: "17:00",
+                sortOrder: 2,
+                attendanceOptions: [{ value: "on_demand", label: "On demand" }],
+              },
+            ],
+          },
+        }),
+      });
+      if (days.status !== 200 || !days.body?.eventUpdatedAt) {
+        throw new Error(`Portal event days failed (${days.status}): ${JSON.stringify(days.body)}`);
+      }
+
+      const settings = await request(`/api/v1/groups/${groupId}/events/${eventId}/registration-settings`, {
+        method: "PUT",
+        body: JSON.stringify({
+          expectedUpdatedAt: days.body.eventUpdatedAt,
+          registrationPolicy: "public",
+        }),
+      });
+      if (settings.status !== 200) {
+        throw new Error(
+          `Portal event registration settings failed (${settings.status}): ${JSON.stringify(settings.body)}`,
+        );
+      }
+      return { eventId, slug };
     },
-    { eventSlug, dayDate, capacity },
+    { groupId, slug },
   );
-
-  expect(result.ok, `admin day capacity update failed: ${JSON.stringify(result)}`).toBe(true);
-  expect(result.updatedCapacity).toBe(capacity);
+  return { ...result, groupId };
 }
 
 test.describe("browser workflows", () => {
+  test("places agenda sessions in their scheduled rows without inline styles", async ({ page }) => {
+    await page.goto("/events/2026/pqc-conference-amsterdam-nl/agenda/");
+    const grid = page.locator(".agenda-grid").first();
+    await expect(grid).toBeVisible();
+    await expect
+      .poll(() => grid.evaluate((element) => getComputedStyle(element).gridTemplateRows.split(" ").length))
+      .toBeGreaterThan(3);
+    const firstTime = grid.locator(".agenda-time").first();
+    const firstSession = grid.locator(".agenda-session").first();
+    expect(await firstTime.evaluate((element) => getComputedStyle(element).gridRowStart)).toBe("1");
+    expect(await firstSession.evaluate((element) => getComputedStyle(element).gridColumnStart)).toBe("2");
+    expect(await firstSession.getAttribute("style")).toBeNull();
+  });
+
   test("stops and reloads an agenda recording when its modal closes", async ({ page }) => {
     await setupPage(page);
     const errorMonitor = monitorErrors(page);
@@ -489,7 +588,10 @@ test.describe("browser workflows", () => {
     const watchButton = page.getByRole("button", { name: "Watch", exact: true }).first();
     await watchButton.click();
 
-    const modal = page.locator(".session-modal.show").first();
+    // The session detail is a native <dialog>; an open one is the only visible
+    // dialog on the page, so the role locator is enough and survives the next
+    // restyle in a way a class selector would not.
+    const modal = page.getByRole("dialog").first();
     await expect(modal).toBeVisible();
     const iframe = modal.locator('iframe[src*="youtube"]').first();
     await expect(iframe).toBeVisible();
@@ -498,7 +600,7 @@ test.describe("browser workflows", () => {
     expect(embedUrl).toBeTruthy();
     const requestsBeforeClose = embedRequestCounts.get(embedUrl ?? "") ?? 0;
 
-    await modal.locator('[data-bs-dismiss="modal"]').first().click();
+    await modal.getByRole("button", { name: "Close", exact: true }).first().click();
     await expect(modal).toBeHidden();
     await expect.poll(() => embedRequestCounts.get(embedUrl ?? "") ?? 0).toBeGreaterThan(requestsBeforeClose);
 
@@ -517,73 +619,60 @@ test.describe("browser workflows", () => {
     });
     const screenshot = createScreenshotter(page);
 
-    await signInAsAdmin(page);
-    const eventSlug = "pqc-conference-amsterdam-nl";
-    const dayDate = "2026-12-01";
-    const restoredCapacity = 800;
+    await signInAsAdmin(page, "browser-waitlist");
+    const event = await createPortalWaitlistEvent(page);
+    await page.goto(`/events/2026/${event.slug}/register/`);
+    await fillRegistrationStep1(page, {
+      firstName: "Capacity",
+      lastName: "One",
+      email: "capacity-one@example.test",
+    });
+    await fillRegistrationStep2(page);
+    await fillRegistrationStep3WithoutQuestions(page);
+    await fillRegistrationStep4(page, "capacity-one@example.test", false);
 
-    try {
-      await setEventDayInPersonCapacity(page, eventSlug, dayDate, 1);
+    const firstConfirmEmail = await waitForEmail("capacity-one@example.test", "confirm");
+    const firstConfirmationUrl = extractUrlFromEmail(firstConfirmEmail, "/register/confirm");
+    await page.goto(firstConfirmationUrl);
+    await page.getByRole("button", { name: /Confirm my registration/i }).click();
+    await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
 
-      await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
-      await fillRegistrationStep1(page, {
-        firstName: "Capacity",
-        lastName: "One",
-        email: "capacity-one@example.test",
-      });
-      await fillRegistrationStep2(page);
-      await fillRegistrationStep3(page);
-      await fillRegistrationStep4(page, "capacity-one@example.test");
+    await page.goto(`/events/2026/${event.slug}/register/`);
+    await fillRegistrationStep1(page, {
+      firstName: "Capacity",
+      lastName: "Two",
+      email: "capacity-two@example.test",
+    });
+    await fillRegistrationStep2(page);
+    await fillRegistrationStep3WithoutQuestions(page);
+    await fillRegistrationStep4(page, "capacity-two@example.test", false);
 
-      const firstConfirmEmail = await waitForEmail("capacity-one@example.test", "confirm");
-      const firstConfirmationUrl = extractUrlFromEmail(firstConfirmEmail, "/register/confirm");
-      await page.goto(firstConfirmationUrl);
-      await page.getByRole("button", { name: /Confirm my registration/i }).click();
-      await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
+    const secondConfirmEmail = await waitForEmail("capacity-two@example.test", "confirm");
+    const secondConfirmationUrl = extractUrlFromEmail(secondConfirmEmail, "/register/confirm");
+    await page.goto(secondConfirmationUrl);
+    await page.getByRole("button", { name: /Confirm my registration/i }).click();
+    await expect(page.getByRole("heading", { name: /registration is in place/i })).toBeVisible({ timeout: 15_000 });
+    await expect(
+      page.getByText(
+        "Your overall registration is confirmed, but one or more selected in-person days are still pending",
+      ),
+    ).toBeVisible();
+    await screenshot("01-partial-capacity-confirmed");
 
-      await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
-      await fillRegistrationStep1(page, {
-        firstName: "Capacity",
-        lastName: "Two",
-        email: "capacity-two@example.test",
-      });
-      await fillRegistrationStep2(page);
-      await fillRegistrationStep3(page);
-      await fillRegistrationStep4(page, "capacity-two@example.test");
+    const secondRegisteredEmail = await waitForEmail("capacity-two@example.test", "confirmed");
+    const secondManageUrl = extractUrlFromEmail(secondRegisteredEmail, "/register/manage/");
+    await page.goto(secondManageUrl);
 
-      const secondConfirmEmail = await waitForEmail("capacity-two@example.test", "confirm");
-      const secondConfirmationUrl = extractUrlFromEmail(secondConfirmEmail, "/register/confirm");
-      await page.goto(secondConfirmationUrl);
-      await page.getByRole("button", { name: /Confirm my registration/i }).click();
-      await expect(page.getByRole("heading", { name: /registration is in place/i })).toBeVisible({ timeout: 15_000 });
-      await expect(
-        page.getByText(
-          "Your overall registration is confirmed, but one or more selected in-person days are still pending",
-        ),
-      ).toBeVisible();
-      await screenshot("01-partial-capacity-confirmed");
+    await expect(page.locator("[data-manage-status-badge]")).toHaveText(/Confirmed/i, { timeout: 15_000 });
+    await expect(page.locator("[data-manage-status-banner]")).toContainText(
+      "Some day-specific entries still need attention.",
+    );
+    await expect(page.locator("[data-day-waitlist-section]")).toContainText(
+      "Tuesday 1 December 2026: Waiting for in-person seat",
+    );
+    await screenshot("02-partial-capacity-manage-friendly-state");
 
-      const secondRegisteredEmail = await waitForEmail("capacity-two@example.test", "confirmed");
-      const secondManageUrl = extractUrlFromEmail(secondRegisteredEmail, "/register/manage/");
-      const secondManageToken = new URL(secondManageUrl).searchParams.get("token") ?? "";
-
-      await page.goto(
-        `/events/2026/pqc-conference-amsterdam-nl/register/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(secondManageToken)}`,
-      );
-
-      await expect(page.locator("[data-manage-status-badge]")).toHaveText(/Confirmed/i, { timeout: 15_000 });
-      await expect(page.locator("[data-manage-status-banner]")).toContainText(
-        "Some day-specific entries still need attention.",
-      );
-      await expect(page.locator("[data-day-waitlist-section]")).toContainText(
-        "Tuesday 1 December 2026: Waiting for in-person seat",
-      );
-      await screenshot("02-partial-capacity-manage-friendly-state");
-
-      errorMonitor.assertClean();
-    } finally {
-      await setEventDayInPersonCapacity(page, eventSlug, dayDate, restoredCapacity);
-    }
+    errorMonitor.assertClean();
   });
 
   test("covers registration, invite acceptance, confirmation, manage updates, and invite decline", async ({ page }) => {
@@ -799,12 +888,7 @@ test.describe("browser workflows", () => {
     await page.goto(speakerManageRoute);
     await expect(page.getByText(/Please confirm whether you would like to participate/i)).toBeVisible();
     // Accept all speaker consent terms
-    const spkConsentCards2 = page.locator("div.event-flow-consent-card");
-    await spkConsentCards2.first().waitFor({ state: "visible", timeout: 10_000 });
-    for (let i = 0; i < (await spkConsentCards2.count()); i++) {
-      await spkConsentCards2.nth(i).scrollIntoViewIfNeeded();
-      await spkConsentCards2.nth(i).evaluate((el) => (el as HTMLElement).click());
-    }
+    await agreeToAllTerms(page);
     await page.getByRole("button", { name: /Confirm participation/i }).click();
     await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
     await screenshot("04-speaker-participation-confirmed");
@@ -845,7 +929,7 @@ test.describe("browser workflows", () => {
       const fd = new FormData();
       fd.append("file", new File([blob], "headshot.jpg", { type: "image/jpeg" }));
       fd.append("consent", "true");
-      const res = await fetch(`/api/v1/proposals/speaker/${encodeURIComponent(token)}/headshot`, {
+      const res = await fetch(`/api/v1/proposals/speakers/access/${encodeURIComponent(token)}/headshot`, {
         method: "PUT",
         body: fd,
       });
@@ -877,7 +961,7 @@ test.describe("browser workflows", () => {
       const pdfContent =
         "%PDF-1.0\n1 0 obj<</Type /Catalog /Pages 2 0 R>>endobj 2 0 obj<</Type /Pages /Kids [3 0 R] /Count 1>>endobj 3 0 obj<</Type /Page /MediaBox [0 0 3 3]>>endobj\nxref\n0 4\ntrailer<</Size 4/Root 1 0 R>>\n%%EOF";
       const file = new File([pdfContent], "presentation.pdf", { type: "application/pdf" });
-      const res = await fetch(`/api/v1/proposals/speaker/${encodeURIComponent(token)}/presentation`, {
+      const res = await fetch(`/api/v1/proposals/speakers/access/${encodeURIComponent(token)}/presentation`, {
         method: "PUT",
         headers: {
           "content-type": file.type,
@@ -963,8 +1047,8 @@ test.describe("browser workflows", () => {
     const apiResults = await page.evaluate(async () => {
       const fake = encodeURIComponent("FAKE-TOKEN-000000000000000000000000");
       const [getStatus, patchStatus] = await Promise.all([
-        fetch(`/api/v1/registrations/manage/${fake}`).then((r) => r.status),
-        fetch(`/api/v1/registrations/manage/${fake}`, {
+        fetch(`/api/v1/registrations/access/${fake}`).then((r) => r.status),
+        fetch(`/api/v1/registrations/access/${fake}`, {
           method: "PATCH",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({ action: "update", attendanceType: "on_demand" }),
@@ -977,7 +1061,7 @@ test.describe("browser workflows", () => {
 
     // ── 6. Schema validation: SQL-injection in enum field → 400, not 500 ───
     const invalidEnumStatus = await page.evaluate(async (token) => {
-      const res = await fetch(`/api/v1/registrations/manage/${encodeURIComponent(token)}`, {
+      const res = await fetch(`/api/v1/registrations/access/${encodeURIComponent(token)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ action: "update", attendanceType: "'; DROP TABLE registrations; --" }),
@@ -1014,7 +1098,7 @@ test.describe("browser workflows", () => {
     // PATCH a completely fabricated speaker token — must be 4xx
     const isolationStatus = await page.evaluate(async () => {
       const fakeSpkToken = encodeURIComponent("ISOLATION-FAKE-SPEAKER-TOKEN-000000");
-      const res = await fetch(`/api/v1/proposals/speaker/${fakeSpkToken}`, {
+      const res = await fetch(`/api/v1/proposals/speakers/access/${fakeSpkToken}/profile`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ biography: "injected bio" }),
@@ -1027,16 +1111,11 @@ test.describe("browser workflows", () => {
     const spkRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/speaker/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(spkToken)}`;
     await page.goto(spkRoute);
     // Accept all speaker consent terms
-    const spkConsentCards = page.locator("div.event-flow-consent-card");
-    await spkConsentCards.first().waitFor({ state: "visible", timeout: 10_000 });
-    for (let i = 0; i < (await spkConsentCards.count()); i++) {
-      await spkConsentCards.nth(i).scrollIntoViewIfNeeded();
-      await spkConsentCards.nth(i).evaluate((el) => (el as HTMLElement).click());
-    }
+    await agreeToAllTerms(page);
     await page.getByRole("button", { name: /Confirm participation/i }).click();
     await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
 
-    const bioValue = await page.getByLabel(/Biography/i).inputValue();
+    const bioValue = await page.getByRole("textbox", { name: "Biography", exact: true }).innerText();
     expect(bioValue).not.toContain("injected bio");
     await screenshot("05-speaker-token-isolation-verified");
 
@@ -1044,32 +1123,16 @@ test.describe("browser workflows", () => {
   });
 
   // ─────────────────────────────────────────────────────────────────────────────
-  test("covers admin sign-in via magic link", async ({ page }) => {
+  test("covers unified user sign-in via magic link", async ({ page }) => {
     await setupPage(page);
     const errorMonitor = monitorErrors(page);
     const screenshot = createScreenshotter(page);
 
-    // Admin page must display the login form (no active session)
-    await page.goto("/admin/");
-    await expect(page.locator("#form-magic")).toBeVisible({ timeout: 10_000 });
+    const adminEmail = e2eAdminEmail("browser-auth");
 
-    // Request a magic link for the seeded admin account
-    await page.locator("#inp-email").fill("admin@pkic.org");
-    await page.locator("#btn-send").click();
-    // The form is hidden and the sent-confirmation panel is shown
-    await expect(page.locator("#magic-sent")).toBeVisible({ timeout: 10_000 });
-    await screenshot("01-magic-link-sent");
-
-    // Wait for the email (subject: "Your PKI Consortium admin sign-in link")
-    const magicEmail = await waitForEmail("admin@pkic.org", "sign-in");
-    // The email contains a link to /admin/?token=…
-    const magicUrl = extractUrlFromEmail(magicEmail, "/admin/");
-
-    // Navigating to the magic link URL triggers the DOMContentLoaded handler
-    // which reads ?token=, calls /api/v1/admin/auth/verify-link, and shows the admin root
-    await page.goto(magicUrl);
-    await expect(page.locator("#admin-root")).toBeVisible({ timeout: 15_000 });
-    await screenshot("02-admin-dashboard-loaded");
+    await signInAsE2eStaff(page, adminEmail);
+    await expectStaffSessionLanding(page);
+    await screenshot("01-system-analytics-loaded");
 
     errorMonitor.assertClean();
   });
@@ -1171,7 +1234,7 @@ test.describe("browser workflows", () => {
 
     // Nominate speakers via the API (no browser page exists for this endpoint)
     const speakerInviteStatus = await page.evaluate(async (token) => {
-      const res = await fetch("/api/v1/events/pqc-conference-amsterdam-nl/speaker-invites", {
+      const res = await fetch("/api/v1/events/pqc-conference-amsterdam-nl/speakers/invitations", {
         method: "POST",
         headers: {
           "content-type": "application/json",
@@ -1213,12 +1276,7 @@ test.describe("browser workflows", () => {
     await page.goto(samProposalUrl);
     await expect(page).toHaveTitle(/Submit a Session Proposal/);
     // Accept all speaker consent terms
-    const samConsentCards = page.locator("div.event-flow-consent-card");
-    await samConsentCards.first().waitFor({ state: "visible", timeout: 10_000 });
-    for (let i = 0; i < (await samConsentCards.count()); i++) {
-      await samConsentCards.nth(i).scrollIntoViewIfNeeded();
-      await samConsentCards.nth(i).evaluate((el) => (el as HTMLElement).click());
-    }
+    await agreeToAllTerms(page);
     await page.getByRole("button", { name: /Continue/i }).click();
     await page.getByLabel("First name").fill("Sam");
     await page.getByLabel("Last name").fill("Speaker");
@@ -1274,9 +1332,10 @@ test.describe("browser workflows", () => {
       timeout: 15_000,
     });
 
-    const speakerUserId = await coSpeakerCard.locator('textarea[id^="speaker-bio-"]').evaluate((element) => {
-      return (element as HTMLTextAreaElement).id.replace("speaker-bio-", "");
-    });
+    const speakerUserId = await coSpeakerCard
+      .locator("form[data-speaker-user-id]")
+      .getAttribute("data-speaker-user-id");
+    if (!speakerUserId) throw new Error("the co-speaker card names no user id");
     const proposerHeadshotResult = await page.evaluate(
       async ({ token, userId }) => {
         const formData = new FormData();
@@ -1287,7 +1346,7 @@ test.describe("browser workflows", () => {
         formData.append("file", new File([bytes], "co-speaker-headshot.png", { type: "image/png" }));
 
         const res = await fetch(
-          `/api/v1/proposals/manage/${encodeURIComponent(token)}/speakers/${encodeURIComponent(userId)}/headshot`,
+          `/api/v1/proposals/access/${encodeURIComponent(token)}/speakers/${encodeURIComponent(userId)}/headshot`,
           {
             method: "PUT",
             body: formData,
@@ -1305,7 +1364,15 @@ test.describe("browser workflows", () => {
       .locator("[data-speaker-card]")
       .filter({ hasText: "co-sam-speaker@example.test" });
     await expect(refreshedCoSpeakerCard).toBeVisible();
-    await expect(refreshedCoSpeakerCard.locator("img.adm-headshot-preview-img")).toBeVisible({ timeout: 15_000 });
+    // The preview is an `<img>` named for the speaker it belongs to, which is
+    // steadier than the class this used to select on — that class no longer
+    // exists anywhere in the product. Checking the `src` too proves the image
+    // on the card is this speaker's headshot resource, rather than merely that
+    // the card has an image somewhere. The URL carries a `?v=` cache buster,
+    // so the path is what is pinned.
+    const coSpeakerHeadshot = refreshedCoSpeakerCard.getByRole("img", { name: "Co Sam Speaker" });
+    await expect(coSpeakerHeadshot).toBeVisible({ timeout: 15_000 });
+    await expect(coSpeakerHeadshot).toHaveAttribute("src", new RegExp(`/speakers/${speakerUserId}/headshot(?:\\?|$)`));
     await screenshot("05-co-speaker-invited");
 
     // ── Resend the co-speaker manage link via the browser ────────────────────
@@ -1344,12 +1411,7 @@ test.describe("browser workflows", () => {
     await page.getByRole("button", { name: /Save profile/i }).click();
     await expect(page.getByText(/Profile updated./i)).toBeVisible({ timeout: 10_000 });
     // Accept all speaker consent terms
-    const refreshedConsentCards = page.locator("div.event-flow-consent-card");
-    await refreshedConsentCards.first().waitFor({ state: "visible", timeout: 10_000 });
-    for (let i = 0; i < (await refreshedConsentCards.count()); i++) {
-      await refreshedConsentCards.nth(i).scrollIntoViewIfNeeded();
-      await refreshedConsentCards.nth(i).evaluate((el) => (el as HTMLElement).click());
-    }
+    await agreeToAllTerms(page);
     await page.getByRole("button", { name: /Confirm participation/i }).click();
     await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
     await screenshot("08-co-speaker-confirmed-via-refreshed-link");
@@ -1386,12 +1448,12 @@ test.describe("browser workflows", () => {
     void proposalManageUrl; // only used to confirm the email arrived; speaker token comes later
 
     // ── 2. Admin signs in and accepts the proposal ────────────────────────────
-    await signInAsAdmin(page);
+    await signInAsAdmin(page, "browser-presentation");
     await screenshot("02-admin-signed-in");
 
     // Accept the proposal. The e2e server is configured with DEFAULT_MIN_PROPOSAL_REVIEWS=0.
     const finalizeResult = await page.evaluate(async (id) => {
-      const res = await fetch(`/api/v1/admin/proposals/${id}/finalize`, {
+      const res = await fetch(`/api/v1/proposals/${id}/decisions`, {
         method: "POST",
         credentials: "include",
         headers: { "content-type": "application/json" },
@@ -1419,7 +1481,22 @@ test.describe("browser workflows", () => {
     await expect(page.locator("[data-event-speaker-presentation] [data-speaker-content]")).toBeVisible({
       timeout: 15_000,
     });
-    await page.locator("[data-presentation-file]").setInputFiles({
+    /*
+     * Through "Upload presentation", not past it. The input is screen-reader
+     * only and the button opens a consent dialog before it ever reaches the
+     * picker, so setting files on the input directly — which is what this did
+     * — exercised neither the button nor the terms a speaker has to accept
+     * (#28's class). The chooser opens only once the disclaimer is agreed.
+     */
+    const presentationChooser = page.waitForEvent("filechooser");
+    await page.getByRole("button", { name: "Upload presentation" }).click();
+    const presentationTerms = page.getByRole("dialog", { name: "Before you upload your presentation" });
+    await expect(presentationTerms).toBeVisible({ timeout: 10_000 });
+    await presentationTerms.locator(".hsd-agree").check();
+    await presentationTerms.locator(".hsd-confirm").click();
+    await (
+      await presentationChooser
+    ).setFiles({
       name: "pqc-migration-talk.pdf",
       mimeType: "application/pdf",
       buffer: Buffer.from(
@@ -1432,33 +1509,34 @@ test.describe("browser workflows", () => {
     await screenshot("05-presentation-uploaded");
 
     // ── 6. Admin views the Presentation tab and submits a review ──────────────
-    await page.goto(`/admin/#/events/pqc-conference-amsterdam-nl/proposal/${proposalId}`);
+    await page.goto(`/portal/#/events/pqc-conference-amsterdam-nl/proposals/detail/${proposalId}`);
     await expect(page.getByRole("heading", { name: /Operational Trust in a Post-Quantum Transition/i })).toBeVisible({
       timeout: 15_000,
     });
 
-    await page.getByRole("tab", { name: /Presentation/i }).click();
+    await tab(page, /Presentation/i).click();
     await expect(page.getByText(/Version 1/i)).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/pqc-migration-talk\.pdf/i)).toBeVisible();
     await screenshot("06-admin-presentation-tab");
 
     // Open the review form and submit a "needs_revision" review
-    const versionCard = page.locator("[data-presentation-version-card]").filter({ hasText: /Version 1/i });
-    await versionCard.getByRole("button", { name: /^Review$/i }).click();
-    const statusSelect = versionCard.locator("select");
+    const versionRow = page.getByRole("row", { name: /Version 1/i });
+    await versionRow.getByRole("button", { name: /^Review$/i }).click();
+    const reviewForm = page.locator(".pk-table__detail form");
+    const statusSelect = reviewForm.locator("select");
     await expect(statusSelect).toBeVisible({ timeout: 5_000 });
     await statusSelect.selectOption("needs_revision");
-    const noteInput = versionCard.locator("textarea");
+    const noteInput = reviewForm.getByRole("textbox", { name: "Note for the speaker", exact: true });
     await noteInput.fill("Please add speaker notes to each slide before the final review.");
-    await versionCard.getByRole("button", { name: /Save review/i }).click();
-    await expect(versionCard.locator("[data-presentation-review-status]")).toHaveText("Needs revision", {
+    await reviewForm.getByRole("button", { name: /Save review/i }).click();
+    await expect(versionRow.locator("[data-presentation-review-status]")).toHaveText("Needs revision", {
       timeout: 10_000,
     });
     await screenshot("07-review-submitted");
 
     // ── 7. Speaker downloads their presentation ───────────────────────────────
     const downloadStatus = await page.evaluate(async (token) => {
-      const res = await fetch(`/api/v1/proposals/speaker/${encodeURIComponent(token)}/presentation/download`);
+      const res = await fetch(`/api/v1/proposals/speakers/access/${encodeURIComponent(token)}/presentation`);
       return { status: res.status, contentType: res.headers.get("content-type") };
     }, speakerToken);
     expect(downloadStatus.status).toBe(200);

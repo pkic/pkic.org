@@ -1,0 +1,126 @@
+// Reusable content-width constraints for application shells. These replace
+// inline style attributes, which are blocked by the site's strict CSP.
+
+.content-width-sm {
+  width: 100%;
+  max-width: 440px;
+}
+
+.content-width-form {
+  width: 100%;
+  max-width: 640px;
+}
+
+.content-width-schedule {
+  width: 100%;
+  max-width: 700px;
+}
+
+.content-width-md {
+  width: 100%;
+  max-width: 720px;
+}
+
+.content-width-reading {
+  width: 100%;
+  max-width: 800px;
+}
+
+.content-width-lg {
+  width: 100%;
+  max-width: 900px;
+}
+
+.content-width-xl {
+  width: 100%;
+  max-width: 960px;
+}
+
+.is-clickable {
+  cursor: pointer;
+}
+
+.text-pre-wrap {
+  white-space: pre-wrap;
+}
+
+// The section side menu (layouts/partials/menu.html). Replaces Bootstrap's
+// `.list-unstyled` plus the per-item `pt-*`/`pb-*`/`px-*` utilities the list
+// used to carry: one gap on the parent instead of a padding decision per row.
+.section-menu {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pk-2);
+}
+
+.section-menu-top {
+  margin-bottom: var(--pk-3);
+}
+
+.section-menu-child {
+  padding-inline-start: var(--pk-3);
+}
+
+// Responsive 12-column content grid for the {{% row %}}/{{% col %}}
+// shortcodes. Tracks and gaps belong to the parent, so authored pages do not
+// recreate the removed Bootstrap layout or carry inline positioning styles.
+.content-row {
+  display: grid;
+  grid-template-columns: repeat(12, minmax(0, 1fr));
+  gap: var(--pk-6);
+  align-items: flex-start;
+}
+
+.content-col {
+  grid-column: span 12;
+  min-width: 0;
+}
+
+@media (min-width: 36rem) {
+  @for $span from 1 through 12 {
+    .content-col--sm-#{$span} {
+      grid-column: span $span;
+    }
+  }
+}
+
+@media (min-width: 48rem) {
+  @for $span from 1 through 12 {
+    .content-col--md-#{$span} {
+      grid-column: span $span;
+    }
+  }
+}
+
+@media (min-width: 62rem) {
+  @for $span from 1 through 12 {
+    .content-col--lg-#{$span} {
+      grid-column: span $span;
+    }
+  }
+
+  .content-col--sticky {
+    position: sticky;
+    top: 5rem;
+  }
+}
+// The About page's SVG needs a real width before it can float beside prose;
+// theme-aware filtering preserves its black artwork in light mode.
+.pk-figure-aside {
+  width: Min(18rem, 100%);
+  margin: var(--pk-4) auto;
+
+  img {
+    filter: var(--pk-member-logo-hover-filter);
+  }
+}
+
+@media (min-width: 60rem) {
+  .pk-figure-aside {
+    float: inline-end;
+    margin: 0 0 var(--pk-4) var(--pk-6);
+  }
+}

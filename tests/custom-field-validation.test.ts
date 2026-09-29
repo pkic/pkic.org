@@ -1,10 +1,10 @@
-import { describe, expect, it, beforeEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { env } from "cloudflare:workers";
-import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
-import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
-import { onRequestPatch as manageRegistration } from "../functions/api/v1/registrations/manage/[token]";
+import { seedEventAndAdmin, queryAll } from "./helpers/context";
+import { callApi } from "./helpers/app";
+import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
 
 const TEST_DAY = "2026-12-01";
 
@@ -104,45 +104,43 @@ async function seedRegistrationForm(_db: DatabaseLike, eventId: string): Promise
 describe("custom field validation", () => {
   beforeEach(async () => {
     await resetDb();
+    stubSuccessfulMxLookup();
   });
+  afterEach(() => vi.unstubAllGlobals());
   it("rejects invalid registration custom answers", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     await seedRegistrationForm(env.DB, eventId);
 
-    await expect(
-      createRegistration(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              firstName: "Alex",
-              lastName: "Tester",
-              email: "alex@pkic.org",
-              attendanceType: "virtual",
-              consents: [
-                { termKey: "privacy-policy", version: "v1" },
-                { termKey: "code-of-conduct", version: "v1" },
-              ],
-              customAnswers: {
-                professional_profile: "https://facebook.com/alex",
-                interests: ["PKI", "Other"],
-                availability: { start: "2026-12-01", end: "2026-12-05" },
-                nps: 11,
-              },
-            }),
-          }),
-          { eventSlug: "pqc-2026" },
-        ),
-      ),
-    ).rejects.toMatchObject({
-      code: "VALIDATION_ERROR",
-      details: {
-        fieldErrors: {
-          professional_profile: expect.any(Array),
-          interests: expect.any(Array),
-          nps: expect.any(Array),
+    const response = await callApi(env, "/api/v1/events/pqc-2026/registrations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        firstName: "Alex",
+        lastName: "Tester",
+        email: "alex@pkic.org",
+        attendanceType: "virtual",
+        consents: [
+          { termKey: "privacy-policy", version: "v1" },
+          { termKey: "code-of-conduct", version: "v1" },
+        ],
+        customAnswers: {
+          professional_profile: "https://facebook.com/alex",
+          interests: ["PKI", "Other"],
+          availability: { start: "2026-12-01", end: "2026-12-05" },
+          nps: 11,
+        },
+      }),
+    });
+    expect(response.status).toBe(400);
+    await expect(response.json()).resolves.toMatchObject({
+      error: {
+        code: "VALIDATION_ERROR",
+        details: {
+          fieldErrors: {
+            professional_profile: expect.any(Array),
+            interests: expect.any(Array),
+            nps: expect.any(Array),
+          },
         },
       },
     });
@@ -153,33 +151,27 @@ describe("custom field validation", () => {
     await seedEventDay(eventId);
     await seedRegistrationForm(env.DB, eventId);
 
-    const response = await createRegistration(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            firstName: "Jamie",
-            lastName: "Valid",
-            email: "jamie@pkic.org",
-            dayAttendance: [{ dayDate: TEST_DAY, attendanceType: "in_person" }],
-            consents: [
-              { termKey: "privacy-policy", version: "v1" },
-              { termKey: "code-of-conduct", version: "v1" },
-            ],
-            customAnswers: {
-              professional_profile: "https://www.linkedin.com/in/jamie-valid",
-              interests: ["PKI", "PQC"],
-              availability: { start: "2026-12-01", end: "2026-12-03" },
-              nps: 9,
-              dietary_restrictions: ["Vegetarian", "Halal"],
-            },
-          }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const response = await callApi(env, "/api/v1/events/pqc-2026/registrations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        firstName: "Jamie",
+        lastName: "Valid",
+        email: "jamie@pkic.org",
+        dayAttendance: [{ dayDate: TEST_DAY, attendanceType: "in_person" }],
+        consents: [
+          { termKey: "privacy-policy", version: "v1" },
+          { termKey: "code-of-conduct", version: "v1" },
+        ],
+        customAnswers: {
+          professional_profile: "https://www.linkedin.com/in/jamie-valid",
+          interests: ["PKI", "PQC"],
+          availability: { start: "2026-12-01", end: "2026-12-03" },
+          nps: 9,
+          dietary_restrictions: ["Vegetarian", "Halal"],
+        },
+      }),
+    });
 
     expect(response.status).toBe(200);
     const payload = (await response.json()) as { registrationId: string };
@@ -204,52 +196,40 @@ describe("custom field validation", () => {
     await seedEventDay(eventId);
     await seedRegistrationForm(env.DB, eventId);
 
-    const createResponse = await createRegistration(
-      createContext(
-        env,
-        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-          method: "POST",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            firstName: "Morgan",
-            lastName: "Updater",
-            email: "morgan@pkic.org",
-            dayAttendance: [{ dayDate: TEST_DAY, attendanceType: "in_person" }],
-            consents: [
-              { termKey: "privacy-policy", version: "v1" },
-              { termKey: "code-of-conduct", version: "v1" },
-            ],
-            customAnswers: {
-              professional_profile: "https://www.linkedin.com/in/morgan-updater",
-              dietary_restrictions: ["Vegetarian"],
-            },
-          }),
-        }),
-        { eventSlug: "pqc-2026" },
-      ),
-    );
+    const createResponse = await callApi(env, "/api/v1/events/pqc-2026/registrations", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        firstName: "Morgan",
+        lastName: "Updater",
+        email: "morgan@pkic.org",
+        dayAttendance: [{ dayDate: TEST_DAY, attendanceType: "in_person" }],
+        consents: [
+          { termKey: "privacy-policy", version: "v1" },
+          { termKey: "code-of-conduct", version: "v1" },
+        ],
+        customAnswers: {
+          professional_profile: "https://www.linkedin.com/in/morgan-updater",
+          dietary_restrictions: ["Vegetarian"],
+        },
+      }),
+    });
 
     expect(createResponse.status).toBe(200);
     const created = (await createResponse.json()) as { registrationId: string; manageToken: string };
 
-    const updateResponse = await manageRegistration(
-      createContext(
-        env,
-        new Request(`https://app.test/api/v1/registrations/manage/${created.manageToken}`, {
-          method: "PATCH",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify({
-            action: "update",
-            dayAttendance: [{ dayDate: TEST_DAY, attendanceType: "in_person" }],
-            customAnswers: {
-              professional_profile: "https://www.linkedin.com/in/morgan-updater",
-              dietary_restrictions: ["Halal"],
-            },
-          }),
-        }),
-        { token: created.manageToken },
-      ),
-    );
+    const updateResponse = await callApi(env, `/api/v1/registrations/access/${created.manageToken}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        action: "update",
+        dayAttendance: [{ dayDate: TEST_DAY, attendanceType: "in_person" }],
+        customAnswers: {
+          professional_profile: "https://www.linkedin.com/in/morgan-updater",
+          dietary_restrictions: ["Halal"],
+        },
+      }),
+    });
 
     expect(updateResponse.status).toBe(200);
 
@@ -271,7 +251,7 @@ describe("custom field validation", () => {
       )
     )[0];
     const details = JSON.parse(auditRow.details_json) as Record<string, { from: unknown; to: unknown }>;
-    expect(details.status).toEqual({ from: "pending_email_confirmation", to: "registered" });
+    expect(details.status).toEqual({ from: "pending_email_confirmation", to: "pending_email_confirmation" });
     expect(details.attendanceType).toEqual({ from: "in_person", to: "in_person" });
     expect(details.customAnswers).toEqual({
       from: {

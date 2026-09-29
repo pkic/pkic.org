@@ -1,0 +1,9 @@
+@layer components {
+  /* The portal sidebar still occupies width at tablet sizes. A two-column
+     record there leaves the participation table too narrow to read. */
+  @media (min-width: 64rem) and (max-width: 80rem) {
+    .pk-record.pk-user-record {
+      grid-template-columns: minmax(0, 1fr);
+    }
+  }
+}

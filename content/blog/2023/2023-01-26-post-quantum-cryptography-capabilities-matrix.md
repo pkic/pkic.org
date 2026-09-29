@@ -11,6 +11,38 @@ categories:
 keyword: [pqc, qsc, post-quantum, quantum-safe, cryptography, hardware, solutions, software]
 tags: [Post-Quantum Cryptography, PQC]
 
+authorProfiles:
+  - name: Tomas Gustavsson
+    organization: Keyfactor
+    role: Chief PKI Officer
+    website: https://www.keyfactor.com/
+    social:
+      x: https://x.com/primetomas
+      linkedin: https://www.linkedin.com/in/tgustavsson/
+    assetdirectory: images/members/keyfactor
+  - name: Lukáš Geyer
+    organization: Lukáš Geyer
+    role: Security Architect
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/pkiluke/
+    assetdirectory: images/members/lukas-geyer
+  - name: Sven Rajala
+    organization: Keyfactor
+    role: Deputy PKI Officer
+    website: https://www.keyfactor.com/
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/international-pki-man-of-mystery/
+    assetdirectory: images/members/keyfactor
+  - name: Paul van Brouwershaven
+    organization: Digitorus
+    role: Founder and CEO
+    website: https://www.digitorus.com
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
+    assetdirectory: images/members/digitorus
 ---
 
 ## PQC Capabilities Matrix (PQCCM)

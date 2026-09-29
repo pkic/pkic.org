@@ -1,0 +1,6 @@
+@layer components {
+  .pk-analytics-window-editor {
+    background: var(--pk-surface-sunk);
+    border-bottom: 1px solid var(--pk-line-soft);
+  }
+}

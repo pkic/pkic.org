@@ -1,0 +1,25 @@
+@layer components {
+  .pk-markdown-editor { min-width: 0; border: 1px solid var(--pk-line); border-radius: var(--pk-radius); background: var(--pk-surface); overflow: hidden; }
+  .pk-markdown-editor__toolbar, .pk-markdown-editor__footer { display: flex; align-items: center; flex-wrap: wrap; gap: var(--pk-1); padding: var(--pk-2); }
+  .pk-markdown-editor__toolbar { border-bottom: 1px solid var(--pk-line); gap: var(--pk-2); }
+  .pk-markdown-editor__toolbar [aria-pressed="true"] { background: var(--pk-surface-sunk); color: var(--pk-ink); }
+  /* The bar's groups: the text's shape, its structure, the session, and the
+     source view at the far end. A hairline between groups is the only
+     separator a row of glyphs needs. */
+  .pk-markdown-editor [hidden] { display: none !important; }
+  .pk-markdown-editor__toolbar [data-command] { display: inline-flex; }
+  .pk-markdown-editor__group { display: flex; align-items: center; gap: 2px; }
+  .pk-markdown-editor__group + .pk-markdown-editor__group { padding-left: var(--pk-2); border-left: 1px solid var(--pk-line-soft); }
+  .pk-markdown-editor__group--end { margin-left: auto; }
+  .pk-markdown-editor__canvas { min-height: 18rem; white-space: pre-wrap; padding: var(--pk-5); outline-offset: -3px; }
+  .pk-markdown-editor__canvas > * + * { margin-top: var(--pk-3); }
+  .pk-markdown-editor__video { cursor: grab; }
+  .pk-markdown-editor__canvas iframe { pointer-events: none; }
+  .pk-markdown-editor__canvas .ProseMirror-selectednode { outline: 2px solid currentColor; outline-offset: 2px; }
+  .pk-markdown-editor__media { padding: var(--pk-4); border-bottom: 1px solid var(--pk-line); }
+  .pk-markdown-editor__footer { justify-content: space-between; border-top: 1px solid var(--pk-line); }
+  /* The compact variant: a field a few lines tall, not a page. */
+  .pk-markdown-editor[data-variant="compact"] .pk-markdown-editor__canvas { min-height: 6rem; padding: var(--pk-3); }
+  .pk-markdown-editor[data-variant="compact"] .pk-markdown-editor__toolbar { padding: var(--pk-1) var(--pk-2); }
+  .pk-markdown-editor[data-variant="compact"] .pk-markdown-editor__footer { padding: var(--pk-1) var(--pk-2); }
+}

@@ -1,0 +1,24 @@
+/*
+ * RowActions.
+ *
+ * Sits at the end of a row and pushes itself to that end, so a table does not
+ * have to give the column its own alignment rule.
+ */
+
+@layer components {
+  .pk-row-actions {
+    display: inline-flex;
+    align-items: center;
+    justify-content: flex-end;
+    gap: var(--pk-2);
+    width: 100%;
+  }
+
+  .pk-row-actions__status {
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink-muted);
+    /* A status that wraps to two lines inside a table row makes the row taller
+       than its neighbours for no gain; the column is sized for it. */
+    white-space: nowrap;
+  }
+}

@@ -1,0 +1,23 @@
+/* A disclosure that reads as one: the whole bar opens what is behind it. */
+.pk-admin-disclosure {
+  display: flex;
+  width: 100%;
+  box-sizing: border-box;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pk-3);
+  background: var(--pk-surface);
+  border: 1px solid var(--pk-line-soft);
+  border-radius: var(--pk-radius-lg);
+  padding: var(--pk-3) var(--pk-4);
+  font-family: inherit;
+  font-size: var(--pk-text-sm);
+  color: var(--pk-ink);
+  cursor: pointer;
+  text-align: start;
+}
+
+.pk-admin-disclosure:hover {
+  border-color: var(--pk-line-strong);
+  background: var(--pk-surface-sunk);
+}

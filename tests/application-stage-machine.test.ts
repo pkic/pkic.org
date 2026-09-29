@@ -1,0 +1,434 @@
+import { pinReviewedStaffWorkflow } from "./helpers/membership-workflows";
+/**
+ * application-stage-machine.test.ts
+ *
+ * application stage transitions, communications, and internal
+ * notes via the canonical domain endpoints (functions/api/v1/members/applications/).
+ */
+import { describe, expect, it, beforeEach } from "vitest";
+import { env } from "cloudflare:workers";
+import app from "../functions/router";
+import { resetDb } from "./helpers/reset-db";
+import { createAdminSession } from "./helpers/auth";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { seedMemberApplication } from "./helpers/member-applications";
+import { membershipApplicationDetailSchema } from "../assets/shared/schemas/membership-application-management";
+import { staffApplicationDocumentsListResponseSchema } from "../assets/shared/schemas/application-documents";
+
+function request(token: string, path: string, init: RequestInit = {}): Request {
+  const headers = new Headers(init.headers);
+  headers.set("authorization", `Bearer ${token}`);
+  if (init.body && !headers.has("content-type")) headers.set("content-type", "application/json");
+  return new Request(`https://app.test${path}`, { ...init, headers });
+}
+
+async function call(token: string, path: string, init: RequestInit = {}): Promise<Response> {
+  return app.fetch(
+    request(token, path, init),
+    env as any,
+    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+  );
+}
+
+async function createApplication(overrides: Record<string, unknown> = {}): Promise<{ id: string }> {
+  const applicantEmail = (overrides.applicant_email as string) ?? "applicant@example.test";
+  const id = await seedMemberApplication({
+    applicantEmail,
+    applicantName: (overrides.applicant_name as string) ?? "Applicant Name",
+    organizationName: (overrides.organization_name as string) ?? "Example Org",
+    organizationDomain:
+      "organization_domain" in overrides
+        ? (overrides.organization_domain as string | null)
+        : (applicantEmail.split("@")[1] ?? null),
+    membershipCategory: (overrides.membership_category as string) ?? "F",
+    stage: (overrides.stage as string) ?? "submitted",
+  });
+  await pinReviewedStaffWorkflow(env.DB, id, (overrides.membership_category as string) ?? "F", false);
+  return { id };
+}
+
+describe("Application stage machine, communications, notes", () => {
+  let adminToken: string;
+  let adminId: string;
+
+  beforeEach(async () => {
+    await resetDb();
+    await seedEventAndAdmin(env.DB);
+    const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'"))[0];
+    adminId = adminRow.id;
+    adminToken = await createAdminSession(env.DB, adminId, "app-stage-admin-token");
+  });
+
+  it("transitions submitted -> declined and records a member_application_events row", async () => {
+    const { id } = await createApplication();
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify({ toStage: "declined" }),
+    });
+    expect(response.status).toBe(200);
+
+    const rows = await queryAll<{ stage: string }>(env.DB, "SELECT stage FROM member_applications WHERE id = ?", id);
+    expect(rows[0].stage).toBe("declined");
+
+    const events = await queryAll<{ actor_user_id: string | null }>(
+      env.DB,
+      "SELECT actor_user_id FROM member_application_events WHERE application_id = ?",
+      id,
+    );
+    expect(events).toEqual([{ actor_user_id: adminId }]);
+  });
+
+  it("rejects API-key stage transitions without side effects", async () => {
+    const { id } = await createApplication();
+    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", `/api/v1/members/applications/${id}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify({ toStage: "declined" }),
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "USER_BACKED_ADMIN_REQUIRED" } });
+    expect(
+      await queryAll<{ actor_user_id: string | null }>(
+        env.DB,
+        "SELECT actor_user_id FROM member_application_events WHERE application_id = ?",
+        id,
+      ),
+    ).toEqual([]);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'application_stage_transitioned' AND entity_id = ?",
+        id,
+      ),
+    ).toEqual([]);
+  });
+
+  it("compare-and-set: two concurrent transitions from the same stage produce exactly one success and one 409, with exactly one event row", async () => {
+    const { id } = await createApplication();
+
+    const [first, second] = await Promise.all([
+      call(adminToken, `/api/v1/members/applications/${id}/stage`, {
+        method: "PATCH",
+        body: JSON.stringify({ toStage: "declined" }),
+      }),
+      call(adminToken, `/api/v1/members/applications/${id}/stage`, {
+        method: "PATCH",
+        body: JSON.stringify({ toStage: "declined" }),
+      }),
+    ]);
+
+    const statuses = [first.status, second.status].sort();
+    expect(statuses).toEqual([200, 409]);
+
+    const rows = await queryAll<{ stage: string }>(env.DB, "SELECT stage FROM member_applications WHERE id = ?", id);
+    expect(rows[0].stage).toBe("declined");
+
+    const events = await queryAll(env.DB, "SELECT * FROM member_application_events WHERE application_id = ?", id);
+    expect(events).toHaveLength(1);
+  });
+
+  it("rejects an invalid transition (submitted -> approved)", async () => {
+    const { id } = await createApplication();
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify({ toStage: "approved" }),
+    });
+    expect(response.status).toBe(400);
+  });
+
+  it("requires a valid on_hold subtype when moving to on_hold, and queues the matching email", async () => {
+    const { id } = await createApplication({ stage: "processing" });
+
+    const missingSubtype = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify({ toStage: "on_hold" }),
+    });
+    expect(missingSubtype.status).toBe(400);
+
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify({ toStage: "on_hold", onHoldSubtype: "request_org_email" }),
+    });
+    expect(response.status).toBe(200);
+
+    const rows = await queryAll<{ stage: string; on_hold_subtype: string }>(
+      env.DB,
+      "SELECT stage, on_hold_subtype FROM member_applications WHERE id = ?",
+      id,
+    );
+    expect(rows[0].stage).toBe("on_hold");
+    expect(rows[0].on_hold_subtype).toBe("request_org_email");
+
+    const outbox = await queryAll(
+      env.DB,
+      "SELECT id FROM email_outbox WHERE template_key = 'application-hold-org-email'",
+    );
+    expect(outbox).toHaveLength(1);
+  });
+
+  it("rolls back the transition, event, and audit when its outbox insert fails", async () => {
+    const { id } = await createApplication({ stage: "processing" });
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_stage_email
+       BEFORE INSERT ON email_outbox
+       WHEN NEW.template_key = 'application-hold-org-email'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced stage email failure');
+       END`,
+    ).run();
+
+    try {
+      const response = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
+        method: "PATCH",
+        body: JSON.stringify({ toStage: "on_hold", onHoldSubtype: "request_org_email" }),
+      });
+      expect(response.status).toBe(500);
+
+      const [application] = await queryAll<{ stage: string }>(
+        env.DB,
+        "SELECT stage FROM member_applications WHERE id = ?",
+        id,
+      );
+      expect(application).toEqual({ stage: "processing" });
+      expect(
+        await queryAll(env.DB, "SELECT id FROM member_application_events WHERE application_id = ?", id),
+      ).toHaveLength(0);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT id FROM audit_log WHERE entity_type = 'member_application' AND entity_id = ?",
+          id,
+        ),
+      ).toHaveLength(0);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_stage_email").run();
+    }
+  });
+
+  it("supports the on_hold -> processing back-transition and clears on_hold_subtype", async () => {
+    const { id } = await createApplication({ stage: "on_hold" });
+    await env.DB.prepare("UPDATE member_applications SET on_hold_subtype = 'request_authority' WHERE id = ?")
+      .bind(id)
+      .run();
+
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify({ toStage: "processing" }),
+    });
+    expect(response.status).toBe(200);
+
+    const rows = await queryAll<{ stage: string; on_hold_subtype: string | null }>(
+      env.DB,
+      "SELECT stage, on_hold_subtype FROM member_applications WHERE id = ?",
+      id,
+    );
+    expect(rows[0].stage).toBe("processing");
+    expect(rows[0].on_hold_subtype).toBeNull();
+  });
+
+  it("a terminal stage (declined) has no further transitions", async () => {
+    const { id } = await createApplication({ stage: "declined" });
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify({ toStage: "processing" }),
+    });
+    expect(response.status).toBe(409);
+  });
+
+  it("sends a communication, records it, and does not create a stage transition event", async () => {
+    const { id } = await createApplication();
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/communications`, {
+      method: "POST",
+      body: JSON.stringify({ subject: "Following up", body: "Please send more info." }),
+    });
+    expect(response.status).toBe(201);
+
+    const comms = await queryAll<{ kind: string; subject: string }>(
+      env.DB,
+      "SELECT kind, subject FROM application_communications WHERE application_id = ?",
+      id,
+    );
+    expect(comms).toHaveLength(1);
+    expect(comms[0].kind).toBe("communication");
+    expect(comms[0].subject).toBe("Following up");
+
+    const outbox = await queryAll(
+      env.DB,
+      "SELECT id FROM email_outbox WHERE recipient_email = 'applicant@example.test'",
+    );
+    expect(outbox.length).toBeGreaterThan(0);
+  });
+
+  it("rejects API-key application communications without side effects", async () => {
+    const { id } = await createApplication();
+    const response = await call(
+      env.ADMIN_API_KEY ?? "test-admin-key",
+      `/api/v1/members/applications/${id}/communications`,
+      {
+        method: "POST",
+        body: JSON.stringify({ subject: "Must not send", body: "Synthetic actors cannot own this record." }),
+      },
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "USER_BACKED_ADMIN_REQUIRED" } });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM application_communications WHERE application_id = ?", id),
+    ).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_type = 'member_application' AND entity_id = ?", id),
+    ).toHaveLength(0);
+  });
+
+  it("adds an internal note that never queues an email", async () => {
+    const { id } = await createApplication();
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/notes`, {
+      method: "POST",
+      body: JSON.stringify({ body: "Internal-only observation." }),
+    });
+    expect(response.status).toBe(201);
+
+    const notes = await queryAll<{ kind: string }>(
+      env.DB,
+      "SELECT kind FROM application_communications WHERE application_id = ?",
+      id,
+    );
+    expect(notes).toHaveLength(1);
+    expect(notes[0].kind).toBe("note");
+
+    const outbox = await queryAll(env.DB, "SELECT id FROM email_outbox");
+    expect(outbox).toHaveLength(0);
+  });
+
+  it("rejects API-key application notes without side effects", async () => {
+    const { id } = await createApplication();
+    const response = await call(env.ADMIN_API_KEY ?? "test-admin-key", `/api/v1/members/applications/${id}/notes`, {
+      method: "POST",
+      body: JSON.stringify({ body: "Synthetic actors cannot own this note." }),
+    });
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "USER_BACKED_ADMIN_REQUIRED" } });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM application_communications WHERE application_id = ?", id),
+    ).toHaveLength(0);
+    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_type = 'member_application' AND entity_id = ?", id),
+    ).toHaveLength(0);
+  });
+
+  it("keeps documents out of detail and lists them through the bounded staff subresource", async () => {
+    const { id } = await createApplication();
+    await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        toStage: "on_hold",
+        onHoldSubtype: "request_information",
+        note: "Please supply the document.",
+      }),
+    });
+    await call(adminToken, `/api/v1/members/applications/${id}/notes`, {
+      method: "POST",
+      body: JSON.stringify({ body: "note" }),
+    });
+    await env.DB.prepare(
+      `INSERT INTO application_documents
+       (id, application_id, uploaded_by_email, r2_key, filename, mime_type,
+        file_size_bytes, content_sha256, uploaded_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    )
+      .bind(
+        "00000000-0000-4000-8000-000000000001",
+        id,
+        "applicant@example.test",
+        "applications/document-1",
+        "evidence.pdf",
+        "application/pdf",
+        2048,
+        "0".repeat(64),
+        "2026-08-21T08:00:00.000Z",
+      )
+      .run();
+
+    const detailResponse = await call(adminToken, `/api/v1/members/applications/${id}`);
+    expect(detailResponse.status).toBe(200);
+    const rawDetail = await detailResponse.json();
+    expect(rawDetail).not.toHaveProperty("documents");
+    const body = membershipApplicationDetailSchema.parse(rawDetail);
+    expect(body.events).toHaveLength(1);
+    expect(body.communications).toHaveLength(1);
+    expect(body.communications[0]).toMatchObject({ body: "note", createdAt: expect.any(String) });
+
+    const documentsResponse = await call(
+      adminToken,
+      `/api/v1/members/applications/${id}/documents?limit=1&offset=0&sort=-uploadedAt&q=evidence`,
+    );
+    expect(documentsResponse.status).toBe(200);
+    expect(staffApplicationDocumentsListResponseSchema.parse(await documentsResponse.json())).toEqual({
+      documents: [
+        {
+          id: "00000000-0000-4000-8000-000000000001",
+          filename: "evidence.pdf",
+          mimeType: "application/pdf",
+          fileSizeBytes: 2048,
+          uploadedAt: "2026-08-21T08:00:00.000Z",
+          uploadedByEmail: "applicant@example.test",
+        },
+      ],
+      page: { limit: 1, offset: 0, total: 1, hasMore: false },
+    });
+
+    const emailSearch = await call(
+      adminToken,
+      `/api/v1/members/applications/${id}/documents?q=applicant%40example.test&sort=filename`,
+    );
+    expect(emailSearch.status).toBe(200);
+    expect(staffApplicationDocumentsListResponseSchema.parse(await emailSearch.json()).documents).toHaveLength(1);
+
+    const finalPage = await call(adminToken, `/api/v1/members/applications/${id}/documents?limit=1&offset=1`);
+    expect(finalPage.status).toBe(200);
+    expect(staffApplicationDocumentsListResponseSchema.parse(await finalPage.json())).toEqual({
+      documents: [],
+      page: { limit: 1, offset: 1, total: 1, hasMore: false },
+    });
+
+    expect((await call(adminToken, `/api/v1/members/applications/${id}/documents?sort=r2Key`)).status).toBe(400);
+    expect(
+      (await call(adminToken, `/api/v1/members/applications/${id}/documents?token=${"x".repeat(16)}`)).status,
+    ).toBe(401);
+  });
+
+  it("GET list filters by stage", async () => {
+    await createApplication({ stage: "submitted" });
+    const { id: reviewId } = await createApplication({
+      stage: "processing",
+      applicant_email: "second@second.test",
+    });
+
+    const response = await call(adminToken, "/api/v1/members/applications?stage=processing");
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as { applications: Array<{ id: string }> };
+    expect(body.applications).toHaveLength(1);
+    expect(body.applications[0].id).toBe(reviewId);
+  });
+
+  it("a plain user with no staff role cannot access membership-application management", async () => {
+    const { id } = await createApplication();
+    const userId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+       VALUES (?, 'plain@example.test', 'plain@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+    )
+      .bind(userId)
+      .run();
+    const staffToken = await createAdminSession(env.DB, userId, "plain-user-token");
+
+    const response = await call(staffToken, `/api/v1/members/applications/${id}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify({ toStage: "processing" }),
+    });
+    expect(response.status).toBe(401);
+  });
+});

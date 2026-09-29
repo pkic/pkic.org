@@ -17,6 +17,11 @@ tags:
 title: Could Quantum Computing Help Stave Off the Next Great Pandemic?
 
 
+authorProfiles:
+  - name: Patrick Nohe
+    organization: GlobalSign
+    role: Senior Product Marketing Manager
+    website: https://www.globalsign.com
 ---
 As we settle into month two of isolation in the world’s collective battle against the COVID-19 pandemic, one talking point you’ve undoubtedly heard time and again is that this won’t truly be over until there’s a vaccine.
 

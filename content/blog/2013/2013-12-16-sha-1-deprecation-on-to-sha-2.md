@@ -21,6 +21,15 @@ tags:
 title: SHA-1 Deprecation, On to SHA-2
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 We have previously reviewed [implementation of SHA-2][1], but with [Bruce Schneier stating the need to migrate away from SHA-1][2] and the [SHA-1 deprecation policy from Microsoft][3], the industry must make more progress in 2014.
 

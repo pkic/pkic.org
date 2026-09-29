@@ -77,7 +77,7 @@
   z-index: 1;
 
   &::before {
-    content: '';
+    content: "";
     position: absolute;
     inset: 0;
     z-index: -1;
@@ -110,11 +110,18 @@
     transform: scale(1.05);
   }
 
-  // Default (light)
-  background: #ffffff;
+  /*
+   * The surface token, not a literal white. These cards carry the page's own
+   * ink, which the dark theme flips to near-white — a card that keeps its
+   * white ground then holds white text on white. In the light theme the token
+   * *is* #ffffff, so nothing here changes for the site as it ships today.
+   */
+  background: var(--pk-surface);
   border: 1px solid rgba(0, 0, 0, 0.05);
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
-  color: #0f172a;
+  box-shadow:
+    0 4px 12px rgba(0, 0, 0, 0.04),
+    0 1px 2px rgba(0, 0, 0, 0.02);
+  color: var(--pk-ink);
 
   // Icon accent
   .bento-icon {
@@ -122,12 +129,7 @@
     margin-bottom: 1rem;
     display: block;
     line-height: 1;
-    color: #1e293b;
-  }
-
-  .d-flex .bento-icon {
-    font-size: 1.75rem;
-    margin-bottom: 0;
+    color: var(--pk-ink);
   }
 
   .bento-title {
@@ -139,20 +141,38 @@
     color: inherit;
   }
 
-  .d-flex .bento-title {
-    margin-bottom: 0;
-    font-size: 1.1rem;
-  }
-
   .bento-text {
     font-size: 0.95rem;
-    color: #475569;
+    color: var(--pk-ink-muted);
     flex: 1;
     line-height: 1.6;
 
-    p, ul, ol, li {
+    p,
+    ul,
+    ol,
+    li {
       color: inherit;
     }
+  }
+
+  // Tone modifiers. These used to be Bootstrap's `bg-success` / `bg-warning
+  // text-dark` / `bg-info`, composed by the template with `bg-{{ if ... }}` —
+  // a class name split across Hugo interpolation, which no class-attribute
+  // check can read as one token. The tone is a modifier now, so it is visible
+  // to the gate and reads a token instead of a framework utility.
+  .bento-badge--ok {
+    background: var(--pk-ok);
+    color: var(--pk-on-solid);
+  }
+
+  .bento-badge--warn {
+    background: var(--pk-warn);
+    color: var(--pk-on-solid);
+  }
+
+  .bento-badge--info {
+    background: var(--pk-info);
+    color: var(--pk-on-solid);
   }
 
   .bento-badge {
@@ -176,6 +196,8 @@
 
   // Link card behaviour
   &.bento-card-link {
+  // Was an inline style on the working-group template; belongs with the card.
+  min-height: 120px;
     text-decoration: none;
     color: inherit;
     cursor: pointer;
@@ -188,13 +210,15 @@
   background: linear-gradient(135deg, lighten($bg, 8%), darken($bg, 6%));
   color: $text;
   border: 1px solid rgba(255, 255, 255, 0.15);
-  box-shadow: 0 4px 16px rgba($bg, 0.25), inset 0 1px 0 rgba(255,255,255,0.2);
+  box-shadow:
+    0 4px 16px rgba($bg, 0.25),
+    inset 0 1px 0 rgba(255, 255, 255, 0.2);
 
   .bento-badge {
     background: rgba(255, 255, 255, 0.2);
     backdrop-filter: blur(8px);
     color: $text;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.2);
   }
 
   .bento-text {
@@ -205,20 +229,26 @@
   .bento-icon {
     background: rgba(255, 255, 255, 0.15);
     backdrop-filter: blur(4px);
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.2), 0 2px 8px rgba(0,0,0,0.1);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.2),
+      0 2px 8px rgba(0, 0, 0, 0.1);
     color: inherit;
   }
 
   &:hover {
-    box-shadow: 0 8px 24px rgba($bg, 0.35), inset 0 1px 0 rgba(255,255,255,0.3) !important;
+    box-shadow:
+      0 8px 24px rgba($bg, 0.35),
+      inset 0 1px 0 rgba(255, 255, 255, 0.3) !important;
   }
 }
 
 @mixin bento-pale($bg) {
   background: linear-gradient(145deg, #ffffff 0%, rgba($bg, 0.08) 100%);
-  color: $body-color;
+  color: $ink;
   border: 1px solid rgba($bg, 0.15);
-  box-shadow: 0 4px 12px rgba($bg, 0.05), inset 0 1px 0 rgba(255,255,255,0.5);
+  box-shadow:
+    0 4px 12px rgba($bg, 0.05),
+    inset 0 1px 0 rgba(255, 255, 255, 0.5);
 
   .bento-badge {
     background: rgba($bg, 0.1);
@@ -227,7 +257,7 @@
   }
 
   .bento-text {
-    color: tint-color($body-color, 20%);
+    color: mix(#fff, $ink, 20%);
   }
 
   .bento-icon {
@@ -235,7 +265,61 @@
   }
 
   &:hover {
-    box-shadow: 0 8px 24px rgba($bg, 0.12), inset 0 1px 0 rgba(255,255,255,0.8) !important;
+    box-shadow:
+      0 8px 24px rgba($bg, 0.12),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+  }
+
+  // Pale cards are text-heavy. A light gradient with dark copy loses contrast
+  // on a dark page, especially where the tint becomes darker at one edge.
+  // Give every pale variant the same stable theme surface and a restrained
+  // accent border, so no part of a paragraph fades into its own background.
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) & {
+      @include bento-pale-dark($bg);
+    }
+  }
+
+  :root[data-theme="dark"] & {
+    @include bento-pale-dark($bg);
+  }
+}
+
+@mixin bento-pale-dark($bg) {
+  background: var(--pk-surface);
+  color: var(--pk-ink);
+  border-color: var(--pk-line-soft);
+  border-radius: var(--pk-radius-lg);
+  box-shadow: none;
+  transform: none;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset-block: 0;
+    inset-inline-start: 0;
+    width: 3px;
+    background: color-mix(in srgb, #{$bg} 68%, var(--pk-ink));
+  }
+
+  .bento-text {
+    color: var(--pk-ink-muted);
+  }
+
+  .bento-icon {
+    color: color-mix(in srgb, #{$bg} 55%, var(--pk-ink));
+  }
+
+  .bento-badge {
+    color: var(--pk-ink);
+    background: var(--pk-surface-raise);
+    border-color: var(--pk-line);
+  }
+
+  &:hover {
+    transform: none;
+    border-color: var(--pk-line-strong);
+    box-shadow: var(--pk-shadow-2) !important;
   }
 }
 
@@ -384,16 +468,6 @@ $wg-colors: (
     background: #fff;
   }
 
-  .form-control {
-    border-color: #dee2e6;
-    border-left: none;
-    font-size: 0.9rem;
-
-    &:focus {
-      box-shadow: none;
-      border-color: #dee2e6;
-    }
-  }
 }
 
 // A–Z quick filter
@@ -462,7 +536,9 @@ $wg-colors: (
     display: none;
   }
 
-  .container {
+  // `members/nav.html` is the only thing that renders this bar, and it is on
+  // `.pk-container` now. The rail must keep its links in one non-wrapping row.
+  .pk-container {
     display: flex;
     align-items: stretch;
     white-space: nowrap;
@@ -485,13 +561,6 @@ $wg-colors: (
       color 0.15s,
       border-color 0.15s;
 
-    .badge {
-      background: rgba(255, 255, 255, 0.12);
-      color: rgba(255, 255, 255, 0.7);
-      font-size: 0.7em;
-      font-weight: 600;
-    }
-
     &:hover {
       color: #fff;
     }
@@ -500,10 +569,6 @@ $wg-colors: (
       color: #fff;
       border-bottom-color: #6f42c1;
 
-      .badge {
-        background: rgba(111, 66, 193, 0.35);
-        color: #fff;
-      }
     }
   }
 }
@@ -527,10 +592,12 @@ $wg-colors: (
 // .member-card-link is no longer used (cards use stretched-link pattern)
 
 .member-card {
-  position: relative; // required for Bootstrap stretched-link
+  position: relative; // the positioned ancestor `.pk-stretched` covers
   border-radius: 1rem;
   padding: 1.25rem;
-  background: #fff;
+  // The surface token: this card inherits the page's ink, so a hardcoded
+  // white left near-white names unreadable under the dark theme.
+  background: var(--pk-surface);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.07);
   display: flex;
   flex-direction: column;
@@ -566,7 +633,8 @@ $wg-colors: (
     width: 100%;
     height: 100%;
     object-fit: contain;
-    filter: grayscale(0.3) opacity(0.85);
+    filter: var(--pk-member-logo-hover-filter);
+    mix-blend-mode: var(--pk-member-logo-blend);
     transition: filter 0.2s ease;
   }
 
@@ -579,7 +647,10 @@ $wg-colors: (
     width: 64px;
     height: 64px;
     flex-shrink: 0;
-    font-size: 1.25rem;
+    // Two letters at 40% of the tile, the proportion every initials avatar
+    // on the site now keeps, so the mark reads as a mark and not as a
+    // caption floating in an empty square (#44).
+    font-size: 1.6rem;
     font-weight: 800;
     letter-spacing: 0.04em;
     color: #fff;
@@ -607,7 +678,7 @@ $wg-colors: (
   }
 
   &:hover .member-card-logo {
-    filter: none;
+    filter: var(--pk-member-logo-hover-filter);
   }
 
   .member-card-name {
@@ -619,18 +690,21 @@ $wg-colors: (
 
   .member-card-slogan {
     font-size: 0.8rem;
-    color: $gray-500;
+    color: var(--pk-ink-muted);
     margin-bottom: 0.5rem;
   }
 
   .member-card-description {
     font-size: 0.8rem;
-    color: $gray-600;
+    color: var(--pk-ink-muted);
     line-height: 1.4;
     flex: 1;
   }
 
   .member-card-wgs {
+    // Above the stretched link, so the tags are not swallowed by it.
+    position: relative;
+    z-index: 2;
     margin-top: 0.75rem;
     display: flex;
     flex-wrap: wrap;
@@ -650,8 +724,14 @@ $wg-colors: (
   }
 
   .member-card-social {
+    position: relative;
+    z-index: 2;
     margin-top: 0.6rem;
     align-self: center;
+    // social.html no longer pads its own anchors; the row owns the spacing.
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
     background: rgba(255, 255, 255, 0.92);
     border-radius: 999px;
     padding: 0.2rem 0.4rem;
@@ -675,6 +755,8 @@ $wg-colors: (
   }
 
   .member-card-sponsor-footer {
+    position: relative;
+    z-index: 2;
     align-self: stretch;
     // Break out of the card's padding to sit flush with the card edges
     margin: auto -1.25rem -1.25rem;
@@ -687,6 +769,59 @@ $wg-colors: (
     color: #fff;
     border-radius: 0 0 1rem 1rem;
   }
+}
+
+// Standalone initials avatar — same palette as .member-card-initials above, but
+// usable outside a .member-card wrapper (member profile hero/representative
+// avatars, which aren't grid cards).
+.standalone-initials {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: #fff;
+  user-select: none;
+
+  // Each size keeps the letters at 40% of the circle. The two big rounds on a
+  // member's profile were the worst case of #44: a 120px hero wearing 32px
+  // letters read as a mostly empty disc.
+  &.standalone-initials--representative {
+    width: 100px;
+    height: 100px;
+    font-size: 2.5rem;
+  }
+
+  &.standalone-initials--hero {
+    width: 120px;
+    height: 120px;
+    font-size: 3rem;
+  }
+
+  &.initial-color-0 {
+    background: linear-gradient(135deg, #2a7a4f, #1a5c3a);
+  }
+  &.initial-color-1 {
+    background: linear-gradient(135deg, #1d4ed8, #1e40af);
+  }
+  &.initial-color-2 {
+    background: linear-gradient(135deg, #d97706, #b45309);
+  }
+  &.initial-color-3 {
+    background: linear-gradient(135deg, #7c3aed, #5b21b6);
+  }
+  &.initial-color-4 {
+    background: linear-gradient(135deg, #dc2626, #991b1b);
+  }
+  &.initial-color-5 {
+    background: linear-gradient(135deg, #0891b2, #0e7490);
+  }
+}
+
+.member-profile-logo {
+  height: 150px;
+  max-width: 60%;
 }
 
 // --- Color highlight sections ---

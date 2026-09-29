@@ -6,6 +6,101 @@ let speakersData = [];
 let locationsData = [];
 let dataPromise = null;
 
+/**
+ * Owns the timer and value for keyboard-driven incremental search. Keeping
+ * this state together prevents event views from drifting in how they reset
+ * and extend the search query.
+ */
+export function createIncrementalSearchBuffer(resetDelay = 1000) {
+    let value = '';
+    let resetTimer = null;
+
+    function reset() {
+        value = '';
+        if (resetTimer) {
+            clearTimeout(resetTimer);
+            resetTimer = null;
+        }
+    }
+
+    function append(character) {
+        value += character;
+        if (resetTimer) {
+            clearTimeout(resetTimer);
+        }
+        resetTimer = setTimeout(() => {
+            value = '';
+            resetTimer = null;
+        }, resetDelay);
+        return value;
+    }
+
+    return {
+        append,
+        reset,
+        get value() {
+            return value;
+        }
+    };
+}
+
+/** Maps keyboard shortcuts 1-9 and 0 to zero-based item indexes. */
+export function shortcutIndexForKey(key) {
+    if (!/^[0-9]$/.test(key)) {
+        return null;
+    }
+    const numericValue = parseInt(key, 10);
+    return numericValue === 0 ? 9 : numericValue - 1;
+}
+
+/** Selects an item for a numeric shortcut when the target exists. */
+export function activateNumericShortcut(key, items, onSelect) {
+    const index = shortcutIndexForKey(key);
+    if (index === null || index < 0 || index >= items.length) {
+        return false;
+    }
+    onSelect(index);
+    return true;
+}
+
+/** Handles the common letter-search and numeric-selection keyboard branch. */
+export function handleSearchOrNumericShortcut(event, { onSearch, items, onBeforeSelect, onSelect }) {
+    if (/^[a-zA-Z]$/.test(event.key)) {
+        onSearch(event.key);
+        return true;
+    }
+    if (/^[0-9]$/.test(event.key)) {
+        onBeforeSelect();
+        activateNumericShortcut(event.key, items, onSelect);
+        return true;
+    }
+    return false;
+}
+
+/**
+ * Starts the common event-display lifecycle and returns a disposer so tests
+ * and future view transitions can clean up listeners and intervals.
+ */
+export async function initializeEventDisplay({ update, onKeyDown, isAutoUpdateEnabled, intervalMs = 60000 }) {
+    await loadEventData();
+    update();
+
+    const refresh = () => {
+        if (isAutoUpdateEnabled()) {
+            update();
+        }
+    };
+    const intervalId = setInterval(refresh, intervalMs);
+    window.addEventListener('hashchange', update);
+    window.addEventListener('keydown', onKeyDown);
+
+    return () => {
+        clearInterval(intervalId);
+        window.removeEventListener('hashchange', update);
+        window.removeEventListener('keydown', onKeyDown);
+    };
+}
+
 function formatTimeFromDate(date) {
     const hours = date.getHours().toString().padStart(2, '0');
     const minutes = date.getMinutes().toString().padStart(2, '0');
@@ -308,14 +403,13 @@ export function getNextAgendaSlot({ day, time }) {
     return null;
 }
 
-export function getSessionsForTime({ day, time, location, startOffsetSeconds = 0, endOffsetSeconds = 0 }) {
+function forEachSessionInTimeWindow({ day, time, location, startOffsetSeconds = 0, endOffsetSeconds = 0 }, visitor) {
     const currentSeconds = time ? parseTime(time) : null;
     const agendaSource = getFilteredAgenda(day);
-    const sessions = [];
 
-    Object.values(agendaSource).forEach(dayAgenda => {
+    Object.entries(agendaSource).forEach(([dayKey, dayAgenda]) => {
         dayAgenda.forEach((agendaSlot, index) => {
-            if (!agendaSlot.sessions || !Array.isArray(agendaSlot.sessions)) {
+            if (!Array.isArray(agendaSlot.sessions)) {
                 return;
             }
 
@@ -323,23 +417,23 @@ export function getSessionsForTime({ day, time, location, startOffsetSeconds = 0
             const endSeconds = agendaSlot.endTime
                 ? (parseTime(agendaSlot.endTime) ?? 0)
                 : (dayAgenda[index + 1] ? (parseTime(dayAgenda[index + 1].time) ?? 0) : startSeconds + 3600);
-            const matchesTime = isWithinTimeWindow(currentSeconds, startSeconds, endSeconds, startOffsetSeconds, endOffsetSeconds);
-
-            if (!matchesTime) {
+            if (!isWithinTimeWindow(currentSeconds, startSeconds, endSeconds, startOffsetSeconds, endOffsetSeconds)) {
                 return;
             }
 
             agendaSlot.sessions.forEach((session) => {
-                if (location) {
-                    if (session.locations && session.locations.includes(location)) {
-                        sessions.push(session);
-                    }
-                } else {
-                    sessions.push(session);
+                if (location && (!Array.isArray(session.locations) || !session.locations.includes(location))) {
+                    return;
                 }
+                visitor({ dayKey, session, startSeconds, endSeconds });
             });
         });
     });
+}
+
+export function getSessionsForTime(options) {
+    const sessions = [];
+    forEachSessionInTimeWindow(options, ({ session }) => sessions.push(session));
 
     return sessions;
 }
@@ -462,63 +556,32 @@ export function getSpeakersForTime({ day, time, location, speakerName, startOffs
 }
 
 export function getSessionSpeakerGroups({ day, time, location, startOffsetSeconds = 0, endOffsetSeconds = 0 }) {
-    const currentSeconds = time ? parseTime(time) : null;
-    
-    // STRICT: If day is specified, ONLY use that day. No fallbacks.
-    const agendaSource = getFilteredAgenda(day);
-    
-    console.debug('[getSessionSpeakerGroups] Filtered agenda', {
-        requestedDay: day,
-        foundDays: Object.keys(agendaSource)
-    });
-    
     const groups = [];
 
-    Object.entries(agendaSource).forEach(([dayKey, dayAgenda]) => {
-        dayAgenda.forEach((agendaSlot, index) => {
-            if (!agendaSlot.sessions || !Array.isArray(agendaSlot.sessions)) {
+    forEachSessionInTimeWindow(
+        { day, time, location, startOffsetSeconds, endOffsetSeconds },
+        ({ dayKey, session, startSeconds, endSeconds }) => {
+            if (!Array.isArray(session.speakers)) {
                 return;
             }
 
-            const startSeconds = parseTime(agendaSlot.time) ?? 0;
-            const endSeconds = agendaSlot.endTime
-                ? (parseTime(agendaSlot.endTime) ?? 0)
-                : (dayAgenda[index + 1] ? (parseTime(dayAgenda[index + 1].time) ?? 0) : startSeconds + 3600);
-            const matchesTime = isWithinTimeWindow(currentSeconds, startSeconds, endSeconds, startOffsetSeconds, endOffsetSeconds);
+            const speakersForSession = session.speakers
+                .map((name) => findSpeakerByName(name) || speakersData.find((s) => s.name === name))
+                .filter(Boolean);
 
-            if (!matchesTime) {
+            if (speakersForSession.length === 0) {
                 return;
             }
 
-            agendaSlot.sessions.forEach((session) => {
-                if (!session.speakers || !Array.isArray(session.speakers)) {
-                    return;
-                }
-
-                if (location) {
-                    if (!session.locations || !session.locations.includes(location)) {
-                        return;
-                    }
-                }
-
-                const speakersForSession = session.speakers
-                    .map((name) => findSpeakerByName(name) || speakersData.find((s) => s.name === name))
-                    .filter(Boolean);
-
-                if (speakersForSession.length === 0) {
-                    return;
-                }
-
-                groups.push({
-                    day: dayKey,
-                    session,
-                    startSeconds,
-                    endSeconds,
-                    speakers: speakersForSession
-                });
+            groups.push({
+                day: dayKey,
+                session,
+                startSeconds,
+                endSeconds,
+                speakers: speakersForSession
             });
-        });
-    });
+        }
+    );
 
     console.debug('[getSessionSpeakerGroups] Found groups', {
         groupCount: groups.length,

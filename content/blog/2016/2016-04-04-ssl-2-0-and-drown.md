@@ -24,6 +24,15 @@ title: SSL 2.0 and DROWN
 aliases:
 - ssl-2-0-and-drown
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 A team of researchers has announced a vulnerability with [SSL 2.0][1] called **D**ecrypting **R**SA with **O**bsolete and **W**eakened e**N**cryption; otherwise known as [DROWN][2].
 

@@ -1,43 +1,53 @@
 {{ define "main" }}
 {{ partial "hero.html" . }}
 
-<div class="py-2 bg-light">
-</div>
+{{/*
+  The sidebar split reuses `events-page-layout` / `events-page-menu` /
+  `events-page-menu-sticky` from assets/scss/_events-listing.scss, written for
+  exactly this `col-md-4 … d-md-block collapse` pattern when
+  layouts/events/list.html migrated: the grid replaces the row/column pair, and
+  the menu is hidden below the medium breakpoint the way `d-md-block collapse`
+  used to hide it — the same menu is reachable from the navbar there.
 
-<div class="container">
-    <div class="row">
-        {{- if $.Page.FirstSection.Param "sideMenu" -}}
-        <nav id="sidebarMenu" class="col-md-4 col-lg-3 d-md-block bg-light sidebar collapse">
-            <div class="position-sticky p-3 sidebar-sticky">
-                {{- partial "menu.html" . -}}
-            </div>
-        </nav>
-        <div id="content" class="col-md-8 ms-sm-auto col-lg-9 p-4" data-pagefind-body>
-        {{- else -}}
-        <div id="content" class="p-4" data-pagefind-body>
-        {{- end -}}
+  No `.pk` root: `.Content` is authored markdown still styled by the legacy
+  sheet, and the base layer beats that sheet, so opting in would restyle every
+  element the markdown emits. The utilities are unscoped, so the measured
+  column, the section rhythm and the card grid come from them.
 
-        {{ .Content }}
-
-        {{- if not ($.Page.FirstSection.Param "sideMenu") -}}
-            {{- if not .Params.noPages -}}
-            <section class="mt-3">
-                <div class="row g-3">
-                    {{- range .RegularPages -}}
-                        {{- if not .Params.robots -}}
-                        <div class="col-sm-6 col-lg-4">
-                            {{- partial "subpage-card.html" . -}}
-                        </div>
-                        {{- end -}}
-                    {{- end -}}
-                </div>
-            </section>
-            {{- with .Params.note -}}
-            <p class="mt-4 text-muted"><small>{{ . | markdownify }}</small></p>
-            {{- end -}}
-            {{- end -}}
-        {{- end -}}
+  The empty `py-2 bg-light` band above the body is gone: it carried no content
+  and existed only to paint a Bootstrap grey strip under the hero.
+*/}}
+{{- if $.Page.FirstSection.Param "sideMenu" -}}
+<div class="pk-container pk-section events-page-layout">
+    <nav id="sidebarMenu" class="events-page-menu" aria-label="Section navigation">
+        <div class="events-page-menu-sticky">
+            {{- partial "menu.html" . -}}
         </div>
+    </nav>
+    <div id="content" data-pagefind-body>
+        {{ .Content }}
     </div>
 </div>
+{{- else -}}
+<div class="pk-container pk-section">
+    <div id="content" data-pagefind-body>
+        {{ .Content }}
+
+        {{- if not .Params.noPages -}}
+        <section class="pk-stack pk-stack--loose">
+            <div class="pk-grid pk-grid--roomy">
+                {{- range .RegularPages -}}
+                    {{- if not .Params.robots -}}
+                    {{- partial "subpage-card.html" . -}}
+                    {{- end -}}
+                {{- end -}}
+            </div>
+            {{- with .Params.note -}}
+            <p class="pk-small">{{ . | markdownify }}</p>
+            {{- end -}}
+        </section>
+        {{- end -}}
+    </div>
+</div>
+{{- end -}}
 {{ end }}

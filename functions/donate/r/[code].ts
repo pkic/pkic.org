@@ -83,7 +83,7 @@ function buildPromoterOgHtml(
   const ogImageAlt = esc(buildPromoterOgImageAlt(promoter.name));
   const ogUrl = esc(`${appBaseUrl}/donate/r/${encodeURIComponent(code)}`);
   const ogImage = promoter.checkout_session_id
-    ? esc(`${appBaseUrl}/api/v1/og/donation/${encodeURIComponent(promoter.checkout_session_id)}`)
+    ? esc(`${appBaseUrl}/api/v1/donations/checkouts/${encodeURIComponent(promoter.checkout_session_id)}/badge`)
     : esc(`${appBaseUrl}/images/donate-og.jpg`); // fallback static image
   const canonical = esc(donateUrl);
 

@@ -18,6 +18,16 @@ tags:
 title: Securing Software Distribution with Digital Code Signing
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
+  - name: Jeremy Rowley
 ---
 Code signing certificates from publicly trusted Certification Authorities (CAs) fulfill a vital need for authentication of software distributed over the Internet in our interconnected world. As the commonly referred to “Internet of things” continues to grow, consumers have access to millions of applications for their desktops, laptops, and mobile devices. Creative software engineers provide us with applications to cover any of our potential needs or interests. Cybercriminals and others with malicious intent recognize this as an opportunity and seek to trick us into installing malicious software (malware) — programs that hijack our computers, steal our money, or try to inflict harm.
 

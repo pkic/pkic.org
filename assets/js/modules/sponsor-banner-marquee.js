@@ -53,37 +53,45 @@ window.pkicLogoUtils = {
 };
 
 (function () {
-  var banner = document.querySelector('.members .banner');
-  if (!banner) return;
+  // The banner's sponsor/member logos are fetched and rendered async by
+  // sponsors-wall.tsx, so the anchors may not exist yet on first run — retry
+  // once they've been mounted (see member:wall-rendered in that module).
+  function setup() {
+    var banner = document.querySelector('.members .banner');
+    if (!banner || banner.querySelector('.banner-track')) return;
 
-  var links = Array.from(banner.querySelectorAll('a[data-sponsor-level]'));
-  if (links.length < 2) return;
+    var links = Array.from(banner.querySelectorAll('a[data-sponsor-level]'));
+    if (links.length < 2) return;
 
-  var b = logoBuckets(links);
-  var sequence = logoBuildSequence(b.sponsors, b.nonSponsors);
+    var b = logoBuckets(links);
+    var sequence = logoBuildSequence(b.sponsors, b.nonSponsors);
 
-  function makeCopy(items, hidden) {
-    var span = document.createElement('span');
-    span.className = 'banner-copy';
-    if (hidden) span.setAttribute('aria-hidden', 'true');
-    items.forEach(function (item) { span.appendChild(item.el.cloneNode(true)); });
-    return span;
+    function makeCopy(items, hidden) {
+      var span = document.createElement('span');
+      span.className = 'banner-copy';
+      if (hidden) span.setAttribute('aria-hidden', 'true');
+      items.forEach(function (item) { span.appendChild(item.el.cloneNode(true)); });
+      return span;
+    }
+
+    var track = document.createElement('div');
+    track.className = 'banner-track';
+    var copy1 = makeCopy(sequence, false);
+    var copy2 = makeCopy(sequence, true);
+    track.appendChild(copy1);
+    track.appendChild(copy2);
+    banner.innerHTML = '';
+    banner.appendChild(track);
+
+    requestAnimationFrame(function () {
+      var w = copy1.scrollWidth;
+      if (w > 0) track.style.animationDuration = Math.max(20, Math.round(w / 80)) + 's';
+    });
+
+    banner.addEventListener('mouseenter', function () { track.style.animationPlayState = 'paused'; });
+    banner.addEventListener('mouseleave', function () { track.style.animationPlayState = 'running'; });
   }
 
-  var track = document.createElement('div');
-  track.className = 'banner-track';
-  var copy1 = makeCopy(sequence, false);
-  var copy2 = makeCopy(sequence, true);
-  track.appendChild(copy1);
-  track.appendChild(copy2);
-  banner.innerHTML = '';
-  banner.appendChild(track);
-
-  requestAnimationFrame(function () {
-    var w = copy1.scrollWidth;
-    if (w > 0) track.style.animationDuration = Math.max(20, Math.round(w / 80)) + 's';
-  });
-
-  banner.addEventListener('mouseenter', function () { track.style.animationPlayState = 'paused'; });
-  banner.addEventListener('mouseleave', function () { track.style.animationPlayState = 'running'; });
+  setup();
+  document.addEventListener('member:wall-rendered', setup);
 })();

@@ -20,7 +20,10 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   padding: 0;
 
-  .container {
+  // Both layouts that render this nav — `wg/section.html` and
+  // `wg/sub-navigation.html` — are on `.pk-container` now. The rail must keep
+  // its horizontal scroll.
+  .pk-container {
     overflow-x: auto;
     scrollbar-width: none;
     &::-webkit-scrollbar {
@@ -151,19 +154,27 @@
 .wg-data-body > section:first-child {
   padding-top: 1.5rem !important;
 
-  > .container > *:first-child {
-    margin-top: 0;
-  }
 }
 
 // ─── WG sub-pages explore cards ───────────────────────────────────────
 
 .wg-explore-card {
+  // The card owns what its markup used to ask Bootstrap for: it fills its grid
+  // cell, it is a column with one rhythm between its lines, and it is a link
+  // that does not underline. Both callers — `subpage-card.html` and the
+  // "Explore this Working Group" grid in `wg/section.html` — get all of it,
+  // including a working `pk-push-block` on the arrow, without repeating a
+  // layout class each.
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--pk-1);
   padding: 1.25rem;
   border-radius: 0.85rem;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: #fff;
+  border: 1px solid var(--pk-line);
+  background: var(--pk-surface);
   color: inherit;
+  text-decoration: none;
   transition:
     transform 0.15s ease,
     box-shadow 0.15s ease,
@@ -185,20 +196,19 @@
 .wg-explore-title {
   font-size: 0.95rem;
   font-weight: 700;
-  color: #111;
-  margin-bottom: 0.25rem;
+  color: var(--pk-ink);
 }
 
 .wg-explore-desc {
   font-size: 0.8rem;
-  color: $gray-600;
+  color: var(--pk-ink-muted);
   line-height: 1.45;
 }
 
 .wg-explore-arrow {
   font-size: 0.82rem;
   font-weight: 600;
-  color: $green;
+  color: var(--pk-accent-ink);
   padding-top: 0.5rem;
 }
 
@@ -491,8 +501,8 @@
 .pqc-conf-past-card {
   padding: 1.25rem 1.25rem 1rem;
   border-radius: 0.85rem;
-  border: 1px solid rgba(0, 0, 0, 0.08);
-  background: #fff;
+  border: 1px solid var(--pk-line);
+  background: var(--pk-surface);
   color: inherit;
   transition:
     transform 0.15s ease,
@@ -514,14 +524,14 @@
 .pqc-conf-past-title {
   font-size: 0.9rem;
   font-weight: 700;
-  color: #111;
+  color: var(--pk-ink);
   margin-bottom: 0.25rem;
   line-height: 1.35;
 }
 
 .pqc-conf-past-meta {
   font-size: 0.78rem;
-  color: $gray-600;
+  color: var(--pk-ink-muted);
   margin-bottom: 0.6rem;
 }
 
@@ -632,3 +642,26 @@
 }
 
 // ─── WG leadership panel ────────────────────────────────────────────────────
+
+// The introduction and leadership are two complementary columns, not a card grid.
+.wg-intro-layout {
+  > :first-child {
+    line-height: 1.65;
+  }
+
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--pk-6);
+  align-items: start;
+
+  @media (min-width: 60rem) {
+    grid-template-columns: minmax(0, 2fr) minmax(20rem, 1fr);
+  }
+}
+
+.wg-page-actions {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--pk-4);
+}

@@ -1,3 +1,5 @@
+import { HTTPException } from "hono/http-exception";
+import { dependencyFailure } from "./dependency-failure";
 import { isAppError } from "./errors";
 
 export function json(data: unknown, status = 200, headers?: HeadersInit): Response {
@@ -19,8 +21,50 @@ export function jsonNoStore(data: unknown, status = 200, headers?: HeadersInit):
   });
 }
 
+/** Security headers for identity- and capability-sensitive browser flows. */
+export function jsonPrivate(data: unknown, status = 200, headers?: HeadersInit): Response {
+  return jsonNoStore(data, status, {
+    "content-security-policy": "default-src 'none'; frame-ancestors 'none'",
+    "referrer-policy": "no-referrer",
+    "x-content-type-options": "nosniff",
+    "x-robots-tag": "noindex, nofollow, noarchive",
+    ...headers,
+  });
+}
+
 export function noContent(): Response {
   return new Response(null, { status: 204 });
+}
+
+type RequestContext = { req: { raw: Request } };
+type RequestMethodHandler<Context extends RequestContext> = (context: Context) => Response | Promise<Response>;
+
+export function methodNotAllowed(allowedMethods: readonly string[]): Response {
+  return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405, {
+    allow: allowedMethods.join(", "),
+  });
+}
+
+/**
+ * Keeps the Cloudflare Pages `onRequest` compatibility export as a thin HTTP
+ * adapter. Domain routes still export their method-specific handlers; this
+ * helper owns only exact method selection and the canonical 405 response.
+ */
+export async function dispatchRequestMethod<Context extends RequestContext>(
+  context: Context,
+  handlers: Readonly<Record<string, RequestMethodHandler<Context>>>,
+): Promise<Response> {
+  const method = context.req.raw.method.toUpperCase();
+  const handler = handlers[method];
+  if (!handler) return methodNotAllowed(Object.keys(handlers));
+  return handler(context);
+}
+
+export function dispatchPostOnly<Context extends RequestContext>(
+  context: Context,
+  handler: RequestMethodHandler<Context>,
+): Promise<Response> {
+  return dispatchRequestMethod(context, { POST: handler });
 }
 
 /**
@@ -39,8 +83,9 @@ export function markSensitive(context: { data?: Record<string, unknown> }): void
 }
 
 export function handleError(error: unknown): Response {
+  error = dependencyFailure(error) ?? error;
   if (isAppError(error)) {
-    return json(
+    return jsonNoStore(
       {
         error: {
           code: error.code,
@@ -51,6 +96,15 @@ export function handleError(error: unknown): Response {
       error.status,
     );
   }
+
+  /*
+   * A request the framework already refused — chanfana's contract validation
+   * throws Hono's HTTPException carrying the 400 it wants sent — is not a
+   * crash. It used to fall through to here, be logged as unhandled with a
+   * full stack, and reach the client as a 500 "Internal server error" in
+   * place of the validation details the exception was carrying (#87).
+   */
+  if (error instanceof HTTPException) return error.getResponse();
 
   console.error("[handleError] Unhandled error:", error);
   return json(

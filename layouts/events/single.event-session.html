@@ -5,6 +5,9 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{{ .Title }} - Event Session</title>
+    {{ $style := partial "site-stylesheet.html" . }}
+    <link rel="stylesheet" href="{{ $style.RelPermalink }}">
+    {{ partial "frontend-styles.html" . }}
     <style>
         @font-face {
             font-family: "Roboto";
@@ -167,7 +170,7 @@
             letter-spacing: 0.3px;
             white-space: nowrap;
         }
-        
+
         /* Ensure headshot images have consistent sizing and are blocks */
         .headshot {
             display: block;
@@ -762,18 +765,7 @@
 
     <div id="footer">
         <div id="sponsors">
-            {{ .Scratch.Set "sponsoring" "Post-Quantum Cryptography Conference Kuala Lumpur 2025" }}
-            {{ .Scratch.Set "level" "Diamond" }}
-            {{ partial "sponsors/grid.html" . }}
-
-            {{ .Scratch.Set "level" "Titanium" }}
-            {{ partial "sponsors/grid.html" . }}
-
-            {{ .Scratch.Set "level" "Leader" }}
-            {{ partial "sponsors/grid.html" . }}
-
-            {{ .Scratch.Set "level" "Platinum" }}
-            {{ partial "sponsors/grid.html" . }}
+            {{ partial "sponsors/wall-app.html" (dict "mode" "strip" "eventName" "Post-Quantum Cryptography Conference Kuala Lumpur 2025" "minWeight" 4 "containerClass" "sponsors-list" "logoClass" "sponsor-logo") }}
         </div>
 
         <div id="textbar" class="yellow-black">
@@ -787,6 +779,7 @@
         <img src="/img/logo.svg" id="logo" alt="PKI Consortium">
     </div>
 
+{{ partial "frontend-loader.html" . }}
 </body>
 
 </html>

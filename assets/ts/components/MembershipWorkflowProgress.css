@@ -1,0 +1,91 @@
+/* Compact process timeline shared by the public applicant status and staff review. */
+@layer components {
+  .membership-progress__version {
+    margin: 0 0 var(--pk-4);
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+
+  .membership-progress__steps {
+    display: grid;
+    gap: 0;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .membership-progress__step {
+    position: relative;
+    display: grid;
+    grid-template-columns: var(--pk-7) minmax(0, 1fr);
+    gap: var(--pk-3);
+    padding-block-end: var(--pk-5);
+  }
+
+  .membership-progress__step:not(:last-child)::before {
+    content: "";
+    position: absolute;
+    inset-block: var(--pk-7) 0;
+    inset-inline-start: calc(var(--pk-7) / 2);
+    width: 2px;
+    translate: -1px 0;
+    background: var(--pk-line-strong);
+  }
+
+  .membership-progress__step:last-child {
+    padding-block-end: 0;
+  }
+
+  .membership-progress__marker {
+    position: relative;
+    z-index: 1;
+    display: grid;
+    place-items: center;
+    width: var(--pk-7);
+    height: var(--pk-7);
+    border: 2px solid var(--pk-line-strong);
+    border-radius: var(--pk-radius-pill);
+    background: var(--pk-surface);
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+    font-weight: 600;
+  }
+
+  .membership-progress__step--complete .membership-progress__marker {
+    border-color: var(--pk-ok);
+    background: var(--pk-ok-soft);
+    color: var(--pk-ok-ink);
+  }
+
+  .membership-progress__step--active .membership-progress__marker {
+    border-color: var(--pk-accent);
+    background: var(--pk-accent-soft);
+    color: var(--pk-accent-ink);
+  }
+
+  .membership-progress__heading {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--pk-2) var(--pk-3);
+  }
+
+  .membership-progress__heading h4,
+  .membership-progress__content p {
+    margin: 0;
+  }
+
+  .membership-progress__dates {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-2) var(--pk-4);
+    color: var(--pk-ink-muted);
+  }
+
+  .membership-progress__payment {
+    padding: var(--pk-3);
+    border-inline-start: 3px solid var(--pk-accent);
+    background: var(--pk-surface-sunk);
+  }
+}

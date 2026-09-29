@@ -1,5 +1,5 @@
 {{/*
-  col.html — Bootstrap column for use inside {{% row %}} in Markdown content.
+  col.html — responsive content-grid column for use inside {{% row %}}.
 
   Use with the percent-sign syntax so inner Markdown is rendered:
     {{% col size="7" %}}
@@ -8,10 +8,10 @@
     {{% /col %}}
 
   Parameters (all optional):
-    size    — Bootstrap lg column width 1–12 (default: auto)
-    sm      — Bootstrap sm column width 1–12 (default: none)
-    md      — Bootstrap md column width 1–12 (default: none)
-    sticky  — If "true", makes the column sticky (position:sticky; top:5rem)
+    size    — large-screen column span 1–12 (default: 12)
+    sm      — small-screen column span 1–12 (default: 12)
+    md      — medium-screen column span 1–12 (default: 12)
+    sticky  — If "true", keeps the column visible on large screens
     class   — Extra CSS classes to add to the column div
 */}}
 {{- $size   := .Get "size"   | default "" -}}
@@ -20,12 +20,13 @@
 {{- $sticky := .Get "sticky" | default "" -}}
 {{- $class  := .Get "class"  | default "" -}}
 
-{{- $colClass := "col" -}}
-{{- with $sm     }}{{- $colClass = printf "%s col-sm-%s"  $colClass . -}}{{ end -}}
-{{- with $md     }}{{- $colClass = printf "%s col-md-%s"  $colClass . -}}{{ end -}}
-{{- with $size   }}{{- $colClass = printf "%s col-lg-%s"  $colClass . -}}{{ end -}}
+{{- $colClass := "content-col" -}}
+{{- with $sm     }}{{- $colClass = printf "%s content-col--sm-%s" $colClass . -}}{{ end -}}
+{{- with $md     }}{{- $colClass = printf "%s content-col--md-%s" $colClass . -}}{{ end -}}
+{{- with $size   }}{{- $colClass = printf "%s content-col--lg-%s" $colClass . -}}{{ end -}}
+{{- if eq $sticky "true" }}{{- $colClass = printf "%s content-col--sticky" $colClass -}}{{ end -}}
 {{- with $class  }}{{- $colClass = printf "%s %s"         $colClass . -}}{{ end -}}
 
-<div class="{{ $colClass }}"{{ with $sticky }} style="position:sticky;top:5rem"{{ end }}>
+<div class="{{ $colClass }}">
 {{ .Inner }}
 </div>

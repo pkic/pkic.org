@@ -1,6 +1,5 @@
 import eslint from "@eslint/js";
 import eslintConfigPrettier from "eslint-config-prettier";
-import eslintPluginPrettier from "eslint-plugin-prettier/recommended";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
@@ -8,9 +7,10 @@ const sourceTypeScriptFiles = [
   "functions/**/*.ts",
   "assets/ts/**/*.{ts,tsx}",
   "assets/shared/**/*.ts",
-  "tests/**/*.ts",
+  "assets/design/**/*.ts",
+  "tests/**/*.{ts,tsx}",
 ];
-const toolingTypeScriptFiles = ["*.config.ts"];
+const toolingTypeScriptFiles = ["*.config.ts", "tests/tools/**/*.ts"];
 const allTypeScriptFiles = [...sourceTypeScriptFiles, ...toolingTypeScriptFiles];
 
 const typedTypeScriptConfigs = tseslint.configs.recommendedTypeChecked.map((config) => ({
@@ -23,6 +23,13 @@ export default tseslint.config(
     ignores: [
       "**/._*",
       ".cache/**",
+      ".claude/**",
+      ".design-sync/**",
+      "types/**",
+      "assets/**/*.d.ts",
+      ".ds-sync/**",
+      "ds-bundle/**",
+      ".venv/**",
       ".wrangler/**",
       "backups/**",
       "coverage/**",
@@ -66,7 +73,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["assets/js/**/*.js", "static/scripts/**/*.js"],
+    files: ["assets/js/**/*.js", "static/js/*.js", "static/scripts/**/*.js"],
     languageOptions: {
       globals: globals.browser,
     },
@@ -114,9 +121,44 @@ export default tseslint.config(
       "@typescript-eslint/unbound-method": "off",
     },
   },
-  eslintConfigPrettier,
   {
-    ...eslintPluginPrettier,
-    files: sourceTypeScriptFiles,
+    files: ["functions/api/**/*.ts"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: ["**/_lib/db/queries", "**/_lib/db/pagination"],
+              message: "API adapters must call a focused service instead of importing SQL execution helpers.",
+            },
+            {
+              group: ["**/_lib/services/audit"],
+              message: "API adapters must call a focused use case that owns the operation and its audit record.",
+            },
+          ],
+        },
+      ],
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "CallExpression[callee.property.name='prepare']",
+          message: "API adapters must not prepare SQL; move the query or mutation into a focused service.",
+        },
+        {
+          selector: "CallExpression[callee.property.name='batch']",
+          message: "API adapters must not execute D1 batches; the service must own the complete atomic unit of work.",
+        },
+        {
+          selector: "Literal[value=405]",
+          message:
+            "API adapters must use dispatchRequestMethod/dispatchPostOnly so 405 responses and Allow headers stay canonical.",
+        },
+      ],
+    },
   },
+  // Formatting is enforced once by format:check in the complete check gate.
+  // Keep conflicting style rules disabled without running Prettier per file
+  // through ESLint's synchronous worker bridge as well.
+  eslintConfigPrettier,
 );

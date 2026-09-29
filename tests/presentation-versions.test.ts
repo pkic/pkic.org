@@ -21,16 +21,26 @@ import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { createProposal, addProposalSpeaker, finalizeProposalDecision } from "../functions/_lib/services/proposals";
 import {
   createPresentationVersion,
+  deletePresentationVersion,
+  getPresentationVersion,
+  listProposalPresentationVersions,
   presentationDownloadResponse,
+  reviewPresentationVersion,
 } from "../functions/_lib/services/presentation-versions";
 import { getPresentationUploader } from "../functions/_lib/services/proposals-speaker-profile";
 import app from "../functions/router";
+import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
 import {
   MAX_PRESENTATION_BYTES,
   PRESENTATION_FILE_NAME_HEADER,
   PRESENTATION_FILE_SIZE_HEADER,
   presentationUploadRequest,
 } from "../assets/shared/presentation-upload";
+import {
+  getPresentationProposalContext,
+  uploadProposalPresentation,
+} from "../functions/_lib/services/presentation-upload";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 
 interface StoredObject {
   body: ReadableStream | null;
@@ -44,6 +54,7 @@ class FakePresentationBucket {
   putCalls = 0;
   putKeys: string[] = [];
   lastPutWasStream = false;
+  deleteFailuresRemaining = 0;
 
   async put(
     key: string,
@@ -91,7 +102,15 @@ class FakePresentationBucket {
   }
 
   async delete(key: string) {
+    if (this.deleteFailuresRemaining > 0) {
+      this.deleteFailuresRemaining -= 1;
+      throw new Error("Simulated R2 deletion failure");
+    }
     this.objects.delete(key);
+  }
+
+  keys(): string[] {
+    return [...this.objects.keys()].sort();
   }
 }
 
@@ -113,6 +132,36 @@ class CountingPresentationBucket {
   }
 
   async delete() {}
+}
+
+class BlockingPresentationBucket extends FakePresentationBucket {
+  private readonly releasePromise: Promise<void>;
+  private releaseUpload!: () => void;
+  private signalStarted!: () => void;
+  readonly started = new Promise<void>((resolve) => {
+    this.signalStarted = resolve;
+  });
+
+  constructor() {
+    super();
+    this.releasePromise = new Promise<void>((resolve) => {
+      this.releaseUpload = resolve;
+    });
+  }
+
+  release(): void {
+    this.releaseUpload();
+  }
+
+  override async put(
+    key: string,
+    value: string | ArrayBuffer | ArrayBufferView | ReadableStream | Blob | null,
+    options?: Record<string, unknown>,
+  ) {
+    this.signalStarted();
+    await this.releasePromise;
+    return super.put(key, value, options);
+  }
 }
 
 const FAKE_PDF = new Uint8Array([0x25, 0x50, 0x44, 0x46]); // %PDF magic bytes
@@ -157,7 +206,7 @@ async function seed() {
   // Accept the proposal so uploads are allowed.
   await finalizeProposalDecision(env.DB, {
     proposalId: proposal.id,
-    decidedByUserId: adminRow.id,
+    actor: { identityType: "user", id: adminRow.id, email: "admin@pkic.org", role: "admin" },
     finalStatus: "accepted",
     minReviewsRequired: 0,
   });
@@ -169,6 +218,38 @@ async function seed() {
     speakerUserId,
     adminUserId: adminRow.id,
     adminToken,
+  };
+}
+
+async function scopedPresentationActor(
+  eventId: string,
+  grantedByUserId: string,
+  permission: "proposals:read" | "proposals:manage" = "proposals:manage",
+) {
+  const userId = crypto.randomUUID();
+  const email = `presentation-manager-${userId}@example.test`;
+  await env.DB.prepare(
+    `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
+     VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+  )
+    .bind(userId, email, email)
+    .run();
+  const grantId = crypto.randomUUID();
+  await env.DB.prepare(
+    `INSERT INTO permission_grants (id, user_id, permission, context_type, context_id, granted_by_user_id, created_at)
+     VALUES (?, ?, ?, 'event', ?, ?, datetime('now'))`,
+  )
+    .bind(grantId, userId, permission, eventId, grantedByUserId)
+    .run();
+  return {
+    grantId,
+    actor: {
+      identityType: "user" as const,
+      id: userId,
+      email,
+      role: "user",
+      grants: [{ permission, contextType: "event", contextId: eventId }],
+    },
   };
 }
 
@@ -194,7 +275,7 @@ describe("presentation versioning", () => {
     const bucket = new FakePresentationBucket();
 
     const res = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         ...presentationRequest(),
       }),
@@ -221,13 +302,164 @@ describe("presentation versioning", () => {
     expect(versions[0].deleted_at).toBeNull();
   });
 
+  it("rejects an invited speaker upload before writing to storage or D1", async () => {
+    const { proposalId, speakerToken } = await seed();
+    await env.DB.prepare("UPDATE proposal_speakers SET status = 'invited', confirmed_at = NULL WHERE proposal_id = ?")
+      .bind(proposalId)
+      .run();
+    const bucket = new FakePresentationBucket();
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
+        method: "PUT",
+        ...presentationRequest("invited.pdf"),
+      }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "SPEAKER_NOT_CONFIRMED" } });
+    expect(bucket.keys()).toEqual([]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("enforces confirmed speaker status at the upload service boundary", async () => {
+    const { proposalId, speakerUserId } = await seed();
+    await env.DB.prepare("UPDATE proposal_speakers SET status = 'invited', confirmed_at = NULL WHERE proposal_id = ?")
+      .bind(proposalId)
+      .run();
+    const bucket = new FakePresentationBucket();
+    const context = await getPresentationProposalContext(env.DB, proposalId);
+
+    const speaker = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM proposal_speakers WHERE proposal_id = ?", proposalId)
+    )[0];
+    await expect(
+      uploadProposalPresentation(
+        env.DB,
+        bucket as any,
+        new Request("https://app.test/upload", { method: "PUT", ...presentationRequest("service-invited.pdf") }),
+        context,
+        {
+          actor: { type: "user", userId: speakerUserId },
+          enforceDeadline: true,
+          authority: {
+            speaker: {
+              id: speaker.id,
+              userId: speakerUserId,
+              role: "proposer",
+              status: "invited",
+              inviteGeneration: 1,
+            },
+          },
+        },
+      ),
+    ).rejects.toMatchObject({ status: 403, code: "SPEAKER_NOT_CONFIRMED" });
+    expect(bucket.keys()).toEqual([]);
+  });
+
+  it("rejects a speaker upload when capability status changes during the R2 stream", async () => {
+    const { proposalId, speakerToken } = await seed();
+    const bucket = new BlockingPresentationBucket();
+    const envWithBucket = { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket };
+    const uploadPromise = app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
+        method: "PUT",
+        ...presentationRequest("stale-speaker.pdf"),
+      }),
+      envWithBucket,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    await bucket.started;
+    await env.DB.prepare("UPDATE proposal_speakers SET status = 'declined' WHERE proposal_id = ?")
+      .bind(proposalId)
+      .run();
+    bucket.release();
+
+    const response = await uploadPromise;
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "PRESENTATION_UPLOAD_CONFLICT" } });
+    expect(bucket.keys()).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId),
+    ).toHaveLength(0);
+  });
+
+  it("rejects a speaker upload when the proposal deadline changes during the R2 stream", async () => {
+    const { proposalId, speakerToken } = await seed();
+    const bucket = new BlockingPresentationBucket();
+    const envWithBucket = { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket };
+    const uploadPromise = app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
+        method: "PUT",
+        ...presentationRequest("stale-deadline.pdf"),
+      }),
+      envWithBucket,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    await bucket.started;
+    await env.DB.prepare("UPDATE session_proposals SET presentation_deadline = ? WHERE id = ?")
+      .bind("2099-01-01T00:00:00.000Z", proposalId)
+      .run();
+    bucket.release();
+
+    const response = await uploadPromise;
+    expect(response.status).toBe(409);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "PRESENTATION_UPLOAD_CONFLICT" } });
+    expect(bucket.keys()).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId),
+    ).toHaveLength(0);
+  });
+
+  it("rejects a speaker upload when its unchanged deadline passes during the R2 stream", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    try {
+      const startedAt = new Date("2026-08-22T12:00:00.000Z");
+      vi.setSystemTime(startedAt);
+      const { proposalId, speakerToken } = await seed();
+      const deadline = new Date(startedAt.getTime() + 60_000).toISOString();
+      await env.DB.prepare("UPDATE session_proposals SET presentation_deadline = ? WHERE id = ?")
+        .bind(deadline, proposalId)
+        .run();
+      const bucket = new BlockingPresentationBucket();
+      const uploadPromise = app.fetch(
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
+          method: "PUT",
+          ...presentationRequest("deadline-passed.pdf"),
+        }),
+        { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+        { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+      );
+
+      await bucket.started;
+      vi.setSystemTime(new Date(startedAt.getTime() + 120_000));
+      bucket.release();
+
+      const response = await uploadPromise;
+      expect(response.status).toBe(409);
+      await expect(response.json()).resolves.toMatchObject({ error: { code: "PRESENTATION_UPLOAD_CONFLICT" } });
+      expect(bucket.keys()).toEqual([]);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId),
+      ).toHaveLength(0);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("admin can upload a presentation on behalf of a speaker", async () => {
     const { proposalId, adminUserId, adminToken } = await seed();
     const bucket = new FakePresentationBucket();
     const upload = presentationRequest("admin-upload.pdf");
 
     const res = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations`, {
         method: "POST",
         ...upload,
         headers: { authorization: `Bearer ${adminToken}`, ...upload.headers },
@@ -258,13 +490,92 @@ describe("presentation versioning", () => {
     expect(auditRows).toEqual([{ actor_type: "admin", actor_id: adminUserId }]);
   });
 
+  it("keeps API-key audit identity separate from the nullable presentation uploader user", async () => {
+    const { proposalId } = await seed();
+    const bucket = new FakePresentationBucket();
+    const upload = presentationRequest("api-key-upload.pdf");
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations`, {
+        method: "POST",
+        ...upload,
+        headers: {
+          authorization: `Bearer ${env.ADMIN_API_KEY ?? "test-admin-key"}`,
+          ...upload.headers,
+        },
+      }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(200);
+    const versions = await queryAll<{ r2_key: string; uploaded_by_user_id: string | null }>(
+      env.DB,
+      "SELECT r2_key, uploaded_by_user_id FROM presentation_versions WHERE proposal_id = ?",
+      proposalId,
+    );
+    expect(versions).toHaveLength(1);
+    expect(versions[0].uploaded_by_user_id).toBeNull();
+    expect(bucket.keys()).toEqual([versions[0].r2_key]);
+    expect(
+      await queryAll<{ actor_id: string | null }>(
+        env.DB,
+        "SELECT actor_id FROM audit_log WHERE action = 'presentation_uploaded' AND entity_id = ?",
+        proposalId,
+      ),
+    ).toEqual([{ actor_id: "api-key" }]);
+  });
+
+  it("durably retains upload cleanup when D1 commit and immediate R2 compensation both fail", async () => {
+    const { proposalId, adminToken } = await seed();
+    const bucket = new FakePresentationBucket();
+    bucket.deleteFailuresRemaining = 1;
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_presentation_upload_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'presentation_uploaded'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced presentation upload audit failure');
+       END`,
+    ).run();
+    const upload = presentationRequest("orphan-safe.pdf");
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations`, {
+        method: "POST",
+        ...upload,
+        headers: { authorization: `Bearer ${adminToken}`, ...upload.headers },
+      }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    await env.DB.prepare("DROP TRIGGER fail_presentation_upload_audit").run();
+
+    expect(response.status).toBe(500);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId),
+    ).toHaveLength(0);
+    expect(bucket.keys()).toHaveLength(1);
+    const [intent] = await queryAll<{ object_key: string; status: string }>(
+      env.DB,
+      "SELECT object_key, status FROM storage_deletion_outbox WHERE bucket = 'speaker_uploads'",
+    );
+    expect(intent).toEqual({ object_key: bucket.keys()[0], status: "queued" });
+
+    await env.DB.prepare("UPDATE storage_deletion_outbox SET next_attempt_at = datetime('now')").run();
+    await expect(
+      processPendingStorageDeletions(env.DB, { SPEAKER_UPLOADS_BUCKET: bucket as unknown as R2Bucket }, 10),
+    ).resolves.toEqual({ processed: 1, failed: 0 });
+    expect(bucket.keys()).toEqual([]);
+  });
+
   it("rejects an oversized presentation before sending its body to R2", async () => {
     const { speakerToken } = await seed();
     const bucket = new FakePresentationBucket();
     const upload = presentationRequest();
 
     const res = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         ...upload,
         headers: { ...upload.headers, [PRESENTATION_FILE_SIZE_HEADER]: String(MAX_PRESENTATION_BYTES + 1) },
@@ -278,7 +589,73 @@ describe("presentation versioning", () => {
     expect(bucket.putCalls).toBe(0);
   });
 
-  it("streams a large presentation without buffering it", async () => {
+  it("rejects a short dishonest stream without committing an R2 object", async () => {
+    const { speakerToken, proposalId } = await seed();
+    const bucket = new FakePresentationBucket();
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(new Uint8Array([1, 2, 3]));
+        controller.close();
+      },
+    });
+
+    const res = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
+        method: "PUT",
+        headers: {
+          "content-type": "application/pdf",
+          [PRESENTATION_FILE_NAME_HEADER]: encodeURIComponent("short.pdf"),
+          [PRESENTATION_FILE_SIZE_HEADER]: "4",
+        },
+        body,
+      }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(res.status).toBe(400);
+    await expect(res.json()).resolves.toMatchObject({ error: { code: "FILE_SIZE_MISMATCH" } });
+    expect(bucket.keys()).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId),
+    ).toHaveLength(0);
+  });
+
+  it("rejects an oversized chunked presentation before any R2 write", async () => {
+    const { speakerToken, proposalId } = await seed();
+    const bucket = new FakePresentationBucket();
+    const oversizedChunk = new Uint8Array(MAX_PRESENTATION_BYTES + 1);
+    const body = new ReadableStream({
+      start(controller) {
+        controller.enqueue(oversizedChunk);
+        controller.close();
+      },
+    });
+
+    const res = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
+        method: "PUT",
+        headers: {
+          "content-type": "application/pdf",
+          [PRESENTATION_FILE_NAME_HEADER]: encodeURIComponent("oversized.pdf"),
+          [PRESENTATION_FILE_SIZE_HEADER]: String(MAX_PRESENTATION_BYTES),
+        },
+        body,
+      }),
+      { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(res.status).toBe(413);
+    await expect(res.json()).resolves.toMatchObject({ error: { code: "FILE_TOO_LARGE" } });
+    expect(bucket.putCalls).toBe(1);
+    expect(bucket.keys()).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId),
+    ).toHaveLength(0);
+  });
+
+  it("streams a large presentation with bounded size verification", async () => {
     const { speakerToken } = await seed();
     const bucket = new CountingPresentationBucket();
     const uploadSize = 95 * 1024 * 1024;
@@ -297,7 +674,7 @@ describe("presentation versioning", () => {
     });
 
     const res = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         headers: {
           "content-type": "application/pdf",
@@ -326,7 +703,7 @@ describe("presentation versioning", () => {
     let res2: Response;
     try {
       await app.fetch(
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
           method: "PUT",
           ...presentationRequest("v1.pdf"),
         }),
@@ -335,7 +712,7 @@ describe("presentation versioning", () => {
       );
 
       res2 = await app.fetch(
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
           method: "PUT",
           ...presentationRequest("v2.pdf"),
         }),
@@ -370,7 +747,7 @@ describe("presentation versioning", () => {
     ]) {
       const upload = presentationUploadRequest(new File([content], name, { type: "application/pdf" }));
       const response = await app.fetch(
-        new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+        new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
           method: "PUT",
           ...upload,
         }),
@@ -390,7 +767,7 @@ describe("presentation versioning", () => {
     });
     await finalizeProposalDecision(env.DB, {
       proposalId: secondProposal.id,
-      decidedByUserId: adminUserId,
+      actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });
@@ -409,7 +786,7 @@ describe("presentation versioning", () => {
     bucket.getFailures.add(secondKey);
 
     const response = await app.fetch(
-      new Request("https://app.test/api/v1/admin/events/pqc-2026/presentations/download", {
+      new Request("https://app.test/api/v1/events/pqc-2026/presentations/archive", {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       envWithBucket,
@@ -430,9 +807,18 @@ describe("presentation versioning", () => {
     expect(archiveText).not.toContain("superseded-version-marker");
     expect(archiveText).not.toContain("second-presentation-marker");
 
+    const retiredRoute = await app.fetch(
+      new Request("https://app.test/api/v1/admin/events/pqc-2026/presentations/content", {
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
+      envWithBucket,
+      execCtx,
+    );
+    expect(retiredRoute.status).toBe(404);
+
     bucket.getFailures.clear();
     const allVersionsResponse = await app.fetch(
-      new Request("https://app.test/api/v1/admin/events/pqc-2026/presentations/download?versions=all", {
+      new Request("https://app.test/api/v1/events/pqc-2026/presentations/archive?versions=all", {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       envWithBucket,
@@ -449,6 +835,28 @@ describe("presentation versioning", () => {
     expect(allVersionsText).toContain(
       `003 - Post-Quantum Key Exchange - ${proposalId.slice(0, 12)} - v002-current.pdf`,
     );
+
+    const selectedResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/events/pqc-2026/presentations/archive?proposalIds=${proposalId}`, {
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
+      envWithBucket,
+      execCtx,
+    );
+    expect(selectedResponse.status).toBe(200);
+    const selectedText = new TextDecoder().decode(await selectedResponse.arrayBuffer());
+    expect(selectedText).toContain("current-version-marker");
+    expect(selectedText).not.toContain("second-presentation-marker");
+    expect(selectedText).not.toContain("superseded-version-marker");
+
+    const invalidSelection = await app.fetch(
+      new Request("https://app.test/api/v1/events/pqc-2026/presentations/archive?proposalIds=invalid", {
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
+      envWithBucket,
+      execCtx,
+    );
+    expect(invalidSelection.status).toBe(400);
   });
 
   it("serializes concurrent version creation and keeps exactly one current version", async () => {
@@ -481,6 +889,42 @@ describe("presentation versioning", () => {
     expect(versions[1].is_current).toBe(1);
   });
 
+  it("rejects a stale deletion after another deletion promotes that version", async () => {
+    const { proposalId, speakerUserId, adminUserId } = await seed();
+    const first = await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/delete-race-first.pdf",
+      fileName: "delete-race-first.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+    const second = await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/delete-race-second.pdf",
+      fileName: "delete-race-second.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+
+    const staleDelete = deletePresentationVersion(
+      mutateBeforeNextBatch(env.DB, () => deletePresentationVersion(env.DB, proposalId, second.id, adminUserId)),
+      proposalId,
+      first.id,
+      adminUserId,
+    );
+    await expect(staleDelete).rejects.toMatchObject({ status: 409, code: "PRESENTATION_VERSION_CONFLICT" });
+
+    const versions = await queryAll<{ id: string; is_current: number; deleted_at: string | null }>(
+      env.DB,
+      "SELECT id, is_current, deleted_at FROM presentation_versions WHERE proposal_id = ? ORDER BY version_number",
+      proposalId,
+    );
+    expect(versions).toEqual([
+      { id: first.id, is_current: 1, deleted_at: null },
+      { id: second.id, is_current: 0, deleted_at: expect.any(String) },
+    ]);
+  });
+
   it("admin can list versions, download, and submit a review", async () => {
     const { proposalId, speakerToken, adminToken } = await seed();
     const bucket = new FakePresentationBucket();
@@ -488,7 +932,7 @@ describe("presentation versioning", () => {
     const execCtx = { passThroughOnException: () => {}, waitUntil: () => {} } as any;
 
     await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         ...presentationRequest(),
       }),
@@ -498,21 +942,25 @@ describe("presentation versioning", () => {
 
     // List versions
     const listRes = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations`, {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       envWithBucket,
       execCtx,
     );
     expect(listRes.status).toBe(200);
-    const listBody = (await listRes.json()) as { versions: Array<{ id: string; versionNumber: number }> };
+    const listBody = (await listRes.json()) as {
+      versions: Array<{ id: string; versionNumber: number }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
     expect(listBody.versions).toHaveLength(1);
+    expect(listBody.page).toEqual({ limit: 25, offset: 0, total: 1, hasMore: false });
     const versionId = listBody.versions[0].id;
     expect(listBody.versions[0].versionNumber).toBe(1);
 
     // Download
     const dlRes = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions/${versionId}/download`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations/${versionId}/content`, {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       envWithBucket,
@@ -525,7 +973,7 @@ describe("presentation versioning", () => {
 
     // Submit a review
     const reviewRes = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions/${versionId}/review`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations/${versionId}/reviews`, {
         method: "POST",
         headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
         body: JSON.stringify({ status: "needs_revision", note: "Please add speaker notes." }),
@@ -539,6 +987,306 @@ describe("presentation versioning", () => {
     expect(reviewBody.version.latestReview.note).toBe("Please add speaker notes.");
   });
 
+  it("rechecks scoped presentation access while listing and loading a version", async () => {
+    const { eventId, proposalId, speakerUserId, adminUserId } = await seed();
+    const version = await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/guarded-read.pdf",
+      fileName: "guarded-read.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+    const { actor, grantId } = await scopedPresentationActor(eventId, adminUserId, "proposals:read");
+    const authorization = { actor, permission: "proposals:read" as const, eventId, proposalId };
+    const { proposal: otherProposal } = await createProposal(env.DB, {
+      eventId,
+      proposerUserId: speakerUserId,
+      proposalType: "talk",
+      title: "Other proposal",
+      abstract: "Cross-proposal guard test",
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+    });
+
+    await expect(
+      getPresentationVersion(env.DB, version.id, {
+        actor,
+        permission: "proposals:read",
+        eventId,
+        proposalId: otherProposal.id,
+      }),
+    ).rejects.toMatchObject({ status: 404, code: "VERSION_NOT_FOUND" });
+
+    const listDb = mutateBeforeNextBatch(env.DB, async () => {
+      await env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+        .bind(grantId)
+        .run();
+    });
+    await expect(
+      listProposalPresentationVersions(listDb, proposalId, { limit: 25, offset: 0 }, authorization),
+    ).rejects.toMatchObject({ code: "PRESENTATION_AUTHORIZATION_CHANGED" });
+
+    const { actor: freshActor, grantId: freshGrantId } = await scopedPresentationActor(
+      eventId,
+      adminUserId,
+      "proposals:read",
+    );
+    const getDb = mutateBeforeNextBatch(env.DB, async () => {
+      await env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+        .bind(freshGrantId)
+        .run();
+    });
+    await expect(
+      getPresentationVersion(getDb, version.id, {
+        actor: freshActor,
+        permission: "proposals:read",
+        eventId,
+        proposalId,
+      }),
+    ).rejects.toMatchObject({ code: "PRESENTATION_AUTHORIZATION_CHANGED" });
+  });
+
+  it("rolls back a review when scoped presentation permission is revoked before commit", async () => {
+    const { eventId, proposalId, speakerUserId, adminUserId } = await seed();
+    const version = await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/review-guard.pdf",
+      fileName: "review-guard.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+    const { actor, grantId } = await scopedPresentationActor(eventId, adminUserId);
+    const db = mutateBeforeNextBatch(env.DB, async () => {
+      await env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+        .bind(grantId)
+        .run();
+    });
+
+    await expect(
+      reviewPresentationVersion(db, proposalId, version.id, actor, { status: "needs_revision", note: "No access" }),
+    ).rejects.toMatchObject({ code: "PRESENTATION_AUTHORIZATION_CHANGED" });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM presentation_version_reviews WHERE version_id = ?", version.id),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("compensates an admin upload when scoped presentation permission is revoked before commit", async () => {
+    const { eventId, proposalId, adminUserId } = await seed();
+    const { actor, grantId } = await scopedPresentationActor(eventId, adminUserId);
+    const bucket = new FakePresentationBucket();
+    const context = await getPresentationProposalContext(env.DB, proposalId);
+    const db = mutateBeforeNextBatch(env.DB, async () => {
+      await env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+        .bind(grantId)
+        .run();
+    });
+
+    await expect(
+      uploadProposalPresentation(
+        db,
+        bucket as any,
+        new Request("https://app.test/upload", { method: "PUT", ...presentationRequest("upload-guard.pdf") }),
+        context,
+        { actor: { type: "admin", admin: actor }, enforceDeadline: false },
+      ),
+    ).rejects.toMatchObject({ code: "PRESENTATION_UPLOAD_CONFLICT" });
+    expect(bucket.keys()).toEqual([]);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM presentation_versions WHERE proposal_id = ?", proposalId),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("rolls back deletion when scoped presentation permission is revoked before commit", async () => {
+    const { eventId, proposalId, speakerUserId, adminUserId } = await seed();
+    const version = await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/delete-guard.pdf",
+      fileName: "delete-guard.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+    const { actor, grantId } = await scopedPresentationActor(eventId, adminUserId);
+    const db = mutateBeforeNextBatch(env.DB, async () => {
+      await env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?")
+        .bind(grantId)
+        .run();
+    });
+
+    await expect(deletePresentationVersion(db, proposalId, version.id, actor)).rejects.toMatchObject({
+      code: "PRESENTATION_AUTHORIZATION_CHANGED",
+    });
+    await expect(
+      queryAll(env.DB, "SELECT deleted_at FROM presentation_versions WHERE id = ?", version.id),
+    ).resolves.toEqual([{ deleted_at: null }]);
+  });
+
+  it("rejects API-key presentation reviews before writing review or audit rows", async () => {
+    const { proposalId, speakerUserId } = await seed();
+    const version = await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/api-key-review.pdf",
+      fileName: "api-key-review.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations/${version.id}/reviews`, {
+        method: "POST",
+        headers: {
+          authorization: `Bearer ${env.ADMIN_API_KEY ?? "test-admin-key"}`,
+          "content-type": "application/json",
+        },
+        body: JSON.stringify({ status: "needs_revision", note: "Must not be attributable to a shared key." }),
+      }),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "USER_BACKED_ADMIN_REQUIRED" } });
+    await expect(
+      queryAll(env.DB, "SELECT id FROM presentation_version_reviews WHERE version_id = ?", version.id),
+    ).resolves.toHaveLength(0);
+    await expect(
+      queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'presentation_version_reviewed'"),
+    ).resolves.toHaveLength(0);
+  });
+
+  it("filters, sorts, and paginates presentation versions in D1", async () => {
+    const { proposalId, speakerUserId, adminToken } = await seed();
+    await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/first.pdf",
+      fileName: "first.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+    await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/second.pptx",
+      fileName: "second.pptx",
+      fileSize: 4,
+      mimeType: "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+      uploadedByUserId: speakerUserId,
+    });
+
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations?q=second&sort=versionNumber&limit=1`, {
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
+      env,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      versions: Array<{ fileName: string }>;
+      page: { limit: number; offset: number; total: number; hasMore: boolean };
+    };
+    expect(body.versions.map((version) => version.fileName)).toEqual(["second.pptx"]);
+    expect(body.page).toEqual({ limit: 1, offset: 0, total: 1, hasMore: false });
+  });
+
+  it("rolls back presentation review and deletion when their audit write fails", async () => {
+    const { proposalId, speakerUserId, adminToken } = await seed();
+    const version = await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/audit-rollback.pdf",
+      fileName: "audit-rollback.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+    const requestContext = { passThroughOnException: () => {}, waitUntil: () => {} } as any;
+
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_presentation_review_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'presentation_version_reviewed'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced presentation review audit failure');
+       END`,
+    ).run();
+    const reviewResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations/${version.id}/reviews`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ status: "needs_revision", note: "Must roll back" }),
+      }),
+      env,
+      requestContext,
+    );
+    await env.DB.prepare("DROP TRIGGER fail_presentation_review_audit").run();
+    expect(reviewResponse.status).toBe(500);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM presentation_version_reviews WHERE version_id = ?", version.id),
+    ).toHaveLength(0);
+
+    await env.DB.prepare(
+      `CREATE TRIGGER fail_presentation_delete_audit
+       BEFORE INSERT ON audit_log
+       WHEN NEW.action = 'presentation_version_deleted'
+       BEGIN
+         SELECT RAISE(ABORT, 'forced presentation delete audit failure');
+       END`,
+    ).run();
+    const deleteResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations/${version.id}`, {
+        method: "DELETE",
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
+      env,
+      requestContext,
+    );
+    await env.DB.prepare("DROP TRIGGER fail_presentation_delete_audit").run();
+    expect(deleteResponse.status).toBe(500);
+    const [stored] = await queryAll<{ deleted_at: string | null; is_current: number }>(
+      env.DB,
+      "SELECT deleted_at, is_current FROM presentation_versions WHERE id = ?",
+      version.id,
+    );
+    expect(stored).toEqual({ deleted_at: null, is_current: 1 });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM storage_deletion_outbox WHERE object_key = ?",
+        "presentations/audit-rollback.pdf",
+      ),
+    ).toHaveLength(0);
+  });
+
+  it("soft-deletes a presentation and atomically queues its R2 object for deletion", async () => {
+    const { proposalId, speakerUserId, adminUserId } = await seed();
+    const version = await createPresentationVersion(env.DB, proposalId, {
+      r2Key: "presentations/durable-delete.pdf",
+      fileName: "durable-delete.pdf",
+      fileSize: 4,
+      mimeType: "application/pdf",
+      uploadedByUserId: speakerUserId,
+    });
+
+    await deletePresentationVersion(env.DB, proposalId, version.id, adminUserId);
+
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT deleted_at IS NOT NULL AS deleted FROM presentation_versions WHERE id = ?",
+        version.id,
+      ),
+    ).toEqual([{ deleted: 1 }]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT bucket, object_key, status FROM storage_deletion_outbox WHERE object_key = ?",
+        version.r2Key,
+      ),
+    ).toEqual([{ bucket: "speaker_uploads", object_key: version.r2Key, status: "queued" }]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT action FROM audit_log WHERE entity_id = ? AND action = 'presentation_version_deleted'",
+        version.id,
+      ),
+    ).toEqual([{ action: "presentation_version_deleted" }]);
+  });
+
   it("admin cannot delete the only approved version — returns 409", async () => {
     const { proposalId, speakerToken, adminToken } = await seed();
     const bucket = new FakePresentationBucket();
@@ -546,7 +1294,7 @@ describe("presentation versioning", () => {
     const execCtx = { passThroughOnException: () => {}, waitUntil: () => {} } as any;
 
     await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         ...presentationRequest(),
       }),
@@ -555,7 +1303,7 @@ describe("presentation versioning", () => {
     );
 
     const listRes = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations`, {
         headers: { authorization: `Bearer ${adminToken}` },
       }),
       envWithBucket,
@@ -566,7 +1314,7 @@ describe("presentation versioning", () => {
 
     // Approve the version
     await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions/${versionId}/review`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations/${versionId}/reviews`, {
         method: "POST",
         headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
         body: JSON.stringify({ status: "approved" }),
@@ -577,7 +1325,7 @@ describe("presentation versioning", () => {
 
     // Attempt to delete — must be blocked
     const deleteRes = await app.fetch(
-      new Request(`https://app.test/api/v1/admin/proposals/${proposalId}/presentation/versions/${versionId}`, {
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations/${versionId}`, {
         method: "DELETE",
         headers: { authorization: `Bearer ${adminToken}` },
       }),
@@ -594,12 +1342,13 @@ describe("presentation versioning", () => {
     const bucket = new FakePresentationBucket();
 
     const res = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}`),
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}`),
       { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket },
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
 
     expect(res.status).toBe(200);
+    expect(res.headers.get("cache-control")).toBe("no-store, max-age=0");
     const body = (await res.json()) as { proposal: Record<string, unknown> };
     // presentationUrl lives inside the proposal object; it is computed server-side
     // from the event's frontend route config and always embeds the speaker token.
@@ -618,7 +1367,7 @@ describe("presentation versioning", () => {
 
     // Upload first
     await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         ...presentationRequest("quantum-talk.pdf"),
       }),
@@ -628,16 +1377,87 @@ describe("presentation versioning", () => {
 
     // Download
     const dlRes = await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation/download`),
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`),
       envWithBucket,
       execCtx,
     );
 
     expect(dlRes.status).toBe(200);
+    expect(dlRes.headers.get("cache-control")).toBe("no-store, max-age=0");
     expect(dlRes.headers.get("content-type")).toBe("application/pdf");
     expect(dlRes.headers.get("content-disposition")).toMatch(/quantum-talk\.pdf/);
     const buf = await dlRes.arrayBuffer();
     expect(new Uint8Array(buf).slice(0, 4)).toEqual(FAKE_PDF);
+  });
+
+  it("rejects presentation downloads for declined speakers and inactive proposals", async () => {
+    const { proposalId, speakerToken } = await seed();
+    const bucket = new FakePresentationBucket();
+    const envWithBucket = { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket };
+    const execCtx = { passThroughOnException: () => {}, waitUntil: () => {} } as any;
+
+    const uploadResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
+        method: "PUT",
+        ...presentationRequest("state-guard.pdf"),
+      }),
+      envWithBucket,
+      execCtx,
+    );
+    expect(uploadResponse.status).toBe(200);
+
+    await env.DB.prepare("UPDATE proposal_speakers SET status = 'declined' WHERE proposal_id = ?")
+      .bind(proposalId)
+      .run();
+    const declinedResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`),
+      envWithBucket,
+      execCtx,
+    );
+    expect(declinedResponse.status).toBe(403);
+    await expect(declinedResponse.json()).resolves.toMatchObject({ error: { code: "SPEAKER_DECLINED" } });
+
+    await env.DB.prepare("UPDATE proposal_speakers SET status = 'confirmed' WHERE proposal_id = ?")
+      .bind(proposalId)
+      .run();
+    await env.DB.prepare("UPDATE session_proposals SET status = 'canceled' WHERE id = ?").bind(proposalId).run();
+    const canceledResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`),
+      envWithBucket,
+      execCtx,
+    );
+    expect(canceledResponse.status).toBe(409);
+    await expect(canceledResponse.json()).resolves.toMatchObject({ error: { code: "PROPOSAL_NOT_ACCEPTED" } });
+  });
+
+  it("redacts internal presentation storage keys from upload and admin list responses", async () => {
+    const { proposalId, speakerToken, adminToken } = await seed();
+    const bucket = new FakePresentationBucket();
+    const envWithBucket = { ...(env as any), SPEAKER_UPLOADS_BUCKET: bucket };
+    const execCtx = { passThroughOnException: () => {}, waitUntil: () => {} } as any;
+
+    const uploadResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
+        method: "PUT",
+        ...presentationRequest("redacted.pdf"),
+      }),
+      envWithBucket,
+      execCtx,
+    );
+    expect(uploadResponse.status).toBe(200);
+    await expect(uploadResponse.json()).resolves.toEqual({ success: true });
+
+    const listResponse = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations`, {
+        headers: { authorization: `Bearer ${adminToken}` },
+      }),
+      envWithBucket,
+      execCtx,
+    );
+    expect(listResponse.status).toBe(200);
+    const listBody = (await listResponse.json()) as { versions: Array<Record<string, unknown>> };
+    expect(listBody.versions).toHaveLength(1);
+    expect(listBody.versions[0]).not.toHaveProperty("r2Key");
   });
 
   it("encodes presentation download filenames with an ASCII fallback", () => {
@@ -663,7 +1483,7 @@ describe("presentation versioning", () => {
     const bucket = new FakePresentationBucket();
     const upload = presentationRequest("current.pdf");
     await app.fetch(
-      new Request(`https://app.test/api/v1/proposals/speaker/${speakerToken}/presentation`, {
+      new Request(`https://app.test/api/v1/proposals/speakers/access/${speakerToken}/presentation`, {
         method: "PUT",
         ...upload,
       }),

@@ -21,6 +21,15 @@ tags:
 title: Microsoft Deploys Certificate Reputation
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 As we have stated previously, website owners have a concern that an attacker can have a certificate issued for their domain name. We now have two systems which will help monitor certificates for domains: [Certificate Transparency (CT)][1] and [Certificate Reputation][2].
 

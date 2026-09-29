@@ -1,0 +1,26 @@
+/*
+ * TextDiff — what a proposal changes in a text, marked in place.
+ *
+ * Removed words are struck and insertions carry a soft ground, each in the
+ * state tone that says what happened to them; the marks also differ in
+ * decoration so the change reads without colour.
+ */
+@layer components {
+  .pk-diff {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+
+  .pk-diff__removed {
+    text-decoration: line-through;
+    background: var(--pk-danger-soft);
+    color: var(--pk-danger-ink);
+  }
+
+  .pk-diff__added {
+    text-decoration: none;
+    background: var(--pk-ok-soft);
+    color: var(--pk-ok-ink);
+  }
+}

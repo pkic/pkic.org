@@ -21,6 +21,15 @@ tags:
 title: Chrome to Show HTTP Sites as Not Secure
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 ## _Always-On SSL should be deployed to prevent the “Not secure” warning_
 

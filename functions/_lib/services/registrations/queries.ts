@@ -3,12 +3,26 @@ import { all, first } from "../../db/queries";
 import { verifyDatabaseCapability } from "../capability-links";
 import type { DatabaseLike } from "../../types";
 import type { RegistrationRecord } from "./types";
+import { REGISTRATION_COLUMNS } from "./types";
+import type { ParticipantAuthority } from "../participant-authority";
 
 export async function getRegistrationByManageToken(
   db: DatabaseLike,
-  manageToken: string,
+  manageToken: ParticipantAuthority,
   signingSecret: string,
 ): Promise<RegistrationRecord> {
+  if (typeof manageToken !== "string") {
+    const registration = await first<RegistrationRecord>(
+      db,
+      `SELECT ${REGISTRATION_COLUMNS} FROM registrations WHERE id = ? AND user_id = ?
+       AND EXISTS (SELECT 1 FROM users WHERE users.id = registrations.user_id AND users.pii_redacted_at IS NULL)`,
+      [manageToken.resourceId, manageToken.userId],
+    );
+    if (!registration) {
+      throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found");
+    }
+    return registration;
+  }
   const verified = await verifyDatabaseCapability({
     db,
     signingSecret,
@@ -22,9 +36,18 @@ export async function getRegistrationByManageToken(
       verified.reason === "expired" ? "Registration manage link has expired" : "Invalid registration token",
     );
   }
-  const registration = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [
-    verified.resourceId,
-  ]);
+  const registration = await first<RegistrationRecord>(
+    db,
+    `SELECT ${REGISTRATION_COLUMNS}
+       FROM registrations
+      WHERE id = ?
+        AND EXISTS (
+          SELECT 1 FROM users
+           WHERE users.id = registrations.user_id
+             AND users.pii_redacted_at IS NULL
+        )`,
+    [verified.resourceId],
+  );
   if (!registration) {
     throw new AppError(404, "REGISTRATION_NOT_FOUND", "Invalid registration token");
   }
@@ -32,17 +55,40 @@ export async function getRegistrationByManageToken(
 }
 
 export async function getRegistrationById(db: DatabaseLike, registrationId: string): Promise<RegistrationRecord> {
-  const registration = await first<RegistrationRecord>(db, "SELECT * FROM registrations WHERE id = ?", [
-    registrationId,
-  ]);
+  const registration = await first<RegistrationRecord>(
+    db,
+    `SELECT ${REGISTRATION_COLUMNS} FROM registrations WHERE id = ?`,
+    [registrationId],
+  );
   if (!registration) {
     throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found");
   }
   return registration;
 }
 
+/** Loads a registration only inside the event boundary authorized by the caller. */
+export async function getRegistrationByIdForEvent(
+  db: DatabaseLike,
+  eventId: string,
+  registrationId: string,
+): Promise<RegistrationRecord> {
+  const registration = await first<RegistrationRecord>(
+    db,
+    `SELECT ${REGISTRATION_COLUMNS}
+       FROM registrations
+      WHERE id = ? AND event_id = ?`,
+    [registrationId, eventId],
+  );
+  if (!registration) {
+    throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found for this event");
+  }
+  return registration;
+}
+
 export async function listRegistrationsForEvent(db: DatabaseLike, eventId: string): Promise<RegistrationRecord[]> {
-  return all<RegistrationRecord>(db, "SELECT * FROM registrations WHERE event_id = ? ORDER BY created_at DESC", [
-    eventId,
-  ]);
+  return all<RegistrationRecord>(
+    db,
+    `SELECT ${REGISTRATION_COLUMNS} FROM registrations WHERE event_id = ? ORDER BY created_at DESC`,
+    [eventId],
+  );
 }

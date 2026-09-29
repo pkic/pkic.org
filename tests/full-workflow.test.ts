@@ -3,22 +3,13 @@ import { env } from "cloudflare:workers";
 import { createContext, deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
-import { onRequestPost as requestAdminLink } from "../functions/api/v1/admin/auth/request-link";
-import { onRequestPost as verifyAdminLink } from "../functions/api/v1/admin/auth/verify-link";
-import { onRequestPost as inviteSpeakersBulk } from "../functions/api/v1/admin/events/[eventSlug]/invites/speakers/bulk";
-import { onRequestPost as addProposalReview } from "../functions/api/v1/admin/proposals/[proposalId]/reviews";
-import { onRequestPost as finalizeProposal } from "../functions/api/v1/admin/proposals/[proposalId]/finalize";
-import { onRequestPost as submitProposal } from "../functions/api/v1/events/[eventSlug]/proposals";
-import { onRequestPost as createRegistration } from "../functions/api/v1/events/[eventSlug]/registrations";
-import { onRequest as confirmRegistrationEmail } from "../functions/api/v1/events/[eventSlug]/registrations/confirm-email";
-import { onRequestPatch as manageRegistration } from "../functions/api/v1/registrations/manage/[token]";
-import { onRequestPost as inviteAttendeesFromRegistration } from "../functions/api/v1/events/[eventSlug]/invites";
 import { onRequestGet as referralRedirect } from "../functions/r/[code]";
-import { onRequestPost as retryPendingEmail } from "../functions/api/v1/internal/email/retry";
 import { queueEmail } from "../functions/_lib/email/outbox";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
+import app from "../functions/router";
+import { createGroup } from "../functions/_lib/services/groups";
 
-interface VerifyAdminPayload {
+interface VerifyUserPayload {
   token: string;
 }
 
@@ -55,9 +46,9 @@ async function seedRequiredEmailTemplates(adminId: string): Promise<void> {
   await seedTemplate(adminId, "partial_donation_request", "Donation request", "Partial: donation request");
   await seedTemplate(
     adminId,
-    "admin_magic_link",
+    "user_magic_link",
     "Click [sign in]({{magicLinkUrl}}). Expires in {{expiresInMinutes}} minutes.",
-    "Admin sign-in link",
+    "User sign-in link",
   );
   await seedTemplate(adminId, "speaker_invite", "Submit your talk: {{proposalUrl}}", "Speaker invitation");
   await seedTemplate(
@@ -96,11 +87,16 @@ async function seedRequiredEmailTemplates(adminId: string): Promise<void> {
 async function extractTokenFromOutboxUrl(payloadJson: string, fieldName: string): Promise<string> {
   const payload = await deliveredEmailPayload<Record<string, string>>(env.DB, env, payloadJson);
   const url = new URL(payload[fieldName]);
-  const token = url.searchParams.get("token");
+  const fragmentQuery = url.hash.includes("?") ? url.hash.slice(url.hash.indexOf("?") + 1) : "";
+  const token = url.searchParams.get("token") ?? new URLSearchParams(fragmentQuery).get("token");
   if (!token) {
     throw new Error(`Missing token in ${fieldName}`);
   }
   return token;
+}
+
+async function callMountedApp(request: Request): Promise<Response> {
+  return app.fetch(request, env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
 }
 
 describe("full workflow", () => {
@@ -108,8 +104,22 @@ describe("full workflow", () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
 
     const adminUser = (
-      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+      await queryAll<{ id: string; email: string }>(
+        env.DB,
+        "SELECT id, email FROM users WHERE email = 'admin@pkic.org' LIMIT 1",
+      )
     )[0];
+    const ownerGroup = await createGroup(
+      env.DB,
+      { identityType: "user", id: adminUser.id, email: adminUser.email, role: "admin" },
+      {
+        typeKey: "working_group",
+        name: `Full workflow ${crypto.randomUUID()}`,
+        visibility: "authenticated",
+        eligibilityMode: "open",
+      },
+    );
+    await env.DB.prepare("UPDATE events SET owner_group_id = ? WHERE id = ?").bind(ownerGroup.id, eventId).run();
     await seedRequiredEmailTemplates(adminUser.id);
 
     const fetchMock = vi.fn().mockResolvedValue(
@@ -120,42 +130,34 @@ describe("full workflow", () => {
     );
     vi.stubGlobal("fetch", fetchMock);
     try {
-      const requestLinkResponse = await requestAdminLink(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/admin/auth/request-link", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ email: "admin@pkic.org" }),
-          }),
-          {},
-        ),
+      const requestLinkResponse = await callMountedApp(
+        new Request("https://app.test/api/v1/auth/request-link", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ email: "admin@pkic.org" }),
+        }),
       );
       expect(requestLinkResponse.status).toBe(200);
 
       const magicLinkOutbox = (
         await queryAll<{ payload_json: string }>(
           env.DB,
-          "SELECT payload_json FROM email_outbox WHERE template_key = 'admin_magic_link' ORDER BY created_at DESC LIMIT 1",
+          "SELECT payload_json FROM email_outbox WHERE template_key = 'user_magic_link' ORDER BY created_at DESC LIMIT 1",
         )
       )[0];
       const magicToken = await extractTokenFromOutboxUrl(magicLinkOutbox.payload_json, "magicLinkUrl");
 
-      const verifyResponse = await verifyAdminLink(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/admin/auth/verify-link", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ token: magicToken } as VerifyAdminPayload),
-          }),
-          {},
-        ),
+      const verifyResponse = await callMountedApp(
+        new Request("https://app.test/api/v1/auth/verify-link", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ token: magicToken } as VerifyUserPayload),
+        }),
       );
       expect(verifyResponse.status).toBe(200);
       await verifyResponse.json();
-      const adminSessionCookie = verifyResponse.headers.get("set-cookie") ?? "";
-      const adminSessionToken = decodeURIComponent(adminSessionCookie.match(/^pkic_admin_session=([^;]+)/)?.[1] ?? "");
+      const staffSessionCookie = verifyResponse.headers.get("set-cookie") ?? "";
+      const staffSessionToken = decodeURIComponent(staffSessionCookie.match(/^pkic_session=([^;]+)/)?.[1] ?? "");
 
       const reviewerUserId = crypto.randomUUID();
       await env.DB.prepare(
@@ -166,21 +168,39 @@ describe("full workflow", () => {
       ).run();
       const reviewerToken = await createAdminSession(env.DB, reviewerUserId, "reviewer-2-token");
 
-      const speakerInviteResponse = await inviteSpeakersBulk(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/admin/events/pqc-2026/invites/speakers/bulk", {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              cookie: adminSessionCookie,
-            },
-            body: JSON.stringify({
-              invites: [{ email: "speaker@example.test", firstName: "Speaker", lastName: "One", sourceType: "direct" }],
-            }),
+      const speakerInvites = [
+        { email: "speaker@example.test", firstName: "Speaker", lastName: "One", sourceType: "direct" },
+      ];
+      const speakerInvitationBase = `/api/v1/groups/${ownerGroup.id}/events/${eventId}/invites/speakers`;
+      const speakerPreviewResponse = await app.fetch(
+        new Request(`https://app.test${speakerInvitationBase}/preview`, {
+          method: "POST",
+          headers: { "content-type": "application/json", cookie: staffSessionCookie },
+          body: JSON.stringify({ invites: speakerInvites }),
+        }),
+        env as any,
+        { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+      );
+      expect(speakerPreviewResponse.status).toBe(200);
+      const speakerPreview = (await speakerPreviewResponse.json()) as {
+        previewToken: string;
+        inviteDigest: string;
+      };
+      const speakerInviteResponse = await app.fetch(
+        new Request(`https://app.test${speakerInvitationBase}/bulk`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie: staffSessionCookie,
+          },
+          body: JSON.stringify({
+            invites: speakerInvites,
+            previewToken: speakerPreview.previewToken,
+            inviteDigest: speakerPreview.inviteDigest,
           }),
-          { eventSlug: "pqc-2026" },
-        ),
+        }),
+        env as any,
+        { passThroughOnException: () => {}, waitUntil: () => {} } as any,
       );
       expect(speakerInviteResponse.status).toBe(200);
       await speakerInviteResponse.json();
@@ -199,117 +219,96 @@ describe("full workflow", () => {
         resourceId: speakerInvite.id,
       });
 
-      const proposalResponse = await submitProposal(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              inviteToken: speakerInviteToken,
-              proposer: {
-                firstName: "Speaker",
-                lastName: "One",
-                email: "speaker@example.test",
-                organizationName: "Government Agency",
-                jobTitle: "Engineer",
-                bio: "Experienced speaker focused on practical post-quantum migration and governance.",
-              },
-              proposal: {
-                type: "talk",
-                title: "Post-Quantum Migration",
-                abstract:
-                  "A practical migration blueprint covering inventory, risk profiling, dual-stack rollout, crypto-agility governance, and operational playbooks for enterprise PKI teams.",
-              },
-              consents: [{ termKey: "speaker-terms", version: "v1" }],
-            }),
+      const proposalResponse = await callMountedApp(
+        new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            inviteToken: speakerInviteToken,
+            proposer: {
+              firstName: "Speaker",
+              lastName: "One",
+              email: "speaker@example.test",
+              organizationName: "Government Agency",
+              jobTitle: "Engineer",
+              bio: "Experienced speaker focused on practical post-quantum migration and governance.",
+            },
+            proposal: {
+              type: "talk",
+              title: "Post-Quantum Migration",
+              abstract:
+                "A practical migration blueprint covering inventory, risk profiling, dual-stack rollout, crypto-agility governance, and operational playbooks for enterprise PKI teams.",
+            },
+            consents: [{ termKey: "speaker-terms", version: "v1" }],
           }),
-          { eventSlug: "pqc-2026" },
-        ),
+        }),
       );
       expect(proposalResponse.status).toBe(200);
       const createdProposal = (await proposalResponse.json()) as ProposalPayload;
 
-      const reviewOneResponse = await addProposalReview(
-        createContext(
-          env,
-          new Request(`https://app.test/api/v1/admin/proposals/${createdProposal.proposalId}/reviews`, {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              cookie: adminSessionCookie,
-            },
-            body: JSON.stringify({
-              recommendation: "accept",
-              score: 9,
-              reviewerComment: "Strong proposal",
-            }),
+      const reviewOneResponse = await callMountedApp(
+        new Request(`https://app.test/api/v1/proposals/${createdProposal.proposalId}/reviews`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie: staffSessionCookie,
+          },
+          body: JSON.stringify({
+            recommendation: "accept",
+            score: 9,
+            reviewerComment: "Strong proposal",
           }),
-          { proposalId: createdProposal.proposalId },
-        ),
+        }),
       );
       expect(reviewOneResponse.status).toBe(200);
 
-      const reviewTwoResponse = await addProposalReview(
-        createContext(
-          env,
-          new Request(`https://app.test/api/v1/admin/proposals/${createdProposal.proposalId}/reviews`, {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              authorization: `Bearer ${reviewerToken}`,
-            },
-            body: JSON.stringify({
-              recommendation: "accept",
-              score: 8,
-              reviewerComment: "Also strong",
-            }),
+      const reviewTwoResponse = await callMountedApp(
+        new Request(`https://app.test/api/v1/proposals/${createdProposal.proposalId}/reviews`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${reviewerToken}`,
+          },
+          body: JSON.stringify({
+            recommendation: "accept",
+            score: 8,
+            reviewerComment: "Also strong",
           }),
-          { proposalId: createdProposal.proposalId },
-        ),
+        }),
       );
       expect(reviewTwoResponse.status).toBe(200);
 
-      const finalizeResponse = await finalizeProposal(
-        createContext(
-          env,
-          new Request(`https://app.test/api/v1/admin/proposals/${createdProposal.proposalId}/finalize`, {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              cookie: adminSessionCookie,
-            },
-            body: JSON.stringify({
-              finalStatus: "accepted",
-              decisionNote: "Approved by committee",
-              minReviewsRequired: 2,
-            }),
+      const finalizeResponse = await callMountedApp(
+        new Request(`https://app.test/api/v1/proposals/${createdProposal.proposalId}/decisions`, {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            cookie: staffSessionCookie,
+          },
+          body: JSON.stringify({
+            finalStatus: "accepted",
+            decisionNote: "Approved by committee",
           }),
-          { proposalId: createdProposal.proposalId },
-        ),
+        }),
       );
       expect(finalizeResponse.status).toBe(200);
 
-      const registrationOneResponse = await createRegistration(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              firstName: "Attendee",
-              lastName: "One",
-              email: "attendee1@pkic.org",
-              attendanceType: "in_person",
-              sourceType: "direct",
-              consents: [
-                { termKey: "privacy-policy", version: "v1" },
-                { termKey: "code-of-conduct", version: "v1" },
-              ],
-            }),
+      const registrationOneResponse = await callMountedApp(
+        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            firstName: "Attendee",
+            lastName: "One",
+            email: "attendee1@pkic.org",
+            attendanceType: "in_person",
+            sourceType: "direct",
+            consents: [
+              { termKey: "privacy-policy", version: "v1" },
+              { termKey: "code-of-conduct", version: "v1" },
+            ],
           }),
-          { eventSlug: "pqc-2026" },
-        ),
+        }),
       );
       const registrationOnePayload = (await registrationOneResponse.json()) as CreateRegistrationPayload;
       expect(registrationOnePayload.status).toBe("pending_email_confirmation");
@@ -325,61 +324,49 @@ describe("full workflow", () => {
         "confirmationUrl",
       );
 
-      const firstConfirmResponse = await confirmRegistrationEmail(
-        createContext(
-          env,
-          new Request(
-            `https://app.test/api/v1/events/pqc-2026/registrations/confirm-email?token=${encodeURIComponent(
-              firstConfirmationToken,
-            )}`,
-            { method: "GET" },
-          ),
-          { eventSlug: "pqc-2026" },
+      const firstConfirmResponse = await callMountedApp(
+        new Request(
+          `https://app.test/api/v1/events/pqc-2026/registrations/confirm-email?token=${encodeURIComponent(
+            firstConfirmationToken,
+          )}`,
+          { method: "GET" },
         ),
       );
       const firstConfirmPayload = (await firstConfirmResponse.json()) as { status: string; manageToken: string };
       expect(firstConfirmPayload.status).toBe("registered");
 
-      const inviteFromAttendeeResponse = await inviteAttendeesFromRegistration(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/events/pqc-2026/invites", {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              authorization: `Bearer ${firstConfirmPayload.manageToken}`,
-            },
-            body: JSON.stringify({
-              invites: [{ email: "friend@example.test", firstName: "Friend", lastName: "User" }],
-            }),
+      const inviteFromAttendeeResponse = await callMountedApp(
+        new Request("https://app.test/api/v1/events/pqc-2026/invites", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${firstConfirmPayload.manageToken}`,
+          },
+          body: JSON.stringify({
+            invites: [{ email: "friend@example.test", firstName: "Friend", lastName: "User" }],
           }),
-          { eventSlug: "pqc-2026" },
-        ),
+        }),
       );
       expect(inviteFromAttendeeResponse.status).toBe(200);
       const inviteFromAttendeePayload = (await inviteFromAttendeeResponse.json()) as { referralCode: string };
       expect(inviteFromAttendeePayload.referralCode).toHaveLength(7);
 
-      const registrationTwoResponse = await createRegistration(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
-            method: "POST",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({
-              firstName: "Attendee",
-              lastName: "Two",
-              email: "attendee2@pkic.org",
-              attendanceType: "in_person",
-              sourceType: "direct",
-              consents: [
-                { termKey: "privacy-policy", version: "v1" },
-                { termKey: "code-of-conduct", version: "v1" },
-              ],
-            }),
+      const registrationTwoResponse = await callMountedApp(
+        new Request("https://app.test/api/v1/events/pqc-2026/registrations", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            firstName: "Attendee",
+            lastName: "Two",
+            email: "attendee2@pkic.org",
+            attendanceType: "in_person",
+            sourceType: "direct",
+            consents: [
+              { termKey: "privacy-policy", version: "v1" },
+              { termKey: "code-of-conduct", version: "v1" },
+            ],
           }),
-          { eventSlug: "pqc-2026" },
-        ),
+        }),
       );
       await registrationTwoResponse.json();
 
@@ -394,31 +381,23 @@ describe("full workflow", () => {
         "confirmationUrl",
       );
 
-      const secondConfirmResponse = await confirmRegistrationEmail(
-        createContext(
-          env,
-          new Request(
-            `https://app.test/api/v1/events/pqc-2026/registrations/confirm-email?token=${encodeURIComponent(
-              secondConfirmationToken,
-            )}`,
-            { method: "GET" },
-          ),
-          { eventSlug: "pqc-2026" },
+      const secondConfirmResponse = await callMountedApp(
+        new Request(
+          `https://app.test/api/v1/events/pqc-2026/registrations/confirm-email?token=${encodeURIComponent(
+            secondConfirmationToken,
+          )}`,
+          { method: "GET" },
         ),
       );
       const secondConfirmPayload = (await secondConfirmResponse.json()) as { status: string };
       expect(secondConfirmPayload.status).toBe("registered");
 
-      const cancelRegistrationResponse = await manageRegistration(
-        createContext(
-          env,
-          new Request(`https://app.test/api/v1/registrations/manage/${firstConfirmPayload.manageToken}`, {
-            method: "PATCH",
-            headers: { "content-type": "application/json" },
-            body: JSON.stringify({ action: "cancel" }),
-          }),
-          { token: firstConfirmPayload.manageToken },
-        ),
+      const cancelRegistrationResponse = await callMountedApp(
+        new Request(`https://app.test/api/v1/registrations/access/${firstConfirmPayload.manageToken}`, {
+          method: "PATCH",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ action: "cancel" }),
+        }),
       );
       expect(cancelRegistrationResponse.status).toBe(200);
 
@@ -441,19 +420,17 @@ describe("full workflow", () => {
         },
       });
 
-      const retryResponse = await retryPendingEmail(
-        createContext(
-          env,
-          new Request("https://app.test/api/v1/internal/email/retry", {
-            method: "POST",
-            headers: {
-              "content-type": "application/json",
-              authorization: `Bearer ${adminSessionToken}`,
-            },
-            body: JSON.stringify({ limit: 50 }),
-          }),
-          {},
-        ),
+      const retryResponse = await app.fetch(
+        new Request("https://app.test/api/v1/email/outbox/process", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${staffSessionToken}`,
+          },
+          body: JSON.stringify({ limit: 50 }),
+        }),
+        env,
+        { passThroughOnException() {}, waitUntil() {} } as any,
       );
       expect(retryResponse.status).toBe(200);
 

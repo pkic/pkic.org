@@ -67,4 +67,5 @@ body: The PKI Consortium is open to organizations committed to improving trust i
 links:
   - text: "Join today — it's free"
     url: /join/
+    primary: true
 {{< /banner >}}

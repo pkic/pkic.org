@@ -1,0 +1,38 @@
+:root {
+  color-scheme: light dark;
+  font-family: system-ui, sans-serif;
+}
+body {
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 24px;
+}
+header {
+  border-bottom: 2px solid #228653;
+  margin-bottom: 24px;
+}
+article {
+  border: 1px solid #88958c;
+  border-radius: 12px;
+  padding: 20px;
+  margin-top: 20px;
+}
+h2 {
+  overflow-wrap: anywhere;
+}
+pre {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font:
+    0.9rem/1.5 ui-monospace,
+    monospace;
+}
+a {
+  display: block;
+  margin-block: 12px;
+}
+button,
+summary {
+  cursor: pointer;
+  padding: 8px;
+}

@@ -27,6 +27,7 @@ cascade:
     heroSponsorLevel: 5
     sectionNav: true
     sponsoring: "Post-Quantum Cryptography Conference Amsterdam 2026"
+    sponsoringSlug: "pqc-conference-amsterdam-nl"
 
 params:
   eventType: conference
@@ -949,6 +950,34 @@ data:
             locations:
               - blue_hall
 
+          - title: "Industry roundtable: Finance"
+            description: |
+              _Held under Chatham House Rules. In person only, with limited seats
+              taken on the day — these sessions are not livestreamed or recorded._
+
+              A moderated, sector-specific discussion for banks, payment providers and
+              market infrastructure: what post-quantum migration looks like inside a
+              regulated institution, and which obstacles are shared across the sector.
+
+              Moderators to be confirmed.
+            track: Roundtable
+            locations:
+              - room_b
+
+          - title: "Industry roundtable: Government and public sector"
+            description: |
+              _Held under Chatham House Rules. In person only, with limited seats
+              taken on the day — these sessions are not livestreamed or recorded._
+
+              A moderated, sector-specific discussion for departments, agencies and public
+              bodies: national roadmaps and mandates, how they reach suppliers through
+              procurement, and where coordination between administrations helps.
+
+              Moderators to be confirmed.
+            track: Roundtable
+            locations:
+              - room_c
+
       - time: "11:45"
         sessions:
           - title: Role of CBOM in a Telco's PQC Journey
@@ -1690,7 +1719,7 @@ cards:
 
 ## Supported By
 
-{{< sponsors-level sponsoring="Post-Quantum Cryptography Conference Amsterdam 2026" level="all" >}}
+{{< sponsors-level event-slug="pqc-conference-amsterdam-nl" sponsoring="Post-Quantum Cryptography Conference Amsterdam 2026" level="all" >}}
 
 ## Main Organizers
 

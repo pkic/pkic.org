@@ -1,10 +1,15 @@
 import { all } from "../../db/queries";
+import { emailPlainText } from "../../email/plain-text";
 import { speakerManagePageUrl } from "../frontend-links";
 import { buildEventEmailVariables } from "../events";
-import { queuedCapabilityToken } from "../capability-links";
 import { type DueSpeakerInviteRow, type EventRouteRow, type ReminderCandidatePreview } from "../reminders-support";
-import { batchQueueEmailsAndUpdateState, bulkBuildProposalInviteEmailContexts } from "./shared";
+import { batchQueueEmailsAndUpdateState, prepareCoSpeakerInviteReminderGuard } from "./shared";
+import { buildProposalInviteEmailContextMap, proposalInviteEmailTextVariables } from "../proposal-invite-email-context";
 import type { DatabaseLike } from "../../types";
+import { proposalSpeakerEffectiveProfileColumns, queuedSpeakerManageToken } from "../proposal-speakers";
+import { PROPOSAL_INACTIVE_STATUS_SQL_LIST } from "../proposal-status-policy";
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import { activeEffectiveInviteExpirySql, effectiveProposalSpeakerInviteExpirySql } from "../../invite-validity";
 
 export async function runCoSpeakerInviteReminders(
   db: DatabaseLike,
@@ -27,33 +32,36 @@ export async function runCoSpeakerInviteReminders(
       ? await all<DueSpeakerInviteRow>(
           db,
           `SELECT
-         ps.id AS speaker_id, ps.proposal_id, ps.user_id, ps.role, ps.status AS speaker_status,
-         u.email, u.first_name, u.last_name,
-         sp.title AS proposal_title, pu.first_name AS proposer_first_name,
+         ps.id AS speaker_id, ps.proposal_id, ps.user_id, ps.manage_link_secret, ps.role, ps.status AS speaker_status,
+         u.email, u.normalized_email,
+         ${proposalSpeakerEffectiveProfileColumns("u", "ps", "", ["firstName", "lastName"])},
+         sp.title AS proposal_title, sp.status AS proposal_status, pu.first_name AS proposer_first_name,
          sp.event_id, e.name AS event_name, e.slug AS event_slug,
          e.base_path AS event_base_path, e.starts_at AS event_starts_at,
+         e.ends_at AS event_ends_at, ps.invite_expires_at,
          e.settings_json AS event_settings_json,
          ps.speaker_invite_reminder_count AS reminder_count
-       FROM proposal_speakers ps
+       FROM proposal_speakers ps INDEXED BY idx_proposal_speakers_speaker_invite_reminder_due
        JOIN users u ON u.id = ps.user_id
        JOIN session_proposals sp ON sp.id = ps.proposal_id
        JOIN events e ON e.id = sp.event_id
        LEFT JOIN users pu ON pu.id = sp.proposer_user_id
        WHERE ps.status = 'invited'
          AND ps.role <> 'proposer'
-         AND sp.status NOT IN ('rejected', 'withdrawn')
+         AND sp.status NOT IN (${PROPOSAL_INACTIVE_STATUS_SQL_LIST})
+         AND ${activeEffectiveInviteExpirySql(effectiveProposalSpeakerInviteExpirySql("ps", "e"))}
          AND (e.starts_at IS NULL OR e.starts_at > ?)
          AND ps.speaker_invite_reminder_count < ?
          AND (ps.speaker_invite_reminders_paused_until IS NULL OR ps.speaker_invite_reminders_paused_until <= ?)
          AND COALESCE(ps.speaker_invite_last_communication_at, ps.created_at) <= ?
-       ORDER BY COALESCE(ps.speaker_invite_last_communication_at, ps.created_at) ASC
+       ORDER BY COALESCE(ps.speaker_invite_last_communication_at, ps.created_at) ASC, ps.id ASC
        LIMIT ?`,
-          [now, maxInviteReminders, now, cutoff, limit],
+          [now, now, maxInviteReminders, now, cutoff, limit],
         )
       : [];
 
   const uniqueProposalIds = [...new Set(dueSpeakerInvites.map((r) => r.proposal_id))];
-  const proposalContexts = await bulkBuildProposalInviteEmailContexts(db, uniqueProposalIds);
+  const proposalContexts = await buildProposalInviteEmailContextMap(db, uniqueProposalIds);
 
   const coSpeakerInvites: ReminderCandidatePreview[] = [];
   for (const row of dueSpeakerInvites) {
@@ -82,44 +90,50 @@ export async function runCoSpeakerInviteReminders(
   }
 
   if (!dryRun && dueSpeakerInvites.length > 0) {
-    const emailRows = dueSpeakerInvites.map((row) => {
-      const event: EventRouteRow = {
-        id: row.event_id,
-        name: row.event_name,
-        slug: row.event_slug,
-        base_path: row.event_base_path,
-        starts_at: row.event_starts_at,
-        settings_json: row.event_settings_json,
-      };
-      const reminderNumber = Number(row.reminder_count ?? 0) + 1;
-      const subject = `Reminder: please confirm speaker participation — ${event.name}`;
-      const manageToken = queuedCapabilityToken("speaker_manage", row.speaker_id);
-      const manageUrl = speakerManagePageUrl(appBaseUrl, event, manageToken);
-      const ctx = proposalContexts.get(row.proposal_id);
-      return {
-        eventId: row.event_id,
-        recipientEmail: row.email,
-        recipientUserId: row.user_id,
-        templateKey: "co_speaker_invite",
-        subject,
-        capabilityLinkValues: [manageUrl],
-        data: {
-          ...buildEventEmailVariables(event, appBaseUrl),
-          firstName: row.first_name ?? "",
-          lastName: row.last_name ?? "",
-          proposerFirstName: row.proposer_first_name ?? "",
-          invitedByDisplay: ctx?.invitedByDisplay ?? "",
-          proposalTitle: ctx?.proposalTitle ?? "",
-          proposalAbstract: ctx?.proposalAbstract ?? "",
-          speakerLineupText: ctx?.speakerLineupText ?? "",
-          manageUrl,
-          isReminder: true,
-          reminderCount: String(reminderNumber),
-        },
-      };
-    });
+    const emailRows = await Promise.all(
+      dueSpeakerInvites.map(async (row) => {
+        const event: EventRouteRow = {
+          id: row.event_id,
+          name: row.event_name,
+          slug: row.event_slug,
+          base_path: row.event_base_path,
+          starts_at: row.event_starts_at,
+          settings_json: row.event_settings_json,
+        };
+        const reminderNumber = Number(row.reminder_count ?? 0) + 1;
+        const subject = `Reminder: please confirm speaker participation — ${event.name}`;
+        const manageToken = await queuedSpeakerManageToken(db, row.speaker_id, row.manage_link_secret);
+        const manageUrl = speakerManagePageUrl(appBaseUrl, event, manageToken);
+        const ctx = proposalContexts.get(row.proposal_id);
+        return {
+          eventId: row.event_id,
+          recipientEmail: row.email,
+          recipientUserId: row.user_id,
+          templateKey: "co_speaker_invite",
+          subject,
+          capabilityLinkValues: [manageUrl],
+          data: {
+            ...buildEventEmailVariables(event, appBaseUrl),
+            firstName: emailPlainText(row.first_name ?? ""),
+            lastName: emailPlainText(row.last_name ?? ""),
+            ...(ctx
+              ? proposalInviteEmailTextVariables({ ...ctx, inviterFirstName: row.proposer_first_name ?? "" })
+              : {
+                  proposerFirstName: emailPlainText(row.proposer_first_name ?? ""),
+                  invitedByDisplay: emailPlainText(""),
+                  proposalTitle: emailPlainText(row.proposal_title),
+                  proposalAbstract: emailPlainText(""),
+                  speakerLineupText: emailPlainText(""),
+                }),
+            manageUrl,
+            isReminder: true,
+            reminderCount: String(reminderNumber),
+          },
+        };
+      }),
+    );
 
-    await batchQueueEmailsAndUpdateState(
+    const queuedCount = await batchQueueEmailsAndUpdateState(
       db,
       emailRows,
       dueSpeakerInvites.map((row) =>
@@ -134,7 +148,28 @@ export async function runCoSpeakerInviteReminders(
           .bind(now, row.speaker_id),
       ),
       now,
+      {
+        isExpectedConflict: isAuthorizationGuardFailure,
+        prepareSliceStatements: (start, end) => [
+          prepareCoSpeakerInviteReminderGuard(
+            db,
+            dueSpeakerInvites.slice(start, end).map((row) => ({
+              speakerId: row.speaker_id,
+              userId: row.user_id,
+              normalizedEmail: row.normalized_email,
+              proposalId: row.proposal_id,
+              proposalStatus: row.proposal_status,
+              eventId: row.event_id,
+              eventStartsAt: row.event_starts_at,
+              eventEndsAt: row.event_ends_at,
+              inviteExpiresAt: row.invite_expires_at,
+            })),
+            now,
+          ),
+        ],
+      },
     );
+    return { speakerInviteRemindersQueued: queuedCount, coSpeakerInvites };
   }
 
   return { speakerInviteRemindersQueued: dueSpeakerInvites.length, coSpeakerInvites };

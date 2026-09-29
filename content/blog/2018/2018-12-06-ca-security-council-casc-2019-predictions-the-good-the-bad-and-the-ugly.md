@@ -47,6 +47,28 @@ tags:
 title: 'CA Security Council (CASC) 2019 Predictions: The Good, the Bad, and the Ugly'
 
 
+authorProfiles:
+  - name: Chris Bailey
+    organization: Entrust
+    role: VP of Strategy and Business Development – Certificate Services
+    website: https://www.entrust.com/
+    social:
+      x: null
+      linkedin: null
+    assetdirectory: images/members/entrust
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
+  - name: Jay Schiavo
+    organization: Entrust
+    role: Vice President, ECS Products and Markets
+    website: https://www.entrust.com/
+    assetdirectory: images/members/entrust
 ---
 ---
 As the legendary coach of the NY Yankees Yogi Berra allegedly said, “It’s difficult to make predictions, especially about the future.”  But we’re going to try.

@@ -1,20 +1,12 @@
 import { AppError } from "../errors";
 import type { AuthAdmin } from "../types";
 import { PERMISSION_DENIED_MESSAGE } from "../../../assets/shared/auth-errors";
+import { PERMISSIONS, type Permission } from "../../../assets/shared/schemas/permissions";
+import { hasPermission } from "./permissions";
 
-export const AUTH_SCOPES = [
-  "admin:read",
-  "events:read",
-  "proposals:read",
-  "proposal-reviews:read",
-  "proposal-reviews:write",
-  "proposal-finalization:write",
-  "sponsor-attendees:read",
-  "presentations:review",
-  "presentations:delete",
-] as const;
-
-export type AuthScope = (typeof AUTH_SCOPES)[number];
+/** OAuth scopes are the canonical permission vocabulary, not a parallel ACL. */
+export const AUTH_SCOPES = PERMISSIONS;
+export type AuthScope = Permission;
 
 export function hasAuthScope(actor: AuthAdmin, scope: AuthScope): boolean {
   return actor.scopes?.includes(scope) === true;
@@ -27,9 +19,5 @@ export function requireAuthScope(actor: AuthAdmin, scope: AuthScope): void {
 }
 
 export function grantableScopesForActor(actor: AuthAdmin, requestedScopes: readonly AuthScope[]): AuthScope[] {
-  if (actor.role === "admin" && !actor.scopes) {
-    return [...requestedScopes];
-  }
-
-  return requestedScopes.filter((scope) => hasAuthScope(actor, scope));
+  return requestedScopes.filter((scope) => hasPermission(actor, scope));
 }

@@ -1,0 +1,378 @@
+/**
+ * Scheduled jobs — the dispatcher registry, its cadence, and its outcomes.
+ *
+ * The shared API table owns list loading, search, refresh, and paging. Row
+ * actions stay behind the same menu used by other portal lists.
+ */
+import { ScheduledJobScheduleDialog } from "./ScheduledJobScheduleDialog";
+import { useRef, useState } from "preact/hooks";
+import {
+  schedulerJobRunResponseSchema,
+  schedulerJobsListResponseSchema,
+  schedulerJobStateResponseSchema,
+  schedulerJobStateUpdateSchema,
+  type ScheduledJobResource,
+  type ScheduledJobStateUpdate,
+} from "../../../../../shared/schemas/scheduler";
+import { Badge, statusLabel } from "../../../../components/Badge";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import type { Column } from "../../../../components/Table";
+import { useContractForm } from "../../../../hooks/useContractForm";
+import { Alert } from "../../../../ui/Alert";
+import type { MenuItem } from "../../../../ui/Menu";
+import { RowActions } from "../../../../ui/RowActions";
+import { EmptyState } from "../../../../ui/EmptyState";
+import { Field } from "../../../../ui/Field";
+import { Dialog } from "../../../../ui/Dialog";
+import { PageHeader } from "../../../../ui/PageHeader";
+import { Textarea } from "../../../../ui/TextControl";
+import { patchJson, postJson } from "../../../../shared/api-client";
+import { fmt, toast } from "../../ui";
+import "../../../../ui/Content.css";
+
+function titleFromKey(jobKey: string): string {
+  return jobKey
+    .replace(/_/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase())
+    .replace(/\bEc\b/g, "EC");
+}
+
+function formatInterval(seconds: number): string {
+  if (seconds % 86_400 === 0) return `${seconds / 86_400} day${seconds === 86_400 ? "" : "s"}`;
+  if (seconds % 3_600 === 0) return `${seconds / 3_600} hour${seconds === 3_600 ? "" : "s"}`;
+  if (seconds % 60 === 0) return `${seconds / 60} minute${seconds === 60 ? "" : "s"}`;
+  return `${seconds} seconds`;
+}
+
+function JobIdentity({ job }: { job: ScheduledJobResource }) {
+  return (
+    <div class="pk-stack pk-stack--tight">
+      <div>{titleFromKey(job.jobKey)}</div>
+      <div class="pk-mono pk-small">{job.jobKey}</div>
+      {job.pausedAt !== null && job.pausedReason ? <div class="pk-small">{job.pausedReason}</div> : null}
+    </div>
+  );
+}
+
+function JobSchedule({ job }: { job: ScheduledJobResource }) {
+  return (
+    <div class="pk-stack pk-stack--tight">
+      <div>{formatInterval(job.intervalSeconds)}</div>
+      <div class="pk-small">Next {fmt(job.nextRunAt)}</div>
+      {job.wakeRequested ? (
+        <div class="pk-cluster">
+          <Badge status="pending" label="Wake requested" />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+function JobOutcome({ job }: { job: ScheduledJobResource }) {
+  return (
+    <div class="pk-stack pk-stack--tight">
+      <div>{job.lastStatus ? <Badge status={job.lastStatus} /> : <span class="pk-small">Never run</span>}</div>
+      <div class="pk-small">Last run {fmt(job.lastRunAt)}</div>
+      <div class="pk-small">Last success {fmt(job.lastSuccessAt)}</div>
+      {job.lastDurationMs !== null ? (
+        <div class="pk-small">Duration {job.lastDurationMs.toLocaleString()} ms</div>
+      ) : null}
+    </div>
+  );
+}
+
+function JobHealth({ job }: { job: ScheduledJobResource }) {
+  const isPaused = job.pausedAt !== null;
+  const isRunning = job.runningSince !== null;
+  return (
+    <div class="pk-stack pk-stack--tight">
+      <div class="pk-cluster">
+        {isPaused ? <Badge status="paused" label="Paused" /> : null}
+        {isRunning ? <Badge status="running" label={job.leaseExpired ? "Lease expired" : "Running"} /> : null}
+        {!isPaused && !isRunning ? <Badge status="active" /> : null}
+      </div>
+      <div class="pk-small">
+        Failures {job.consecutiveFailures}; abandoned {job.consecutiveAbandoned}
+      </div>
+      {job.lastError ? (
+        <details>
+          {/* The word carries the meaning. A red line and nothing else leaves
+              anyone who cannot separate the hues with an unexplained colour. */}
+          <summary class="pk-small">Last error</summary>
+          <div class="pk-small pk-break">{job.lastError}</div>
+        </details>
+      ) : null}
+    </div>
+  );
+}
+
+interface JobControls {
+  busyJob: string | null;
+  onRun: (job: ScheduledJobResource) => void;
+  onResume: (job: ScheduledJobResource) => void;
+  onEditSchedule: (job: ScheduledJobResource) => void;
+  onStartPause: (job: ScheduledJobResource) => void;
+}
+
+function JobActions({ job, controls }: { job: ScheduledJobResource; controls: JobControls }) {
+  const isBusy = controls.busyJob === job.jobKey;
+  const isPaused = job.pausedAt !== null;
+  const isRunning = job.runningSince !== null;
+
+  // Row commands live behind the row's menu, like every other list; a row
+  // with no capability at all carries no menu rather than an empty one.
+  const actions: MenuItem[] = [];
+  if (job.capabilities.run) {
+    actions.push({
+      id: "run",
+      label: "Run now",
+      onSelect: () => controls.onRun(job),
+      disabled: isBusy || isPaused || isRunning,
+    });
+  }
+  if (job.capabilities.manageState) {
+    actions.push({
+      id: "schedule",
+      label: "Edit schedule",
+      onSelect: () => controls.onEditSchedule(job),
+      disabled: isBusy || isRunning,
+    });
+    actions.push(
+      isPaused
+        ? { id: "resume", label: "Resume", onSelect: () => controls.onResume(job), disabled: isBusy }
+        : { id: "pause", label: "Pause", onSelect: () => controls.onStartPause(job), disabled: isBusy },
+    );
+  }
+  return <RowActions subject={titleFromKey(job.jobKey)} actions={actions} />;
+}
+
+/**
+ * The reason a job is paused, asked for in a dialog (#126). It used to
+ * unfold as a form under the job's row — the inline expansion no list in the
+ * portal uses any more. The dialog's confirm submits the form inside it, so
+ * the reason is refused by the endpoint's own contract as it is typed.
+ */
+function PauseDialog({
+  job,
+  busy,
+  reason,
+  onReason,
+  onCancel,
+  onConfirm,
+}: {
+  job: ScheduledJobResource;
+  busy: boolean;
+  reason: string;
+  onReason: (value: string) => void;
+  onCancel: () => void;
+  /** Sends the pause; a rejection is thrown back so the form can show it. */
+  onConfirm: (update: ScheduledJobStateUpdate) => Promise<void>;
+}) {
+  // One basis for validation: the state contract the endpoint parses decides
+  // what the reason shows as it is typed and what Confirm may send.
+  const form = useContractForm(schedulerJobStateUpdateSchema, { state: "paused", reason });
+  const [error, setError] = useState("");
+  const title = titleFromKey(job.jobKey);
+
+  async function confirm() {
+    setError("");
+    const checked = form.submit();
+    if (!checked.data) {
+      setError(checked.message);
+      return;
+    }
+    try {
+      await onConfirm(checked.data);
+    } catch (confirmError) {
+      // A server refusal names its field the same way the contract does.
+      setError(form.refuse(confirmError));
+    }
+  }
+
+  return (
+    <Dialog
+      open
+      title={`Pause ${title}?`}
+      description="Pausing prevents future claims; a run already in progress finishes."
+      confirmLabel={busy ? "Pausing…" : "Confirm pause"}
+      confirmDisabled={busy}
+      onConfirm={() => void confirm()}
+      onCancel={onCancel}
+    >
+      <form
+        noValidate
+        class="pk-stack pk-stack--snug"
+        aria-label={`Pause ${title}`}
+        {...form.handlers}
+        onSubmit={(event) => {
+          event.preventDefault();
+          void confirm();
+        }}
+      >
+        <Field
+          label="Pause reason"
+          required
+          help="Recorded with the pause and shown beside the job until it resumes."
+          {...form.of("reason")}
+        >
+          {(control) => (
+            <Textarea
+              {...control}
+              name="reason"
+              rows={2}
+              maxLength={500}
+              value={reason}
+              disabled={busy}
+              onInput={(event) => onReason((event.target as HTMLTextAreaElement).value)}
+            />
+          )}
+        </Field>
+        {error && <Alert tone="danger">{error}</Alert>}
+      </form>
+    </Dialog>
+  );
+}
+
+export function ScheduledJobs() {
+  const [scheduleJob, setScheduleJob] = useState<ScheduledJobResource | null>(null);
+  const [jobs, setJobs] = useState<ScheduledJobResource[]>([]);
+  const [busyJob, setBusyJob] = useState<string | null>(null);
+  const [pauseJob, setPauseJob] = useState<string | null>(null);
+  const [pauseReason, setPauseReason] = useState("");
+  const tableActions = useRef<ApiTableActions | null>(null);
+
+  /** Sends one state change; a rejection is thrown so the caller can say where. */
+  async function updateState(job: ScheduledJobResource, update: ScheduledJobStateUpdate): Promise<void> {
+    setBusyJob(job.jobKey);
+    try {
+      await patchJson(
+        `/api/v1/scheduler/jobs/${encodeURIComponent(job.jobKey)}`,
+        update,
+        schedulerJobStateResponseSchema,
+      );
+      await tableActions.current?.reload();
+      setPauseJob(null);
+      setPauseReason("");
+      toast(update.state === "paused" ? "Scheduled job paused." : "Scheduled job resumed.", "success");
+    } finally {
+      setBusyJob(null);
+    }
+  }
+
+  async function resume(job: ScheduledJobResource): Promise<void> {
+    try {
+      await updateState(job, { state: "active" });
+    } catch (resumeError) {
+      toast((resumeError as Error).message, "error");
+    }
+  }
+
+  async function runNow(job: ScheduledJobResource): Promise<void> {
+    setBusyJob(job.jobKey);
+    try {
+      const result = await postJson(
+        `/api/v1/scheduler/jobs/${encodeURIComponent(job.jobKey)}/runs`,
+        {},
+        schedulerJobRunResponseSchema,
+      );
+      await tableActions.current?.reload();
+      toast(
+        `${titleFromKey(job.jobKey)} finished with status ${statusLabel(result.status).toLowerCase()}.`,
+        result.status === "succeeded" ? "success" : "error",
+      );
+    } catch (runError) {
+      toast((runError as Error).message, "error");
+    } finally {
+      setBusyJob(null);
+    }
+  }
+
+  const controls: JobControls = {
+    busyJob,
+    onRun: (job) => void runNow(job),
+    onResume: (job) => void resume(job),
+    onEditSchedule: setScheduleJob,
+    onStartPause: (job) => {
+      setPauseJob(job.jobKey);
+      setPauseReason("");
+    },
+  };
+
+  const columns: Column<ScheduledJobResource>[] = [
+    {
+      header: "Job",
+      width: "primary",
+      sort: { asc: "job_key", desc: "-job_key" },
+      cell: (job) => <JobIdentity job={job} />,
+    },
+    {
+      header: "Schedule",
+      sort: { asc: "next_run_at", desc: "-next_run_at" },
+      cell: (job) => <JobSchedule job={job} />,
+    },
+    {
+      header: "Last outcome",
+      sort: { asc: "last_run_at", desc: "-last_run_at" },
+      cell: (job) => <JobOutcome job={job} />,
+    },
+    { header: "Health", cell: (job) => <JobHealth job={job} /> },
+    {
+      header: "",
+      width: "fit",
+      className: "pk-end",
+      cell: (job) => <JobActions job={job} controls={controls} />,
+    },
+  ];
+
+  const pausing = pauseJob ? jobs.find((job) => job.jobKey === pauseJob) : undefined;
+
+  return (
+    <div class="pk pk-stack pk-stack--snug">
+      <PageHeader title="Scheduled jobs" />
+      {scheduleJob && (
+        <ScheduledJobScheduleDialog
+          job={scheduleJob}
+          onCancel={() => setScheduleJob(null)}
+          onSaved={() => {
+            void tableActions.current?.reload();
+            setScheduleJob(null);
+          }}
+        />
+      )}
+      {pausing && (
+        <PauseDialog
+          job={pausing}
+          busy={busyJob === pausing.jobKey}
+          reason={pauseReason}
+          onReason={setPauseReason}
+          onCancel={() => setPauseJob(null)}
+          onConfirm={(update) => updateState(pausing, update)}
+        />
+      )}
+      <p class="pk-small">
+        Inspect dispatcher cadence and outcomes. Pausing prevents future claims but does not cancel a running job.
+      </p>
+      <ApiDataTable
+        caption="Scheduled jobs"
+        endpoint="/api/v1/scheduler/jobs"
+        responseSchema={schedulerJobsListResponseSchema}
+        resolve={(response) => response.jobs}
+        resolvePage={(response) => response.page}
+        columns={columns}
+        rowKey={(job) => job.jobKey}
+        initialSort="job_key"
+        searchPlaceholder="Search scheduled jobs…"
+        paginate
+        initialPageSize={25}
+        actionsRef={tableActions}
+        onData={(response) => setJobs(response.jobs)}
+        empty={
+          <EmptyState
+            title="No scheduled jobs are configured."
+            body="A job appears here once the dispatcher registers it."
+          />
+        }
+      />
+    </div>
+  );
+}

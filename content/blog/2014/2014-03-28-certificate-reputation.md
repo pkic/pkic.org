@@ -19,6 +19,15 @@ tags:
 title: Certificate Reputation
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 One of the advantages of having multiple certification authorities (CAs) from which to choose an SSL certificate is that customers have flexibility to choose a CA that meets their specific needs, or even use a number of CAs for redundancy or to have access to a broader toolset. The disadvantage for end users, however, is that they often may not know if a particular CA was authorized to issue the certificate, and there could be a chance that the certificate was fraudulently obtained.
 

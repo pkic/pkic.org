@@ -1,20 +1,24 @@
+import { mountMarkdownField } from "../components/markdown-editor/mount-markdown-field";
 import { render, createRef } from "preact";
+import type { z } from "zod";
 import { getJson, postJson } from "../shared/api-client";
 import { clearReferralSession } from "../shared/query-context";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/widgets/consents";
 import { renderCustomFields, readCustomFieldValues } from "../shared/widgets/custom-fields";
 import { installStepNavigation } from "../shared/form/step-navigation";
 import { renderSharePanel } from "../shared/widgets/share-panel";
-import type { EventFormsResponse } from "../shared/types";
+import { eventFormsResponseSchema } from "../../shared/schemas/forms";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
-import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
+import { withLoadingButton } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
-import { proposalCreateSchema } from "../../shared/schemas/api";
+import { proposalCreateSchema, proposalCreateResponseSchema } from "../../shared/schemas/proposal-management";
 import { readField, findSubmitButton } from "../shared/form/helpers";
 import { SpeakerFormCard } from "../components/SpeakerFormCard";
 import { SuccessPanel } from "../components/SuccessPanel";
+import { ButtonLink } from "../ui/Button";
+import { Radio } from "../ui/Checkbox";
 import type { ProfileLinksHandle } from "../components/ProfileLinksInput";
-import { tryRecoverInvalidInvite } from "../shared/widgets/invite-recovery";
+import { handleFormInviteSubmitError } from "../shared/widgets/invite-recovery";
 
 // ── Session type labels ───────────────────────────────────────────────────────
 
@@ -43,14 +47,7 @@ function renderSessionTypes(root: HTMLElement, types: string[]): void {
       {types.map((type, i) => {
         const id = `type-${type}`;
         const label = SESSION_TYPE_LABELS[type] ?? type.replace(/_/g, " ");
-        return (
-          <>
-            <input class="btn-check" type="radio" name="proposalType" id={id} value={type} defaultChecked={i === 0} />
-            <label class="btn btn-outline-secondary btn-sm" htmlFor={id}>
-              {label}
-            </label>
-          </>
-        );
+        return <Radio name="proposalType" id={id} value={type} defaultChecked={i === 0} label={label} />;
       })}
     </>,
     container,
@@ -202,12 +199,12 @@ function readAdditionalSpeakers(form: HTMLFormElement) {
 function showSuccessPanel(
   root: HTMLElement,
   form: HTMLFormElement,
-  result: { success: boolean; status: string; manageUrl?: string },
+  result: z.infer<typeof proposalCreateResponseSchema>,
   firstName: string,
   eventName: string,
   eventSlug: string,
 ): void {
-  form.classList.add("d-none");
+  form.hidden = true;
 
   const container = document.createElement("div");
   const shareRef = createRef<HTMLDivElement>();
@@ -216,19 +213,19 @@ function showSuccessPanel(
   render(
     <SuccessPanel icon="📋" title={title}>
       <p class="event-flow-success-body">
-        Your proposal is now under review. The programme committee will be in touch by email with a decision.
+        Your proposal is now under review. The program committee will be in touch by email with a decision.
       </p>
       {result.manageUrl && (
         <p>
-          <a href={result.manageUrl} class="btn btn-outline-secondary btn-sm">
+          <ButtonLink href={result.manageUrl} size="sm">
             Manage your proposal →
-          </a>
+          </ButtonLink>
         </p>
       )}
-      <p class="text-muted small">
+      <p class="pk-small">
         Speakers you listed will each receive a personal email with a private link to confirm their participation,
         complete their profile, and upload a headshot once accepted. If there is context about additional potential
-        speakers, include that in your proposal notes or follow up with the programme team.
+        speakers, include that in your proposal notes or follow up with the program team.
       </p>
       <div ref={shareRef} />
     </SuccessPanel>,
@@ -255,6 +252,11 @@ async function main(): Promise<void> {
   const { form, statusEl, eventSlug, eventPagePath, apiBase, query } = boot;
   const eventPathHeaders = eventPagePath ? { "x-event-base-path": eventPagePath } : undefined;
 
+  const abstractEditor = await mountMarkdownField(
+    form.querySelector<HTMLTextAreaElement>("#proposal-abstract"),
+    "Abstract",
+    proposalCreateSchema.shape.proposal.shape.abstract,
+  );
   installLiveValidation(form, statusEl);
 
   const consentsContainer = boot.root.querySelector<HTMLElement>("[data-consents]");
@@ -324,6 +326,7 @@ async function main(): Promise<void> {
   // ── Step navigation — pre-fill proposer card when entering step 3 ─────────
 
   installStepNavigation(boot.root, form, statusEl, (currentStep) => {
+    if (currentStep === 3 && abstractEditor && !abstractEditor.validate()) return false;
     if (currentStep === 3 && isPresentingCheckbox?.checked) {
       ensureProposerCard();
       prefillProposerCard();
@@ -348,10 +351,18 @@ async function main(): Promise<void> {
   // ── Load form metadata ────────────────────────────────────────────────────
 
   try {
-    const forms = await getJson<EventFormsResponse>(`${apiBase}/events/${eventSlug}/forms?purpose=proposal_submission`);
+    const forms = await getJson(
+      `${apiBase}/events/${eventSlug}/forms/placements/proposal_submission`,
+      eventFormsResponseSchema,
+    );
     eventName = forms.event.name;
     if (consentsContainer) renderConsentInputs(consentsContainer, forms.requiredTerms);
-    renderSessionTypes(boot.root, forms.allowedSessionTypes ?? ["talk", "keynote", "panel"]);
+    // Whatever the event allows, and only that. The fallback that used to
+    // stand here named three session types of its own — a second copy of the
+    // backend's `DEFAULT_SESSION_TYPES`, which `resolveSessionTypes` already
+    // applies before the response is built, so the field is never empty and
+    // the copy could only ever have offered a type the event refused.
+    renderSessionTypes(boot.root, forms.allowedSessionTypes);
     if (customFieldsContainer && forms.form) {
       renderCustomFields(customFieldsContainer, forms.form.fields);
     }
@@ -363,9 +374,12 @@ async function main(): Promise<void> {
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
-    form.classList.add("was-validated");
+    // `validateBeforeSubmit` marks the form as validated itself; adding the
+    // class here as well was a second owner for the same state. Consent cards
+    // draw their own error from the platform's `invalid` event, which
+    // `syncConsentValidation` triggers, so nothing here depended on the class.
     syncConsentValidation(form);
-    if (!validateBeforeSubmit(form, statusEl)) return;
+    if (!validateBeforeSubmit(form, statusEl) || (abstractEditor && !abstractEditor.validate())) return;
 
     await withLoadingButton(findSubmitButton(form), async () => {
       try {
@@ -401,27 +415,23 @@ async function main(): Promise<void> {
           consents: readConsentValues(form),
         });
 
-        const result = await postJson<{ success: boolean; status: string; manageUrl?: string }>(
+        const result = await postJson(
           `${apiBase}/events/${eventSlug}/proposals`,
           payload,
+          proposalCreateResponseSchema,
           eventPathHeaders,
         );
 
         clearReferralSession();
         showSuccessPanel(boot.root, form, result, firstName, eventName, eventSlug);
       } catch (error) {
-        if (
-          await tryRecoverInvalidInvite({
-            error,
-            email: readField(form, "email"),
-            apiBase,
-            statusEl,
-            hasInviteToken: Boolean(query.inviteToken),
-          })
-        ) {
-          return;
-        }
-        handleSubmitError(error, form, statusEl);
+        await handleFormInviteSubmitError({
+          error,
+          form,
+          apiBase,
+          statusEl,
+          hasInviteToken: Boolean(query.inviteToken),
+        });
       }
     });
   });

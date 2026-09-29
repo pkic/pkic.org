@@ -1,202 +1,75 @@
-import { OpenAPIRoute } from "chanfana";
-import { parseJsonBody } from "../../../../../_lib/validation";
-import { handleError, json } from "../../../../../_lib/http";
+import type { ValidatedData } from "chanfana";
+import { openApiRoute } from "../../../../../_lib/openapi/route";
+import { json } from "../../../../../_lib/http";
 import { getConfig, resolveAppBaseUrl } from "../../../../../_lib/config";
-import { buildEventEmailVariables, getEventBySlug } from "../../../../../_lib/services/events";
-import { confirmRegistrationByToken } from "../../../../../_lib/services/registrations";
+import { getEventBySlug } from "../../../../../_lib/services/events";
+import { confirmRegistrationWithNotification } from "../../../../../_lib/services/registrations/confirmation-workflow";
 import { getRegistrationDayAttendance } from "../../../../../_lib/services/event-days";
 import { listDayWaitlistForRegistration } from "../../../../../_lib/services/registrations/day-waitlist";
-import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../../../../../_lib/utils/attendance";
-import { getAcceptedTermsTextForRegistration, getCustomAnswerRows } from "../../../../../_lib/utils/registration-email";
-import { first } from "../../../../../_lib/db/queries";
-import { buildBadgeAttachment } from "../../../../../_lib/email/attachments";
-import { processOutboxByIdBackground, queueEmail } from "../../../../../_lib/email/outbox";
-import { buildRegistrationIcs } from "../../../../../_lib/utils/calendar";
-import { generateSignedRsvpAddress } from "../../../../../_lib/email/rsvp";
-import { registrationManagePageUrl } from "../../../../../_lib/services/frontend-links";
-import type { UserRecord } from "../../../../../_lib/services/users";
-import { registrationConfirmSchema } from "../../../../../../assets/shared/schemas/api";
+import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
+import { registrationConfirmResponseSchema } from "../../../../../../assets/shared/schemas/registration";
 import {
   registrationConfirmEmailGetRouteSchema,
   registrationConfirmEmailPostRouteSchema,
 } from "../../../../../../assets/shared/schemas/route-contracts";
 import { requireInternalSecret } from "../../../../../_lib/request";
-import { queuedCapabilityToken } from "../../../../../_lib/services/capability-links";
 
-async function confirmRegistration(c: any, token: string, registrationId?: string | null): Promise<Response> {
+async function confirmRegistration(
+  c: any,
+  eventSlug: string,
+  token: string,
+  registrationId?: string | null,
+): Promise<Response> {
   const config = getConfig(c.env, c.req.raw);
-  const event = await getEventBySlug(c.env.DB, c.req.param("eventSlug"));
-  const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
-  const signingSecret = requireInternalSecret(c.env);
-
-  const { registration, manageToken } = await confirmRegistrationByToken(c.env.DB, {
+  const event = await getEventBySlug(c.env.DB, eventSlug);
+  const result = await confirmRegistrationWithNotification(c.env.DB, {
+    event,
     token,
     registrationId,
     waitlistClaimWindowHours: config.waitlistClaimWindowHours,
-    signingSecret,
+    confirmationTtlHours: config.confirmationLinkTtlHours,
+    signingSecret: requireInternalSecret(c.env),
+    appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
+    rsvpEmail: c.env.RSVP_EMAIL,
   });
-
-  // Look up the attendee's referral (share) code so the confirmation page can
-  // present it as a sharing prompt — the Peak-End moment for engagement.
-  const referralRow = await first<{ code: string }>(
-    c.env.DB,
-    "SELECT code FROM referral_codes WHERE owner_type = 'registration' AND owner_id = ? LIMIT 1",
-    [registration.id],
+  c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, result.outboxId));
+  const [dayAttendance, dayWaitlist] = await Promise.all([
+    getRegistrationDayAttendance(c.env.DB, result.registration.id),
+    listDayWaitlistForRegistration(c.env.DB, result.registration.id),
+  ]);
+  return json(
+    registrationConfirmResponseSchema.parse({
+      success: true,
+      stage: result.stage,
+      status: result.registration.status,
+      shareUrl: result.shareUrl,
+      manageUrl: result.manageUrl,
+      manageToken: result.manageToken,
+      dayAttendance,
+      dayWaitlist,
+    }),
   );
-  const shareUrl = referralRow ? `${appBaseUrl}/r/${referralRow.code}` : null;
-  const manageUrl = registrationManagePageUrl(appBaseUrl, event, manageToken);
-  const queuedManageUrl = registrationManagePageUrl(
-    appBaseUrl,
-    event,
-    queuedCapabilityToken("registration_manage", registration.id),
-  );
-  const dayAttendanceRaw = await getRegistrationDayAttendance(c.env.DB, registration.id);
-  const dayWaitlist = await listDayWaitlistForRegistration(c.env.DB, registration.id);
-
-  const user = await first<UserRecord>(c.env.DB, "SELECT * FROM users WHERE id = ?", [registration.user_id]);
-  if (user) {
-    if (registration.status === "registered") {
-      const attendanceData = buildAttendanceEmailData(registration.attendance_type, dayAttendanceRaw, dayWaitlist);
-      const statusData = buildRegistrationEmailStatusData(registration.status, dayWaitlist);
-      const customAnswerRows = await getCustomAnswerRows(c.env.DB, event.id, registration.custom_answers_json);
-      const acceptedTermsText = await getAcceptedTermsTextForRegistration(c.env.DB, registration.id);
-      const rsvpEmail = c.env.INTERNAL_SIGNING_SECRET
-        ? await generateSignedRsvpAddress(registration.id, c.env.INTERNAL_SIGNING_SECRET, c.env.RSVP_EMAIL)
-        : undefined;
-      const calendar = await buildRegistrationIcs(
-        event,
-        registration.id,
-        queuedManageUrl,
-        dayAttendanceRaw,
-        appBaseUrl,
-        rsvpEmail,
-        user.email,
-        c.env.INTERNAL_SIGNING_SECRET,
-      );
-      const outboxId = await queueEmail(c.env.DB, {
-        eventId: event.id,
-        baseUrl: appBaseUrl,
-        templateKey: "registration_confirmed",
-        recipientEmail: user.email,
-        recipientUserId: registration.user_id,
-        messageType: "transactional",
-        subject: `Registration confirmed for ${event.name}`,
-        capabilityLinkValues: [queuedManageUrl],
-        attachments: referralRow
-          ? [
-              buildBadgeAttachment({
-                badgeCode: referralRow.code,
-                badgeType: "attendee",
-                firstName: user.first_name ?? "",
-                lastName: user.last_name ?? "",
-              }),
-            ]
-          : undefined,
-        data: {
-          ...buildEventEmailVariables(event, appBaseUrl),
-          // User
-          firstName: user.first_name ?? "",
-          lastName: user.last_name ?? "",
-          email: user.email,
-          organizationName: user.organization_name ?? "",
-          jobTitle: user.job_title ?? "",
-          // Registration
-          attendanceType: registration.attendance_type,
-          attendanceLabel: attendanceData.attendanceLabel,
-          dayAttendance: attendanceData.dayAttendance,
-          dayWaitlist,
-          customAnswerRows,
-          acceptedTermsText: acceptedTermsText || undefined,
-          ...statusData,
-          registrationId: registration.id,
-          // URLs
-          manageUrl: queuedManageUrl,
-          shareUrl,
-          ...(referralRow
-            ? {
-                badgeImageUrl: `${appBaseUrl}/api/v1/og/${referralRow.code}`,
-                linkedinShareUrl: `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(shareUrl as string)}`,
-                twitterShareUrl: `https://twitter.com/intent/tweet?text=${encodeURIComponent(`I just registered for ${event.name} — join me! ${shareUrl}`)}`,
-                blueskyShareUrl: `https://bsky.app/intent/compose?text=${encodeURIComponent(`I just registered for ${event.name} — join me!\n${shareUrl}`)}`,
-                redditShareUrl: `https://www.reddit.com/submit?url=${encodeURIComponent(shareUrl as string)}&title=${encodeURIComponent(`Join me at ${event.name}`)}`,
-              }
-            : {}),
-        },
-        bounceAddress: rsvpEmail,
-        calendar: {
-          registrationId: registration.id,
-          eventId: event.id,
-          icsUid: calendar.uid,
-          icsFiles: calendar.files,
-          inlineContent: calendar.inlineContent,
-        },
-      });
-      c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
-    }
-  }
-
-  return json({
-    success: true,
-    status: registration.status,
-    shareUrl,
-    manageUrl,
-    manageToken,
-    dayAttendance: dayAttendanceRaw,
-    dayWaitlist,
-  });
 }
 
-export async function onRequestPost(c: any): Promise<Response> {
-  const body = await parseJsonBody(c.req, registrationConfirmSchema);
-  return confirmRegistration(c, body.token, body.id);
+async function handleConfirmRegistrationPost(
+  c: any,
+  data: ValidatedData<typeof registrationConfirmEmailPostRouteSchema>,
+): Promise<Response> {
+  return confirmRegistration(c, data.params.eventSlug, data.body.token, data.body.id);
 }
 
-export async function onRequestGet(c: any): Promise<Response> {
-  const params = new URL(c.req.raw.url).searchParams;
-  const token = params.get("token");
-  const id = params.get("id");
-  if (!token) {
-    return json({ error: { code: "TOKEN_REQUIRED", message: "token query parameter is required" } }, 400);
-  }
-
-  const parsed = registrationConfirmSchema.safeParse({ token, id: id ?? undefined });
-  if (!parsed.success) {
-    return json({ error: { code: "VALIDATION_ERROR", message: "Invalid token" } }, 400);
-  }
-
-  return confirmRegistration(c, parsed.data.token, parsed.data.id);
+async function handleConfirmRegistrationGet(
+  c: any,
+  data: ValidatedData<typeof registrationConfirmEmailGetRouteSchema>,
+): Promise<Response> {
+  return confirmRegistration(c, data.params.eventSlug, data.query.token, data.query.id);
 }
 
-export async function onRequest(c: any): Promise<Response> {
-  if (c.req.raw.method === "GET") {
-    return onRequestGet(c);
-  }
-  if (c.req.raw.method === "POST") {
-    return onRequestPost(c);
-  }
-  return json({ error: { code: "METHOD_NOT_ALLOWED", message: "Method not allowed" } }, 405);
-}
-
-export class EventsEventSlugRegistrationsConfirmEmailGet extends OpenAPIRoute {
-  schema = registrationConfirmEmailGetRouteSchema;
-
-  async handle(c: any) {
-    try {
-      return await onRequestGet(c);
-    } catch (error) {
-      return handleError(error);
-    }
-  }
-}
-
-export class EventsEventSlugRegistrationsConfirmEmailPost extends OpenAPIRoute {
-  schema = registrationConfirmEmailPostRouteSchema;
-
-  async handle(c: any) {
-    try {
-      return await onRequestPost(c);
-    } catch (error) {
-      return handleError(error);
-    }
-  }
-}
+export const EventsEventSlugRegistrationsConfirmEmailGet = openApiRoute(
+  registrationConfirmEmailGetRouteSchema,
+  handleConfirmRegistrationGet,
+);
+export const EventsEventSlugRegistrationsConfirmEmailPost = openApiRoute(
+  registrationConfirmEmailPostRouteSchema,
+  handleConfirmRegistrationPost,
+);

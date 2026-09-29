@@ -20,6 +20,15 @@ tags:
 title: Trust Indication Change in Google Chrome
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 Google is making [security icon changes][1] in the Chrome status bar. The changes are based on a [research paper][2] prepared by members of Google and University of California, Berkeley. The research evaluated forty icons, seven complementary strings and surveyed 1,329 people.
 

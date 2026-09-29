@@ -1,5 +1,4 @@
 import {
-    loadEventData,
     getHashParams,
     resolveDayTime,
     parseOffsetToSeconds,
@@ -7,7 +6,10 @@ import {
     getSessionStartTime,
     parseTime,
     findSpeakerByName,
-    getNextAgendaSlot
+    getNextAgendaSlot,
+    createIncrementalSearchBuffer,
+    handleSearchOrNumericShortcut,
+    initializeEventDisplay
 } from './event-common.js';
 
 let sessions = [];
@@ -16,10 +18,7 @@ let autoUpdateEnabled = false;
 let autoSwitchEnabled = false;
 
 let countdownInterval = null;
-let searchBuffer = '';
-let searchResetTimer = null;
-
-const SEARCH_RESET_DELAY = 1000;
+const incrementalSearch = createIncrementalSearchBuffer();
 
 function createHeadshotWithBadge(speaker) {
     const wrapper = document.createElement('div');
@@ -110,29 +109,9 @@ function updateSessionAndSpeakers() {
 
             speakersList.appendChild(headshotsRow);
 
-        } else if (layout === 'vertical') {
-            // Vertical layout: Stack speakers with headshot on left
-            selectedSession.speakers.forEach(speakerName => {
-                const speaker = findSpeakerByName(speakerName);
-                if (speaker) {
-                    const speakerElement = document.createElement('div');
-                    speakerElement.classList.add('speaker');
-
-                    speakerElement.appendChild(createHeadshotWithBadge(speaker));
-
-                    const speakerInfo = document.createElement('div');
-                    speakerInfo.className = 'speaker-info';
-                    speakerInfo.innerHTML = `
-                        <div class="name">${speaker.name}</div>
-                        <div class="title">${speaker.title}</div>
-                    `;
-                    speakerElement.appendChild(speakerInfo);
-                    speakersList.appendChild(speakerElement);
-                }
-            });
-
         } else {
-            // Default/Grid layout: Original behavior
+            // Vertical and grid layouts share the same speaker markup; their
+            // container class controls the visual arrangement.
             selectedSession.speakers.forEach(speakerName => {
                 const speaker = findSpeakerByName(speakerName);
                 if (speaker) {
@@ -293,24 +272,6 @@ function updateNameAndTitle() {
     updateSessionAndSpeakers();
 }
 
-function resetSearchBuffer() {
-    searchBuffer = '';
-    if (searchResetTimer) {
-        clearTimeout(searchResetTimer);
-        searchResetTimer = null;
-    }
-}
-
-function scheduleSearchReset() {
-    if (searchResetTimer) {
-        clearTimeout(searchResetTimer);
-    }
-    searchResetTimer = setTimeout(() => {
-        searchBuffer = '';
-        searchResetTimer = null;
-    }, SEARCH_RESET_DELAY);
-}
-
 function findSessionIndexInList(list, query) {
     if (!list || !list.length) {
         return -1;
@@ -358,8 +319,7 @@ function findSessionIndexInList(list, query) {
 
 function handleSearchKey(key) {
     const character = key.toLowerCase();
-    searchBuffer += character;
-    scheduleSearchReset();
+    const searchBuffer = incrementalSearch.append(character);
 
     // Search within the current session list
     const foundIndex = findSessionIndexInList(sessions, searchBuffer);
@@ -383,7 +343,7 @@ function navigateSessions(event) {
         if (!sessions.length) {
             return;
         }
-        resetSearchBuffer();
+        incrementalSearch.reset();
         currentSessionIndex = (currentSessionIndex > 0) ? currentSessionIndex - 1 : sessions.length - 1;
         autoUpdateEnabled = false;
         updateSessionAndSpeakers();
@@ -392,7 +352,7 @@ function navigateSessions(event) {
         if (!sessions.length) {
             return;
         }
-        resetSearchBuffer();
+        incrementalSearch.reset();
         currentSessionIndex = (currentSessionIndex < sessions.length - 1) ? currentSessionIndex + 1 : 0;
         autoUpdateEnabled = false;
         updateSessionAndSpeakers();
@@ -402,7 +362,7 @@ function navigateSessions(event) {
     // Space : Toggle auto-update mode (re-enable time/day filters)
     else if (event.key === ' ') {
         event.preventDefault();
-        resetSearchBuffer();
+        incrementalSearch.reset();
         if (autoUpdateEnabled) {
             console.log("Auto-update disabled. Freezing current view.");
             autoUpdateEnabled = false;
@@ -416,59 +376,41 @@ function navigateSessions(event) {
     
     // Escape : Return to current session with auto-update
     else if (event.key === 'Escape') {
-        resetSearchBuffer();
+        incrementalSearch.reset();
         console.log("Returning to current session with auto-update.");
         autoUpdateEnabled = true;
         updateNameAndTitle();
         return;
     }
     
-    // a-z : Incremental search for sessions
-    else if (/^[a-zA-Z]$/.test(event.key)) {
-        handleSearchKey(event.key);
-        return;
-    }
-    
-    // 0-9 : Jump to session by index
-    else if (/^[0-9]$/.test(event.key)) {
-        resetSearchBuffer();
-        const numericValue = parseInt(event.key, 10);
-        let index = numericValue - 1;
-        if (numericValue === 0) {
-            index = 9;
-        }
-        if (sessions.length && index >= 0 && index < sessions.length) {
+    else if (handleSearchOrNumericShortcut(event, {
+        onSearch: handleSearchKey,
+        items: sessions,
+        onBeforeSelect: incrementalSearch.reset,
+        onSelect: (index) => {
             currentSessionIndex = index;
             autoUpdateEnabled = false;
             updateSessionAndSpeakers();
         }
+    })) {
         return;
     }
     
     // +/- : Toggle fullscreen mode
     else if (event.key === '+') {
-        resetSearchBuffer();
+        incrementalSearch.reset();
         setFullscreenMode(true);
         return;
     } else if (event.key === '-') {
-        resetSearchBuffer();
+        incrementalSearch.reset();
         setFullscreenMode(false);
         return;
     }
 }
 
-function refreshIfAutoUpdateEnabled() {
-    if (autoUpdateEnabled) {
-        updateNameAndTitle();
-    }
-}
-
-loadEventData()
-    .then(() => {
-        updateNameAndTitle();
-        setInterval(refreshIfAutoUpdateEnabled, 60000);
-
-        window.addEventListener('hashchange', updateNameAndTitle);
-        window.addEventListener('keydown', navigateSessions);
-    })
+initializeEventDisplay({
+    update: updateNameAndTitle,
+    onKeyDown: navigateSessions,
+    isAutoUpdateEnabled: () => autoUpdateEnabled
+})
     .catch(error => console.error('Error loading event data:', error));

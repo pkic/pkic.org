@@ -55,6 +55,15 @@ tags:
 title: The CA Security Council Looks Ahead to 2020 and Beyond
 
 
+authorProfiles:
+  - name: Patrick Nohe
+    organization: GlobalSign
+    role: Senior Product Marketing Manager
+    website: https://www.globalsign.com
+  - name: Doug Beattie
+    organization: GlobalSign
+    role: VP Product Management
+    website: https://www.globalsign.com
 ---
 ## **A whirlwind of activity will cause dramatic shifts across the PKI world in the year ahead**
 

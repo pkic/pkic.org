@@ -18,6 +18,15 @@ tags:
 title: POODLE for TLS
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 The [POODLE attack on SSL 3.0][1] has now been extended to some implementations of TLS. POODLE for TLS can be tracked through [CVE-2014-8730][2].
 

@@ -4,21 +4,12 @@ import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import YAML from "yaml";
+import { buildWranglerD1ExecuteArgs, parseSeedCliArgs } from "./lib/seed-cli.mjs";
+import { sqlString, toSqlNullableTextPreservingWhitespace as toSqlNullableText } from "./lib/sql.mjs";
 
 const DEFAULT_CONFIG_PATH = path.join(process.cwd(), "scripts", "seed-event.yaml");
 const DEFAULT_BUCKET = process.env.ASSETS_BUCKET_NAME ?? "pkic-assets";
 const DEFAULT_ADMIN_EMAIL = process.env.SEED_ADMIN_EMAIL ?? "admin@pkic.org";
-
-function sqlString(value) {
-  return `'${String(value).replaceAll("'", "''")}'`;
-}
-
-function toSqlNullableText(value) {
-  if (value === null || value === undefined || String(value).trim().length === 0) {
-    return "NULL";
-  }
-  return sqlString(value);
-}
 
 function toSqlInt(value, fallback) {
   const parsed = Number.parseInt(String(value), 10);
@@ -29,74 +20,20 @@ function toSqlInt(value, fallback) {
 }
 
 function parseArgs(argv) {
-  const parsed = {
-    mode: "local",
-    database: process.env.D1_DATABASE_NAME ?? "pkic-db",
-    wranglerEnv: null,
-    persistTo: null,
-    configPath: DEFAULT_CONFIG_PATH,
-    bucket: DEFAULT_BUCKET,
-    adminEmail: DEFAULT_ADMIN_EMAIL,
-    skipEmailTemplates: false,
-  };
-
-  for (let index = 0; index < argv.length; index += 1) {
-    const arg = argv[index];
-    const next = argv[index + 1];
-
-    if (arg === "--remote") {
-      parsed.mode = "remote";
-      continue;
-    }
-
-    if (arg === "--local") {
-      parsed.mode = "local";
-      continue;
-    }
-
-    if (arg === "--db" && next) {
-      parsed.database = next;
-      index += 1;
-      continue;
-    }
-
-    if ((arg === "--config" || arg === "--file") && next) {
-      parsed.configPath = path.isAbsolute(next) ? next : path.join(process.cwd(), next);
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--bucket" && next) {
-      parsed.bucket = next;
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--admin-email" && next) {
-      parsed.adminEmail = next;
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--env" && next) {
-      parsed.wranglerEnv = next;
-      index += 1;
-      continue;
-    }
-
-    if (arg === "--skip-email-templates") {
+  return parseSeedCliArgs(
+    argv,
+    {
+      configPath: DEFAULT_CONFIG_PATH,
+      bucket: DEFAULT_BUCKET,
+      adminEmail: DEFAULT_ADMIN_EMAIL,
+      skipEmailTemplates: false,
+    },
+    ({ arg, parsed }) => {
+      if (arg !== "--skip-email-templates") return 0;
       parsed.skipEmailTemplates = true;
-      continue;
-    }
-
-    if (arg === "--persist-to" && next) {
-      parsed.persistTo = next;
-      index += 1;
-      continue;
-    }
-  }
-
-  return parsed;
+      return 0;
+    },
+  );
 }
 
 function loadConfig(configPath) {
@@ -225,7 +162,9 @@ function buildOrganizersSql(config) {
 
   const statements = [];
   for (const organizer of organizers) {
-    const email = String(organizer.email ?? "").trim().toLowerCase();
+    const email = String(organizer.email ?? "")
+      .trim()
+      .toLowerCase();
     if (!email) {
       continue;
     }
@@ -438,15 +377,7 @@ function main() {
   const config = loadConfig(cli.configPath);
   const sql = buildSql(config);
 
-  const args = [
-    "wrangler",
-    "d1",
-    "execute",
-    cli.database,
-    ...(cli.wranglerEnv ? ["--env", cli.wranglerEnv] : []),
-    cli.mode === "remote" ? "--remote" : "--local",
-    ...(cli.persistTo ? [`--persist-to=${cli.persistTo}`] : []),
-  ];
+  const args = buildWranglerD1ExecuteArgs(cli);
 
   runWranglerSql(args, sql);
 

@@ -1,0 +1,11 @@
+@layer components {
+  .pk-breadcrumb__list {
+    flex-wrap: wrap;
+    row-gap: var(--pk-1);
+  }
+  .pk-breadcrumb__item {
+    min-width: 0;
+    max-width: 100%;
+    overflow-wrap: anywhere;
+  }
+}

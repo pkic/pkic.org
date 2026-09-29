@@ -1,10 +1,16 @@
+import { protectsPublicAction } from "./abuse-protection";
 import { z } from "zod";
 import { SUPPORTED_CURRENCY_CODES } from "../constants/currencies";
+import { stripeCheckoutSessionIdSchema } from "./stripe";
+import { httpUrlSchema, relativeRedirectPathSchema } from "./urls";
+import { publicOperation } from "./route-contract";
 
 /**
  * Schema for POST /api/v1/donations/checkout — creates a Stripe Checkout Session.
  */
 export const donationCheckoutSchema = z.object({
+  /** Stable per form attempt so client retries cannot create duplicate Stripe sessions. */
+  checkoutAttemptId: z.uuid(),
   /** Amount in the currency's smallest unit (cents for USD/EUR, whole units for JPY). */
   amount: z.number().int().positive().min(100).max(100_000_000),
   /** ISO 4217 currency code, lowercase. */
@@ -17,24 +23,12 @@ export const donationCheckoutSchema = z.object({
   name: z.string().trim().min(1, "Name is required").max(200),
   /** Donor's email — pre-fills Stripe Checkout and stored for tax reporting. */
   email: z.email().trim().toLowerCase().optional(),
-  /** Donor's organisation name (optional). */
+  /** Donor's organization name (optional). */
   organizationName: z.string().trim().max(200).optional(),
   /** Relative path to redirect to after successful donation (must start with /). */
-  successPath: z
-    .string()
-    .trim()
-    .max(500)
-    .refine((p) => p.startsWith("/"), "Must be a relative path starting with /")
-    .refine((p) => !p.includes("//"), "Must not contain //")
-    .optional(),
+  successPath: relativeRedirectPathSchema.optional(),
   /** Relative path to redirect to if the donor cancels. */
-  cancelPath: z
-    .string()
-    .trim()
-    .max(500)
-    .refine((p) => p.startsWith("/"), "Must be a relative path starting with /")
-    .refine((p) => !p.includes("//"), "Must not contain //")
-    .optional(),
+  cancelPath: relativeRedirectPathSchema.optional(),
   /** Optional metadata for tracking donation source. */
   metadata: z
     .object({
@@ -46,21 +40,47 @@ export const donationCheckoutSchema = z.object({
   embedded: z.boolean().optional(),
 });
 
+export const donationCheckoutRedirectResponseSchema = z.object({ url: httpUrlSchema });
+export const donationCheckoutEmbeddedResponseSchema = z.object({
+  clientSecret: z.string().min(1),
+  publishableKey: z.string(),
+});
+
+export const donationCheckoutPostRouteSchema = {
+  ...protectsPublicAction("donation_checkout", "donations:sync"),
+  tags: ["Donations"],
+  summary: "Create a donation checkout session",
+  request: {
+    body: { content: { "application/json": { schema: donationCheckoutSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Stripe-hosted or embedded checkout session.",
+      content: {
+        "application/json": {
+          schema: z.union([donationCheckoutRedirectResponseSchema, donationCheckoutEmbeddedResponseSchema]),
+        },
+      },
+    },
+    "400": { description: "Invalid donation parameters." },
+    "403": { description: "Cross-origin request rejected." },
+    "502": { description: "Stripe checkout creation failed." },
+    "503": { description: "Donation processing is not configured." },
+  },
+};
+
 export const donationPromoterRequestSchema = z.object({
-  session_id: z
-    .string()
-    .trim()
-    .refine((value) => value.startsWith("cs_"), "Must be a valid Stripe checkout session ID")
-    .describe("A valid completed Stripe checkout session ID starting with cs_"),
+  sessionId: stripeCheckoutSessionIdSchema.describe("A valid completed Stripe checkout session ID starting with cs_"),
 });
 
 export const donationPromoterResponseSchema = z.object({
   code: z.string().describe("Uniquely generated promoter code"),
-  shareUrl: z.string().url().describe("The URL where users can visit the share landing page"),
-  ogImageUrl: z.string().url().describe("The dynamically generated image URL representing the donation badge"),
+  shareUrl: httpUrlSchema.describe("The URL where users can visit the share landing page"),
+  ogImageUrl: httpUrlSchema.describe("The dynamically generated image URL representing the donation badge"),
 });
 
 export const donationPromoterPostRouteSchema = {
+  ...publicOperation(),
   tags: ["Donations"],
   summary: "Create or retrieve promoter link",
   description:
@@ -97,11 +117,9 @@ export const donationPromoterPostRouteSchema = {
 };
 
 export const donationSessionQuerySchema = z.object({
-  session_id: z
-    .string()
-    .trim()
-    .refine((value) => value.startsWith("cs_"), "Must be a valid Stripe checkout session ID")
-    .describe("The Stripe Checkout Session ID appended to the success redirect URL"),
+  session_id: stripeCheckoutSessionIdSchema.describe(
+    "The Stripe Checkout Session ID appended to the success redirect URL",
+  ),
 });
 
 export const donationSessionCompletedResponseSchema = z.object({
@@ -132,6 +150,12 @@ export const donationSessionPendingResponseSchema = z.object({
   paymentMethodType: z.string().nullable().optional(),
   sessionExpiresAt: z.number().nullable().optional(),
 });
+
+/** Combined 200/202 wire response used by clients that poll settlement state. */
+export const donationSessionPollResponseSchema = z.union([
+  donationSessionResponseSchema,
+  donationSessionPendingResponseSchema,
+]);
 
 export const donationSessionGetRouteSchema = {
   tags: ["Donations"],

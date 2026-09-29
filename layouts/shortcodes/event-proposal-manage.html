@@ -1,101 +1,127 @@
 {{- $eventSlug := partial "events/flow/slug.html" . -}}
 {{- $eventPagePath := partial "events/flow/page-path.html" . -}}
-<div class="event-flow" data-event-proposal-manage data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1" data-module="event-flows/proposal-manage-page">
-  <p class="text-muted" data-proposal-manage-loading>Loading proposal…</p>
-  <div class="d-none" data-proposal-manage-content>
-  <p class="form-text mb-3">Open this page from your proposal management link.</p>
-  <form class="row g-3 my-2 needs-validation" novalidate>
-    <div class="col-12">
-      <label for="manage-proposal-type" class="form-label">Session type</label>
-      <select id="manage-proposal-type" name="proposalType" class="form-select" required>
-        <option value="talk">Talk</option>
-        <option value="workshop">Workshop</option>
-        <option value="panel">Panel</option>
-        <option value="tutorial">Tutorial</option>
-        <option value="lightning_talk">Lightning talk</option>
-        <option value="roundtable">Roundtable</option>
-        <option value="keynote">Keynote</option>
-        <option value="birds_of_a_feather">Birds of a feather</option>
-        <option value="fireside_chat">Fireside chat</option>
-        <option value="demo">Demo</option>
-      </select>
-    </div>
+<div class="event-flow pk" data-event-proposal-manage data-event-slug="{{ $eventSlug }}" data-event-page-path="{{ $eventPagePath }}" data-api-base="/api/v1" data-module="event-flows/proposal-manage-page">
+  <p class="pk-muted" data-proposal-manage-loading>Loading proposal…</p>
 
-    <div class="col-12">
-      <label for="manage-proposal-title" class="form-label">Title</label>
-      <input id="manage-proposal-title" name="title" type="text" class="form-control" required>
-      <div data-field-error="title" class="invalid-feedback d-block"></div>
-    </div>
+  <div class="pk-stack pk-stack--loose" hidden data-proposal-manage-content>
+    {{/* Prose about the page, not a control's help text: `pk-field__help`
+         belongs to a field and takes its colour from the field's state. */}}
+    <p class="pk-muted pk-small">Open this page from your proposal management link.</p>
 
-    <div class="col-12">
-      <label for="manage-proposal-abstract" class="form-label">Abstract</label>
-      <textarea id="manage-proposal-abstract" name="abstract" rows="8" class="form-control" required></textarea>
-      <div data-field-error="abstract" class="invalid-feedback d-block"></div>
-    </div>
-
-    <div class="col-12 d-flex gap-2">
-      <button type="submit" class="btn btn-success">Save changes</button>
-      <button type="button" data-action="withdraw" class="btn btn-outline-danger">Withdraw proposal</button>
-    </div>
-
-    <div class="col-12">
-      <p data-flow-status class="alert visually-hidden mb-0" role="status" aria-live="polite"></p>
-    </div>
-  </form>
-
-  <hr class="my-4">
-
-  <div data-cospeaker-section>
-    <h5 class="mb-1">Speakers</h5>
-    <p class="text-muted small mb-3">Invite additional speakers to contribute to this proposal. You can provide their profile details and headshot here, or send them a profile link so they can update their own information.</p>
-
-    <div data-cospeaker-list class="mb-3"></div>
-    <p class="text-muted small mb-3" data-cospeaker-status-help>
-      Track who has accepted, keep speaker details current, and send a reminder to invited speakers who have not responded yet.
-    </p>
-
-    <div data-cospeaker-form>
-      <div class="row g-2 align-items-end mb-2">
-        <div class="col-12 col-sm-4">
-          <label class="form-label small" for="cs-email">Email *</label>
-          <input id="cs-email" name="cs-email" type="email" class="form-control form-control-sm" placeholder="speaker@example.com" autocomplete="off">
-        </div>
-        <div class="col-6 col-sm-3">
-          <label class="form-label small" for="cs-first-name">First name</label>
-          <input id="cs-first-name" name="cs-first-name" type="text" class="form-control form-control-sm" placeholder="Optional">
-        </div>
-        <div class="col-6 col-sm-3">
-          <label class="form-label small" for="cs-last-name">Last name</label>
-          <input id="cs-last-name" name="cs-last-name" type="text" class="form-control form-control-sm" placeholder="Optional">
-        </div>
-        <div class="col-6 col-sm-2">
-          <label class="form-label small" for="cs-role">Role</label>
-          <select id="cs-role" name="cs-role" class="form-select form-select-sm">
-            <option value="speaker">Speaker</option>
-            <option value="co_speaker">Co-speaker</option>
-            <option value="moderator">Moderator</option>
-            <option value="panelist">Panelist</option>
+    <form class="pk-form needs-validation" novalidate>
+      {{/* The control sits inside `pk-field__control`: the state mark is
+           positioned against that box, so a control outside one has nowhere to
+           draw its tick, caution or cross. The message slot lives in the same
+           `pk-field`, which is what carries the `--state-*` variables that
+           `pk-field--ok|--advisory|--invalid` set. */}}
+      <div class="pk-field">
+        <label for="manage-proposal-type" class="pk-field__label">Session type</label>
+        <div class="pk-field__control">
+          <select id="manage-proposal-type" name="proposalType" class="pk-input pk-input--select" required>
+            <option value="talk">Talk</option>
+            <option value="workshop">Workshop</option>
+            <option value="panel">Panel</option>
+            <option value="tutorial">Tutorial</option>
+            <option value="lightning_talk">Lightning talk</option>
+            <option value="roundtable">Roundtable</option>
+            <option value="keynote">Keynote</option>
+            <option value="birds_of_a_feather">Birds of a feather</option>
+            <option value="fireside_chat">Fireside chat</option>
+            <option value="demo">Demo</option>
           </select>
         </div>
+        <p data-field-error="proposalType" class="pk-field__message" aria-live="polite" hidden></p>
       </div>
-      <button type="button" data-cospeaker-invite-btn class="btn btn-sm btn-outline-primary">Send invite</button>
-      <p data-cospeaker-status class="mt-2 small"></p>
+
+      <div class="pk-field">
+        <label for="manage-proposal-title" class="pk-field__label">Title</label>
+        <div class="pk-field__control">
+          <input id="manage-proposal-title" name="title" type="text" class="pk-input" required>
+        </div>
+        <p data-field-error="title" class="pk-field__message" aria-live="polite" hidden></p>
+      </div>
+
+      <div class="pk-field">
+        <label for="manage-proposal-abstract" class="pk-field__label">Abstract</label>
+        <div class="pk-field__control">
+          <textarea id="manage-proposal-abstract" name="abstract" rows="8" class="pk-input pk-input--textarea" required></textarea>
+        </div>
+        <p data-field-error="abstract" class="pk-field__message" aria-live="polite" hidden></p>
+      </div>
+
+      <div class="pk-cluster">
+        <button type="submit" class="pk-btn pk-btn--primary">Save changes</button>
+        <button type="button" data-action="withdraw" class="pk-btn pk-btn--danger-quiet">Withdraw proposal</button>
+      </div>
+
+      <p data-flow-status class="pk-alert pk-sr-only" role="status" aria-live="polite"></p>
+    </form>
+
+    <div data-cospeaker-section class="pk-stack">
+      <h3>Speakers</h3>
+      <p class="pk-small">Invite additional speakers to contribute to this proposal. You can provide their profile details and headshot here, or send them a profile link so they can update their own information.</p>
+
+      <div data-cospeaker-list class="pk-stack"></div>
+      <p class="pk-small" data-cospeaker-status-help>
+        Track who has accepted, keep speaker details current, and send a reminder to invited speakers who have not responded yet.
+      </p>
+
+      <div data-cospeaker-form class="pk-stack">
+        <div class="pk-grid pk-grid--tight">
+          <div class="pk-field">
+            {{/* The asterisk is decorative; the word behind it is what a
+                 screen reader announces, as `Field` renders it. */}}
+            <label class="pk-field__label" for="cs-email">Email <span class="pk-field__required"><span aria-hidden="true">*</span><span class="pk-field__sr">(required)</span></span></label>
+            <div class="pk-field__control">
+              <input id="cs-email" name="cs-email" type="email" class="pk-input" placeholder="speaker@example.com" autocomplete="off">
+            </div>
+          </div>
+          <div class="pk-field">
+            <label class="pk-field__label" for="cs-first-name">First name</label>
+            <div class="pk-field__control">
+              <input id="cs-first-name" name="cs-first-name" type="text" class="pk-input" placeholder="Optional">
+            </div>
+          </div>
+          <div class="pk-field">
+            <label class="pk-field__label" for="cs-last-name">Last name</label>
+            <div class="pk-field__control">
+              <input id="cs-last-name" name="cs-last-name" type="text" class="pk-input" placeholder="Optional">
+            </div>
+          </div>
+          <div class="pk-field">
+            <label class="pk-field__label" for="cs-role">Role</label>
+            <div class="pk-field__control">
+              <select id="cs-role" name="cs-role" class="pk-input pk-input--select">
+                <option value="speaker">Speaker</option>
+                <option value="co_speaker">Co-speaker</option>
+                <option value="moderator">Moderator</option>
+                <option value="panelist">Panelist</option>
+              </select>
+            </div>
+          </div>
+        </div>
+        <div class="pk-cluster">
+          <button type="button" data-cospeaker-invite-btn class="pk-btn pk-btn--secondary pk-btn--sm">Send invite</button>
+        </div>
+        <p data-cospeaker-status class="pk-alert pk-sr-only" role="status" aria-live="polite"></p>
+      </div>
     </div>
-  </div>
   </div>
 
-  <div class="d-none" data-resend-proposal-manage-section>
+  <div class="pk-stack" hidden data-resend-proposal-manage-section>
     <p>Enter the email address used to submit your proposal and we will send fresh management links.</p>
-    <div class="row g-2 align-items-end">
-      <div class="col-12 col-md-8">
-        <label class="form-label" for="resend-proposal-manage-email">Your email address</label>
-        <input id="resend-proposal-manage-email" type="email" class="form-control" autocomplete="email" placeholder="you@example.com" data-resend-proposal-manage-email>
+    <div class="pk-grid">
+      <div class="pk-field">
+        <label class="pk-field__label" for="resend-proposal-manage-email">Your email address</label>
+        <div class="pk-field__control">
+          <input id="resend-proposal-manage-email" type="email" class="pk-input" autocomplete="email" placeholder="you@example.com" data-resend-proposal-manage-email>
+        </div>
       </div>
-      <div class="col-12 col-md-4">
-        <button type="button" class="btn btn-primary" data-resend-proposal-manage-btn>Send my proposal links</button>
+      <div class="pk-cluster">
+        <button type="button" class="pk-btn pk-btn--primary" data-resend-proposal-manage-btn>Send my proposal links</button>
       </div>
     </div>
-    <p data-resend-proposal-manage-status class="mt-2 small" role="status"></p>
+    <p data-resend-proposal-manage-status class="pk-small" role="status"></p>
   </div>
 </div>
 {{ partial "headshot-modals.html" . }}

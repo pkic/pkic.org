@@ -1,0 +1,46 @@
+@layer components {
+  .pk-link-list {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-2);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    font-size: var(--pk-text-sm);
+  }
+
+  .pk-link-list__link {
+    display: flex;
+    align-items: center;
+    gap: 0.4rem;
+    min-width: 0;
+    padding: 0.25rem;
+    border-radius: var(--pk-radius-sm);
+    text-decoration: none;
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-link-list__link:hover,
+  .pk-link-list__link:focus-visible {
+    background: var(--pk-accent-soft);
+    color: var(--pk-accent);
+  }
+
+  .pk-link-list__link:hover .pk-link-list__label,
+  .pk-link-list__link:focus-visible .pk-link-list__label {
+    text-decoration: underline;
+  }
+
+  .pk-link-list__mark {
+    flex: none;
+    width: 16px;
+    height: 16px;
+  }
+
+  /* A site with no name in the table falls back to its host, which can still
+     be long enough to need a break inside a narrow aside. */
+  .pk-link-list__label {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+}

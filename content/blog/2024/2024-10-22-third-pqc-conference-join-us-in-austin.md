@@ -6,6 +6,15 @@ authors:
 date: 2024-10-22T08:00:00+00:00
 keywords: [PQC, Post-Quantum Cryptography, Conference, Austin, Texas] 
 tags: [PQC, Post-Quantum Cryptography, Conference, Austin, Texas]
+authorProfiles:
+  - name: Paul van Brouwershaven
+    organization: Digitorus
+    role: Founder and CEO
+    website: https://www.digitorus.com
+    social:
+      x: null
+      linkedin: https://www.linkedin.com/in/pvanbrouwershaven/
+    assetdirectory: images/members/digitorus
 ---
 
 **The PKI Consortium is excited to announce the third edition of the Post-Quantum Cryptography (PQC) Conference, scheduled for January 15 and 16, 2025, at the Thompson Conference Center, University of Texas at Austin (US). This event will bring together decision-makers, technical leaders, and industry influencers from both public and private sectors who are deeply invested in the future of cryptography.**
@@ -60,7 +69,7 @@ We are currently accepting speaker proposals for the conference. If you have exp
 
 Sponsorship packages are available for organizations looking to gain visibility and engage with our diverse audience that which business leaders, industry experts, and representatives from various sectors. For more information on sponsorship opportunities, please check our [sponsor brochure](/events/2025/pqc-conference-austin-us/pqc-conference-austin-sponsors.pdf) or contact us at contact@pkic.org.
 
-{{< sponsors sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="all" height="20" max-width="60" rows=true >}}
+{{< sponsors event-slug="pqc-conference-austin-us-2025" sponsoring="Post-Quantum Cryptography Conference Austin 2025" level="all" height="20" max-width="60" rows=true >}}
 
 Stay tuned for more updates on speakers, agenda, and other conference details. We look forward to seeing you in Austin for this exciting exploration of the future of cryptography!
 

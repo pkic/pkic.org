@@ -1,0 +1,305 @@
+import { BreadcrumbScope } from "../../../../ui/BreadcrumbScope";
+/**
+ * The selected-group workspace: one URL-addressed context whose tabs derive
+ * from the identity's live capabilities in that group. The same views serve
+ * members, leaders, and staff — the backend decides what each may do.
+ */
+import { lazy, Suspense } from "preact/compat";
+import { Link } from "wouter";
+import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
+import "../../../../ui/Content.css";
+import {
+  authenticatedGroupDetailResponseSchema,
+  type AuthenticatedGroup,
+  type GroupCapability,
+  type GroupSettingsDetail,
+} from "../../../../../shared/schemas/groups";
+import { selfGroupsListResponseSchema } from "../../../../../shared/schemas/group-participation";
+import { Badge as StatusBadge } from "../../../../components/Badge";
+import { ErrorAlert } from "../../../../components/ErrorAlert";
+import { Spinner } from "../../../../components/Spinner";
+import { Tabs } from "../../../../components/Tabs";
+import { Badge } from "../../../../ui/Badge";
+import { PageHeader } from "../../../../ui/PageHeader";
+import { useData } from "../../../../hooks/useData";
+import { useEffect } from "preact/hooks";
+import { getJson } from "../../../../shared/api-client";
+import { usePortalHashLocation } from "../../hash-location";
+import { portalSession } from "../../state";
+import { refreshPortalSidebarGroups } from "../../shell/SidebarGroups";
+import { GroupParticipationCard } from "../GroupParticipationCard";
+import { groupContextNavigation } from "./group-context-navigation";
+
+const GroupSettingsTabs = lazy(() =>
+  import("./GroupSettingsTabs").then((module) => ({ default: module.GroupSettingsTabs })),
+);
+const GroupMembers = lazy(() => import("./GroupMembers").then((module) => ({ default: module.GroupMembers })));
+const GroupLeadership = lazy(() => import("./GroupLeadership").then((module) => ({ default: module.GroupLeadership })));
+const GroupMeetings = lazy(() => import("./GroupMeetings").then((module) => ({ default: module.GroupMeetings })));
+const GroupAuditLog = lazy(() => import("./GroupAuditLog").then((module) => ({ default: module.GroupAuditLog })));
+const GroupEvents = lazy(() => import("./GroupEvents").then((module) => ({ default: module.GroupEvents })));
+const GroupForms = lazy(() => import("./GroupForms").then((module) => ({ default: module.GroupForms })));
+const GroupMailingLists = lazy(() =>
+  import("./GroupMailingLists").then((module) => ({ default: module.GroupMailingLists })),
+);
+const GroupVotes = lazy(() => import("./GroupVotes").then((module) => ({ default: module.GroupVotes })));
+const GroupOverview = lazy(() => import("./GroupOverview").then((module) => ({ default: module.GroupOverview })));
+const GroupStatistics = lazy(() => import("./GroupStatistics").then((module) => ({ default: module.GroupStatistics })));
+
+const OVERVIEW_VIEW = "overview";
+
+/** The group owns the page title at its root and becomes navigation context inside a record. */
+function GroupContextHeader({ group }: { group: AuthenticatedGroup }) {
+  return (
+    <PageHeader
+      title={group.abbreviatedName ? `${group.name} (${group.abbreviatedName})` : group.name}
+      context={
+        <>
+          <Badge tone="neutral">{group.type.singularLabel}</Badge>
+          {!group.active && <StatusBadge status="inactive" />}
+        </>
+      }
+      description={group.parentGroup ? `Part of ${group.parentGroup.name}` : undefined}
+    />
+  );
+}
+
+/**
+ * Join from the group itself: the same capacity-aware participation card the
+ * catalog uses, fetched for exactly this group. Renders nothing while the
+ * viewer already participates or holds no member capacity.
+ */
+function GroupJoinPanel({ groupId, onChanged }: { groupId: string; onChanged: () => void | Promise<void> }) {
+  const selfGroup = useData(
+    () =>
+      getJson(
+        `/api/v1/users/current/groups?view=catalog&id=${encodeURIComponent(groupId)}&limit=1`,
+        selfGroupsListResponseSchema,
+      ),
+    [groupId],
+  );
+  const row = selfGroup.data?.groups[0];
+  if (!row || row.eligibleCapacities.length === 0) return null;
+  return (
+    <GroupParticipationCard
+      group={row}
+      onChanged={async () => {
+        refreshPortalSidebarGroups();
+        await selfGroup.reload();
+        await onChanged();
+      }}
+    />
+  );
+}
+
+export function GroupWorkspace({
+  groupId,
+  view = OVERVIEW_VIEW,
+  resourceId,
+  resourceTab,
+  resourceDetailId,
+  resourceDetailTab,
+  resourceDetailSegment,
+}: {
+  groupId: string;
+  view?: string;
+  resourceId?: string;
+  /** A second URL segment below `resourceId`: the events, forms, meetings, and votes views forward it as the resource's initial tab. */
+  resourceTab?: string;
+  /** A third URL segment: the events view forwards it as the tab's own resource (a registration or proposal id, or a promoters sub-tab). */
+  resourceDetailId?: string;
+  /** A fourth URL segment: the facet of that resource — a proposal's own tab. */
+  resourceDetailTab?: string;
+  /** A fifth URL segment: a page under that facet, such as the co-speaker invitation under a proposal's Speakers. */
+  resourceDetailSegment?: string;
+}) {
+  const [, navigate] = usePortalHashLocation();
+  const detail = useData(
+    () => getJson(`/api/v1/groups/${encodeURIComponent(groupId)}`, authenticatedGroupDetailResponseSchema),
+    [groupId],
+  );
+  // A link from the public site names a group by its slug — `/groups/pqc` —
+  // and the API resolves either. The workspace, though, keys everything it
+  // renders on the id, so a slug is canonicalized to the id path on arrival
+  // and the rest of the URL rides along.
+  const loaded = detail.data?.group;
+  const arrivedBySlug = loaded !== undefined && loaded.id !== groupId && loaded.slug === groupId;
+  useEffect(() => {
+    if (!loaded || !arrivedBySlug) return;
+    const rest = [view, resourceId, resourceTab, resourceDetailId, resourceDetailTab, resourceDetailSegment]
+      .filter((segment): segment is string => Boolean(segment))
+      .map(encodeURIComponent)
+      .join("/");
+    navigate(`/groups/${encodeURIComponent(loaded.id)}${rest ? `/${rest}` : ""}`);
+  }, [
+    loaded,
+    arrivedBySlug,
+    view,
+    resourceId,
+    resourceTab,
+    resourceDetailId,
+    resourceDetailTab,
+    resourceDetailSegment,
+    navigate,
+  ]);
+  // While a different group loads, useData still holds the previous group's
+  // data; rendering it would leave the old workspace on screen with no
+  // feedback. Treat it as absent so the switch shows a spinner immediately.
+  const group = loaded && loaded.id === groupId ? loaded : undefined;
+  const capabilities = detail.data?.capabilities ?? ([] as GroupCapability[]);
+  const views = groupContextNavigation(capabilities);
+  const canManage = capabilities.includes("manage");
+  const canParticipate = capabilities.includes("participate");
+  const settingsGroup: GroupSettingsDetail | null =
+    group && detail.data?.configuration ? { ...group, ...detail.data.configuration } : null;
+
+  // Tab targets derive from the route's groupId, never from fetched data:
+  // while another group's data is in flight, links must not point back into
+  // the group being left.
+  function viewPath(nextView: string): string {
+    return `/groups/${encodeURIComponent(groupId)}/${nextView}`;
+  }
+
+  const trail = group
+    ? [
+        { label: "Groups", href: usePortalHashLocation.hrefs("/groups") },
+        { label: group.name, href: usePortalHashLocation.hrefs(`/groups/${encodeURIComponent(group.id)}`) },
+        ...(view !== OVERVIEW_VIEW
+          ? [
+              {
+                label: views.find((item) => item.key === view)?.label ?? view,
+                href: usePortalHashLocation.hrefs(viewPath(view)),
+              },
+            ]
+          : []),
+      ]
+    : [];
+  return (
+    <div class="pk pk-stack">
+      {detail.loading && !group && <Spinner label="Loading group…" />}
+      {detail.error && <ErrorAlert error={detail.error} />}
+      {group && (
+        <BreadcrumbScope
+          route={[
+            groupId,
+            view,
+            resourceId,
+            resourceTab,
+            resourceDetailId,
+            resourceDetailTab,
+            resourceDetailSegment,
+          ].join("/")}
+          items={trail}
+          label="Group navigation"
+        >
+          <GroupContextHeader group={group} />
+          <Tabs
+            items={views.map((item) => ({ key: item.key, label: item.label }))}
+            active={view}
+            label={`${group.name} sections`}
+            onChange={(nextView) => navigate(viewPath(nextView))}
+            hrefFor={viewPath}
+          />
+          <Suspense fallback={<Spinner />}>
+            {view === OVERVIEW_VIEW && (
+              <div class={canParticipate || portalSession.value?.member ? "pk-record" : "pk-stack"}>
+                <GroupOverview
+                  groupId={group.id}
+                  description={group.description}
+                  participantCount={group.participantCount}
+                  representedMemberCount={group.representedMemberCount}
+                  childCount={group.childCount}
+                />
+                {!canParticipate && Boolean(portalSession.value?.member) && (
+                  <GroupJoinPanel groupId={group.id} onChanged={detail.reload} />
+                )}
+                {canParticipate && (
+                  <Panel>
+                    <PanelHeader title="Your participation" />
+                    <PanelBody class="pk-stack">
+                      <p>You participate in this group.</p>
+                      <Link href="/groups">Manage your participation</Link>
+                    </PanelBody>
+                  </Panel>
+                )}
+              </div>
+            )}
+            {view === "settings" && canManage && settingsGroup && (
+              <GroupSettingsTabs group={settingsGroup} onUpdated={detail.reload} />
+            )}
+            {view === "members" && (canManage || canParticipate) && (
+              <GroupMembers
+                key={group.id}
+                groupId={group.id}
+                canManage={canManage}
+                seatSegment={resourceId}
+                onChanged={detail.reload}
+              />
+            )}
+            {view === "leadership" && canManage && (
+              <GroupLeadership key={group.id} groupId={group.id} assignmentSegment={resourceId} />
+            )}
+            {view === "events" && (
+              <GroupEvents
+                key={`${group.id}:${resourceId ?? ""}`}
+                groupId={group.id}
+                canManage={canManage}
+                initialEventId={resourceId}
+                initialEventTab={resourceTab}
+                initialEventDetailId={resourceDetailId}
+                initialEventDetailTab={resourceDetailTab}
+                initialEventDetailSegment={resourceDetailSegment}
+              />
+            )}
+            {view === "meetings" && (
+              <GroupMeetings
+                key={`${group.id}:${resourceId ?? ""}`}
+                groupId={group.id}
+                canManage={canManage}
+                seriesSegment={resourceId}
+                seriesTab={resourceTab}
+                seriesDetailId={resourceDetailId}
+                seriesDetailTab={resourceDetailTab}
+              />
+            )}
+            {view === "forms" && (
+              <GroupForms
+                key={`${group.id}:${resourceId ?? ""}`}
+                groupId={group.id}
+                canManage={canManage}
+                placementSegment={resourceId}
+                initialPlacementTab={resourceTab}
+              />
+            )}
+            {view === "votes" && (
+              <GroupVotes
+                key={`${group.id}:${resourceId ?? ""}`}
+                groupId={group.id}
+                canManage={canManage}
+                canParticipate={canParticipate}
+                voteSegment={resourceId}
+                voteTab={resourceTab}
+              />
+            )}
+            {view === "stats" && canManage && <GroupStatistics key={group.id} groupId={group.id} />}
+            {view === "mailing-lists" && (
+              <GroupMailingLists
+                key={group.id}
+                groupId={group.id}
+                canManage={canManage}
+                canParticipate={canParticipate}
+                listSegment={resourceId}
+                listTab={resourceTab}
+              />
+            )}
+            {view === "audit" && canManage && <GroupAuditLog key={group.id} groupId={group.id} />}
+          </Suspense>
+
+          {!views.some((item) => item.key === view) && (
+            <ErrorAlert error="This group section is not available to your current identity." />
+          )}
+        </BreadcrumbScope>
+      )}
+    </div>
+  );
+}

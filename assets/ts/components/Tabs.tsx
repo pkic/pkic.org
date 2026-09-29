@@ -1,30 +1,88 @@
+/**
+ * The portal's tab strip, resolved to whichever design-system component the
+ * caller actually meant.
+ *
+ * Callers pass `hrefFor` when a tab is a place — a URL that should be
+ * shareable and survive the back button — and omit it when a tab merely
+ * swaps a panel already on the page. Those are two different accessibility
+ * contracts, and the version this replaces gave both the same markup: a
+ * wouter `<Link role="tab">`. A link that claims to be a tab announces
+ * arrow-key movement between panels and then navigates instead.
+ *
+ * So the choice the caller already makes now picks the right component:
+ * `Tabs` (links, `aria-current="page"`) or `TabList` (buttons, `role="tab"`,
+ * arrow keys, `aria-controls`).
+ */
+import { Link } from "wouter";
+
+import { useActiveTabVisibility } from "../ui/useActiveTabVisibility";
+
+import { TabList } from "../ui/TabList";
+// The navigating variant is rendered here rather than by `ui/Tabs` because it
+// has to be a wouter <Link>: the portal is hash-routed, and a plain <a href>
+// would navigate away from the app instead of within it. The design system
+// cannot know that, so it supplies the appearance and this supplies the link.
+import "../ui/Tabs.css";
+
 export interface TabItem {
   key: string;
   label: string;
+  panelId?: string;
 }
 
-interface TabsProps {
+interface SharedTabsProps {
   items: TabItem[];
   active: string;
-  onChange: (key: string) => void;
   className?: string;
+  idPrefix?: string;
+  /** Names the set for assistive technology. */
+  label?: string;
 }
 
-export function Tabs({ items, active, onChange, className = "mb-3" }: TabsProps) {
+/** Routed tabs navigate themselves unless a caller supplies guarded navigation. */
+type TabsProps = SharedTabsProps &
+  (
+    | { hrefFor: (key: string) => string; onChange?: (key: string) => void }
+    | { hrefFor?: undefined; onChange: (key: string) => void }
+  );
+
+export function Tabs({ items, active, onChange, className, idPrefix, label = "Sections", hrefFor }: TabsProps) {
+  const listRef = useActiveTabVisibility(active);
+  if (hrefFor) {
+    return (
+      <nav class={["pk-tabs", className].filter(Boolean).join(" ")} aria-label={label}>
+        <div class="pk-tabs__list" ref={listRef}>
+          {items.map((item) => (
+            <Link
+              key={item.key}
+              href={hrefFor(item.key)}
+              class="pk-tabs__link"
+              aria-current={item.key === active ? "page" : undefined}
+              onClick={(event: MouseEvent) => {
+                // Plain routed tabs let Link navigate. Editors may supply
+                // their own guarded navigation; modified clicks stay native.
+                if (!onChange) return;
+                if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                event.preventDefault();
+                onChange(item.key);
+              }}
+            >
+              {item.label}
+            </Link>
+          ))}
+        </div>
+      </nav>
+    );
+  }
+
   return (
-    <ul class={`nav nav-tabs ${className}`} role="tablist">
-      {items.map((item) => (
-        <li key={item.key} class="nav-item" role="presentation">
-          <button
-            class={`nav-link${active === item.key ? " active" : ""}`}
-            onClick={() => onChange(item.key)}
-            type="button"
-            role="tab"
-          >
-            {item.label}
-          </button>
-        </li>
-      ))}
-    </ul>
+    <TabList
+      class={className}
+      label={label}
+      idPrefix={idPrefix}
+      activeId={active}
+      onSelect={onChange}
+      items={items.map((item) => ({ id: item.key, label: item.label, panelId: item.panelId }))}
+    />
   );
 }

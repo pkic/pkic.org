@@ -1,0 +1,50 @@
+import { Tabs } from "../../../../../components/Tabs";
+import type { EventDetail } from "../types";
+import { Team } from "./Team";
+import { GeneralTab } from "./settings/GeneralTab";
+import { SeriesManagedNotice } from "./settings/SeriesManagedNotice";
+import { LazySponsorTiersTab } from "./settings/LazySponsorTiersTab";
+
+type SettingsTab = "general" | "sponsor-tiers" | "team";
+
+const SETTINGS_TABS: Array<{ key: SettingsTab; label: string; capability?: "manage" }> = [
+  { key: "general", label: "General" },
+  { key: "sponsor-tiers", label: "Sponsor Tiers" },
+  { key: "team", label: "Team", capability: "manage" },
+];
+
+export function Settings({
+  event,
+  onUpdated,
+  subTab,
+  detailSegment,
+}: {
+  event: EventDetail;
+  onUpdated: (event: EventDetail) => void;
+  subTab?: string;
+  /** The segment below a sub-tab; `"new"` under Team opens its add page. */
+  detailSegment?: string;
+}) {
+  const visibleTabs = SETTINGS_TABS.filter(({ capability }) => !capability || event.capabilities.includes(capability));
+  const tab: SettingsTab = visibleTabs.find(({ key }) => key === subTab)?.key ?? "general";
+
+  return (
+    <div>
+      <Tabs
+        items={visibleTabs}
+        active={tab}
+        onChange={(key) => {
+          location.hash = `/events/${event.slug}/settings/${key}`;
+        }}
+        hrefFor={(key) => `/events/${event.slug}/settings/${key}`}
+      />
+
+      {tab === "general" &&
+        (event.seriesId ? <SeriesManagedNotice event={event} /> : <GeneralTab event={event} onUpdated={onUpdated} />)}
+      {tab === "sponsor-tiers" && (
+        <LazySponsorTiersTab slug={event.slug} canWrite={event.capabilities.includes("write")} />
+      )}
+      {tab === "team" && <Team slug={event.slug} teamSegment={detailSegment} />}
+    </div>
+  );
+}

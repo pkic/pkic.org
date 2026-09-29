@@ -1,26 +1,21 @@
+{{/*
+  carousel — the photo set attached to a post, as a responsive gallery.
+
+  It was a Bootstrap carousel: its slides, indicators and controls were all
+  Bootstrap classes driven by Bootstrap's own JavaScript. The design system has
+  no carousel primitive, and inventing a `pk-` class for one is not allowed, so
+  the photos are laid out with `pk-grid` instead. Every photo is now on the page
+  at once rather than one at a time behind a control, which needs no script and
+  no slide state to be reachable by keyboard or assistive technology.
+
+  The shortcode name is kept so existing content keeps working.
+*/}}
 {{- with $.Page.Resources.Match (.Get 0) -}}
-<div id="carousel" class="carousel slide bg-light mb-4" data-bs-ride="carousel">
-    <div class="carousel-indicators">
-      <button type="button" data-bs-target="#carousel" data-bs-slide-to="0" class="active" aria-current="true" aria-label="Photo 1"></button>
-      {{- range $index, $image := . -}}
-        <button type="button" data-bs-target="#carousel" data-bs-slide-to="{{ add $index 1 }}" aria-label="Photo {{ add $index 2 }}"></button>
-      {{- end -}}
-   </div>
-    <div class="carousel-inner">
-      {{- range $index, $image := . -}}
-      {{ $image := $image.Fit "1000x400" }}
-      <div class="carousel-item{{ if eq $index 0 }} active{{end}}">
-        <img src="{{ $image.RelPermalink }}" class="d-block mx-auto" alt="{{ .Title }}">
-      </div>
-      {{- end -}}
-    </div>
-    <button class="carousel-control-prev" type="button" data-bs-target="#carousel" data-bs-slide="prev">
-      <span class="carousel-control-prev-icon" aria-hidden="true"></span>
-      <span class="visually-hidden">Previous</span>
-    </button>
-    <button class="carousel-control-next" type="button" data-bs-target="#carousel" data-bs-slide="next">
-      <span class="carousel-control-next-icon" aria-hidden="true"></span>
-      <span class="visually-hidden">Next</span>
-    </button>
-  </div>
+<div class="pk pk-grid pk-grid--roomy" role="group" aria-label="Photos">
+  {{- range . -}}
+    {{- $image := .Fit "1000x400" -}}
+    <img src="{{ $image.RelPermalink }}" width="{{ $image.Width }}" height="{{ $image.Height }}"
+         alt="{{ .Title }}" loading="lazy">
+  {{- end -}}
+</div>
 {{- end -}}

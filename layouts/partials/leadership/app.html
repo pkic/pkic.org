@@ -1,0 +1,20 @@
+{{/*
+  leadership/app.html — mount point for the client-fetched governance display
+  of one group (managed in the portal, no git commit needed). Reads the public
+  group directory, so the group's own "publish leadership" and "publish roster"
+  switches decide what renders. Params (dict):
+    group: group slug, e.g. "board", "executive-council", "all-members" (required)
+    view:  "roster" (default: seats, leaders first, plus past positions)
+           | "leadership" (current leaders plus past terms)
+    color: accent color slug (optional, default "green")
+*/}}
+<div
+  data-leadership
+  data-module="member-flows/leadership-widget"
+  data-api-base="/api/v1"
+  data-group="{{ .group }}"
+  data-view="{{ .view | default "roster" }}"
+  data-color="{{ .color | default "green" }}"
+>
+  {{ with .pastHeading }}<template data-past-heading>{{ . }}</template>{{ end }}
+</div>

@@ -1,33 +1,60 @@
+import { hasAuthenticationCredential } from "../../_lib/auth/session-cookies";
+
 const PUBLIC_CACHE_CONTROL = "public, max-age=300, s-maxage=900, stale-while-revalidate=60";
 const NO_STORE_CACHE_CONTROL = "no-store, max-age=0";
 
 function isPublicCacheableGet(pathname: string): boolean {
-  return /^\/api\/v1\/events\/[^/]+\/terms$/.test(pathname);
+  return (
+    pathname === "/api/v1/events" ||
+    /^\/api\/v1\/events\/[^/]+$/.test(pathname) ||
+    /^\/api\/v1\/events\/[^/]+\/terms$/.test(pathname)
+  );
 }
 
 /**
- * Returns true for routes that are architecturally admin/internal and must
- * never be cached regardless of whether the handler calls markSensitive().
+ * Returns true for staff-only and signed integration routes that must never be
+ * cached regardless of whether the handler calls markSensitive().
  * All other routes signal sensitivity by calling markSensitive(context) at
  * the top of their handler so the middleware reads it from context.data.
  */
-function isAdminPath(pathname: string): boolean {
-  return pathname.startsWith("/api/v1/admin/") || pathname.startsWith("/api/v1/internal/");
+function isSensitiveArchitecturePath(pathname: string): boolean {
+  return (
+    pathname.startsWith("/api/v1/analytics/") ||
+    pathname === "/api/v1/audit-log" ||
+    pathname.startsWith("/api/v1/audit-log/") ||
+    pathname.startsWith("/api/v1/email/") ||
+    pathname === "/api/v1/calendar/rsvp" ||
+    pathname.startsWith("/api/v1/membership/") ||
+    pathname.startsWith("/api/v1/organizations/") ||
+    pathname.startsWith("/api/v1/retention/") ||
+    pathname.startsWith("/api/v1/scheduler/") ||
+    pathname.startsWith("/api/v1/permissions/") ||
+    /^\/api\/v1\/proposals\/[^/]+(?:\/|$)/.test(pathname) ||
+    pathname === "/api/v1/users/current" ||
+    pathname.startsWith("/api/v1/users/current/") ||
+    pathname === "/api/v1/roles" ||
+    pathname.startsWith("/api/v1/roles/") ||
+    /^\/api\/v1\/users\/[^/]+\/roles(?:\/|$)/.test(pathname)
+  );
 }
 
-function applyCachePolicy(request: Request, response: Response, sensitive?: boolean): void {
+function applyResponsePolicy(request: Request, response: Response, sensitive?: boolean): void {
   const pathname = new URL(request.url).pathname.replace(/\/+$/, "") || "/";
   const method = request.method.toUpperCase();
-  const hasAuthHeader = Boolean(request.headers.get("authorization"));
-  const isSensitive = hasAuthHeader || isAdminPath(pathname) || sensitive === true;
+  const isSensitive =
+    hasAuthenticationCredential(request) || isSensitiveArchitecturePath(pathname) || sensitive === true;
 
   if (isSensitive || !["GET", "HEAD"].includes(method)) {
     response.headers.set("cache-control", NO_STORE_CACHE_CONTROL);
-    return;
+  } else if (isPublicCacheableGet(pathname)) {
+    response.headers.set("cache-control", PUBLIC_CACHE_CONTROL);
   }
 
-  if (isPublicCacheableGet(pathname)) {
-    response.headers.set("cache-control", PUBLIC_CACHE_CONTROL);
+  if (isSensitive) {
+    response.headers.set("content-security-policy", "default-src 'none'; frame-ancestors 'none'");
+    response.headers.set("referrer-policy", "no-referrer");
+    response.headers.set("x-content-type-options", "nosniff");
+    response.headers.set("x-robots-tag", "noindex, nofollow, noarchive");
   }
 }
 
@@ -48,7 +75,7 @@ export function finalizeApiResponse(
   requestId?: string,
 ): Response {
   const mutableResponse = ensureMutableResponse(response);
-  applyCachePolicy(request, mutableResponse, sensitive);
+  applyResponsePolicy(request, mutableResponse, sensitive);
   if (requestId) {
     mutableResponse.headers.set("x-request-id", requestId);
   }

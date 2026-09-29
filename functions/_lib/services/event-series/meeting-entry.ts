@@ -1,0 +1,448 @@
+import type { z } from "zod";
+import { outboundMeetingLocation } from "../../../../assets/shared/meeting-calendar-policy";
+import {
+  meetingJoinConfirmSchema,
+  meetingJoinLandingSchema,
+  meetingJoinResponseSchema,
+} from "../../../../assets/shared/schemas/meeting-entry";
+import { all, first } from "../../db/queries";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
+import { AppError } from "../../errors";
+import type { DatabaseLike } from "../../types";
+import { hmacSha256Hex, verifyHmacSha256Hex } from "../../utils/crypto";
+import { uuid } from "../../utils/ids";
+import { nowIso } from "../../utils/time";
+import { openProviderJoinUrl } from "./provider-url";
+
+type JoinConfirmInput = z.infer<typeof meetingJoinConfirmSchema>;
+
+export type MeetingJoinSubject =
+  | { kind: "member"; userId: string; sessionId: string }
+  | { kind: "guest"; guestId: string; sessionId: string }
+  | {
+      kind: "personal";
+      userId: string | null;
+      guestId: string | null;
+      seriesId: string;
+      linkOccurrenceId: string | null;
+      linkSecret: string;
+      authenticatedAt: number;
+      expiresAt: number;
+      sourceKind: "member" | "guest";
+      sourceSessionId: string;
+      authentication: "remember_browser" | "always";
+      rememberDays: number;
+    };
+
+interface JoinContextRow {
+  occurrence_id: string;
+  series_id: string;
+  event_id: string;
+  event_name: string;
+  starts_at: string;
+  ends_at: string;
+  location: string | null;
+  provider_join_url_ciphertext: string | null;
+  user_name: string | null;
+  user_affiliation: string | null;
+  guest_name: string | null;
+  guest_affiliation: string | null;
+}
+
+interface TermRow {
+  id: string;
+  term_key: string;
+  version: string;
+  display_text: string | null;
+  required: number;
+  accepted: number;
+}
+
+const JOIN_CONTEXT_SELECT = `SELECT occurrence.id AS occurrence_id, occurrence.series_id,
+  event.id AS event_id, event.name AS event_name, occurrence.starts_at, occurrence.ends_at,
+  COALESCE(occurrence.location_override, series.location) AS location,
+  COALESCE(occurrence.provider_join_url_ciphertext,
+    json_extract(series.provider_data_json, '$.joinUrlCiphertext')) AS provider_join_url_ciphertext,
+  COALESCE(user.preferred_name,
+           NULLIF(trim(COALESCE(user.first_name, '') || ' ' || COALESCE(user.last_name, '')), ''),
+           user.email) AS user_name,
+  COALESCE(
+    (SELECT GROUP_CONCAT(affiliation.name, ', ')
+       FROM (
+         SELECT DISTINCT organization.id, organization.name
+           FROM identities identity
+           JOIN organizations organization ON organization.id = identity.organization_id
+           JOIN members member ON member.organization_id = organization.id AND member.status = 'active'
+          WHERE identity.user_id = user.id
+            AND identity.started_at IS NOT NULL
+            AND identity.ended_at IS NULL
+            AND identity.blocked_at IS NULL
+          ORDER BY organization.name COLLATE NOCASE, organization.id
+       ) affiliation),
+    NULL
+  ) AS user_affiliation,
+  guest.name AS guest_name, guest.affiliation AS guest_affiliation
+  FROM event_occurrences occurrence
+  JOIN event_series series ON series.id = occurrence.series_id
+  JOIN events event ON event.id = series.event_id
+  LEFT JOIN users user ON user.id = ?
+  LEFT JOIN event_occurrence_guests guest ON guest.id = ?
+  WHERE occurrence.id = ?`;
+
+function subjectIds(subject: MeetingJoinSubject): { userId: string | null; guestId: string | null } {
+  if (subject.kind === "personal") return { userId: subject.userId, guestId: subject.guestId };
+  return subject.kind === "member"
+    ? { userId: subject.userId, guestId: null }
+    : { userId: null, guestId: subject.guestId };
+}
+
+async function loadJoinContext(
+  db: DatabaseLike,
+  occurrenceId: string,
+  subject: MeetingJoinSubject,
+): Promise<JoinContextRow> {
+  const { userId, guestId } = subjectIds(subject);
+  const eligible = await first<{ event_id: string }>(
+    db,
+    `SELECT event_id FROM current_event_occurrence_subject_eligibility
+      WHERE occurrence_id = ? AND user_id IS ? AND guest_id IS ? LIMIT 1`,
+    [occurrenceId, userId, guestId],
+  );
+  if (!eligible) {
+    throw new AppError(403, "MEETING_ACCESS_REVOKED", "You are not currently eligible to join this occurrence");
+  }
+
+  const row = await first<JoinContextRow>(db, JOIN_CONTEXT_SELECT, [userId, guestId, occurrenceId]);
+  if (!row || row.event_id !== eligible.event_id) {
+    throw new AppError(404, "MEETING_OCCURRENCE_NOT_FOUND", "Meeting occurrence not found");
+  }
+  return row;
+}
+
+async function currentTerms(db: DatabaseLike, row: JoinContextRow, subject: MeetingJoinSubject): Promise<TermRow[]> {
+  const { userId, guestId } = subjectIds(subject);
+  return all<TermRow>(
+    db,
+    `SELECT term.id, term.term_key, term.version, term.display_text, term.required,
+            CASE WHEN acceptance.id IS NULL THEN 0 ELSE 1 END AS accepted
+       FROM event_terms term
+  LEFT JOIN event_access_term_acceptances acceptance
+         ON acceptance.event_term_id = term.id AND acceptance.event_id = term.event_id
+        AND ((? IS NOT NULL AND acceptance.user_id = ?) OR (? IS NOT NULL AND acceptance.guest_id = ?))
+      WHERE term.event_id = ? AND term.audience_type = 'attendee' AND term.active = 1
+      ORDER BY term.created_at, term.id`,
+    [userId, userId, guestId, guestId, row.event_id],
+  );
+}
+
+function authoritativeIdentity(row: JoinContextRow, subject: MeetingJoinSubject) {
+  const isMember = subject.kind === "member" || (subject.kind === "personal" && subject.userId !== null);
+  const name = isMember ? row.user_name : row.guest_name;
+  const affiliation = isMember ? row.user_affiliation : row.guest_affiliation;
+  if (!name) throw new AppError(409, "MEETING_IDENTITY_UNAVAILABLE", "The attendee identity is incomplete");
+  return { name, affiliation };
+}
+
+function landingRevisionPayload(
+  row: JoinContextRow,
+  subject: MeetingJoinSubject,
+  identity: { name: string; affiliation: string | null },
+  terms: TermRow[],
+): string {
+  return JSON.stringify({
+    occurrenceId: row.occurrence_id,
+    eventId: row.event_id,
+    subject: { kind: subject.kind, ...subjectIds(subject) },
+    name: identity.name,
+    affiliation: identity.affiliation,
+    terms: terms.map((term) => ({
+      id: term.id,
+      key: term.term_key,
+      version: term.version,
+      displayText: term.display_text ?? term.term_key,
+      required: term.required === 1,
+    })),
+  });
+}
+
+async function buildLanding(
+  db: DatabaseLike,
+  occurrenceId: string,
+  subject: MeetingJoinSubject,
+  revisionSecret: string,
+) {
+  const row = await loadJoinContext(db, occurrenceId, subject);
+  const terms = await currentTerms(db, row, subject);
+  const identity = authoritativeIdentity(row, subject);
+  const landingRevision = await hmacSha256Hex(revisionSecret, landingRevisionPayload(row, subject, identity, terms));
+  return {
+    row,
+    terms,
+    identity,
+    landing: meetingJoinLandingSchema.parse({
+      occurrence: {
+        id: row.occurrence_id,
+        seriesId: row.series_id,
+        eventName: row.event_name,
+        startsAt: row.starts_at,
+        endsAt: row.ends_at,
+        location: outboundMeetingLocation(row.location),
+      },
+      ...identity,
+      terms: terms.map((term) => ({
+        id: term.id,
+        key: term.term_key,
+        version: term.version,
+        displayText: term.display_text ?? term.term_key,
+        required: term.required === 1,
+        accepted: term.accepted === 1,
+      })),
+      landingRevision,
+    }),
+  };
+}
+
+export async function getMeetingJoinLanding(
+  db: DatabaseLike,
+  occurrenceId: string,
+  subject: MeetingJoinSubject,
+  revisionSecret: string,
+) {
+  return (await buildLanding(db, occurrenceId, subject, revisionSecret)).landing;
+}
+
+export async function confirmMeetingJoin(
+  db: DatabaseLike,
+  occurrenceId: string,
+  subject: MeetingJoinSubject,
+  input: JoinConfirmInput,
+  options: {
+    encryptionSecret: string;
+    revisionSecret: string;
+    evidenceSecret: string;
+    ip: string | null;
+    userAgent: string | null;
+  },
+) {
+  const { row, terms, identity, landing } = await buildLanding(db, occurrenceId, subject, options.revisionSecret);
+  if (
+    !(await verifyHmacSha256Hex(
+      options.revisionSecret,
+      landingRevisionPayload(row, subject, identity, terms),
+      input.landingRevision,
+    )) ||
+    landing.landingRevision !== input.landingRevision
+  ) {
+    throw new AppError(409, "MEETING_LANDING_CHANGED", "The meeting identity or terms changed; reload before joining");
+  }
+  if (!row.provider_join_url_ciphertext) {
+    throw new AppError(409, "MEETING_PROVIDER_NOT_CONFIGURED", "This occurrence has no meeting-provider destination");
+  }
+
+  const redirectUrl = await openProviderJoinUrl(row.provider_join_url_ciphertext, options.encryptionSecret);
+  const currentById = new Map(terms.map((term) => [term.id, term]));
+  const supplied = new Set<string>();
+  for (const acceptance of input.acceptedTerms) {
+    const term = currentById.get(acceptance.termId);
+    if (!term || term.version !== acceptance.version) {
+      throw new AppError(422, "MEETING_TERM_INVALID", "Only current meeting terms may be accepted");
+    }
+    supplied.add(term.id);
+  }
+  const missing = terms.find((term) => term.required === 1 && term.accepted !== 1 && !supplied.has(term.id));
+  if (missing) throw new AppError(422, "MEETING_TERM_REQUIRED", `Acceptance is required for ${missing.term_key}`);
+
+  const now = nowIso();
+  const { userId, guestId } = subjectIds(subject);
+  const [ipHash, userAgentHash] = await Promise.all([
+    options.ip ? hmacSha256Hex(options.evidenceSecret, options.ip) : null,
+    options.userAgent ? hmacSha256Hex(options.evidenceSecret, options.userAgent) : null,
+  ]);
+  const acceptanceStatements = [...supplied].map((termId) =>
+    db
+      .prepare(
+        `INSERT OR IGNORE INTO event_access_term_acceptances
+           (id, event_id, user_id, guest_id, event_term_id, accepted_at, ip_hash, user_agent_hash)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .bind(uuid(), row.event_id, userId, guestId, termId, now, ipHash, userAgentHash),
+  );
+
+  const proposedConfirmationId = uuid();
+  const confirmationStatement =
+    userId !== null
+      ? db
+          .prepare(
+            `INSERT INTO event_occurrence_join_confirmations
+               (id, occurrence_id, user_id, guest_id, name_snapshot, affiliation_snapshot,
+                join_count, confirmed_at, attendance_verified_at, attendance_verification_source,
+                created_at, updated_at)
+             VALUES (?, ?, ?, NULL, ?, ?, 1, ?, NULL, NULL, ?, ?)
+             ON CONFLICT(occurrence_id, user_id) WHERE user_id IS NOT NULL DO UPDATE SET
+               name_snapshot = excluded.name_snapshot,
+               affiliation_snapshot = excluded.affiliation_snapshot,
+               join_count = event_occurrence_join_confirmations.join_count + 1,
+               confirmed_at = excluded.confirmed_at,
+               updated_at = excluded.updated_at`,
+          )
+          .bind(proposedConfirmationId, row.occurrence_id, userId, identity.name, identity.affiliation, now, now, now)
+      : db
+          .prepare(
+            `INSERT INTO event_occurrence_join_confirmations
+               (id, occurrence_id, user_id, guest_id, name_snapshot, affiliation_snapshot,
+                join_count, confirmed_at, attendance_verified_at, attendance_verification_source,
+                created_at, updated_at)
+             VALUES (?, ?, NULL, ?, ?, ?, 1, ?, NULL, NULL, ?, ?)
+             ON CONFLICT(occurrence_id, guest_id) WHERE guest_id IS NOT NULL DO UPDATE SET
+               name_snapshot = excluded.name_snapshot,
+               affiliation_snapshot = excluded.affiliation_snapshot,
+               join_count = event_occurrence_join_confirmations.join_count + 1,
+               confirmed_at = excluded.confirmed_at,
+               updated_at = excluded.updated_at`,
+          )
+          .bind(proposedConfirmationId, row.occurrence_id, guestId, identity.name, identity.affiliation, now, now, now);
+
+  try {
+    await db.batch([
+      ...acceptanceStatements,
+      subject.kind === "personal"
+        ? prepareAuthorizationGuard(db, {
+            sql: `SELECT 1 FROM event_occurrences occurrence
+              JOIN event_series series ON series.id = occurrence.series_id AND series.active = 1
+              JOIN events event ON event.id = series.event_id
+              WHERE occurrence.id = ? AND event.id = ? AND series.id = ?
+                AND (? IS NULL OR occurrence.id = ?)
+                AND occurrence.status = 'scheduled'
+                AND EXISTS (
+                  SELECT 1 FROM current_event_occurrence_subject_eligibility eligible
+                   WHERE eligible.occurrence_id = occurrence.id
+                     AND eligible.event_id = event.id
+                     AND eligible.user_id IS ? AND eligible.guest_id IS ?
+                )
+                AND (
+                  (? IS NOT NULL AND EXISTS (
+                    SELECT 1 FROM users user
+                     WHERE user.id = ? AND user.active = 1 AND user.link_secret = ?
+                  ))
+                  OR (? IS NOT NULL AND EXISTS (
+                    SELECT 1 FROM event_occurrence_guests guest
+                     WHERE guest.id = ? AND guest.series_id = series.id
+                       AND (guest.occurrence_id IS NULL OR guest.occurrence_id = occurrence.id)
+                       AND guest.invitation_secret = ? AND guest.revoked_at IS NULL
+                       AND unixepoch(guest.expires_at) > unixepoch()
+                  ))
+                )
+                AND COALESCE(json_extract(event.settings_json, '$.meetingEntryPolicy.authentication'),
+                             'remember_browser') = ?
+                AND COALESCE(json_extract(event.settings_json, '$.meetingEntryPolicy.rememberDays'), 30) = ?
+                AND unixepoch(?) > unixepoch()
+                AND unixepoch() < unixepoch(?) +
+                    CASE WHEN ? = 'always' THEN 600 ELSE ? * 86400 END
+                AND NOT EXISTS (
+                  SELECT 1 FROM event_terms required_term
+                   WHERE required_term.event_id = event.id
+                     AND required_term.audience_type = 'attendee'
+                     AND required_term.active = 1 AND required_term.required = 1
+                     AND NOT EXISTS (
+                       SELECT 1 FROM event_access_term_acceptances acceptance
+                        WHERE acceptance.event_id = event.id
+                          AND acceptance.event_term_id = required_term.id
+                          AND acceptance.user_id IS ? AND acceptance.guest_id IS ?
+                     )
+                )
+                AND (? != 'always' OR (
+                  ( ? = 'member' AND EXISTS (
+                    SELECT 1 FROM sessions source
+                     WHERE source.id = ? AND source.user_id = ?
+                       AND source.session_type = 'auth' AND source.revoked_at IS NULL
+                       AND unixepoch(source.expires_at) > unixepoch()
+                       AND unixepoch() < unixepoch(source.created_at) + 600
+                       AND NOT EXISTS (
+                         SELECT 1 FROM event_occurrence_join_confirmations prior
+                         JOIN event_occurrences prior_occurrence ON prior_occurrence.id = prior.occurrence_id
+                          WHERE prior_occurrence.series_id = series.id AND prior.user_id = ?
+                            AND prior.confirmed_at >= source.created_at
+                       )
+                  ))
+                  OR ( ? = 'guest' AND EXISTS (
+                    SELECT 1 FROM meeting_guest_sessions source
+                    JOIN meeting_guest_browser_challenges challenge ON challenge.id = source.challenge_id
+                     WHERE source.id = ? AND source.guest_id = ?
+                       AND challenge.occurrence_id = occurrence.id
+                       AND source.revoked_at IS NULL AND unixepoch(source.expires_at) > unixepoch()
+                       AND challenge.used_at IS NOT NULL
+                       AND source.authorization_hash = challenge.authorization_hash
+                       AND unixepoch() < unixepoch(source.created_at) + 600
+                       AND NOT EXISTS (
+                         SELECT 1 FROM event_occurrence_join_confirmations prior
+                         JOIN event_occurrences prior_occurrence ON prior_occurrence.id = prior.occurrence_id
+                          WHERE prior_occurrence.series_id = series.id AND prior.guest_id = ?
+                            AND prior.confirmed_at >= source.created_at
+                       )
+                  ))
+                ))`,
+            bindings: [
+              row.occurrence_id,
+              row.event_id,
+              subject.seriesId,
+              subject.linkOccurrenceId,
+              subject.linkOccurrenceId,
+              userId,
+              guestId,
+              userId,
+              userId,
+              subject.linkSecret,
+              guestId,
+              guestId,
+              subject.linkSecret,
+              subject.authentication,
+              subject.rememberDays,
+              new Date(subject.expiresAt).toISOString(),
+              new Date(subject.authenticatedAt).toISOString(),
+              subject.authentication,
+              subject.rememberDays,
+              userId,
+              guestId,
+              subject.authentication,
+              subject.sourceKind,
+              subject.sourceSessionId,
+              userId,
+              userId,
+              subject.sourceKind,
+              subject.sourceSessionId,
+              guestId,
+              guestId,
+            ],
+          })
+        : db
+            .prepare(
+              `INSERT INTO event_occurrence_join_guards
+                 (id, session_kind, session_id, occurrence_id, event_id, user_id, guest_id)
+               VALUES (?, ?, ?, ?, ?, ?, ?)`,
+            )
+            .bind(uuid(), subject.kind, subject.sessionId, row.occurrence_id, row.event_id, userId, guestId),
+      confirmationStatement,
+    ]);
+  } catch (error) {
+    if (
+      isAuthorizationGuardFailure(error) ||
+      (error instanceof Error && error.message.includes("MEETING_JOIN_CONTEXT_CHANGED"))
+    ) {
+      throw new AppError(409, "MEETING_ACCESS_CHANGED", "Meeting access or the authenticated session changed");
+    }
+    throw error;
+  }
+
+  const persisted = await first<{ id: string; confirmed_at: string }>(
+    db,
+    `SELECT id, confirmed_at FROM event_occurrence_join_confirmations
+      WHERE occurrence_id = ? AND user_id IS ? AND guest_id IS ?`,
+    [row.occurrence_id, userId, guestId],
+  );
+  if (!persisted) throw new AppError(500, "MEETING_CONFIRMATION_READ_FAILED", "Failed to read meeting confirmation");
+  return meetingJoinResponseSchema.parse({
+    confirmationId: persisted.id,
+    confirmedAt: persisted.confirmed_at,
+    redirectUrl,
+  });
+}

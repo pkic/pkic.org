@@ -1,0 +1,33 @@
+/*
+ * BulkBar — the strip shown when rows are selected.
+ *
+ * A 3px leading (left) border in the accent colour signals selection without
+ * competing with status badges in the rows below. The background is sunk,
+ * keeping the focus on the actions above the table.
+ */
+
+@layer components {
+  .pk-bulk-bar {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-4);
+    padding: var(--pk-control-y) var(--pk-control-x);
+    padding-left: calc(var(--pk-control-x) - 3px);
+    border-left: 3px solid var(--pk-accent);
+    background: var(--pk-surface-sunk);
+  }
+
+  .pk-bulk-bar__count {
+    font-size: var(--pk-text-md);
+    font-weight: 500;
+    color: var(--pk-ink);
+    flex: 0 0 auto;
+  }
+
+  .pk-bulk-bar__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-3);
+    margin-left: auto;
+  }
+}

@@ -29,6 +29,15 @@ tags:
 title: Is Your SSL Server Vulnerable to a FREAK Attack?
 
 
+authorProfiles:
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 FREAK is a new man-in-the-middle (MITM) vulnerability discovered by a [group of cryptographers at INRIA, Microsoft Research and IMDEA][1]. FREAK stands for “Factoring RSA-EXPORT Keys.”
 

@@ -16,8 +16,8 @@
     {{ template "_internal/opengraph.html" . }}
 
     <link rel="canonical" href="{{ .Permalink }}">
-    <link rel="alternate" type="application/rss+xml" href="{{ .Site.BaseURL}}/feed/blog/" title="Subscribe to updates from the PKI Consortium blog" />
-    <link rel="alternate" type="application/rss+xml" href="{{ .Site.BaseURL}}/news/feed/" title="Subscribe to news from the PKI Consortium members" />
+    <link rel="alternate" type="application/rss+xml" href="{{ "feed/blog/" | absURL }}" title="Subscribe to updates from the PKI Consortium blog" />
+    <link rel="alternate" type="application/rss+xml" href="{{ "news/feed/" | absURL }}" title="Subscribe to news from the PKI Consortium members" />
 
     <!-- Favicon -->
     <link rel="icon" href="/favicon.svg">

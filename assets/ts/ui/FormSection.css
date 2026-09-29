@@ -1,0 +1,86 @@
+@layer components {
+  /*
+   * `fieldset` for the grouping a screen reader announces, with the browser's
+   * own frame removed — the separation is the space above and the rule, which
+   * stay consistent whatever a form puts inside.
+   */
+  .pk-form-section {
+    border: 0;
+    margin: 0;
+    padding: 0;
+    min-width: 0;
+  }
+
+  .pk-form-section + .pk-form-section {
+    margin-block-start: var(--pk-6);
+    border-block-start: 1px solid var(--pk-line-soft);
+    padding-block-start: var(--pk-5);
+  }
+
+  /*
+   * Outranking a field label is the whole point: same size, but tracked out,
+   * upper-cased and muted, which is the kicker treatment the portal already
+   * uses where a line names what follows rather than what it is.
+   *
+   * `float` so the legend takes part in the block flow — a `<legend>` is
+   * positioned on the fieldset's border by default, which no amount of margin
+   * makes sit correctly above a stack of fields.
+   */
+  .pk-form-section__title {
+    float: inline-start;
+    width: 100%;
+    padding: 0;
+    font-size: var(--pk-text-xs);
+    font-weight: 600;
+    letter-spacing: 0.06em;
+    text-transform: uppercase;
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-form-section__description {
+    clear: both;
+    margin: var(--pk-2) 0 0;
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink-muted);
+  }
+
+  /*
+   * The rhythm between the fields themselves, one gap for every form — and
+   * how many of them sit on a line.
+   *
+   * A column of full-width fields is right on a phone and wrong on a desk: an
+   * email and a label, each three words long, were drawn as two inputs the
+   * width of the page with the reader's eye travelling the whole measure
+   * between the label and the end of the box. That is part of what #50 and
+   * #53 mean by a form that is not organized. The tracks are as many as fit
+   * at a field's own minimum, so the same markup gives a phone one column and
+   * a desk two or three, and nothing has to state a breakpoint.
+   */
+  .pk-form-section__fields {
+    clear: both;
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(var(--pk-field-min, 18rem), 100%), 1fr));
+    gap: var(--pk-4);
+    padding-block-start: var(--pk-3);
+  }
+
+  /*
+   * A group of controls takes the row.
+   *
+   * A `fieldset` inside a section is a set of choices answering one question —
+   * thirteen membership categories, three roles, two standing switches. Half a
+   * row is not enough for one, and squeezing it beside an unrelated text field
+   * loses the boundary the group exists to draw.
+   */
+  .pk-form-section__fields > fieldset {
+    grid-column: 1 / -1;
+  }
+
+  /*
+   * Prose takes the row too. A biography or a description is read across a
+   * measure, and a textarea in a half-width track is a column of five words.
+   */
+  .pk-form-section__fields > .pk-field:has(textarea) {
+    grid-column: 1 / -1;
+  }
+}

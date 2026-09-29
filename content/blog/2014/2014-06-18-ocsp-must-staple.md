@@ -16,6 +16,16 @@ tags:
 title: OCSP Must-Staple
 
 
+authorProfiles:
+  - name: Rick Andrews
+  - name: Bruce Morton
+    organization: Entrust
+    role: Director, Certificate Technology & Standards
+    website: https://www.entrust.com/
+    social:
+      x: https://x.com/brucecmorton
+      linkedin: https://www.linkedin.com/in/brucecmorton/
+    assetdirectory: images/members/entrust
 ---
 ---
 With the announcement of the Heartbleed bug and the resulting need to revoke large numbers of SSL certificates, the topic of certificate revocation has, once again, come to the fore.
