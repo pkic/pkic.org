@@ -15,7 +15,7 @@ import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { buildServerCollectionUrl } from "../../../../hooks/useServerCollection";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
-import { fmtDate } from "../../ui";
+import { fmtCalendarDate } from "../../ui";
 
 /** The sponsorship that speaks for the organization now: active first, then the most recent in flight. */
 function standing(sponsorships: readonly Sponsorship[]): Sponsorship | undefined {
@@ -69,7 +69,7 @@ export function OrganizationSponsorshipStanding({
             <p class="pk-small pk-muted">
               {statusLabel(current.sponsorType)} sponsorship
               {current.eventName ? ` · ${current.eventName}` : ""}
-              {current.renewalDate ? ` · renews ${fmtDate(current.renewalDate)}` : ""}
+              {current.renewalDate ? ` · renews ${fmtCalendarDate(current.renewalDate)}` : ""}
             </p>
           </>
         )}

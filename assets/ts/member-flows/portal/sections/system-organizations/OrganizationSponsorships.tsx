@@ -12,7 +12,7 @@ import { ApiDataTable } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { EmptyState } from "../../../../components/EmptyState";
 import type { Column } from "../../../../components/Table";
-import { fmtDate } from "../../ui";
+import { fmtCalendarDate } from "../../ui";
 
 const COLUMNS: Column<Sponsorship>[] = [
   {
@@ -45,7 +45,7 @@ const COLUMNS: Column<Sponsorship>[] = [
   },
   {
     header: "Renewal",
-    cell: (sponsorship) => (sponsorship.renewalDate ? fmtDate(sponsorship.renewalDate) : "—"),
+    cell: (sponsorship) => (sponsorship.renewalDate ? fmtCalendarDate(sponsorship.renewalDate) : "—"),
     sort: { asc: "renewalDate", desc: "-renewalDate" },
     width: "content",
   },
