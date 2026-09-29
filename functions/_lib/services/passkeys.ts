@@ -169,6 +169,8 @@ export async function beginPasskeyRegistration(
     rpName,
     rpID: rpId,
     userName: actor.email,
+    // Empty display names cause registration failures in some passkey providers.
+    userDisplayName: actor.email,
     userID: new TextEncoder().encode(actor.id),
     attestationType: "none",
     excludeCredentials: existing.map((row) => ({ id: row.credential_id })),
