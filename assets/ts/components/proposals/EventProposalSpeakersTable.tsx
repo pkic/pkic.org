@@ -1,7 +1,12 @@
 import { ApiDataTable } from "../ApiDataTable";
 import { Badge } from "../Badge";
 import { formatDayAndMonth } from "../../../shared/format-date";
-import { eventSpeakersResponseSchema, type EventProposalSpeaker } from "../../../shared/schemas/event-speakers";
+import {
+  EVENT_SPEAKER_REGISTRATION_FILTER_LABELS,
+  eventSpeakerRegistrationFilterSchema,
+  eventSpeakersResponseSchema,
+  type EventProposalSpeaker,
+} from "../../../shared/schemas/event-speakers";
 import { attendanceTypeLabel } from "../../shared/attendance";
 import { registrationDayStatus } from "../event-registrations/RegistrationDayStates";
 
@@ -68,8 +73,10 @@ export function EventProposalSpeakersTable({
             param: "registration",
             options: [
               { value: "", label: "All registration statuses" },
-              { value: "missing", label: "Needs registration" },
-              { value: "registered", label: "Registered" },
+              ...eventSpeakerRegistrationFilterSchema.options.map((value) => ({
+                value,
+                label: EVENT_SPEAKER_REGISTRATION_FILTER_LABELS[value],
+              })),
             ],
           },
         },
