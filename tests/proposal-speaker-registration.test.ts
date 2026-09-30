@@ -13,6 +13,7 @@ import {
 import { finalizeProposalDecision } from "../functions/_lib/services/proposals";
 import { eventProposalsResponseSchema } from "../assets/shared/schemas/event-proposals";
 import { eventSpeakersResponseSchema } from "../assets/shared/schemas/event-speakers";
+import { proposalSpeakersResponseSchema } from "../assets/shared/schemas/proposal-speakers";
 
 describe("accepted proposal speaker registration", () => {
   let eventId: string;
@@ -63,7 +64,23 @@ describe("accepted proposal speaker registration", () => {
 
   it("registers every speaker on every configured day, bypasses capacity, and exposes the bounded overview", async () => {
     const { proposalId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
+    const proposalSpeakers = async () => {
+      const response = await app.fetch(
+        new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers`, {
+          headers: { authorization: `Bearer ${adminSessionToken}` },
+        }),
+        env,
+        createExecutionContext(),
+      );
+      expect(response.status).toBe(200);
+      return proposalSpeakersResponseSchema.parse(await response.json()).speakers;
+    };
+    expect((await proposalSpeakers()).map((speaker) => speaker.registrationStatus)).toEqual([null, null]);
     await accept(proposalId);
+    expect((await proposalSpeakers()).map((speaker) => speaker.registrationStatus)).toEqual([
+      "registered",
+      "registered",
+    ]);
     const registrations = await queryAll<{ id: string; status: string; attendance_type: string }>(
       env.DB,
       "SELECT id, status, attendance_type FROM registrations WHERE event_id = ?",

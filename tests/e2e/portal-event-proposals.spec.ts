@@ -126,7 +126,7 @@ test("portal proposal detail uses canonical proposal resources without admin fal
   await expect(page.getByRole("table", { name: "Event proposals" })).toBeVisible();
   const row = page.getByRole("row").filter({ hasText: "Canonical portal proposal journey" });
   await expect(row).toBeVisible();
-  await expect(row.getByRole("img", { name: "Submitted", exact: true })).toHaveClass(/pk-badge--ok/);
+  await expect(row.getByRole("img", { name: "Submitted", exact: true })).toHaveClass(/pk-badge--neutral/);
   await expect(row.getByRole("img", { name: "talk", exact: true })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Proposer" })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: "Speaker registration" })).toHaveCount(0);
@@ -151,6 +151,7 @@ test("portal proposal detail uses canonical proposal resources without admin fal
   await expect(page.getByRole("heading", { name: "Speakers", exact: true })).toBeVisible();
   const speakerPanel = page.getByRole("region", { name: "Proposal speakers" });
   await expect(speakerPanel.getByText("Portal Proposer", { exact: true })).toBeVisible();
+  await expect(speakerPanel.getByText("Not registered", { exact: true })).toBeVisible();
   // A speaker's commands sit behind the card's own menu; editing turns the
   // card's values into inputs in place.
   await page.getByRole("button", { name: "Actions for Portal Proposer" }).click();
@@ -207,6 +208,12 @@ test("portal proposal detail uses canonical proposal resources without admin fal
   await page.goto(`/portal/#/groups/${GROUP_ID}/events/${event.id}/proposals`);
   const acceptedRow = page.getByRole("row").filter({ hasText: "Canonical portal proposal journey" });
   await expect(acceptedRow.getByRole("img", { name: "Accepted", exact: true })).toBeVisible();
+  await openRow(acceptedRow, "Open Canonical portal proposal journey");
+  await tab(page.getByRole("navigation", { name: "Proposal sections" }), "Speakers").click();
+  await expect(
+    page.getByRole("region", { name: "Proposal speakers" }).getByText("Registered", { exact: true }),
+  ).toHaveCount(2);
+  await page.goto(`/portal/#/groups/${GROUP_ID}/events/${event.id}/proposals`);
   await expect(page.getByRole("columnheader", { name: /^Decision/ })).toHaveCount(0);
   await expect(page.getByRole("columnheader", { name: /^Reviews/ })).toHaveCount(0);
   const title = acceptedRow.getByText("Canonical portal proposal journey", { exact: true });
@@ -230,7 +237,7 @@ test("portal proposal detail uses canonical proposal resources without admin fal
   await expect(
     roster.getByRole("row").filter({ hasText: "Portal Co Speaker" }).getByText("Registered", { exact: true }),
   ).toBeVisible();
-  await expect(roster.getByText(/Conference day: In-person/)).toHaveCount(2);
+  await expect(roster.getByText("In-person", { exact: true })).toHaveCount(2);
   await expect(page.getByText("Decision saved", { exact: true })).toBeHidden();
   await page.screenshot({ path: test.info().outputPath("proposal-speakers.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });

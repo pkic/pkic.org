@@ -258,7 +258,7 @@ function roster(speakers: ProposalSpeaker[]): ProposalSpeakersResponse {
       profileComplete: 0,
       presentationUploaded: 0,
     },
-    speakers,
+    speakers: speakers.map((speaker) => ({ ...speaker, registrationStatus: null })),
   });
 }
 

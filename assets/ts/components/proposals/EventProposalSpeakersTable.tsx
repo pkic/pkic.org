@@ -1,14 +1,12 @@
 import { ApiDataTable } from "../ApiDataTable";
 import { Badge } from "../Badge";
-import { formatDayAndMonth } from "../../../shared/format-date";
 import {
   EVENT_SPEAKER_REGISTRATION_FILTER_LABELS,
   eventSpeakerRegistrationFilterSchema,
   eventSpeakersResponseSchema,
   type EventProposalSpeaker,
 } from "../../../shared/schemas/event-speakers";
-import { attendanceTypeLabel } from "../../shared/attendance";
-import { registrationDayStatus } from "../event-registrations/RegistrationDayStates";
+import { RegistrationDayStates } from "../event-registrations/RegistrationDayStates";
 
 function speakerName(speaker: EventProposalSpeaker): string {
   return [speaker.firstName, speaker.lastName].filter(Boolean).join(" ") || "Unnamed speaker";
@@ -16,17 +14,7 @@ function speakerName(speaker: EventProposalSpeaker): string {
 
 function selectedDays(speaker: EventProposalSpeaker) {
   if (speaker.registrationStatus !== "registered") return "—";
-  if (!speaker.days.length) return `${attendanceTypeLabel(speaker.attendanceType)} · No days selected`;
-  return (
-    <ul class="pk-plain-list pk-stack pk-stack--tight" aria-label="Registered days">
-      {speaker.days.map((day) => (
-        <li key={day.dayDate}>
-          {formatDayAndMonth(day.dayDate)}
-          {day.label ? ` · ${day.label}` : ""}: {registrationDayStatus(day).label}
-        </li>
-      ))}
-    </ul>
-  );
+  return <RegistrationDayStates days={speaker.days} attendanceType={speaker.attendanceType} />;
 }
 
 /** Event-wide roster, with one row per talk speaker and a live registration filter. */
@@ -66,7 +54,11 @@ export function EventProposalSpeakersTable({
         {
           header: "Registration",
           cell: (speaker) =>
-            speaker.registrationStatus ? <Badge status={speaker.registrationStatus} /> : "Not registered",
+            speaker.registrationStatus ? (
+              <Badge status={speaker.registrationStatus} />
+            ) : (
+              <Badge status="not_registered" />
+            ),
           width: "fit",
           sort: { asc: "registration", desc: "-registration" },
           filter: {

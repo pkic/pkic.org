@@ -169,9 +169,9 @@ describe("the shared proposal catalog", () => {
     const heads = [...page.querySelectorAll("thead th")].map((head) => head.textContent);
     expect(heads.some((text) => text?.includes("Decision"))).toBe(false);
     expect(heads.some((text) => text?.includes("Reviews"))).toBe(false);
-    expect(page.querySelector('tbody [role="img"][aria-label="Submitted"]')?.classList.contains("pk-badge--ok")).toBe(
-      true,
-    );
+    expect(
+      page.querySelector('tbody [role="img"][aria-label="Submitted"]')?.classList.contains("pk-badge--neutral"),
+    ).toBe(true);
     expect(page.querySelector('tbody [role="img"][aria-label="Accepted"]')).toBeNull();
     expect(page.querySelector('tbody [role="img"][aria-label="talk"]')).not.toBeNull();
     const headers = [...page.querySelectorAll("thead th")];

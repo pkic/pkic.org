@@ -32,6 +32,7 @@ import { Badge as ToneBadge, IconBadge, type BadgeTone } from "../ui/Badge";
 const STATUS_TONE: Record<string, BadgeTone> = {
   // registration
   registered: "ok",
+  confirmed: "ok",
   pending_email_confirmation: "warn",
   waitlisted: "info",
   cancelled: "neutral",
@@ -51,7 +52,7 @@ const STATUS_TONE: Record<string, BadgeTone> = {
   archived: "neutral",
   draft: "neutral",
   // proposal statuses
-  submitted: "ok",
+  submitted: "neutral",
   spam: "danger",
   resubmitted: "warn",
   under_review: "info",
@@ -138,6 +139,7 @@ const STATUS_TONE: Record<string, BadgeTone> = {
 };
 
 const STATUS_LABEL: Record<string, string> = {
+  not_registered: "Not registered",
   pending_email_confirmation: "Pending confirmation",
   under_review: "Under review",
   needs_work: "Needs work",

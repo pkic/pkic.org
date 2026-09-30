@@ -130,9 +130,23 @@ export async function getProposalSpeakerRoster(
   }
 
   const speakerRows = batchRows<ProposalSpeakerWithUser>(speakersResult);
-  const speakers = speakerRows.map((speaker) =>
-    toProposalSpeaker(speaker, appBaseUrl, proposalId, options?.proposalHeadshotUrl),
+  const registrationRows = await db
+    .prepare(
+      `SELECT ps.user_id AS userId, r.status AS registrationStatus
+       FROM proposal_speakers ps
+       JOIN session_proposals sp ON sp.id = ps.proposal_id
+       LEFT JOIN registrations r ON r.event_id = sp.event_id AND r.user_id = ps.user_id
+       WHERE ps.proposal_id = ?`,
+    )
+    .bind(proposalId)
+    .all<{ userId: string; registrationStatus: ProposalSpeakersResponse["speakers"][number]["registrationStatus"] }>();
+  const registrationByUser = new Map(
+    (registrationRows.results ?? []).map((row) => [row.userId, row.registrationStatus]),
   );
+  const speakers = speakerRows.map((speaker) => ({
+    ...toProposalSpeaker(speaker, appBaseUrl, proposalId, options?.proposalHeadshotUrl),
+    registrationStatus: registrationByUser.get(speaker.user_id) ?? null,
+  }));
   const summary = {
     total: speakers.length,
     confirmed: 0,

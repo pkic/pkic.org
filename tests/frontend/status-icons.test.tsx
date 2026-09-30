@@ -27,7 +27,8 @@ describe("shared symbolic badges", () => {
     const submitted = element(render(<Badge status="submitted" iconOnly />));
     const resubmitted = element(render(<Badge status="resubmitted" iconOnly />));
     const accepted = element(render(<Badge status="accepted" iconOnly />));
-    expect(submitted.querySelector(".pk-badge--ok")).not.toBeNull();
+    expect(submitted.querySelector(".pk-badge--neutral")).not.toBeNull();
+    expect(accepted.querySelector(".pk-badge--ok")).not.toBeNull();
     expect(resubmitted.querySelector(".pk-badge--warn")).not.toBeNull();
     expect(submitted.querySelector("svg")?.innerHTML).not.toBe(resubmitted.querySelector("svg")?.innerHTML);
     expect(submitted.querySelector("svg")?.innerHTML).not.toBe(accepted.querySelector("svg")?.innerHTML);

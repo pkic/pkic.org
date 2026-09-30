@@ -64,6 +64,7 @@ const quiet: (message: string, type: ToastType) => void = () => {};
 
 export function ProposalSpeakerCard({
   speaker,
+  registrationStatus,
   proposalId,
   canEdit,
   canFinalize,
@@ -77,6 +78,7 @@ export function ProposalSpeakerCard({
   notify = quiet,
 }: {
   speaker: ProposalSpeaker;
+  registrationStatus?: string | null;
   proposalId: string;
   canEdit: boolean;
   canFinalize?: boolean;
@@ -307,6 +309,7 @@ export function ProposalSpeakerCard({
                   {name !== speaker.email && <span class="pk-small">{speaker.email}</span>}
                   <Badge status={speaker.role} />
                   <Badge status={speaker.status} />
+                  {registrationStatus !== undefined && <Badge status={registrationStatus ?? "not_registered"} />}
                 </div>
                 {(speaker.organizationName || speaker.jobTitle) && (
                   <div class="pk-small">{[speaker.jobTitle, speaker.organizationName].filter(Boolean).join(" · ")}</div>

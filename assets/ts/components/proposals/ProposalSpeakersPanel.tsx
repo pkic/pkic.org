@@ -86,6 +86,7 @@ export function ProposalSpeakersPanel({
               <ProposalSpeakerCard
                 key={speaker.userId}
                 speaker={speaker}
+                registrationStatus={speaker.registrationStatus}
                 proposalId={proposalId}
                 canEdit={access.canFinalize}
                 canFinalize={access.canFinalize}

@@ -65,8 +65,23 @@ describe("proposal speakers tab", () => {
                 attendanceType: null,
                 days: [],
               },
+              {
+                id: "10000000-0000-4000-8000-000000000002",
+                proposalId: PROPOSAL_ID,
+                proposalTitle: "Organization security case study",
+                firstName: "Sam",
+                lastName: "Speaker",
+                organizationName: "Example Organization",
+                status: "invited",
+                registrationStatus: "registered",
+                attendanceType: "in_person",
+                days: [
+                  { dayDate: "2026-12-01", label: "Conference", attendanceType: "in_person", waitlistStatus: null },
+                  { dayDate: "2026-12-02", label: "Workshop", attendanceType: "in_person", waitlistStatus: null },
+                ],
+              },
             ],
-            page: { limit: 25, offset: 0, total: 1, hasMore: false },
+            page: { limit: 25, offset: 0, total: 2, hasMore: false },
           }),
           { headers: { "content-type": "application/json" } },
         ),
@@ -80,6 +95,11 @@ describe("proposal speakers tab", () => {
     expect(page.querySelector("tbody")?.textContent).toContain("Alex Example");
     expect(page.querySelector("tbody")?.textContent).toContain("Organization security case study");
     expect(page.querySelector("tbody")?.textContent).toContain("Not registered");
+    expect(page.querySelector("tbody")?.textContent).toContain("Registered");
+    expect(page.querySelector("tbody")?.textContent).toContain("In-person");
+    expect(page.querySelector("tbody")?.textContent).not.toContain("Conference:");
+    expect(page.querySelector("tbody .pk-badge--neutral")?.textContent).toBe("Not registered");
+    expect(page.querySelector("tbody .pk-badge--ok")?.textContent).toBe("Confirmed");
     expect(page.querySelector<HTMLAnchorElement>("tbody a.pk-table__row-link")?.href).toContain(
       `/proposals/detail/${PROPOSAL_ID}`,
     );
