@@ -125,12 +125,13 @@ test("creates, renames, and reorders organization categories from their forms an
   await expect(page).toHaveURL(/membership-categories$/);
   const rows = page.getByRole("table", { name: "Membership categories" }).locator("tbody tr");
   await expect(rows.last()).toContainText(renamed);
+  const movedRowIndex = (await rows.count()) - 2;
   await page.getByRole("button", { name: `Actions for category ${renamed}`, exact: true }).click();
   await expect(page.getByRole("menuitem", { name: "Move down", exact: true })).toBeDisabled();
   await page.getByRole("menuitem", { name: "Move up", exact: true }).click();
-  await expect(rows.nth((await rows.count()) - 2)).toContainText(renamed);
+  await expect(rows.nth(movedRowIndex)).toContainText(renamed);
   await page.reload();
-  await expect(rows.nth((await rows.count()) - 2)).toContainText(renamed);
+  await expect(rows.nth(movedRowIndex)).toContainText(renamed);
   await page.goto(`/portal/#/settings/membership-categories/${renamed}`);
   await expect(page.getByLabel(/^Code/)).toHaveValue(renamed);
   await expect(page.getByLabel("Category", { exact: true })).toBeDisabled();
