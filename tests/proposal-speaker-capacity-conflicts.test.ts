@@ -17,7 +17,7 @@ import {
   updateProposalSpeakerByProposer,
 } from "../functions/_lib/services/proposer-speaker-profile";
 import { resetDb } from "./helpers/reset-db";
-import { queryAll } from "./helpers/context";
+import { queryAll, registrationAdmissionRole } from "./helpers/context";
 import { findOrCreateUser } from "../functions/_lib/services/users";
 import {
   inviteSpeakerAndSubmitCapacityProposal,
@@ -168,9 +168,7 @@ describe("proposal speaker capacity conflicts", () => {
         coSpeakerUserId,
       ]),
     ).resolves.toEqual([{ status: "invited" }]);
-    await expect(
-      queryAll(env.DB, "SELECT capacity_exempt_in_person FROM registrations WHERE id = ?", [registrationId]),
-    ).resolves.toEqual([{ capacity_exempt_in_person: 1 }]);
+    await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBe("panelist");
   });
 
   it("rolls back consent when confirmation loses to a concurrent decline", async () => {
@@ -243,9 +241,7 @@ describe("proposal speaker capacity conflicts", () => {
         coSpeakerUserId,
       ]),
     ).resolves.toEqual([{ count: 0 }]);
-    await expect(
-      queryAll(env.DB, "SELECT capacity_exempt_in_person FROM registrations WHERE id = ?", [registrationId]),
-    ).resolves.toEqual([{ capacity_exempt_in_person: 0 }]);
+    await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBeNull();
   });
 
   it("reconciles accepted-proposal capacity when a speaker confirms", async () => {
@@ -270,9 +266,7 @@ describe("proposal speaker capacity conflicts", () => {
         coSpeakerUserId,
       ]),
     ).resolves.toEqual([{ status: "confirmed" }]);
-    await expect(
-      queryAll(env.DB, "SELECT capacity_exempt_in_person FROM registrations WHERE id = ?", [registrationId]),
-    ).resolves.toEqual([{ capacity_exempt_in_person: 1 }]);
+    await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBe("speaker");
   });
 
   it("returns a stable registration conflict and leaves decline state unchanged", async () => {
@@ -449,9 +443,7 @@ describe("proposal speaker capacity conflicts", () => {
         coSpeakerUserId,
       ]),
     ).resolves.toEqual([{ status: "declined" }]);
-    await expect(
-      queryAll(env.DB, "SELECT capacity_exempt_in_person FROM registrations WHERE id = ?", [registrationId]),
-    ).resolves.toEqual([{ capacity_exempt_in_person: 1 }]);
+    await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBe("speaker");
   });
 
   it("rolls back a speaker decline when a concurrent manual source changes capacity eligibility", async () => {
@@ -482,8 +474,6 @@ describe("proposal speaker capacity conflicts", () => {
         coSpeakerUserId,
       ]),
     ).resolves.toEqual([{ status: "invited" }]);
-    await expect(
-      queryAll(env.DB, "SELECT capacity_exempt_in_person FROM registrations WHERE id = ?", [registrationId]),
-    ).resolves.toEqual([{ capacity_exempt_in_person: 1 }]);
+    await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBe("organizer");
   });
 });

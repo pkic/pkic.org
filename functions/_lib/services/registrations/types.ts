@@ -39,8 +39,6 @@ const REGISTRATION_COLUMN_NAMES = [
   "confirmation_link_secret",
   "pending_confirmation_deadline_at",
   "manage_link_secret",
-  "capacity_exempt_in_person",
-  "capacity_exempt_reason",
   "cancellation_reason_code",
   "transition_revision",
   "created_identity_user_id",

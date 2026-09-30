@@ -115,8 +115,6 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
   const updated: RegistrationRecord = {
     ...registration,
     attendance_type: deriveEventAttendanceType(selections) ?? registration.attendance_type,
-    capacity_exempt_in_person: roleExemptReason ? 1 : 0,
-    capacity_exempt_reason: roleExemptReason,
     updated_at: now,
   };
   const waitlist = await buildRegistrationDayWaitlistSync(db, {
@@ -153,17 +151,10 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
     db
       .prepare(
         `UPDATE registrations
-         SET attendance_type = ?, capacity_exempt_in_person = ?, capacity_exempt_reason = ?, updated_at = ?
+         SET attendance_type = ?, updated_at = ?
          WHERE id = ? AND event_id = ?`,
       )
-      .bind(
-        updated.attendance_type,
-        updated.capacity_exempt_in_person,
-        roleExemptReason,
-        now,
-        registration.id,
-        payload.event.id,
-      ),
+      .bind(updated.attendance_type, now, registration.id, payload.event.id),
   ];
   const dayOverrideStatements: StatementLike[] = [];
   for (const dayDate of admittedDayDates) {
@@ -231,8 +222,6 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
   const changed =
     dayAttendanceChanged ||
     registration.attendance_type !== updated.attendance_type ||
-    registration.capacity_exempt_in_person !== updated.capacity_exempt_in_person ||
-    registration.capacity_exempt_reason !== updated.capacity_exempt_reason ||
     waitlist.changed ||
     waitlistAdmissionChanged;
   if (!changed) return { registration, admittedDayDates, statements: [], outboxId: null };
@@ -243,6 +232,13 @@ async function buildAdmission(db: DatabaseLike, payload: AdmissionPayload): Prom
       reason: payload.reason,
       admittedDayDates,
       capacityExemptReason: roleExemptReason ?? `day:${ADMIN_DAY_CAPACITY_EXEMPT_REASON_CODE}`,
+      capacityDecisions: waitlist.decisions
+        .filter((decision) => admittedDayDates.includes(decision.dayDate))
+        .map((decision) => ({
+          ...decision,
+          outcome: "admitted",
+          reason: roleExemptReason ?? `admin:${payload.mode}`,
+        })),
     }),
   );
   const idempotencyKey =

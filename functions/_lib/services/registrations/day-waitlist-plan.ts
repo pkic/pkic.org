@@ -3,6 +3,7 @@ import type { DatabaseLike, StatementLike } from "../../types";
 import type { DayAttendanceSelection } from "../event-days";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
+import { prepareAuditLog } from "../audit";
 import {
   dayWaitlistOfferUnavailableError,
   listCapacityEventDays,
@@ -23,6 +24,17 @@ function normalizeSelections(selections?: DayAttendanceSelection[]): DayAttendan
   return Array.from(byDate.values());
 }
 
+export interface DayCapacityDecision {
+  dayDate: string;
+  attendanceType: string;
+  outcome: "admitted" | "waitlisted" | "offered";
+  reason: string;
+  seatsReservedBeforeDecision: number;
+  attendeesWaitingBeforeDecision: number;
+  limit: number | null;
+  roleReason: string | null;
+}
+
 export async function buildRegistrationDayWaitlistSync(
   db: DatabaseLike,
   payload: {
@@ -37,12 +49,14 @@ export async function buildRegistrationDayWaitlistSync(
     reArbitrateExistingCapacityRows?: boolean;
     forceWaitlistDayDates?: string[];
     claimOfferedDayDates?: string[];
+    auditActor?: { type: "user" | "admin" | "system"; id: string | null };
   },
 ): Promise<{
   guardStatements: StatementLike[];
   statements: StatementLike[];
   activeRows: PlannedDayWaitlistEntry[];
   changed: boolean;
+  decisions: DayCapacityDecision[];
 }> {
   const selections = normalizeSelections(payload.selections);
   const selectedByDate = new Map(selections.map((entry) => [entry.dayDate, entry.attendanceType]));
@@ -57,7 +71,7 @@ export async function buildRegistrationDayWaitlistSync(
     all<DayWaitlistRow>(
       db,
       `SELECT id, event_id, event_day_id, registration_id, user_id, priority_lane,
-              status, position, offer_expires_at
+              status, position, offer_expires_at, reason_code
        FROM event_day_waitlist_entries WHERE registration_id = ?`,
       [payload.registrationId],
     ),
@@ -104,7 +118,7 @@ export async function buildRegistrationDayWaitlistSync(
   ]);
   if (!eventDays.length) {
     if (claimOfferedDayDates.size > 0) throw dayWaitlistOfferUnavailableError();
-    return { guardStatements: [], statements: [], activeRows: [], changed: false };
+    return { guardStatements: [], statements: [], activeRows: [], changed: false, decisions: [] };
   }
 
   const dayByDate = new Map(eventDays.map((day) => [day.day_date, day]));
@@ -137,19 +151,38 @@ export async function buildRegistrationDayWaitlistSync(
       .bind(now, payload.eventId, now),
   ];
   const activeRows: PlannedDayWaitlistEntry[] = [];
+  const decisions: DayCapacityDecision[] = [];
   let changed = false;
 
   for (const day of eventDays) {
     const selectedType = selectedByDate.get(day.day_date);
     const existing = existingByDay.get(day.id);
-    const clearReason = payload.capacityExemptReason
-      ? { code: "capacity_exempt", note: payload.capacityExemptReason }
-      : selectedType !== "in_person"
-        ? { code: "selection_changed", note: null }
-        : !day.in_person_capacity || day.in_person_capacity <= 0
-          ? { code: "capacity_unlimited", note: null }
-          : null;
+    const capacity = capacityByDay.get(day.id);
+    const recordDecision = (outcome: DayCapacityDecision["outcome"], reason: string): void => {
+      if (selectedType !== "in_person") return;
+      decisions.push({
+        dayDate: day.day_date,
+        attendanceType: selectedType,
+        outcome,
+        reason,
+        seatsReservedBeforeDecision: Number(capacity?.reserved ?? 0),
+        attendeesWaitingBeforeDecision: Number(capacity?.waiting ?? 0),
+        limit: day.in_person_capacity,
+        roleReason: payload.capacityExemptReason,
+      });
+    };
+    const clearReason =
+      payload.capacityExemptReason &&
+      existing?.reason_code !== "admin_returned_to_waitlist" &&
+      !forcedWaitlistDates.has(day.day_date)
+        ? { code: "capacity_exempt", note: payload.capacityExemptReason }
+        : selectedType !== "in_person"
+          ? { code: "selection_changed", note: null }
+          : !day.in_person_capacity || day.in_person_capacity <= 0
+            ? { code: "capacity_unlimited", note: null }
+            : null;
     if (clearReason) {
+      recordDecision("admitted", clearReason.code);
       if (existing && ["waiting", "offered", "accepted"].includes(existing.status)) changed = true;
       statements.push(
         db
@@ -163,7 +196,7 @@ export async function buildRegistrationDayWaitlistSync(
       continue;
     }
     if (forcedWaitlistDates.has(day.day_date)) {
-      const capacity = capacityByDay.get(day.id);
+      recordDecision("waitlisted", "admin_returned_to_waitlist");
       const priorityLane: DayWaitlistLane = "general";
       changed = true;
       statements.push(
@@ -198,11 +231,17 @@ export async function buildRegistrationDayWaitlistSync(
         ? "expired"
         : existing?.status;
     if (
-      !payload.reArbitrateExistingCapacityRows &&
       existing &&
-      (existingStatus === "accepted" || existingStatus === "offered")
+      (existingStatus === "accepted" || existingStatus === "offered") &&
+      (!payload.reArbitrateExistingCapacityRows ||
+        (existingStatus === "accepted" && existing.reason_code === "admin_returned_to_waitlist"))
     ) {
-      if (existingStatus === "offered" && claimOfferedDayDates.has(day.day_date)) changed = true;
+      const claimingOffer = existingStatus === "offered" && claimOfferedDayDates.has(day.day_date);
+      recordDecision(
+        existingStatus === "offered" && !claimingOffer ? "offered" : "admitted",
+        claimingOffer ? "offer_claimed" : existingStatus === "offered" ? "existing_offer" : "existing_admission",
+      );
+      if (claimingOffer) changed = true;
       activeRows.push({
         dayDate: day.day_date,
         status: existingStatus,
@@ -217,6 +256,7 @@ export async function buildRegistrationDayWaitlistSync(
       eventDays.some((other) => other.id !== day.id && selectedByDate.get(other.day_date) === "in_person");
     const priorityLane: DayWaitlistLane = continuity ? "continuity" : "general";
     if (existing && (existingStatus === "waiting" || existingStatus === "expired")) {
+      recordDecision("waitlisted", "existing_queue_position");
       if (
         existingStatus !== "waiting" ||
         existing.priority_lane !== priorityLane ||
@@ -237,10 +277,10 @@ export async function buildRegistrationDayWaitlistSync(
       continue;
     }
 
-    const capacity = capacityByDay.get(day.id);
     // A released seat belongs to the existing queue until promotion offers it.
     // Otherwise a new registration or attendance edit can take the opening.
     if (Number(capacity?.reserved ?? 0) < day.in_person_capacity! && Number(capacity?.waiting ?? 0) === 0) {
+      recordDecision("admitted", "capacity_available");
       if (existing?.status === "removed") {
         changed = true;
         statements.push(
@@ -256,8 +296,12 @@ export async function buildRegistrationDayWaitlistSync(
       }
       continue;
     }
-    if (preserved.has(day.id)) continue;
+    if (preserved.has(day.id)) {
+      recordDecision("admitted", "existing_admission_preserved");
+      continue;
+    }
 
+    recordDecision("waitlisted", Number(capacity?.waiting ?? 0) > 0 ? "queue_ahead" : "capacity_full");
     changed = true;
     statements.push(
       db
@@ -285,7 +329,21 @@ export async function buildRegistrationDayWaitlistSync(
     );
     activeRows.push({ dayDate: day.day_date, status: "waiting", priorityLane, offerExpiresAt: null });
   }
-  return { guardStatements, statements, activeRows, changed };
+  if (decisions.length && payload.auditActor) {
+    statements.push(
+      prepareAuditLog(
+        db,
+        payload.auditActor.type,
+        payload.auditActor.id,
+        "registration_capacity_decision",
+        "registration",
+        payload.registrationId,
+        { eventId: payload.eventId, decisions },
+        now,
+      ),
+    );
+  }
+  return { guardStatements, statements, activeRows, changed, decisions };
 }
 
 export async function prepareSyncRegistrationDayWaitlistStatements(

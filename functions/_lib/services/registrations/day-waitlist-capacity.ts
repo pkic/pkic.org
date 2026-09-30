@@ -11,8 +11,12 @@ const ROLE_BASED_CAPACITY_EXEMPT_ROLES = [
   "organizer",
   "speaker",
   "moderator",
+  "panelist",
+  "staff",
 ] as const satisfies readonly EventParticipantRole[];
-const ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL = ROLE_BASED_CAPACITY_EXEMPT_ROLES.map((role) => `'${role}'`).join(", ");
+export const ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL = ROLE_BASED_CAPACITY_EXEMPT_ROLES.map((role) => `'${role}'`).join(
+  ", ",
+);
 
 /**
  * Shared set-based capacity predicate used when selecting promotion work and
@@ -128,7 +132,8 @@ export async function roleBasedCapacityExemptReason(
      FROM effective_event_participant_roles
      WHERE event_id = ? AND user_id = ? AND status = 'active'
        AND role IN (${ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL})
-     ORDER BY CASE role WHEN 'organizer' THEN 1 WHEN 'speaker' THEN 2 WHEN 'moderator' THEN 3 ELSE 9 END
+     ORDER BY CASE role WHEN 'organizer' THEN 1 WHEN 'speaker' THEN 2 WHEN 'moderator' THEN 3
+                        WHEN 'panelist' THEN 4 WHEN 'staff' THEN 5 ELSE 9 END
      LIMIT 1`,
     [eventId, userId],
   );

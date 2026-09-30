@@ -1,16 +1,17 @@
 import { first } from "../../db/queries";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { getRegistrationDayAttendance, listEventDays } from "../event-days";
-import { buildRegistrationDayWaitlistSync, prepareRemoveAllDayWaitlistStatement } from "./day-waitlist-plan";
-import { roleBasedCapacityExemptReasonAfterParticipantChange } from "./day-waitlist-capacity";
+import { buildRegistrationDayWaitlistSync } from "./day-waitlist-plan";
+import {
+  roleBasedCapacityExemptReason,
+  roleBasedCapacityExemptReasonAfterParticipantChange,
+} from "./day-waitlist-capacity";
 import { registrationColumns, type RegistrationRecord } from "./types";
-import { nowIso } from "../../utils/time";
 import { prepareRegistrationTransitionGuard } from "./transition-guard";
 
 /**
- * Reconciles an attendee's registration capacity exemption with the intended
- * post-transition proposal participant state. If an exemption is revoked,
- * the existing per-day selections are re-arbitrated in the same D1 batch.
+ * Reconciles day admission with the intended post-transition participant roles.
+ * The roles are authoritative; no copy is stored on the registration.
  */
 export async function prepareRoleCapacityReconciliationStatements(
   db: DatabaseLike,
@@ -31,36 +32,11 @@ export async function prepareRoleCapacityReconciliationStatements(
   );
   if (!registration) return [];
 
-  const capacityExemptReason = await roleBasedCapacityExemptReasonAfterParticipantChange(db, input);
-  const nextCapacityExempt = capacityExemptReason ? 1 : 0;
-  if (
-    registration.capacity_exempt_in_person === nextCapacityExempt &&
-    registration.capacity_exempt_reason === capacityExemptReason
-  ) {
-    return [];
-  }
-
-  const now = nowIso();
-  const updateRegistrationCapacityStatement = db
-    .prepare(
-      `UPDATE registrations
-       SET capacity_exempt_in_person = ?, capacity_exempt_reason = ?, updated_at = ?
-       WHERE id = ? AND event_id = ?`,
-    )
-    .bind(nextCapacityExempt, capacityExemptReason, now, registration.id, input.eventId);
-  const statements: StatementLike[] = [prepareRegistrationTransitionGuard(db, registration)];
-
-  if (capacityExemptReason) {
-    statements.push(
-      updateRegistrationCapacityStatement,
-      prepareRemoveAllDayWaitlistStatement(db, {
-        registrationId: registration.id,
-        reasonCode: "capacity_exempt",
-        reasonNote: capacityExemptReason,
-      }),
-    );
-    return statements;
-  }
+  const [previousReason, capacityExemptReason] = await Promise.all([
+    roleBasedCapacityExemptReason(db, input.eventId, input.userId),
+    roleBasedCapacityExemptReasonAfterParticipantChange(db, input),
+  ]);
+  if (previousReason === capacityExemptReason) return [];
 
   const [dayAttendance, eventDays] = await Promise.all([
     getRegistrationDayAttendance(db, registration.id),
@@ -71,12 +47,12 @@ export async function prepareRoleCapacityReconciliationStatements(
     eventId: input.eventId,
     userId: input.userId,
     selections: dayAttendance,
-    capacityExemptReason: null,
+    capacityExemptReason,
     preserveConfirmedEventDayIds: [],
-    reArbitrateExistingCapacityRows: true,
+    reArbitrateExistingCapacityRows: !capacityExemptReason,
     registrationStatus: registration.status,
     configuredEventDays: eventDays,
+    auditActor: { type: "system", id: null },
   });
-  statements.push(...waitlist.guardStatements, updateRegistrationCapacityStatement, ...waitlist.statements);
-  return statements;
+  return [prepareRegistrationTransitionGuard(db, registration), ...waitlist.guardStatements, ...waitlist.statements];
 }

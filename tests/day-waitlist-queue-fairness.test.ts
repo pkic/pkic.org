@@ -42,7 +42,7 @@ describe("day waitlist queue fairness", () => {
     };
 
     const organizer = await createRegistration(env.DB, { ...common, userId: "organizer" });
-    expect(organizer.registration.capacity_exempt_in_person).toBe(1);
+    expect(organizer.registration).not.toHaveProperty("capacity_exempt_in_person");
     const attendee = await createRegistration(env.DB, { ...common, userId: "attendee" });
 
     expect(
@@ -52,6 +52,25 @@ describe("day waitlist queue fairness", () => {
         [attendee.registration.id],
       ),
     ).toEqual([{ status: "waiting" }]);
+    const [audit] = await queryAll<{ details_json: string }>(
+      env.DB,
+      "SELECT details_json FROM audit_log WHERE entity_id = ? AND action = 'registration_capacity_decision'",
+      [attendee.registration.id],
+    );
+    expect(JSON.parse(audit.details_json)).toMatchObject({
+      decisions: {
+        to: [
+          {
+            dayDate: "2026-12-01",
+            outcome: "waitlisted",
+            reason: "capacity_full",
+            seatsReservedBeforeDecision: 1,
+            attendeesWaitingBeforeDecision: 0,
+            limit: 1,
+          },
+        ],
+      },
+    });
   });
 
   it("counts an admin-admitted day toward physical capacity for an ordinary registration", async () => {

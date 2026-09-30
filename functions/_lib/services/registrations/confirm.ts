@@ -2,7 +2,8 @@ import { AppError } from "../../errors";
 import { first } from "../../db/queries";
 import { nowIso } from "../../utils/time";
 import { prepareEngagementStatement } from "../engagement";
-import { prepareRemoveAllDayWaitlistStatement, resolveCapacityExemptReason } from "./day-waitlist";
+import { buildRegistrationDayWaitlistSync, resolveCapacityExemptReason } from "./day-waitlist";
+import { getRegistrationDayAttendance } from "../event-days";
 import { isAuditChangeGuardFailure, prepareAuditLog } from "../audit";
 import { prepareFinalizeEmailChange } from "./change-email";
 import {
@@ -196,32 +197,26 @@ export async function prepareConfirmRegistrationByToken(
          SET status = ?, confirmed_at = ?, confirmation_link_secret = NULL,
              pending_confirmation_deadline_at = NULL, confirmation_reminder_sent_at = NULL,
              manage_link_secret = ?, created_identity_user_id = NULL,
-             invite_id = COALESCE(invite_id, ?), capacity_exempt_in_person = ?,
-             capacity_exempt_reason = ?, updated_at = ?
+             invite_id = COALESCE(invite_id, ?), updated_at = ?
          WHERE id = ? AND status = 'pending_email_confirmation'`,
       )
-      .bind(
-        newStatus,
-        now,
-        finalizedRegistration.manage_link_secret,
-        matchingInvite?.id ?? null,
-        capacityExemptReason ? 1 : 0,
-        capacityExemptReason,
-        now,
-        registration.id,
-      ),
+      .bind(newStatus, now, finalizedRegistration.manage_link_secret, matchingInvite?.id ?? null, now, registration.id),
   ];
-  // A role-based attendee does not consume day capacity. Remove any waiting
-  // or offered rows atomically with confirmation so a stale row cannot later
-  // be promoted as though this registration still needed a seat.
+  // A role-based attendee may bypass the queue. Preserve an explicit manager
+  // return to the waitlist until that manager admits them again.
   if (capacityExemptReason) {
-    updateStatements.push(
-      prepareRemoveAllDayWaitlistStatement(db, {
-        registrationId: registration.id,
-        reasonCode: "capacity_exempt",
-        reasonNote: capacityExemptReason,
-      }),
-    );
+    const dayAttendance = await getRegistrationDayAttendance(db, registration.id);
+    const waitlist = await buildRegistrationDayWaitlistSync(db, {
+      registrationId: registration.id,
+      eventId: registration.event_id,
+      userId: registration.user_id,
+      selections: dayAttendance,
+      capacityExemptReason,
+      registrationStatus: newStatus,
+      auditActor: { type: "user", id: registration.user_id },
+    });
+    updateStatements.unshift(...waitlist.guardStatements);
+    updateStatements.push(...waitlist.statements);
   }
   if (matchingInvite) {
     updateStatements.push(...prepareAcceptInviteStatements(db, matchingInvite));
@@ -273,8 +268,6 @@ export async function prepareConfirmRegistrationByToken(
     invite_id: registration.invite_id ?? matchingInvite?.id ?? null,
     confirmation_link_secret: null,
     pending_confirmation_deadline_at: null,
-    capacity_exempt_in_person: capacityExemptReason ? 1 : 0,
-    capacity_exempt_reason: capacityExemptReason,
     confirmed_at: now,
     created_identity_user_id: null,
     transition_revision: registration.transition_revision + 2,

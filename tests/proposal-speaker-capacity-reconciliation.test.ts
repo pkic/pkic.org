@@ -10,7 +10,7 @@ import {
 } from "../functions/_lib/services/proposals";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { resetDb } from "./helpers/reset-db";
-import { queryAll } from "./helpers/context";
+import { queryAll, registrationAdmissionRole } from "./helpers/context";
 import {
   inviteSpeakerAndSubmitCapacityProposal,
   seedAcceptedSpeakerRegistration,
@@ -21,13 +21,7 @@ import {
 const requestOptions = { passThroughOnException: () => {}, waitUntil: () => {} } as any;
 
 async function expectWaitingAndNotExempt(registrationId: string): Promise<void> {
-  await expect(
-    queryAll<{ capacity_exempt_in_person: number; capacity_exempt_reason: string | null }>(
-      env.DB,
-      "SELECT capacity_exempt_in_person, capacity_exempt_reason FROM registrations WHERE id = ?",
-      [registrationId],
-    ),
-  ).resolves.toEqual([{ capacity_exempt_in_person: 0, capacity_exempt_reason: null }]);
+  await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBeNull();
   await expect(
     queryAll<{ status: string }>(
       env.DB,
@@ -164,7 +158,7 @@ describe("proposal speaker capacity reconciliation", () => {
     await expectWaitingAndNotExempt(registrationId);
   });
 
-  it("re-arbitrates after proposer role change", async () => {
+  it("keeps panelist admission after proposer role change", async () => {
     const { proposalId, proposalManageToken, coSpeakerUserId } =
       await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
     const proposal = await getProposalByManageToken(env.DB, proposalManageToken, env.INTERNAL_SIGNING_SECRET!);
@@ -187,10 +181,17 @@ describe("proposal speaker capacity reconciliation", () => {
       requestOptions,
     );
     expect(response.status).toBe(200);
-    await expectWaitingAndNotExempt(registrationId);
+    await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBe("panelist");
+    await expect(
+      queryAll(
+        env.DB,
+        "SELECT id FROM event_day_waitlist_entries WHERE registration_id = ? AND status IN ('waiting', 'offered')",
+        [registrationId],
+      ),
+    ).resolves.toHaveLength(0);
   });
 
-  it("re-arbitrates after admin role change", async () => {
+  it("keeps panelist admission after admin role change", async () => {
     const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
     const event = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM events WHERE slug = 'pqc-2026'"))[0];
     const registrationId = await seedAcceptedSpeakerRegistration({
@@ -209,7 +210,14 @@ describe("proposal speaker capacity reconciliation", () => {
       requestOptions,
     );
     expect(response.status).toBe(200);
-    await expectWaitingAndNotExempt(registrationId);
+    await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBe("panelist");
+    await expect(
+      queryAll(
+        env.DB,
+        "SELECT id FROM event_day_waitlist_entries WHERE registration_id = ? AND status IN ('waiting', 'offered')",
+        [registrationId],
+      ),
+    ).resolves.toHaveLength(0);
   });
 
   it("restores exemption when a removed speaker is re-added", async () => {
@@ -245,13 +253,7 @@ describe("proposal speaker capacity reconciliation", () => {
       requestOptions,
     );
     expect(addResponse.status).toBe(200);
-    await expect(
-      queryAll<{ capacity_exempt_in_person: number; capacity_exempt_reason: string | null }>(
-        env.DB,
-        "SELECT capacity_exempt_in_person, capacity_exempt_reason FROM registrations WHERE id = ?",
-        [registrationId],
-      ),
-    ).resolves.toEqual([{ capacity_exempt_in_person: 1, capacity_exempt_reason: "role:speaker" }]);
+    await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBe("speaker");
   });
 
   it("preserves another active exempt source when changing to a non-exempt role", async () => {
@@ -284,13 +286,7 @@ describe("proposal speaker capacity reconciliation", () => {
       requestOptions,
     );
     expect(response.status).toBe(200);
-    await expect(
-      queryAll<{ capacity_exempt_in_person: number; capacity_exempt_reason: string | null }>(
-        env.DB,
-        "SELECT capacity_exempt_in_person, capacity_exempt_reason FROM registrations WHERE id = ?",
-        [registrationId],
-      ),
-    ).resolves.toEqual([{ capacity_exempt_in_person: 1, capacity_exempt_reason: "role:organizer" }]);
+    await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBe("organizer");
   });
 
   it("projects moderator and panelist roles without remapping them as speakers", async () => {
@@ -323,9 +319,7 @@ describe("proposal speaker capacity reconciliation", () => {
         [eventId, coSpeakerUserId],
       ),
     ).resolves.toContainEqual({ role: "moderator", subrole: null, status: "active" });
-    await expect(
-      queryAll(env.DB, "SELECT capacity_exempt_reason FROM registrations WHERE id = ?", [registrationId]),
-    ).resolves.toEqual([{ capacity_exempt_reason: "role:moderator" }]);
+    await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBe("moderator");
 
     const panelist = await app.fetch(
       new Request(
@@ -348,7 +342,7 @@ describe("proposal speaker capacity reconciliation", () => {
         [eventId, coSpeakerUserId],
       ),
     ).resolves.toContainEqual({ role: "panelist", subrole: null, status: "active" });
-    await expectWaitingAndNotExempt(registrationId);
+    await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBe("panelist");
   });
 
   it("retains a shared speaker projection and capacity exemption while another accepted proposal remains", async () => {
@@ -392,11 +386,7 @@ describe("proposal speaker capacity reconciliation", () => {
         [eventId, coSpeakerUserId],
       ),
     ).resolves.toEqual([{ role: "speaker", subrole: "co_speaker", status: "active", source_ref: secondProposal.id }]);
-    await expect(
-      queryAll(env.DB, "SELECT capacity_exempt_in_person, capacity_exempt_reason FROM registrations WHERE id = ?", [
-        registrationId,
-      ]),
-    ).resolves.toEqual([{ capacity_exempt_in_person: 1, capacity_exempt_reason: "role:speaker" }]);
+    await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBe("speaker");
   });
 
   it("grants exemption and removes the waitlist when proposal acceptance activates speakers", async () => {
@@ -410,13 +400,7 @@ describe("proposal speaker capacity reconciliation", () => {
       minReviewsRequired: 0,
     });
 
-    await expect(
-      queryAll<{ capacity_exempt_in_person: number; capacity_exempt_reason: string | null }>(
-        env.DB,
-        "SELECT capacity_exempt_in_person, capacity_exempt_reason FROM registrations WHERE id = ?",
-        [registrationId],
-      ),
-    ).resolves.toEqual([{ capacity_exempt_in_person: 1, capacity_exempt_reason: "role:speaker" }]);
+    await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBe("speaker");
     await expect(
       queryAll(
         env.DB,
@@ -435,11 +419,7 @@ describe("proposal speaker capacity reconciliation", () => {
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });
-    await expect(
-      queryAll(env.DB, "SELECT capacity_exempt_in_person, capacity_exempt_reason FROM registrations WHERE id = ?", [
-        registrationId,
-      ]),
-    ).resolves.toEqual([{ capacity_exempt_in_person: 1, capacity_exempt_reason: "role:speaker" }]);
+    await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBe("speaker");
 
     // Correcting the decision has to carry the seat with it: a speaker on a
     // rejected proposal keeps no speaker's exemption from the day's capacity.
@@ -450,14 +430,10 @@ describe("proposal speaker capacity reconciliation", () => {
       minReviewsRequired: 0,
     });
 
-    await expect(
-      queryAll(env.DB, "SELECT capacity_exempt_in_person, capacity_exempt_reason FROM registrations WHERE id = ?", [
-        registrationId,
-      ]),
-    ).resolves.toEqual([{ capacity_exempt_in_person: 0, capacity_exempt_reason: null }]);
+    await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBeNull();
   });
 
-  it("re-arbitrates stale capacity when an unanswered needs-work proposal is rejected", async () => {
+  it("keeps an attendee waiting when a needs-work proposal is rejected", async () => {
     const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
     const registrationId = await seedPendingSpeakerRegistration({ eventId, speakerUserId: coSpeakerUserId });
     await finalizeProposalDecision(env.DB, {
@@ -467,11 +443,6 @@ describe("proposal speaker capacity reconciliation", () => {
       decisionNote: "Please revise the proposal.",
       minReviewsRequired: 0,
     });
-    await env.DB.batch([
-      env.DB.prepare(
-        "UPDATE registrations SET capacity_exempt_in_person = 1, capacity_exempt_reason = 'role:speaker' WHERE id = ?",
-      ).bind(registrationId),
-    ]);
 
     await finalizeProposalDecision(env.DB, {
       proposalId,
@@ -482,14 +453,9 @@ describe("proposal speaker capacity reconciliation", () => {
     await expectWaitingAndNotExempt(registrationId);
   });
 
-  it("re-arbitrates a stale exemption during self-service withdrawal", async () => {
+  it("keeps an attendee waiting during self-service withdrawal", async () => {
     const { proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
     const registrationId = await seedPendingSpeakerRegistration({ eventId, speakerUserId: coSpeakerUserId });
-    await env.DB.batch([
-      env.DB.prepare(
-        "UPDATE registrations SET capacity_exempt_in_person = 1, capacity_exempt_reason = 'role:speaker' WHERE id = ?",
-      ).bind(registrationId),
-    ]);
 
     const response = await app.fetch(
       new Request(`https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}`, {
@@ -504,16 +470,11 @@ describe("proposal speaker capacity reconciliation", () => {
     await expectWaitingAndNotExempt(registrationId);
   });
 
-  it("does not reconcile capacity when a stale withdrawal loses its primary mutation", async () => {
+  it("does not change admission when a withdrawal loses its primary mutation", async () => {
     const { proposalId, proposalManageToken, coSpeakerUserId } =
       await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
     const proposal = await getProposalByManageToken(env.DB, proposalManageToken, env.INTERNAL_SIGNING_SECRET!);
     const registrationId = await seedPendingSpeakerRegistration({ eventId, speakerUserId: coSpeakerUserId });
-    await env.DB.batch([
-      env.DB.prepare(
-        "UPDATE registrations SET capacity_exempt_in_person = 1, capacity_exempt_reason = 'role:speaker' WHERE id = ?",
-      ).bind(registrationId),
-    ]);
     const baseDb: DatabaseLike = env.DB;
     let raced = false;
     const racingDb: DatabaseLike = {
@@ -534,13 +495,7 @@ describe("proposal speaker capacity reconciliation", () => {
       status: 409,
       code: "PROPOSAL_EDIT_CONFLICT",
     });
-    await expect(
-      queryAll<{ capacity_exempt_in_person: number; capacity_exempt_reason: string | null }>(
-        env.DB,
-        "SELECT capacity_exempt_in_person, capacity_exempt_reason FROM registrations WHERE id = ?",
-        [registrationId],
-      ),
-    ).resolves.toEqual([{ capacity_exempt_in_person: 1, capacity_exempt_reason: "role:speaker" }]);
+    await expectWaitingAndNotExempt(registrationId);
   });
 
   it("does not count declined speakers for final-speaker protection", async () => {

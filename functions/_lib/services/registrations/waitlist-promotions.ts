@@ -6,7 +6,7 @@ import { listEventDays } from "../event-days";
 import { listDayWaitlistForRegistration } from "./day-waitlist-queries";
 import { prepareRegistrationStatusEmail, type RegistrationStatusEmailEvent } from "./status-notifications";
 import { promoteDayWaitlistIfCapacity } from "./day-waitlist";
-import { eventDayHasAvailableCapacitySql } from "./day-waitlist-capacity";
+import { eventDayHasAvailableCapacitySql, ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL } from "./day-waitlist-capacity";
 import type { DatabaseLike, StatementLike } from "../../types";
 
 export interface WaitlistPromotionEvent extends RegistrationStatusEmailEvent {
@@ -73,6 +73,12 @@ export async function promoteEventWaitlistWithNotifications(
               eventDayId: promotion.event_day_id,
               registrationId: promotion.registration_id,
               dayRegistrationOffers: 1,
+              capacityDecision: {
+                outcome: "offered",
+                reason: "queue_promotion",
+                seatsReservedBeforeDecision: promotion.capacitySnapshot?.seatsReservedBeforeDecision,
+                limit: promotion.capacitySnapshot?.limit,
+              },
             },
             nowIso(),
           ),
@@ -175,7 +181,11 @@ export async function runWaitlistPromotionCycle(
              WHERE candidate.event_day_id = ed.id
                AND candidate.status = 'waiting'
                AND candidate_registration.status IN ('pending_email_confirmation', 'registered')
-               AND candidate_registration.capacity_exempt_in_person = 0
+               AND (candidate.reason_code = 'admin_returned_to_waitlist' OR NOT EXISTS (
+                 SELECT 1 FROM effective_event_participant_roles role
+                 WHERE role.event_id = candidate.event_id AND role.user_id = candidate.user_id
+                   AND role.status = 'active' AND role.role IN (${ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL})
+               ))
            )
        )
      ORDER BY datetime(COALESCE(e.starts_at, '9999-12-31')) ASC, e.name ASC, e.id ASC

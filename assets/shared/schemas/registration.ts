@@ -134,8 +134,6 @@ export const registrationCapabilitySafeProjectionSchema = z.object({
   custom_answers_json: z.string().nullable(),
   referred_by_code: z.string().nullable(),
   pending_confirmation_deadline_at: z.string().nullable(),
-  capacity_exempt_in_person: z.number().int().min(0).max(1),
-  capacity_exempt_reason: z.string().nullable(),
   cancellation_reason_code: z.string().nullable(),
   transition_revision: z.number().int().nonnegative(),
   confirmed_at: z.string().nullable(),
