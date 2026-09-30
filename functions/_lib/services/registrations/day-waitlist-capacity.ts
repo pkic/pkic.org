@@ -38,7 +38,6 @@ export function eventDayHasAvailableCapacitySql(dayAlias: string, nowExpression:
         WHERE rda.event_day_id = ${dayAlias}.id
           AND rda.attendance_type = 'in_person'
           AND r.status IN ('pending_email_confirmation', 'registered')
-          AND r.capacity_exempt_in_person = 0
           AND w.id IS NULL
       ) + (
         SELECT COUNT(*)
@@ -48,7 +47,6 @@ export function eventDayHasAvailableCapacitySql(dayAlias: string, nowExpression:
           AND w.status = 'offered'
           AND (w.offer_expires_at IS NULL OR w.offer_expires_at > ${nowExpression})
           AND r.status IN ('pending_email_confirmation', 'registered')
-          AND r.capacity_exempt_in_person = 0
       )
     ) < ${dayAlias}.in_person_capacity`;
 }
@@ -92,7 +90,6 @@ export async function countConfirmedInPersonForDay(
      WHERE rda.event_day_id = ?
        AND rda.attendance_type = 'in_person'
        AND r.status IN ('pending_email_confirmation', 'registered')
-       AND r.capacity_exempt_in_person = 0
        AND w.id IS NULL
        AND (? IS NULL OR r.id <> ?)`,
     [eventDayId, excludeRegistrationId ?? null, excludeRegistrationId ?? null],
@@ -114,7 +111,6 @@ export async function countActiveOffersForDay(
        AND w.status = 'offered'
        AND (w.offer_expires_at IS NULL OR w.offer_expires_at > ?)
        AND r.status IN ('pending_email_confirmation', 'registered')
-       AND r.capacity_exempt_in_person = 0
        AND (? IS NULL OR r.id <> ?)`,
     [eventDayId, nowIso(), excludeRegistrationId ?? null, excludeRegistrationId ?? null],
   );

@@ -75,7 +75,6 @@ export async function buildRegistrationDayWaitlistSync(
                 WHERE rda.event_day_id = ed.id
                   AND rda.attendance_type = 'in_person'
                   AND r.status IN ('pending_email_confirmation', 'registered')
-                  AND r.capacity_exempt_in_person = 0
                   AND w.id IS NULL
                   AND r.id <> ?
               ) + (
@@ -86,7 +85,6 @@ export async function buildRegistrationDayWaitlistSync(
                   AND w.status = 'offered'
                   AND (w.offer_expires_at IS NULL OR w.offer_expires_at > ?)
                   AND r.status IN ('pending_email_confirmation', 'registered')
-                  AND r.capacity_exempt_in_person = 0
                   AND r.id <> ?
               ) AS reserved,
               (SELECT COUNT(*)
