@@ -12,6 +12,7 @@ import {
 } from "./helpers/proposal-speaker-capacity";
 import { finalizeProposalDecision } from "../functions/_lib/services/proposals";
 import { eventProposalsResponseSchema } from "../assets/shared/schemas/event-proposals";
+import { eventSpeakersResponseSchema } from "../assets/shared/schemas/event-speakers";
 
 describe("accepted proposal speaker registration", () => {
   let eventId: string;
@@ -35,6 +36,30 @@ describe("accepted proposal speaker registration", () => {
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });
+
+  it("lists unregistered speakers with bounded search and rejects invalid or unauthorized reads", async () => {
+    await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
+    const request = (suffix: string, authorized = true) =>
+      app.fetch(
+        new Request(`https://app.test/api/v1/events/pqc-2026/speakers${suffix}`, {
+          headers: authorized ? { authorization: `Bearer ${adminSessionToken}` } : {},
+        }),
+        env,
+        createExecutionContext(),
+      );
+    const missing = eventSpeakersResponseSchema.parse(await (await request("?registration=missing&limit=1")).json());
+    expect(missing.speakers).toHaveLength(1);
+    expect(missing.speakers[0].registrationStatus).toBeNull();
+    expect(missing.page).toMatchObject({ total: 2, hasMore: true });
+    const byFullName = eventSpeakersResponseSchema.parse(await (await request("?q=Co%20Speaker")).json());
+    expect(byFullName.speakers).toHaveLength(1);
+    expect(byFullName.speakers[0].firstName).toBe("Co");
+    const searched = eventSpeakersResponseSchema.parse(await (await request("?q=nomatch")).json());
+    expect(searched.speakers).toEqual([]);
+    expect(searched.page.total).toBe(0);
+    expect((await request("?sort=unknown")).status).toBe(400);
+    expect((await request("", false)).status).toBe(401);
+  });
 
   it("registers every speaker on every configured day, bypasses capacity, and exposes the bounded overview", async () => {
     const { proposalId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
@@ -60,21 +85,40 @@ describe("accepted proposal speaker registration", () => {
     expect(response.status).toBe(200);
     const body = eventProposalsResponseSchema.parse(await response.json());
     expect(body.proposals).toHaveLength(1);
-    expect(body.proposals[0].speakers).toHaveLength(2);
-    expect(
-      body.proposals[0].speakers.every(
-        (speaker) => speaker.registrationStatus === "registered" && speaker.days.length === 2,
-      ),
-    ).toBe(true);
-    const missingResponse = await app.fetch(
-      new Request("https://app.test/api/v1/events/pqc-2026/proposals?speakerRegistration=missing", {
+    const speakersResponse = await app.fetch(
+      new Request("https://app.test/api/v1/events/pqc-2026/speakers?limit=1", {
         headers: { authorization: `Bearer ${adminSessionToken}` },
       }),
       env,
       createExecutionContext(),
     );
-    const missing = eventProposalsResponseSchema.parse(await missingResponse.json());
-    expect(missing.proposals).toEqual([]);
+    expect(speakersResponse.status).toBe(200);
+    const firstPage = eventSpeakersResponseSchema.parse(await speakersResponse.json());
+    expect(firstPage.speakers).toHaveLength(1);
+    expect(firstPage.page).toMatchObject({ total: 2, hasMore: true });
+    const secondResponse = await app.fetch(
+      new Request("https://app.test/api/v1/events/pqc-2026/speakers?limit=1&offset=1", {
+        headers: { authorization: `Bearer ${adminSessionToken}` },
+      }),
+      env,
+      createExecutionContext(),
+    );
+    const secondPage = eventSpeakersResponseSchema.parse(await secondResponse.json());
+    expect(secondPage.page.hasMore).toBe(false);
+    expect(
+      [...firstPage.speakers, ...secondPage.speakers].every(
+        (speaker) => speaker.registrationStatus === "registered" && speaker.days.length === 2,
+      ),
+    ).toBe(true);
+    const missingResponse = await app.fetch(
+      new Request("https://app.test/api/v1/events/pqc-2026/speakers?registration=missing", {
+        headers: { authorization: `Bearer ${adminSessionToken}` },
+      }),
+      env,
+      createExecutionContext(),
+    );
+    const missing = eventSpeakersResponseSchema.parse(await missingResponse.json());
+    expect(missing.speakers).toEqual([]);
     expect(missing.page.total).toBe(0);
     await expect(accept(proposalId)).rejects.toMatchObject({ code: "PROPOSAL_DECISION_CONFLICT" });
     expect(await queryAll(env.DB, "SELECT id FROM registrations WHERE event_id = ?", eventId)).toHaveLength(2);

@@ -1,4 +1,3 @@
-import { loadProposalSpeakerAttendance } from "./proposal-speaker-attendance";
 import { batchFirst, buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuery } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import type { DatabaseLike } from "../types";
@@ -83,15 +82,6 @@ export function buildEventProposalsPageQuery(query: EventProposalsServiceQuery):
       "EXISTS (SELECT 1 FROM proposal_reviews pr_filter WHERE pr_filter.proposal_id = sp.id AND pr_filter.review_round = sp.review_round AND pr_filter.recommendation = ?)",
     );
     predicateBindings.push(query.recommendation);
-  }
-  if (query.speakerRegistration) {
-    conditions.push(`EXISTS (
-      SELECT 1 FROM proposal_speakers registration_speaker
-      LEFT JOIN registrations speaker_registration
-        ON speaker_registration.event_id = sp.event_id AND speaker_registration.user_id = registration_speaker.user_id
-      WHERE registration_speaker.proposal_id = sp.id AND registration_speaker.status <> 'declined'
-        AND ${query.speakerRegistration === "registered" ? "speaker_registration.status = 'registered'" : "(speaker_registration.status IS NULL OR speaker_registration.status <> 'registered')"}
-    )`);
   }
   if (query.presentation) {
     conditions.push(`${query.presentation === "missing" ? "NOT " : ""}${PRESENTATION_EXISTS_SQL}`);
@@ -220,16 +210,11 @@ export async function listEventProposals(
   ]);
 
   const { rows, total } = decodeOffsetPageResults<
-    Omit<EventProposalSummary, "has_presentation" | "speakers"> & { has_presentation: number }
+    Omit<EventProposalSummary, "has_presentation"> & { has_presentation: number }
   >(rowsResult, totalResult);
-  const speakers = await loadProposalSpeakerAttendance(
-    db,
-    rows.map((row) => row.id),
-  );
   const proposals = rows.map((row) => ({
     ...row,
     has_presentation: row.has_presentation === 1,
-    speakers: speakers.get(row.id) ?? [],
   }));
   const statsRow = batchFirst<ProposalStatsRow>(statsResult);
   const byStatus = parseCountRecord(statsRow?.by_status_json ?? "{}");

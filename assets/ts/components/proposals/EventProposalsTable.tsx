@@ -11,7 +11,6 @@
  * table exists to prevent. The list's state now rides in the URL instead, so
  * a narrowed page can be refreshed and shared.
  */
-import { ProposalSpeakerAttendance } from "./ProposalSpeakerAttendance";
 import type { ComponentChildren } from "preact";
 import { useRef, useState } from "preact/hooks";
 import { ProposalTypeIcon } from "./ProposalTypeIcon";
@@ -156,21 +155,8 @@ export function EventProposalsTable({
           },
           {
             header: "Proposer",
-            defaultHidden: true,
             cell: proposerName,
             sort: { asc: "proposer", desc: "-proposer", defaultDirection: "asc" },
-          },
-          {
-            header: "Speaker registration",
-            filter: {
-              param: "speakerRegistration",
-              options: [
-                { value: "", label: "All speaker registrations" },
-                { value: "missing", label: "Needs registration" },
-                { value: "registered", label: "Has registered speakers" },
-              ],
-            },
-            cell: (proposal) => <ProposalSpeakerAttendance speakers={proposal.speakers} />,
           },
           {
             header: "Type",

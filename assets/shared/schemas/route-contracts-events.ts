@@ -23,6 +23,7 @@ import { eventPromotersListQuerySchema, eventPromotersListResponseSchema } from 
 import { eventPresentationArchiveQuerySchema } from "./event-presentations";
 import { eventAnalyticsResponseSchema } from "./event-analytics";
 import { eventProposalsListQuerySchema, eventProposalsResponseSchema } from "./event-proposals";
+import { eventSpeakersListQuerySchema, eventSpeakersResponseSchema } from "./event-speakers";
 
 export const eventDetailRouteSchema = {
   tags: ["Events"],
@@ -269,4 +270,22 @@ export const eventProposalsListRouteSchema = {
   },
   "x-pkic-auth": { required: true, scopes: ["proposals:read"] },
   "x-pkic-mcp": { expose: true, readonly: true },
+};
+
+export const eventSpeakersListRouteSchema = {
+  tags: ["Event proposals"],
+  summary: "List proposal speakers for an event",
+  description:
+    "Searches, filters, sorts and paginates proposal speakers and their registration status for a caller with proposal read permission.",
+  request: { params: eventSlugParamsSchema, query: eventSpeakersListQuerySchema },
+  responses: {
+    "200": {
+      description: "Proposal speakers for this event.",
+      content: { "application/json": { schema: eventSpeakersResponseSchema } },
+    },
+    "401": jsonErrorResponse("An authenticated user session is required."),
+    "403": jsonErrorResponse("Proposal read permission is required for this event."),
+    "404": jsonErrorResponse("Event not found."),
+  },
+  "x-pkic-auth": { required: true, scopes: ["proposals:read"] },
 };

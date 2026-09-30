@@ -98,6 +98,7 @@ describe("event Proposals section", () => {
     expect(nav?.getAttribute("aria-label")).toBe("Proposal sections");
     expect([...root.querySelectorAll("nav.pk-tabs a")].map((link) => link.textContent)).toEqual([
       "Overview",
+      "Speakers",
       "Responses",
       "Email",
     ]);
@@ -220,6 +221,7 @@ describe("event Proposals section", () => {
 
     expect([...root.querySelectorAll("nav.pk-tabs a")].map((link) => link.textContent)).toEqual([
       "Overview",
+      "Speakers",
       "Responses",
     ]);
   });

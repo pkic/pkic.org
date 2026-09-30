@@ -39,6 +39,8 @@ import { LazyGroupEventConfiguration } from "./LazyGroupEventConfiguration";
 import { GroupEventEditor } from "./GroupEventEditor";
 import { GroupEventInvitations } from "./GroupEventInvitations";
 import { GroupEventProposals } from "./GroupEventProposals";
+import { groupEventProposalPath } from "./GroupEventProposals";
+import { EventProposalSpeakersTable } from "../../../../components/proposals/EventProposalSpeakersTable";
 import { GroupEventRegistrationPanel } from "./GroupEventRegistrationPanel";
 import { GroupEventRegistrationRecord } from "./GroupEventRegistrationRecord";
 import { GroupEventRegistrations } from "./GroupEventRegistrations";
@@ -65,6 +67,8 @@ function EventRecordSections({
   eventSlug,
   purpose,
   children,
+  speakers,
+  speakersActive = false,
 }: {
   label: string;
   basePath: string;
@@ -72,20 +76,29 @@ function EventRecordSections({
   eventSlug: string;
   purpose: EventFormsPurpose;
   children: ComponentChildren;
+  speakers?: ComponentChildren;
+  speakersActive?: boolean;
 }) {
-  const active = responsesActive ? EVENT_RESPONSES_SEGMENT : "overview";
+  const active = speakersActive ? "speakers" : responsesActive ? EVENT_RESPONSES_SEGMENT : "overview";
   return (
     <div class="pk pk-stack">
       <Tabs
         label={`${label} sections`}
         items={[
           { key: "overview", label: "Overview" },
+          ...(speakers ? [{ key: "speakers", label: "Speakers" }] : []),
           { key: EVENT_RESPONSES_SEGMENT, label: "Responses" },
         ]}
         active={active}
-        hrefFor={(key) => (key === "overview" ? basePath : `${basePath}/${EVENT_RESPONSES_SEGMENT}`)}
+        hrefFor={(key) => (key === "overview" ? basePath : `${basePath}/${key}`)}
       />
-      {responsesActive ? <EventFormResponses eventSlug={eventSlug} purpose={purpose} /> : children}
+      {speakersActive ? (
+        speakers
+      ) : responsesActive ? (
+        <EventFormResponses eventSlug={eventSlug} purpose={purpose} />
+      ) : (
+        children
+      )}
     </div>
   );
 }
@@ -186,8 +199,12 @@ export function GroupEventWorkspace({
     key === invitationAudiences[0]?.key ? tabPath("invitations") : `${tabPath("invitations")}/${key}`;
 
   const responsesActive = detailId === EVENT_RESPONSES_SEGMENT;
+  const speakersActive = activeTab === "proposals" && detailId === "speakers";
   const recordOpen =
-    detailId !== undefined && !responsesActive && (activeTab === "registrations" || activeTab === "proposals");
+    detailId !== undefined &&
+    !responsesActive &&
+    !speakersActive &&
+    (activeTab === "registrations" || activeTab === "proposals");
 
   return (
     <BreadcrumbBranch
@@ -329,6 +346,15 @@ export function GroupEventWorkspace({
                   label="Proposal"
                   basePath={tabPath("proposals")}
                   responsesActive={responsesActive}
+                  speakersActive={speakersActive}
+                  speakers={
+                    <EventProposalSpeakersTable
+                      slug={event.slug}
+                      rowHref={(speaker) =>
+                        usePortalHashLocation.hrefs(groupEventProposalPath(groupId, event.id, speaker.proposalId))
+                      }
+                    />
+                  }
                   eventSlug={event.slug}
                   purpose="proposal_submission"
                 >

@@ -112,7 +112,11 @@ test("portal proposal detail uses canonical proposal resources without admin fal
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
     if (pathname.startsWith("/api/v1/admin/")) adminRequests.push(`${request.method()} ${pathname}`);
-    if (pathname.startsWith("/api/v1/proposals/") || pathname === `/api/v1/events/${event.slug}/proposals`) {
+    if (
+      pathname.startsWith("/api/v1/proposals/") ||
+      pathname === `/api/v1/events/${event.slug}/proposals` ||
+      pathname === `/api/v1/events/${event.slug}/speakers`
+    ) {
       proposalRequests.push(`${request.method()} ${pathname}`);
     }
   });
@@ -124,6 +128,8 @@ test("portal proposal detail uses canonical proposal resources without admin fal
   await expect(row).toBeVisible();
   await expect(row.getByRole("img", { name: "Submitted", exact: true })).toHaveClass(/pk-badge--ok/);
   await expect(row.getByRole("img", { name: "talk", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Proposer" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Speaker registration" })).toHaveCount(0);
   // A row is a link to the proposal's own page, so the address bar follows.
   await openRow(row, "Open Canonical portal proposal journey");
   await expect(page).toHaveURL(new RegExp(`#/groups/${GROUP_ID}/events/${event.id}/proposals/${proposalId}$`));
@@ -200,16 +206,11 @@ test("portal proposal detail uses canonical proposal resources without admin fal
   await expect(page.getByRole("button", { name: "Change decision", exact: true })).toBeVisible();
   await page.goto(`/portal/#/groups/${GROUP_ID}/events/${event.id}/proposals`);
   const acceptedRow = page.getByRole("row").filter({ hasText: "Canonical portal proposal journey" });
-  await expect(acceptedRow.getByRole("list", { name: "Speaker registrations" })).toBeVisible();
-  await expect(acceptedRow.getByText("Registered", { exact: true })).toHaveCount(2);
-  await expect(acceptedRow.getByText(/Conference day: In-person/)).toHaveCount(2);
   await expect(acceptedRow.getByRole("img", { name: "Accepted", exact: true })).toBeVisible();
   await expect(page.getByRole("columnheader", { name: /^Decision/ })).toHaveCount(0);
   await expect(page.getByRole("columnheader", { name: /^Reviews/ })).toHaveCount(0);
   const title = acceptedRow.getByText("Canonical portal proposal journey", { exact: true });
   await expect(title).toHaveCSS("white-space", "nowrap");
-  await page.getByRole("button", { name: "Choose columns", exact: true }).click();
-  await page.getByRole("menuitemradio", { name: "Proposer", exact: true }).click();
   await expect(acceptedRow.getByRole("cell", { name: "Portal Proposer", exact: true })).toBeVisible();
   await expect(acceptedRow).not.toContainText(`portal-proposer-${unique}@pkic.org`);
   // The shared row link forwards each icon's hover label through its overlay.
@@ -218,16 +219,29 @@ test("portal proposal detail uses canonical proposal resources without admin fal
     "title",
     "Accepted",
   );
-  await page.screenshot({ path: test.info().outputPath("speaker-registrations.png"), fullPage: true });
+  const sections = page.getByRole("navigation", { name: "Proposal sections" });
+  await tab(sections, "Speakers").click();
+  await expect(page).toHaveURL(/\/proposals\/speakers$/);
+  const roster = page.getByRole("table", { name: "Proposal speakers" });
+  await expect(roster).toBeVisible();
+  await expect(
+    roster.getByRole("row").filter({ hasText: "Portal Proposer" }).getByText("Registered", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    roster.getByRole("row").filter({ hasText: "Portal Co Speaker" }).getByText("Registered", { exact: true }),
+  ).toBeVisible();
+  await expect(roster.getByText(/Conference day: In-person/)).toHaveCount(2);
+  await expect(page.getByText("Decision saved", { exact: true })).toBeHidden();
+  await page.screenshot({ path: test.info().outputPath("proposal-speakers.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(title).toHaveCSS("white-space", "nowrap");
-  await expect(acceptedRow.getByRole("img", { name: "Accepted", exact: true })).toBeVisible();
-  await page.screenshot({ path: test.info().outputPath("speaker-registrations-mobile.png"), fullPage: true });
+  await expect(roster.getByRole("row").filter({ hasText: "Portal Proposer" })).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("proposal-speakers-mobile.png"), fullPage: true });
 
   expect(adminRequests, "portal proposals must not call admin APIs").toEqual([]);
   expect(proposalRequests).toEqual(
     expect.arrayContaining([
       `GET /api/v1/events/${event.slug}/proposals`,
+      `GET /api/v1/events/${event.slug}/speakers`,
       `GET /api/v1/proposals/${proposalId}`,
       `GET /api/v1/proposals/${proposalId}/audit-log`,
       `GET /api/v1/proposals/${proposalId}/speakers`,

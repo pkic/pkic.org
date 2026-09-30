@@ -1,15 +1,19 @@
 import type { ComponentType } from "preact";
-import { IconArchive, IconBan, IconClock, IconFlag, IconSend } from "./icons/indicators";
 import {
-  IconCheckmark,
-  IconInfoCircle,
-  IconLayers,
-  IconPencil,
-  IconRefresh,
-  IconRemove,
-  IconSearch,
-  IconUndo,
-} from "./icons";
+  IconArchive,
+  IconBan,
+  IconCheckOutline,
+  IconClock,
+  IconFlag,
+  IconInfoOutline,
+  IconLayersOutline,
+  IconPencilOutline,
+  IconRefreshOutline,
+  IconRemoveOutline,
+  IconSearchOutline,
+  IconSend,
+  IconUndoOutline,
+} from "./icons/indicators";
 import { Badge as ToneBadge, IconBadge, type BadgeTone } from "../ui/Badge";
 
 /**
@@ -175,28 +179,28 @@ export function statusTone(status: string): BadgeTone {
 
 const STATUS_ICON: Record<string, ComponentType> = {
   submitted: IconSend,
-  resubmitted: IconRefresh,
-  under_review: IconSearch,
-  accepted: IconCheckmark,
-  accept: IconCheckmark,
-  approved: IconCheckmark,
-  registered: IconCheckmark,
-  rejected: IconRemove,
-  reject: IconRemove,
-  declined: IconRemove,
-  "needs-work": IconPencil,
-  needs_work: IconPencil,
-  needs_revision: IconPencil,
-  withdrawn: IconUndo,
+  resubmitted: IconRefreshOutline,
+  under_review: IconSearchOutline,
+  accepted: IconCheckOutline,
+  accept: IconCheckOutline,
+  approved: IconCheckOutline,
+  registered: IconCheckOutline,
+  rejected: IconRemoveOutline,
+  reject: IconRemoveOutline,
+  declined: IconRemoveOutline,
+  "needs-work": IconPencilOutline,
+  needs_work: IconPencilOutline,
+  needs_revision: IconPencilOutline,
+  withdrawn: IconUndoOutline,
   canceled: IconBan,
   cancelled: IconBan,
   spam: IconFlag,
-  duplicate: IconLayers,
+  duplicate: IconLayersOutline,
   deleted: IconArchive,
   archived: IconArchive,
   pending: IconClock,
   pending_email_confirmation: IconClock,
-  draft: IconPencil,
+  draft: IconPencilOutline,
 };
 
 interface BadgeProps {
@@ -212,7 +216,7 @@ interface BadgeProps {
  */
 export function Badge({ status, label, iconOnly = false, count }: BadgeProps) {
   if (iconOnly) {
-    const Icon = STATUS_ICON[status] ?? IconInfoCircle;
+    const Icon = STATUS_ICON[status] ?? IconInfoOutline;
     const accessibleLabel = label ?? `${statusLabel(status)}${count === undefined ? "" : ` ${count}`}`;
     return <IconBadge tone={statusTone(status)} label={accessibleLabel} icon={<Icon />} count={count} />;
   }

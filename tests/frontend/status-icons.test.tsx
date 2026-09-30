@@ -18,6 +18,8 @@ describe("shared symbolic badges", () => {
     expect(icon?.getAttribute("aria-label")).toBeTruthy();
     expect(icon?.getAttribute("title")).toBe(icon?.getAttribute("aria-label"));
     expect(icon?.querySelector("svg")).not.toBeNull();
+    expect(icon?.querySelector("svg")?.getAttribute("fill")).toBe("none");
+    expect(icon?.querySelector("svg")?.getAttribute("stroke-width")).toBe("1.6");
     expect(icon?.textContent).toBe("");
   });
 

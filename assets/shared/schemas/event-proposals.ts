@@ -4,9 +4,6 @@ import { eventSummarySchema } from "./event-read-models";
 import { activeFormSummarySchema } from "./forms";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema, sortColumnSchemaWithDefault } from "./pagination";
-import { registrationDayStateSchema } from "./event-registrations";
-import { registrationLifecycleStatusSchema, attendanceTypeSchema } from "./registration";
-import { proposalSpeakerProfileSchema } from "./proposal-management";
 import { proposalSessionTypesSchema } from "./proposal-management";
 import { proposalRecommendationSchema } from "./proposal-reviews";
 import { proposalAdminStatusFilterSchema, proposalDecisionStatusSchema, proposalStatusSchema } from "./proposal-status";
@@ -25,8 +22,6 @@ export const EVENT_PROPOSALS_SORT_COLUMNS = [
   "recommendations",
 ] as const;
 
-export const proposalSpeakerRegistrationFilterSchema = z.enum(["registered", "missing"]);
-
 export const proposalPresentationFilterSchema = z.enum(["uploaded", "missing"]);
 
 export const eventProposalsListQuerySchema = listQuerySchema(EVENT_PROPOSALS_SORT_COLUMNS).extend({
@@ -34,7 +29,6 @@ export const eventProposalsListQuerySchema = listQuerySchema(EVENT_PROPOSALS_SOR
   status: proposalAdminStatusFilterSchema.optional(),
   recommendation: proposalRecommendationSchema.optional(),
   presentation: proposalPresentationFilterSchema.optional(),
-  speakerRegistration: proposalSpeakerRegistrationFilterSchema.optional(),
 });
 export type EventProposalsListQuery = z.infer<typeof eventProposalsListQuerySchema>;
 
@@ -73,22 +67,6 @@ const proposalDecisionSchema = z.object({
   decision_decided_at: z.string().nullable(),
 });
 
-export const proposalSpeakerAttendanceSchema = proposalSpeakerProfileSchema
-  .pick({
-    userId: true,
-    firstName: true,
-    lastName: true,
-    organizationName: true,
-    status: true,
-  })
-  .extend({
-    registrationId: databaseIdSchema.nullable(),
-    registrationStatus: registrationLifecycleStatusSchema.nullable(),
-    attendanceType: attendanceTypeSchema.nullable(),
-    days: z.array(registrationDayStateSchema),
-  });
-export type ProposalSpeakerAttendance = z.infer<typeof proposalSpeakerAttendanceSchema>;
-
 export const eventProposalSummarySchema = eventProposalCoreSchema
   .extend(proposalProposerSchema.shape)
   .extend(proposalDecisionSchema.shape)
@@ -99,7 +77,6 @@ export const eventProposalSummarySchema = eventProposalCoreSchema
     recommendation_needs_work_count: z.number(),
     recommendation_reject_count: z.number(),
     has_presentation: z.boolean(),
-    speakers: z.array(proposalSpeakerAttendanceSchema),
   });
 
 export const eventProposalDetailSchema = eventProposalCoreSchema

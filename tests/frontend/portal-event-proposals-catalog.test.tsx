@@ -60,19 +60,6 @@ function proposal() {
     recommendation_needs_work_count: 0,
     recommendation_reject_count: 0,
     has_presentation: false,
-    speakers: [
-      {
-        userId: "40000000-0000-4000-8000-000000000001",
-        firstName: "Proposal",
-        lastName: "Owner",
-        organizationName: "Example Organization",
-        status: "confirmed",
-        registrationId: null,
-        registrationStatus: null,
-        attendanceType: null,
-        days: [],
-      },
-    ],
   };
 }
 
@@ -166,8 +153,10 @@ describe("the shared proposal catalog", () => {
       "Reject",
       "Needs work",
     ]);
-    expect(page.querySelector('[aria-label="Speaker registrations"]')?.textContent).toContain("Not registered");
-    expect(page.querySelector('[aria-label="Speaker registrations"]')?.textContent).toContain("Example Organization");
+    expect([...page.querySelectorAll("thead th")].map((head) => head.textContent)).not.toContain(
+      "Speaker registration",
+    );
+    expect(page.querySelector("tbody tr")?.textContent).toContain("Proposal Owner");
     // A row is a link to the proposal's own page.
     const row = page.querySelector<HTMLAnchorElement>("tbody a.pk-table__row-link");
     expect(row?.textContent).toBe("Open Read-only proposal");
@@ -185,12 +174,6 @@ describe("the shared proposal catalog", () => {
     );
     expect(page.querySelector('tbody [role="img"][aria-label="Accepted"]')).toBeNull();
     expect(page.querySelector('tbody [role="img"][aria-label="talk"]')).not.toBeNull();
-    await act(async () => page.querySelector<HTMLButtonElement>('button[aria-label="Choose columns"]')?.click());
-    const proposer = [...page.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find(
-      (item) => item.textContent?.trim() === "Proposer",
-    );
-    expect(proposer).toBeDefined();
-    await act(async () => proposer?.click());
     const headers = [...page.querySelectorAll("thead th")];
     const index = headers.findIndex((head) => head.textContent?.includes("Proposer"));
     expect(index).toBeGreaterThan(-1);
@@ -216,16 +199,6 @@ describe("the shared proposal catalog", () => {
     const requested = fetchMock.mock.calls.map((call) => new URL(String(call[0]), location.origin));
     expect(requested.at(-1)?.searchParams.get("status")).toBe("archived");
     expect(requested.some((url) => url.searchParams.has("archived"))).toBe(false);
-  });
-
-  it("sends the missing speaker registration filter to the server", async () => {
-    stubCatalog();
-    const page = await mountCatalog(EVENT_SLUG);
-    await chooseColumnFilter(page, "Speaker registration", "Needs registration");
-    await settle();
-    const fetchMock = globalThis.fetch as ReturnType<typeof vi.fn>;
-    const requested = fetchMock.mock.calls.map((call) => new URL(String(call[0]), location.origin));
-    expect(requested.at(-1)?.searchParams.get("speakerRegistration")).toBe("missing");
   });
 
   it("states an unavailable proposal program as a status region rather than a bare line", async () => {
