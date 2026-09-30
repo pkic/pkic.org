@@ -187,6 +187,8 @@ describe("group event proposal portal", () => {
     await act(async () => speakersTab?.click());
     await settle();
     expect(calls.filter(({ url }) => url.endsWith(`/proposals/${PROPOSAL_ID}/speakers`))).toHaveLength(1);
+    expect(container.textContent).toContain("Not registered");
+    expect(container.textContent).toContain("Registered");
 
     // The speaker's commands sit behind the card's own menu.
     await runCardAction(container, "Proposal Speaker", "Edit profile");
