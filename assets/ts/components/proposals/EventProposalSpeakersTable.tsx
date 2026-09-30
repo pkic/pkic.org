@@ -43,13 +43,13 @@ export function EventProposalSpeakersTable({
           width: "fit",
           sort: { asc: "speaker", desc: "-speaker", defaultDirection: "asc" },
         },
-        { header: "Organization", cell: (speaker) => speaker.organizationName || "—" },
         {
           header: "Talk",
           cell: (speaker) => <span title={speaker.proposalTitle}>{speaker.proposalTitle}</span>,
           width: "primary",
           sort: { asc: "proposal", desc: "-proposal", defaultDirection: "asc" },
         },
+        { header: "Organization", cell: (speaker) => speaker.organizationName || "—" },
         { header: "Participation", cell: (speaker) => <Badge status={speaker.status} />, width: "fit" },
         {
           header: "Registration",
@@ -72,7 +72,7 @@ export function EventProposalSpeakersTable({
             ],
           },
         },
-        { header: "Days", cell: selectedDays },
+        { header: "Attendance", cell: selectedDays },
       ]}
       empty="No proposal speakers found"
       rowKey={(speaker) => speaker.id}

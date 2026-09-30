@@ -92,6 +92,15 @@ describe("proposal speakers tab", () => {
       "Speakers",
     );
     expect(page.querySelector("caption")?.textContent).toBe("Proposal speakers");
+    const headings = [...page.querySelectorAll("thead th")].map((heading) => heading.textContent ?? "");
+    expect(headings.slice(0, 6)).toEqual([
+      expect.stringContaining("Speaker"),
+      expect.stringContaining("Talk"),
+      expect.stringContaining("Organization"),
+      expect.stringContaining("Participation"),
+      expect.stringContaining("Registration"),
+      expect.stringContaining("Attendance"),
+    ]);
     expect(page.querySelector("tbody")?.textContent).toContain("Alex Example");
     expect(page.querySelector("tbody")?.textContent).toContain("Organization security case study");
     expect(page.querySelector("tbody")?.textContent).toContain("Not registered");
