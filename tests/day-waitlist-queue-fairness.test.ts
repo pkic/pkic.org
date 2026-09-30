@@ -6,6 +6,7 @@ import {
   updateRegistrationById,
   updateRegistrationByManageToken,
 } from "../functions/_lib/services/registrations";
+import { promoteDayWaitlistIfCapacity } from "../functions/_lib/services/registrations/day-waitlist";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 
@@ -196,5 +197,115 @@ describe("day waitlist queue fairness", () => {
       { registration_id: editing.registration.id, status: "waiting" },
     ]);
     expect(rows.map((row) => row.position)).toEqual([1, 2, 3]);
+  });
+
+  it("admits new attendees into surplus seats while holding enough seats for the earlier queue", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+         VALUES ('expanded-day', ?, '2026-12-01', 'Day 1', 1, 0, datetime('now'), datetime('now'))`,
+      ).bind(eventId),
+      ...["holder", "waiting", "direct", "editing", "late"].map((id) =>
+        env.DB.prepare(
+          `INSERT INTO users (id, email, normalized_email, created_at, updated_at)
+           VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
+        ).bind(id, `${id}@example.test`, `${id}@example.test`),
+      ),
+    ]);
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const common = {
+      event,
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    };
+    const inPerson = [{ dayDate: "2026-12-01", attendanceType: "in_person" as const }];
+
+    await createRegistration(env.DB, {
+      ...common,
+      userId: "holder",
+      attendanceType: "in_person",
+      dayAttendance: inPerson,
+    });
+    const firstWaiting = await createRegistration(env.DB, {
+      ...common,
+      userId: "waiting",
+      attendanceType: "in_person",
+      dayAttendance: inPerson,
+    });
+    const editing = await createRegistration(env.DB, {
+      ...common,
+      userId: "editing",
+      attendanceType: "virtual",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "virtual" }],
+    });
+
+    await env.DB.prepare("UPDATE event_days SET in_person_capacity = 4 WHERE id = 'expanded-day'").run();
+
+    const direct = await createRegistration(env.DB, {
+      ...common,
+      userId: "direct",
+      attendanceType: "in_person",
+      dayAttendance: inPerson,
+    });
+    await updateRegistrationByManageToken(env.DB, {
+      manageToken: editing.manageToken,
+      signingSecret: common.signingSecret,
+      action: "update",
+      dayAttendance: inPerson,
+    });
+    const late = await createRegistration(env.DB, {
+      ...common,
+      userId: "late",
+      attendanceType: "in_person",
+      dayAttendance: inPerson,
+    });
+
+    expect(
+      await queryAll<{ registration_id: string; status: string }>(
+        env.DB,
+        `SELECT registration_id, status FROM event_day_waitlist_entries
+         WHERE event_day_id = 'expanded-day' AND status = 'waiting' ORDER BY position`,
+      ),
+    ).toEqual([
+      { registration_id: firstWaiting.registration.id, status: "waiting" },
+      { registration_id: late.registration.id, status: "waiting" },
+    ]);
+    const [audit] = await queryAll<{ details_json: string }>(
+      env.DB,
+      "SELECT details_json FROM audit_log WHERE entity_id = ? AND action = 'registration_capacity_decision'",
+      [direct.registration.id],
+    );
+    expect(JSON.parse(audit.details_json)).toMatchObject({
+      decisions: {
+        to: [
+          {
+            outcome: "admitted",
+            reason: "capacity_available_after_queue",
+            seatsReservedBeforeDecision: 1,
+            attendeesWaitingBeforeDecision: 1,
+            limit: 4,
+          },
+        ],
+      },
+    });
+
+    const offer = await promoteDayWaitlistIfCapacity(env.DB, {
+      eventId,
+      eventDayId: "expanded-day",
+      claimWindowHours: 24,
+    });
+    expect(offer?.registration_id).toBe(firstWaiting.registration.id);
+    expect(
+      await queryAll<{ registration_id: string; status: string }>(
+        env.DB,
+        `SELECT registration_id, status FROM event_day_waitlist_entries
+         WHERE event_day_id = 'expanded-day' AND status IN ('waiting', 'offered') ORDER BY position`,
+      ),
+    ).toEqual([
+      { registration_id: firstWaiting.registration.id, status: "offered" },
+      { registration_id: late.registration.id, status: "waiting" },
+    ]);
   });
 });

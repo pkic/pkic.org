@@ -277,10 +277,11 @@ export async function buildRegistrationDayWaitlistSync(
       continue;
     }
 
-    // A released seat belongs to the existing queue until promotion offers it.
-    // Otherwise a new registration or attendance edit can take the opening.
-    if (Number(capacity?.reserved ?? 0) < day.in_person_capacity! && Number(capacity?.waiting ?? 0) === 0) {
-      recordDecision("admitted", "capacity_available");
+    // Hold one seat for each earlier waiting attendee. Any capacity beyond
+    // confirmed seats, active offers, and those holds can be admitted now.
+    const waiting = Number(capacity?.waiting ?? 0);
+    if (Number(capacity?.reserved ?? 0) + waiting < day.in_person_capacity!) {
+      recordDecision("admitted", waiting > 0 ? "capacity_available_after_queue" : "capacity_available");
       if (existing?.status === "removed") {
         changed = true;
         statements.push(
@@ -301,7 +302,7 @@ export async function buildRegistrationDayWaitlistSync(
       continue;
     }
 
-    recordDecision("waitlisted", Number(capacity?.waiting ?? 0) > 0 ? "queue_ahead" : "capacity_full");
+    recordDecision("waitlisted", waiting > 0 ? "queue_ahead" : "capacity_full");
     changed = true;
     statements.push(
       db
