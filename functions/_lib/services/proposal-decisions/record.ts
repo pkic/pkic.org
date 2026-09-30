@@ -1,3 +1,4 @@
+import { isEventDayCapacityConflict } from "../registrations/day-waitlist-capacity";
 import { prepareQueueEmailStatementWhen } from "../../email/outbox";
 import { requireAdminDatabaseUserId } from "../../auth/admin-identity";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
@@ -328,8 +329,19 @@ export async function recordProposalDecision(
         "Proposal authorization changed while the decision was being saved",
       );
     }
-    if (isRegistrationTransitionConflict(error)) {
+    if (
+      isRegistrationTransitionConflict(error) ||
+      (error instanceof Error &&
+        error.message.includes("UNIQUE constraint failed: registrations.event_id, registrations.user_id"))
+    ) {
       throw registrationChangedError();
+    }
+    if (isEventDayCapacityConflict(error)) {
+      throw new AppError(
+        409,
+        "DAY_CAPACITY_CHANGED",
+        "Event attendance changed while the decision was being saved. Please retry.",
+      );
     }
     if (isProposalDecisionHistoryConflict(error)) {
       throw new Error("Proposal decision history already contains the current review round", { cause: error });

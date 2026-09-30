@@ -66,6 +66,25 @@ test("portal proposal detail uses canonical proposal resources without admin fal
     200,
   );
   const event = { ...createdEvent, updatedAt: terms.eventUpdatedAt as string };
+  expectStatus(
+    await api(page, `/api/v1/groups/${GROUP_ID}/events/${event.id}/days`, "PUT", {
+      expectedUpdatedAt: event.updatedAt,
+      configuration: {
+        days: [
+          {
+            date: "2027-09-10",
+            label: "Conference day",
+            startTime: "09:00",
+            endTime: "17:00",
+            sortOrder: 0,
+            attendanceOptions: [{ value: "in_person", label: "In person", capacity: 1 }],
+          },
+        ],
+      },
+    }),
+    200,
+  );
+
   const created = expectStatus(
     await api(page, `/api/v1/events/${event.slug}/proposals`, "POST", {
       proposer: {
@@ -169,6 +188,20 @@ test("portal proposal detail uses canonical proposal resources without admin fal
     expiresAt: "2027-09-10T13:30:00.000Z",
     queued: true,
   });
+
+  await tab(proposalTabs, "Decision").click();
+  await page.getByLabel("Decision", { exact: true }).selectOption("accepted");
+  await expect(page.getByText("Acceptance registers all speakers", { exact: false })).toBeVisible();
+  await page.getByRole("button", { name: "Preview emails", exact: true }).click();
+  await page.getByLabel("I reviewed the outgoing email preview and confirm this decision send.").check();
+  await page.getByRole("button", { name: "Record Decision", exact: true }).click();
+  await expect(page.getByRole("button", { name: "Change decision", exact: true })).toBeVisible();
+  await page.goto(`/portal/#/groups/${GROUP_ID}/events/${event.id}/proposals`);
+  const acceptedRow = page.getByRole("row").filter({ hasText: "Canonical portal proposal journey" });
+  await expect(acceptedRow.getByRole("list", { name: "Speaker registrations" })).toBeVisible();
+  await expect(acceptedRow.getByText("Registered", { exact: true })).toHaveCount(2);
+  await expect(acceptedRow.getByText(/Conference day: In-person/)).toHaveCount(2);
+  await page.screenshot({ path: test.info().outputPath("speaker-registrations.png"), fullPage: true });
 
   expect(adminRequests, "portal proposals must not call admin APIs").toEqual([]);
   expect(proposalRequests).toEqual(

@@ -11,6 +11,7 @@
  * table exists to prevent. The list's state now rides in the URL instead, so
  * a narrowed page can be refreshed and shared.
  */
+import { ProposalSpeakerAttendance } from "./ProposalSpeakerAttendance";
 import type { ComponentChildren } from "preact";
 import { useRef, useState } from "preact/hooks";
 import { Badge } from "../Badge";
@@ -32,6 +33,7 @@ import { formatDateTime } from "../../shared/ui";
 // `pk-mono` on the score column ships in Content.css, a lazy chunk rather than
 // the entry stylesheet, so the module that writes the class name imports it.
 import "../../ui/Content.css";
+import "./EventProposalsTable.css";
 
 const RECOMMENDATION_LABELS: Record<string, string> = {
   accept: "Accept",
@@ -146,12 +148,14 @@ export function EventProposalsTable({
         columns={[
           {
             header: "Title",
-            cell: (proposal) => <span class="pk-strong">{proposal.title}</span>,
+            cell: (proposal) => <span class="pk-strong pk-proposal-title__text">{proposal.title}</span>,
+            className: "pk-proposal-title",
             width: "primary",
             sort: { asc: "title", desc: "-title", defaultDirection: "asc" },
           },
           {
             header: "Proposer",
+            defaultHidden: true,
             cell: (proposal) => {
               const proposer = proposerName(proposal);
               return (
@@ -164,6 +168,18 @@ export function EventProposalsTable({
               );
             },
             sort: { asc: "proposer", desc: "-proposer", defaultDirection: "asc" },
+          },
+          {
+            header: "Speaker registration",
+            filter: {
+              param: "speakerRegistration",
+              options: [
+                { value: "", label: "All speaker registrations" },
+                { value: "missing", label: "Needs registration" },
+                { value: "registered", label: "Has registered speakers" },
+              ],
+            },
+            cell: (proposal) => <ProposalSpeakerAttendance speakers={proposal.speakers} />,
           },
           {
             header: "Type",

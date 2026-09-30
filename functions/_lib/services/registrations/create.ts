@@ -1,3 +1,6 @@
+import type { EventParticipantRole } from "../../../../assets/shared/schemas/participant-roles";
+import { roleBasedCapacityExemptReasonAfterParticipantChange } from "./day-waitlist-capacity";
+import { prepareRegistrationTransitionGuard } from "./transition-guard";
 import { AppError } from "../../errors";
 import { first } from "../../db/queries";
 import { uuid } from "../../utils/ids";
@@ -24,6 +27,9 @@ import type { AttendanceType } from "../../../../assets/shared/schemas/registrat
 const DEFAULT_PENDING_CONFIRMATION_DEADLINE_HOURS = 14 * 24;
 
 export interface CreateRegistrationPayload {
+  /** Trusted role projection for an acceptance in the same atomic batch. */
+  acceptedProposalRoles?: readonly EventParticipantRole[];
+  capacityGuards?: Map<string, StatementLike>;
   event: { id: string };
   userId: string;
   attendanceType: AttendanceType;
@@ -46,9 +52,9 @@ export interface CreateRegistrationPayload {
 
 function initialRegistrationStatus(
   inviteId: string | null,
-  identityVerified: boolean,
+  admissionConfirmed: boolean,
 ): "pending_email_confirmation" | "registered" {
-  if (!inviteId && !identityVerified) {
+  if (!inviteId && !admissionConfirmed) {
     return "pending_email_confirmation";
   }
   return "registered";
@@ -101,10 +107,19 @@ export async function buildCreateRegistration(
   const registrationId = existing?.id ?? uuid();
   const manageLinkSecret = newCapabilityLinkSecret();
   const attendanceType = deriveEventAttendanceType(payload.dayAttendance) ?? payload.attendanceType;
-  const roleExemptReason = await roleBasedCapacityExemptReason(db, payload.event.id, payload.userId);
+  const roleExemptReason = payload.acceptedProposalRoles
+    ? await roleBasedCapacityExemptReasonAfterParticipantChange(db, {
+        eventId: payload.event.id,
+        userId: payload.userId,
+        activeProposalRoles: payload.acceptedProposalRoles,
+      })
+    : await roleBasedCapacityExemptReason(db, payload.event.id, payload.userId);
   const configuredEventDays = await listEventDays(db, payload.event.id);
   const capacityExemptReason = roleExemptReason;
-  const status = initialRegistrationStatus(payload.inviteId ?? null, Boolean(payload.verifiedIdentity));
+  const status = initialRegistrationStatus(
+    payload.inviteId ?? null,
+    Boolean(payload.verifiedIdentity || payload.acceptedProposalRoles?.length),
+  );
   let confirmationLinkSecret: string | null = null;
   let pendingConfirmationDeadlineAt: string | null = null;
   if (status === "pending_email_confirmation") {
@@ -127,11 +142,18 @@ export async function buildCreateRegistration(
     source_ref: payload.sourceRef ?? null,
     custom_answers_json: payload.customAnswersJson ?? null,
     form_placement_id: payload.formPlacementId ?? null,
-    registration_group_id: payload.verifiedIdentity?.registrationGroupId ?? null,
-    registration_identity_id: payload.verifiedIdentity?.selectedIdentity?.id ?? null,
+    registration_group_id:
+      payload.verifiedIdentity?.registrationGroupId ??
+      (payload.acceptedProposalRoles ? existing?.registration_group_id : null) ??
+      null,
+    registration_identity_id:
+      payload.verifiedIdentity?.selectedIdentity?.id ??
+      (payload.acceptedProposalRoles ? existing?.registration_identity_id : null) ??
+      null,
     registration_organization_name: payload.eventOrganizationName ?? null,
     registration_job_title: payload.eventJobTitle ?? null,
-    referred_by_code: payload.referredByCode ?? null,
+    referred_by_code:
+      payload.referredByCode ?? (payload.acceptedProposalRoles ? existing?.referred_by_code : null) ?? null,
     confirmation_link_secret: confirmationLinkSecret,
     pending_confirmation_deadline_at: pendingConfirmationDeadlineAt,
     manage_link_secret: manageLinkSecret,
@@ -149,6 +171,7 @@ export async function buildCreateRegistration(
   const statements: StatementLike[] = [];
   if (existing) {
     statements.push(
+      prepareRegistrationTransitionGuard(db, existing),
       db
         .prepare(
           `UPDATE registrations
@@ -227,6 +250,7 @@ export async function buildCreateRegistration(
     userId: registration.user_id,
     selections: payload.dayAttendance,
     capacityExemptReason,
+    capacityGuards: payload.capacityGuards,
     registrationStatus: registration.status,
     configuredEventDays,
     auditActor: { type: "user", id: registration.user_id },

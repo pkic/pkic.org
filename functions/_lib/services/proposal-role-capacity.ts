@@ -115,6 +115,8 @@ export async function prepareProposalRoleCapacityAfterSourceChange(
     sourceRef: string;
     nextRole?: ProposalSpeakerRole;
     nextStatus: "active" | "inactive";
+    ensureRegistration?: boolean;
+    capacityGuards?: Map<string, StatementLike>;
     sourceRevisionAdvance?: 0 | 1;
   },
 ): Promise<StatementLike[]> {
@@ -132,6 +134,8 @@ export async function prepareProposalRoleCapacityAfterSourceChange(
     ...(await prepareRoleCapacityReconciliationStatements(db, {
       eventId: payload.eventId,
       userId: payload.userId,
+      ensureRegistration: payload.ensureRegistration,
+      capacityGuards: payload.capacityGuards,
       activeProposalRoles: sources
         .filter((participant) => participant.status === "active")
         .map((participant) => participant.role),
@@ -185,6 +189,7 @@ export async function prepareProposalRoleCapacityForProposalStatus(
       expectedRevision: rosterRevision,
     }),
   ];
+  const capacityGuards = new Map<string, StatementLike>();
   for (const speaker of speakers) {
     statements.push(
       ...(await prepareProposalRoleCapacityAfterSourceChange(db, {
@@ -193,8 +198,11 @@ export async function prepareProposalRoleCapacityForProposalStatus(
         sourceRef: payload.sourceRef,
         nextRole: speaker.role,
         nextStatus: payload.nextStatus === "active" && speaker.status !== "declined" ? "active" : "inactive",
+        capacityGuards,
+        ensureRegistration: payload.nextStatus === "active" && speaker.status !== "declined",
       })),
     );
   }
-  return statements;
+  // All day snapshots must be checked before any speaker changes capacity.
+  return [...capacityGuards.values(), ...statements];
 }

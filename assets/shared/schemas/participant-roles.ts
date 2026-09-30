@@ -4,6 +4,9 @@ export const PROPOSAL_SPEAKER_ROLES = ["proposer", "speaker", "co_speaker", "mod
 export const proposalSpeakerRoleSchema = z.enum(PROPOSAL_SPEAKER_ROLES);
 export type ProposalSpeakerRole = z.infer<typeof proposalSpeakerRoleSchema>;
 
+/** Default day choices for a newly accepted speaker, in preference order. */
+export const SPEAKER_ATTENDANCE_PREFERENCE = ["in_person", "virtual", "on_demand"] as const;
+
 /** Persisted/effective event roles. Proposal-only roles map onto this vocabulary. */
 export const EVENT_PARTICIPANT_ROLES = ["attendee", "speaker", "moderator", "panelist", "organizer", "staff"] as const;
 

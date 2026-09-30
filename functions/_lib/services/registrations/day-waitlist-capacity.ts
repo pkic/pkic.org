@@ -214,20 +214,26 @@ export function prepareCapacityGuardStatements(
   selectedByDate: Map<string, string>,
   preservedEventDayIds: Set<string>,
   claim?: { registrationId: string; dayDates: ReadonlySet<string> },
+  sharedGuards?: Map<string, StatementLike>,
 ): StatementLike[] {
   return eventDays.flatMap((day) => {
     const claimsOffer = claim?.dayDates.has(day.day_date) ?? false;
     const affectsCapacity =
       selectedByDate.get(day.day_date) === "in_person" || preservedEventDayIds.has(day.id) || claimsOffer;
     if (!affectsCapacity || !day.in_person_capacity || day.in_person_capacity <= 0) return [];
-    return [
-      db
-        .prepare(
-          `INSERT INTO event_day_capacity_guards (
+    const guard = db
+      .prepare(
+        `INSERT INTO event_day_capacity_guards (
              id, event_day_id, expected_revision, claim_registration_id
            ) VALUES (?, ?, ?, ?)`,
-        )
-        .bind(uuid(), day.id, day.capacity_revision, claimsOffer ? claim!.registrationId : null),
-    ];
+      )
+      .bind(uuid(), day.id, day.capacity_revision, claimsOffer ? claim!.registrationId : null);
+    if (sharedGuards && !claimsOffer) {
+      // A guard itself advances the revision, so an atomic multi-person plan
+      // checks each day once, before any of its writes.
+      if (!sharedGuards.has(day.id)) sharedGuards.set(day.id, guard);
+      return [];
+    }
+    return [guard];
   });
 }

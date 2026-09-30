@@ -1,3 +1,6 @@
+import { prepareAuditLog } from "../audit";
+import { prepareProposalAdmission } from "./proposal-admission";
+import { nowIso } from "../../utils/time";
 import { first } from "../../db/queries";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { getRegistrationDayAttendance, listEventDays } from "../event-days";
@@ -16,6 +19,8 @@ import { prepareRegistrationTransitionGuard } from "./transition-guard";
 export async function prepareRoleCapacityReconciliationStatements(
   db: DatabaseLike,
   input: {
+    ensureRegistration?: boolean;
+    capacityGuards?: Map<string, StatementLike>;
     eventId: string;
     userId: string;
     activeProposalRoles: readonly import("../../../../assets/shared/schemas/participant-roles").EventParticipantRole[];
@@ -25,18 +30,23 @@ export async function prepareRoleCapacityReconciliationStatements(
     db,
     `SELECT ${registrationColumns("r")}
      FROM registrations r
-     WHERE r.event_id = ? AND r.user_id = ? AND r.status IN ('pending_email_confirmation', 'registered')
+     WHERE r.event_id = ? AND r.user_id = ?
      ORDER BY CASE r.status WHEN 'registered' THEN 1 ELSE 2 END, r.updated_at DESC
      LIMIT 1`,
     [input.eventId, input.userId],
   );
-  if (!registration) return [];
+  if (!registration || registration.status === "cancelled") {
+    return input.ensureRegistration
+      ? prepareProposalAdmission(db, { ...input, previousRegistration: registration ?? undefined })
+      : [];
+  }
+  const confirm = input.ensureRegistration && registration.status === "pending_email_confirmation";
 
   const [previousReason, capacityExemptReason] = await Promise.all([
     roleBasedCapacityExemptReason(db, input.eventId, input.userId),
     roleBasedCapacityExemptReasonAfterParticipantChange(db, input),
   ]);
-  if (previousReason === capacityExemptReason) return [];
+  if (previousReason === capacityExemptReason && !confirm) return [];
 
   const [dayAttendance, eventDays] = await Promise.all([
     getRegistrationDayAttendance(db, registration.id),
@@ -48,11 +58,38 @@ export async function prepareRoleCapacityReconciliationStatements(
     userId: input.userId,
     selections: dayAttendance,
     capacityExemptReason,
+    capacityGuards: input.capacityGuards,
     preserveConfirmedEventDayIds: [],
     reArbitrateExistingCapacityRows: !capacityExemptReason,
-    registrationStatus: registration.status,
+    registrationStatus: confirm ? "registered" : registration.status,
     configuredEventDays: eventDays,
     auditActor: { type: "system", id: null },
   });
-  return [prepareRegistrationTransitionGuard(db, registration), ...waitlist.guardStatements, ...waitlist.statements];
+  const now = nowIso();
+  return [
+    prepareRegistrationTransitionGuard(db, registration),
+    ...waitlist.guardStatements,
+    ...(confirm
+      ? [
+          db
+            .prepare(
+              `UPDATE registrations SET status = 'registered', confirmed_at = ?, updated_at = ?,
+      confirmation_link_secret = NULL, pending_confirmation_deadline_at = NULL, created_identity_user_id = NULL
+      WHERE id = ?`,
+            )
+            .bind(now, now, registration.id),
+          prepareAuditLog(
+            db,
+            "system",
+            null,
+            "speaker_registration_confirmed",
+            "registration",
+            registration.id,
+            { status: { from: registration.status, to: "registered" } },
+            now,
+          ),
+        ]
+      : []),
+    ...waitlist.statements,
+  ];
 }
