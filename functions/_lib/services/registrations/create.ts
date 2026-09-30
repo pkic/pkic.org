@@ -1,3 +1,4 @@
+import { assertRegistrationRestorationAllowed } from "./restoration";
 import type { EventParticipantRole } from "../../../../assets/shared/schemas/participant-roles";
 import { roleBasedCapacityExemptReasonAfterParticipantChange } from "./day-waitlist-capacity";
 import { prepareRegistrationTransitionGuard } from "./transition-guard";
@@ -99,6 +100,7 @@ export async function buildCreateRegistration(
     [payload.event.id, payload.userId],
   );
   if (existing) {
+    if (payload.acceptedProposalRoles) assertRegistrationRestorationAllowed(existing);
     if (existing.status !== "cancelled") {
       throw new AppError(409, "REGISTRATION_EXISTS", "This user is already registered for the event");
     }

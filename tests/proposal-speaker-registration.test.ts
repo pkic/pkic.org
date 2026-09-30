@@ -204,4 +204,54 @@ describe("accepted proposal speaker registration", () => {
       await queryAll(env.DB, "SELECT id FROM registrations WHERE event_id = ? AND status = 'registered'", eventId),
     ).toHaveLength(2);
   });
+  it("preserves a canceled scalar-only virtual registration without adding days", async () => {
+    const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
+    const { registration } = await createRegistration(env.DB, {
+      event: { id: eventId },
+      userId: coSpeakerUserId,
+      attendanceType: "virtual",
+      sourceType: "public",
+    });
+    await env.DB.prepare("UPDATE registrations SET status = 'cancelled' WHERE id = ?").bind(registration.id).run();
+    await accept(proposalId);
+    expect(
+      await queryAll(env.DB, "SELECT status, attendance_type FROM registrations WHERE id = ?", registration.id),
+    ).toEqual([{ status: "registered", attendance_type: "virtual" }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM registration_day_attendance WHERE registration_id = ?", registration.id),
+    ).toEqual([]);
+  });
+
+  it("does not clear an unauthorized-registration report during proposal acceptance", async () => {
+    const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
+    const { registration } = await createRegistration(env.DB, {
+      event: { id: eventId },
+      userId: coSpeakerUserId,
+      attendanceType: "virtual",
+      sourceType: "public",
+    });
+    await env.DB.prepare(
+      "UPDATE registrations SET status = 'cancelled', cancellation_reason_code = 'unauthorized_registration' WHERE id = ?",
+    )
+      .bind(registration.id)
+      .run();
+    await expect(accept(proposalId)).rejects.toMatchObject({
+      status: 409,
+      code: "UNAUTHORIZED_REGISTRATION_REVIEW_REQUIRED",
+    });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT status, cancellation_reason_code FROM registrations WHERE id = ?",
+        registration.id,
+      ),
+    ).toEqual([{ status: "cancelled", cancellation_reason_code: "unauthorized_registration" }]);
+    expect(await queryAll(env.DB, "SELECT status FROM session_proposals WHERE id = ?", proposalId)).toEqual([
+      { status: "submitted" },
+    ]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM proposal_decision_history WHERE proposal_id = ?", proposalId),
+    ).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM registrations WHERE event_id = ?", eventId)).toHaveLength(1);
+  });
 });

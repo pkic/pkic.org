@@ -391,7 +391,7 @@ export function IconCalendarDownload(props: SvgProps) {
 // four words took. Each is decorative — the button around it carries the
 // command's name — and inherits the button's ink.
 
-function StrokeIcon({ children, ...props }: SvgProps & { children: ComponentChildren }) {
+export function StrokeIcon({ children, ...props }: SvgProps & { children: ComponentChildren }) {
   return (
     <svg
       xmlns="http://www.w3.org/2000/svg"

@@ -14,7 +14,8 @@
 import { ProposalSpeakerAttendance } from "./ProposalSpeakerAttendance";
 import type { ComponentChildren } from "preact";
 import { useRef, useState } from "preact/hooks";
-import { Badge } from "../Badge";
+import { ProposalTypeIcon } from "./ProposalTypeIcon";
+import { Badge, statusTone } from "../Badge";
 import { ApiDataTable, type ApiTableActions } from "../ApiDataTable";
 import { CollectionTotals } from "../CollectionTotals";
 import {
@@ -33,7 +34,6 @@ import { formatDateTime } from "../../shared/ui";
 // `pk-mono` on the score column ships in Content.css, a lazy chunk rather than
 // the entry stylesheet, so the module that writes the class name imports it.
 import "../../ui/Content.css";
-import "./EventProposalsTable.css";
 
 const RECOMMENDATION_LABELS: Record<string, string> = {
   accept: "Accept",
@@ -68,18 +68,16 @@ function recommendationSummary(proposal: EventProposalSummary) {
     );
   }
   return (
-    <div class="pk-cluster">
+    <div class="pk-cluster pk-cluster--nowrap">
       {visible.map(([status, count]) => (
-        <Badge key={status} status={status} label={`${recommendationLabel(status)} ${String(count)}`} />
+        <Badge key={status} status={status} iconOnly count={count} />
       ))}
     </div>
   );
 }
 
 function proposerName(proposal: EventProposalSummary): string {
-  return (
-    [proposal.proposer_first_name, proposal.proposer_last_name].filter(Boolean).join(" ") || proposal.proposer_email
-  );
+  return [proposal.proposer_first_name, proposal.proposer_last_name].filter(Boolean).join(" ") || "Unnamed proposer";
 }
 
 export function EventProposalsTable({
@@ -148,25 +146,18 @@ export function EventProposalsTable({
         columns={[
           {
             header: "Title",
-            cell: (proposal) => <span class="pk-strong pk-proposal-title__text">{proposal.title}</span>,
-            className: "pk-proposal-title",
+            cell: (proposal) => (
+              <span class="pk-strong" title={proposal.title}>
+                {proposal.title}
+              </span>
+            ),
             width: "primary",
             sort: { asc: "title", desc: "-title", defaultDirection: "asc" },
           },
           {
             header: "Proposer",
             defaultHidden: true,
-            cell: (proposal) => {
-              const proposer = proposerName(proposal);
-              return (
-                <div class="pk-stack pk-stack--tight">
-                  <span>{proposer}</span>
-                  {proposer !== proposal.proposer_email && (
-                    <span class="pk-muted pk-small">{proposal.proposer_email}</span>
-                  )}
-                </div>
-              );
-            },
+            cell: proposerName,
             sort: { asc: "proposer", desc: "-proposer", defaultDirection: "asc" },
           },
           {
@@ -183,13 +174,13 @@ export function EventProposalsTable({
           },
           {
             header: "Type",
-            cell: (proposal) => proposal.proposal_type,
+            cell: (proposal) => <ProposalTypeIcon type={proposal.proposal_type} />,
             width: "fit",
             sort: { asc: "type", desc: "-type", defaultDirection: "asc" },
           },
           {
             header: "Status",
-            cell: (proposal) => <Badge status={proposal.status} />,
+            cell: (proposal) => <Badge status={proposal.status} iconOnly />,
             width: "fit",
             sort: { asc: "status", desc: "-status", defaultDirection: "asc" },
             filter: {
@@ -202,22 +193,6 @@ export function EventProposalsTable({
                 })),
               ],
             },
-          },
-          {
-            header: "Decision",
-            cell: (proposal) =>
-              proposal.decision_status ? (
-                <Badge status={proposal.decision_status} />
-              ) : (
-                <>
-                  <span class="pk-muted" aria-hidden="true">
-                    —
-                  </span>
-                  <span class="pk-sr-only">No decision</span>
-                </>
-              ),
-            width: "fit",
-            sort: { asc: "decision", desc: "-decision", defaultDirection: "asc" },
           },
           {
             header: "Score",
@@ -243,6 +218,7 @@ export function EventProposalsTable({
           },
           {
             header: "Reviews",
+            defaultHidden: true,
             cell: (proposal) => proposal.review_count,
             className: "pk-end",
             width: "fit",
@@ -296,7 +272,7 @@ function ProposalStatsSummary({ stats }: { stats: ProposalStats }) {
       // rows; the plain counts stay plain.
       items={[
         { label: "total", value: stats.total },
-        { label: "submitted", value: stats.byStatus.submitted ?? 0, tone: "info" },
+        { label: "submitted", value: stats.byStatus.submitted ?? 0, tone: statusTone("submitted") },
         { label: "under review", value: stats.byStatus.under_review ?? 0, tone: "accent" },
         { label: "accepted", value: stats.byStatus.accepted ?? 0, tone: "ok" },
         { label: "needs work", value: stats.byStatus["needs-work"] ?? 0, tone: "warn" },

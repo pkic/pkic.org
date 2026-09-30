@@ -35,11 +35,12 @@ export async function prepareProposalAdmission(
   });
   const previous = input.previousRegistration;
   const priorDays = previous ? await getRegistrationDayAttendance(db, previous.id) : [];
-  const dayAttendance = priorDays.length ? priorDays : selections;
+  const dayAttendance = previous ? priorDays : selections;
   const built = await buildCreateRegistration(db, {
     event: { id: input.eventId },
     userId: input.userId,
-    attendanceType: deriveEventAttendanceType(dayAttendance) ?? SPEAKER_ATTENDANCE_PREFERENCE[0],
+    attendanceType:
+      deriveEventAttendanceType(dayAttendance) ?? previous?.attendance_type ?? SPEAKER_ATTENDANCE_PREFERENCE[0],
     dayAttendance,
     customAnswersJson: previous?.custom_answers_json,
     formPlacementId: previous?.form_placement_id,

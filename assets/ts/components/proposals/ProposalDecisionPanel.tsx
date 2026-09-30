@@ -338,7 +338,8 @@ export function ProposalDecisionPanel({
                   <p class="pk-small pk-muted">
                     Acceptance registers all speakers who have not declined, including those with canceled
                     registrations. New registrations include all configured days, in-person where available, and bypass
-                    the waitlist. Existing attendance choices are preserved.
+                    the waitlist. Existing attendance choices are preserved. Registrations reported as unauthorized
+                    require organizer review before acceptance.
                   </p>
                 )}
                 <Button
