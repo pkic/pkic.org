@@ -61,7 +61,7 @@ export async function buildRegistrationDayWaitlistSync(
        FROM event_day_waitlist_entries WHERE registration_id = ?`,
       [payload.registrationId],
     ),
-    all<{ event_day_id: string; reserved: number; max_position: number | null }>(
+    all<{ event_day_id: string; reserved: number; waiting: number; max_position: number | null }>(
       db,
       `SELECT ed.id AS event_day_id,
               (
@@ -89,9 +89,16 @@ export async function buildRegistrationDayWaitlistSync(
                   AND r.capacity_exempt_in_person = 0
                   AND r.id <> ?
               ) AS reserved,
+              (SELECT COUNT(*)
+               FROM event_day_waitlist_entries w
+               JOIN registrations r ON r.id = w.registration_id
+               WHERE w.event_day_id = ed.id
+                 AND w.status = 'waiting'
+                 AND r.status IN ('pending_email_confirmation', 'registered')
+                 AND w.registration_id <> ?) AS waiting,
               (SELECT MAX(position) FROM event_day_waitlist_entries w WHERE w.event_day_id = ed.id) AS max_position
        FROM event_days ed WHERE ed.event_id = ?`,
-      [payload.registrationId, now, payload.registrationId, payload.eventId],
+      [payload.registrationId, now, payload.registrationId, payload.registrationId, payload.eventId],
     ),
     payload.registrationStatus
       ? Promise.resolve({ status: payload.registrationStatus })
@@ -233,7 +240,9 @@ export async function buildRegistrationDayWaitlistSync(
     }
 
     const capacity = capacityByDay.get(day.id);
-    if (Number(capacity?.reserved ?? 0) < day.in_person_capacity!) {
+    // A released seat belongs to the existing queue until promotion offers it.
+    // Otherwise a new registration or attendance edit can take the opening.
+    if (Number(capacity?.reserved ?? 0) < day.in_person_capacity! && Number(capacity?.waiting ?? 0) === 0) {
       if (existing?.status === "removed") {
         changed = true;
         statements.push(
