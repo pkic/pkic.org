@@ -17,6 +17,8 @@ export interface DayWaitlistRow {
   status: "waiting" | "offered" | "accepted" | "expired" | "removed";
   position: number;
   offer_expires_at: string | null;
+  reason_code?: string | null;
+  capacitySnapshot?: { seatsReservedBeforeDecision: number; limit: number };
 }
 
 export interface PlannedDayWaitlistEntry {

@@ -5,6 +5,7 @@ import {
   countActiveOffersForDay,
   countConfirmedInPersonForDay,
   eventDayHasAvailableCapacitySql,
+  ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL,
 } from "./day-waitlist-capacity";
 import type { DayWaitlistRow } from "./day-waitlist-types";
 
@@ -46,12 +47,16 @@ export async function promoteDayWaitlistIfCapacity(
   const candidates = await all<DayWaitlistRow>(
     db,
     `SELECT w.id, w.event_id, w.event_day_id, w.registration_id, w.user_id,
-            w.priority_lane, w.status, w.position, w.offer_expires_at
+            w.priority_lane, w.status, w.position, w.offer_expires_at, w.reason_code
      FROM event_day_waitlist_entries w
      JOIN registrations r ON r.id = w.registration_id
      WHERE w.event_id = ? AND w.event_day_id = ? AND w.status = 'waiting'
        AND r.status IN ('pending_email_confirmation', 'registered')
-       AND r.capacity_exempt_in_person = 0
+       AND (w.reason_code = 'admin_returned_to_waitlist' OR NOT EXISTS (
+         SELECT 1 FROM effective_event_participant_roles role
+         WHERE role.event_id = w.event_id AND role.user_id = w.user_id
+           AND role.status = 'active' AND role.role IN (${ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL})
+       ))
      ORDER BY CASE w.priority_lane WHEN 'continuity' THEN 1 ELSE 2 END ASC, w.position ASC`,
     [payload.eventId, payload.eventDayId],
   );
@@ -73,7 +78,12 @@ export async function promoteDayWaitlistIfCapacity(
          )`,
       )
       .bind(offerExpiresAt, now, candidate.id, payload.eventDayId, payload.eventId, now);
-    const promotion = { ...candidate, status: "offered" as const, offer_expires_at: offerExpiresAt };
+    const promotion = {
+      ...candidate,
+      status: "offered" as const,
+      offer_expires_at: offerExpiresAt,
+      capacitySnapshot: { seatsReservedBeforeDecision: reserved, limit: day.in_person_capacity },
+    };
     const commitGuard = payload.prepareCommitGuard?.(promotion);
     const additionalStatements = (await payload.prepareCommitStatements?.(promotion)) ?? [];
     try {

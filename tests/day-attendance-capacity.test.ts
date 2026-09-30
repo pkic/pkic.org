@@ -135,7 +135,7 @@ describe("day attendance capacity", () => {
       waitlistClaimWindowHours: 24,
       signingSecret: "test-signing-secret",
     });
-    expect(confirmed.registration.capacity_exempt_in_person).toBe(1);
+    expect(confirmed.registration).not.toHaveProperty("capacity_exempt_in_person");
 
     await expect(
       queryAll<{ status: string; reason_code: string }>(
@@ -144,6 +144,27 @@ describe("day attendance capacity", () => {
         [pending.registration.id],
       ),
     ).resolves.toEqual([{ status: "removed", reason_code: "capacity_exempt" }]);
+    const [decisionAudit] = await queryAll<{ details_json: string }>(
+      env.DB,
+      `SELECT details_json FROM audit_log
+       WHERE entity_id = ? AND action = 'registration_capacity_decision'
+       ORDER BY rowid DESC LIMIT 1`,
+      [pending.registration.id],
+    );
+    expect(JSON.parse(decisionAudit.details_json)).toMatchObject({
+      decisions: {
+        to: [
+          {
+            dayDate: "2026-12-01",
+            outcome: "admitted",
+            reason: "capacity_exempt",
+            roleReason: "role:speaker",
+            seatsReservedBeforeDecision: 1,
+            limit: 1,
+          },
+        ],
+      },
+    });
 
     // Defense in depth for legacy stale rows: an exempt registration must
     // never be selected by promotion even if an old row survives cleanup.
@@ -468,17 +489,11 @@ describe("day attendance capacity", () => {
       actorUserId: admin.id,
     });
 
-    const [registration] = await queryAll<{ capacity_exempt_in_person: number }>(
-      env.DB,
-      "SELECT capacity_exempt_in_person FROM registrations WHERE id = ?",
-      [attendee.registration.id],
-    );
     const waitlist = await queryAll<{ status: string }>(
       env.DB,
       "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ? AND event_day_id = 'day-admin-return'",
       [attendee.registration.id],
     );
-    expect(registration.capacity_exempt_in_person).toBe(0);
     expect(waitlist).toEqual([{ status: "waiting" }]);
   });
 
@@ -558,11 +573,6 @@ describe("day attendance capacity", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const [registration] = await queryAll<{ capacity_exempt_in_person: number }>(
-      env.DB,
-      "SELECT capacity_exempt_in_person FROM registrations WHERE id = ?",
-      [attendee.registration.id],
-    );
     const rows = await queryAll<{ day_date: string; status: string; reason_code: string | null }>(
       env.DB,
       `SELECT ed.day_date, w.status, w.reason_code
@@ -572,7 +582,6 @@ describe("day attendance capacity", () => {
        ORDER BY ed.day_date`,
       [attendee.registration.id],
     );
-    expect(registration.capacity_exempt_in_person).toBe(0);
     expect(rows).toEqual([
       { day_date: "2026-12-01", status: "accepted", reason_code: "admin_capacity_exempt" },
       { day_date: "2026-12-02", status: "waiting", reason_code: null },

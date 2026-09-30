@@ -120,16 +120,10 @@ describe("event-registration admission", () => {
     expect(admitPayload.registration).not.toHaveProperty("manage_link_secret");
     expect(admitPayload.admittedDayDates).toEqual(["2026-12-01"]);
 
-    const registration = (
-      await queryAll<{ capacity_exempt_in_person: number; capacity_exempt_reason: string | null }>(
-        env.DB,
-        "SELECT capacity_exempt_in_person, capacity_exempt_reason FROM registrations WHERE id = ?",
-        [registrationId],
-      )
-    )[0];
-
-    expect(registration.capacity_exempt_in_person).toBe(0);
-    expect(registration.capacity_exempt_reason).toBeNull();
+    const [registration] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM registrations WHERE id = ?", [
+      registrationId,
+    ]);
+    expect(registration.id).toBe(registrationId);
 
     const waitlist = (
       await queryAll<{ status: string; reason_code: string; reason_note: string }>(
@@ -145,13 +139,17 @@ describe("event-registration admission", () => {
     });
 
     const audit = (
-      await queryAll<{ total: number }>(
+      await queryAll<{ details_json: string }>(
         env.DB,
-        "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'registration_admitted' AND entity_id = ?",
+        "SELECT details_json FROM audit_log WHERE action = 'registration_admitted' AND entity_id = ?",
         [registrationId],
       )
     )[0];
-    expect(Number(audit.total)).toBe(1);
+    expect(JSON.parse(audit.details_json)).toMatchObject({
+      capacityDecisions: {
+        to: [{ dayDate: "2026-12-01", outcome: "admitted", reason: "admin:vip", limit: 1 }],
+      },
+    });
 
     const outbox = (
       await queryAll<{ template_key: string; payload_json: string }>(
@@ -192,12 +190,11 @@ describe("event-registration admission", () => {
       );
       expect(response.status).toBe(500);
 
-      const [registration] = await queryAll<{
-        capacity_exempt_in_person: number;
-        capacity_exempt_reason: string | null;
-      }>(env.DB, "SELECT capacity_exempt_in_person, capacity_exempt_reason FROM registrations WHERE id = ?", [
-        registrationId,
-      ]);
+      const [registration] = await queryAll<{ status: string }>(
+        env.DB,
+        "SELECT status FROM registrations WHERE id = ?",
+        [registrationId],
+      );
       const [waitlist] = await queryAll<{ status: string }>(
         env.DB,
         "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ? AND event_day_id = 'day-1'",
@@ -208,7 +205,7 @@ describe("event-registration admission", () => {
         "SELECT COUNT(*) AS total FROM audit_log WHERE action = 'registration_admitted' AND entity_id = ?",
         [registrationId],
       );
-      expect(registration).toEqual({ capacity_exempt_in_person: 0, capacity_exempt_reason: null });
+      expect(registration).toEqual({ status: "registered" });
       expect(waitlist.status).toBe("waiting");
       expect(Number(audit.total)).toBe(0);
     } finally {

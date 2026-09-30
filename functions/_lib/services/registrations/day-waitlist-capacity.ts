@@ -11,8 +11,12 @@ const ROLE_BASED_CAPACITY_EXEMPT_ROLES = [
   "organizer",
   "speaker",
   "moderator",
+  "panelist",
+  "staff",
 ] as const satisfies readonly EventParticipantRole[];
-const ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL = ROLE_BASED_CAPACITY_EXEMPT_ROLES.map((role) => `'${role}'`).join(", ");
+export const ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL = ROLE_BASED_CAPACITY_EXEMPT_ROLES.map((role) => `'${role}'`).join(
+  ", ",
+);
 
 /**
  * Shared set-based capacity predicate used when selecting promotion work and
@@ -38,7 +42,6 @@ export function eventDayHasAvailableCapacitySql(dayAlias: string, nowExpression:
         WHERE rda.event_day_id = ${dayAlias}.id
           AND rda.attendance_type = 'in_person'
           AND r.status IN ('pending_email_confirmation', 'registered')
-          AND r.capacity_exempt_in_person = 0
           AND w.id IS NULL
       ) + (
         SELECT COUNT(*)
@@ -48,7 +51,6 @@ export function eventDayHasAvailableCapacitySql(dayAlias: string, nowExpression:
           AND w.status = 'offered'
           AND (w.offer_expires_at IS NULL OR w.offer_expires_at > ${nowExpression})
           AND r.status IN ('pending_email_confirmation', 'registered')
-          AND r.capacity_exempt_in_person = 0
       )
     ) < ${dayAlias}.in_person_capacity`;
 }
@@ -92,7 +94,6 @@ export async function countConfirmedInPersonForDay(
      WHERE rda.event_day_id = ?
        AND rda.attendance_type = 'in_person'
        AND r.status IN ('pending_email_confirmation', 'registered')
-       AND r.capacity_exempt_in_person = 0
        AND w.id IS NULL
        AND (? IS NULL OR r.id <> ?)`,
     [eventDayId, excludeRegistrationId ?? null, excludeRegistrationId ?? null],
@@ -114,7 +115,6 @@ export async function countActiveOffersForDay(
        AND w.status = 'offered'
        AND (w.offer_expires_at IS NULL OR w.offer_expires_at > ?)
        AND r.status IN ('pending_email_confirmation', 'registered')
-       AND r.capacity_exempt_in_person = 0
        AND (? IS NULL OR r.id <> ?)`,
     [eventDayId, nowIso(), excludeRegistrationId ?? null, excludeRegistrationId ?? null],
   );
@@ -132,7 +132,8 @@ export async function roleBasedCapacityExemptReason(
      FROM effective_event_participant_roles
      WHERE event_id = ? AND user_id = ? AND status = 'active'
        AND role IN (${ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL})
-     ORDER BY CASE role WHEN 'organizer' THEN 1 WHEN 'speaker' THEN 2 WHEN 'moderator' THEN 3 ELSE 9 END
+     ORDER BY CASE role WHEN 'organizer' THEN 1 WHEN 'speaker' THEN 2 WHEN 'moderator' THEN 3
+                        WHEN 'panelist' THEN 4 WHEN 'staff' THEN 5 ELSE 9 END
      LIMIT 1`,
     [eventId, userId],
   );

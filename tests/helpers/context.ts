@@ -18,6 +18,24 @@ export async function queryAll<T = Record<string, unknown>>(
   return results;
 }
 
+/** Read the current role used for admission without a stored registration flag. */
+export async function registrationAdmissionRole(db: DatabaseLike, registrationId: string): Promise<string | null> {
+  const rows = await queryAll<{ role: string }>(
+    db,
+    `SELECT roles.role
+     FROM registrations r
+     JOIN effective_event_participant_roles roles
+       ON roles.event_id = r.event_id AND roles.user_id = r.user_id
+     WHERE r.id = ? AND roles.status = 'active'
+       AND roles.role IN ('organizer', 'speaker', 'moderator', 'panelist', 'staff')
+     ORDER BY CASE roles.role WHEN 'organizer' THEN 1 WHEN 'speaker' THEN 2
+                              WHEN 'moderator' THEN 3 WHEN 'panelist' THEN 4 ELSE 5 END
+     LIMIT 1`,
+    [registrationId],
+  );
+  return rows[0]?.role ?? null;
+}
+
 export async function deliveredEmailPayload<T extends Record<string, unknown>>(
   db: DatabaseLike,
   environment: Pick<Env, "INTERNAL_SIGNING_SECRET">,

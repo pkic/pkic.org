@@ -179,14 +179,11 @@ export async function seedAcceptedSpeakerRegistration(input: {
     confirmationTtlHours: 48,
     signingSecret: env.INTERNAL_SIGNING_SECRET!,
   });
-  const confirmedSpeaker = await confirmRegistrationByToken(env.DB, {
+  await confirmRegistrationByToken(env.DB, {
     token: speakerRegistration.confirmationToken as string,
     waitlistClaimWindowHours: 24,
     signingSecret: env.INTERNAL_SIGNING_SECRET!,
   });
-  if (confirmedSpeaker.registration.capacity_exempt_in_person !== 1) {
-    throw new Error("Speaker registration was not capacity exempt");
-  }
   return speakerRegistration.registration.id;
 }
 
@@ -229,13 +226,10 @@ export async function seedPendingSpeakerRegistration(input: {
     confirmationTtlHours: 48,
     signingSecret: env.INTERNAL_SIGNING_SECRET!,
   });
-  const confirmedSpeaker = await confirmRegistrationByToken(env.DB, {
+  await confirmRegistrationByToken(env.DB, {
     token: speakerRegistration.confirmationToken as string,
     waitlistClaimWindowHours: 24,
     signingSecret: env.INTERNAL_SIGNING_SECRET!,
   });
-  if (confirmedSpeaker.registration.capacity_exempt_in_person !== 0) {
-    throw new Error("Pending speaker registration unexpectedly has an exemption");
-  }
   return speakerRegistration.registration.id;
 }

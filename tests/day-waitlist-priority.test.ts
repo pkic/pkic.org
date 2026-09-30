@@ -2,7 +2,7 @@ import { describe, expect, it, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { env } from "cloudflare:workers";
-import { seedEventAndAdmin, queryAll } from "./helpers/context";
+import { seedEventAndAdmin, queryAll, registrationAdmissionRole } from "./helpers/context";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration, updateRegistrationByManageToken } from "../functions/_lib/services/registrations";
 import { updateRegistrationDayAttendance } from "../functions/_lib/services/registrations/day-attendance-management";
@@ -645,16 +645,7 @@ describe("day waitlist priorities", () => {
       signingSecret: "test-signing-secret",
     });
 
-    const registration = (
-      await queryAll<{ capacity_exempt_in_person: number; capacity_exempt_reason: string | null }>(
-        env.DB,
-        "SELECT capacity_exempt_in_person, capacity_exempt_reason FROM registrations WHERE id = ?",
-        [organizer.registration.id],
-      )
-    )[0];
-
-    expect(registration.capacity_exempt_in_person).toBe(1);
-    expect(registration.capacity_exempt_reason).toBe("role:organizer");
+    expect(await registrationAdmissionRole(env.DB, organizer.registration.id)).toBe("organizer");
 
     const dayWaitlist = (
       await queryAll<{ total: number }>(
@@ -670,14 +661,47 @@ describe("day waitlist priorities", () => {
       env.DB,
       "SELECT id, email FROM users WHERE role = 'admin' LIMIT 1",
     );
+    await updateRegistrationDayAttendance(env.DB, {
+      event,
+      registrationId: organizer.registration.id,
+      change: { action: "waitlist", dayDates: ["2026-12-01"] },
+      appBaseUrl: "https://example.test",
+      actorUserId: admin.id,
+    });
     await expect(
-      updateRegistrationDayAttendance(env.DB, {
-        event,
-        registrationId: organizer.registration.id,
-        change: { action: "waitlist", dayDates: ["2026-12-01"] },
-        appBaseUrl: "https://example.test",
-        actorUserId: admin.id,
-      }),
-    ).rejects.toThrow(/role-based capacity-exempt attendee cannot be placed on the waitlist/);
+      queryAll(env.DB, "SELECT status, reason_code FROM event_day_waitlist_entries WHERE registration_id = ?", [
+        organizer.registration.id,
+      ]),
+    ).resolves.toEqual([{ status: "waiting", reason_code: "admin_returned_to_waitlist" }]);
+
+    await env.DB.prepare("UPDATE event_days SET in_person_capacity = 2 WHERE id = 'day-1'").run();
+    const offered = await promoteDayWaitlistIfCapacity(env.DB, {
+      eventId,
+      eventDayId: "day-1",
+      claimWindowHours: 24,
+    });
+    expect(offered?.registration_id).toBe(organizer.registration.id);
+    await updateRegistrationByManageToken(env.DB, {
+      manageToken: organizer.manageToken,
+      action: "update",
+      dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+      claimDayWaitlistOffers: ["2026-12-01"],
+      signingSecret: "test-signing-secret",
+    });
+    await expect(
+      queryAll(env.DB, "SELECT status FROM event_day_waitlist_entries WHERE registration_id = ?", [
+        organizer.registration.id,
+      ]),
+    ).resolves.toEqual([{ status: "accepted" }]);
+    const [decisionAudit] = await queryAll<{ details_json: string }>(
+      env.DB,
+      `SELECT details_json FROM audit_log
+       WHERE entity_id = ? AND action = 'registration_capacity_decision'
+       ORDER BY rowid DESC LIMIT 1`,
+      [organizer.registration.id],
+    );
+    expect(JSON.parse(decisionAudit.details_json)).toMatchObject({
+      decisions: { to: [{ outcome: "admitted", reason: "offer_claimed", limit: 2 }] },
+    });
   });
 });

@@ -243,13 +243,6 @@ export async function buildRegistrationUpdate(
   });
   const forceWaitlistDayDates = new Set(payload.forceWaitlistDayDates ?? []);
   if (forceWaitlistDayDates.size > 0) {
-    if (capacityExemptReason) {
-      throw new AppError(
-        409,
-        "CAPACITY_EXEMPT_REGISTRATION",
-        "A role-based capacity-exempt attendee cannot be placed on the waitlist",
-      );
-    }
     const selectionByDate = new Map(payload.dayAttendance?.map((entry) => [entry.dayDate, entry.attendanceType]));
     const dayByDate = new Map(configuredEventDays.map((day) => [day.day_date, day]));
     for (const dayDate of forceWaitlistDayDates) {
@@ -297,7 +290,7 @@ export async function buildRegistrationUpdate(
              custom_answers_json = CASE WHEN ? = 1 THEN ? ELSE custom_answers_json END,
              form_placement_id = CASE WHEN ? = 1 THEN ? ELSE form_placement_id END,
              source_ref = CASE WHEN ? = 1 THEN ? ELSE source_ref END,
-             capacity_exempt_in_person = ?, capacity_exempt_reason = ?, cancelled_at = ?, updated_at = ?
+             cancelled_at = ?, updated_at = ?
          WHERE id = ?`,
       )
       .bind(
@@ -310,8 +303,6 @@ export async function buildRegistrationUpdate(
         payload.formPlacementId ?? null,
         payload.sourceRef !== undefined ? 1 : 0,
         payload.sourceRef ?? null,
-        capacityExemptReason ? 1 : 0,
-        capacityExemptReason,
         isCancelled ? null : registration.cancelled_at,
         now,
         registration.id,
@@ -334,6 +325,9 @@ export async function buildRegistrationUpdate(
       configuredEventDays,
       forceWaitlistDayDates: payload.forceWaitlistDayDates,
       claimOfferedDayDates: payload.claimDayWaitlistOffers,
+      auditActor: payload.auditActor
+        ? { type: payload.auditActor.type, id: payload.auditActor.id }
+        : { type: "system", id: null },
     });
     waitlistChanged = waitlist.changed;
     const dayAttendanceStatements = await prepareReplaceRegistrationDayAttendanceStatements(db, {
@@ -376,8 +370,6 @@ export async function buildRegistrationUpdate(
     form_placement_id:
       payload.customAnswersJson === undefined ? registration.form_placement_id : (payload.formPlacementId ?? null),
     source_ref: payload.sourceRef === undefined ? registration.source_ref : payload.sourceRef,
-    capacity_exempt_in_person: capacityExemptReason ? 1 : 0,
-    capacity_exempt_reason: capacityExemptReason,
     cancelled_at: isCancelled ? null : registration.cancelled_at,
     updated_at: now,
   };
@@ -388,8 +380,6 @@ export async function buildRegistrationUpdate(
     registration.custom_answers_json !== updated.custom_answers_json ||
     registration.form_placement_id !== updated.form_placement_id ||
     registration.source_ref !== updated.source_ref ||
-    registration.capacity_exempt_in_person !== updated.capacity_exempt_in_person ||
-    registration.capacity_exempt_reason !== updated.capacity_exempt_reason ||
     registration.cancelled_at !== updated.cancelled_at;
   const profileChanged = payload.profilePatch
     ? await userProfilePatchWouldChange(db, updated.user_id, payload.profilePatch)

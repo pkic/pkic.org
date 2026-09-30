@@ -271,7 +271,12 @@ describe("mounted registration day-waitlist claims", () => {
     const response = await callMountedClaim(fixture.token, ["2026-12-01", "2026-12-02"]);
 
     expect(response.status).toBe(200);
-    expect(await aggregateEffects(fixture.registrationId)).toEqual({ firstName: "After", outbox: 1, audits: 1 });
+    expect(await aggregateEffects(fixture.registrationId)).toEqual({ firstName: "After", outbox: 1, audits: 2 });
+    await expect(
+      queryAll<{ action: string }>(env.DB, "SELECT action FROM audit_log WHERE entity_id = ? ORDER BY action", [
+        fixture.registrationId,
+      ]),
+    ).resolves.toEqual([{ action: "registration_capacity_decision" }, { action: "self_service_update" }]);
     await expect(
       queryAll<{ day_date: string; status: string; offer_expires_at: string | null }>(
         env.DB,

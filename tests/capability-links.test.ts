@@ -46,8 +46,8 @@ async function seedRegistrationCapability(): Promise<void> {
     env.DB,
     `INSERT INTO registrations (
       id, event_id, user_id, status, attendance_type, source_type,
-      manage_link_secret, capacity_exempt_in_person, created_at, updated_at
-    ) VALUES (?, ?, ?, 'registered', 'virtual', 'test', ?, 0, ?, ?)`,
+      manage_link_secret, created_at, updated_at
+    ) VALUES (?, ?, ?, 'registered', 'virtual', 'test', ?, ?, ?)`,
     ["registration-capability", "event-capability", "user-capability", newCapabilityLinkSecret(), now, now],
   );
 }
