@@ -403,26 +403,20 @@
                                                             {{- if .track -}}
                                                                 <span class="session-track-badge">{{ .track }}</span>
                                                             {{- end -}}
-                                                            <div class="session-content">
-                                                                <h6 class="session-title">{{ .title }}</h6>
+                                                            <h6 class="session-title">{{ .title }}</h6>
 
-                                                                {{- if .speakers -}}
-                                                                    <div class="session-speakers">
-                                                                        {{- range $speaker := .speakers -}}
-                                                                            {{- $speakerName := trim $speaker " *" -}}
-                                                                            {{- range $data.speakers -}}
-                                                                                {{- if eq $speakerName .name -}}
-                                                                                    <div class="speaker-info">
-                                                                                        {{ with .headshot }}
-                                                                                            <img src="{{ .x150 }}" class="speaker-avatar" alt="{{ .name }}" loading="lazy">
-                                                                                        {{ else }}
-                                                                                            <div class="speaker-avatar speaker-initial">
-                                                                                                {{ substr .name 0 1 | upper }}
-                                                                                            </div>
-                                                                                        {{ end }}
-                                                                                        <div class="speaker-details">
-                                                                                            <div class="speaker-name">{{ .name }}{{- if hasSuffix $speaker " *" -}} <span class="pk-badge pk-badge--warn">Moderator</span>{{- end -}}</div>
-                                                                                            <div class="speaker-role">{{ .title }}</div>
+                                                            {{- if .speakers -}}
+                                                                <div class="session-speakers">
+                                                                    {{- range $speaker := .speakers -}}
+                                                                        {{- $speakerName := trim $speaker " *" -}}
+                                                                        {{- range $data.speakers -}}
+                                                                            {{- if eq $speakerName .name -}}
+                                                                                <div class="speaker-info">
+                                                                                    {{ with .headshot }}
+                                                                                        <img src="{{ .x150 }}" class="speaker-avatar" alt="{{ .name }}" loading="lazy">
+                                                                                    {{ else }}
+                                                                                        <div class="speaker-avatar speaker-initial">
+                                                                                            {{ substr .name 0 1 | upper }}
                                                                                         </div>
                                                                                     {{ end }}
                                                                                     <div class="speaker-details">
@@ -432,15 +426,17 @@
                                                                                 </div>
                                                                             {{- end -}}
                                                                         {{- end -}}
-                                                                    </div>
-                                                                {{- end -}}
+                                                                    {{- end -}}
+                                                                </div>
+                                                            {{- end -}}
 
+                                                            <div class="session-content">
                                                                 {{- if .description -}}
                                                                     <div class="session-preview-wrapper">
                                                                         <div class="session-preview-gradient">{{ .description | markdownify }}</div>
                                                                     </div>
-                                                                </div>
-                                                            {{- end -}}
+                                                                {{- end -}}
+                                                            </div>
                                                             {{- if .durationMinutes -}}
                                                             <div class="session-duration">
                                                                 <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M8 3.5a.5.5 0 0 0-1 0V9a.5.5 0 0 0 .252.434l3.5 2a.5.5 0 0 0 .496-.868L8 8.71z"/><path d="M8 16A8 8 0 1 0 8 0a8 8 0 0 0 0 16m7-8A7 7 0 1 1 1 8a7 7 0 0 1 14 0"/></svg>

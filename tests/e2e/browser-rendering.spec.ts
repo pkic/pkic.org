@@ -567,6 +567,32 @@ test.describe("browser workflows", () => {
     expect(await firstTime.evaluate((element) => getComputedStyle(element).gridRowStart)).toBe("1");
     expect(await firstSession.evaluate((element) => getComputedStyle(element).gridColumnStart)).toBe("2");
     expect(await firstSession.getAttribute("style")).toBeNull();
+    await grid.scrollIntoViewIfNeeded();
+  });
+
+  test("keeps agenda speakers and later sessions inside their scheduled cards", async ({ page }) => {
+    await page.goto("/events/2026/pqc-conference-amsterdam-nl/agenda/");
+    const panel = page.locator("#nav-tuesday");
+    const grid = panel.locator(".agenda-grid");
+    const opening = grid
+      .locator(".session-card")
+      .filter({ has: page.getByRole("heading", { name: "Opening", exact: true }) });
+    await expect(opening).toHaveCount(1);
+    await expect(opening.locator(":scope > .session-title")).toHaveText("Opening");
+    await expect(opening.locator(":scope > .session-speakers .speaker-name")).toHaveText([
+      "Paul van Brouwershaven",
+      "Albert de Ruiter",
+    ]);
+    await expect(opening.locator(".speaker-info > .speaker-details")).toHaveCount(2);
+    await expect(grid.locator(":scope > .agenda-session .session-card")).toHaveCount(
+      await panel.locator(".mobile-session-card").count(),
+    );
+    await expect(grid.locator(":scope > .speaker-details, :scope > .speaker-info")).toHaveCount(0);
+    await opening.getByRole("button", { name: "Open session details: Opening", exact: true }).click();
+    await expect(page.getByRole("dialog").filter({ visible: true })).toBeVisible();
+    await page.keyboard.press("Escape");
+    await page.getByRole("tab", { name: "Wednesday", exact: true }).click();
+    await expect(page.locator("#nav-wednesday")).toBeVisible();
   });
 
   test("stops and reloads an agenda recording when its modal closes", async ({ page }) => {
