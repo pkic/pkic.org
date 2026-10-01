@@ -153,10 +153,33 @@ describe("the shared proposal catalog", () => {
       "Reject",
       "Needs work",
     ]);
+    expect([...page.querySelectorAll("thead th")].map((head) => head.textContent)).not.toContain(
+      "Speaker registration",
+    );
+    expect(page.querySelector("tbody tr")?.textContent).toContain("Proposal Owner");
     // A row is a link to the proposal's own page.
     const row = page.querySelector<HTMLAnchorElement>("tbody a.pk-table__row-link");
     expect(row?.textContent).toBe("Open Read-only proposal");
     expect(row?.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/events/${EVENT_ID}/proposals/${PROPOSAL_ID}`);
+  });
+
+  it("shows the current status as an icon, keeps decision history out of the overview, and hides Reviews", async () => {
+    stubCatalog();
+    const page = await mountCatalog(EVENT_SLUG);
+    const heads = [...page.querySelectorAll("thead th")].map((head) => head.textContent);
+    expect(heads.some((text) => text?.includes("Decision"))).toBe(false);
+    expect(heads.some((text) => text?.includes("Reviews"))).toBe(false);
+    expect(
+      page.querySelector('tbody [role="img"][aria-label="Submitted"]')?.classList.contains("pk-badge--neutral"),
+    ).toBe(true);
+    expect(page.querySelector('tbody [role="img"][aria-label="Accepted"]')).toBeNull();
+    expect(page.querySelector('tbody [role="img"][aria-label="talk"]')).not.toBeNull();
+    const headers = [...page.querySelectorAll("thead th")];
+    const index = headers.findIndex((head) => head.textContent?.includes("Proposer"));
+    expect(index).toBeGreaterThan(-1);
+    const cell = page.querySelectorAll("tbody tr:first-child td")[index];
+    expect(cell.textContent).toContain("Proposal Owner");
+    expect(cell.textContent).not.toContain("proposer@example.test");
   });
 
   it("sends the archive choice to the proposals query as a status rather than filtering rows in the browser", async () => {

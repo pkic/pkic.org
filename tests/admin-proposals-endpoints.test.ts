@@ -676,7 +676,12 @@ describe("admin proposal endpoints", () => {
     expect(response.status).toBe(200);
     const payload = proposalSpeakersResponseSchema.parse(await response.json());
     expect(payload.summary).toMatchObject({ total: 1, confirmed: 1, pending: 0, declined: 0 });
-    expect(payload.speakers[0]).toMatchObject({ userId: speakerId, role: "speaker", links: [] });
+    expect(payload.speakers[0]).toMatchObject({
+      userId: speakerId,
+      role: "speaker",
+      links: [],
+      registrationStatus: null,
+    });
   });
 
   it("invites a proposal speaker through the canonical proposal resource", async () => {

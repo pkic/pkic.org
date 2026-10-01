@@ -7,6 +7,7 @@ import {
   proposalSpeakerProfileSchema,
 } from "./proposal-management";
 import { proposalStatusSchema } from "./proposal-status";
+import { registrationLifecycleStatusSchema } from "./registration";
 
 /** Canonical transport contract for a proposal's bounded speaker roster. */
 export const proposalSpeakerSchema = proposalSpeakerProfileSchema.extend({
@@ -39,7 +40,9 @@ export const proposalSpeakersResponseSchema = z.object({
     profileComplete: z.number().int().nonnegative(),
     presentationUploaded: z.number().int().min(0).max(1),
   }),
-  speakers: z.array(proposalSpeakerSchema).max(MAX_PROPOSAL_PARTICIPANTS),
+  speakers: z
+    .array(proposalSpeakerSchema.extend({ registrationStatus: registrationLifecycleStatusSchema.nullable() }))
+    .max(MAX_PROPOSAL_PARTICIPANTS),
 });
 
 export const proposalSpeakerPatchResponseSchema = successResponseSchema.extend({

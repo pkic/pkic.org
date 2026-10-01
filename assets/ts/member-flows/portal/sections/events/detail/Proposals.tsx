@@ -9,6 +9,7 @@
 import { usePortalHashLocation } from "../../../hash-location";
 import { Tabs } from "../../../../../components/Tabs";
 import { EventProposalsTable } from "../../../../../components/proposals/EventProposalsTable";
+import { EventProposalSpeakersTable } from "../../../../../components/proposals/EventProposalSpeakersTable";
 import { EventEmailCampaign } from "../../../../../components/events/EventEmailCampaign";
 import { EventFormResponses } from "./Forms";
 import { toast } from "../../../ui";
@@ -35,7 +36,8 @@ function ProposalsList({ slug }: { slug: string }) {
 /** Portal adapter for the shared event-proposal catalogue. */
 export function Proposals({ slug, subTab, canWrite }: { slug: string; subTab?: string; canWrite: boolean }) {
   const [, navigate] = usePortalHashLocation();
-  const tab = subTab === "responses" || (canWrite && subTab === "email") ? subTab : "proposals";
+  const tab =
+    subTab === "responses" || subTab === "speakers" || (canWrite && subTab === "email") ? subTab : "proposals";
 
   return (
     <div class="pk-stack">
@@ -43,6 +45,7 @@ export function Proposals({ slug, subTab, canWrite }: { slug: string; subTab?: s
         label="Proposal sections"
         items={[
           { key: "proposals", label: "Overview" },
+          { key: "speakers", label: "Speakers" },
           { key: "responses", label: "Responses" },
           ...(canWrite ? [{ key: "email", label: "Email" }] : []),
         ]}
@@ -51,6 +54,12 @@ export function Proposals({ slug, subTab, canWrite }: { slug: string; subTab?: s
         hrefFor={(key) => `/events/${slug}/proposals/${key === "proposals" ? "" : key}`}
       />
       {tab === "proposals" && <ProposalsList slug={slug} />}
+      {tab === "speakers" && (
+        <EventProposalSpeakersTable
+          slug={slug}
+          rowHref={(speaker) => usePortalHashLocation.hrefs(eventProposalDetailViewPath(slug, speaker.proposalId))}
+        />
+      )}
       {tab === "responses" && <EventFormResponses slug={slug} purpose="proposal_submission" />}
       {tab === "email" && (
         <EventEmailCampaign

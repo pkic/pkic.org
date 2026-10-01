@@ -157,8 +157,8 @@ export function stubFetch(
           },
           summary: { total: 2, confirmed: 2, pending: 0, declined: 0, profileComplete: 0, presentationUploaded: 0 },
           speakers: [
-            speaker("40000000-0000-4000-8000-000000000001", "proposer"),
-            speaker("40000000-0000-4000-8000-000000000002"),
+            { ...speaker("40000000-0000-4000-8000-000000000001", "proposer"), registrationStatus: null },
+            { ...speaker("40000000-0000-4000-8000-000000000002"), registrationStatus: "registered" },
           ],
         });
       }

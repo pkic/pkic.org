@@ -38,7 +38,7 @@ function expectStatus(result: ApiResult, status: number): Record<string, unknown
   return result.body as Record<string, unknown>;
 }
 
-test("portal proposal detail accepts registered speakers through canonical resources", async ({ page }, testInfo) => {
+test("portal proposal detail registers accepted speakers through canonical resources", async ({ page }, testInfo) => {
   await signInToPortal(page, e2eAdminEmail("portal-event-proposals"));
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const createdEvent = expectStatus(
@@ -82,17 +82,18 @@ test("portal proposal detail accepts registered speakers through canonical resou
         days: [
           {
             date: "2027-09-10",
-            label: "Panel day",
-            startTime: "11:00",
-            endTime: "19:00",
+            label: "Conference day",
+            startTime: "09:00",
+            endTime: "17:00",
             sortOrder: 0,
-            attendanceOptions: [{ value: "in_person", label: "In person", capacity: 800 }],
+            attendanceOptions: [{ value: "in_person", label: "In person", capacity: 1 }],
           },
         ],
       },
     }),
     200,
   );
+
   const created = expectStatus(
     await api(page, `/api/v1/events/${event.slug}/proposals`, "POST", {
       proposer: {
@@ -120,7 +121,11 @@ test("portal proposal detail accepts registered speakers through canonical resou
   page.on("request", (request) => {
     const pathname = new URL(request.url()).pathname;
     if (pathname.startsWith("/api/v1/admin/")) adminRequests.push(`${request.method()} ${pathname}`);
-    if (pathname.startsWith("/api/v1/proposals/") || pathname === `/api/v1/events/${event.slug}/proposals`) {
+    if (
+      pathname.startsWith("/api/v1/proposals/") ||
+      pathname === `/api/v1/events/${event.slug}/proposals` ||
+      pathname === `/api/v1/events/${event.slug}/speakers`
+    ) {
       proposalRequests.push(`${request.method()} ${pathname}`);
     }
   });
@@ -130,6 +135,10 @@ test("portal proposal detail accepts registered speakers through canonical resou
   await expect(page.getByRole("table", { name: "Event proposals" })).toBeVisible();
   const row = page.getByRole("row").filter({ hasText: "Canonical portal proposal journey" });
   await expect(row).toBeVisible();
+  await expect(row.getByRole("img", { name: "Submitted", exact: true })).toHaveClass(/pk-badge--neutral/);
+  await expect(row.getByRole("img", { name: "talk", exact: true })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Proposer" })).toBeVisible();
+  await expect(page.getByRole("columnheader", { name: "Speaker registration" })).toHaveCount(0);
   // A row is a link to the proposal's own page, so the address bar follows.
   await openRow(row, "Open Canonical portal proposal journey");
   await expect(page).toHaveURL(new RegExp(`#/groups/${GROUP_ID}/events/${event.id}/proposals/${proposalId}$`));
@@ -151,6 +160,7 @@ test("portal proposal detail accepts registered speakers through canonical resou
   await expect(page.getByRole("heading", { name: "Speakers", exact: true })).toBeVisible();
   const speakerPanel = page.getByRole("region", { name: "Proposal speakers" });
   await expect(speakerPanel.getByText("Portal Proposer", { exact: true })).toBeVisible();
+  await expect(speakerPanel.getByText("Not registered", { exact: true })).toBeVisible();
   // A speaker's commands sit behind the card's own menu; editing turns the
   // card's values into inputs in place.
   await page.getByRole("button", { name: "Actions for Portal Proposer" }).click();
@@ -197,45 +207,57 @@ test("portal proposal detail accepts registered speakers through canonical resou
     queued: true,
   });
 
-  for (const [email, lastName] of [
-    [`portal-proposer-${unique}@pkic.org`, "Proposer"],
-    [coSpeakerEmail, "Co Speaker"],
-  ]) {
-    expectStatus(
-      await api(page, `/api/v1/events/${event.slug}/registrations`, "POST", {
-        email,
-        firstName: "Portal",
-        lastName,
-        organizationName: "E2E Organization",
-        jobTitle: "Panel participant",
-        dayAttendance: [{ dayDate: "2027-09-10", attendanceType: "in_person" }],
-        consents: [{ termKey: "e2e-attendee-terms", version: "1.0" }],
-      }),
-      200,
-    );
-  }
   await tab(proposalTabs, "Decision").click();
   await page.getByLabel("Decision", { exact: true }).selectOption("accepted");
+  await expect(page.getByText("Acceptance registers all speakers", { exact: false })).toBeVisible();
   await page.getByRole("button", { name: "Preview emails", exact: true }).click();
-  await expect(page.getByTitle("Decision email preview", { exact: true })).toBeVisible();
   await page.getByLabel("I reviewed the outgoing email preview and confirm this decision send.").check();
-  const decisionResponse = page.waitForResponse(
-    (response) =>
-      response.request().method() === "POST" &&
-      new URL(response.url()).pathname === `/api/v1/proposals/${proposalId}/decisions`,
-  );
   await page.getByRole("button", { name: "Record Decision", exact: true }).click();
-  expect((await decisionResponse).status()).toBe(200);
-  const finalDecision = page.getByRole("status").filter({ hasText: "Decision recorded:" });
-  await expect(finalDecision.getByText("Decision recorded:", { exact: true })).toBeVisible();
-  await expect(finalDecision.getByText("Accepted", { exact: true })).toBeVisible();
-  await page.getByRole("heading", { name: "Final decision", exact: true }).scrollIntoViewIfNeeded();
-  await page.screenshot({ path: testInfo.outputPath("registered-panel-accepted.png") });
+  await expect(page.getByRole("button", { name: "Change decision", exact: true })).toBeVisible();
+  await page.goto(`/portal/#/groups/${GROUP_ID}/events/${event.id}/proposals`);
+  const acceptedRow = page.getByRole("row").filter({ hasText: "Canonical portal proposal journey" });
+  await expect(acceptedRow.getByRole("img", { name: "Accepted", exact: true })).toBeVisible();
+  await openRow(acceptedRow, "Open Canonical portal proposal journey");
+  await tab(page.getByRole("navigation", { name: "Proposal sections" }), "Speakers").click();
+  await expect(
+    page.getByRole("region", { name: "Proposal speakers" }).getByText("Registered", { exact: true }),
+  ).toHaveCount(2);
+  await page.goto(`/portal/#/groups/${GROUP_ID}/events/${event.id}/proposals`);
+  await expect(page.getByRole("columnheader", { name: /^Decision/ })).toHaveCount(0);
+  await expect(page.getByRole("columnheader", { name: /^Reviews/ })).toHaveCount(0);
+  const title = acceptedRow.getByText("Canonical portal proposal journey", { exact: true });
+  await expect(title).toHaveCSS("white-space", "nowrap");
+  await expect(acceptedRow.getByRole("cell", { name: "Portal Proposer", exact: true })).toBeVisible();
+  await expect(acceptedRow).not.toContainText(`portal-proposer-${unique}@pkic.org`);
+  // The shared row link forwards each icon's hover label through its overlay.
+  await acceptedRow.getByRole("img", { name: "Accepted", exact: true }).hover({ force: true });
+  await expect(acceptedRow.getByRole("link", { name: "Open Canonical portal proposal journey" })).toHaveAttribute(
+    "title",
+    "Accepted",
+  );
+  const sections = page.getByRole("navigation", { name: "Proposal sections" });
+  await tab(sections, "Speakers").click();
+  await expect(page).toHaveURL(/\/proposals\/speakers$/);
+  const roster = page.getByRole("table", { name: "Proposal speakers" });
+  await expect(roster).toBeVisible();
+  await expect(
+    roster.getByRole("row").filter({ hasText: "Portal Proposer" }).getByText("Registered", { exact: true }),
+  ).toBeVisible();
+  await expect(
+    roster.getByRole("row").filter({ hasText: "Portal Co Speaker" }).getByText("Registered", { exact: true }),
+  ).toBeVisible();
+  await expect(roster.getByText("In-person", { exact: true })).toHaveCount(2);
+  await expect(page.getByText("Decision saved", { exact: true })).toBeHidden();
+  await page.screenshot({ path: testInfo.outputPath("proposal-speakers.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(roster.getByRole("row").filter({ hasText: "Portal Proposer" })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("proposal-speakers-mobile.png"), fullPage: true });
 
   expect(adminRequests, "portal proposals must not call admin APIs").toEqual([]);
   expect(proposalRequests).toEqual(
     expect.arrayContaining([
       `GET /api/v1/events/${event.slug}/proposals`,
+      `GET /api/v1/events/${event.slug}/speakers`,
       `GET /api/v1/proposals/${proposalId}`,
       `GET /api/v1/proposals/${proposalId}/audit-log`,
       `GET /api/v1/proposals/${proposalId}/speakers`,

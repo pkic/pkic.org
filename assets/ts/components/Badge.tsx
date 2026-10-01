@@ -1,4 +1,20 @@
-import { Badge as ToneBadge, type BadgeTone } from "../ui/Badge";
+import type { ComponentType } from "preact";
+import {
+  IconArchive,
+  IconBan,
+  IconCheckOutline,
+  IconClock,
+  IconFlag,
+  IconInfoOutline,
+  IconLayersOutline,
+  IconPencilOutline,
+  IconRefreshOutline,
+  IconRemoveOutline,
+  IconSearchOutline,
+  IconSend,
+  IconUndoOutline,
+} from "./icons/indicators";
+import { Badge as ToneBadge, IconBadge, type BadgeTone } from "../ui/Badge";
 
 /**
  * The product's status vocabulary, mapped onto the design system's six tones.
@@ -16,6 +32,7 @@ import { Badge as ToneBadge, type BadgeTone } from "../ui/Badge";
 const STATUS_TONE: Record<string, BadgeTone> = {
   // registration
   registered: "ok",
+  confirmed: "ok",
   pending_email_confirmation: "warn",
   waitlisted: "info",
   cancelled: "neutral",
@@ -35,7 +52,8 @@ const STATUS_TONE: Record<string, BadgeTone> = {
   archived: "neutral",
   draft: "neutral",
   // proposal statuses
-  submitted: "accent",
+  submitted: "neutral",
+  spam: "danger",
   resubmitted: "warn",
   under_review: "info",
   needs_work: "warn",
@@ -121,6 +139,7 @@ const STATUS_TONE: Record<string, BadgeTone> = {
 };
 
 const STATUS_LABEL: Record<string, string> = {
+  not_registered: "Not registered",
   pending_email_confirmation: "Pending confirmation",
   under_review: "Under review",
   needs_work: "Needs work",
@@ -160,15 +179,48 @@ export function statusTone(status: string): BadgeTone {
   return STATUS_TONE[status] ?? "neutral";
 }
 
+const STATUS_ICON: Record<string, ComponentType> = {
+  submitted: IconSend,
+  resubmitted: IconRefreshOutline,
+  under_review: IconSearchOutline,
+  accepted: IconCheckOutline,
+  accept: IconCheckOutline,
+  approved: IconCheckOutline,
+  registered: IconCheckOutline,
+  rejected: IconRemoveOutline,
+  reject: IconRemoveOutline,
+  declined: IconRemoveOutline,
+  "needs-work": IconPencilOutline,
+  needs_work: IconPencilOutline,
+  needs_revision: IconPencilOutline,
+  withdrawn: IconUndoOutline,
+  canceled: IconBan,
+  cancelled: IconBan,
+  spam: IconFlag,
+  duplicate: IconLayersOutline,
+  deleted: IconArchive,
+  archived: IconArchive,
+  pending: IconClock,
+  pending_email_confirmation: IconClock,
+  draft: IconPencilOutline,
+};
+
 interface BadgeProps {
   status: string;
   label?: string;
+  iconOnly?: boolean;
+  count?: number;
 }
 
 /**
  * A status as a pill. The vocabulary is ours; the pill is the system's, so it
  * carries the tone dot that keeps status from resting on colour alone.
  */
-export function Badge({ status, label }: BadgeProps) {
+export function Badge({ status, label, iconOnly = false, count }: BadgeProps) {
+  if (iconOnly) {
+    const Icon = STATUS_ICON[status] ?? IconInfoOutline;
+    const accessibleLabel = label ?? `${statusLabel(status)}${count === undefined ? "" : ` ${count}`}`;
+    return <IconBadge tone={statusTone(status)} label={accessibleLabel} icon={<Icon />} count={count} />;
+  }
   return <ToneBadge tone={statusTone(status)}>{label ?? statusLabel(status)}</ToneBadge>;
 }

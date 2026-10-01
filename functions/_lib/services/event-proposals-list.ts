@@ -212,7 +212,10 @@ export async function listEventProposals(
   const { rows, total } = decodeOffsetPageResults<
     Omit<EventProposalSummary, "has_presentation"> & { has_presentation: number }
   >(rowsResult, totalResult);
-  const proposals = rows.map((row) => ({ ...row, has_presentation: row.has_presentation === 1 }));
+  const proposals = rows.map((row) => ({
+    ...row,
+    has_presentation: row.has_presentation === 1,
+  }));
   const statsRow = batchFirst<ProposalStatsRow>(statsResult);
   const byStatus = parseCountRecord(statsRow?.by_status_json ?? "{}");
   const byRecommendation = parseCountRecord(statsRow?.by_recommendation_json ?? "{}");

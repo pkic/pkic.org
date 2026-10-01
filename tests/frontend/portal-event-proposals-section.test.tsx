@@ -98,6 +98,7 @@ describe("event Proposals section", () => {
     expect(nav?.getAttribute("aria-label")).toBe("Proposal sections");
     expect([...root.querySelectorAll("nav.pk-tabs a")].map((link) => link.textContent)).toEqual([
       "Overview",
+      "Speakers",
       "Responses",
       "Email",
     ]);
@@ -153,6 +154,7 @@ describe("event Proposals section", () => {
       recommendation_needs_work_count: 0,
       recommendation_reject_count: 0,
       has_presentation: false,
+      speakers: [],
     });
     respond(ACCESS, [proposal]);
     const root = await mount();
@@ -219,6 +221,7 @@ describe("event Proposals section", () => {
 
     expect([...root.querySelectorAll("nav.pk-tabs a")].map((link) => link.textContent)).toEqual([
       "Overview",
+      "Speakers",
       "Responses",
     ]);
   });

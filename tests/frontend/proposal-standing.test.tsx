@@ -95,6 +95,9 @@ describe("proposal review standing", () => {
 
   it("says quorum is met in words when it is", () => {
     const root = mount({ quorumMet: true, reviewCount: 2 });
-    expect(root.querySelector(".pk-badge--ok")?.textContent).toBe("Quorum met");
+    const reviews = [...root.querySelectorAll("dl.pk-datalist > dt")].find(
+      (term) => term.textContent === "Reviews",
+    )?.nextElementSibling;
+    expect(reviews?.querySelector(".pk-badge--ok")?.textContent).toBe("Quorum met");
   });
 });

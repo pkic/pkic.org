@@ -285,6 +285,8 @@ describe("group event workspace", () => {
     const proposals = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="proposals" />);
     const proposalSections = proposals.querySelector('nav[aria-label="Proposal sections"]');
     expect(proposalSections?.textContent).toContain("Overview");
+    expect(proposalSections?.textContent).toContain("Speakers");
+    expect(proposalSections?.querySelector('a[href$="/proposals/speakers"]')).not.toBeNull();
     expect(proposalSections?.textContent).toContain("Responses");
     expect(proposalSections?.querySelector('a[href$="/proposals/responses"]')).not.toBeNull();
   });

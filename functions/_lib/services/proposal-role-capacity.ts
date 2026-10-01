@@ -116,6 +116,7 @@ export async function prepareProposalRoleCapacityAfterSourceChange(
     sourceRef: string;
     nextRole?: ProposalSpeakerRole;
     nextStatus: "active" | "inactive";
+    ensureRegistration?: boolean;
     sourceRevisionAdvance?: 0 | 1;
     sharedCapacityGuards?: EventDayCapacityGuardPlan;
   },
@@ -134,6 +135,7 @@ export async function prepareProposalRoleCapacityAfterSourceChange(
     ...(await prepareRoleCapacityReconciliationStatements(db, {
       eventId: payload.eventId,
       userId: payload.userId,
+      ensureRegistration: payload.ensureRegistration,
       sharedCapacityGuards: payload.sharedCapacityGuards,
       activeProposalRoles: sources
         .filter((participant) => participant.status === "active")
@@ -198,6 +200,7 @@ export async function prepareProposalRoleCapacityForProposalStatus(
         sharedCapacityGuards,
         nextRole: speaker.role,
         nextStatus: payload.nextStatus === "active" && speaker.status !== "declined" ? "active" : "inactive",
+        ensureRegistration: payload.nextStatus === "active" && speaker.status !== "declined",
       })),
     );
   }

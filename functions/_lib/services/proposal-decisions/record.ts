@@ -330,7 +330,11 @@ export async function recordProposalDecision(
         "Proposal authorization changed while the decision was being saved",
       );
     }
-    if (isRegistrationTransitionConflict(error)) {
+    if (
+      isRegistrationTransitionConflict(error) ||
+      (error instanceof Error &&
+        error.message.includes("UNIQUE constraint failed: registrations.event_id, registrations.user_id"))
+    ) {
       throw registrationChangedError();
     }
     if (isProposalDecisionHistoryConflict(error)) {

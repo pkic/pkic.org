@@ -1,3 +1,4 @@
+import { assertRegistrationRestorationAllowed } from "./restoration";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
@@ -96,17 +97,8 @@ export async function buildRegistrationUpdate(
     throw dayWaitlistOfferUnavailableError();
   }
   const isCancelled = registration.status === "cancelled";
-  if (
-    payload.action === "update" &&
-    isCancelled &&
-    registration.cancellation_reason_code === "unauthorized_registration" &&
-    changedBy === "self"
-  ) {
-    throw new AppError(
-      409,
-      "UNAUTHORIZED_REGISTRATION_REVIEW_REQUIRED",
-      "This registration was reported as unauthorized and must be reviewed by an organizer before it can be restored",
-    );
+  if (payload.action === "update" && changedBy === "self") {
+    assertRegistrationRestorationAllowed(registration);
   }
   if (payload.action === "cancel") {
     if (isCancelled) throw new AppError(409, "ALREADY_CANCELLED", "Registration is already cancelled");
