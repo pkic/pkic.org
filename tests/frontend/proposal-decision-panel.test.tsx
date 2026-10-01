@@ -45,6 +45,14 @@ const editableProposal: ProposalDetailRecord = {
   decision_decided_at: null,
 };
 
+const decisionResponse = {
+  success: true,
+  decisionId: "5555555555555555555555555555ffff",
+  reviewRound: 1,
+  reviewCount: 2,
+  minReviewsRequired: 2,
+};
+
 const previewResponse = {
   success: true,
   recipientCount: 1,
@@ -178,6 +186,26 @@ describe("proposal decision panel", () => {
     expect(root.querySelector('button[type="submit"]')?.textContent).toContain("Record Decision");
   });
 
+  it("changes a recorded needs-work decision when the proposal still says submitted", async () => {
+    const requests = stubApi(() => json(decisionResponse));
+    const onSaved = vi.fn();
+    const root = mount({ ...proposal, status: "submitted" }, onSaved);
+    expect(root.textContent).toContain("Decision recorded:");
+    await act(() => buttonNamed(root, "Change decision").click());
+    await previewAndConfirm(root, "rejected", "The proposal does not meet the program requirements.");
+    await act(() => buttonNamed(root, "Record Decision").click());
+    await settle();
+
+    expect(requests).toHaveLength(2);
+    for (const request of requests) {
+      expect(finalizeProposalSchema.parse(request.body)).toEqual({
+        finalStatus: "rejected",
+        decisionNote: "The proposal does not meet the program requirements.",
+      });
+    }
+    expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
   it("lets an accepted decision be corrected too, and shows it as recorded until then", async () => {
     const root = mount({ ...proposal, status: "accepted", decision_status: "accepted" });
 
@@ -188,15 +216,7 @@ describe("proposal decision panel", () => {
   });
 
   it("previews before confirming, then records a decision the shared contract accepts", async () => {
-    const requests = stubApi(() =>
-      json({
-        success: true,
-        decisionId: "5555555555555555555555555555ffff",
-        reviewRound: 1,
-        reviewCount: 2,
-        minReviewsRequired: 2,
-      }),
-    );
+    const requests = stubApi(() => json(decisionResponse));
     const onSaved = vi.fn();
     const root = mount(editableProposal, onSaved);
 

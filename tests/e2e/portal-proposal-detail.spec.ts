@@ -8,6 +8,7 @@ import { eventManagementDetailResponseSchema } from "../../assets/shared/schemas
 import { eventProposalsResponseSchema } from "../../assets/shared/schemas/event-proposals";
 import { proposalSpeakersResponseSchema } from "../../assets/shared/schemas/proposal-speakers";
 import { proposalDecisionPreviewResponseSchema } from "../../assets/shared/schemas/proposal-decisions";
+import { finalizeProposalSchema } from "../../assets/shared/schemas/proposal-management";
 import { definitionFor } from "./helpers/definition-list";
 import { tab } from "./helpers/tabs";
 
@@ -147,6 +148,8 @@ test("renders the portal proposal detail workflow with submission answers and op
   };
   let abstract = "A practical session on operating certificate platforms with clear failure domains.";
   let proposalStatus: "accepted" | "canceled" = "accepted";
+  let legacyDecision = false;
+  let correctedDecision = false;
   let canceledAt: string | null = null;
   let cancellationComment: string | null = null;
   const openedUrls: string[] = [];
@@ -275,8 +278,8 @@ test("renders the portal proposal detail workflow with submission answers and op
           acceptCount: 1,
           needsWorkCount: 0,
           rejectCount: 0,
-          minReviewsRequired: 2,
-          quorumMet: false,
+          minReviewsRequired: legacyDecision ? 1 : 2,
+          quorumMet: legacyDecision,
         },
         page: { limit: 25, offset: 0, total: 1, hasMore: false },
       }),
@@ -460,7 +463,7 @@ test("renders the portal proposal detail workflow with submission answers and op
           id: proposalId,
           event_id: "event-1",
           proposer_user_id: proposerUserId,
-          status: proposalStatus,
+          status: correctedDecision ? "rejected" : legacyDecision ? "submitted" : proposalStatus,
           proposal_type: "panel",
           title: "Operational PKI at Internet Scale",
           abstract,
@@ -473,7 +476,7 @@ test("renders the portal proposal detail workflow with submission answers and op
           proposer_last_name: "Speaker",
           review_round: 1,
           review_count: 1,
-          decision_status: "accepted",
+          decision_status: correctedDecision ? "rejected" : legacyDecision ? "needs-work" : "accepted",
           decision_note: null,
           decision_decided_at: "2025-02-01T11:00:00.000Z",
           details: {
@@ -556,7 +559,7 @@ test("renders the portal proposal detail workflow with submission answers and op
             },
           ],
         },
-        minReviewsRequired: 2,
+        minReviewsRequired: legacyDecision ? 1 : 2,
         sessionTypes: [
           { label: "Panel", requiresPresentation: false },
           { label: "Talk", requiresPresentation: true },
@@ -685,11 +688,14 @@ test("renders the portal proposal detail workflow with submission answers and op
   expect(adminUpload?.fileSize).toBe(String(pdfBody.byteLength));
   expect(adminUpload?.body).toEqual(pdfBody);
 
+  // Reproduce the production combination: Submitted with a recorded Needs work decision.
+  legacyDecision = true;
+  await page.reload();
   await tab(page, "Decision").click();
   await page.getByRole("button", { name: "Change decision", exact: true }).click();
   const decision = page.getByLabel("Decision", { exact: true });
-  await decision.selectOption("accepted");
-  await expect(decision).toHaveValue("accepted");
+  await decision.selectOption("rejected");
+  await expect(decision).toHaveValue("rejected");
   await expect(decision).not.toHaveAttribute("aria-invalid", "true");
   await expect(page.getByRole("button", { name: "Preview emails", exact: true })).toBeEnabled();
   await page.route(`**/api/v1/proposals/${proposalId}/decisions/previews`, (route) =>
@@ -705,9 +711,9 @@ test("renders the portal proposal detail workflow with submission answers and op
           templateKey: "proposal_decision",
           recipientEmail: `${name.toLowerCase()}@example.test`,
           recipientLabel: `${name} Example`,
-          subject: "Your proposal about accessible forms was accepted",
-          html: "<h1>Proposal accepted</h1><p>Alex, your session on accessible forms for organizations and users has been accepted.</p>",
-          text: "Alex, your session on accessible forms for organizations and users has been accepted.",
+          subject: "Your proposal about accessible forms was rejected",
+          html: "<h1>Proposal rejected</h1><p>Alex, your session on accessible forms has been rejected.</p>",
+          text: "Alex, your session on accessible forms has been rejected.",
           templateMissing: false,
         })),
       }),
@@ -738,6 +744,33 @@ test("renders the portal proposal detail workflow with submission answers and op
     await page.screenshot({ path: testInfo.outputPath(`decision-preview-${width}.png`) });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
+  let recordedDecision: unknown;
+  await page.route(`**/api/v1/proposals/${proposalId}/decisions`, async (route) => {
+    recordedDecision = finalizeProposalSchema.parse(route.request().postDataJSON());
+    correctedDecision = true;
+    await route.fulfill({
+      json: {
+        success: true,
+        decisionId: "5555555555555555555555555555ffff",
+        reviewRound: 1,
+        reviewCount: 1,
+        minReviewsRequired: 1,
+      },
+    });
+  });
+  await page.getByLabel("I reviewed the outgoing email preview and confirm this decision send.").check();
+  await page.getByRole("button", { name: "Record Decision", exact: true }).click();
+  await expect.poll(() => recordedDecision).toEqual({ finalStatus: "rejected" });
+  await expect(page.getByText("Decision saved", { exact: true })).toBeVisible();
+  await tab(page, "Decision").click();
+  const finalDecision = page.getByRole("heading", { name: "Final decision", exact: true }).locator("../..");
+  await expect(finalDecision.getByText("Rejected", { exact: true })).toBeVisible();
+  await finalDecision.scrollIntoViewIfNeeded();
+  await page.screenshot({ path: testInfo.outputPath("changed-legacy-decision.png") });
+  correctedDecision = false;
+  legacyDecision = false;
+  await page.reload();
+  await tab(page, "Decision").click();
   // The required marker is no longer part of the label's own words — it is the
   // control's `required` and a "(required)" the label carries for a screen
   // reader — so the field is named by its name and its requirement asserted.
