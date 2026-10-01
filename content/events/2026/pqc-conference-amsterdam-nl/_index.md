@@ -220,6 +220,12 @@ data:
 
     - name: Dave Butcher
       title: Senior Security Consultant, Entrust
+      bio: |
+        Dave Butcher is a senior cybersecurity consultant at Entrust, specializing in applied cryptography, hardware security modules, and quantum-ready security strategy. His work bridges enterprise security strategy and practical implementation, helping customers assess cryptographic risk, modernize security architectures, and prepare for the post-quantum transition.
+        
+        Dave is a senior member of IEEE, ISSA, and ISC2. He holds a master’s in computer science from the University of Michigan and a bachelor’s in engineering management from Grantham University. His current credentials include CISSP, CCSP, CSSLP, CPM, and CCZT.
+        
+        The proposer can only be removed once an invited or confirmed replacement speaker exists. Otherwise, ask the proposer to use the separate Withdraw proposal action; every proposal must retain its speaker roster.
 
     - name: Louise Davey
       title: President, LDIQ
@@ -350,7 +356,13 @@ data:
 
     - name: Sarah McCarthy
       title: SVP Cryptography, Citi
-
+      bio: |
+        As the Quantum Readiness Program Lead at Citi, Sarah McCarthy focusses on developing effective solutions to ensure the security of financial systems amid emerging quantum threats. Before joining Citi, Sarah was Cryptographic Strategist at evolutionQ, where she spearheaded the development of quantum-safe network solutions and advocated for proactive preparation for the quantum computing era. Prior to that, she held a Research Fellow position at the Institute for Quantum Computing (IQC) at the University of Waterloo, following her PhD from Queen’s University Belfast. Her academic background supports her deep expertise, enabling her to stay at the forefront of quantum-safe solutions and bridge the gap from theoretical research to practical deployment.
+ 
+        A sought-after speaker known for her clear and engaging style, she has presented at events worldwide and is a key PC member for ETSI/IQC Quantum-Safe Cryptography Conference. Sarah was also named one of the Top 50 Women in Quantum by The Quantum Insider.
+      social:
+        linkedin: https://www.linkedin.com/in/sarahmccarthyphd/
+        
     - name: Itan Barmes
       title: Co-founder and Chief Strategy Officer, Qiz Security
       bio: |
@@ -370,7 +382,17 @@ data:
 
     - name: Chris Bailey
       title: Board Chair, PKI Consortium
+      bio: |
+        Chris Bailey is a recognized leader in the digital security and Public Key Infrastructure (PKI) industry, with more than 25 years of experience driving innovation, shaping global standards, and building trust across the certificate authority (CA) ecosystem. He currently serves as Board Chair of the PKI Consortium, a nonprofit dedicated to advancing PKI maturity, interoperability, post-quantum readiness, and best practices across industries.
 
+        A founding member of the CA/Browser Forum and the PKI Consortium, Chris has played a pivotal role in the creation and global adoption of standards for SSL/TLS certificates and digital trust. He was one of the original architects of the Domain Validation (DV) Certificate, which now secures the vast majority of TLS connections online. His contributions also include launching the first publicly trusted PDF signing certificate, enabling legally binding digital signatures, and co-inventing the Brand Indicators for Message Identification (BIMI) certificate, which displays verified brand logos in supported email clients to enhance trust and combat phishing.
+
+        Chris has held senior leadership roles at Trend Micro, Entrust, and GeoTrust, three prominent companies in the cybersecurity and digital certificate sectors. In these roles, he expanded certificate offerings, guided policy development, and strengthened industry collaboration around trusted identity and encryption technologies.   
+        
+        Driven by a deep commitment to community engagement, standards development, and technical innovation, Chris continues to champion secure digital identity solutions and foster global cooperation throughout the PKI ecosystem.
+      social:
+        linkedin: https://www.linkedin.com/in/christophertmbailey/
+        
     - name: Chris Hickman
       title: Chief Security Officer, Keyfactor
       bio: |
@@ -378,10 +400,18 @@ data:
 
     - name: Ganesh Mallaya
       title: Global Field CTO, AppViewX
-
+      bio: |
+        Ganesh Mallaya is a Global Field CTO at AppViewX, where he has helped revolutionize certificate lifecycle management (CLM) and PKI solutions for global enterprises. A member of the CA/Browser Forum and a Harvard-certified cybersecurity strategist, he serves as a trusted advisor to organizations on post-quantum cryptography (PQC), digital trust infrastructure, and CLM modernization across complex, regulated environments
+      social:
+        linkedin: https://www.linkedin.com/in/ganeshmallaya/
+        
     - name: George Parsons
       title: Head of PKI Strategy, Palo Alto Networks
-
+      bio: |
+        George Parsons brings over three decades of experience in cryptographic policy, compliance, and automation. As a founder team member of VeriSign, he helped shape the early PKI trust model for the Internet, working closely with Netscape and Microsoft on the development of SSL server enrollment protocols and processes. Today, he leads PKI Strategy at CyberArk, where he helps enterprises modernize their PKI trust infrastructures to support Zero Trust architectures, enable certificate lifecycle automation, and prepare for post-quantum cryptographic transitions.
+      social:
+        linkedin: https://www.linkedin.com/in/georgehparsons/
+        
     - name: Marin Ivezic
       title: Founder and CEO, Applied Quantum
       bio: |
@@ -405,7 +435,9 @@ data:
 
     - name: Antti Ropponen
       title: Executive Partner, Quantum Safe Transformation Services, IBM
-
+      bio: |
+        Quantum Safe Transformation Leader driving strategy, scaling, and innovation of Quantum Safe programs across the world. Since 2019, he has pioneered quantum-safe transformations, partnering with executives to implement cutting-edge solutions, scale global offerings, and help ensure organizational resilience against emerging threats. He has validated successes through dozens of quantum-safe programs across banking, telecommunications, insurance, and government sectors.
+        
     - name: Sudha Iyer
       title: Chief Engineer - PKI & Cryptography, Citi
       bio: |
@@ -478,6 +510,11 @@ data:
       title: Chief Researcher, Hitachi, Ltd.
       bio: |
         Akane Suzuki is a Chief Researcher at Hitachi, Ltd., specializing in information security, electronic authentication, and digital identity. Leveraging hands-on experience in cryptographic migration for public key infrastructure during Japan's "2010 Cryptographic Algorithm Transition," Suzuki currently focuses on analyzing post-quantum cryptography (PQC) trends and designing migration approaches, and contributed to the CRYPTREC external evaluation report in FY2025, "Survey on Technical Trends in the Migration to Post Quantum Cryptography."
+
+    - name: Hiroki Uchiyama
+      title: Director and Head of Security Innovation Lab Hitachi America, Ltd.
+      bio: |
+        Hiroki Uchiyama is Director and Head of the Security Innovation Lab at Hitachi America R&amp;D. He focuses on advancing cybersecurity technologies to strengthen security across critical sectors, including energy, mobility, and manufacturing. In his current role, he is developing quantum security technologies to migrate to quantum-safe systems. He holds a Ph.D. in Informatics from Kyoto University in Japan and is a Certified Information Systems Security Professional(CISSP).
 
   # Agenda --------------------------------------------------------------------
   # Red hall (plenary) carries the strategic track, the blue hall the technical
@@ -1475,9 +1512,16 @@ data:
             locations:
               - plenary
 
-          - title: To be announced
+          - title: Practical Implementation of Hardware-Separated Composite Signatures for Large-Scale PKI During the PQC Migration Period
             description: |
-              Session details will be announced soon.
+              The transition to Post-Quantum Cryptography (PQC) presents a significant challenge for organizations operating large-scale Public Key Infrastructures (PKIs). While PQC standards are becoming available, replacing vast numbers of deployed hardware tokens such as smart cards remains operationally expensive and time-consuming.
+
+              In this session, we present our implementation experience with the IETF LAMPS draft "Composite ML-DSA for Use in X.509 Public Key Infrastructure" in a hardware-separated environment for large-scale PKI migration. The approach combines existing smart cards holding traditional signature keys (e.g., RSA) with server-side Hardware Security Modules (HSMs) providing PQC signature capabilities (e.g., ML-DSA), enabling organizations to begin introducing PQC without requiring immediate replacement of end-user hardware. We discuss three representative risks observed during implementation and evaluation: cross-protocol signature composition, unintended reuse of composite-signature keys for single-algorithm signatures, and device impersonation across separated trust domains, and present a device-binding architecture that addresses them while maintaining compatibility with the IETF LAMPS composite signature framework.
+
+              We also evaluate the potential operational impact of this approach using a large-scale PKI migration model involving tens of millions of certificates, and share architectural considerations, implementation experiences, and validation results from a prototype built using cloud-based HSM services and commercially available PKI smart cards.
+            speakers:
+              - Akane Suzuki
+              - Hiroki Uchiyama
             locations:
               - blue_hall
 
@@ -1543,15 +1587,9 @@ data:
             locations:
               - plenary
 
-          - title: Practical Implementation of Hardware-Separated Composite Signatures for Large-Scale PKI During the PQC Migration Period
+          - title: To be announced
             description: |
-              The transition to Post-Quantum Cryptography (PQC) presents a significant challenge for organizations operating large-scale Public Key Infrastructures (PKIs). While PQC standards are becoming available, replacing vast numbers of deployed hardware tokens such as smart cards remains operationally expensive and time-consuming.
-
-              In this session, we present our implementation experience with the IETF LAMPS draft "Composite ML-DSA for Use in X.509 Public Key Infrastructure" in a hardware-separated environment for large-scale PKI migration. The approach combines existing smart cards holding traditional signature keys (e.g., RSA) with server-side Hardware Security Modules (HSMs) providing PQC signature capabilities (e.g., ML-DSA), enabling organizations to begin introducing PQC without requiring immediate replacement of end-user hardware. We discuss three representative risks observed during implementation and evaluation: cross-protocol signature composition, unintended reuse of composite-signature keys for single-algorithm signatures, and device impersonation across separated trust domains, and present a device-binding architecture that addresses them while maintaining compatibility with the IETF LAMPS composite signature framework.
-
-              We also evaluate the potential operational impact of this approach using a large-scale PKI migration model involving tens of millions of certificates, and share architectural considerations, implementation experiences, and validation results from a prototype built using cloud-based HSM services and commercially available PKI smart cards.
-            speakers:
-              - Akane Suzuki
+              Session details will be announced soon.
             locations:
               - blue_hall
 
