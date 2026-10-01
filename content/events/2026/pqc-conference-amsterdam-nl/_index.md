@@ -220,6 +220,12 @@ data:
 
     - name: Dave Butcher
       title: Senior Security Consultant, Entrust
+      bio: |
+        Dave Butcher is a senior cybersecurity consultant at Entrust, specializing in applied cryptography, hardware security modules, and quantum-ready security strategy. His work bridges enterprise security strategy and practical implementation, helping customers assess cryptographic risk, modernize security architectures, and prepare for the post-quantum transition.
+        
+        Dave is a senior member of IEEE, ISSA, and ISC2. He holds a master’s in computer science from the University of Michigan and a bachelor’s in engineering management from Grantham University. His current credentials include CISSP, CCSP, CSSLP, CPM, and CCZT.
+        
+        The proposer can only be removed once an invited or confirmed replacement speaker exists. Otherwise, ask the proposer to use the separate Withdraw proposal action; every proposal must retain its speaker roster.
 
     - name: Louise Davey
       title: President, LDIQ
@@ -377,7 +383,7 @@ data:
     - name: Chris Bailey
       title: Board Chair, PKI Consortium
       bio: |
-        Chris Bailey is a recognized leader in the digital security and Public Key Infrastructure (PKI) industry, with more than 25 years of experience driving innovation, shaping global standards, and building trust across the certificate authority (CA) ecosystem. He currently serves as Board Chair of the PKI Consortium, a nonprofit dedicated to advancing PKI maturity, interoperability, post-quantum readiness, and best practices across industries. He also serves as a Board Member of AppViewX.
+        Chris Bailey is a recognized leader in the digital security and Public Key Infrastructure (PKI) industry, with more than 25 years of experience driving innovation, shaping global standards, and building trust across the certificate authority (CA) ecosystem. He currently serves as Board Chair of the PKI Consortium, a nonprofit dedicated to advancing PKI maturity, interoperability, post-quantum readiness, and best practices across industries.
 
         A founding member of the CA/Browser Forum and the PKI Consortium, Chris has played a pivotal role in the creation and global adoption of standards for SSL/TLS certificates and digital trust. He was one of the original architects of the Domain Validation (DV) Certificate, which now secures the vast majority of TLS connections online. His contributions also include launching the first publicly trusted PDF signing certificate, enabling legally binding digital signatures, and co-inventing the Brand Indicators for Message Identification (BIMI) certificate, which displays verified brand logos in supported email clients to enhance trust and combat phishing.
 
@@ -394,10 +400,18 @@ data:
 
     - name: Ganesh Mallaya
       title: Global Field CTO, AppViewX
-
+      bio: |
+        Ganesh Mallaya is a Global Field CTO at AppViewX, where he has helped revolutionize certificate lifecycle management (CLM) and PKI solutions for global enterprises. A member of the CA/Browser Forum and a Harvard-certified cybersecurity strategist, he serves as a trusted advisor to organizations on post-quantum cryptography (PQC), digital trust infrastructure, and CLM modernization across complex, regulated environments
+      social:
+        linkedin: https://www.linkedin.com/in/ganeshmallaya/
+        
     - name: George Parsons
       title: Head of PKI Strategy, Palo Alto Networks
-
+      bio: |
+        George Parsons brings over three decades of experience in cryptographic policy, compliance, and automation. As a founder team member of VeriSign, he helped shape the early PKI trust model for the Internet, working closely with Netscape and Microsoft on the development of SSL server enrollment protocols and processes. Today, he leads PKI Strategy at CyberArk, where he helps enterprises modernize their PKI trust infrastructures to support Zero Trust architectures, enable certificate lifecycle automation, and prepare for post-quantum cryptographic transitions.
+      social:
+        linkedin: https://www.linkedin.com/in/georgehparsons/
+        
     - name: Marin Ivezic
       title: Founder and CEO, Applied Quantum
       bio: |
@@ -421,7 +435,9 @@ data:
 
     - name: Antti Ropponen
       title: Executive Partner, Quantum Safe Transformation Services, IBM
-
+      bio: |
+        Quantum Safe Transformation Leader driving strategy, scaling, and innovation of Quantum Safe programs across the world. Since 2019, he has pioneered quantum-safe transformations, partnering with executives to implement cutting-edge solutions, scale global offerings, and help ensure organizational resilience against emerging threats. He has validated successes through dozens of quantum-safe programs across banking, telecommunications, insurance, and government sectors.
+        
     - name: Sudha Iyer
       title: Chief Engineer - PKI & Cryptography, Citi
       bio: |
