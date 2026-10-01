@@ -179,6 +179,13 @@ export function isEventDayCapacityConflict(error: unknown): boolean {
   return error instanceof Error && error.message.includes("EVENT_DAY_CAPACITY_CHANGED");
 }
 
+export function eventDayCapacityChangedError(): AppError {
+  return new AppError(409, "DAY_CAPACITY_CHANGED", "Day capacity changed; please retry");
+}
+
+/** One guard per day, executed before every participant's reconciliation in the same atomic command. */
+export type EventDayCapacityGuardPlan = Map<string, { expectedRevision: number; statement: StatementLike }>;
+
 export const DAY_WAITLIST_OFFER_UNAVAILABLE_CODE = "DAY_WAITLIST_OFFER_UNAVAILABLE";
 
 export function dayWaitlistOfferUnavailableError(): AppError {
@@ -205,7 +212,7 @@ export async function withDayCapacityRetry<T>(operation: () => Promise<T>): Prom
       if (attempt === 2) break;
     }
   }
-  throw new AppError(409, "DAY_CAPACITY_CHANGED", "Day capacity changed; please retry");
+  throw eventDayCapacityChangedError();
 }
 
 export function prepareCapacityGuardStatements(
@@ -214,20 +221,30 @@ export function prepareCapacityGuardStatements(
   selectedByDate: Map<string, string>,
   preservedEventDayIds: Set<string>,
   claim?: { registrationId: string; dayDates: ReadonlySet<string> },
+  sharedGuards?: EventDayCapacityGuardPlan,
 ): StatementLike[] {
+  if (claim && sharedGuards) throw new Error("Waitlist offer claims require their own capacity guards");
   return eventDays.flatMap((day) => {
     const claimsOffer = claim?.dayDates.has(day.day_date) ?? false;
     const affectsCapacity =
       selectedByDate.get(day.day_date) === "in_person" || preservedEventDayIds.has(day.id) || claimsOffer;
     if (!affectsCapacity || !day.in_person_capacity || day.in_person_capacity <= 0) return [];
-    return [
-      db
-        .prepare(
-          `INSERT INTO event_day_capacity_guards (
+    const previousGuard = sharedGuards?.get(day.id);
+    if (previousGuard) {
+      if (previousGuard.expectedRevision !== day.capacity_revision) throw eventDayCapacityChangedError();
+      return [];
+    }
+    const statement = db
+      .prepare(
+        `INSERT INTO event_day_capacity_guards (
              id, event_day_id, expected_revision, claim_registration_id
            ) VALUES (?, ?, ?, ?)`,
-        )
-        .bind(uuid(), day.id, day.capacity_revision, claimsOffer ? claim!.registrationId : null),
-    ];
+      )
+      .bind(uuid(), day.id, day.capacity_revision, claimsOffer ? claim!.registrationId : null);
+    if (sharedGuards) {
+      sharedGuards.set(day.id, { expectedRevision: day.capacity_revision, statement });
+      return [];
+    }
+    return [statement];
   });
 }

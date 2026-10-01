@@ -1,6 +1,7 @@
 import type { DatabaseLike, StatementLike } from "../types";
 import { all } from "../db/queries";
 import { prepareRoleCapacityReconciliationStatements } from "./registrations/role-capacity-reconciliation";
+import type { EventDayCapacityGuardPlan } from "./registrations/day-waitlist-capacity";
 import type { EventParticipantRole, ProposalSpeakerRole } from "../../../assets/shared/schemas/participant-roles";
 import {
   getEventParticipantSourceRevision,
@@ -116,6 +117,7 @@ export async function prepareProposalRoleCapacityAfterSourceChange(
     nextRole?: ProposalSpeakerRole;
     nextStatus: "active" | "inactive";
     sourceRevisionAdvance?: 0 | 1;
+    sharedCapacityGuards?: EventDayCapacityGuardPlan;
   },
 ): Promise<StatementLike[]> {
   // Read the revision before reading the source set. If another proposal
@@ -132,6 +134,7 @@ export async function prepareProposalRoleCapacityAfterSourceChange(
     ...(await prepareRoleCapacityReconciliationStatements(db, {
       eventId: payload.eventId,
       userId: payload.userId,
+      sharedCapacityGuards: payload.sharedCapacityGuards,
       activeProposalRoles: sources
         .filter((participant) => participant.status === "active")
         .map((participant) => participant.role),
@@ -185,16 +188,20 @@ export async function prepareProposalRoleCapacityForProposalStatus(
       expectedRevision: rosterRevision,
     }),
   ];
+  const sharedCapacityGuards: EventDayCapacityGuardPlan = new Map();
   for (const speaker of speakers) {
     statements.push(
       ...(await prepareProposalRoleCapacityAfterSourceChange(db, {
         eventId: payload.eventId,
         userId: speaker.user_id,
         sourceRef: payload.sourceRef,
+        sharedCapacityGuards,
         nextRole: speaker.role,
         nextStatus: payload.nextStatus === "active" && speaker.status !== "declined" ? "active" : "inactive",
       })),
     );
   }
-  return statements;
+  // Guard shared days once before any participant's waitlist writes can
+  // advance their revisions. Every plan remains in the caller's atomic batch.
+  return [...Array.from(sharedCapacityGuards.values(), ({ statement }) => statement), ...statements];
 }

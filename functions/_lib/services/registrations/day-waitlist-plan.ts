@@ -8,6 +8,7 @@ import {
   dayWaitlistOfferUnavailableError,
   listCapacityEventDays,
   prepareCapacityGuardStatements,
+  type EventDayCapacityGuardPlan,
 } from "./day-waitlist-capacity";
 import type {
   DayWaitlistLane,
@@ -46,6 +47,7 @@ export async function buildRegistrationDayWaitlistSync(
     preserveConfirmedEventDayIds?: string[];
     registrationStatus?: string;
     configuredEventDays?: EventDayCapacityRow[];
+    sharedCapacityGuards?: EventDayCapacityGuardPlan;
     reArbitrateExistingCapacityRows?: boolean;
     forceWaitlistDayDates?: string[];
     claimOfferedDayDates?: string[];
@@ -139,6 +141,7 @@ export async function buildRegistrationDayWaitlistSync(
     claimOfferedDayDates.size > 0
       ? { registrationId: payload.registrationId, dayDates: claimOfferedDayDates }
       : undefined,
+    payload.sharedCapacityGuards,
   );
   const statements: StatementLike[] = [
     db
