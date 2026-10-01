@@ -1,3 +1,4 @@
+import type { EventDayCapacityGuardPlan } from "./day-waitlist-capacity";
 import type { RegistrationRecord } from "./types";
 import {
   SPEAKER_ATTENDANCE_PREFERENCE,
@@ -22,7 +23,7 @@ export async function prepareProposalAdmission(
     eventId: string;
     userId: string;
     activeProposalRoles: readonly EventParticipantRole[];
-    capacityGuards?: Map<string, StatementLike>;
+    sharedCapacityGuards?: EventDayCapacityGuardPlan;
   },
 ): Promise<StatementLike[]> {
   const days = await listEventDays(db, input.eventId);
@@ -50,7 +51,7 @@ export async function prepareProposalAdmission(
     sourceRef: previous?.source_ref,
     inviteId: previous?.invite_id,
     acceptedProposalRoles: input.activeProposalRoles,
-    capacityGuards: input.capacityGuards,
+    sharedCapacityGuards: input.sharedCapacityGuards,
   });
   return [
     ...built.statements,

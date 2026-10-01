@@ -1,3 +1,4 @@
+import type { EventDayCapacityGuardPlan } from "./day-waitlist-capacity";
 import { assertRegistrationRestorationAllowed } from "./restoration";
 import type { EventParticipantRole } from "../../../../assets/shared/schemas/participant-roles";
 import { roleBasedCapacityExemptReasonAfterParticipantChange } from "./day-waitlist-capacity";
@@ -30,7 +31,7 @@ const DEFAULT_PENDING_CONFIRMATION_DEADLINE_HOURS = 14 * 24;
 export interface CreateRegistrationPayload {
   /** Trusted role projection for an acceptance in the same atomic batch. */
   acceptedProposalRoles?: readonly EventParticipantRole[];
-  capacityGuards?: Map<string, StatementLike>;
+  sharedCapacityGuards?: EventDayCapacityGuardPlan;
   event: { id: string };
   userId: string;
   attendanceType: AttendanceType;
@@ -252,7 +253,7 @@ export async function buildCreateRegistration(
     userId: registration.user_id,
     selections: payload.dayAttendance,
     capacityExemptReason,
-    capacityGuards: payload.capacityGuards,
+    sharedCapacityGuards: payload.sharedCapacityGuards,
     registrationStatus: registration.status,
     configuredEventDays,
     auditActor: { type: "user", id: registration.user_id },

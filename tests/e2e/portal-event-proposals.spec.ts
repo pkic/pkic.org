@@ -38,7 +38,7 @@ function expectStatus(result: ApiResult, status: number): Record<string, unknown
   return result.body as Record<string, unknown>;
 }
 
-test("portal proposal detail uses canonical proposal resources without admin fallback", async ({ page }) => {
+test("portal proposal detail registers accepted speakers through canonical resources", async ({ page }, testInfo) => {
   await signInToPortal(page, e2eAdminEmail("portal-event-proposals"));
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const createdEvent = expectStatus(
@@ -58,7 +58,9 @@ test("portal proposal detail uses canonical proposal resources without admin fal
     await api(page, `/api/v1/groups/${GROUP_ID}/events/${createdEvent.id}/terms`, "PUT", {
       expectedUpdatedAt: createdEvent.updatedAt,
       configuration: {
-        attendee: [],
+        attendee: [
+          { termKey: "e2e-attendee-terms", version: "1.0", required: true, displayText: "E2E attendee terms" },
+        ],
         speaker: [{ termKey: "e2e-proposal-terms", version: "1.0", required: true, displayText: "E2E proposal terms" }],
         presentation: [],
       },
@@ -66,9 +68,16 @@ test("portal proposal detail uses canonical proposal resources without admin fal
     200,
   );
   const event = { ...createdEvent, updatedAt: terms.eventUpdatedAt as string };
+  const registrationSettings = expectStatus(
+    await api(page, `/api/v1/groups/${GROUP_ID}/events/${event.id}/registration-settings`, "PUT", {
+      expectedUpdatedAt: event.updatedAt,
+      registrationPolicy: "public",
+    }),
+    200,
+  );
   expectStatus(
     await api(page, `/api/v1/groups/${GROUP_ID}/events/${event.id}/days`, "PUT", {
-      expectedUpdatedAt: event.updatedAt,
+      expectedUpdatedAt: registrationSettings.eventUpdatedAt,
       configuration: {
         days: [
           {
@@ -239,10 +248,10 @@ test("portal proposal detail uses canonical proposal resources without admin fal
   ).toBeVisible();
   await expect(roster.getByText("In-person", { exact: true })).toHaveCount(2);
   await expect(page.getByText("Decision saved", { exact: true })).toBeHidden();
-  await page.screenshot({ path: test.info().outputPath("proposal-speakers.png"), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath("proposal-speakers.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(roster.getByRole("row").filter({ hasText: "Portal Proposer" })).toBeVisible();
-  await page.screenshot({ path: test.info().outputPath("proposal-speakers-mobile.png"), fullPage: true });
+  await page.screenshot({ path: testInfo.outputPath("proposal-speakers-mobile.png"), fullPage: true });
 
   expect(adminRequests, "portal proposals must not call admin APIs").toEqual([]);
   expect(proposalRequests).toEqual(

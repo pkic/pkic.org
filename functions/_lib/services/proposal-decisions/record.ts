@@ -1,4 +1,3 @@
-import { isEventDayCapacityConflict } from "../registrations/day-waitlist-capacity";
 import { prepareQueueEmailStatementWhen } from "../../email/outbox";
 import { requireAdminDatabaseUserId } from "../../auth/admin-identity";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
@@ -22,6 +21,7 @@ import type { RecordProposalDecisionInput, RecordedProposalDecision } from "./ty
 import { proposalDecisionSnapshotPredicate } from "./snapshot";
 import { prepareProposalRoleCapacityForProposalStatus } from "../proposal-role-capacity";
 import { isRegistrationTransitionConflict, registrationChangedError } from "../registrations/transition-guard";
+import { eventDayCapacityChangedError, isEventDayCapacityConflict } from "../registrations/day-waitlist-capacity";
 import { isEventParticipantSourceConflict } from "../event-participant-source-revision";
 import { isProposalSpeakerRosterConflict } from "../proposal-speaker-roster-revision";
 import { withProposalWriteContextGuard, type ProposalWriteAuthorization } from "../proposal-write-authorization";
@@ -322,6 +322,7 @@ export async function recordProposalDecision(
       outboxIds: preparedEmails.map(({ id }) => id),
     };
   } catch (error) {
+    if (isEventDayCapacityConflict(error)) throw eventDayCapacityChangedError();
     if (isAuthorizationGuardFailure(error)) {
       throw new AppError(
         409,
@@ -335,13 +336,6 @@ export async function recordProposalDecision(
         error.message.includes("UNIQUE constraint failed: registrations.event_id, registrations.user_id"))
     ) {
       throw registrationChangedError();
-    }
-    if (isEventDayCapacityConflict(error)) {
-      throw new AppError(
-        409,
-        "DAY_CAPACITY_CHANGED",
-        "Event attendance changed while the decision was being saved. Please retry.",
-      );
     }
     if (isProposalDecisionHistoryConflict(error)) {
       throw new Error("Proposal decision history already contains the current review round", { cause: error });

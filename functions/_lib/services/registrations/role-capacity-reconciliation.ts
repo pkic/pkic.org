@@ -8,6 +8,7 @@ import { buildRegistrationDayWaitlistSync } from "./day-waitlist-plan";
 import {
   roleBasedCapacityExemptReason,
   roleBasedCapacityExemptReasonAfterParticipantChange,
+  type EventDayCapacityGuardPlan,
 } from "./day-waitlist-capacity";
 import { registrationColumns, type RegistrationRecord } from "./types";
 import { prepareRegistrationTransitionGuard } from "./transition-guard";
@@ -20,10 +21,10 @@ export async function prepareRoleCapacityReconciliationStatements(
   db: DatabaseLike,
   input: {
     ensureRegistration?: boolean;
-    capacityGuards?: Map<string, StatementLike>;
     eventId: string;
     userId: string;
     activeProposalRoles: readonly import("../../../../assets/shared/schemas/participant-roles").EventParticipantRole[];
+    sharedCapacityGuards?: EventDayCapacityGuardPlan;
   },
 ): Promise<StatementLike[]> {
   const registration = await first<RegistrationRecord>(
@@ -58,11 +59,11 @@ export async function prepareRoleCapacityReconciliationStatements(
     userId: input.userId,
     selections: dayAttendance,
     capacityExemptReason,
-    capacityGuards: input.capacityGuards,
     preserveConfirmedEventDayIds: [],
     reArbitrateExistingCapacityRows: !capacityExemptReason,
     registrationStatus: confirm ? "registered" : registration.status,
     configuredEventDays: eventDays,
+    sharedCapacityGuards: input.sharedCapacityGuards,
     auditActor: { type: "system", id: null },
   });
   const now = nowIso();
