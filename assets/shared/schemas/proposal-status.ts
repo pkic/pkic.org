@@ -94,7 +94,9 @@ export function isProposalDecisionTransitionAllowed(
   currentDecisionStatus: string | null | undefined,
   _nextDecisionStatus: ProposalDecisionStatus,
 ): boolean {
-  if (isProposalDecidableStatus(proposalStatus)) return currentDecisionStatus == null;
+  // Older recorded decisions can retain a submission/review status. The
+  // current decision still belongs to this round and can be superseded.
+  if (isProposalDecidableStatus(proposalStatus)) return true;
   // A proposal whose status is the decision it carries can be decided again.
   return currentDecisionStatus != null && proposalStatus === currentDecisionStatus;
 }

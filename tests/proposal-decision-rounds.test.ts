@@ -252,58 +252,69 @@ describe("proposal decision review rounds", () => {
     ).resolves.toEqual([{ review_round: 2 }, { review_round: 2 }]);
   });
 
-  it("lets an admin reject an unanswered needs-work proposal without losing the changes-request decision", async () => {
-    const seeded = await seedDecisionWorkflow();
-    for (const [index, token] of seeded.reviewerTokens.entries()) {
-      expect((await saveReview(seeded.proposalId, token, 8 + index)).status).toBe(200);
-    }
-    expect((await finalize(seeded.proposalId, seeded.adminToken, "needs-work")).status).toBe(200);
-    const needsWorkProposal = await getProposalByManageToken(env.DB, seeded.manageToken, env.INTERNAL_SIGNING_SECRET!);
-    const reminder = await remindProposalSpeakerByProposer(env.DB, {
-      proposal: needsWorkProposal,
-      userId: needsWorkProposal.proposer_user_id,
-      appBaseUrl: "https://app.test",
-    });
-    // A decision can be corrected, so accepting here would stand; this round
-    // ends in a rejection instead, which is what the proposer is told.
-    const rejected = await finalize(seeded.proposalId, seeded.adminToken, "rejected");
-    expect(rejected.status).toBe(200);
-
-    await expect(
-      queryAll<{ status: string }>(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [seeded.proposalId]),
-    ).resolves.toEqual([{ status: "rejected" }]);
-    await expect(
-      queryAll<{ decision_sequence: number; final_status: string }>(
+  it.each(["needs-work", "submitted", "resubmitted", "under_review"])(
+    "rejects a recorded needs-work decision with proposal status %s and retains its history",
+    async (status) => {
+      const seeded = await seedDecisionWorkflow();
+      for (const [index, token] of seeded.reviewerTokens.entries()) {
+        expect((await saveReview(seeded.proposalId, token, 8 + index)).status).toBe(200);
+      }
+      expect((await finalize(seeded.proposalId, seeded.adminToken, "needs-work")).status).toBe(200);
+      const needsWorkProposal = await getProposalByManageToken(
         env.DB,
-        `SELECT decision_sequence, final_status
+        seeded.manageToken,
+        env.INTERNAL_SIGNING_SECRET!,
+      );
+      const reminder = await remindProposalSpeakerByProposer(env.DB, {
+        proposal: needsWorkProposal,
+        userId: needsWorkProposal.proposer_user_id,
+        appBaseUrl: "https://app.test",
+      });
+      // Reproduce older records whose proposal status was not updated with the decision.
+      await env.DB.prepare("UPDATE session_proposals SET status = ? WHERE id = ?")
+        .bind(status, seeded.proposalId)
+        .run();
+      // A decision can be corrected, so accepting here would stand; this round
+      // ends in a rejection instead, which is what the proposer is told.
+      const rejected = await finalize(seeded.proposalId, seeded.adminToken, "rejected");
+      expect(rejected.status).toBe(200);
+
+      await expect(
+        queryAll<{ status: string }>(env.DB, "SELECT status FROM session_proposals WHERE id = ?", [seeded.proposalId]),
+      ).resolves.toEqual([{ status: "rejected" }]);
+      await expect(
+        queryAll<{ decision_sequence: number; final_status: string }>(
+          env.DB,
+          `SELECT decision_sequence, final_status
          FROM proposal_decision_history
          WHERE proposal_id = ?
          ORDER BY review_round, decision_sequence`,
+          [seeded.proposalId],
+        ),
+      ).resolves.toEqual([
+        { decision_sequence: 1, final_status: "needs-work" },
+        { decision_sequence: 2, final_status: "rejected" },
+      ]);
+      await expect(
+        queryAll<{ status: string }>(env.DB, "SELECT status FROM email_outbox WHERE id = ?", [reminder.outboxId]),
+      ).resolves.toEqual([{ status: "cancelled" }]);
+      const participants = await queryAll<{ status: string }>(
+        env.DB,
+        "SELECT status FROM event_participant_role_sources WHERE source_type = 'proposal' AND source_ref = ?",
         [seeded.proposalId],
-      ),
-    ).resolves.toEqual([
-      { decision_sequence: 1, final_status: "needs-work" },
-      { decision_sequence: 2, final_status: "rejected" },
-    ]);
-    await expect(
-      queryAll<{ status: string }>(env.DB, "SELECT status FROM email_outbox WHERE id = ?", [reminder.outboxId]),
-    ).resolves.toEqual([{ status: "cancelled" }]);
-    const participants = await queryAll<{ status: string }>(
-      env.DB,
-      "SELECT status FROM event_participant_role_sources WHERE source_type = 'proposal' AND source_ref = ?",
-      [seeded.proposalId],
-    );
-    expect(participants.length).toBeGreaterThan(0);
-    expect(participants.every((participant) => participant.status === "inactive")).toBe(true);
-    const rejectedDecisionMail = await queryAll<{ status: string; payload_json: string }>(
-      env.DB,
-      `SELECT status, payload_json FROM email_outbox
+      );
+      expect(participants.length).toBeGreaterThan(0);
+      expect(participants.every((participant) => participant.status === "inactive")).toBe(true);
+      const rejectedDecisionMail = await queryAll<{ status: string; payload_json: string }>(
+        env.DB,
+        `SELECT status, payload_json FROM email_outbox
        WHERE template_key = 'proposal_decision'
          AND json_extract(payload_json, '$.finalStatus') = 'rejected'`,
-    );
-    expect(rejectedDecisionMail.length).toBeGreaterThan(0);
-    expect(rejectedDecisionMail.every((message) => message.status !== "cancelled")).toBe(true);
-  });
+      );
+      expect(rejectedDecisionMail.length).toBeGreaterThan(0);
+      expect(rejectedDecisionMail.every((message) => message.status !== "cancelled")).toBe(true);
+    },
+  );
 
   it("rolls back resubmission, decision release, and audit together", async () => {
     const seeded = await seedDecisionWorkflow();

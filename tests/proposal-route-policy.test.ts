@@ -4,6 +4,20 @@ import {
   proposalPermissionForRequest,
 } from "../functions/_lib/auth/proposal-route-policy";
 
+import {
+  isProposalDecisionTransitionAllowed,
+  PROPOSAL_DECISION_STATUSES,
+  PROPOSAL_MODERATION_STATUSES,
+} from "../assets/shared/schemas/proposal-status";
+
+describe("proposal decision transition policy", () => {
+  it.each(PROPOSAL_MODERATION_STATUSES)("does not reopen a %s proposal with a recorded decision", (status) => {
+    for (const nextStatus of PROPOSAL_DECISION_STATUSES) {
+      expect(isProposalDecisionTransitionAllowed(status, "needs-work", nextStatus)).toBe(false);
+    }
+  });
+});
+
 describe("proposal route authorization policy", () => {
   it("maps canonical proposal resources to exact capabilities", () => {
     expect(proposalPermissionForRequest("/api/v1/proposals/p1/reviews", "GET")).toBe("proposals:score");
