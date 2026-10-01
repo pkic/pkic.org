@@ -350,7 +350,13 @@ data:
 
     - name: Sarah McCarthy
       title: SVP Cryptography, Citi
-
+      bio: |
+        As the Quantum Readiness Program Lead at Citi, Sarah McCarthy focusses on developing effective solutions to ensure the security of financial systems amid emerging quantum threats. Before joining Citi, Sarah was Cryptographic Strategist at evolutionQ, where she spearheaded the development of quantum-safe network solutions and advocated for proactive preparation for the quantum computing era. Prior to that, she held a Research Fellow position at the Institute for Quantum Computing (IQC) at the University of Waterloo, following her PhD from Queen’s University Belfast. Her academic background supports her deep expertise, enabling her to stay at the forefront of quantum-safe solutions and bridge the gap from theoretical research to practical deployment.
+ 
+        A sought-after speaker known for her clear and engaging style, she has presented at events worldwide and is a key PC member for ETSI/IQC Quantum-Safe Cryptography Conference. Sarah was also named one of the Top 50 Women in Quantum by The Quantum Insider.
+      social:
+        linkedin: https://www.linkedin.com/in/sarahmccarthyphd/
+        
     - name: Itan Barmes
       title: Co-founder and Chief Strategy Officer, Qiz Security
       bio: |
@@ -370,7 +376,17 @@ data:
 
     - name: Chris Bailey
       title: Board Chair, PKI Consortium
+      bio: |
+        Chris Bailey is a recognized leader in the digital security and Public Key Infrastructure (PKI) industry, with more than 25 years of experience driving innovation, shaping global standards, and building trust across the certificate authority (CA) ecosystem. He currently serves as Board Chair of the PKI Consortium, a nonprofit dedicated to advancing PKI maturity, interoperability, post-quantum readiness, and best practices across industries. He also serves as a Board Member of AppViewX.
 
+        A founding member of the CA/Browser Forum and the PKI Consortium, Chris has played a pivotal role in the creation and global adoption of standards for SSL/TLS certificates and digital trust. He was one of the original architects of the Domain Validation (DV) Certificate, which now secures the vast majority of TLS connections online. His contributions also include launching the first publicly trusted PDF signing certificate, enabling legally binding digital signatures, and co-inventing the Brand Indicators for Message Identification (BIMI) certificate, which displays verified brand logos in supported email clients to enhance trust and combat phishing.
+
+        Chris has held senior leadership roles at Trend Micro, Entrust, and GeoTrust, three prominent companies in the cybersecurity and digital certificate sectors. In these roles, he expanded certificate offerings, guided policy development, and strengthened industry collaboration around trusted identity and encryption technologies.   
+        
+        Driven by a deep commitment to community engagement, standards development, and technical innovation, Chris continues to champion secure digital identity solutions and foster global cooperation throughout the PKI ecosystem.
+      social:
+        linkedin: https://www.linkedin.com/in/christophertmbailey/
+        
     - name: Chris Hickman
       title: Chief Security Officer, Keyfactor
       bio: |
