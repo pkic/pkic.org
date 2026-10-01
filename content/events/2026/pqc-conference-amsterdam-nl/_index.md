@@ -479,6 +479,11 @@ data:
       bio: |
         Akane Suzuki is a Chief Researcher at Hitachi, Ltd., specializing in information security, electronic authentication, and digital identity. Leveraging hands-on experience in cryptographic migration for public key infrastructure during Japan's "2010 Cryptographic Algorithm Transition," Suzuki currently focuses on analyzing post-quantum cryptography (PQC) trends and designing migration approaches, and contributed to the CRYPTREC external evaluation report in FY2025, "Survey on Technical Trends in the Migration to Post Quantum Cryptography."
 
+    - name: Hiroki Uchiyama
+      title: Director and Head of Security Innovation Lab Hitachi America, Ltd.
+      bio: |
+        Hiroki Uchiyama is Director and Head of the Security Innovation Lab at Hitachi America R&amp;D. He focuses on advancing cybersecurity technologies to strengthen security across critical sectors, including energy, mobility, and manufacturing. In his current role, he is developing quantum security technologies to migrate to quantum-safe systems. He holds a Ph.D. in Informatics from Kyoto University in Japan and is a Certified Information Systems Security Professional(CISSP).
+
   # Agenda --------------------------------------------------------------------
   # Red hall (plenary) carries the strategic track, the blue hall the technical
   # track; rooms A-E are smaller breakout rooms. Sessions are 30 min, panels 45,
@@ -1475,9 +1480,16 @@ data:
             locations:
               - plenary
 
-          - title: To be announced
+          - title: Practical Implementation of Hardware-Separated Composite Signatures for Large-Scale PKI During the PQC Migration Period
             description: |
-              Session details will be announced soon.
+              The transition to Post-Quantum Cryptography (PQC) presents a significant challenge for organizations operating large-scale Public Key Infrastructures (PKIs). While PQC standards are becoming available, replacing vast numbers of deployed hardware tokens such as smart cards remains operationally expensive and time-consuming.
+
+              In this session, we present our implementation experience with the IETF LAMPS draft "Composite ML-DSA for Use in X.509 Public Key Infrastructure" in a hardware-separated environment for large-scale PKI migration. The approach combines existing smart cards holding traditional signature keys (e.g., RSA) with server-side Hardware Security Modules (HSMs) providing PQC signature capabilities (e.g., ML-DSA), enabling organizations to begin introducing PQC without requiring immediate replacement of end-user hardware. We discuss three representative risks observed during implementation and evaluation: cross-protocol signature composition, unintended reuse of composite-signature keys for single-algorithm signatures, and device impersonation across separated trust domains, and present a device-binding architecture that addresses them while maintaining compatibility with the IETF LAMPS composite signature framework.
+
+              We also evaluate the potential operational impact of this approach using a large-scale PKI migration model involving tens of millions of certificates, and share architectural considerations, implementation experiences, and validation results from a prototype built using cloud-based HSM services and commercially available PKI smart cards.
+            speakers:
+              - Akane Suzuki
+              - Hiroki Uchiyama
             locations:
               - blue_hall
 
@@ -1543,15 +1555,9 @@ data:
             locations:
               - plenary
 
-          - title: Practical Implementation of Hardware-Separated Composite Signatures for Large-Scale PKI During the PQC Migration Period
+          - title: To be announced
             description: |
-              The transition to Post-Quantum Cryptography (PQC) presents a significant challenge for organizations operating large-scale Public Key Infrastructures (PKIs). While PQC standards are becoming available, replacing vast numbers of deployed hardware tokens such as smart cards remains operationally expensive and time-consuming.
-
-              In this session, we present our implementation experience with the IETF LAMPS draft "Composite ML-DSA for Use in X.509 Public Key Infrastructure" in a hardware-separated environment for large-scale PKI migration. The approach combines existing smart cards holding traditional signature keys (e.g., RSA) with server-side Hardware Security Modules (HSMs) providing PQC signature capabilities (e.g., ML-DSA), enabling organizations to begin introducing PQC without requiring immediate replacement of end-user hardware. We discuss three representative risks observed during implementation and evaluation: cross-protocol signature composition, unintended reuse of composite-signature keys for single-algorithm signatures, and device impersonation across separated trust domains, and present a device-binding architecture that addresses them while maintaining compatibility with the IETF LAMPS composite signature framework.
-
-              We also evaluate the potential operational impact of this approach using a large-scale PKI migration model involving tens of millions of certificates, and share architectural considerations, implementation experiences, and validation results from a prototype built using cloud-based HSM services and commercially available PKI smart cards.
-            speakers:
-              - Akane Suzuki
+              Session details will be announced soon.
             locations:
               - blue_hall
 
