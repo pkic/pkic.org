@@ -169,9 +169,6 @@ markup:
         block: true
 
 module:
-  imports:
-    - path: github.com/gohugoio/hugo-mod-bootstrap-scss/v5
-
   # Apply the filter at Hugo's unified-file-system boundary. Git ignores these
   # files too, but Hugo must not parse or publish metadata present in a local
   # checkout on filesystems that create AppleDouble sidecars.

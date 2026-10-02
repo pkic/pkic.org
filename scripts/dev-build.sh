@@ -7,7 +7,7 @@ STATIC_LOG="$ROOT_DIR/.wrangler/dev-static.log"
 
 cd "$ROOT_DIR"
 
-HUGO_VERSION="${HUGO_VERSION:-0.160.0}" bash ./scripts/build.sh
+bash ./scripts/build.sh
 
 if curl -fsS --max-time 2 "http://127.0.0.1:${STATIC_PORT}/" >/dev/null 2>&1; then
   exit 0
