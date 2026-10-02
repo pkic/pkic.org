@@ -96,11 +96,16 @@ test.describe("public site at every width", () => {
   test("uses the wide four-column working group grid on desktop", async ({ page }) => {
     await page.setViewportSize({ width: 1600, height: 900 });
     await page.goto("/wg/");
-    const grid = page.locator(".bento-grid").first();
-    const container = grid.locator("xpath=..");
+    const grid = page.locator("main .pk-grid").filter({ has: page.locator(".pkic-wg-spotlight") });
     await expect(grid).toBeVisible();
-    expect((await container.boundingBox())?.width).toBeGreaterThan(1200);
-    expect(await grid.evaluate((element) => getComputedStyle(element).gridTemplateColumns.split(" ").length)).toBe(4);
+    expect((await grid.boundingBox())?.width).toBeGreaterThan(1200);
+    const cards = grid.locator(":scope > .pkic-wg-spotlight");
+    expect(await cards.count()).toBeGreaterThanOrEqual(4);
+    const firstRow = await cards.evaluateAll((elements) => {
+      const firstTop = elements[0]!.getBoundingClientRect().top;
+      return elements.filter((element) => Math.abs(element.getBoundingClientRect().top - firstTop) < 1).length;
+    });
+    expect(firstRow).toBe(4);
   });
 
   test("fits the viewport and stays operable at mobile, tablet and desktop", async ({ page }) => {

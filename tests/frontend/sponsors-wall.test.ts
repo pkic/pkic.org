@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import type { PublicSponsor } from "../../assets/shared/schemas/public-sponsors";
-import { sponsorWeightClass, sponsorWeightsDescending } from "../../assets/ts/member-flows/sponsors-wall";
+import { sponsorWeightClass, sponsorWeightsDescending } from "../../assets/ts/site/SponsorDisplays";
 import { mergeSponsorDisplayPages, sponsorQueryForTest } from "../../assets/ts/member-flows/sponsors-wall-data";
 
 function sponsor(weight: number): PublicSponsor {

@@ -139,7 +139,7 @@ describe("public votes index", () => {
     const container = await mountIndex();
 
     const link = container.querySelector<HTMLAnchorElement>("a.pk-stretched");
-    expect(link?.getAttribute("aria-label")).toBe("Charter amendment");
+    expect(link?.textContent).toBe("Charter amendment");
     expect(link?.getAttribute("href")).toBe("/votes/detail/?slug=charter-amendment");
     // Nothing is activated by a handler on a non-interactive element.
     expect(container.querySelector(".member-card[onclick]")).toBeNull();

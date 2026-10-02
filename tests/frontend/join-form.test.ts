@@ -14,7 +14,6 @@ import {
   renderMembershipCategories,
 } from "../../assets/ts/member-flows/join-form";
 import type { MemberApplicationFormResponse } from "../../assets/shared/schemas/member-applications";
-// @ts-expect-error Vite's raw-loader suffix is available to frontend tests.
 import joinFormTemplate from "../../layouts/shortcodes/joinform.html?raw";
 import { mountTemplate } from "./helpers/hugo-template";
 

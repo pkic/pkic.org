@@ -17,6 +17,11 @@ for (const viewport of [
       const backdrop = document.querySelector(".pk-login__backdrop")!.getBoundingClientRect();
       const footer = document.querySelector("footer")!.getBoundingClientRect();
       return {
+        loginLeft: login.left,
+        loginRight: login.right,
+        viewportWidth: document.documentElement.clientWidth,
+        loginTop: login.top,
+        headerBottom: document.querySelector("#pkicMainNav")!.getBoundingClientRect().bottom,
         loginBottom: login.bottom,
         backdropBottom: backdrop.bottom,
         footerTop: footer.top,
@@ -24,6 +29,13 @@ for (const viewport of [
       };
     });
     expect(layout.overflow).toBe(0);
+    expect(layout.loginLeft).toBe(0);
+    expect(Math.abs(layout.loginRight - layout.viewportWidth)).toBeLessThanOrEqual(1);
+    expect(Math.abs(layout.loginTop - layout.headerBottom)).toBeLessThanOrEqual(1);
+    if (viewport.width >= 1024) {
+      await expect(page.getByText("Working group drafts, votes, plenary registration", { exact: false })).toBeVisible();
+      await expect(page.locator(".pk-login__facts")).toBeVisible();
+    }
     expect(Math.abs(layout.footerTop - layout.loginBottom)).toBeLessThanOrEqual(1);
     if (viewport.width >= 1024) expect(Math.abs(layout.backdropBottom - layout.loginBottom)).toBeLessThanOrEqual(1);
     await page.screenshot({

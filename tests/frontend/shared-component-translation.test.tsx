@@ -13,7 +13,7 @@ import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { AuditLogTable } from "../../assets/ts/components/AuditLogTable";
-import { Markdown } from "../../assets/ts/components/Markdown";
+import { Markdown } from "../../assets/ts/ui/Markdown";
 import { PersonCell } from "../../assets/ts/components/PersonCell";
 import { StatCard } from "../../assets/ts/components/StatCard";
 

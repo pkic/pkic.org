@@ -381,7 +381,10 @@ describe("recurring meeting calendars", () => {
   });
 
   it("retains a past cancellation when replacing the recurring master", async () => {
-    const startsAt = new Date(Date.now() - 40 * 86400_000).toISOString().replace(/\.\d{3}Z$/, ".000Z");
+    const pastStart = new Date(Date.now() - 40 * 86400_000);
+    // Noon keeps this cancellation fixture outside daylight-saving clock gaps.
+    pastStart.setUTCHours(12, 0, 0, 0);
+    const startsAt = pastStart.toISOString();
     const series = await createGroupEventSeries(env.DB, admin, GROUP, {
       ...input(),
       startsAt,

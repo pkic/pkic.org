@@ -5,7 +5,7 @@ import { userDetailResponseSchema } from "../../assets/shared/schemas/user-manag
 
 const USER_ID = "00000000-0000-4000-8000-000000000041";
 
-test("a signed-in nonmember sees saved contact details without an empty identity picker", async ({ page }) => {
+test("a signed-in nonmember can use saved contact details without an empty identity picker", async ({ page }) => {
   await page.route("**/api/v1/auth/session", (route) =>
     route.fulfill({
       json: userAuthSessionResponseSchema.parse({
@@ -50,8 +50,33 @@ test("a signed-in nonmember sees saved contact details without an empty identity
   });
 
   await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
-  await expect(page.getByLabel("First name", { exact: true })).toHaveValue("Ada");
-  await expect(page.getByLabel("Last name", { exact: true })).toHaveValue("Lovelace");
-  await expect(page.getByLabel("Work email", { exact: true })).toHaveValue("ada@example.test");
+  await page.getByRole("button", { name: "Use saved profile", exact: true }).click();
+  await expect(page.getByRole("textbox", { name: "First name (required)", exact: true })).toHaveValue("Ada");
+  await expect(page.getByRole("textbox", { name: "Last name (required)", exact: true })).toHaveValue("Lovelace");
+  await expect(page.getByRole("textbox", { name: "Work email (required)", exact: true })).toHaveValue(
+    "ada@example.test",
+  );
+  await expect(page.getByRole("combobox", { name: "Event identity" })).toHaveCount(0);
+});
+
+test("a signed-out visitor gets clear profile guidance and keeps entered registration details", async ({ page }) => {
+  let sessionRequests = 0;
+  await page.route("**/api/v1/auth/session", (route) => {
+    sessionRequests += 1;
+    return route.fulfill({
+      status: 401,
+      json: { error: { code: "UNAUTHORIZED", message: "Sign in required" } },
+    });
+  });
+  await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
+  const profile = page.getByRole("button", { name: "Use saved profile", exact: true });
+  await expect(profile).toBeVisible();
+  expect(sessionRequests).toBe(0);
+  const firstName = page.getByRole("textbox", { name: "First name (required)", exact: true });
+  await firstName.fill("Entered name");
+  await profile.click();
+  await expect(page.getByRole("status").filter({ hasText: "You are not signed in" })).toBeVisible();
+  await expect(firstName).toHaveValue("Entered name");
+  expect(sessionRequests).toBe(1);
   await expect(page.getByRole("combobox", { name: "Event identity" })).toHaveCount(0);
 });

@@ -5,7 +5,7 @@ import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { confirmAction, ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { confirmationConsequences, requestClose, typedConfirmationInput } from "./helpers/confirm-dialog";
-import { EmptyState } from "../../assets/ts/components/EmptyState";
+import { EmptyState } from "../../assets/ts/ui/RecordEmptyState";
 import { RowActions } from "../../assets/ts/ui/RowActions";
 import { Spinner } from "../../assets/ts/components/Spinner";
 import { DataTable } from "../../assets/ts/components/Table";

@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { formatTimeRangeInZone } from "../../assets/shared/format-date";
 import {
   formatCalendarDate,
   formatDate,
@@ -17,6 +18,16 @@ afterEach(() => {
 });
 
 describe("friendly date formatting", () => {
+  it("labels an agenda clock range in the event's zone across daylight saving time", () => {
+    const winter = formatTimeRangeInZone("2026-12-01T08:00:00.000Z", "2026-12-01T08:30:00.000Z", "Europe/Amsterdam");
+    expect(winter).toContain("09:00");
+    expect(winter).toContain("09:30");
+    expect(winter).toMatch(/CET|GMT\+1/);
+    const summer = formatTimeRangeInZone("2026-06-01T08:00:00.000Z", "2026-06-01T08:30:00.000Z", "Europe/Amsterdam");
+    expect(summer).toContain("10:00");
+    expect(summer).toMatch(/CEST|GMT\+2/);
+    expect(formatTimeRangeInZone("invalid", undefined, "Europe/Amsterdam")).toBe("—");
+  });
   it("names the zone when speaking a venue's clock and stays local otherwise", () => {
     const zoned = formatDateTimeInZone("2026-12-01T08:00:00.000Z", "Europe/Amsterdam");
     // 08:00Z is 09:00 in Amsterdam in December (CET) — the zone must be visible.

@@ -11,6 +11,7 @@
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
+import { publishE2eSite } from "./helpers/site-publication";
 
 test("a member's page answers on its name, embeds its video, and marks its links", async ({ page }) => {
   // The readable address, not `/members/profile/?id=<uuid>`. This is the exact
@@ -60,7 +61,7 @@ test("a member's page answers on its name, embeds its video, and marks its links
 
 test("the members directory links a member by name, not by id", async ({ page }) => {
   await page.goto("/members/");
-  const card = page.locator('.member-card a.pk-stretched[aria-label="Digitorus"]');
+  const card = page.getByRole("main").getByRole("link", { name: "Digitorus", exact: true });
   await expect(card).toHaveCount(1);
   await expect(card).toHaveAttribute("href", "/members/digitorus/");
 });
@@ -143,11 +144,10 @@ test("an organization created in the portal gets a readable address too", async 
   }, name);
   expect(created.status, JSON.stringify(created.body)).toBe(201);
 
-  // Find the new member through the directory, including after its first page fills up.
+  await publishE2eSite(page, `/members/${expectedSlug}/`);
+  // Find the newly published member through the complete static directory.
   await page.goto("/members/");
-  await page.getByLabel("Search members").fill(name);
-  await page.getByRole("button", { name: "Search", exact: true }).click();
-  const card = page.locator(`.member-card a.pk-stretched[aria-label="${name}"]`);
+  const card = page.locator(".member-card").getByRole("link", { name, exact: true });
   await expect(card).toHaveCount(1, { timeout: 15_000 });
   await expect(card).toHaveAttribute("href", `/members/${expectedSlug}/`);
 

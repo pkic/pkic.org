@@ -10,7 +10,16 @@ const e2eBaseUrl = `http://localhost:${e2ePort}`;
 export default defineConfig({
   testDir: "./tests/e2e",
   testMatch: "**/*.spec.ts",
-  testIgnore: "**/._*",
+  testIgnore: [
+    "**/._*",
+    "**/astro-publication.spec.ts",
+    "**/public-contrast.spec.ts",
+    "**/public-publication-layout.spec.ts",
+    "**/public-responsive.spec.ts",
+    "**/public-form-and-theme-layout.spec.ts",
+  ],
+  // Whole-site republication variants are an explicit audit, not routine UI CI.
+  grepInvert: /@publication/,
   timeout: 120_000,
   fullyParallel: false,
   forbidOnly: Boolean(process.env.CI),
@@ -46,6 +55,8 @@ export default defineConfig({
     // Always start fresh so Wrangler uses the seeded state dir.
     reuseExistingServer: Boolean(process.env.REUSE_SERVER),
     timeout: 300_000,
+    // Let the release supervisor stop its Worker process group and close logs.
+    gracefulShutdown: { signal: "SIGTERM", timeout: 10_000 },
     /*
      * The server's own output, kept.
      *

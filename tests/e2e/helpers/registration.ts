@@ -10,6 +10,7 @@ const REGISTRATION_API = "/api/v1/events/pqc-conference-amsterdam-nl/registratio
 export async function registerInBrowser(page: Page, email: string, identityName?: string) {
   await page.goto(REGISTRATION_PAGE);
   if (identityName) {
+    await page.getByRole("button", { name: "Use saved profile", exact: true }).click();
     const picker = page.getByRole("combobox", { name: "Event identity", exact: true });
     await picker.fill(identityName);
     await page.getByRole("option", { name: identityName, exact: true }).click();
@@ -36,7 +37,7 @@ export async function registerInBrowser(page: Page, email: string, identityName?
   await page.getByLabel("Country", { exact: true }).selectOption("US");
   await page.getByRole("button", { name: /Continue/i }).click();
   if (identityName) await expect(page.locator("[data-registration-review]")).toContainText(identityName);
-  await page.locator('label[for="registration-email-review-confirmed"]').click();
+  await page.getByRole("checkbox", { name: /I checked that .* is correct and understand/i }).check();
   for (const term of [/privacy policy/i, /code of conduct/i, /photos and videos/i]) {
     await page.getByRole("checkbox", { name: term }).check();
   }

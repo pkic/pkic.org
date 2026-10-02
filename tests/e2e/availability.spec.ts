@@ -60,6 +60,7 @@ test("a temporary data outage preserves loaded user rows and recovers on explici
   const { e2eAdminEmail } = await import("../helpers/e2e-admin");
   await signInToPortal(page, e2eAdminEmail("portal-permission-boundaries"));
   await page.goto("/portal/#/users");
+  await expect(page.locator("#portal-app")).not.toHaveAttribute("inert");
   const table = page.getByRole("table").first();
   await expect(table.getByRole("row").nth(1)).toBeVisible();
   const firstRow = await table.getByRole("row").nth(1).innerText();

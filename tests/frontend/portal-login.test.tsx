@@ -68,6 +68,14 @@ function submitForm(): Promise<void> {
   });
 }
 
+async function enterEmail(value: string): Promise<void> {
+  await act(() => {
+    const control = controlLabeled("Work email");
+    control.value = value;
+    control.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 beforeEach(() => {
   container = document.createElement("div");
   document.body.append(container);
@@ -101,7 +109,7 @@ describe("portal login", () => {
     // Nothing has been submitted, so the field must not claim to be in error.
     expect(email.getAttribute("aria-invalid")).toBeNull();
 
-    email.value = "member@example.test";
+    await enterEmail("member@example.test");
     await submitForm();
     await waitFor(() => container.querySelector('[role="status"]') !== null, "the send was never confirmed");
 
@@ -124,7 +132,7 @@ describe("portal login", () => {
     );
 
     await act(() => render(<Login onSignedIn={vi.fn()} />, container));
-    controlLabeled("Work email").value = "member@example.test";
+    await enterEmail("member@example.test");
     await submitForm();
     await waitFor(() => container.querySelector('[role="alert"]') !== null, "the failure was never announced");
 

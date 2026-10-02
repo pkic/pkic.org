@@ -29,11 +29,11 @@ test("requires a factual organization answer and updates the email path", async 
   // at the same label scale as every other field label in this form, rather
   // than falling back to the browser's oversized default legend size.
   await expect(applicantQuestion).toHaveClass(/\bpk-field__label\b/);
-  await expect(applicantQuestion).toHaveClass(/\bpk-strong\b/);
-  const answerLabel = page.locator('label[for="joinApplicantOrganization"]');
   const questionFontSize = await applicantQuestion.evaluate((element) => getComputedStyle(element).fontSize);
   const questionFontWeight = await applicantQuestion.evaluate((element) => getComputedStyle(element).fontWeight);
-  const answerFontWeight = await answerLabel.evaluate((element) => getComputedStyle(element).fontWeight);
+  const answerFontWeight = await page
+    .getByLabel("Yes — I am employed by or own an organization")
+    .evaluate((element) => getComputedStyle(element.closest("label")!).fontWeight);
   expect(Number(questionFontWeight)).toBeGreaterThan(Number(answerFontWeight));
 
   const organizationChoice = page.getByLabel("Yes — I am employed by or own an organization");

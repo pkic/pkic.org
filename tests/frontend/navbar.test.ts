@@ -1,8 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
-// @ts-expect-error Vite's raw-loader suffix is available to frontend tests.
 import navbarSource from "../../assets/js/navbar.js?raw";
-// @ts-expect-error Vite's raw-loader suffix is available to frontend tests.
 import navbarTemplate from "../../layouts/partials/navbar.html?raw";
 
 async function loadNavbar(): Promise<void> {

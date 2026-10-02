@@ -1,5 +1,6 @@
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
-// @ts-expect-error Legacy event display code is still plain JavaScript.
+// Legacy event display code is still plain JavaScript; the frontend project
+// allows it so the public entry can load these modules.
 import * as eventCommon from "../../assets/js/event-common.js";
 
 const {

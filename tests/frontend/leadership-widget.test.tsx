@@ -93,7 +93,6 @@ async function mountWidget(view: "roster" | "leadership"): Promise<void> {
         apiBase="/api/v1"
         slug="board"
         view={view}
-        color="green"
         pastHeadingHtml="<h2>Previous Board members</h2>"
       />,
       container,
@@ -297,7 +296,7 @@ describe("GroupGovernanceWidget", () => {
     expect(card?.querySelector(".person-card-org")).toBeNull();
     expect(card?.textContent).not.toContain(" at ");
     // Initials rather than an empty ring where the photograph would go.
-    expect(card?.querySelector(".person-card-avatar--initials")?.textContent).toBe("UC");
+    expect(card?.querySelector(".person-card-avatar-frame .pk-avatar__initials")?.textContent).toBe("UC");
     expect(card?.textContent).toContain("Jun 1, 2022 – Feb 1, 2025");
   });
 

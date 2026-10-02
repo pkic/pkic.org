@@ -12,7 +12,8 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { MemberDetailPage, MemberDetailView } from "../../assets/ts/member-flows/member-detail-page";
+import { MemberDetailPage } from "../../assets/ts/member-flows/member-detail-page";
+import { MemberDetailView } from "../../assets/ts/site/MemberProfile";
 import { publicMemberDetailSchema } from "../../assets/shared/schemas/members-directory";
 
 const mounted: HTMLElement[] = [];
@@ -86,10 +87,16 @@ async function mountPage(directoryHref = "/members/"): Promise<HTMLElement> {
   return container;
 }
 
-async function mountView(overrides: MemberPayload = {}): Promise<HTMLElement> {
+async function mountView(
+  overrides: MemberPayload = {},
+  workingGroups?: ReadonlyArray<{ name: string; href: string }>,
+): Promise<HTMLElement> {
   const container = attach();
   await act(() => {
-    render(<MemberDetailView member={memberRecord(overrides)} directoryHref="/members/" />, container);
+    render(
+      <MemberDetailView member={memberRecord(overrides)} directoryHref="/members/" workingGroups={workingGroups} />,
+      container,
+    );
   });
   return container;
 }
@@ -259,8 +266,8 @@ describe("public member detail content", () => {
       "X (Twitter)",
     ]);
     expect(badges.map((link) => link.getAttribute("aria-label"))).toEqual([
-      null,
-      null,
+      "Example Corp on GitHub (opens in a new tab)",
+      "Example Corp on LinkedIn (opens in a new tab)",
       "Ada Lovelace on LinkedIn (opens in a new tab)",
       "Ada Lovelace on X (Twitter) (opens in a new tab)",
     ]);
@@ -300,12 +307,12 @@ describe("public member detail content", () => {
     expect(region!.querySelector("img")?.getAttribute("alt")).toBe("");
   });
 
-  it("shows the branded initials, hidden from assistive technology, when there is no logo", async () => {
+  it("shows the organization's monogram, hidden from assistive technology, when there is no logo", async () => {
     const container = await mountView({ logoUrl: null, name: "Example Corp" });
 
-    const initials = container.querySelector(".standalone-initials");
-    expect(initials?.textContent).toBe("EC");
-    expect(initials?.getAttribute("aria-hidden")).toBe("true");
+    const avatar = container.querySelector("header .pk-avatar--square");
+    expect(avatar?.querySelector(".pk-avatar__initials")?.textContent).toBe("EC");
+    expect(avatar?.getAttribute("aria-hidden")).toBe("true");
     // The name is still on the page, as the heading rather than as a picture.
     expect(container.querySelector("h1")?.textContent).toContain("Example Corp");
   });
@@ -316,4 +323,20 @@ describe("public member detail content", () => {
     expect(container.querySelector("section[aria-labelledby]")).toBeNull();
     expect(container.textContent).not.toContain("Representatives");
   });
+});
+
+it("publishes supplied working groups as named navigation links without fetching", async () => {
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  const root = await mountView({}, [{ name: "Post-Quantum Cryptography", href: "/wg/pqc/" }]);
+  const section = root.querySelector('[aria-labelledby="member-working-groups"]');
+  expect(section?.querySelector("h3")?.textContent).toBe("Working groups");
+  expect(section?.querySelector("li a")?.getAttribute("href")).toBe("/wg/pqc/");
+  expect(section?.querySelector("li a")?.textContent).toBe("Post-Quantum Cryptography");
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it.each([undefined, []])("omits an empty working-group section (%s)", async (workingGroups) => {
+  const root = await mountView({}, workingGroups);
+  expect(root.querySelector('[aria-labelledby="member-working-groups"]')).toBeNull();
 });

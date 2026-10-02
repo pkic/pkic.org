@@ -103,7 +103,10 @@ function installResponses(organizationName: string | null | undefined): void {
   );
 }
 
-async function mount(initial: Partial<Record<"firstName" | "lastName" | "email", string>> = {}) {
+async function mount(
+  initial: Partial<Record<"firstName" | "lastName" | "email", string>> = {},
+  deferUntilRequested = false,
+) {
   host = document.createElement("div");
   document.body.append(host);
   const form = document.createElement("form");
@@ -117,7 +120,7 @@ async function mount(initial: Partial<Record<"firstName" | "lastName" | "email",
   form.append(mountPoint);
   host.append(form);
   await act(async () => {
-    render(<RegistrationIdentitySelect form={form} />, mountPoint);
+    render(<RegistrationIdentitySelect form={form} deferUntilRequested={deferUntilRequested} />, mountPoint);
   });
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
@@ -140,6 +143,64 @@ afterEach(() => {
 });
 
 describe("event registration identity", () => {
+  it("makes no anonymous session request until the visitor asks to use a saved profile", async () => {
+    installResponses(undefined);
+    const form = await mount({}, true);
+    expect(fetch).not.toHaveBeenCalled();
+    const button = host!.querySelector<HTMLButtonElement>("button")!;
+    expect(button.textContent).toBe("Use saved profile");
+    await act(async () => button.click());
+    await vi.waitFor(() => expect(value(form, "email")).toBe("ada@example.test"));
+  });
+
+  it("shows pending feedback and keeps typed details when the session is signed out", async () => {
+    let finish!: (response: Response) => void;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        () =>
+          new Promise<Response>((resolve) => {
+            finish = resolve;
+          }),
+      ),
+    );
+    const form = await mount({ firstName: "Chosen", email: "chosen@example.test" }, true);
+    await act(async () => host!.querySelector<HTMLButtonElement>("button")!.click());
+    const button = host!.querySelector<HTMLButtonElement>("button")!;
+    expect(button.getAttribute("aria-busy")).toBe("true");
+    expect(button.textContent).toContain("Loading saved profile");
+    await act(async () =>
+      finish(
+        new Response(JSON.stringify({ error: { code: "UNAUTHORIZED", message: "Sign in" } }), {
+          status: 401,
+          headers: { "content-type": "application/json" },
+        }),
+      ),
+    );
+    await vi.waitFor(() =>
+      expect(host!.querySelector('[role="status"]')?.textContent).toContain("You are not signed in"),
+    );
+    expect(fetch).toHaveBeenCalledTimes(1);
+    expect(value(form, "firstName")).toBe("Chosen");
+    expect(value(form, "email")).toBe("chosen@example.test");
+  });
+
+  it("distinguishes a connection failure, supports retry and confirms saved details without overwriting input", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(new TypeError("Offline")));
+    const form = await mount({ firstName: "Chosen", email: "chosen@example.test" }, true);
+    await act(async () => host!.querySelector<HTMLButtonElement>("button")!.click());
+    await vi.waitFor(() => expect(host!.querySelector('[role="alert"]')?.textContent).toContain("We could not load"));
+    expect(host!.textContent).not.toContain("You are not signed in");
+    installResponses(undefined);
+    await act(async () => host!.querySelector<HTMLButtonElement>("button")!.click());
+    await vi.waitFor(() =>
+      expect(host!.querySelector('[role="status"]')?.textContent).toContain("Your saved profile is ready"),
+    );
+    expect(value(form, "firstName")).toBe("Chosen");
+    expect(value(form, "email")).toBe("chosen@example.test");
+    expect(value(form, "lastName")).toBe("Lovelace");
+  });
+
   it("prefills a signed-in nonmember and hides an empty selector", async () => {
     installResponses(undefined);
     const form = await mount();

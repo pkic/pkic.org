@@ -19,7 +19,6 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { showHeadshotDisclaimer } from "../../assets/ts/shared/headshot/upload";
-// @ts-expect-error Vite's raw-loader suffix is available to frontend tests.
 import headshotModals from "../../layouts/partials/headshot-modals.html?raw";
 
 function mountPartial(): void {

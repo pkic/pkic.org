@@ -16,6 +16,7 @@
 
 import { render } from "preact-render-to-string";
 import { describe, expect, it } from "vitest";
+import type { SiteNavigation } from "../../assets/shared/site-content";
 
 import { Alert } from "../../assets/ts/ui/Alert";
 import { Avatar } from "../../assets/ts/ui/Avatar";
@@ -40,6 +41,13 @@ import { StatCard } from "../../assets/ts/ui/StatCard";
 import { Tabs } from "../../assets/ts/ui/Tabs";
 import { Select, Textarea, TextInput } from "../../assets/ts/ui/TextControl";
 import { Toast } from "../../assets/ts/ui/Toast";
+
+const siteNavigationFixture: SiteNavigation = {
+  footer: [{ children: [], identifier: "about", label: "About", href: "/about/" }],
+  main: [{ children: [], identifier: "blog", label: "Blog", href: "/blog/" }],
+};
+import { SiteFooter, SiteHeader, SiteMain } from "../../assets/ts/ui/SiteChrome";
+import { ThemeToggle } from "../../assets/ts/ui/ThemeToggle";
 
 interface Row {
   id: string;
@@ -146,6 +154,10 @@ const primitives: ReadonlyArray<[string, () => string]> = [
     () => render(<DescriptionList items={[{ term: "Legal name", value: "SecureCA Inc" }, { term: "Slogan" }]} />),
   ],
   ["Toast", () => render(<Toast tone="ok" message="Saved." />)],
+  ["SiteHeader", () => render(<SiteHeader currentPath="/blog/" navigation={siteNavigationFixture} />)],
+  ["SiteMain", () => render(<SiteMain>Content</SiteMain>)],
+  ["SiteFooter", () => render(<SiteFooter navigation={siteNavigationFixture} />)],
+  ["ThemeToggle", () => render(<ThemeToggle />)],
   [
     "Dialog, closed",
     () =>

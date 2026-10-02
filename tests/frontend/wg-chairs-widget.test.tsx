@@ -116,10 +116,7 @@ describe("WgChairsWidget", () => {
     document.body.append(container);
 
     await act(async () => {
-      render(
-        <WgChairsWidget apiBase="/api/v1" slug="pqc-task-force" wgLabel="Task Force" color="green" mode="compact" />,
-        container,
-      );
+      render(<WgChairsWidget apiBase="/api/v1" slug="pqc-task-force" wgLabel="Task Force" mode="compact" />, container);
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     await settle();
@@ -161,14 +158,7 @@ describe("WgChairsWidget", () => {
 
     await act(async () => {
       render(
-        <WgChairsWidget
-          apiBase="/api/v1"
-          slug="pqc-task-force"
-          wgLabel="Task Force"
-          color="green"
-          mode="card"
-          onReveal={onReveal}
-        />,
+        <WgChairsWidget apiBase="/api/v1" slug="pqc-task-force" wgLabel="Task Force" mode="card" onReveal={onReveal} />,
         container,
       );
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -194,7 +184,6 @@ describe("WgChairsWidget", () => {
           apiBase="/api/v1"
           slug="pqc-task-force"
           wgLabel="Task Force"
-          color="green"
           mode="compact"
           onReveal={onReveal}
         />,
