@@ -12,6 +12,15 @@ change:
 pnpm run check
 ```
 
+Routine browser CI (`pnpm run test:e2e`) covers ongoing user flows. The static
+publication audit (`pnpm run test:e2e:astro`) is opt-in: it builds synthetic public
+data and checks populated layouts, light and dark artwork, and historical
+conference display exports. Run it for public-site migrations or relevant
+publication changes, rather than adding those temporary-page and detailed
+geometry checks to every CI run. The catalog-wide contrast audit
+(`pnpm run test:e2e:contrast`) is also opt-in. Wait for the rendered state or
+resource being tested; do not add fixed sleeps.
+
 Use focused tests while iterating. For repeatable timing profiles, set
 `PKIC_TEST_PROFILE_PATH` to a path outside the repository. The report records
 test, import, environment, and setup durations without disabling test isolation:
