@@ -10,7 +10,7 @@ import type { EventInviteWindow } from "../../../../../shared/schemas/event-invi
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
-import { EmptyState } from "../../../../components/EmptyState";
+import { EmptyState } from "../../../../ui/RecordEmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Badge } from "../../../../ui/Badge";
 import { PersonCell } from "../../../../ui/PersonCell";

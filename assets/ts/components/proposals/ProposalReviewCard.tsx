@@ -1,5 +1,5 @@
 import type { ProposalReview } from "../../../shared/schemas/proposal-reviews";
-import { Markdown } from "../Markdown";
+import { Markdown } from "../../ui/Markdown";
 import { Badge } from "../Badge";
 import { Badge as ToneBadge } from "../../ui/Badge";
 import { Panel, PanelBody } from "../../ui/Panel";

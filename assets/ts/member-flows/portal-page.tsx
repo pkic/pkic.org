@@ -8,6 +8,7 @@
  * layouts/portal/single.html's data-module attribute and loader.ts's module
  * map don't need to change.
  */
+import "../../scss/portal-entry.scss";
 import { render } from "preact";
 import { App } from "./portal/App";
 import { installPortalApiInterceptors } from "./portal/state";

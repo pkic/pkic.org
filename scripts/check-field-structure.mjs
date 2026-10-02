@@ -84,6 +84,7 @@ const failures = [];
 function inspect(file) {
   const rel = relative(root, file);
   const source = stripActions(readFileSync(file, "utf8"));
+  const usesSharedField = /import\s*\{[^}]*\bField\b[^}]*\}\s*from\s*["'][^"']*\/ui\/Field["']/.test(source);
   if (!source.includes("pk-field") && !source.includes("pk-input")) return;
 
   const stack = [];
@@ -102,6 +103,8 @@ function inspect(file) {
     }
 
     const { names, dynamic } = classesOf(attributes);
+    // The shared Field renders its children inside the canonical control wrapper.
+    if (name === "Field" && usesSharedField) names.push("pk-field", "pk-field__control");
     const line = source.slice(0, match.index).split("\n").length;
 
     for (const className of names) {

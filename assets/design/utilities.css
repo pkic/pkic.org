@@ -17,6 +17,14 @@
  */
 
 @layer utilities {
+  /*
+   * The server's stand-in for a client island. The loader removes it before
+   * the module mounts, so it is never part of the rendered result.
+   */
+  .pk-island-placeholder {
+    margin: 0;
+  }
+
   /* A measured reading column. One max-width, not twelve breakpoint variants. */
   .pk-container {
     width: 100%;
@@ -48,7 +56,8 @@
    * Vertical rhythm. The gap goes on the parent, so twelve children cannot
    * disagree about their spacing the way twelve `mb-*` classes can.
    */
-  .pk-stack {
+  .pk-stack,
+  .pk-form {
     display: flex;
     flex-direction: column;
     gap: var(--pk-gap, var(--pk-4));
@@ -83,9 +92,6 @@
 
   /* Forms fill their containing layout; field groups own their columns. */
   .pk-form {
-    display: flex;
-    flex-direction: column;
-    gap: var(--pk-gap, var(--pk-4));
     min-width: 0;
   }
 
@@ -148,12 +154,6 @@
     grid-template-columns: repeat(auto-fit, minmax(min(max(16rem, 31%), 100%), 1fr));
   }
 
-  @media (min-width: 760px) {
-    .pkic-card-bento:has(> :nth-child(4):last-child) {
-      grid-template-columns: repeat(2, 1fr);
-    }
-  }
-
   /*
    * A row of small figures that stays a row.
    *
@@ -165,10 +165,14 @@
    * short enough to survive the squeeze, and reading them side by side is the
    * whole point of a glance.
    */
-  .pk-figure-row {
+  .pk-figure-row,
+  .pk-stat-row {
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: var(--pk-gap, var(--pk-3));
+  }
+
+  .pk-figure-row {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
   /*
@@ -183,9 +187,7 @@
    * width, not a card's, so the row stays a row on a laptop.
    */
   .pk-stat-row {
-    display: grid;
     grid-template-columns: repeat(auto-fit, minmax(min(var(--pk-stat-min, 9.5rem), 100%), 1fr));
-    gap: var(--pk-gap, var(--pk-3));
   }
 
   /*
@@ -206,23 +208,6 @@
     grid-template-columns: repeat(auto-fit, minmax(min(30rem, 100%), 1fr));
     gap: var(--pk-gap, var(--pk-4));
     align-items: start;
-  }
-
-  /* A compact record summary beside a wider working pane. Both retain a
-     usable measure; they stack based on available container width. */
-  .pk-split--aside {
-    display: flex;
-    flex-wrap: wrap;
-  }
-
-  .pk-split--aside > :first-child {
-    flex: 1 1 22rem;
-    min-width: 0;
-  }
-
-  .pk-split--aside > :last-child {
-    flex: 2 1 40rem;
-    min-width: 0;
   }
 
   /*
@@ -247,7 +232,6 @@
 
   /* Vertical section rhythm, so pages do not each choose their own py-*. */
   .pk-section {
-    box-sizing: border-box;
     padding-block: var(--pk-7);
   }
 

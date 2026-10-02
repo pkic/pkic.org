@@ -1,20 +1,21 @@
 import { html } from "hono/html";
-import { formatDate } from "../../../../assets/shared/format-date";
+import { formatLocalTime } from "../../../../assets/shared/format-date";
 import type { MemberNewsArticle, MemberNewsPage, MemberNewsQuery } from "../../../../assets/shared/schemas/member-news";
 
-function articleCard(article: MemberNewsArticle) {
-  const date = formatDate(article.publishedAt);
+function articleCard(article: MemberNewsArticle, headingLevel: 2 | 3 = 2) {
+  const heading = headingLevel === 3 ? "h3" : "h2";
+  const date = formatLocalTime(article.publishedAt, "date");
   const domain = new URL(article.url).hostname;
   return html`<article class="blog-card news-card${article.sponsorTier ? " news-card--sponsor" : ""}">
     <div class="blog-card-header blog-card-header--gradient">
       <div class="blog-card-header-overlay"></div>
       ${article.sponsorTier ? html`<span class="blog-card-tag news-card-sponsor-badge">★ ${article.sponsorTier}</span>` : ""}
       <div class="blog-card-header-content">
-        <h2 class="blog-card-title">
+        <${heading} class="blog-card-title">
           <a href="${article.url}" target="_blank" rel="noopener noreferrer" class="pk-stretched">${article.title}</a>
-        </h2>
+        </${heading}>
         <p class="blog-card-date">
-          <time datetime="${article.publishedAt}" data-local-time="${article.publishedAt}" data-local-time-date-only
+          <time datetime="${article.publishedAt}" data-local-time="${article.publishedAt}" data-local-time-format="date"
             >${date}</time
           >
         </p>
@@ -34,26 +35,34 @@ function articleCard(article: MemberNewsArticle) {
   </article>`;
 }
 
+/** The same escaped cards are used by runtime pages and static publications. */
+export async function renderMemberNewsArticles(articles: MemberNewsArticle[], headingLevel: 2 | 3 = 2) {
+  return String(await html`${articles.map((article) => articleCard(article, headingLevel))}`);
+}
+
 export async function renderMemberNews(
   page: MemberNewsPage,
   sponsors: MemberNewsArticle[],
   query: MemberNewsQuery,
+  pageHref?: (offset: number) => string,
 ): Promise<string> {
-  const href = (offset: number) =>
-    `/news/?${new URLSearchParams({ ...(query.q ? { q: query.q } : {}), ...(query.sort ? { sort: query.sort } : {}), limit: String(query.limit), offset: String(offset) })}`;
+  const href =
+    pageHref ??
+    ((offset: number) =>
+      `/news/?${new URLSearchParams({ ...(query.q ? { q: query.q } : {}), ...(query.sort ? { sort: query.sort } : {}), limit: String(query.limit), offset: String(offset) })}`);
   return String(
     await html`<div class="pk-stack pk-stack--loose">
       ${
         sponsors.length && !query.q && query.offset === 0
           ? html`<section class="news-spotlight">
               <h2 class="news-section-heading">Sponsor Highlights</h2>
-              <div class="pk-grid pk-grid--roomy">${sponsors.map(articleCard)}</div>
+              <div class="pk-grid pk-grid--roomy">${sponsors.map((article) => articleCard(article))}</div>
             </section>`
           : ""
       }
       <section class="news-main">
         <h2 class="news-section-heading news-section-heading--plain">Latest Member News</h2>
-        <div class="pk-grid pk-grid--roomy">${page.articles.map(articleCard)}</div>
+        <div class="pk-grid pk-grid--roomy">${page.articles.map((article) => articleCard(article))}</div>
         ${page.articles.length ? "" : html`<p class="pk-center pk-muted pk-section">No news items available at this time.</p>`}
       </section>
       ${
@@ -69,13 +78,17 @@ export async function renderMemberNews(
 }
 
 /** Hono's HTML escaping also escapes XML text and quoted attributes. */
-export async function renderMemberNewsFeed(articles: MemberNewsArticle[], origin: string): Promise<string> {
+export async function renderMemberNewsFeed(
+  articles: MemberNewsArticle[],
+  origin: string,
+  feedPath = "/news/feed/",
+): Promise<string> {
   return String(
     await html`<?xml version="1.0" encoding="utf-8"?>
     <rss version="2.0" xmlns:atom="http://www.w3.org/2005/Atom"><channel>
       <title>News by the members of the PKI Consortium</title><link>${origin}/news/</link>
       <description>Recent news from the members of the PKI Consortium</description><language>en-US</language>
-      <atom:link href="${origin}/news/feed/" rel="self" type="application/rss+xml"/>
+      <atom:link href="${origin}${feedPath}" rel="self" type="application/rss+xml"/>
       ${articles.map(
         (article) => html`<item><title>${article.title}</title><link>${article.url}</link>
         <guid isPermaLink="true">${article.url}</guid><pubDate>${new Date(article.publishedAt).toUTCString()}</pubDate>

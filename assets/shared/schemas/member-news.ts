@@ -5,6 +5,7 @@ import { httpUrlSchema } from "./urls";
 export const memberNewsQuerySchema = listQuerySchema(["publishedAt", "title"] as const, { limit: 48 });
 export type MemberNewsQuery = z.infer<typeof memberNewsQuerySchema>;
 export const memberNewsArticleSchema = z.object({
+  organizationId: z.string(),
   url: httpUrlSchema,
   title: z.string(),
   summary: z.string(),

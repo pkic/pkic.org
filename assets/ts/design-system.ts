@@ -3,11 +3,13 @@
  *
  * Imported from the loader entry so the tokens and the base layer land in the
  * entry stylesheet, which every page links. Both are small and every surface
- * needs them; component styles do NOT come through here — each component
- * imports its own CSS so Vite emits it into that component's lazy chunk and
- * the browser fetches it only when the component is actually reached.
+ * needs them. Interactive component styles normally remain in lazy chunks;
+ * styles needed by server-rendered components are explicitly listed below.
  */
 
+// The typeface the tokens name. Declared here so it is part of the loader
+// entry stylesheet every page links, public and portal alike.
+import "../design/fonts.css";
 import "../design/tokens.generated.css";
 import "../design/base.css";
 // Utilities ship with the entry too: they are a few hundred bytes, every
@@ -18,8 +20,8 @@ import "../design/utilities.css";
 // Public pages are server-rendered and linked from the head, so they cannot
 // wait for a lazy chunk without flashing unstyled markup. The few primitives
 // their HTML writes by class name therefore ship with the entry. Everything
-// else stays in its own chunk — this list should stay short, and each addition
-// should be because a Hugo layout writes the class, not because it is handy.
+// else stays in its own chunk. This list should stay short, and each addition
+// must be required by a component in the server-rendered document.
 import "./ui/Button.css";
 import "./ui/Badge.css";
 // The public shortcodes are largely forms — join, registration, speaker and
@@ -45,3 +47,6 @@ import "./ui/ThemeToggle.css";
 // keeps this list from growing on convenience alone.
 import "./ui/Panel.css";
 import "./ui/Alert.css";
+// Portraits are server-rendered too: blog authors and agenda speakers are drawn
+// with `ui/Avatar`, the one component that draws initials for a missing photo.
+import "./ui/Avatar.css";

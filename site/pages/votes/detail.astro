@@ -1,0 +1,15 @@
+---
+import PublicPage from "../../layouts/PublicPage.astro";
+import { publication } from "../../publication";
+---
+<PublicPage title="Vote result" privatePage>
+  <section class="pk-container pk-section pk-stack">
+    <h1>Vote result</h1>
+    <p>Find public vote results in the <a href="/votes/">votes directory</a>.</p>
+  </section>
+  <template id="published-vote-paths">{JSON.stringify(publication.votes.map(({ slug }) => ({ slug })))}</template>
+  <script>
+    await import("../../../assets/ts/shared/browser-validation");
+    await import("../../../assets/ts/site/vote-profile-redirect");
+  </script>
+</PublicPage>

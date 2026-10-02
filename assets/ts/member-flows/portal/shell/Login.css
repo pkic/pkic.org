@@ -9,7 +9,8 @@
 
 .pk-login {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(26rem, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 26rem), 1fr));
+  min-width: 0;
   align-items: stretch;
   /*
    * As tall as the space between the header and the footer — not the space
@@ -56,6 +57,7 @@ body:has(.pk-login) > main {
 
 body:has(.pk-login) > main > #portal-app {
   display: flex;
+  min-width: 0;
   flex: 1;
 }
 

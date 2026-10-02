@@ -1,0 +1,335 @@
+/*
+ * The member directory's own layout: the search bar, the A-Z rail and the
+ * letter groups.
+ *
+ * Ported from the published site's members-directory stylesheet. The cards
+ * inside the grid — member cards, the profile's monogram and logo, and the
+ * bento cards the working-group pages share — are styled once, by
+ * `components/site-content.css`, which every public page links.
+*/
+
+@layer components {
+  .member-profile-header {
+    display: grid;
+    grid-template-columns: minmax(0, 20rem) minmax(0, 1fr);
+    align-items: center;
+    gap: clamp(1.5rem, 4vw, 4rem);
+    padding-block: 1rem 2.5rem;
+    border-bottom: 1px solid var(--pk-line-soft);
+  }
+
+  .member-profile-introduction {
+    min-width: 0;
+  }
+
+  .member-profile-membership {
+    margin: 0 0 0.6rem;
+    color: var(--pk-accent-ink);
+    font-size: var(--pk-text-sm);
+    font-weight: 600;
+  }
+
+  .member-profile-introduction h1 {
+    margin: 0;
+    font-size: var(--pk-text-display);
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+  }
+
+  .member-profile-slogan {
+    margin: 0.8rem 0 0;
+    font-size: var(--pk-text-lg);
+    line-height: 1.5;
+  }
+
+  .member-profile-description {
+    max-width: 65ch;
+    margin: 1rem 0 0;
+    color: var(--pk-ink-muted);
+    line-height: 1.7;
+  }
+
+  .member-profile-body {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(16rem, 22rem);
+    gap: clamp(2rem, 4vw, 4rem);
+    align-items: start;
+  }
+
+  .member-profile-body--details {
+    grid-template-columns: minmax(0, 32rem);
+  }
+
+  .member-profile-content,
+  .member-profile-details {
+    min-width: 0;
+  }
+
+  .member-profile-content {
+    line-height: 1.75;
+  }
+
+  .member-profile-details .pk-datalist {
+    grid-template-columns: minmax(0, max-content) minmax(0, 1fr);
+    gap: 0.75rem 1rem;
+  }
+
+  .member-profile-working-groups {
+    padding-top: 1rem;
+    border-top: 1px solid var(--pk-line-soft);
+  }
+
+  .member-profile-working-groups h3 {
+    margin: 0 0 0.75rem;
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink-muted);
+  }
+
+  .member-profile-working-groups ul {
+    display: grid;
+    gap: 0.5rem;
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+
+  .member-profile-working-groups a {
+    display: block;
+    text-decoration: underline;
+    text-underline-offset: 0.15em;
+    font-size: var(--pk-text-sm);
+    line-height: 1.4;
+  }
+
+  .member-profile-working-groups a:hover,
+  .member-profile-working-groups a:focus-visible {
+    color: var(--pk-accent-ink);
+  }
+
+  .member-representatives {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 1.5rem;
+  }
+
+  .member-representative {
+    min-width: 0;
+    padding: 1.5rem;
+    background: var(--pk-surface);
+    border: 1px solid var(--pk-line-soft);
+    border-radius: var(--pk-radius);
+  }
+
+  .member-representative-heading {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.25rem;
+  }
+
+  .member-representative-heading > div {
+    min-width: 0;
+  }
+
+  .member-representative-heading h3 {
+    margin: 0;
+    font-size: var(--pk-text-lg);
+    line-height: 1.35;
+  }
+
+  .member-representative-heading p {
+    margin: 0;
+    line-height: 1.5;
+  }
+
+  .member-representative-bio {
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+    line-height: 1.7;
+  }
+
+  .member-representative-bio p:last-child {
+    margin-bottom: 0;
+  }
+
+  @media (max-width: 735px) {
+    .member-profile-header,
+    .member-profile-body,
+    .member-representatives {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .member-profile-header {
+      gap: 1.5rem;
+      padding-block: 0 2rem;
+    }
+
+    .member-profile-header .member-profile-logo-wrap {
+      margin-inline: 0;
+    }
+
+    .member-representative {
+      padding: 1.25rem;
+    }
+  }
+
+  .member-profile-logo-wrap {
+    width: min(20rem, 100%);
+    height: 7rem;
+    margin-inline: auto;
+  }
+
+  .member-profile-logo-wrap:has(.member-profile-logo) {
+    background: var(--pk-logo-surface);
+    border-radius: var(--pk-radius-card);
+    padding: 0.75rem;
+  }
+
+  .member-profile-logo-wrap:has(.member-profile-logo[data-logo-ink="light"]) {
+    background: var(--pk-accent-strong);
+  }
+
+  .member-profile-logo-wrap .member-profile-logo {
+    display: block;
+    width: 100%;
+    max-width: 100%;
+    height: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    object-position: center;
+  }
+}
+
+@layer legacy {
+  .member-card-name a {
+    color: inherit;
+    text-decoration: none;
+  }
+  .btn-pkic {
+    background: var(--pk-grad-tonal);
+    color: var(--pk-on-solid);
+    border: none;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+    box-shadow: var(--pk-shadow-2);
+    transition:
+      transform var(--pk-dur-fast) ease,
+      box-shadow var(--pk-dur-fast) ease;
+  }
+  .btn-pkic:hover,
+  .btn-pkic:focus {
+    transform: translateY(-1px);
+    box-shadow: var(--pk-shadow-3);
+    color: var(--pk-on-solid);
+  }
+  .btn-pkic:active {
+    transform: translateY(0);
+  }
+
+  .btn-pkic-outline {
+    background: transparent;
+    color: var(--pk-on-solid);
+    border: 1.5px solid color-mix(in oklab, var(--pk-on-solid) 50%, transparent);
+    font-weight: 500;
+    transition:
+      background var(--pk-dur-fast) ease,
+      border-color var(--pk-dur-fast) ease,
+      transform var(--pk-dur-fast) ease;
+  }
+  .btn-pkic-outline:hover,
+  .btn-pkic-outline:focus {
+    background: color-mix(in oklab, var(--pk-on-solid) 12%, transparent);
+    border-color: color-mix(in oklab, var(--pk-on-solid) 85%, transparent);
+    color: var(--pk-on-solid);
+    transform: translateY(-1px);
+  }
+
+  .members-search-bar {
+    max-width: 560px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+
+  .members-layout {
+    display: flex;
+    gap: 2rem;
+    align-items: flex-start;
+  }
+
+  .members-az-sidebar {
+    flex-shrink: 0;
+    width: 34px;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+    max-height: calc(100vh - 88px);
+    overflow-y: auto;
+    scrollbar-width: none;
+  }
+  .members-az-sidebar::-webkit-scrollbar {
+    display: none;
+  }
+  .members-az-sidebar .az-sidebar-link {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 26px;
+    border-radius: var(--pk-radius);
+    font-size: var(--pk-text-2xs);
+    font-weight: 700;
+    color: var(--pk-ink-muted);
+    text-decoration: none;
+    transition:
+      background var(--pk-dur-fast) ease,
+      color var(--pk-dur-fast) ease;
+  }
+  .members-az-sidebar .az-sidebar-link:hover {
+    background: var(--pk-accent);
+    color: var(--pk-on-solid);
+  }
+  .members-az-sidebar .az-sidebar-link.is-active {
+    background: var(--pk-accent);
+    color: var(--pk-on-solid);
+  }
+  .members-az-sidebar .az-sidebar-link.is-empty,
+  .members-az-sidebar .az-sidebar-link.is-empty-search {
+    color: var(--pk-ink-faint);
+    pointer-events: none;
+  }
+  .members-az-sidebar {
+    position: sticky;
+    top: 68px;
+    display: none;
+  }
+  @media (min-width: 992px) {
+    .members-az-sidebar {
+      display: flex;
+    }
+  }
+
+  .members-content {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .member-letter-group {
+    scroll-margin-top: calc(var(--pkic-navbar-height) + 48px);
+    margin-bottom: 2.5rem;
+  }
+  .member-letter-group.is-hidden {
+    display: none;
+  }
+
+  .members-content .member-letter-heading,
+  h3.member-letter-heading {
+    font-size: var(--pk-text-2xs);
+    font-weight: 800;
+    letter-spacing: 0.15em;
+    text-transform: uppercase;
+    color: var(--pk-ink-muted);
+    border-bottom: 1px solid var(--pk-line-soft);
+    padding-bottom: 0.5rem;
+    margin-bottom: 1rem;
+    scroll-margin-top: 80px;
+  }
+}

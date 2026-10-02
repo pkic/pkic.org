@@ -1,18 +1,15 @@
 import { Hono } from "hono";
 import { logError } from "../_lib/logging";
 import { resolveEventFlowShell } from "../_lib/services/events/public-shell";
+import { servePublicSiteRequest } from "../_lib/services/site-rendering";
 import { getStaticAssetsBinding } from "../_lib/static-assets";
 import type { Env } from "../_lib/types";
-
-const EVENT_SHELL_CSP =
-  "default-src 'none'; img-src 'self' https://pkic.org https://i.ytimg.com data:; form-action 'self'; base-uri 'self'; connect-src 'self' data:; block-all-mixed-content; style-src 'unsafe-inline' 'self'; font-src 'self'; script-src 'self' 'wasm-unsafe-eval' https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js https://pkic.github.io/self-assessment/ https://js.stripe.com; frame-src https://js.stripe.com; frame-ancestors 'none'";
+import { siteSecurityHeaders } from "../../assets/shared/site-security-policy";
 
 const PRIVATE_RESPONSE_HEADERS = {
+  ...siteSecurityHeaders(),
   "cache-control": "no-store, max-age=0",
-  "content-security-policy": EVENT_SHELL_CSP,
   "referrer-policy": "no-referrer",
-  "x-content-type-options": "nosniff",
-  "x-frame-options": "DENY",
   "x-robots-tag": "noindex, nofollow, noarchive",
 } as const;
 
@@ -31,15 +28,21 @@ function staticAssetRequest(request: Request, pathname = new URL(request.url).pa
 
 function secureShellResponse(response: Response, headOnly: boolean): Response {
   const headers = privateHeaders(response.headers);
-  return new Response(headOnly ? null : response.body, { status: 200, headers });
+  return new Response(headOnly ? null : response.body, { status: response.status, headers });
 }
 
-function unavailableResponse(): Response {
-  return new Response("Event page temporarily unavailable.", {
-    status: 503,
-    headers: privateHeaders({
-      "content-type": "text/plain; charset=UTF-8",
-    }),
+async function secureRenderedShell(request: Request, env: Env, shellPath: string): Promise<Response> {
+  let response = await servePublicSiteRequest(request, env, { privatePage: true });
+  if (response.status === 404) {
+    response = await servePublicSiteRequest(request, env, {
+      canonicalPath: new URL(request.url).pathname,
+      pagePath: shellPath,
+      privatePage: true,
+    });
+  }
+  return new Response(request.method === "HEAD" ? null : response.body, {
+    status: response.status,
+    headers: privateHeaders(response.headers),
   });
 }
 
@@ -51,20 +54,22 @@ async function serveEventPage(request: Request, env: Env): Promise<Response> {
     });
   }
 
+  const pathname = new URL(request.url).pathname;
+  const shell = resolveEventFlowShell(pathname);
   const assets = getStaticAssetsBinding(env);
-  if (!assets) return unavailableResponse();
+  if (!assets) return shell ? secureRenderedShell(request, env, shell.assetPath) : servePublicSiteRequest(request, env);
 
   try {
     const staticResponse = await assets.fetch(staticAssetRequest(request));
-    if (staticResponse.status !== 404) return staticResponse;
+    if (staticResponse.status !== 404)
+      return shell ? secureShellResponse(staticResponse, request.method === "HEAD") : staticResponse;
 
-    const shell = resolveEventFlowShell(new URL(request.url).pathname);
     if (!shell) return staticResponse;
 
     const shellResponse = await assets.fetch(staticAssetRequest(request, shell.assetPath, true));
     if (!shellResponse.ok) {
       logError("PORTAL_EVENT_FLOW_SHELL_ASSET_MISSING", { assetPath: shell.assetPath });
-      return unavailableResponse();
+      return secureRenderedShell(request, env, shell.assetPath);
     }
     return secureShellResponse(shellResponse, request.method === "HEAD");
   } catch (error) {
@@ -72,7 +77,9 @@ async function serveEventPage(request: Request, env: Env): Promise<Response> {
       path: new URL(request.url).pathname,
       error: error instanceof Error ? error.message : "Unknown shell failure",
     });
-    return unavailableResponse();
+    return shell
+      ? secureRenderedShell(request, env, shell.assetPath)
+      : new Response("Static publication unavailable", { status: 503 });
   }
 }
 

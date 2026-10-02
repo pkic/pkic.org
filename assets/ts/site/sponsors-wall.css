@@ -1,0 +1,279 @@
+@layer components {
+  .sponsors {
+    --sponsors-caption-gap: var(--pk-4);
+    --sponsors-row-gap: var(--pk-5);
+    --sponsors-logo-gap: var(--pk-6);
+    --sponsors-edge-inset: var(--pk-3);
+    --sponsors-logo-aspect: 3.375;
+
+    gap: var(--pk-7);
+    padding-block: var(--pk-6);
+  }
+
+  .sponsors-tier {
+    --sponsors-logo-height: 1.25rem;
+    --sponsors-logo-width: min(
+      calc(var(--sponsors-logo-height) * var(--sponsors-logo-aspect)),
+      calc((100% - var(--sponsors-logo-gap)) / 2)
+    );
+
+    display: flex;
+    width: 100%;
+    flex-direction: column;
+    gap: var(--sponsors-caption-gap);
+  }
+
+  .sponsors-tier.sponsor-weight-2 {
+    --sponsors-logo-height: 1.5rem;
+  }
+
+  .sponsors-tier.sponsor-weight-3 {
+    --sponsors-logo-height: 1.875rem;
+  }
+
+  .sponsors-tier.sponsor-weight-4 {
+    --sponsors-logo-height: 2.375rem;
+  }
+
+  .sponsors-tier.sponsor-weight-5 {
+    --sponsors-logo-height: 3.125rem;
+  }
+
+  .sponsors-tier.sponsor-weight-6 {
+    --sponsors-logo-height: 4.5rem;
+  }
+
+  .sponsors-tier.sponsor-weight-7 {
+    --sponsors-logo-height: 5rem;
+  }
+
+  .sponsors-tier.sponsor-weight-8 {
+    --sponsors-logo-height: 5.5rem;
+  }
+
+  .sponsor-level {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-4);
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-2xs);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .sponsor-level::before,
+  .sponsor-level::after {
+    height: 1px;
+    flex: 1;
+    background: var(--pk-line-soft);
+    content: "";
+  }
+
+  .sponsors-tier-logos {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sponsors-row-gap) var(--sponsors-logo-gap);
+    padding-inline: var(--sponsors-edge-inset);
+  }
+
+  .sponsors-tier .sponsor-link {
+    display: flex;
+    width: var(--sponsors-logo-width);
+    height: var(--sponsors-logo-height);
+    align-items: center;
+    justify-content: center;
+  }
+
+  .pk-public-prose .sponsors-tier .sponsor-logo {
+    width: auto;
+    max-width: 100%;
+    height: auto;
+    max-height: 100%;
+    margin: 0;
+    object-fit: contain;
+  }
+
+  /*
+   * Sponsor artwork stays inside whatever column holds it — a blog sidebar is a
+   * few hundred pixels wide. Rows, links and logos may all shrink, and a logo
+   * never grows past its column or its tier's own cap.
+   */
+  .sponsors-list,
+  .sponsors-list > div {
+    display: flex;
+    min-width: 0;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: var(--sponsors-row-gap, var(--pk-5)) var(--sponsors-logo-gap, var(--pk-6));
+  }
+
+  .sponsors-list > div {
+    width: 100%;
+  }
+
+  .sponsors-list .sponsor-link {
+    display: flex;
+    max-width: 100%;
+    min-width: 0;
+    min-height: 2rem;
+    align-items: center;
+    justify-content: center;
+    text-decoration: none;
+  }
+
+  .sponsors-list .sponsor-logo {
+    display: block;
+    max-width: min(100%, var(--sponsor-logo-max-width, 100%));
+    object-fit: contain;
+  }
+
+  .pk-public-prose .sponsors-list .sponsor-logo {
+    width: auto;
+    max-width: 11rem;
+    height: auto;
+    max-height: 4rem;
+    margin: 0;
+    object-fit: contain;
+  }
+
+  .pk-public-prose > .pk-content-island[data-sponsors-wall]:not([data-mode="wall"]) {
+    width: min(calc(100vw - 2 * var(--pk-5)), 81rem);
+    padding: 0;
+    margin-inline: calc((100% - min(calc(100vw - 2 * var(--pk-5)), 81rem)) / 2);
+    border: 0;
+    background: transparent;
+    box-shadow: none;
+  }
+
+  .pk-content-island[data-sponsors-wall][data-mode="wall"][data-state="empty"] {
+    display: none;
+  }
+
+  .pk-public-home-content .pk-content-island[data-sponsors-wall][data-mode="wall"][data-state="ready"] {
+    width: 100vw;
+    min-height: 0;
+    padding: 0;
+    margin: 0 calc(50% - 50vw);
+  }
+
+  .pk-member-wall__label {
+    position: relative;
+    margin-block-start: calc(var(--pk-6) + var(--pk-2));
+    text-align: center;
+  }
+
+  .pk-member-wall__label::before {
+    position: absolute;
+    top: 50%;
+    right: 10%;
+    left: 10%;
+    border-block-start: 1px solid var(--pk-line-soft);
+    content: "";
+  }
+
+  .pk-member-wall__label span {
+    position: relative;
+    z-index: 1;
+    display: inline-block;
+    padding-inline: var(--pk-4);
+    background: var(--pk-surface);
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    font-weight: 700;
+    letter-spacing: var(--pk-tracking-label);
+    text-transform: uppercase;
+  }
+
+  .pk-member-wall {
+    padding: var(--pk-5) var(--pk-3);
+    background: var(--pk-surface);
+  }
+
+  .pk-member-wall__viewport {
+    position: relative;
+    height: 17.5rem;
+    overflow: hidden;
+    -webkit-mask-image: var(--pk-public-member-wall-mask);
+    mask-image: var(--pk-public-member-wall-mask);
+  }
+
+  .pk-member-wall__track {
+    display: flex;
+    flex-direction: column;
+    animation: pk-member-wall-scroll var(--pk-public-member-wall-duration) linear infinite;
+    will-change: transform;
+  }
+
+  .pk-member-wall__copy {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    align-content: center;
+    align-items: center;
+    justify-content: center;
+    gap: 0.625rem 0;
+  }
+
+  .pk-member-wall__copy a {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 0.3125rem var(--pk-4);
+  }
+
+  .pk-public-prose .pk-member-wall__logo,
+  .pk-member-wall__logo {
+    width: auto;
+    max-width: 5.625rem;
+    height: 1.125rem;
+    margin: 0;
+    filter: grayscale(1) opacity(0.55) contrast(0.5);
+    object-fit: contain;
+    transition:
+      filter var(--pk-dur),
+      transform var(--pk-dur);
+  }
+
+  .pk-member-wall__logo--sponsor {
+    filter: none;
+  }
+
+  .pk-member-wall__copy a:hover .pk-member-wall__logo,
+  .pk-member-wall__copy a:focus-visible .pk-member-wall__logo {
+    filter: none;
+  }
+
+  .pk-member-wall__copy a:hover .pk-member-wall__logo--sponsor,
+  .pk-member-wall__copy a:focus-visible .pk-member-wall__logo--sponsor {
+    transform: scale(1.12);
+  }
+
+  .pk-member-wall__viewport:hover .pk-member-wall__track,
+  .pk-member-wall__viewport:focus-within .pk-member-wall__track {
+    animation-play-state: paused;
+  }
+
+  @keyframes pk-member-wall-scroll {
+    from {
+      transform: translateY(0);
+    }
+
+    to {
+      transform: translateY(-50%);
+    }
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    .pk-member-wall__track {
+      animation: none;
+    }
+
+    .pk-member-wall__copy[aria-hidden="true"] {
+      display: none;
+    }
+  }
+}

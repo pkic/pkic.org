@@ -80,7 +80,7 @@ export function Button({
       type={type}
       class={classes}
       disabled={Boolean(disabled)}
-      aria-disabled={inert ? "true" : undefined}
+      aria-disabled={loading ? "true" : undefined}
       aria-busy={loading ? "true" : undefined}
       onClick={inert ? undefined : rest.onClick}
     >

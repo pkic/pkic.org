@@ -436,7 +436,7 @@ summary.portal-sidebar-group {
 }
 .portal-mailing-list-fields {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(unquote("min(100%, 25rem)"), 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 25rem), 1fr));
   align-items: start;
   gap: var(--pk-8);
 }

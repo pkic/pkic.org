@@ -8,7 +8,7 @@ import { asBool, asString, asStringArray, externalLink, toHttpUrl } from "./help
 // stylesheet into its own chunk. Without the import the markup renders
 // unstyled and nothing complains.
 import "../../../../ui/Content.css";
-import { Markdown } from "../../../../components/Markdown";
+import { Markdown } from "../../../../ui/Markdown";
 
 /**
  * An answer the applicant left blank.

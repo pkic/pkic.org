@@ -285,12 +285,12 @@
    * measure for prose and made every wrapped cell a third taller than it needed
    * to be.
    */
-  .pk-table th,
-  .pk-table td {
+  .pk-table--data th,
+  .pk-table--data td {
     line-height: 1.35;
   }
 
-  .pk-table th {
+  .pk-table--data th {
     border-bottom-color: var(--pk-line);
     white-space: nowrap;
     font-size: var(--pk-text-2xs);
@@ -298,7 +298,7 @@
     color: var(--pk-ink-muted);
   }
 
-  .pk-table td {
+  .pk-table--data td {
     border-bottom-color: var(--pk-line-soft);
     vertical-align: middle;
   }

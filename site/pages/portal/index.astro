@@ -1,0 +1,24 @@
+---
+import PublicPage from "../../layouts/PublicPage.astro";
+import { HeadshotDialogTemplates } from "../../../assets/ts/site/HeadshotDialogTemplates";
+import { Login } from "../../../assets/ts/member-flows/portal/shell/Login";
+import { loadSiteContent } from "../../../functions/_lib/services/site-content";
+import { PORTAL_LOGIN_COPY_ID } from "../../../assets/shared/schemas/portal-login-copy";
+import { memberCounts } from "../../publication";
+const content = await loadSiteContent("/portal/");
+const copy = { ...content?.portalLogin, facts: content?.portalLogin?.facts?.map((fact) => ({
+  ...fact,
+  value: fact.memberCount ? String(fact.memberCount === "all" ? memberCounts.organization + memberCounts.independent : memberCounts[fact.memberCount]) : fact.value,
+  memberCount: undefined,
+})) };
+---
+<PublicPage title="Member portal" privatePage>
+  <script id={PORTAL_LOGIN_COPY_ID} type="application/json" set:html={JSON.stringify(copy).replace(/</g, "\u003c")} />
+  <div id="portal-app" inert><Login copy={copy} onSignedIn={() => {}} /></div>
+  <div id="portal-toast-area" />
+  <HeadshotDialogTemplates />
+  <script>
+    await import("../../../assets/ts/shared/browser-validation");
+    await import("../../portal-entry");
+  </script>
+</PublicPage>

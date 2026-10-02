@@ -15,33 +15,46 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { emitTokenCss } from "../assets/design/emit-css.ts";
+import { layers } from "../assets/design/tokens.ts";
+
+import { emitPublicTokenCss, emitTokenCss } from "../assets/design/emit-css.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
-const target = resolve(root, "assets", "design", "tokens.generated.css");
-const shown = relative(root, target);
 const checkOnly = process.argv.includes("--check");
 
-const rendered = emitTokenCss();
+const sheets = [
+  {
+    name: "layers.generated.css",
+    render: () => `/* Generated from assets/design/tokens.ts. */\n@layer ${layers.join(", ")};\n`,
+  },
+  { name: "tokens.generated.css", render: emitTokenCss },
+  { name: "tokens.public.generated.css", render: emitPublicTokenCss },
+];
 
-if (!checkOnly) {
-  writeFileSync(target, rendered);
-  console.log(`[design-tokens] wrote ${shown} (${rendered.length} bytes)`);
-  process.exit(0);
+for (const sheet of sheets) {
+  const target = resolve(root, "assets", "design", sheet.name);
+  const shown = relative(root, target);
+  const rendered = sheet.render();
+
+  if (!checkOnly) {
+    writeFileSync(target, rendered);
+    console.log(`[design-tokens] wrote ${shown} (${rendered.length} bytes)`);
+    continue;
+  }
+
+  if (!existsSync(target)) {
+    console.error(`[design-tokens] ${shown} is missing. Run \`pnpm run build:tokens\`.`);
+    process.exit(1);
+  }
+
+  const current = readFileSync(target, "utf8");
+  if (current !== rendered) {
+    console.error(
+      `[design-tokens] ${shown} is out of date with assets/design/tokens.ts.\n` +
+        "Run `pnpm run build:tokens` and commit the result.",
+    );
+    process.exit(1);
+  }
+
+  console.log(`[design-tokens] ${shown} matches the token module`);
 }
-
-if (!existsSync(target)) {
-  console.error(`[design-tokens] ${shown} is missing. Run \`pnpm run build:tokens\`.`);
-  process.exit(1);
-}
-
-const current = readFileSync(target, "utf8");
-if (current !== rendered) {
-  console.error(
-    `[design-tokens] ${shown} is out of date with assets/design/tokens.ts.\n` +
-      "Run `pnpm run build:tokens` and commit the result.",
-  );
-  process.exit(1);
-}
-
-console.log(`[design-tokens] ${shown} matches the token module`);

@@ -32,59 +32,19 @@
  * the D1 read model. This component only arranges the returned page for each
  * visual mode.
  */
-import { prepareMemberLogo } from "../shared/member-logo-treatment";
+import { initMemberLogoTreatment } from "../shared/member-logo-treatment";
 import { render } from "preact";
+import { SponsorGridView, SponsorLevelView, SponsorStripView, MemberWallView } from "../site/SponsorDisplays";
 import { useEffect, useState } from "preact/hooks";
 import { getJson } from "../shared/api-client";
 import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
 import { memberWallResponseSchema, type MemberWallEntry } from "../../shared/schemas/members-directory";
-import type { PublicSponsor } from "../../shared/schemas/public-sponsors";
 import { SPONSOR_DISPLAY_LIMIT, useSponsorDisplay, useSponsorList } from "./sponsors-wall-data";
 
+import "../site/sponsors-wall.css";
+
 const API_BASE_FALLBACK = "/api/v1";
-
-export function sponsorWeightsDescending(sponsors: PublicSponsor[]): number[] {
-  return [...new Set(sponsors.map(({ weight }) => weight))].sort((a, b) => b - a);
-}
-
-/** Keep arbitrary data-backed weights ordered while bounding their visual scale. */
-export function sponsorWeightClass(weight: number): string {
-  return `sponsor-weight-${Math.min(8, Math.max(1, Math.trunc(weight)))}`;
-}
-
-function titleFor(s: PublicSponsor, level: string | null, eventName?: string): string {
-  const context = eventName ?? "the PKI Consortium";
-  return `${s.name} is a ${level ?? "sponsor"} sponsor for ${context}`;
-}
-
-function SponsorLogo({
-  s,
-  level,
-  eventName,
-  logoClass,
-  sizeClass,
-}: {
-  s: PublicSponsor;
-  level: string | null;
-  eventName?: string;
-  logoClass?: string;
-  sizeClass?: string;
-}) {
-  if (!s.logoUrl) return null;
-  const title = titleFor(s, level, eventName);
-  return (
-    <a href={s.website ?? "#"} title={title} target="_blank" rel="noopener noreferrer" class="sponsor-link">
-      <img
-        src={s.logoUrl}
-        alt={title}
-        title={title}
-        class={[logoClass ?? "sponsor-logo", sizeClass].filter(Boolean).join(" ")}
-        loading="lazy"
-      />
-    </a>
-  );
-}
 
 function SponsorLoadError({ message }: { message: string }) {
   return <Alert tone="danger">Sponsors could not be loaded: {message}</Alert>;
@@ -134,34 +94,19 @@ function GridMode({
   if (error) return <SponsorLoadError message={error} />;
   if (!display || display.groups.length === 0) return null;
 
-  const items = display.groups.map(({ weight: w, sponsors }) => (
-    <>
-      {sponsors.map((s) => {
-        const sizeClasses = [
-          sponsorWeightClass(w),
-          height === 20 ? "sponsor-grid-height-20" : "",
-          maxHeight === 20 ? "sponsor-grid-max-height-20" : "",
-          maxWidth === 60 ? "sponsor-grid-max-width-60" : "",
-        ];
-        return (
-          <SponsorLogo
-            key={s.id}
-            s={s}
-            level={s.effectiveTier}
-            eventName={eventName}
-            logoClass={logoClass ? `sponsor-logo ${logoClass}` : "sponsor-logo"}
-            sizeClass={sizeClasses.filter(Boolean).join(" ")}
-          />
-        );
-      })}
-    </>
-  ));
-
   return (
-    <div class="pk-stack">
-      <div class="sponsors-list">{rows ? items.map((row, i) => <div key={i}>{row}</div>) : items}</div>
+    <>
+      <SponsorGridView
+        display={display}
+        eventName={eventName}
+        height={height}
+        maxHeight={maxHeight}
+        maxWidth={maxWidth}
+        rows={rows}
+        logoClass={logoClass}
+      />
       <SponsorLoadMore hasMore={display.page.hasMore} loading={loadingMore} onClick={() => void loadMore()} />
-    </div>
+    </>
   );
 }
 
@@ -188,34 +133,11 @@ function LevelMode({
   if (error) return <SponsorLoadError message={error} />;
   if (!display || display.groups.length === 0) return null;
 
-  /*
-   * The tier band — a captioned rule with the tier's logos beneath it — was
-   * built out of Bootstrap's grid and position utilities in the markup. It is
-   * now a few class names whose rules live in `assets/scss/sponsors.scss`,
-   * beside the rest of this surface's appearance: the surface is still styled
-   * from the legacy sheet, so moving the layout there keeps one owner rather
-   * than splitting it between a stylesheet and a row of utility classes. The
-   * wrapper the logos each sat in is gone with the grid — the row is a flex
-   * container now, so a logo needs nothing around it to be centered.
-   *
-   * The weight class sits on the band rather than on each image: a tier's rank
-   * sets one logo box that every sponsor in the tier is contained by, which is
-   * a property of the band and not of the images inside it.
-   */
   return (
-    <div class="sponsors pk-stack pk-center">
-      {display.groups.map((group) => (
-        <div key={group.weight} data-weight={group.weight} class={`sponsors-tier ${sponsorWeightClass(group.weight)}`}>
-          <span class="sponsor-level">{group.tierName}</span>
-          <div class="sponsors-tier-logos">
-            {group.sponsors.map((s) => (
-              <SponsorLogo key={s.id} s={s} level={group.tierName} eventName={eventName} logoClass="sponsor-logo" />
-            ))}
-          </div>
-        </div>
-      ))}
+    <>
+      <SponsorLevelView display={display} eventName={eventName} />
       <SponsorLoadMore hasMore={display.page.hasMore} loading={loadingMore} onClick={() => void loadMore()} />
-    </div>
+    </>
   );
 }
 
@@ -251,40 +173,17 @@ function StripMode({
     limit: maxItems ?? SPONSOR_DISPLAY_LIMIT,
     sort: "-weight",
   });
-  const sorted = sponsors?.map((s) => ({ s, weight: s.weight })) ?? null;
-
   if (error) return <SponsorLoadError message={error} />;
-  if (!sorted || sorted.length === 0) return null;
-  const centered = sorted
-    .map((entry, index) => ({
-      ...entry,
-      order: index % 2 === 0 ? -Math.floor(index / 2) : Math.floor((index + 1) / 2),
-    }))
-    .sort((left, right) => left.order - right.order);
-
   return (
-    <>
-      {label && <div class={labelClass ?? "sponsor-strip-default-label"}>{label}</div>}
-      <div class={containerClass}>
-        {centered.map(({ s, weight }) => {
-          const tier = s.effectiveTier;
-          const title = titleFor(s, tier, eventName);
-          if (!s.logoUrl) return null;
-          return (
-            <a
-              key={s.id}
-              href={s.website ?? "#"}
-              title={title}
-              target="_blank"
-              rel="noopener noreferrer"
-              class={`${linkClass} ${sponsorWeightClass(weight)}`}
-            >
-              <img class={`${logoClass} sponsor-strip-default-logo`} alt={title} src={s.logoUrl} loading="lazy" />
-            </a>
-          );
-        })}
-      </div>
-    </>
+    <SponsorStripView
+      sponsors={sponsors ?? []}
+      eventName={eventName}
+      containerClass={containerClass}
+      linkClass={linkClass}
+      logoClass={logoClass}
+      label={label}
+      labelClass={labelClass}
+    />
   );
 }
 
@@ -346,9 +245,8 @@ function WallMode({
     onState?.(state);
   }, [onState, state]);
 
-  // The marquee/scroll effects (sponsor-banner-marquee.js, members-overview-effects.js)
-  // build their tracks by scanning the DOM once — they need to run after these anchors
-  // actually exist, not at page load, since this data arrives async.
+  // The marquee and the hover/zoom effects scan the DOM once. They have to run
+  // after these anchors exist, not at page load, because the data is fetched.
   useEffect(() => {
     if (entries) document.dispatchEvent(new CustomEvent("member:wall-rendered"));
   }, [entries]);
@@ -357,46 +255,24 @@ function WallMode({
     return <p class="pk-muted pk-small">Member logos could not be loaded.</p>;
   }
 
-  if (!entries) return null;
+  if (!entries?.length) return null;
 
-  return (
-    <>
-      {entries.map((e) => (
-        <a
-          key={e.key}
-          href={e.href}
-          target="_blank"
-          rel="noopener"
-          data-sponsor-level={e.sponsorLevel}
-          data-member-name={e.name}
-          data-member-slogan={e.slogan ?? undefined}
-          data-sponsor-level-name={e.sponsorLevel > 0 ? (e.sponsorLevelName ?? undefined) : undefined}
-        >
-          <img
-            class={`member-logo${e.sponsorLevel > 0 ? ` member-logo-sponsor sponsor-lvl-${e.sponsorLevel}` : ""}`}
-            alt={e.name}
-            src={e.logoUrl}
-            loading="lazy"
-          />
-        </a>
-      ))}
-    </>
-  );
+  /*
+   * The published wall's own markup: one anchor per member carrying the
+   * sponsor level, the name and the slogan. `members-overview-effects.js`
+   * reads those attributes to build the scrolling track, the hover card and
+   * the sponsor zoom overlay, and the stylesheet colours a sponsor's logo by
+   * its `sponsor-lvl-N` class while every other logo stays greyscale.
+   */
+  return <MemberWallView entries={entries} />;
 }
 
 function main(): void {
-  // Capture image loads because the wall animation clones the rendered anchors.
-  document.addEventListener(
-    "load",
-    (event) => {
-      if (event.target instanceof HTMLImageElement && event.target.classList.contains("member-logo")) {
-        prepareMemberLogo(event.target);
-      }
-    },
-    true,
-  );
-  document.querySelectorAll<HTMLImageElement>("img.member-logo").forEach(prepareMemberLogo);
+  initMemberLogoTreatment();
   document.querySelectorAll<HTMLElement>("[data-sponsors-wall]").forEach((root) => {
+    // The server placeholder is not part of the interactive component tree.
+    // Clear it before Preact mounts so an empty response is genuinely empty.
+    root.replaceChildren();
     const apiBase = root.dataset.apiBase ?? API_BASE_FALLBACK;
     const eventSlug = root.dataset.eventSlug || undefined;
     const eventName = root.dataset.eventName || undefined;
@@ -412,7 +288,7 @@ function main(): void {
       render(
         <WallMode
           apiBase={apiBase}
-          memberLimit={Math.min(200, Number(root.dataset.memberLimit ?? 200))}
+          memberLimit={Math.min(200, Number(root.dataset.memberLimit ?? root.dataset.limit ?? 200))}
           onState={(state) => {
             root.dataset.state = state;
           }}

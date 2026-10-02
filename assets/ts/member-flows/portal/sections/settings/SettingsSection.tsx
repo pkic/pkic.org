@@ -10,7 +10,7 @@ import { lazy, Suspense } from "preact/compat";
 
 import type { PortalSession } from "../../types";
 import { portalHasGlobalPermission, portalSettingsPages } from "../../shell/portal-navigation";
-import { EmptyState } from "../../../../components/EmptyState";
+import { EmptyState } from "../../../../ui/RecordEmptyState";
 import { Spinner } from "../../../../components/Spinner";
 import { Breadcrumb } from "../../../../ui/Breadcrumb";
 import { PageHeader } from "../../../../ui/PageHeader";

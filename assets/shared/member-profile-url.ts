@@ -9,12 +9,8 @@
  * keeping it means nothing outside this repository has to change and nothing
  * has to be redirected. `functions/members/[slug].ts` serves it.
  *
- * The query-string form survives for one case only: an individual member with
- * no `organizations` row has nowhere to hold a slug, so their page is keyed by
- * id. Three surfaces had each written that rule for themselves — the wall in
- * SQL, the directory in TSX, and the group roster in TSX with a *different*
- * fallback (the member's own website, or no link at all) — which is three
- * answers to one question.
+ * Independent members have no organization slug. Their immutable id gives
+ * them a static path too, so every published profile has a file address.
  */
 
 /** The shell page that resolves `?id=`; also `/members/<slug>`'s own source. */
@@ -29,5 +25,5 @@ export interface MemberProfileIdentifiers {
 /** The public page for one member of the consortium. */
 export function memberProfileHref(member: MemberProfileIdentifiers): string {
   if (member.slug) return `/members/${encodeURIComponent(member.slug)}/`;
-  return `${MEMBER_PROFILE_SHELL_PATH}?id=${encodeURIComponent(member.id)}`;
+  return `/members/${encodeURIComponent(member.id)}/`;
 }

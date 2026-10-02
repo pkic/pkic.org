@@ -1,0 +1,105 @@
+body {
+  background-color: #000;
+}
+
+@keyframes rotate {
+  0% {
+    transform: rotate(0deg) scale(1);
+  }
+
+  50% {
+    transform: rotate(180deg) scale(0.8);
+  }
+
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+@keyframes gradientShift {
+  0% {
+    stop-color: rgb(66, 66, 66);
+  }
+
+  /* black */
+  20% {
+    stop-color: rgb(237, 125, 49);
+  }
+
+  /* orange */
+  40% {
+    stop-color: rgb(90, 155, 213);
+  }
+
+  /* blue */
+  60% {
+    stop-color: rgb(255, 192, 0);
+  }
+
+  /* yellow */
+  80% {
+    stop-color: rgb(25, 135, 84);
+  }
+
+  /* green */
+  100% {
+    stop-color: rgb(66, 66, 66);
+  }
+
+  /* black */
+}
+
+@keyframes fadeTrail {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0.3;
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+
+  50% {
+    opacity: 0;
+  }
+}
+
+.fade {
+  transform-origin: 168px 151px;
+  animation: fadeTrail 5s ease-in-out infinite;
+  filter: url(#shadow);
+  /* Apply shadow filter */
+}
+
+.rotate {
+  animation: rotate 5s linear infinite;
+  filter: url(#shadow);
+  /* Apply shadow filter */
+}
+
+.gradient {
+  animation: gradientShift 5s linear infinite;
+}
+
+.timer {
+  font-family: Arial, sans-serif;
+  font-size: 90px;
+  font-weight: bold;
+  fill: url(#dynamicGradient);
+  /* Match the gradient */
+  text-anchor: middle;
+  dominant-baseline: middle;
+  text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+}
+
+.blink {
+  animation: blink 0.8s step-start infinite;
+  fill: rgb(255, 0, 0);
+}

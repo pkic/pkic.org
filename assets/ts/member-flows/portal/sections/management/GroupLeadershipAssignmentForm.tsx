@@ -113,13 +113,7 @@ export function GroupLeadershipAssignmentForm({
   return (
     // This is the primary heading on the assignment page.
     <Panel class="pk" aria-label="Add leadership">
-      <PanelHeader title="Add leadership" headingLevel={2} breadcrumb>
-        {onCancel && (
-          <Button size="sm" disabled={saving} onClick={onCancel}>
-            Cancel
-          </Button>
-        )}
-      </PanelHeader>
+      <PanelHeader title="Add leadership" headingLevel={2} breadcrumb />
       <PanelBody>
         <form class="pk-stack pk-stack--snug" onSubmit={(event) => void submit(event)}>
           <p class="pk-muted pk-small">
@@ -211,6 +205,9 @@ export function GroupLeadershipAssignmentForm({
               disabled={!candidate || !title.trim() || !startsOn}
             >
               {saving ? "Adding…" : "Assign leadership"}
+            </Button>
+            <Button size="sm" disabled={saving} onClick={onCancel}>
+              Cancel
             </Button>
           </div>
         </form>

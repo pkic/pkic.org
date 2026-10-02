@@ -3,7 +3,7 @@ import {
   type MailingListSubscriber,
 } from "../../../../../shared/schemas/mailing-lists";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
-import { EmptyState } from "../../../../components/EmptyState";
+import { EmptyState } from "../../../../ui/RecordEmptyState";
 import { Badge } from "../../../../ui/Badge";
 import { PersonCell } from "../../../../ui/PersonCell";
 

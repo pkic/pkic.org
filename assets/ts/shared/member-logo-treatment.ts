@@ -45,3 +45,22 @@ export function prepareMemberLogo(image: HTMLImageElement): void {
     // A remote logo without CORS permission still uses the theme's default filter.
   }
 }
+
+const logoSelector = "img.member-logo, img.member-profile-logo";
+let listening = false;
+
+/** Treat published and interactive artwork, including subsequently loaded wall clones. */
+export function initMemberLogoTreatment(): void {
+  if (!listening) {
+    document.addEventListener(
+      "load",
+      (event) => {
+        if (event.target instanceof HTMLImageElement && event.target.matches(logoSelector))
+          prepareMemberLogo(event.target);
+      },
+      true,
+    );
+    listening = true;
+  }
+  document.querySelectorAll<HTMLImageElement>(logoSelector).forEach(prepareMemberLogo);
+}

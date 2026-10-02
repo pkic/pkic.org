@@ -68,7 +68,7 @@ export function showHeadshotDisclaimer(opts: HeadshotDisclaimerOptions = {}): Pr
     const titleEl = dialog.querySelector<HTMLElement>(".hsd-title");
     const listEl = dialog.querySelector<HTMLUListElement>(".hsd-list");
     const confirmBtn = dialog.querySelector<HTMLButtonElement>(".hsd-confirm");
-    const checkbox = dialog.querySelector<HTMLInputElement>(".hsd-agree");
+    const checkbox = dialog.querySelector<HTMLInputElement>("[data-headshot-agreement]");
     const cancelBtn = dialog.querySelector<HTMLButtonElement>(".hsd-cancel");
     const form = dialog.querySelector<HTMLFormElement>(".hsd-form");
 

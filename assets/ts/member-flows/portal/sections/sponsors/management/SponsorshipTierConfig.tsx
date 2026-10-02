@@ -6,7 +6,7 @@ import {
 } from "../../../../../../shared/schemas/sponsorship-management";
 import { managedSponsorTiersResponseSchema } from "../../../../../../shared/schemas/sponsors";
 import { statusLabel } from "../../../../../components/Badge";
-import { EmptyState } from "../../../../../components/EmptyState";
+import { EmptyState } from "../../../../../ui/RecordEmptyState";
 import { ErrorAlert } from "../../../../../components/ErrorAlert";
 import { Spinner } from "../../../../../components/Spinner";
 import { useContractForm } from "../../../../../hooks/useContractForm";

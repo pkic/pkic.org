@@ -1,0 +1,322 @@
+/*
+ * Working-group glyphs, inline diagrams and the icon tiles that carry them.
+ *
+ * Ported from the published site's diagrams-and-icons stylesheet: the SVGs
+ * were already inlined by the components, but nothing sized or coloured them,
+ * so every icon tile rendered empty.
+ */
+
+@layer legacy {
+  /*
+   * The inline SVG's wrapper. It exists only to hold the markup, so it
+   * dissolves into its parent's layout rather than becoming a box the icon
+   * tile would then have to size twice.
+   */
+  .pk-wg-icon-slot {
+    display: contents;
+  }
+
+
+  .mermaid-wrap {
+    background: transparent;
+    border: 1px solid rgba(0, 0, 0, 0.08);
+    border-radius: 0.75rem;
+    padding: 2rem 1.5rem;
+    margin: 2rem 0;
+    overflow-x: auto;
+    position: relative;
+  }
+  .mermaid-wrap::before {
+    content: "";
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 3px;
+    background: linear-gradient(90deg, var(--wg-color, #2f5fc7), transparent 80%);
+    border-radius: 0.75rem 0.75rem 0 0;
+  }
+  .mermaid-wrap pre.mermaid {
+    background: transparent;
+    border: none;
+    padding: 0;
+    margin: 0;
+    text-align: center;
+    font-size: 1rem;
+  }
+  .mermaid-wrap svg {
+    max-width: 100%;
+    height: auto;
+  }
+  .mermaid-wrap {
+    background: #ffffff;
+  }
+
+  [data-pagefind-body] .mermaid-wrap {
+    --wg-color: var(--pk-palette-blue);
+  }
+
+  [data-pagefind-body] h1,
+  [data-pagefind-body] h2,
+  [data-pagefind-body] h3,
+  [data-pagefind-body] h4,
+  [data-pagefind-body] h5,
+  [data-pagefind-body] h6 {
+    font-weight: 700;
+    line-height: 1.25;
+    scroll-margin-top: 5rem;
+  }
+  [data-pagefind-body] h1 {
+    font-size: 2rem;
+    margin-top: 0;
+    margin-bottom: 1rem;
+  }
+  [data-pagefind-body] h2 {
+    font-size: 1.5rem;
+    margin-top: 2.5rem;
+    margin-bottom: 0.75rem;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid color-mix(in srgb, var(--page-accent, var(--wg-color, var(--pk-palette-green))) 20%, transparent);
+    background: linear-gradient(120deg, var(--page-accent, var(--wg-color, var(--pk-palette-green))), var(--page-accent-2, rgb(72, 124, 170)));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+  @supports not (-webkit-background-clip: text) {
+    [data-pagefind-body] h2 {
+      color: var(--page-accent, var(--wg-color, var(--pk-palette-green)));
+      background: none;
+    }
+  }
+  [data-pagefind-body] h3 {
+    font-size: 1.2rem;
+    margin-top: 2rem;
+    margin-bottom: 0.5rem;
+    color: var(--page-accent-2, var(--page-accent, var(--wg-color, rgb(72, 124, 170))));
+  }
+  [data-pagefind-body] h4 {
+    font-size: 1rem;
+    margin-top: 1.5rem;
+    margin-bottom: 0.4rem;
+    color: var(--pk-ink);
+  }
+  /*
+   * Prose ink is a token: the page ground flips in the dark theme, and a fixed
+   * dark grey left every article unreadable there.
+   */
+  [data-pagefind-body] p:not(:where(svg *)) {
+    margin-bottom: 1rem;
+    line-height: 1.75;
+    color: var(--pk-ink);
+  }
+  [data-pagefind-body] blockquote p {
+    color: inherit;
+  }
+  [data-pagefind-body] code:not(pre code) {
+    background: var(--pk-surface-sunk);
+    border: 1px solid var(--pk-line);
+    border-radius: 0.3em;
+    font-size: 0.85em;
+    padding: 0.15em 0.45em;
+    color: var(--pk-ink);
+  }
+  [data-pagefind-body] pre {
+    background: #0d1117;
+    border: 1px solid #30363d;
+    border-radius: 0.5rem;
+    padding: 1.25rem 1.5rem;
+    overflow-x: auto;
+    margin: 1.5rem 0;
+  }
+  [data-pagefind-body] pre code {
+    background: transparent;
+    border: none;
+    padding: 0;
+    color: #c9d1d9;
+    font-size: 0.875rem;
+    line-height: 1.65;
+  }
+  [data-pagefind-body] ul,
+  [data-pagefind-body] ol {
+    padding-left: 1.5rem;
+    margin-bottom: 1rem;
+  }
+  [data-pagefind-body] ul li,
+  [data-pagefind-body] ol li {
+    line-height: 1.75;
+    margin-bottom: 0.35rem;
+  }
+  [data-pagefind-body] ul ul,
+  [data-pagefind-body] ul ol,
+  [data-pagefind-body] ol ul,
+  [data-pagefind-body] ol ol {
+    margin-bottom: 0;
+    margin-top: 0.35rem;
+  }
+  [data-pagefind-body] hr {
+    border: none;
+    border-top: 1px solid var(--pk-line);
+    margin: 2rem 0;
+  }
+  [data-pagefind-body] img {
+    max-width: 100%;
+    height: auto;
+  }
+
+  .wg-svg-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .wg-svg-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .pkic-mega-wg-svg {
+    width: 2.25rem;
+    height: 2.25rem;
+    flex-shrink: 0;
+    color: currentColor;
+    opacity: 0.85;
+  }
+
+  .bento-svg-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 3rem;
+    height: 3rem;
+    margin-bottom: 0.75rem;
+  }
+  .bento-svg-icon svg {
+    width: 100%;
+    height: 100%;
+  }
+
+  .mermaid-wrap {
+    cursor: zoom-in;
+    transition: transform 0.2s, box-shadow 0.2s;
+  }
+  .mermaid-wrap:hover {
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  }
+  .diagram-toggle {
+    display: block;
+    margin: 0 0 0.5rem auto;
+    min-height: 44px;
+    padding: 0.5rem 1rem;
+    border: 1px solid var(--pk-line-soft);
+    border-radius: 0.5rem;
+    background: var(--pk-surface-raise);
+    color: var(--pk-ink);
+    font: inherit;
+    cursor: pointer;
+  }
+  .diagram-dialog {
+    width: calc(100vw - 2rem);
+    max-width: 90rem;
+    max-height: calc(100svh - 2rem);
+    padding: 1rem;
+    border: 1px solid var(--pk-line-soft);
+    border-radius: 1rem;
+    background: var(--pk-page-surface);
+    color: var(--pk-ink);
+    overscroll-behavior: contain;
+  }
+  .diagram-dialog::backdrop {
+    background: rgba(15, 23, 42, 0.65);
+  }
+  .diagram-hint {
+    margin: 0 0 0.75rem;
+    color: var(--pk-ink-muted);
+    font-size: 0.875rem;
+  }
+  .diagram-viewport {
+    max-height: calc(100svh - 12rem);
+    overflow: auto;
+    overscroll-behavior: contain;
+    background: #ffffff;
+    border: 1px solid var(--pk-line-soft);
+    border-radius: 0.5rem;
+  }
+  .diagram-viewport:focus-visible {
+    outline: 2px solid var(--pk-accent-ink);
+    outline-offset: 2px;
+  }
+  .diagram-dialog .mermaid svg {
+    width: auto;
+    height: auto;
+    max-width: none !important;
+    display: block;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .mermaid-wrap svg *,
+    .diagram-dialog svg * {
+      animation: none !important;
+    }
+  }
+  .mermaid-wrap.fullscreen {
+    cursor: zoom-out;
+    position: fixed;
+    top: 5vmin;
+    left: 5vmin;
+    right: 5vmin;
+    bottom: 5vmin;
+    z-index: 9999;
+    background: #ffffff;
+    margin: 0;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.25);
+    border-radius: 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    justify-content: center;
+    padding: 4rem 2rem 2rem 2rem;
+    overflow: hidden;
+  }
+  .mermaid-wrap.fullscreen::before {
+    content: none;
+  }
+  .mermaid-wrap.fullscreen::after {
+    content: "✕ Close";
+    position: absolute;
+    top: 1rem;
+    right: 1.5rem;
+    background: #f1f5f9;
+    color: #334155;
+    padding: 0.5rem 1rem;
+    border-radius: 999px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    pointer-events: none;
+  }
+  .mermaid-wrap.fullscreen pre.mermaid {
+    flex: 1;
+    width: 100%;
+    min-height: 0;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .mermaid-wrap.fullscreen svg {
+    width: 100% !important;
+    height: 100% !important;
+    max-width: 100% !important;
+    max-height: 100% !important;
+  }
+
+  body.mermaid-fullscreen-active::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: rgba(15, 23, 42, 0.6);
+    backdrop-filter: blur(4px);
+    -webkit-backdrop-filter: blur(4px);
+    z-index: 9998;
+  }
+
+  body.mermaid-fullscreen-active {
+    overflow: hidden;
+  }
+}

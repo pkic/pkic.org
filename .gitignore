@@ -57,3 +57,6 @@ types/
 # Local migration and rehearsal documentation
 /docs/local-dev-with-production-backup.md
 /docs/yaml-to-d1-member-migration.md
+
+# Astro generated types and build cache
+.astro/

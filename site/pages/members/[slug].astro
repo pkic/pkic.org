@@ -1,0 +1,35 @@
+---
+import PublicPage from "../../layouts/PublicPage.astro";
+import { MemberDetailView } from "../../../assets/ts/site/MemberProfile";
+import { memberProfileHref } from "../../../assets/shared/member-profile-url";
+import { publication } from "../../publication";
+import { publishedSiteRoutes } from "../../../functions/_lib/services/site-content";
+import { renderMemberNewsArticles } from "../../../functions/_lib/services/member-news/render";
+export function getStaticPaths() {
+  return publication.members.map((member) => ({
+    params: { slug: memberProfileHref(member).split("/")[2] },
+    props: { member },
+  }));
+}
+const { member } = Astro.props;
+const publishedRoutes = new Set(publishedSiteRoutes());
+const workingGroups = Object.entries(publication.groupMembers)
+  .filter(([slug, members]) => publishedRoutes.has(`/wg/${slug}/`) && members.some((entry) => entry.id === member.id))
+  .flatMap(([slug]) => {
+    const directory = publication.groups[slug];
+    return directory ? [{ name: directory.group.name, href: `/wg/${slug}/` }] : [];
+  })
+  .sort((left, right) => left.name.localeCompare(right.name, "en-US"));
+const news = publication.news.filter((article) => article.organizationId === member.id).slice(0, 6);
+const newsCards = await renderMemberNewsArticles(news, 3);
+---
+<PublicPage title={member.name} description={member.description ?? undefined} member={member}>
+  <div data-pagefind-body><MemberDetailView member={member} directoryHref="/members/" workingGroups={workingGroups} /></div>
+  {news.length > 0 && (
+    <section class="pk-section pk-container pk-container--wide" aria-labelledby="member-news-heading" data-pagefind-body>
+      <h2 id="member-news-heading">Latest member news</h2>
+      <div class="pk-grid pk-grid--roomy" set:html={newsCards} />
+      <p><a href="/news/">News from all members</a></p>
+    </section>
+  )}
+</PublicPage>

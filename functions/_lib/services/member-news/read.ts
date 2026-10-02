@@ -14,7 +14,7 @@ const ARTICLE_SOURCE = `FROM member_news_articles article
   LEFT JOIN sponsorship_tier_catalog tier ON tier.sponsor_type = 'consortium'
     AND tier.tier = organization.sponsor_tier AND tier.active = 1
   WHERE article.published_at <= ?`;
-const ARTICLE_COLUMNS = `article.url, article.title, article.summary, article.published_at AS publishedAt,
+const ARTICLE_COLUMNS = `article.organization_id AS organizationId, article.url, article.title, article.summary, article.published_at AS publishedAt,
   organization.name AS organizationName, tier.tier AS sponsorTier`;
 
 export async function readMemberNews(db: DatabaseLike, query: MemberNewsQuery): Promise<MemberNewsPage> {
@@ -46,7 +46,7 @@ export async function readSponsorNews(db: DatabaseLike): Promise<MemberNewsArtic
       `WITH ranked AS (
     SELECT ${ARTICLE_COLUMNS}, ROW_NUMBER() OVER (PARTITION BY article.organization_id ORDER BY article.published_at DESC, article.url ASC) AS position
     ${ARTICLE_SOURCE} AND tier.tier IS NOT NULL AND article.published_at >= ?
-  ) SELECT url, title, summary, publishedAt, organizationName, sponsorTier FROM ranked
+  ) SELECT organizationId, url, title, summary, publishedAt, organizationName, sponsorTier FROM ranked
     WHERE position = 1 ORDER BY publishedAt DESC, url ASC LIMIT 12`,
     )
     .bind(nowIso(), cutoff)

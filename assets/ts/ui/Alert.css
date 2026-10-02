@@ -9,12 +9,10 @@
 @layer components {
   .pk-alert {
     position: relative;
-    padding-left: var(--pk-4);
-    padding-top: var(--pk-3);
-    padding-bottom: var(--pk-3);
-    padding-right: var(--pk-3);
+    padding: var(--pk-3) var(--pk-3) var(--pk-3) var(--pk-4);
     border-radius: var(--pk-radius);
     background-color: var(--tone-soft);
+    color: var(--tone-ink);
   }
 
   .pk-alert::before {
@@ -34,21 +32,26 @@
     align-items: start;
     gap: var(--pk-3);
     color: var(--pk-on-solid);
-    background: linear-gradient(110deg,
+    background: linear-gradient(
+      110deg,
       color-mix(in srgb, var(--tone) 30%, var(--pk-on-solid-ink)),
-      color-mix(in srgb, var(--tone) 50%, var(--pk-on-solid-ink)));
+      color-mix(in srgb, var(--tone) 50%, var(--pk-on-solid-ink))
+    );
   }
 
   .pk-alert--callout .pk-alert__body,
-  .pk-alert--callout a {
+  .pk-alert a {
     color: inherit;
   }
 
-  .pk-alert--callout .pk-alert__body > :first-child { margin-top: 0; }
-  .pk-alert--callout .pk-alert__body > :last-child { margin-bottom: 0; }
+  .pk-alert--callout .pk-alert__body > :first-child {
+    margin-top: 0;
+  }
+  .pk-alert--callout .pk-alert__body > :last-child {
+    margin-bottom: 0;
+  }
 
   .pk-alert__title {
-    color: var(--tone-ink);
     font-weight: 500;
     margin: 0 0 var(--pk-2) 0;
   }

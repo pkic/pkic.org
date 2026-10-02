@@ -1,11 +1,13 @@
+import { Button } from "../ui/Button";
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import { identitiesListResponseSchema, type ActingIdentity } from "../../shared/schemas/identity";
 import { userDetailResponseSchema } from "../../shared/schemas/user-management";
 import { userAuthSessionResponseSchema } from "../../shared/schemas/user-auth";
-import { getJson } from "../shared/api-client";
+import { ApiClientError, getJson } from "../shared/api-client";
 import { buildServerCollectionUrl } from "../hooks/useServerCollection";
 import { Field } from "../ui/Field";
+import { Alert } from "../ui/Alert";
 import { ServerSearchSelect } from "./ServerSearchSelect";
 
 const identityLabel = (identity: ActingIdentity) => identity.organizationName ?? "My individual membership";
@@ -28,56 +30,98 @@ function fillEmptyField(form: HTMLFormElement | undefined, name: string, value: 
 }
 
 /** Optional attribution. Merely opening a form never selects or activates an identity. */
-export function RegistrationIdentitySelect({ form }: { form?: HTMLFormElement }) {
+export function RegistrationIdentitySelect({
+  form,
+  deferUntilRequested = false,
+}: {
+  form?: HTMLFormElement;
+  deferUntilRequested?: boolean;
+}) {
+  const [requested, setRequested] = useState(!deferUntilRequested);
+  const [attempt, setAttempt] = useState(0);
+  const [loading, setLoading] = useState(!deferUntilRequested);
+  const [error, setError] = useState<string | null>(null);
+  const [signedOut, setSignedOut] = useState(false);
   const [session, setSession] = useState<z.infer<typeof userAuthSessionResponseSchema> | null>(null);
   const [profile, setProfile] = useState<z.infer<typeof userDetailResponseSchema>["user"] | null>(null);
   const [hasSelectableIdentity, setHasSelectableIdentity] = useState(false);
   const identityField = useRef<HTMLInputElement>(null);
   const [selected, setSelected] = useState<ActingIdentity | null>(null);
   useEffect(() => {
+    if (!requested) return;
     let active = true;
-    void getJson("/api/v1/auth/session", userAuthSessionResponseSchema)
-      .then((response) => {
+    setLoading(true);
+    setError(null);
+    setSignedOut(false);
+    async function loadProfile(): Promise<void> {
+      try {
+        const response = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
         if (!active) return;
         setSession(response);
         fillEmptyField(form, "email", response.identity.email);
-        void getJson(`/api/v1/users/${encodeURIComponent(response.identity.id)}`, userDetailResponseSchema)
-          .then((detail) => {
-            if (!active) return;
-            setProfile(detail.user);
-            fillEmptyField(form, "firstName", detail.user.first_name);
-            fillEmptyField(form, "lastName", detail.user.last_name);
-          })
-          .catch(() => {
-            /* Email can still be prefilled if the profile request fails. */
-          });
         const url = buildServerCollectionUrl(catalog.endpoint, {
           ...catalog.params,
           limit: "1",
           offset: "0",
           sort: catalog.sort,
         });
-        void getJson(url, identitiesListResponseSchema)
-          .then((available) => {
+        await Promise.all([
+          getJson(`/api/v1/users/${encodeURIComponent(response.identity.id)}`, userDetailResponseSchema).then(
+            (detail) => {
+              if (!active) return;
+              setProfile(detail.user);
+              fillEmptyField(form, "firstName", detail.user.first_name);
+              fillEmptyField(form, "lastName", detail.user.last_name);
+            },
+          ),
+          getJson(url, identitiesListResponseSchema).then((available) => {
             if (!active) return;
-            // A sole individual identity adds no useful choice to this form.
             setHasSelectableIdentity(
               available.page.total > 1 ||
                 (available.identities[0] !== undefined && available.identities[0].organizationId !== null),
             );
-          })
-          .catch(() => {
-            /* A failed identity lookup must not block registration. */
-          });
-      })
-      .catch(() => {
-        /* Signed-out visitors use the ordinary event form. */
-      });
+          }),
+        ]);
+      } catch (caught) {
+        if (!active) return;
+        if (caught instanceof ApiClientError && caught.status === 401) {
+          setSignedOut(true);
+          setError(
+            "You are not signed in. You can continue filling in this form, or sign in through the member portal to use your saved profile.",
+          );
+        } else {
+          setError("We could not load your saved profile. You can try again or continue filling in this form.");
+        }
+      } finally {
+        if (active) setLoading(false);
+      }
+    }
+    void loadProfile();
     return () => {
       active = false;
     };
-  }, [form]);
-  if (!session || !hasSelectableIdentity) return null;
+  }, [form, requested, attempt]);
+  if (!requested || loading || error)
+    return (
+      <>
+        {error && <Alert tone={signedOut ? "info" : "warn"}>{error}</Alert>}
+        <Button
+          type="button"
+          variant="secondary"
+          loading={loading}
+          onClick={() => {
+            setRequested(true);
+            setAttempt((current) => current + 1);
+          }}
+        >
+          {loading ? "Loading saved profile…" : error ? "Try saved profile again" : "Use saved profile"}
+        </Button>
+      </>
+    );
+  if (!session || !hasSelectableIdentity)
+    return deferUntilRequested && session ? (
+      <p role="status">Your saved profile is ready. Details you already entered have been kept.</p>
+    ) : null;
   return (
     <Field
       label="Event identity"

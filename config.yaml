@@ -47,7 +47,7 @@ taxonomies:
 # no .well-known — while leaving where the repository happens to live out of it.
 ignoreFiles:
   - "/(archetypes|assets|content|data|i18n|layouts|static)/([^/]+/)*\\." # Hidden files/folders inside the site
-  - "(^|/)(AGENTS|CLAUDE|COPILOT|PROMPTS)\\.md$" # Matches exact instruction files anywhere
+  - "(^|/)(AGENTS|CLAUDE|CODEX|COPILOT|GEMINI|PROMPTS)\\.md$" # Matches exact instruction files anywhere
   - wg/pkimm/(extensions|integrations)/pkimm-model/
   - wg/pkimm/(extensions|integrations)/scripts/
   - wg/pkimm/(extensions|integrations)/\.github/

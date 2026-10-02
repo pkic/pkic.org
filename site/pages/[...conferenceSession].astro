@@ -1,0 +1,41 @@
+---
+import { siteConferencePrograms } from "../../functions/_lib/services/site-content";
+import { SponsorStripView } from "../../assets/ts/site/SponsorDisplays";
+import { sponsorPublicationKey } from "../../assets/shared/sponsor-publication-query";
+import { formatDateRange } from "../../assets/shared/format-date";
+import { publication } from "../publication";
+import "../../assets/scss/conference-session.scss";
+export function getStaticPaths() {
+  return siteConferencePrograms().filter((event) => event.outputs.includes("event-session"))
+    .map((event) => ({ params: { conferenceSession: `${event.route}event-session`.replace(/^\//, "") }, props: { event } }));
+}
+const { event } = Astro.props;
+const groups = publication.sponsors[sponsorPublicationKey(event.sponsorSelection)];
+if (!groups) throw new Error("Conference display sponsors are missing from the approved publication");
+const slots = Object.values(event.program.agenda).flat();
+const dates = formatDateRange(slots[0]?.startsAt, slots.at(-1)?.startsAt, event.program.timezone);
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <title>{event.title} — Session display</title>
+  </head>
+  <body data-conference-data={`${event.route}event-data.json`}>
+    <img src="/img/logo-color.svg" id="logo-element" alt="" />
+    <div id="header"><div class="white-orange">{event.program.name}</div><div class="orange-white">{dates}</div></div>
+    <main id="session" class="centered">
+      <div id="subject" class="white-blue"><h1 id="title">Loading session…</h1><div id="description"></div></div>
+      <div id="speakers" class="blue-white"><div id="speakersList"></div></div>
+    </main>
+    <footer id="footer">
+      <div id="sponsors"><SponsorStripView sponsors={groups.flatMap((group) => group.sponsors)} eventName={event.sponsorSelection.eventName} containerClass="sponsors-list" linkClass="sponsor-link" logoClass="sponsor-logo" /></div>
+      <div id="textbar" class="yellow-black">{dates} · {event.program.timezone}</div>
+      <div class="dimmed">PKI Consortium · pkic.org</div>
+      <img src="/img/logo.svg" id="logo" alt="PKI Consortium" />
+    </footer>
+    <script>import "../../assets/js/event-session.js";</script>
+  </body>
+</html>

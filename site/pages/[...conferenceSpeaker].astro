@@ -1,0 +1,58 @@
+---
+import { siteConferencePrograms } from "../../functions/_lib/services/site-content";
+import { formatDateRange } from "../../assets/shared/format-date";
+import "../../assets/scss/conference-speaker-card.scss";
+
+export function getStaticPaths() {
+  return siteConferencePrograms().flatMap((event) => event.outputs
+    .filter((output) => output === "event-speakers" || output === "event-speakers2")
+    .map((variant) => ({ params: { conferenceSpeaker: `${event.route}${variant}`.replace(/^\//, "") }, props: { event, variant } })));
+}
+const { event, variant } = Astro.props;
+const slots = Object.values(event.program.agenda).flat();
+const first = slots[0]?.startsAt;
+const last = slots.at(-1)?.startsAt;
+const dates = formatDateRange(first, last, event.program.timezone);
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <title>{event.title} — Speaker card</title>
+  </head>
+  <body data-conference-data={`${event.route}event-data.json`} data-conference-title={event.program.name}>
+    <div id="speaker-card">
+      <div class="speaker-card-container">
+        <div class="speaker-card-content">
+          <div class="speaker-card-header">
+            <div class="speaker-card-event-info">
+              <div class="white-orange">{event.program.name}</div>
+              <div class="event-details">{dates}</div>
+            </div>
+            <img src="/img/logo-color-black.svg" class="speaker-card-logo" alt="PKI Consortium" />
+          </div>
+          <div class="speaker-card-main">
+            <div class="speaker-photo-container">
+              <div id="speaker-photo" class="speaker-photo"></div>
+              <div class="speaker-label">SPEAKER</div>
+            </div>
+            <div class="speaker-info">
+              <div class="speaker-intro">{variant === "event-speakers2" ? "Speaking at the" : "I'm speaking at the"}</div>
+              <div class="speaker-event-name">{event.program.name}</div>
+              <div id="speaker-name" class="speaker-name"></div>
+              <div id="speaker-title" class="speaker-title"></div>
+              <div class="speaker-cta">{variant === "event-speakers2" ? "Join me for free at" : "Join me at"} <a href={event.route}>pkic.org</a></div>
+            </div>
+          </div>
+          <div class="speaker-card-footer">
+            {variant === "event-speakers" && <div class="yellow-black">Join us: <a href={event.route}>pkic.org</a></div>}
+            <img src="/img/logo-black.svg" class="speaker-card-footer-logo" alt="PKI Consortium" />
+          </div>
+        </div>
+      </div>
+    </div>
+    <script>import "../../assets/js/event-speaker-card.js";</script>
+  </body>
+</html>

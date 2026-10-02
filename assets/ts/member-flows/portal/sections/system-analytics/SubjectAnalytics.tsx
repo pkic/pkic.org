@@ -20,7 +20,7 @@ import { PageHeader } from "../../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { StatCard } from "../../../../ui/StatCard";
 import { statusBars, svgBarChart } from "../../../../ui/chart";
-import { EmptyState } from "../../../../components/EmptyState";
+import { EmptyState } from "../../../../ui/RecordEmptyState";
 
 export interface SubjectFigure {
   label: string;

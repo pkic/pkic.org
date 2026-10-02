@@ -59,3 +59,14 @@ export function parseEventFlowPath(pathname: string): EventFlowPathContext | nul
   }
   return null;
 }
+
+export const EVENT_FLOW_SHELL_PATHS: Readonly<Record<EventFlowKind, string>> = {
+  registration: "/_event-flow-shells/registration/",
+  registrationConfirm: "/_event-flow-shells/registration-confirm/",
+  registrationManage: "/_event-flow-shells/registration-manage/",
+  proposal: "/_event-flow-shells/proposal/",
+  proposalManage: "/_event-flow-shells/proposal-manage/",
+  speakerManage: "/_event-flow-shells/speaker-manage/",
+  speakerPresentation: "/_event-flow-shells/speaker-presentation/",
+  inviteDecline: "/_event-flow-shells/invite-decline/",
+};

@@ -37,7 +37,7 @@ const surfacesLight = {
   "surface-sunk": neutral[100],
   "surface-raise": neutral.white,
   ink: neutral[800],
-  "ink-muted": neutral[500],
+  "ink-muted": "#626c74",
   "ink-faint": "#868e96",
   "ink-inverse": neutral.white,
   line: neutral[300],
@@ -159,7 +159,25 @@ export const constants = {
   "text-xl": "1.25rem",
   "text-2xl": "1.5rem",
   "text-3xl": "2rem",
+  "text-display": "clamp(2.25rem, 5vw, 3.5rem)",
+  "text-display-lg": "clamp(2.6rem, 5vw, 3.5rem)",
+  "text-display-mobile": "clamp(2rem, 10vw, 2.7rem)",
   "tracking-label": "0.12em",
+
+  /*
+   * Public-site sizes.
+   *
+   * The published site needs a fluid home headline, a statistics figure, a
+   * working-group page title and a large card icon; none of them exist on the
+   * application scale. Everything else the public site needs is already a step
+   * on the shared ramp and reads it directly rather than adding a near
+   * duplicate here.
+   */
+  "public-text-hero": "clamp(1.6rem, 5.5vw, 3.5rem)",
+  "public-text-stat": "1.6rem",
+  "public-text-wg-title": "2rem",
+  "public-text-card-icon": "2.25rem",
+  "public-radius-card-lg": "1.5rem",
 
   "1": "0.25rem",
   "2": "0.5rem",
@@ -173,6 +191,7 @@ export const constants = {
   "radius-sm": "4px",
   radius: "6px",
   "radius-lg": "10px",
+  "radius-card": "1rem",
   "radius-pill": "999px",
 
   "dur-fast": "120ms",
@@ -194,6 +213,10 @@ export const constants = {
   // Text on any saturated solid fill — an accent button, a danger button.
   // Constant across themes: a filled control keeps its own contrast.
   "on-solid": "#ffffff",
+  chrome: "#050505",
+  "chrome-deep": "#020202",
+  "chrome-panel": "#080808",
+  "chrome-raised": "#111111",
   /*
    * Controls sitting ON such a fill, rather than text written on it.
    *
@@ -208,6 +231,85 @@ export const constants = {
    * constant across themes, because the banner's ground is.
    */
   "on-solid-ink": neutral[800],
+  "public-prose-callout": "#111827",
+  "public-home-feature-ink": "#cde8d8",
+  /* The near-black a working-group header fades into, and the shade its
+     accent is darkened against. Both are ground, not ink, so they hold
+     across themes. */
+  "public-wg-header-ground": "#0d0d0d",
+  "public-wg-shade": "#000000",
+  "public-hero-action": `color-mix(in srgb, ${palette.orange} 75%, #000)`,
+  /* Working-group accents, one per `color` value a group declares. */
+  "wg-green": "rgb(25, 135, 84)",
+  "wg-blue": "rgb(90, 155, 213)",
+  "wg-orange": "rgb(237, 125, 49)",
+  "wg-purple": "rgb(111, 66, 193)",
+  "wg-teal": "rgb(32, 201, 151)",
+  "public-hero": "linear-gradient(135deg, #0a1f14 0%, #0d3d24 55%, #0a2f40 100%)",
+  "public-hero-home": "linear-gradient(135deg, #0a1f14 0%, #0d3d24 45%, #0a2f40 100%)",
+  "public-hero-blog": "linear-gradient(135deg, #0c0e2a 0%, #142058 50%, #0a183a 100%)",
+  "public-hero-members": "linear-gradient(135deg, #10082a 0%, #200d42 50%, #0c0820 100%)",
+  "public-hero-about": "linear-gradient(135deg, #0a0c20 0%, #141c3a 50%, #0a1428 100%)",
+  "public-hero-events": "linear-gradient(135deg, #1a0a04 0%, #38200a 50%, #1a1408 100%)",
+  "public-hero-resources": "linear-gradient(135deg, #041a18 0%, #083430 50%, #041a24 100%)",
+  "public-hero-working-groups": "linear-gradient(135deg, #062719 0%, #0b4a2c 48%, #093849 100%)",
+  /* Page hero themes, chosen by a page's own `color`. */
+  "public-hero-blue": "linear-gradient(135deg, #08152e 0%, #0d2452 55%, #081a38 100%)",
+  "public-hero-green": "linear-gradient(135deg, #0a1f14 0%, #0d3d24 55%, #0a2f14 100%)",
+  "public-hero-orange": "linear-gradient(135deg, #1e0c05 0%, #3d1a08 55%, #2a140a 100%)",
+  "public-hero-purple": "linear-gradient(135deg, #110820 0%, #2a0d3d 55%, #1a0c2a 100%)",
+  "public-hero-teal": "linear-gradient(135deg, #041a18 0%, #083430 55%, #04201f 100%)",
+  "public-card-1": "linear-gradient(135deg, #073922 0%, #0b5041 52%, #122139 100%)",
+  "public-card-2": "linear-gradient(135deg, #071c35 0%, #163e4a 52%, #0b2f2a 100%)",
+  "public-card-3": "linear-gradient(135deg, #2a0d3d 0%, #173b42 52%, #0d3d24 100%)",
+  "public-card-4": "linear-gradient(135deg, #3d1a08 0%, #572119 52%, #29102d 100%)",
+  "public-card-5": "linear-gradient(135deg, #381020 0%, #301447 52%, #142058 100%)",
+  "public-card-6": "linear-gradient(135deg, #0d3d24 0%, #3d2c08 100%)",
+  "public-card-shade": "linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.24) 64%, rgba(0,0,0,0.08) 100%)",
+  "public-hero-image-scrim": "linear-gradient(180deg, rgba(0,0,0,0.22), rgba(0,0,0,0.62))",
+  "public-hero-sponsor-scrim": "rgba(0,0,0,0.42)",
+  "public-wg-1": "linear-gradient(135deg, #34115f, #792fc3)",
+  "public-wg-pkimm": "linear-gradient(135deg, #1e3a5f, #0d2040)",
+  "public-wg-pqc": "linear-gradient(135deg, #4a1d8e, #1c0852)",
+  "public-wg-cm": "linear-gradient(135deg, #8b3200, #4a1a00)",
+  "public-wg-tc": "linear-gradient(135deg, #1a5a3a, #0a2d1e)",
+  "public-wg-cbom": "linear-gradient(135deg, #006a6a, #003333)",
+  "public-wg-radius": "0.875rem",
+  "public-wg-label-text": "0.65rem",
+  "public-wg-heading-text": "1.1rem",
+  "public-wg-body-text": "0.83rem",
+  "public-wg-chip-text": "0.72rem",
+  "public-wg-label-ink": "rgba(255,255,255,0.55)",
+  "public-wg-icon-ink": "rgba(255,255,255,0.88)",
+  "public-wg-circle-strong": "rgba(255,255,255,0.07)",
+  "public-wg-circle-soft": "rgba(255,255,255,0.05)",
+  "public-wg-chip-muted": "rgba(0,0,0,0.055)",
+  "public-wg-chip-muted-hover": "rgba(0,0,0,0.11)",
+  "public-wg-shadow": "0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.07)",
+  "public-wg-shadow-hover": "0 4px 8px rgba(0,0,0,0.08), 0 16px 48px rgba(0,0,0,0.14)",
+  "public-support": "linear-gradient(135deg, #0a1f14 0%, #0d3d24 45%, #0a2f40 100%)",
+  "public-support-stripe": `linear-gradient(to right, ${palette.green}, ${palette.teal}, ${palette.blue}, ${palette.yellow}, ${palette.orange}, ${palette.red})`,
+  "public-support-stat": palette.teal,
+  "public-support-heading": "#cde8d8",
+  "public-support-body": "rgba(255,255,255,0.7)",
+  "public-support-label": "rgba(255,255,255,0.55)",
+  "public-support-link": "rgba(255,255,255,0.6)",
+  "public-support-circle": "rgba(255,255,255,0.05)",
+  "public-support-circle-soft": "rgba(255,255,255,0.035)",
+  "public-support-stat-text": "2.75rem",
+  "public-support-body-text": "0.9rem",
+  "public-support-link-text": "0.875rem",
+  "public-support-label-text": "0.75rem",
+  "public-support-button-text": "0.95rem",
+  "public-support-shadow": "0 4px 12px rgba(0,0,0,0.08), 0 16px 40px rgba(0,0,0,0.12)",
+  "public-member-wall-duration": "30s",
+  "public-member-wall-mask": "linear-gradient(to bottom, transparent 0%, #000 8%, #000 92%, transparent 100%)",
+  "agenda-location-1": "#2f8fcb",
+  "agenda-location-2": "#f2782c",
+  "agenda-location-3": "#df3447",
+  "agenda-location-4": "#6c36bd",
+  "agenda-location-5": "#10a884",
+  "agenda-location-6": "#5c76d8",
   // The dark theme's --pk-danger is a light red meant for ink. Filling a
   // button with it and writing in white gave 2.6:1. A destructive fill gets
   // the same darkening an accent fill does.

@@ -1,19 +1,8 @@
 import {
   parseEventFlowPath,
-  type EventFlowKind,
+  EVENT_FLOW_SHELL_PATHS,
   type EventFlowPathContext,
 } from "../../../../assets/shared/event-flow-paths";
-
-const SHELL_ASSET_PATHS: Readonly<Record<EventFlowKind, string>> = {
-  registration: "/_event-flow-shells/registration/",
-  registrationConfirm: "/_event-flow-shells/registration-confirm/",
-  registrationManage: "/_event-flow-shells/registration-manage/",
-  proposal: "/_event-flow-shells/proposal/",
-  proposalManage: "/_event-flow-shells/proposal-manage/",
-  speakerManage: "/_event-flow-shells/speaker-manage/",
-  speakerPresentation: "/_event-flow-shells/speaker-presentation/",
-  inviteDecline: "/_event-flow-shells/invite-decline/",
-};
 
 export interface EventFlowShell {
   assetPath: string;
@@ -30,5 +19,5 @@ export interface EventFlowShell {
 export function resolveEventFlowShell(pathname: string): EventFlowShell | null {
   const context = parseEventFlowPath(pathname);
   if (!context) return null;
-  return { assetPath: SHELL_ASSET_PATHS[context.flow], context };
+  return { assetPath: EVENT_FLOW_SHELL_PATHS[context.flow], context };
 }

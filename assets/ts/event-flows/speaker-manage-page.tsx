@@ -177,10 +177,10 @@ async function main(): Promise<void> {
   const profileFormWrap = boot.root.querySelector<HTMLElement>("[data-profile-form-wrap]");
   const profileSavedState = boot.root.querySelector<HTMLElement>("[data-profile-saved-state]");
   const profileEditButton = boot.root.querySelector<HTMLButtonElement>("[data-profile-edit]");
-  const firstNameField = profileForm?.querySelector<HTMLInputElement>("#speaker-first-name");
-  const lastNameField = profileForm?.querySelector<HTMLInputElement>("#speaker-last-name");
-  const organizationField = profileForm?.querySelector<HTMLInputElement>("#speaker-organization");
-  const jobTitleField = profileForm?.querySelector<HTMLInputElement>("#speaker-job-title");
+  const firstNameField = profileForm?.querySelector<HTMLInputElement>('input[name="firstName"]');
+  const lastNameField = profileForm?.querySelector<HTMLInputElement>('input[name="lastName"]');
+  const organizationField = profileForm?.querySelector<HTMLInputElement>('input[name="organizationName"]');
+  const jobTitleField = profileForm?.querySelector<HTMLInputElement>('input[name="jobTitle"]');
   const bioField = profileForm?.querySelector<HTMLTextAreaElement>("#speaker-bio");
   const linksContainer = boot.root.querySelector<HTMLElement>("[data-profile-links-container]");
   let linksWidget: ProfileLinksWidget | null = null;

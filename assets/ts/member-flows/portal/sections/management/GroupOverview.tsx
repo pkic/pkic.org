@@ -19,7 +19,7 @@ import "../../../../ui/Content.css";
 import { useData } from "../../../../hooks/useData";
 import { getJson } from "../../../../shared/api-client";
 import { formatEventWhen, formatRelativeDays } from "../../../../shared/ui";
-import { Markdown } from "../../../../components/Markdown";
+import { Markdown } from "../../../../ui/Markdown";
 
 function eventWhen(event: GroupEvent): string {
   const at = event.startsAt ?? event.nextOccurrenceAt;

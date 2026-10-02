@@ -1,0 +1,810 @@
+{
+  "publishers": [
+    {
+      "id": "360",
+      "name": "360 Browser",
+      "description": "360 is a security company in China and has always been working on the secure development of the Internet.",
+      "website": "https://caprogram.360.cn/",
+      "contact": "caprogram@360.cn",
+      "ccadb": false,
+      "legal-context": "",
+      "audit": null,
+      "requirements": [
+        {
+          "type": "",
+          "url": "https://caprogram.360.cn/#strategy"
+        }
+      ],
+      "discussions": null,
+      "issues": null,
+      "trust-lists": {
+        "info": "",
+        "policy": "",
+        "trust": [
+          {
+            "purposes": [
+              "TLS"
+            ],
+            "requirements": null,
+            "discussions": null,
+            "issues": null,
+            "audit": [
+              {
+                "name": "WebTrust",
+                "description": "",
+                "frequency": 0,
+                "policies": null
+              }
+            ],
+            "list": [
+              {
+                "type": "HTML",
+                "url": "https://caprogram.360.cn/#trust"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "adobe",
+      "name": "Adobe",
+      "description": "The Adobe Approved Trust List is a program that allows millions of users around the world to create digital signatures that are trusted whenever the signed document is opened in Adobe® Acrobat® or Reader® software. Essentially, both Acrobat and Reader have been programmed to reach out to a web page to periodically download a list of trusted \"root\" digital certificates. Any digital signature created with a credential that can trace a relationship (\"chain\") back to the high-assurance, trustworthy certificates on this list is trusted by Acrobat and Reader.",
+      "website": "https://helpx.adobe.com/acrobat/kb/approved-trust-list2.html",
+      "contact": "aatl-info@adobe.com",
+      "ccadb": false,
+      "legal-context": "",
+      "audit": null,
+      "requirements": [
+        {
+          "type": "",
+          "url": "https://helpx.adobe.com/acrobat/kb/approved-trust-list2.html#AATLtechnicalrequirements"
+        }
+      ],
+      "discussions": null,
+      "issues": null,
+      "trust-lists": {
+        "info": "",
+        "policy": "",
+        "trust": [
+          {
+            "purposes": [
+              "PAdES"
+            ],
+            "requirements": null,
+            "discussions": null,
+            "issues": null,
+            "audit": null,
+            "list": [
+              {
+                "type": "HTML",
+                "url": "https://helpx.adobe.com/acrobat/kb/approved-trust-list1.html"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "akamai",
+      "name": "Akamai",
+      "description": "The Akamai Certificate Store is used by Akamai CDN edge servers when making connections to origin servers.",
+      "website": "https://github.com/akamai/akamai-certificate-store",
+      "contact": "",
+      "ccadb": false,
+      "legal-context": "",
+      "audit": null,
+      "requirements": null,
+      "discussions": null,
+      "issues": null,
+      "trust-lists": {
+        "info": "",
+        "policy": "",
+        "trust": [
+          {
+            "purposes": [
+              "TLS"
+            ],
+            "requirements": null,
+            "discussions": null,
+            "issues": null,
+            "audit": null,
+            "list": [
+              {
+                "type": "HTML",
+                "url": "https://github.com/akamai/akamai-certificate-store/blob/main/akamai-certificate-store.md"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "android",
+      "name": "Android",
+      "description": "",
+      "website": "http://www.android.com",
+      "contact": "",
+      "ccadb": false,
+      "legal-context": "",
+      "audit": null,
+      "requirements": null,
+      "discussions": null,
+      "issues": [
+        {
+          "type": "",
+          "url": "https://issuetracker.google.com/issues?q=android%20status:(open%20%7C%20new%20%7C%20assigned%20%7C%20accepted%20%7C%20verified)%20%22root%20certificate%22"
+        }
+      ],
+      "trust-lists": {
+        "info": "",
+        "policy": "",
+        "trust": [
+          {
+            "purposes": [
+              "TLS"
+            ],
+            "requirements": null,
+            "discussions": null,
+            "issues": null,
+            "audit": null,
+            "list": [
+              {
+                "type": "HTML",
+                "url": "https://android.googlesource.com/platform/system/ca-certificates/+/master/files/"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "apple",
+      "name": "Apple",
+      "description": "Apple uses public key infrastructure (PKI) to secure and enhance the experience for Apple users. Apple products, including the web browser Safari and Mail.app, use a common store for root certificates.",
+      "website": "https://www.apple.com/certificateauthority/ca_program.html",
+      "contact": "certificate-authority-program@apple.com",
+      "ccadb": true,
+      "legal-context": "",
+      "audit": null,
+      "requirements": [
+        {
+          "type": "",
+          "url": "https://www.apple.com/certificateauthority/ca_program.html"
+        }
+      ],
+      "discussions": null,
+      "issues": null,
+      "trust-lists": {
+        "info": "",
+        "policy": "",
+        "trust": [
+          {
+            "purposes": [
+              "TLS"
+            ],
+            "requirements": null,
+            "discussions": null,
+            "issues": null,
+            "audit": [
+              {
+                "name": "WebTrust",
+                "description": "",
+                "frequency": 0,
+                "policies": null
+              }
+            ],
+            "list": [
+              {
+                "type": "HTML",
+                "url": "https://support.apple.com/en-us/HT204132"
+              },
+              {
+                "type": "HTML",
+                "url": "http://support.apple.com/kb/HT6005"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "chrome",
+      "name": "Chrome",
+      "description": "When Chrome presents the connection to a website as secure, Chrome is making a statement to its users about the security properties of that connection. Because of the CA's critical role in upholding those properties, Chrome must ensure the CAs who issue certificates are operated in a consistent and trustworthy manner.",
+      "website": "http://g.co/chrome/root-policy",
+      "contact": "chrome-root-program@google.com",
+      "ccadb": true,
+      "legal-context": "",
+      "audit": null,
+      "requirements": [
+        {
+          "type": "",
+          "url": "http://g.co/chrome/root-policy"
+        }
+      ],
+      "discussions": null,
+      "issues": null,
+      "trust-lists": {
+        "info": "",
+        "policy": "",
+        "trust": [
+          {
+            "purposes": [
+              "TLS"
+            ],
+            "requirements": null,
+            "discussions": null,
+            "issues": null,
+            "audit": [
+              {
+                "name": "WebTrust",
+                "description": "",
+                "frequency": 0,
+                "policies": null
+              }
+            ],
+            "list": [
+              {
+                "type": "HTML",
+                "url": "http://g.co/chrome/root-store"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "cisco",
+      "name": "Cisco Trusted Root Store",
+      "description": "The Cisco Trusted Root Store supports the distribution of root certificates for over 90 products and families.",
+      "website": "https://www.cisco.com/security/pki/",
+      "contact": "",
+      "ccadb": false,
+      "legal-context": "",
+      "audit": null,
+      "requirements": null,
+      "discussions": null,
+      "issues": null,
+      "trust-lists": {
+        "info": "",
+        "policy": "",
+        "trust": [
+          {
+            "purposes": [
+              "TLS",
+              "Code-Signing"
+            ],
+            "requirements": null,
+            "discussions": null,
+            "issues": null,
+            "audit": [
+              {
+                "name": "WebTrust",
+                "description": "",
+                "frequency": 0,
+                "policies": null
+              }
+            ],
+            "list": [
+              {
+                "type": "PKCS7",
+                "url": "https://www.cisco.com/security/pki/trs/ios.p7b"
+              },
+              {
+                "type": "PKCS7",
+                "url": "https://www.cisco.com/security/pki/trs/ios_core.p7b"
+              },
+              {
+                "type": "PKCS7",
+                "url": "https://www.cisco.com/security/pki/trs/ios_union.p7b"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "eidaslotl",
+      "name": "eIDAS List of Trusted Lists",
+      "description": "The Member States of the European Union and European Economic Area publish trusted lists of qualified trust service providers in accordance with the eIDAS Regulation.\nThe European Commission publishes a list of these trusted lists, the List of Trusted Lists (LOTL).\n",
+      "website": "https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=CELEX:32014R0910&from=EN",
+      "contact": "",
+      "ccadb": false,
+      "legal-context": "",
+      "audit": null,
+      "requirements": [
+        {
+          "type": "",
+          "url": "https://eur-lex.europa.eu/legal-content/EN/TXT/HTML/?uri=CELEX:32014R0910&from=EN"
+        },
+        {
+          "type": "",
+          "url": "https://portal.etsi.org/TB-SiteMap/ESI/Trust-Service-Providers"
+        }
+      ],
+      "discussions": null,
+      "issues": null,
+      "trust-lists": {
+        "info": "",
+        "policy": "",
+        "trust": [
+          {
+            "purposes": [
+              "TLS",
+              "S/MIME",
+              "Code-Signing",
+              "Time-Stamping"
+            ],
+            "requirements": null,
+            "discussions": null,
+            "issues": null,
+            "audit": [
+              {
+                "name": "eIDAS",
+                "description": "",
+                "frequency": 0,
+                "policies": null
+              },
+              {
+                "name": "ETSI",
+                "description": "",
+                "frequency": 0,
+                "policies": null
+              }
+            ],
+            "list": [
+              {
+                "type": "HTML",
+                "url": "https://esignature.ec.europa.eu/efda/tl-browser/"
+              },
+              {
+                "type": "XML",
+                "url": "https://ec.europa.eu/tools/lotl/eu-lotl.xml"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "gmail",
+      "name": "Gmail",
+      "description": "",
+      "website": "https://www.google.com/gmail/about/",
+      "contact": "",
+      "ccadb": false,
+      "legal-context": "",
+      "audit": null,
+      "requirements": null,
+      "discussions": null,
+      "issues": null,
+      "trust-lists": {
+        "info": "",
+        "policy": "",
+        "trust": [
+          {
+            "purposes": [
+              "S/MIME"
+            ],
+            "requirements": null,
+            "discussions": null,
+            "issues": null,
+            "audit": null,
+            "list": [
+              {
+                "type": "HTML",
+                "url": "https://support.google.com/a/answer/7448393?hl=en"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "icao",
+      "name": "ICAO Public Key Directory (PKD)",
+      "description": "The ICAO Public Key Directory (PKD) is a central repository for exchanging the information required to authenticate ePassports.",
+      "website": "https://www.icao.int/Security/FAL/PKD/",
+      "contact": "",
+      "ccadb": false,
+      "legal-context": "",
+      "audit": null,
+      "requirements": null,
+      "discussions": null,
+      "issues": null,
+      "trust-lists": {
+        "info": "",
+        "policy": "",
+        "trust": [
+          {
+            "purposes": [
+              "ePassport"
+            ],
+            "requirements": null,
+            "discussions": null,
+            "issues": null,
+            "audit": null,
+            "list": [
+              {
+                "type": "HTML",
+                "url": "https://www.icao.int/Security/FAL/PKD/Pages/ICAO-Master-List.aspx"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "microsoft",
+      "name": "Microsoft",
+      "description": "The Microsoft Root Certificate Program supports the distribution of root certificates, enabling customers to trust Windows products.",
+      "website": "https://aka.ms/RootCert",
+      "contact": "",
+      "ccadb": true,
+      "legal-context": "",
+      "audit": null,
+      "requirements": [
+        {
+          "type": "",
+          "url": "https://aka.ms/RootCert"
+        },
+        {
+          "type": "",
+          "url": "https://aka.ms/auditreqs"
+        }
+      ],
+      "discussions": null,
+      "issues": null,
+      "trust-lists": {
+        "info": "https://docs.microsoft.com/en-us/security/trusted-root/participants-list",
+        "policy": "https://wiki.mozilla.org/CA/FAQ#Can_I_use_Mozilla.27s_set_of_CA_certificates.3F",
+        "trust": [
+          {
+            "purposes": [
+              "TLS"
+            ],
+            "requirements": null,
+            "discussions": null,
+            "issues": null,
+            "audit": [
+              {
+                "name": "WebTrust",
+                "description": "",
+                "frequency": 0,
+                "policies": null
+              },
+              {
+                "name": "ETSI",
+                "description": "",
+                "frequency": 0,
+                "policies": [
+                  "DVCP",
+                  "OVCP",
+                  "EVCP",
+                  "PTR-BR",
+                  "QCP-w"
+                ]
+              },
+              {
+                "name": "CABForum",
+                "description": "",
+                "frequency": 0,
+                "policies": [
+                  "BR",
+                  "EVG",
+                  "NetSec"
+                ]
+              }
+            ],
+            "list": null
+          },
+          {
+            "purposes": [
+              "S/MIME"
+            ],
+            "requirements": null,
+            "discussions": null,
+            "issues": null,
+            "audit": [
+              {
+                "name": "WebTrust",
+                "description": "",
+                "frequency": 0,
+                "policies": [
+                  "CA"
+                ]
+              },
+              {
+                "name": "ETSI",
+                "description": "",
+                "frequency": 0,
+                "policies": [
+                  "LCP",
+                  "NCP",
+                  "NCP+",
+                  "QCP-n",
+                  "QCP-n-qscd",
+                  "QCP-l",
+                  "QCP-l-qscd"
+                ]
+              }
+            ],
+            "list": null
+          },
+          {
+            "purposes": [
+              "Code-Signing"
+            ],
+            "requirements": null,
+            "discussions": null,
+            "issues": null,
+            "audit": [
+              {
+                "name": "WebTrust",
+                "description": "",
+                "frequency": 0,
+                "policies": [
+                  "CA",
+                  "Code-Signing"
+                ]
+              },
+              {
+                "name": "ETSI",
+                "description": "",
+                "frequency": 0,
+                "policies": [
+                  "QCP-w",
+                  "LCP",
+                  "NCP",
+                  "NCP+",
+                  "QCP-n",
+                  "QCP-n-qscd",
+                  "QCP-l",
+                  "QCP-l-qscd"
+                ]
+              }
+            ],
+            "list": [
+              {
+                "type": "PEM",
+                "url": "https://ccadb-public.secure.force.com/microsoft/IncludedRootsPEMTxtForMSFT?TrustBitsInclude=Code%20Signing"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "mozilla",
+      "name": "Mozilla",
+      "description": "Mozilla’s CA Certificate Program governs inclusion of root certificates in Network Security Services (NSS), a set of open source libraries designed to support cross-platform development of security-enabled client and server applications. The NSS root certificate store is not only used in Mozilla products such as the Firefox browser, but is also used by other companies in a variety of products. The program is overseen by the module owner and peers of the CA Certificates Module; the policy itself is overseen by the module owner and peers of the CA Certificate Policy Module.",
+      "website": "https://wiki.mozilla.org/CA",
+      "contact": "",
+      "ccadb": true,
+      "legal-context": "",
+      "audit": null,
+      "requirements": [
+        {
+          "type": "",
+          "url": "https://www.mozilla.org/en-US/about/governance/policies/security-group/certs/policy/"
+        }
+      ],
+      "discussions": [
+        {
+          "type": "",
+          "url": "https://groups.google.com/u/1/a/mozilla.org/g/dev-security-policy"
+        }
+      ],
+      "issues": [
+        {
+          "type": "",
+          "url": "https://bugzilla.mozilla.org/buglist.cgi?query_format=advanced&product=NSS&resolution=---&component=CA%20Certificate%20Compliance&component=CA%20Certificate%20Root%20Program"
+        },
+        {
+          "type": "ATOM",
+          "url": "https://bugzilla.mozilla.org/buglist.cgi?component=CA%20Certificate%20Compliance&component=CA%20Certificate%20Root%20Program&product=NSS&query_format=advanced&resolution=---&title=Bug%20List&ctype=atom"
+        },
+        {
+          "type": "JSON",
+          "url": "https://bugzilla.mozilla.org/rest/bug?include_fields=id,summary,status&component=CA%20Certificate%20Compliance&component=CA%20Certificate%20Root%20Program&product=NSS&resolution=---"
+        }
+      ],
+      "trust-lists": {
+        "info": "https://wiki.mozilla.org/CA/Included_Certificates",
+        "policy": "https://wiki.mozilla.org/CA/FAQ#Can_I_use_Mozilla.27s_set_of_CA_certificates.3F",
+        "trust": [
+          {
+            "purposes": [
+              "TLS"
+            ],
+            "requirements": null,
+            "discussions": null,
+            "issues": null,
+            "audit": [
+              {
+                "name": "WebTrust",
+                "description": "",
+                "frequency": 0,
+                "policies": null
+              },
+              {
+                "name": "ETSI",
+                "description": "",
+                "frequency": 0,
+                "policies": [
+                  "DV",
+                  "EV",
+                  "QWAC"
+                ]
+              },
+              {
+                "name": "CABForum",
+                "description": "",
+                "frequency": 0,
+                "policies": [
+                  "BR",
+                  "EVG",
+                  "NetSec"
+                ]
+              }
+            ],
+            "list": [
+              {
+                "type": "PEM",
+                "url": "https://ccadb-public.secure.force.com/mozilla/IncludedRootsPEMTxt?TrustBitsInclude=Websites"
+              }
+            ]
+          },
+          {
+            "purposes": [
+              "S/MIME"
+            ],
+            "requirements": null,
+            "discussions": null,
+            "issues": null,
+            "audit": [
+              {
+                "name": "WebTrust",
+                "description": "",
+                "frequency": 0,
+                "policies": null
+              },
+              {
+                "name": "ETSI",
+                "description": "",
+                "frequency": 0,
+                "policies": [
+                  "NCP",
+                  "NCP+",
+                  "LCP",
+                  "LCP+",
+                  "QCP"
+                ]
+              }
+            ],
+            "list": [
+              {
+                "type": "PEM",
+                "url": "https://ccadb-public.secure.force.com/mozilla/IncludedRootsPEMTxt?TrustBitsInclude=Email"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "oracle-java",
+      "name": "Oracle Java",
+      "description": "The Oracle Java Root Certificate program includes widely recognized Certificate Authorities with a significant customer base and global reach.\n",
+      "website": "https://www.oracle.com/java/technologies/javase/carootcertsprogram.html",
+      "contact": "",
+      "ccadb": false,
+      "legal-context": "",
+      "audit": null,
+      "requirements": null,
+      "discussions": null,
+      "issues": null,
+      "trust-lists": {
+        "info": "",
+        "policy": "",
+        "trust": [
+          {
+            "purposes": [
+              "TLS",
+              "S/MIME",
+              "Code-Signing",
+              "Time-Stamping"
+            ],
+            "requirements": null,
+            "discussions": null,
+            "issues": null,
+            "audit": [
+              {
+                "name": "WebTrust",
+                "description": "",
+                "frequency": 0,
+                "policies": null
+              }
+            ],
+            "list": [
+              {
+                "type": "HTML",
+                "url": "https://github.com/openjdk/jdk/tree/master/src/java.base/share/data/cacerts"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "visa",
+      "name": "Visa",
+      "description": "Visa List of Trusted Certifying Authorities",
+      "website": "https://developer.visa.com/developer_program",
+      "contact": "",
+      "ccadb": false,
+      "legal-context": "",
+      "audit": null,
+      "requirements": null,
+      "discussions": null,
+      "issues": null,
+      "trust-lists": {
+        "info": "",
+        "policy": "",
+        "trust": [
+          {
+            "purposes": [
+              "TLS"
+            ],
+            "requirements": null,
+            "discussions": null,
+            "issues": null,
+            "audit": null,
+            "list": [
+              {
+                "type": "HTML",
+                "url": "https://developer.visa.com/pages/trusted_certifying_authorities"
+              }
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "wi-fi-alliance",
+      "name": "Wi-Fi Alliance",
+      "description": "In the Wi-Fi CERTIFIED Passpoint® certification program, mobile devices use Online Sign-Up (OSU) to accomplish registration and credential provisioning to obtain secure network access. Each Service Provider network has an OSU Server, an AAA Server, and access to a certificate authority (CA). A CA is a collection of computer hardware, software, and the people who operate it. The CA is known by two attributes: its name and its public key. One of the requirements for a mobile device and the hotspot to trust each other is that the OSU Server shall hold a certificate signed by a Certificate Authority whose root certificate is issued by one of the CAs authorized by Wi-Fi Alliance, and that these trusted root CA certificates are installed on the mobile device.\n",
+      "website": "https://www.wi-fi.org/certification/certificate-authority-vendors",
+      "contact": "",
+      "ccadb": false,
+      "legal-context": "",
+      "audit": null,
+      "requirements": null,
+      "discussions": null,
+      "issues": null,
+      "trust-lists": {
+        "info": "",
+        "policy": "",
+        "trust": [
+          {
+            "purposes": [
+              "Wi-Fi"
+            ],
+            "requirements": null,
+            "discussions": null,
+            "issues": null,
+            "audit": null,
+            "list": [
+              {
+                "type": "HTML",
+                "url": "https://www.wi-fi.org/certification/certificate-authority-vendors"
+              }
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "release": "v0.1.10"
+}

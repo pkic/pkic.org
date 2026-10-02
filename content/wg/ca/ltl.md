@@ -1,5 +1,5 @@
 ---
-date: 2021-07-20T6:52:00Z
+date: 2021-07-20T06:52:00Z
 draft: false
 title: List of Trust Lists
 summary: The List of Trust Lists (LTL) is a vendor-neutral, machine-readable directory that enables global discovery and interoperability of public, private, and industry-specific digital trust frameworks.

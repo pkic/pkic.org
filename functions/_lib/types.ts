@@ -77,8 +77,6 @@ export interface Env {
   SPEAKER_UPLOADS_BUCKET?: R2BucketLike;
   /** Cloudflare Images binding — resize/convert images from raw streams without a public URL. */
   IMAGES?: ImagesBinding;
-  /** Cloudflare Browser Rendering binding — headless Chromium for HTML-to-image rendering. */
-  BROWSER?: Fetcher;
   /** Cloudflare Worker Loader binding for MCP codemode sandbox execution. */
   LOADER?: WorkerLoader;
   /** KV namespace used by the Workers OAuth Provider for MCP auth state and tokens. */

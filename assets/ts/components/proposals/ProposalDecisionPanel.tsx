@@ -1,4 +1,4 @@
-import { useEffect, useState } from "preact/hooks";
+import { useEffect, useLayoutEffect, useState } from "preact/hooks";
 import type { z } from "zod";
 import type { EventProposalDetailResponse } from "../../../shared/schemas/event-proposals";
 import type { ProposalDecisionPreviewResponse } from "../../../shared/schemas/proposal-decisions";
@@ -16,7 +16,7 @@ import { Field } from "../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import { Select } from "../../ui/TextControl";
 import { Tabs } from "../Tabs";
-import { Markdown } from "../Markdown";
+import { Markdown } from "../../ui/Markdown";
 import { EMAIL_PREVIEW_TABS, type EmailPreviewTab } from "../../shared/email-preview-tabs";
 import type { ToastType } from "../../shared/ui";
 import "../../ui/Content.css";
@@ -92,7 +92,9 @@ export function ProposalDecisionPanel({
   const selectedPreview =
     preview?.messages.find((message) => message.id === selectedPreviewId) ?? preview?.messages[0] ?? null;
 
-  useEffect(() => {
+  // Reset the record's draft before controls become interactive. A deferred
+  // effect can otherwise erase a decision chosen just after opening this tab.
+  useLayoutEffect(() => {
     setDecisionStatus("");
     setDecisionNote("");
     setChanging(false);

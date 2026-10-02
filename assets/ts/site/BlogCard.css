@@ -1,0 +1,26 @@
+/*
+ * The blog card's own placement.
+ *
+ * The card itself is the published site's, styled by the ported card
+ * stylesheet. What stays here is how the listing arranges them: three across
+ * the container measure, which is what the blog index and the home page's
+ * "Latest from the Blog" band both use.
+ */
+
+@layer components {
+  .blog-sidebar-topics .pk-badge {
+    text-decoration: none;
+    transition: border-color var(--pk-dur-fast);
+  }
+
+  .blog-sidebar-topics .pk-badge:hover {
+    border-color: var(--tone);
+  }
+
+  .pk-public-listing--blog .pk-public-listing__grid,
+  .pk-wg-posts {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(22rem, 100%), 1fr));
+    gap: var(--pk-5);
+  }
+}

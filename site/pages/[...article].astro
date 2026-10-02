@@ -1,0 +1,22 @@
+---
+import PublicPage from "../layouts/PublicPage.astro";
+import { SitePageBody } from "../../assets/ts/site/SitePageBody";
+import { loadSiteContent, publishedSiteRoutes, siteMapEntries } from "../../functions/_lib/services/site-content";
+import { publication, memberCounts } from "../publication";
+export async function getStaticPaths() {
+  const dedicated = new Set(["/members/", "/members/independent/", "/members/profile/", "/portal/", "/search/", "/news/", "/votes/", "/votes/detail/", "/wg/pkimm/"]);
+  const routes = new Set([...publishedSiteRoutes(), ...siteMapEntries().map(({ route }) => route), ...(publication.eventFlows ?? []).map(page => page.route)]);
+  const pages = [];
+  for (const route of routes) {
+    if (dedicated.has(route)) continue;
+    const content = await loadSiteContent(route, { publication });
+    if (!content || content.draft || content.redirect) continue;
+    pages.push({ params: { article: route === "/" ? undefined : route.replace(/^\/|\/$/g, "") }, props: { content } });
+  }
+  return pages;
+}
+const { content } = Astro.props;
+---
+<PublicPage title={content.title} description={content.description} accent={content.pageAccent} robots={content.robots} content={content}>
+  <SitePageBody content={content} publication={publication} memberCount={memberCounts.organization} />
+</PublicPage>

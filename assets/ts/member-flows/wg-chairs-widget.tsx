@@ -29,7 +29,9 @@ import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { groupDirectoryResponseSchema, type GroupDirectoryResponse } from "../../shared/schemas/group-directory";
 import { getJson } from "../shared/api-client";
-import { PublicPersonCard } from "./components/public-person-card";
+import { GroupChairsView } from "../site/GroupChairs";
+
+import "../site/leadership.css";
 
 const API_BASE_FALLBACK = "/api/v1";
 
@@ -39,14 +41,12 @@ export function WgChairsWidget({
   apiBase,
   slug,
   wgLabel,
-  color,
   mode,
   onReveal,
 }: {
   apiBase: string;
   slug: string;
   wgLabel: string;
-  color: string;
   mode: Mode;
   onReveal?: () => void;
 }) {
@@ -68,29 +68,7 @@ export function WgChairsWidget({
 
   if (!hasData) return null;
 
-  const avatarSize = mode === "card" ? "small" : "default";
-  const cards = (
-    <>
-      {leaders.map((assignment) => (
-        <PublicPersonCard
-          key={`${assignment.sourceGroup?.id ?? "private-source"}:${assignment.roleId}:${assignment.person.name}`}
-          person={assignment.person}
-          role={`${wgLabel} ${assignment.title}`}
-          color={color}
-          avatarSize={avatarSize}
-        />
-      ))}
-    </>
-  );
-
-  if (mode === "card") return cards;
-
-  return (
-    <>
-      <div class="wg-leadership-label">Working Group Leadership</div>
-      <div class="consortium-leaders">{cards}</div>
-    </>
-  );
+  return <GroupChairsView leaders={leaders} wgLabel={wgLabel} mode={mode} />;
 }
 
 function main(): void {
@@ -98,7 +76,6 @@ function main(): void {
     const apiBase = root.dataset.apiBase ?? API_BASE_FALLBACK;
     const slug = root.dataset.wgSlug ?? "";
     const wgLabel = root.dataset.wgLabel ?? "";
-    const color = root.dataset.color ?? "green";
     const mode: Mode = root.dataset.mode === "card" ? "card" : "compact";
     if (!slug) return;
 
@@ -110,10 +87,7 @@ function main(): void {
           }
         : undefined;
 
-    render(
-      <WgChairsWidget apiBase={apiBase} slug={slug} wgLabel={wgLabel} color={color} mode={mode} onReveal={onReveal} />,
-      root,
-    );
+    render(<WgChairsWidget apiBase={apiBase} slug={slug} wgLabel={wgLabel} mode={mode} onReveal={onReveal} />, root);
   });
 }
 

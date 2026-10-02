@@ -8,7 +8,7 @@ import {
 } from "../../../../shared/schemas/identity";
 import { ApiDataTable, type ApiTableActions, type ApiDataTableProps } from "../../../components/ApiDataTable";
 import { DataTable, type Column } from "../../../components/Table";
-import { EmptyState } from "../../../components/EmptyState";
+import { EmptyState } from "../../../ui/RecordEmptyState";
 import { Badge } from "../../../ui/Badge";
 import { type MenuItem } from "../../../ui/Menu";
 import { RowActions } from "../../../ui/RowActions";

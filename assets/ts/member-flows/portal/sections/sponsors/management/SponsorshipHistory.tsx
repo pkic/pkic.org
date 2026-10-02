@@ -5,7 +5,7 @@ import {
 } from "../../../../../../shared/schemas/sponsorship-management";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
 import { statusLabel } from "../../../../../components/Badge";
-import { EmptyState } from "../../../../../components/EmptyState";
+import { EmptyState } from "../../../../../ui/RecordEmptyState";
 import type { Column } from "../../../../../components/Table";
 import { fmt } from "../../../ui";
 

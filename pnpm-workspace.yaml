@@ -3,6 +3,8 @@ allowBuilds:
   better-sqlite3: true
   core-js-pure: true
   esbuild: true
+  # Mermaid reuses Playwright's managed Chromium instead of downloading a second browser.
+  puppeteer: false
   sharp: true
   workerd: true
 minimumReleaseAgeExclude:

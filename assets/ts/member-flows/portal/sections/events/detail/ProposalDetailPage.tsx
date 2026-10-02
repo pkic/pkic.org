@@ -63,7 +63,7 @@ import { eventProposalsViewPath } from "./proposal-paths";
 // a component, so this module has to pull its stylesheet into its own chunk.
 import "../../../../../ui/Content.css";
 import { MarkdownEditor } from "../../../../../components/markdown-editor/MarkdownInput";
-import { Markdown } from "../../../../../components/Markdown";
+import { Markdown } from "../../../../../ui/Markdown";
 
 const DETAIL_TABS: DetailTab[] = ["submission", "speakers", "reviews", "presentation", "audit-log", "decision"];
 const DEFAULT_TAB: DetailTab = "submission";

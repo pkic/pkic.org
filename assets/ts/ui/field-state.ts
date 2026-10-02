@@ -35,7 +35,7 @@ function stateIcon(document: Document, state: FieldState, className: string): SV
   svg.classList.add(className);
   const path = document.createElementNS(SVG_NS, "path");
   path.setAttribute("d", FIELD_STATE_ICON[state]);
-  svg.append(path);
+  svg.appendChild(path);
   return svg;
 }
 
@@ -50,8 +50,8 @@ function syncIcon(parent: Element | null, state: FieldState | null, className: s
   const icon = stateIcon(parent.ownerDocument, state, className);
   if (existing) existing.replaceWith(icon);
   // The message reads "<mark> text", the control "…value <mark>".
-  else if (className === "pk-field__message-icon") parent.prepend(icon);
-  else parent.append(icon);
+  else if (className === "pk-field__message-icon") parent.insertBefore(icon, parent.firstChild);
+  else parent.appendChild(icon);
 }
 
 /**

@@ -4,14 +4,15 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 
 const sourceTypeScriptFiles = [
-  "functions/**/*.ts",
+  "functions/**/*.{ts,tsx}",
   "assets/ts/**/*.{ts,tsx}",
   "assets/shared/**/*.ts",
   "assets/design/**/*.ts",
   "tests/**/*.{ts,tsx}",
 ];
 const toolingTypeScriptFiles = ["*.config.ts", "tests/tools/**/*.ts"];
-const allTypeScriptFiles = [...sourceTypeScriptFiles, ...toolingTypeScriptFiles];
+const astroTypeScriptFiles = ["site/**/*.ts"];
+const allTypeScriptFiles = [...sourceTypeScriptFiles, ...toolingTypeScriptFiles, ...astroTypeScriptFiles];
 
 const typedTypeScriptConfigs = tseslint.configs.recommendedTypeChecked.map((config) => ({
   ...config,
@@ -23,6 +24,7 @@ export default tseslint.config(
     ignores: [
       "**/._*",
       ".cache/**",
+      ".astro/**",
       ".claude/**",
       ".design-sync/**",
       "types/**",
@@ -73,6 +75,12 @@ export default tseslint.config(
     },
   },
   {
+    files: astroTypeScriptFiles,
+    languageOptions: {
+      parserOptions: { project: "./tsconfig.astro.json", tsconfigRootDir: import.meta.dirname },
+    },
+  },
+  {
     files: ["assets/js/**/*.js", "static/js/*.js", "static/scripts/**/*.js"],
     languageOptions: {
       globals: globals.browser,
@@ -91,7 +99,7 @@ export default tseslint.config(
     },
   },
   {
-    files: ["eslint.config.js", ".dependency-cruiser.cjs", "scripts/**/*.{js,mjs,cjs}"],
+    files: ["eslint.config.js", "astro.config.mjs", ".dependency-cruiser.cjs", "scripts/**/*.{js,mjs,cjs}"],
     languageOptions: {
       globals: globals.node,
     },

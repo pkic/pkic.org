@@ -1,0 +1,12 @@
+---
+import PublicPage from "../../layouts/PublicPage.astro";
+import { publication } from "../../publication";
+import { VoteDetailView } from "../../../assets/ts/site/PublicVoteDetail";
+export function getStaticPaths() {
+  return publication.votes.map((vote) => ({ params: { slug: vote.slug }, props: { vote } }));
+}
+const { vote } = Astro.props;
+---
+<PublicPage title={vote.title} description={vote.description ?? undefined}>
+  <div data-pagefind-body><VoteDetailView vote={vote} indexHref="/votes/" /></div>
+</PublicPage>

@@ -24,11 +24,11 @@ import "./Field.css";
 export type { FieldState };
 
 export interface FieldProps {
-  label: string;
+  label: ComponentChildren;
   /** Marks the control required and annotates the label. */
   required?: boolean;
   /** Persistent guidance. Replaced by the message when a state is set. */
-  help?: string;
+  help?: ComponentChildren;
   state?: FieldState;
   /** The message for `state`. Required whenever a state is set. */
   message?: string;

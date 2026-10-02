@@ -1,4 +1,4 @@
-import { first } from "../../db/queries";
+import { all, first } from "../../db/queries";
 import { batchFirst, batchRows, queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { parseJsonSafe } from "../../utils/json";
@@ -124,6 +124,18 @@ interface MemberDetailRow extends DirectoryRow {
   organization_links_json: string | null;
 }
 
+/**
+ * How many members the public directory shows for one group.
+ *
+ * The home page states the member count on the server, so it has to count the
+ * same rows the directory lists rather than a looser `members` total.
+ */
+export async function countPublicMembers(db: DatabaseLike, group: "independent" | "organization"): Promise<number> {
+  const condition = group === "independent" ? "m.organization_id IS NULL" : "m.organization_id IS NOT NULL";
+  const rows = await all<{ total: number }>(db, `SELECT COUNT(*) AS total FROM (${DIRECTORY_SELECT} AND ${condition})`);
+  return Number(rows[0]?.total ?? 0);
+}
+
 /** group: "organization" = org-tied categories; "independent" = org-less H5/H6/H7 */
 export async function listPublicMembers(
   db: DatabaseLike,
@@ -142,15 +154,15 @@ export async function listPublicMembers(
    * A member with somebody seated in the group, counted once however many
    * people it seats: the roll lists aggregates, and representatives inherit
    * the membership rather than each holding one. Everything behind a seat has
-   * to be live — the person, the identity they hold it through, and the
-   * membership that identity acts for — which is the same predicate the
-   * group's own roster reads.
+   * to be live — the person, the identity they hold it through, the membership
+   * that identity acts for, and the group itself, so a dissolved group stops
+   * publishing a roll.
    */
   if (params.workingGroup) {
     conditions.push(`EXISTS (
       SELECT 1
         FROM group_memberships membership
-        JOIN groups g ON g.id = membership.group_id AND (g.slug = ? OR g.id = ?)
+        JOIN groups g ON g.id = membership.group_id AND g.active = 1 AND (g.slug = ? OR g.id = ?)
         JOIN users seated ON seated.id = membership.user_id AND seated.active = 1
         JOIN identities identity ON identity.id = membership.identity_id
          AND identity.started_at IS NOT NULL AND identity.ended_at IS NULL AND identity.blocked_at IS NULL
@@ -168,6 +180,11 @@ export async function listPublicMembers(
     ]);
     conditions.push(search.sql);
     args.push(...search.bindings);
+  }
+
+  if (params.membershipCategory) {
+    conditions.push("mca.category_code = ?");
+    args.push(params.membershipCategory);
   }
 
   const extraWhere = conditions.length ? ` AND ${conditions.join(" AND ")}` : "";
@@ -248,9 +265,12 @@ export async function getPublicMemberById(db: DatabaseLike, idOrSlug: string): P
   const row = batchFirst<MemberDetailRow>(profileResult);
   if (!row) return null;
 
+  return publicMemberDetail(row, batchRows<PublicIdentityRow>(identitiesResult));
+}
+
+function publicMemberDetail(row: MemberDetailRow, identityRows: PublicIdentityRow[]): PublicMemberDetail {
   const summary = toSummary(row);
   const userLinks = parseLinksJson(row.links_json);
-  const identities = batchRows<PublicIdentityRow>(identitiesResult).map(toPublicIdentity);
 
   // An organization's public links belong to the organization row; an org-less
   // individual's belong to their own user record.
@@ -265,7 +285,7 @@ export async function getPublicMemberById(db: DatabaseLike, idOrSlug: string): P
     pressFeedUrl: sanitizeLegacyHttpUrl(row.press_feed_url),
     careersUrl: sanitizeLegacyHttpUrl(row.careers_url),
     links,
-    identities,
+    identities: identityRows.map(toPublicIdentity),
     jobTitle: row.organization_id ? null : row.job_title,
     featuredLink: getFeaturedLink(links),
   };
@@ -301,3 +321,35 @@ export async function getMemberLogoR2Key(db: DatabaseLike, id: string): Promise<
 }
 
 // ── Working groups ──────────────────────────────────────────────────────────
+
+/** Bounded publication export: profiles and their public identities share one batch. */
+export async function readPublicMemberPublicationBatch(db: DatabaseLike, after: string): Promise<PublicMemberDetail[]> {
+  const profile = `SELECT ${DIRECTORY_COLUMNS}, o.content_markdown, o.blog_url, o.blog_feed_url,
+    o.press_url, o.press_feed_url, o.careers_url, o.links_json AS organization_links_json
+    ${DIRECTORY_FROM} AND COALESCE(m.organization_id, m.id) > ?
+    ORDER BY COALESCE(m.organization_id, m.id), m.id, mca.category_code LIMIT 100`;
+  const [profiles, identities] = await db.batch([
+    db.prepare(profile).bind(after),
+    db
+      .prepare(
+        `SELECT identity.id AS identity_id, identity.organization_id,
+      u.first_name, u.last_name, identity.job_title, identity.biography, identity.links_json, u.headshot_r2_key
+      FROM identities identity JOIN users u ON u.id = identity.user_id
+      WHERE identity.organization_id IN (SELECT organization_id FROM (${profile}))
+        AND identity.started_at IS NOT NULL AND identity.ended_at IS NULL
+        AND identity.blocked_at IS NULL AND identity.show_on_organization_profile = 1
+      ORDER BY u.last_name, u.first_name, identity.id`,
+      )
+      .bind(after),
+  ]);
+  const roster = batchRows<PublicIdentityRow & { organization_id: string }>(identities);
+  const members = new Map<string, PublicMemberDetail>();
+  for (const row of batchRows<MemberDetailRow>(profiles)) {
+    const member = publicMemberDetail(
+      row,
+      roster.filter((identity) => identity.organization_id === row.organization_id),
+    );
+    if (!members.has(member.id)) members.set(member.id, member);
+  }
+  return [...members.values()];
+}

@@ -1,0 +1,391 @@
+@layer components {
+  /*
+   * The published document's own typography.
+   *
+   * `.pk` carries the design system's font, but the navigation, the mega
+   * panels and the search overlay sit outside it — they are chrome, not a
+   * design-system surface — and were falling back to the browser's serif.
+   * The family belongs to the document, so it is set once here.
+   */
+  .pk-site {
+    margin: 0;
+    background: var(--pk-page-surface);
+    color: var(--pk-ink);
+    font-family: var(--pk-font);
+    font-size: var(--pk-text-lg);
+  }
+
+  .pk-site-header {
+    position: sticky;
+    z-index: 40;
+    top: 0;
+    border-bottom: 1px solid color-mix(in srgb, var(--pk-on-solid) 8%, transparent);
+    background: var(--pk-chrome);
+    color: var(--pk-on-solid);
+  }
+
+  /*
+   * Brand, then a search field that centres itself in the space between the
+   * brand and the links, then the links, then the site controls pinned right.
+   * A fixed grid could not give the search `margin-inline: auto`, which is
+   * what centres it without measuring anything.
+   */
+  .pk-site-header__inner {
+    position: relative;
+    display: flex;
+    min-height: 3.5rem;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+  }
+
+  .pk-site-header__brand {
+    display: flex;
+    flex: none;
+    align-items: center;
+    margin-inline-end: var(--pk-4);
+  }
+
+  .pk-site-header__brand img {
+    width: auto;
+    height: 2.25rem;
+  }
+
+  .pk-site-search {
+    display: flex;
+    height: 2rem;
+    flex: 0 1 15rem;
+    min-width: 7.5rem;
+    align-items: center;
+    margin-inline: auto;
+    gap: var(--pk-2);
+    padding-inline: var(--pk-3);
+    border: 1px solid color-mix(in srgb, var(--pk-on-solid) 18%, transparent);
+    border-radius: var(--pk-radius);
+    background: color-mix(in srgb, var(--pk-on-solid) 7%, transparent);
+    color: color-mix(in srgb, var(--pk-on-solid) 52%, transparent);
+  }
+
+  .pk-site-search:focus-within {
+    border-color: color-mix(in srgb, var(--pk-on-solid) 38%, transparent);
+    color: color-mix(in srgb, var(--pk-on-solid) 80%, transparent);
+  }
+
+  .pk-site-search svg {
+    width: var(--pk-3);
+    height: var(--pk-3);
+    fill: none;
+    stroke: currentcolor;
+    stroke-linecap: round;
+    stroke-width: 1.5;
+  }
+
+  .pk-site-search input {
+    width: 100%;
+    min-width: 0;
+    padding: 0;
+    border: 0;
+    outline: 0;
+    background: transparent;
+    color: var(--pk-on-solid);
+  }
+
+  .pk-site-search input::placeholder {
+    color: color-mix(in srgb, var(--pk-on-solid) 52%, transparent);
+  }
+
+  .pk-site-search kbd {
+    padding: 0.1rem 0.35rem;
+    border: 1px solid color-mix(in srgb, var(--pk-on-solid) 16%, transparent);
+    border-radius: var(--pk-radius-sm);
+    background: color-mix(in srgb, var(--pk-on-solid) 8%, transparent);
+    color: color-mix(in srgb, var(--pk-on-solid) 44%, transparent);
+    font-size: var(--pk-text-2xs);
+  }
+
+  /* Controls that act on the site rather than navigate it, kept last. */
+  .pk-site-header__utilities {
+    display: flex;
+    order: 3;
+    align-items: center;
+    padding-inline-start: var(--pk-3);
+    margin-inline-start: var(--pk-2);
+    border-inline-start: 1px solid color-mix(in srgb, var(--pk-on-solid) 14%, transparent);
+    color: color-mix(in srgb, var(--pk-on-solid) 72%, transparent);
+  }
+
+  .pk-site-header__navigation {
+    display: none;
+    min-width: 0;
+  }
+
+  .pk-site-header__nav--mobile {
+    min-width: 0;
+  }
+
+  .pk-site-header__navigation-toggle {
+    display: none;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--pk-on-solid);
+    cursor: pointer;
+  }
+
+  .pk-site-header__navigation-toggle svg {
+    width: 1.7rem;
+    height: 1.7rem;
+    fill: none;
+    stroke: currentcolor;
+    stroke-linecap: round;
+    stroke-width: 2;
+  }
+
+  .pk-site-header__nav-list,
+  .pk-site-header__submenu,
+  .pk-site-footer__links {
+    padding: 0;
+    margin: 0;
+    list-style: none;
+  }
+
+  .pk-site-header__nav--desktop {
+    display: flex;
+  }
+
+  .pk-site-header__nav-list {
+    display: flex;
+    align-items: center;
+    justify-content: flex-end;
+  }
+
+  .pk-site-header__nav-item {
+    position: relative;
+  }
+
+  .pk-site-header__nav a {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-1);
+    padding: 0.45rem 0.85rem;
+    border-radius: var(--pk-radius);
+    color: color-mix(in srgb, var(--pk-on-solid) 72%, transparent);
+    font-size: var(--pk-text-md);
+    font-weight: 500;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .pk-site-header__nav a:hover,
+  .pk-site-header__nav a:focus-visible {
+    background: color-mix(in srgb, var(--pk-on-solid) 8%, transparent);
+    color: var(--pk-on-solid);
+  }
+
+  .pk-site-header__nav a.is-active {
+    background: color-mix(in srgb, var(--pk-on-solid) 5%, transparent);
+    color: var(--pk-on-solid);
+  }
+
+  .pk-site-header__menu-caret {
+    width: 0.7rem;
+    height: 0.7rem;
+    fill: none;
+    stroke: currentcolor;
+    stroke-linecap: round;
+    stroke-linejoin: round;
+    stroke-width: 1.5;
+  }
+
+  .pk-site-header__submenu {
+    position: absolute;
+    top: calc(100% + var(--pk-1));
+    left: 0;
+    display: none;
+    min-width: 18rem;
+    padding: var(--pk-2);
+    border: 1px solid color-mix(in srgb, var(--pk-on-solid) 14%, transparent);
+    border-radius: var(--pk-radius-lg);
+    background: var(--pk-chrome-raised);
+    box-shadow: var(--pk-shadow-3);
+  }
+
+  .pk-site-header__submenu .pk-site-header__submenu {
+    top: calc(-1 * var(--pk-2));
+    left: calc(100% + var(--pk-1));
+  }
+
+  .pk-site-header__nav-item:hover > .pk-site-header__submenu,
+  .pk-site-header__nav-item:focus-within > .pk-site-header__submenu {
+    display: block;
+  }
+
+  .pk-site-header__submenu a {
+    padding: var(--pk-2) var(--pk-3);
+    white-space: normal;
+  }
+
+  /*
+   * A short page still fills the window, so the footer does not ride up into
+   * the middle of the screen. Keyed off the body rather than a class on
+   * `main`, so the element the published site writes stays as it wrote it.
+   */
+  .pk-site main {
+    min-height: 60vh;
+  }
+
+  .pk-site-footer__participate {
+    padding-block: var(--pk-5);
+    border-top: 3px solid transparent;
+    border-image: var(--pk-stripe) 1;
+    text-align: center;
+    font-size: var(--pk-text-lg);
+  }
+
+  .pk-site-footer__body {
+    padding-block: var(--pk-7);
+    border-top: 1px solid color-mix(in srgb, var(--pk-on-solid) 7%, transparent);
+  }
+
+  .pk-site-footer__columns {
+    display: grid;
+    grid-template-columns: minmax(16rem, 1.35fr) repeat(3, minmax(9rem, 1fr));
+    gap: var(--pk-7);
+  }
+
+  .pk-site-footer__brand {
+    padding-inline-end: var(--pk-7);
+    border-inline-end: 1px solid color-mix(in srgb, var(--pk-on-solid) 8%, transparent);
+  }
+
+  .pk-site-footer__brand img {
+    width: auto;
+    height: 2.6rem;
+    opacity: 0.9;
+  }
+
+  .pk-site-footer__brand p {
+    max-width: 23rem;
+    margin: 0;
+    color: color-mix(in srgb, var(--pk-on-solid) 42%, transparent);
+    font-size: var(--pk-text-sm);
+  }
+
+  .pk-site-footer__heading {
+    margin: 0;
+    color: color-mix(in srgb, var(--pk-on-solid) 38%, transparent);
+    font-size: var(--pk-text-2xs);
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+  }
+
+  .pk-site-footer__heading a,
+  .pk-site-footer__heading span {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .pk-site-footer__links {
+    display: grid;
+    gap: var(--pk-2);
+  }
+
+  .pk-site-footer__links a {
+    color: color-mix(in srgb, var(--pk-on-solid) 62%, transparent);
+    font-size: var(--pk-text-sm);
+    text-decoration: none;
+  }
+
+  .pk-site-footer__bottom {
+    padding-block: var(--pk-5);
+    border-top: 1px solid color-mix(in srgb, var(--pk-on-solid) 7%, transparent);
+    background: var(--pk-chrome-deep);
+    color: color-mix(in srgb, var(--pk-on-solid) 34%, transparent);
+    font-size: var(--pk-text-xs);
+  }
+
+  .pk-site-footer__bottom p {
+    max-width: 60rem;
+    margin: 0;
+  }
+
+  @media (max-width: 62rem) {
+    .pk-site-search {
+      display: none;
+    }
+
+    .pk-site-header__navigation-toggle {
+      display: block;
+    }
+
+    .pk-site-header__navigation {
+      display: block;
+    }
+
+    .pk-site-header__nav--desktop {
+      display: none;
+    }
+
+    .pk-site-header__navigation > .pkic-navbar-collapse:not(.is-open) {
+      display: none;
+    }
+
+    .pk-site-header__nav {
+      position: absolute;
+      top: 100%;
+      right: 0;
+      left: 0;
+      padding: var(--pk-4);
+      border-top: 1px solid color-mix(in srgb, var(--pk-on-solid) 10%, transparent);
+      background: var(--pk-chrome-panel);
+      box-shadow: var(--pk-shadow-3);
+    }
+
+    .pk-site-header__nav-list {
+      max-width: 84rem;
+      align-items: stretch;
+      flex-direction: column;
+      gap: var(--pk-1);
+      margin-inline: auto;
+    }
+
+    .pk-site-header__nav a {
+      justify-content: space-between;
+      padding: var(--pk-2) var(--pk-3);
+    }
+
+    .pk-site-header__submenu,
+    .pk-site-header__submenu .pk-site-header__submenu {
+      position: static;
+      display: grid;
+      min-width: 0;
+      padding: 0 0 0 var(--pk-4);
+      border: 0;
+      background: transparent;
+      box-shadow: none;
+    }
+
+    .pk-site-footer__columns {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+
+    .pk-site-footer__brand {
+      grid-column: 1 / -1;
+      padding-inline-end: 0;
+      padding-bottom: var(--pk-5);
+      border-inline-end: 0;
+      border-bottom: 1px solid color-mix(in srgb, var(--pk-on-solid) 8%, transparent);
+    }
+  }
+
+  @media (max-width: 42rem) {
+    .pk-site-footer__columns {
+      grid-template-columns: minmax(0, 1fr);
+    }
+
+    .pk-site-footer__brand {
+      grid-column: auto;
+    }
+  }
+}

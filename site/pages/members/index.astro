@@ -1,0 +1,15 @@
+---
+import PublicPage from "../../layouts/PublicPage.astro";
+import { DirectoryGrid } from "../../../assets/ts/site/MemberDirectory";
+import { SiteHero } from "../../../assets/ts/site/SitePrimitives";
+import { loadSiteContent } from "../../../functions/_lib/services/site-content";
+import { organizationMembers } from "../../publication";
+const content = await loadSiteContent("/members/");
+if (!content) throw new Error("The member directory source is missing");
+---
+<PublicPage title={content.title} description={content.description} content={content}>
+  <SiteHero hero={content.hero} />
+  <section class="pk-section pk-container pk-container--wide" data-pagefind-body>
+    <DirectoryGrid members={organizationMembers} prefix="members" />
+  </section>
+</PublicPage>

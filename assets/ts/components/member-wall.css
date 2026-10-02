@@ -1,0 +1,219 @@
+/*
+ * The member and sponsor logo wall.
+ *
+ * Ported from the published site's members-effects stylesheet: the frame that
+ * clips the scrolling track, the hover card, the sponsor zoom overlay and the
+ * tier colours `members-overview-effects.js` switches between. Server-rendered
+ * on public pages, so it belongs to the public entry rather than to a lazy
+ * island chunk.
+ */
+
+@layer legacy {
+  .member-hovercard {
+    position: fixed;
+    z-index: 9999;
+    width: 210px;
+    background: #fff;
+    border-radius: 10px;
+    box-shadow: 0 6px 24px rgba(0, 0, 0, 0.14), 0 1px 5px rgba(0, 0, 0, 0.08);
+    overflow: hidden;
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.15s ease;
+    white-space: normal;
+    text-align: left;
+  }
+  .member-hovercard.member-hovercard--visible {
+    opacity: 1;
+  }
+
+  .member-hovercard-body {
+    padding: 12px 14px 10px;
+  }
+
+  .member-hovercard-name {
+    display: block;
+    font-size: 0.82rem;
+    font-weight: 700;
+    color: #111;
+    line-height: 1.35;
+  }
+
+  .member-hovercard-slogan {
+    display: block;
+    font-size: 0.72rem;
+    color: #666;
+    margin-top: 4px;
+    line-height: 1.4;
+  }
+
+  .member-hovercard-footer {
+    display: block;
+    padding: 5px 14px 6px;
+    font-size: 0.68rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    text-align: center;
+    color: #fff;
+  }
+
+  .sponsor-tier-1 {
+    background: linear-gradient(135deg, #b87333, #8b5320);
+  }
+
+  .sponsor-tier-2 {
+    background: linear-gradient(135deg, #7a7a7a, #555);
+  }
+
+  .sponsor-tier-3 {
+    background: linear-gradient(135deg, #c9950c, #9a6f00);
+  }
+
+  .sponsor-tier-4 {
+    background: linear-gradient(135deg, #3d7a8a, #25515e);
+  }
+
+  .sponsor-tier-5 {
+    background: linear-gradient(135deg, #455a64, #1c313a);
+  }
+
+  .sponsor-tier-6 {
+    background: linear-gradient(135deg, #0097b2, #006b82);
+  }
+
+  .member-zoom-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: 5;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    background: rgba(255, 255, 255, 0.97);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 0.3s ease;
+  }
+  .member-zoom-overlay.member-zoom-overlay--visible {
+    opacity: 1;
+    transition: opacity 0.3s ease;
+  }
+  .member-zoom-overlay:not(.member-zoom-overlay--visible) {
+    transition: opacity 0.65s ease-out;
+  }
+
+  .member-zoom-logo {
+    max-height: 72px;
+    max-width: 55%;
+    width: auto;
+    object-fit: contain;
+  }
+
+  .member-zoom-info {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    text-align: center;
+    padding: 0 28px;
+  }
+
+  .member-zoom-name {
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: #111;
+    line-height: 1.3;
+  }
+
+  .member-zoom-slogan {
+    font-size: 0.75rem;
+    color: #555;
+    line-height: 1.4;
+  }
+
+  .member-zoom-badge {
+    display: inline-block;
+    padding: 4px 16px 5px;
+    border-radius: 20px;
+    font-size: 0.66rem;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: #fff;
+  }
+
+  .members-overview--wide-only {
+    display: none;
+  }
+
+  @media (min-width: 992px) {
+    .members-overview--wide-only {
+      display: block;
+    }
+  }
+  .pkic-section-label:has(+ .members-overview [data-sponsors-wall][data-state=empty]) {
+    display: none;
+  }
+
+  .members-overview {
+    background: var(--pk-surface);
+    padding-block: var(--pk-5);
+    padding-inline: var(--pk-3);
+  }
+  .members-overview:has([data-sponsors-wall][data-state=empty]) {
+    display: none;
+  }
+  .members-overview:has([data-sponsors-wall][data-state=error]) .members {
+    height: auto;
+  }
+  .members-overview .members {
+    height: 280px;
+    overflow: hidden;
+    position: relative;
+    -webkit-mask-image: linear-gradient(to bottom, transparent 0%, #000 8%, #000 92%, transparent 100%);
+    mask-image: linear-gradient(to bottom, transparent 0%, #000 8%, #000 92%, transparent 100%);
+  }
+  .members-overview .members.members--zooming {
+    -webkit-mask-image: none;
+    mask-image: none;
+  }
+
+  .logo-wall-track {
+    display: flex;
+    flex-direction: column;
+    animation: logo-wall-scroll 120s linear infinite;
+    will-change: transform;
+  }
+
+  .logo-wall-copy {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 10px 0;
+    flex-shrink: 0;
+  }
+
+  @keyframes logo-wall-scroll {
+    from {
+      transform: translateY(0);
+    }
+    to {
+      transform: translateY(-50%);
+    }
+  }
+  .linkArea {
+    color: currentColor;
+    text-decoration: none;
+  }
+
+  .bd-placeholder-img {
+    font-size: 1.125rem;
+    text-anchor: middle;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+  }
+}

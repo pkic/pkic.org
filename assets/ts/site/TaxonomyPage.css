@@ -1,0 +1,31 @@
+@layer components {
+  .blog-taxonomy-header {
+    padding-block: var(--pk-7) var(--pk-4);
+  }
+  .blog-taxonomy-body {
+    padding-block: var(--pk-4) var(--pk-7);
+  }
+  .blog-taxonomy-index {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 19rem), 1fr));
+    gap: 0 var(--pk-6);
+    padding: 0;
+    margin: 0;
+    list-style: none;
+  }
+  .blog-taxonomy-index li {
+    border-bottom: 1px solid var(--pk-line-soft);
+  }
+  .blog-taxonomy-index a {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--pk-3);
+    padding: var(--pk-3) 0;
+    color: var(--pk-ink);
+    text-decoration: none;
+  }
+  .blog-taxonomy-index a:hover {
+    color: var(--pk-accent-ink);
+  }
+}

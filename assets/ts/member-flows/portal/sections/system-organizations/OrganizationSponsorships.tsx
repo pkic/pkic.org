@@ -10,7 +10,7 @@ import { usePortalHashLocation } from "../../hash-location";
 import { sponsorshipsListResponseSchema, type Sponsorship } from "../../../../../shared/schemas/sponsorship-management";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
-import { EmptyState } from "../../../../components/EmptyState";
+import { EmptyState } from "../../../../ui/RecordEmptyState";
 import type { Column } from "../../../../components/Table";
 import { fmtCalendarDate } from "../../ui";
 

@@ -1,5 +1,5 @@
 ---
-date: 2021-06-21T7:55:00Z
+date: 2021-06-21T07:55:00Z
 draft: false
 title: List of Trust Lists
 description: There are many trust lists and often there is little overlap or interoperability. With this project the PKI consortium is not only building a comprehensive list of trust lists but also a place where the industry can find each other, engage, share knowledge, policies and best practices to improve security, interoperability and mutual trust.
