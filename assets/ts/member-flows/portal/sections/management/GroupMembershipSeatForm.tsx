@@ -7,7 +7,7 @@ import {
 } from "../../../../../shared/schemas/groups";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { GroupSeatFields, useGroupSeatDraft } from "./GroupSeatFields";
-import { Button } from "../../../../ui/Button";
+import { FormActions } from "../../../../components/FormActions";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { patchJson } from "../../../../shared/api-client";
 import { fromCalendarDateInput, toCalendarDateInput } from "../../ui";
@@ -67,11 +67,7 @@ export function GroupMembershipSeatForm({
           title={`Edit seat for ${membership.userName} (${capacityLabel(membership)})`}
           headingLevel={2}
           breadcrumb
-        >
-          <Button size="sm" disabled={saving} onClick={onCancel}>
-            Cancel
-          </Button>
-        </PanelHeader>
+        />
         <PanelBody>
           <form
             noValidate
@@ -92,11 +88,13 @@ export function GroupMembershipSeatForm({
             </p>
             {error && <ErrorAlert error={error} />}
             <GroupSeatFields draft={draft} onDraft={onDraft} field={form.of} disabled={saving} />
-            <div class="pk-cluster">
-              <Button type="submit" size="sm" variant="primary" loading={saving} disabled={!draft.joinedOn}>
-                {saving ? "Saving…" : "Save seat"}
-              </Button>
-            </div>
+            <FormActions
+              submitLabel="Save seat"
+              busyLabel="Saving…"
+              busy={saving}
+              disabled={!draft.joinedOn}
+              onCancel={onCancel}
+            />
           </form>
         </PanelBody>
       </Panel>
