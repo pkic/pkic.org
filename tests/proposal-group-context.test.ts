@@ -1,3 +1,4 @@
+import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createGroupManagedEvent } from "../functions/_lib/services/events/group-management";
@@ -17,8 +18,8 @@ beforeEach(resetDb);
 async function userActor(label: string, role = "user"): Promise<AuthAdmin> {
   const email = `${label}-${crypto.randomUUID()}@example.test`;
   const id = await insertUser(env.DB, email);
-  await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
-  return { identityType: "user", id, email, role };
+  const grants = role === "admin" ? await grantAdministrator(env.DB, id) : [];
+  return { identityType: "user", id, email, role: "user", grants };
 }
 
 async function setupProposalContext(): Promise<{

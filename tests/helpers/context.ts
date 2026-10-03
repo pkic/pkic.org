@@ -1,3 +1,4 @@
+import { grantAdministrator } from "./administrator";
 import type { DatabaseLike, Env, PagesContext } from "../../functions/_lib/types";
 import type { AdminContext } from "../../functions/_lib/db/context";
 import type { RateLimitBinding } from "../../functions/_lib/rate-limit";
@@ -120,6 +121,7 @@ export async function seedEventAndAdmin(db: DatabaseLike): Promise<{ eventId: st
        ('${crypto.randomUUID()}', '${eventId}', 'speaker', 'speaker-terms', 'v1', 1, '/speaker-terms', 1, datetime('now'))`,
     ),
   ]);
+  await grantAdministrator(db, adminId);
 
   return { eventId };
 }

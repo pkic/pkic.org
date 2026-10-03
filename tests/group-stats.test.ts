@@ -1,3 +1,4 @@
+import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { groupStatsQuerySchema, groupStatsResponseSchema } from "../assets/shared/schemas/group-statistics";
@@ -13,8 +14,8 @@ import { resetDb } from "./helpers/reset-db";
 
 async function adminActor(email: string, role = "admin"): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, email);
-  await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
-  return { identityType: "user", id, email, role };
+  const grants = role === "admin" ? await grantAdministrator(env.DB, id) : [];
+  return { identityType: "user", id, email, role: "user", grants };
 }
 
 beforeEach(resetDb);

@@ -3,7 +3,7 @@
  *
  * Two lists because they answer two questions. Contact answers "how do I
  * reach this person", which is the address; Account answers "what is this
- * record" — the names, the role and the dates. The address appeared in both
+ * record" — the names and the dates. The address appeared in both
  * until Contact existed, and a fact stated twice on one page is a fact the
  * reader has to check for agreement.
  *
@@ -12,7 +12,6 @@
  * wrong needs to see that the field exists and is empty, which a missing row
  * does not say.
  */
-import { Badge } from "../../../../components/Badge";
 import type { DescriptionListItem } from "../../../../ui/DescriptionList";
 import { fmt } from "../../ui";
 import type { UserDetail as UserRecord, UserMembership } from "./model";
@@ -49,7 +48,6 @@ export function userRecordFacts(
           { term: "Last name", value: user.last_name },
           { term: "Preferred name", value: user.preferred_name },
         ]),
-    { term: "Role", value: <Badge status={user.role} /> },
     { term: "Active", value: user.active ? "Yes" : "No" },
     { term: "Created", value: <span class="pk-nowrap">{fmt(user.created_at)}</span> },
   ];

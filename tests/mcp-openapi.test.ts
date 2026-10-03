@@ -1,3 +1,4 @@
+import { administratorGrants } from "./helpers/administrator";
 import { describe, expect, it } from "vitest";
 import { grantableScopesForActor, type AuthScope } from "../functions/_lib/auth/scopes";
 import {
@@ -216,6 +217,7 @@ describe("MCP scope delegation", () => {
       id: "user-1",
       email: "user@example.test",
       role: "admin",
+      grants: administratorGrants,
       sessionId: "session-1",
       expiresAt: "2099-01-01T00:00:00.000Z",
     };
@@ -254,6 +256,7 @@ describe("MCP scope delegation", () => {
       id: "admin-1",
       email: "admin@example.test",
       role: "admin",
+      grants: administratorGrants,
     };
     const requested: AuthScope[] = ["proposals:read", "proposals:score"];
 

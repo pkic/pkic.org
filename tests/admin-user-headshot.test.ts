@@ -1,3 +1,4 @@
+import { administratorGrants } from "./helpers/administrator";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
@@ -463,7 +464,13 @@ describe("admin user headshot upload", () => {
     const bucket = new FakeUploadsBucket();
     const target = await getUserHeadshotRecord(env.DB, targetUserId);
     const gate = gateNextBatch(env.DB);
-    const actor = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" } as const;
+    const actor = {
+      identityType: "user",
+      id: adminId,
+      email: "admin@pkic.org",
+      role: "admin",
+      grants: administratorGrants,
+    } as const;
     const mutation = replaceUserHeadshot({
       db: authorizedUserMutationDb(gate.db, actor, ["users:write"]),
       bucket: bucket as unknown as R2Bucket,

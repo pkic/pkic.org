@@ -1,3 +1,4 @@
+import { administratorGrants } from "./helpers/administrator";
 /**
  * permission-grants.test.ts
  *
@@ -351,6 +352,7 @@ describe("permission_grants (Permission grants)", () => {
       id: "oauth-admin",
       email: "oauth-admin@example.test",
       role: "admin",
+      grants: administratorGrants,
       scopes: ["proposals:read"],
       scopeRestricted: true,
     };
@@ -396,9 +398,12 @@ describe("permission_grants (Permission grants)", () => {
       id: adminId,
       email: "admin@pkic.org",
       role: "admin",
+      grants: administratorGrants,
     };
     const racingDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(adminId).run(),
+      env.DB.prepare("UPDATE user_roles SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE user_id = ?")
+        .bind(adminId)
+        .run(),
     );
 
     await expect(
@@ -425,6 +430,7 @@ describe("permission_grants (Permission grants)", () => {
       id: adminId,
       email: "admin@pkic.org",
       role: "admin",
+      grants: administratorGrants,
     };
     const racingDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare(
@@ -473,9 +479,12 @@ describe("permission_grants (Permission grants)", () => {
       id: adminId,
       email: "admin@pkic.org",
       role: "admin",
+      grants: administratorGrants,
     };
     const racingDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(adminId).run(),
+      env.DB.prepare("UPDATE user_roles SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE user_id = ?")
+        .bind(adminId)
+        .run(),
     );
 
     await expect(revokeAccessGrant(racingDb, actor, grantId)).rejects.toMatchObject({
@@ -502,6 +511,7 @@ describe("permission_grants (Permission grants)", () => {
       id: adminId,
       email: "admin@pkic.org",
       role: "admin",
+      grants: administratorGrants,
     };
     const racingDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?").bind(grantId).run(),

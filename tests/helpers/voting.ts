@@ -1,3 +1,4 @@
+import { administratorGrants } from "./administrator";
 import { env } from "cloudflare:workers";
 import type { AuthAdmin, AuthMember, DatabaseLike } from "../../functions/_lib/types";
 import { createVoteDirect, type CreateVoteInput } from "../../functions/_lib/services/votes";
@@ -70,7 +71,13 @@ export async function seedVotingAdmin(
     db,
     "SELECT id, email FROM users WHERE email = 'admin@pkic.org' LIMIT 1",
   );
-  const admin: AuthAdmin = { identityType: "user", id: row.id, email: row.email, role: "admin" };
+  const admin: AuthAdmin = {
+    identityType: "user",
+    id: row.id,
+    email: row.email,
+    role: "admin",
+    grants: administratorGrants,
+  };
   return {
     admin,
     adminId: row.id,

@@ -170,6 +170,13 @@ test("a selected-group manager changes one attendee day through portal routes", 
   const attendance = page.getByRole("region", { name: "Registration for E2E Attendee" });
   await expect(attendance).toBeVisible();
   await expect(attendance.getByRole("heading", { name: "E2E Attendee", exact: true })).toBeVisible();
+  const resendSince = await capturedEmailCount();
+  await attendance.getByRole("button", { name: "Registration actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Resend registration email", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Registration email queued" })).toBeVisible();
+  const resent = await waitForCapturedEmail(attendeeEmail, "Your registration is confirmed", { since: resendSince });
+  expect(resent).toBeTruthy();
+  await page.screenshot({ path: test.info().outputPath("registration-resend.png"), fullPage: true });
   // The waitlist state is read from the day's own row rather than from
   // anywhere in the panel, and it is the badge's word — the raw status token
   // is no longer what the cell renders.

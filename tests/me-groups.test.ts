@@ -1,3 +1,5 @@
+import { administratorGrants } from "./helpers/administrator";
+import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { selfGroupsListQuerySchema, selfGroupsListResponseSchema } from "../assets/shared/schemas/group-participation";
@@ -24,8 +26,14 @@ import { resetDb } from "./helpers/reset-db";
 
 async function adminActor(): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, `self-groups-admin-${crypto.randomUUID()}@example.test`);
-  await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(id).run();
-  return { identityType: "user", id, email: "self-groups-admin@example.test", role: "admin" };
+  await grantAdministrator(env.DB, id);
+  return {
+    identityType: "user",
+    id,
+    email: "self-groups-admin@example.test",
+    role: "admin",
+    grants: administratorGrants,
+  };
 }
 
 function getAs(token: string, path: string): Promise<Response> {

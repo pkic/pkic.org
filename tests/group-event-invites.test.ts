@@ -1,3 +1,4 @@
+import { grantAdministrator } from "./helpers/administrator";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { createAdminSession } from "./helpers/auth";
@@ -22,8 +23,8 @@ import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 async function actor(label: string, role = "user"): Promise<UserBackedAuthAdmin> {
   const email = `${label}-${crypto.randomUUID()}@example.test`;
   const id = await insertUser(env.DB, email);
-  await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
-  return { identityType: "user", id, email, role };
+  const grants = role === "admin" ? await grantAdministrator(env.DB, id) : [];
+  return { identityType: "user", id, email, role: "user", grants };
 }
 
 async function insertInvite(eventId: string, inviteType: "attendee" | "speaker"): Promise<string> {

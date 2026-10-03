@@ -1,3 +1,4 @@
+import { administratorGrants } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
@@ -81,6 +82,7 @@ describe("membership access offboarding", () => {
       id: actorId,
       email: "offboarding-admin@example.test",
       role: "admin",
+      grants: administratorGrants,
     };
     const groupId = await insertGroup("Offboarding Group", "offboarding-group@lists.pkic.org");
     const organizationId = await insertOrganization(env.DB, "Offboarding Organization");
@@ -124,6 +126,7 @@ describe("membership access offboarding", () => {
       id: actorId,
       email: "rollback-admin@example.test",
       role: "admin",
+      grants: administratorGrants,
     };
     const groupId = await insertGroup("Rollback Group", "rollback-group@lists.pkic.org");
     const organizationId = await insertOrganization(env.DB, "Rollback Organization");
@@ -219,6 +222,7 @@ describe("membership access offboarding", () => {
         id: actorId,
         email: "representative-admin@example.test",
         role: "admin",
+        grants: administratorGrants,
       },
       representativeA,
     );
