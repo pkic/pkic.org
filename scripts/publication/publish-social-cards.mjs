@@ -1,3 +1,4 @@
+import { publicationCacheDirectory } from "./build-context.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { access, copyFile, mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -127,7 +128,7 @@ export async function publicSocialCardPublisher(output) {
   }
   const brand = await embed("/img/logo.svg");
   const directory = resolve(output, "_published/social");
-  const cache = resolve(process.env.PKIC_PUBLICATION_SOCIAL_CACHE ?? "node_modules/.astro/publication-social");
+  const cache = resolve(process.env.PKIC_PUBLICATION_SOCIAL_CACHE ?? publicationCacheDirectory("publication-social"));
   await Promise.all([mkdir(directory, { recursive: true }), mkdir(cache, { recursive: true })]);
   const manifest = [];
   return {

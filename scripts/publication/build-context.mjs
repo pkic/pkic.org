@@ -13,3 +13,10 @@ export function publicationStagingDirectory() {
   if (!id || !/^[a-f0-9-]{36}$/.test(id)) throw new Error("Publication requires an isolated build identifier");
   return resolve(".cache", "publication", publicationEnvironment(), id);
 }
+
+/** Workers Builds currently restores .next/cache but drops the documented Astro cache.
+ * Use Astro's native cacheDir in that retained directory; local builds keep the default. */
+export function publicationCacheDirectory(...segments) {
+  const directory = process.env.WORKERS_CI_BRANCH ? ".next/cache/astro" : "node_modules/.astro";
+  return resolve(directory, ...segments);
+}
