@@ -1,0 +1,6 @@
+{
+  "@context": {
+    "@protected": true,
+    "@vocab": "https://pkic.org/ns/assessment#"
+  }
+}
