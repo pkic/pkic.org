@@ -10,7 +10,9 @@ if (!local && process.env.WORKERS_CI_BRANCH !== branch) {
 }
 if (process.env.CLOUDFLARE_ENV === "production") throw new Error("Cache probe cannot target production");
 process.env.CLOUDFLARE_ENV = "preview";
-const cache = resolve(local ? ".cache/probe-local-cache" : "node_modules/.astro");
+const cache = resolve(
+  local ? ".cache/probe-local-cache" : (process.env.PKIC_PROBE_CACHE_DIRECTORY ?? "node_modules/.astro"),
+);
 process.env.PKIC_PROBE_CACHE_DIRECTORY = cache;
 const marker = resolve(cache, "preview-cache-probe.json");
 const cachedImages = await readdir(resolve(cache, "assets")).catch((error) => {
