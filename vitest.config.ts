@@ -69,6 +69,7 @@ export default defineConfig(async () => {
   // their actual router/service explicitly, still inside isolated workerd
   // with the same bindings and real migrations.
   const workerFetchFiles = ["tests/api-security.test.ts", "tests/public-site-rendering.test.ts"];
+  if (process.env.PKIC_VALIDATE_SITE_MIGRATION === "1") workerFetchFiles.push("tests/public-site-catalog.migration.ts");
   const siteOptions = {
     resolve: {
       alias: {

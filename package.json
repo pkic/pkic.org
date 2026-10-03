@@ -27,6 +27,7 @@
     "test:worker": "vitest run --config vitest.config.ts --configLoader runner",
     "test:frontend": "vitest run --config vitest.config.frontend.ts --configLoader runner",
     "test:tools": "vitest run --config vitest.config.tools.ts --configLoader runner",
+    "test:migration:site": "PKIC_VALIDATE_SITE_MIGRATION=1 pnpm run test:worker tests/public-site-catalog.migration.ts",
     "test:workflows": "vitest run --config vitest.config.ts --configLoader runner tests/full-workflow.test.ts",
     "test:e2e": "playwright test",
     "test:e2e:ci": "playwright test --config playwright.ci.config.ts",
