@@ -1,3 +1,4 @@
+import { logPublicationBuildCache } from "./scripts/publication/log-build-cache.mjs";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { preparePublicationPublicAssets } from "./scripts/publication/prepare-public-assets.mjs";
@@ -34,11 +35,14 @@ export default defineConfig({
       name: "pkic-publication-post-processing",
       hooks: {
         "astro:build:start": async () => {
+          await logPublicationBuildCache("before Astro generation");
           await preparePublicationPublicAssets(resolve(root, "public"), publicAssets);
           await publishAssessmentScripts(publicAssets);
         },
         "astro:build:done": async ({ dir, pages }) => {
+          await logPublicationBuildCache("after Astro generation");
           await finishAstroRelease(fileURLToPath(dir), pages);
+          await logPublicationBuildCache("after post-processing");
         },
       },
     },
