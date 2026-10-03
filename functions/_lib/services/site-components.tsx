@@ -12,8 +12,7 @@ import { EventSpeakerManagement } from "../../../assets/ts/site/EventSpeakerMana
 import { EventSpeakerPresentation } from "../../../assets/ts/site/EventSpeakerPresentation";
 import { renderContentAgenda } from "./site-agenda";
 import { renderToStringAsync as render } from "preact-render-to-string";
-import { marked } from "marked";
-import { createContentMarked } from "./site-headings";
+import { renderSiteMarkdown } from "./site-markdown-processor";
 import {
   SHORTCODE_BLOCK,
   SHORTCODE_LEAF,
@@ -79,11 +78,11 @@ type ContentRenderer = (call: ContentCall, context: ContentComponentContext) => 
 
 /** One line of Markdown as inline HTML, the way Hugo's `markdownify` renders it. */
 export async function inlineMarkdownHtml(value: string): Promise<string> {
-  return await marked.parseInline(value);
+  return (await renderSiteMarkdown(value)).replace(/^<p>([\s\S]*)<\/p>\s*$/, "$1");
 }
 
 async function markdownHtml(value: unknown): Promise<string> {
-  return value == null ? "" : await marked.parse(String(value));
+  return value == null ? "" : await renderSiteMarkdown(String(value));
 }
 
 function component(html: string, block = true): RenderedCall {
@@ -561,10 +560,10 @@ export async function renderContentMarkdown(markdown: string, context: ContentCo
     const replacement = rendered.block ? `\n\n${token}\n\n` : token;
     source = `${source.slice(0, match.index)}${replacement}${source.slice(match.index + match[0].length)}`;
   }
-  let html = await createContentMarked(async (token) => {
-    await prepareSiteImage(token.href);
-    return render(<SiteImage src={token.href} alt={token.text} title={token.title ?? undefined} loading="lazy" />);
-  }).parse(source);
+  let html = await renderSiteMarkdown(source, async (src, alt, title) => {
+    await prepareSiteImage(src);
+    return render(<SiteImage src={src} alt={alt} title={title} loading="lazy" />);
+  });
   for (const call of calls) {
     if (call.block) html = html.replace(new RegExp(`<p>\\s*${call.token}\\s*</p>`, "g"), () => call.html);
     html = html.replaceAll(call.token, () => call.html);

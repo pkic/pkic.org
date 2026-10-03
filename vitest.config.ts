@@ -1,3 +1,4 @@
+import { astroMarkdownWorkerPlugin } from "./scripts/lib/astro-markdown-worker-plugin.mjs";
 import { prepareStaticPublicationFixture } from "./tests/helpers/prepare-static-publication.mjs";
 import path from "node:path";
 import { builtinModules } from "node:module";
@@ -80,6 +81,7 @@ export default defineConfig(async () => {
     },
   };
   const sitePlugins = () => [
+    astroMarkdownWorkerPlugin(),
     contentMediaPlugin(import.meta.dirname),
     trustListPlugin(import.meta.dirname),
     bylinesPlugin(import.meta.dirname),

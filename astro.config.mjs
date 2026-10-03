@@ -1,3 +1,4 @@
+import { siteMarkdownProcessor } from "./functions/_lib/services/site-markdown-processor.ts";
 import { logPublicationBuildCache } from "./scripts/publication/log-build-cache.mjs";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
@@ -26,6 +27,7 @@ export default defineConfig({
   outDir: "./dist/astro",
   output: "static",
   compressHTML: true,
+  markdown: { processor: siteMarkdownProcessor, syntaxHighlight: false },
   trailingSlash: "always",
   build: { assets: "_assets", inlineStylesheets: "never" },
   integrations: [

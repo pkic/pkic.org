@@ -105,7 +105,7 @@ describe("Vite public-site rendering", () => {
       sourcePath: "content/test.md",
     });
     expect(html).toContain("$$");
-    expect(html).toContain("$&amp;");
+    expect(html).toMatch(/\$(?:&amp;|&#x26;)/);
   });
 
   it("keeps explicitly unpublished source documentation out of pages and discovery", async () => {
