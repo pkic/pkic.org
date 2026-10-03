@@ -12,6 +12,10 @@ for (const viewport of [
     await page.setViewportSize(viewport);
     await page.goto("/portal/");
     await openEmailSignIn(page);
+    await expect(page.getByRole("link", { name: "Ask the secretariat" })).toHaveAttribute(
+      "href",
+      "mailto:contact@pkic.org",
+    );
     const layout = await page.evaluate(() => {
       const login = document.querySelector(".pk-login")!.getBoundingClientRect();
       const backdrop = document.querySelector(".pk-login__backdrop")!.getBoundingClientRect();

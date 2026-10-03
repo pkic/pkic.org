@@ -397,7 +397,10 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
   },
   leadership: async (call, context) => {
     if (!context.publication) return island("member-flows/leadership-widget", { leadership: "" })(call, context);
-    const directory = context.publication.groups[call.props.group ?? call.positional[0] ?? ""];
+    const group = call.props.group ?? call.positional[0] ?? "";
+    const directory =
+      context.publication.groups[group] ??
+      Object.values(context.publication.groups).find((directory) => directory.group.id === group);
     return directory
       ? component(
           render(

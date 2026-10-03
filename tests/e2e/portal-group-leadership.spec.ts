@@ -183,6 +183,26 @@ for (const scenario of [
         await page.setViewportSize({ width: 1440, height: 1000 });
         await editor.screenshot({ path: test.info().outputPath("leadership-term-actions.png") });
 
+        await editor.getByLabel("Term starts", { exact: false }).fill("2026-04-01");
+        await cancel.click();
+        await expect(page).toHaveURL(new RegExp(`#/groups/${boardId}/leadership$`));
+        await page.goto(termUrl);
+        await expect(page.getByLabel("Term starts", { exact: false })).toHaveValue("2026-03-01");
+        await editor.getByLabel("Term starts", { exact: false }).fill("2026-02-01");
+        const saved = page.waitForResponse(
+          (response) =>
+            response.request().method() === "PATCH" && response.url().includes(`/groups/${boardId}/leadership/`),
+        );
+        await save.click();
+        expect((await saved).status()).toBe(200);
+        await expect(page).toHaveURL(new RegExp(`#/groups/${boardId}/leadership$`));
+        await page.goto(termUrl);
+        await expect(page.getByLabel("Term starts", { exact: false })).toHaveValue("2026-02-01");
+        // Restore the original term for the publication assertions below.
+        await editor.getByLabel("Term starts", { exact: false }).fill("2026-03-01");
+        await save.click();
+        await expect(page).toHaveURL(new RegExp(`#/groups/${boardId}/leadership$`));
+
         // A term that does not exist returns to the list rather than sitting on an
         // address that resolves to nothing.
         await page.goto(`/portal/?from=leadership#/groups/${boardId}/leadership/00000000-0000-4000-8000-000000000000`);

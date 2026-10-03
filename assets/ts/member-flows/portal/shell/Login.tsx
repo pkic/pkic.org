@@ -180,7 +180,7 @@ export function Login({ onSignedIn, copy }: { onSignedIn: () => void | Promise<v
               <SignInError error={magicLink.error} />
 
               <p class="pk-small pk-muted pk-login__note">
-                Trouble signing in? <a href="/about/contact/">Ask the secretariat</a>.
+                Trouble signing in? <a href="mailto:contact@pkic.org">Ask the secretariat</a>.
               </p>
             </div>
             <div class="pk-login__card-foot">
