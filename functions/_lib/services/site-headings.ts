@@ -54,6 +54,26 @@ export function createContentMarked(renderImage?: (token: Tokens.Image) => Promi
   const images = new Map<Tokens.Image, string>();
   const used = new Map<string, number>();
   const parser = new Marked();
+  // Preserve the Hugo emoji shortcodes used by authored site content.
+  const emoji: Record<string, string> = { x: "❌", heavy_check_mark: "✔️", clock1: "🕐", warning: "⚠️" };
+  parser.use({
+    extensions: [
+      {
+        name: "siteEmoji",
+        level: "inline",
+        start(source) {
+          return source.indexOf(":");
+        },
+        tokenizer(source) {
+          const match = /^:(x|heavy_check_mark|clock1|warning):/.exec(source);
+          return match ? { type: "siteEmoji", raw: match[0], text: emoji[match[1]!] } : undefined;
+        },
+        renderer(token) {
+          return token.text;
+        },
+      },
+    ],
+  });
   parser.use({
     async: true,
     async walkTokens(token) {
