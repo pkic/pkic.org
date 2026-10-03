@@ -1,4 +1,4 @@
-import { applicationImportPending, prepareApplicationImportActivationGuard } from "./import-activation";
+import { applicationImportPending } from "./import-activation";
 import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../../db/authorization-guard";
 /**
  * Membership application stage machine. Split out of the former
@@ -162,7 +162,8 @@ export function prepareApplicationStageTransition(
              on_hold_subtype = ?, updated_at = ?,
              on_hold_reminder_sent_at = NULL
          WHERE id = ? AND stage = ? AND transition_revision = ?
-           AND (on_hold_subtype IS NOT 'manual' OR ? IS NOT NULL)`,
+           AND (on_hold_subtype IS NOT 'manual' OR ? IS NOT NULL)
+           AND NOT EXISTS (SELECT 1 FROM membership_application_sources source WHERE source.application_id = member_applications.id AND source.activated_at IS NULL)`,
       )
       .bind(
         params.toStage,
@@ -200,7 +201,6 @@ export function prepareApplicationStageTransition(
       .bind(params.toStage === "processing" ? now : null, application.id),
   );
 
-  statements.push(prepareApplicationImportActivationGuard(db, application.id));
   const outboxIds: string[] = [];
   if (params.toStage === "declined" || params.toStage === "withdrawn") {
     statements.push(prepareReleaseApplicationDomainClaim(db, application.id));

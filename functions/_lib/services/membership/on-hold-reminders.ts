@@ -52,7 +52,7 @@ type OnHoldWorkItem =
   | { kind: "reminder"; application: OnHoldReminderCandidate };
 
 const ON_HOLD_SELECTION_STATEMENTS = 3;
-const ON_HOLD_MAX_ACTION_STATEMENTS = 7;
+const ON_HOLD_MAX_ACTION_STATEMENTS = 6;
 const ON_HOLD_REMINDER_STATEMENTS = 4;
 
 function selectFairWork(
