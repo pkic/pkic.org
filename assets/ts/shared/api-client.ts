@@ -1,3 +1,8 @@
+import {
+  isPublishedFormResource,
+  publishedResourceKey,
+  publishedFormResourcesSchema,
+} from "../../shared/published-resource-url";
 import { AVAILABILITY_ERROR_CODE } from "../../shared/schemas/availability";
 import { publishAvailability, serviceAvailability } from "./availability-state";
 import { TURNSTILE_TOKEN_HEADER, turnstileChallengeSchema } from "../../shared/schemas/abuse-protection";
@@ -155,6 +160,14 @@ export function getJson<Schema extends z.ZodType>(
   schema: Schema,
   init?: Pick<RequestInit, "signal">,
 ): Promise<z.output<Schema>> {
+  const publication =
+    typeof document === "undefined" ? null : document.querySelector<HTMLTemplateElement>("#pkic-public-form-resources");
+  if (publication && isPublishedFormResource(url)) {
+    const resources = publishedFormResourcesSchema.parse(JSON.parse(publication.content.textContent ?? "{}"));
+    const key = publishedResourceKey(url);
+    if (!(key in resources)) return Promise.reject(new Error("This form is not available in the published site."));
+    return Promise.resolve(schema.parse(resources[key]));
+  }
   return requestJson(url, schema, { method: "GET", ...init });
 }
 

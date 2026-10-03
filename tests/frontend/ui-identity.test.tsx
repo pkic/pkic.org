@@ -151,11 +151,12 @@ describe("Avatar", () => {
     const rule = stylesheet.slice(stylesheet.indexOf(".pk-avatar__initials"));
     const fontSize = /font-size:\s*([^;]+);/.exec(rule)?.[1];
 
-    expect(fontSize).toContain("var(--pk-avatar-size)");
+    expect(fontSize).toMatch(/var\(--pk-avatar-size\b/);
     expect(fontSize).not.toMatch(/\d\s*em\b/);
-    // Every size the component offers sets that custom property, so the
-    // proportion holds for all of them rather than only the default.
-    for (const size of ["sm", "md", "lg", "xl"]) {
+    // The default has a fallback so callers can override it from a parent;
+    // non-default sizes set the property on their modifier.
+    expect(stylesheet).toMatch(/\.pk-avatar\s*\{[^}]*width:\s*var\(--pk-avatar-size,\s*2\.5rem\)/s);
+    for (const size of ["sm", "lg", "xl"]) {
       expect(stylesheet).toMatch(new RegExp(`\\.pk-avatar--${size}\\s*\\{\\s*--pk-avatar-size:`));
     }
   });

@@ -1,0 +1,72 @@
+@use "fonts";
+body {
+  margin: 0;
+  padding: 0;
+  background: #000;
+}
+#svg-container svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+#svg-container {
+  tspan {
+    white-space: pre;
+  }
+  .s0 {
+    opacity: 0.8;
+    fill: #ffffff;
+  }
+  .s1 {
+    fill: #ffffff;
+  }
+  .t2 {
+    font-size: 95px;
+    fill: #000000;
+    font-weight: 900;
+    font-family: "Roboto-Black", "Roboto", "Helvetica";
+  }
+  .t3 {
+    font-size: 60px;
+    fill: #434343;
+    font-weight: 500;
+    font-family: "Roboto-Medium", "Roboto", "Helvetica";
+  }
+  .t3-large {
+    font-size: 85px;
+    fill: #434343;
+    font-weight: 500;
+    font-family: "Roboto-Medium", "Roboto", "Helvetica";
+  }
+  .s4 {
+    fill: #5a9bd5;
+  }
+  .s5 {
+    fill: #ed7d31;
+  }
+  .s6 {
+    fill: #188754;
+  }
+
+  .hidden-line {
+    display: none;
+  }
+}
+#debug-overlay {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: #000e;
+  color: #9f9;
+  font: 13px/1.5 monospace;
+  padding: 1.25rem;
+  border-radius: 0.5rem;
+  border: 1px solid #9f9;
+  z-index: 10;
+  width: min(90vw, 40rem);
+  max-height: 90vh;
+  overflow: auto;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

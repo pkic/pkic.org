@@ -1,0 +1,61 @@
+@layer components {
+  /*
+   * A portrait carrying a standing: ring, then the label across its foot.
+   *
+   * The ring is two nested rounds — the tone, then a surface-coloured gap —
+   * so the brand gradient reads as a ring rather than a halo bleeding into
+   * the portrait. The label overlaps the foot deliberately: it belongs to the
+   * portrait, and set below it instead it would read as the first line of
+   * whatever follows.
+   */
+  .pk-avatar-standing {
+    display: inline-flex;
+    flex-direction: column;
+    align-items: center;
+    flex: none;
+  }
+
+  .pk-avatar-standing__ring {
+    display: block;
+    padding: 3px;
+    border-radius: 50%;
+    background: var(--pk-grad-brand);
+  }
+
+  .pk-avatar-standing__ring > .pk-avatar {
+    border: 3px solid var(--pk-surface);
+    box-sizing: content-box;
+  }
+
+  .pk-avatar-standing__label {
+    position: relative;
+    z-index: 1;
+    /* Pulled up over the ring's foot, and allowed to be wider than the
+       portrait — "Board member" is longer than any avatar is round. */
+    margin-block-start: -0.6rem;
+    padding: 0.25rem 0.55rem;
+    border: 2px solid var(--pk-surface);
+    border-radius: var(--pk-radius-pill);
+    background: var(--pk-accent);
+    color: var(--pk-accent-on);
+    font-size: var(--pk-text-2xs);
+    line-height: 1;
+    letter-spacing: var(--pk-tracking-label);
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  /* Held before, not now. */
+  .pk-avatar-standing[data-tone="neutral"] .pk-avatar-standing__ring {
+    background: var(--pk-line-strong);
+  }
+
+  .pk-avatar-standing[data-tone="neutral"] .pk-avatar {
+    filter: grayscale(1);
+  }
+
+  .pk-avatar-standing[data-tone="neutral"] .pk-avatar-standing__label {
+    background: var(--pk-ink-faint);
+    color: var(--pk-on-solid);
+  }
+}

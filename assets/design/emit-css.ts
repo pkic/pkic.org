@@ -13,6 +13,22 @@
 import { accentNeighbour, palette, type AccentHue } from "./palette.ts";
 import { constants, cssVar, density, layers, radiusModes, themes } from "./tokens.ts";
 
+/**
+ * Tokens the public site alone reads.
+ *
+ * The entry stylesheet is linked on every authenticated page, and the published
+ * site's headline scale, working-group accents and hero gradients are of no use
+ * there. Splitting them out keeps the application from paying for presentation
+ * it never renders, which is also what keeps the entry inside its ceiling.
+ */
+function isPublicToken(name: string): boolean {
+  return name.startsWith("public-") || name.startsWith("wg-");
+}
+
+function partition(entries: Record<string, string>, wanted: (name: string) => boolean): Record<string, string> {
+  return Object.fromEntries(Object.entries(entries).filter(([name]) => wanted(name)));
+}
+
 function block(entries: Record<string, string>, indent: string): string {
   return Object.entries(entries)
     .map(([name, value]) => `${indent}${cssVar(name)}: ${value};`)
@@ -27,7 +43,9 @@ function accentPair(hue: AccentHue): Record<string, string> {
 export function emitTokenCss(defaultAccent: AccentHue = "green"): string {
   // Unchanged theme values inherit from :root; emit each shared value once.
   const darkOverrides = Object.fromEntries(
-    Object.entries(themes.dark).filter(([name, value]) => value !== themes.light[name as keyof typeof themes.light]),
+    Object.entries(themes.dark).filter(
+      ([name, value]) => !isPublicToken(name) && value !== themes.light[name as keyof typeof themes.light],
+    ),
   );
   const paletteEntries = Object.fromEntries(Object.entries(palette).map(([name, value]) => [`palette-${name}`, value]));
 
@@ -47,11 +65,17 @@ ${block(paletteEntries, "    ")}
 
 ${block(accentPair(defaultAccent), "    ")}
 
-${block(constants, "    ")}
+${block(
+  partition(constants, (name) => !isPublicToken(name)),
+  "    ",
+)}
 
 ${block(density.comfortable, "    ")}
 
-${block(themes.light, "    ")}
+${block(
+  partition(themes.light, (name) => !isPublicToken(name)),
+  "    ",
+)}
   }
 
   /* The un-stamped document is the common case: most viewers never choose a
@@ -78,6 +102,44 @@ ${block(radiusModes.sharp, "    ")}
 
   [data-radius="round"] {
 ${block(radiusModes.round, "    ")}
+  }
+}
+`;
+}
+
+/**
+ * The public site's own token sheet.
+ *
+ * Linked beside the entry stylesheet on public pages only. It declares the
+ * same layer order so it can load in either order, and repeats the theme
+ * structure the entry uses so a public token can differ per theme.
+ */
+export function emitPublicTokenCss(): string {
+  const light = partition(themes.light, isPublicToken);
+  const dark = partition(themes.dark, isPublicToken);
+  return `/*
+ * GENERATED FILE — do not edit.
+ *
+ * Source: assets/design/tokens.ts (tokens the public site alone reads)
+ * Regenerate: pnpm run build:tokens
+ */
+@layer ${layers.join(", ")};
+
+@layer tokens {
+  :root {
+${block(partition(constants, isPublicToken), "    ")}
+
+${block(light, "    ")}
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+${block(dark, "      ")}
+    }
+  }
+
+  :root[data-theme="dark"] {
+${block(dark, "    ")}
   }
 }
 `;

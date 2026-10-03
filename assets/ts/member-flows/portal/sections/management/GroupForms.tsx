@@ -5,7 +5,7 @@ import { FORM_PLACEMENT_CONTEXT_TYPES, FORM_PURPOSES, type FormPlacement } from 
 import { groupFormsListResponseSchema } from "../../../../../shared/schemas/group-forms";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
-import { EmptyState } from "../../../../components/EmptyState";
+import { EmptyState } from "../../../../ui/RecordEmptyState";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { GroupFormDetail } from "./GroupFormDetail";
 import { GroupFormEditor } from "./GroupFormEditor";

@@ -14,7 +14,7 @@
 import { Link } from "wouter";
 
 import type { PortalNavItem } from "../../shell/portal-navigation";
-import { EmptyState } from "../../../../components/EmptyState";
+import { EmptyState } from "../../../../ui/RecordEmptyState";
 import { PageHeader } from "../../../../ui/PageHeader";
 
 export function SettingsIndex({ pages }: { pages: readonly PortalNavItem[] }) {

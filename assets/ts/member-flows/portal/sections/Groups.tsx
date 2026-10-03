@@ -8,7 +8,7 @@ import { ApiDataTable, type ApiTableActions } from "../../../components/ApiDataT
 import { RowActions } from "../../../ui/RowActions";
 import type { MenuItem } from "../../../ui/Menu";
 import { Badge } from "../../../components/Badge";
-import { EmptyState } from "../../../components/EmptyState";
+import { EmptyState } from "../../../ui/RecordEmptyState";
 import { PageHeader } from "../../../ui/PageHeader";
 import { portalHasGlobalPermission } from "../shell/portal-navigation";
 import { portalSession } from "../state";

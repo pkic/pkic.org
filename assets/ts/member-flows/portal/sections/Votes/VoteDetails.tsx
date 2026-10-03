@@ -14,7 +14,7 @@ import { isElectionResult, isMotionResult } from "./shared";
 import { BallotForm } from "./BallotForm";
 import { ConsultationResponseForm } from "./ConsultationForm";
 import { MotionResultView, ElectionResultView } from "./VoteResults";
-import { Markdown } from "../../../../components/Markdown";
+import { Markdown } from "../../../../ui/Markdown";
 
 export function VoteDetails({
   vote,

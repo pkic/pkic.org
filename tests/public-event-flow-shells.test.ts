@@ -105,6 +105,17 @@ describe("portal event public flow shells", () => {
     await resetDb();
   });
 
+  it("does not restore missing public pages or discovery through database rendering", async () => {
+    const assets = assetsFor();
+    for (const path of ["/about/", "/en/sitemap.xml", `${EVENT_BASE_PATH}agenda/`]) {
+      const response = await app.fetch(request(path), workerEnv(assets, NO_DB), {
+        passThroughOnException: () => {},
+        waitUntil: () => {},
+      } as any);
+      expect(response.status, path).toBe(404);
+    }
+  });
+
   it("parses only supported canonical flow paths and preserves the event base path", () => {
     expect(parseEventFlowPath(`${EVENT_BASE_PATH}register/`)).toEqual({
       eventSlug: EVENT_SLUG,
@@ -190,8 +201,8 @@ describe("portal event public flow shells", () => {
     expectPrivateNoStoreHeaders(response);
     expect(response.headers.get("content-security-policy")).toContain("default-src 'none'");
     expect(response.headers.get("content-security-policy")).toContain("script-src 'self'");
-    expect(response.headers.get("content-security-policy")).toContain("https://js.stripe.com");
-    expect(response.headers.get("content-security-policy")).toContain("frame-src https://js.stripe.com");
+    expect(response.headers.get("content-security-policy")).not.toContain("stripe.com");
+    expect(response.headers.get("content-security-policy")).toContain("https://challenges.cloudflare.com");
     expect(response.headers.get("referrer-policy")).toBe("no-referrer");
     expect(response.headers.get("x-content-type-options")).toBe("nosniff");
     expect(response.headers.get("x-frame-options")).toBe("DENY");
@@ -227,7 +238,7 @@ describe("portal event public flow shells", () => {
     expectPrivateNoStoreHeaders(postResponse);
     expect(postAssets.calls).toHaveLength(0);
 
-    const unavailableResponse = await app.fetch(
+    const viteShellResponse = await app.fetch(
       request(`${EVENT_BASE_PATH}register/`),
       { ...workerEnv(postAssets, NO_DB), ASSETS_PUBLIC: undefined } as unknown as Env,
       {
@@ -235,11 +246,12 @@ describe("portal event public flow shells", () => {
         waitUntil: () => {},
       } as any,
     );
-    expect(unavailableResponse.status).toBe(503);
-    expectPrivateNoStoreHeaders(unavailableResponse);
+    expect(viteShellResponse.status).toBe(200);
+    expectPrivateNoStoreHeaders(viteShellResponse);
+    await expect(viteShellResponse.text()).resolves.toContain('data-module="event-flows/registration-page"');
   });
 
-  it("fails closed with a sanitized response when the shared shell is unavailable", async () => {
+  it("falls back to a secure Vite shell when the retired static shell is unavailable", async () => {
     const shellPath = "/_event-flow-shells/registration/";
 
     for (const assets of [assetsFor({ missingShell: shellPath }), assetsFor({ throwOnPath: shellPath })]) {
@@ -248,15 +260,16 @@ describe("portal event public flow shells", () => {
         waitUntil: () => {},
       } as any);
 
-      expect(response.status).toBe(503);
-      expect(response.headers.get("content-type")).toContain("text/plain");
+      expect(response.status).toBe(200);
+      expect(response.headers.get("content-type")).toContain("text/html");
       expectPrivateNoStoreHeaders(response);
       expect(response.headers.get("content-security-policy")).toContain("frame-ancestors 'none'");
-      await expect(response.text()).resolves.toBe("Event page temporarily unavailable.");
-      expect(assets.calls.map((call) => new URL(call.url).pathname)).toEqual([
-        `${EVENT_BASE_PATH}register/`,
-        shellPath,
-      ]);
+      const html = await response.text();
+      expect(html).toContain('data-module="event-flows/registration-page"');
+      expect(html).not.toContain("sensitive upstream asset failure");
+      const assetPaths = assets.calls.map((call) => new URL(call.url).pathname);
+      expect(assetPaths.slice(0, 2)).toEqual([`${EVENT_BASE_PATH}register/`, shellPath]);
+      expect(assetPaths.slice(2)).toEqual(["/js/built/manifest.json", "/js/built/manifest.json"]);
     }
   });
 

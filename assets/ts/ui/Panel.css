@@ -32,7 +32,7 @@
     align-items: center;
     justify-content: space-between;
     gap: var(--pk-2) 1rem;
-    padding: var(--pk-4) var(--pk-4);
+    padding: var(--pk-4);
     border-bottom: 1px solid var(--pk-line-soft);
   }
 
@@ -69,6 +69,10 @@
     background: var(--pk-ok-soft);
   }
 
+  .pk-panel__body--danger {
+    background: var(--pk-danger-soft);
+  }
+
   .pk-panel__body--warn {
     background: var(--pk-warn-soft);
   }
@@ -79,7 +83,7 @@
 
   @media (max-width: 48rem) {
     .pk-panel__header {
-      padding: var(--pk-3) var(--pk-3);
+      padding: var(--pk-3);
     }
 
     .pk-panel__body {

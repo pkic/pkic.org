@@ -1,7 +1,7 @@
 /**
- * Capture the canonical documents from the local Worker after Hugo has built
- * public/. The deployed Worker serves these assets instead of converting every
- * route schema during isolate startup.
+ * Capture the canonical documents from a local Worker after its public assets
+ * are built. The deployed Worker serves these assets instead of converting
+ * every route schema during isolate startup.
  */
 import { spawn } from "node:child_process";
 import { mkdtemp, mkdir, rm, writeFile } from "node:fs/promises";
@@ -16,10 +16,16 @@ const environment = process.argv[2] ?? "local";
 if (!new Set(["local", "preview", "production"]).has(environment)) {
   throw new Error(`Unsupported Cloudflare environment: ${environment}`);
 }
+const configOption = process.argv.indexOf("--config");
+const outputOption = process.argv.indexOf("--output");
+const configPath = configOption === -1 ? null : process.argv[configOption + 1];
+const output = outputOption === -1 ? "public" : process.argv[outputOption + 1];
+if (configOption !== -1 && !configPath) throw new Error("--config requires a path");
+if (!new Set(["public", "dist/client"]).has(output)) throw new Error("Unsupported OpenAPI output directory");
 
 const OPENAPI_PATH = "/api/v1/openapi.json";
 const MCP_OPENAPI_PATH = "/api/v1/mcp/openapi.json";
-const artifactPath = (path) => resolve(root, "public", path.slice(1));
+const artifactPath = (path) => resolve(root, output, path.slice(1));
 
 async function availablePort() {
   const server = createServer();
@@ -58,8 +64,8 @@ async function readDocument(url, child) {
 
 const temporaryState = await mkdtemp(join(process.env.PKIC_BUILD_TMPDIR ?? tmpdir(), "pkic-openapi-"));
 const port = await availablePort();
-// A repeated local build must not read its previous document back through the
-// assets binding. Hugo has already produced public/ before this script runs.
+// A repeated build must not read its previous document back through the assets
+// binding. The public assets are already present before this script runs.
 await Promise.all([OPENAPI_PATH, MCP_OPENAPI_PATH].map((path) => rm(artifactPath(path), { force: true })));
 const child = spawn(
   "pnpm",
@@ -67,8 +73,7 @@ const child = spawn(
     "exec",
     "wrangler",
     "dev",
-    "--env",
-    environment,
+    ...(configPath ? ["--config", resolve(root, configPath)] : ["--env", environment]),
     "--local",
     "--ip",
     "127.0.0.1",

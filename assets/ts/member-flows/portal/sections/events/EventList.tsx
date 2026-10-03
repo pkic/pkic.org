@@ -3,7 +3,7 @@ import { Badge } from "../../../../components/Badge";
 import { useRef, useState } from "preact/hooks";
 import type { z } from "zod";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
-import { EmptyState } from "../../../../components/EmptyState";
+import { EmptyState } from "../../../../ui/RecordEmptyState";
 import { Chip } from "../../../../ui/Chip";
 import { RowActions } from "../../../../ui/RowActions";
 import type { MenuItem } from "../../../../ui/Menu";

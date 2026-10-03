@@ -1,0 +1,257 @@
+/*
+ * The maturity model's staircase.
+ *
+ * Ported from the published site's `_maturity-staircase.scss`, which the
+ * `maturity-staircase` content component draws. Shared across models: the PQC
+ * maturity model and the PKI maturity model both read it.
+ */
+
+@layer legacy {
+  .maturity-staircase {
+    display: flex;
+    align-items: flex-end;
+    gap: 0.5rem;
+    padding: 0;
+    margin: 2.5rem 0 1.5rem;
+    overflow-x: auto;
+    border-bottom: 2px solid rgb(233, 236, 239);
+    padding-bottom: 0;
+  }
+  .maturity-staircase .maturity-step {
+    flex: 1;
+    min-width: 80px;
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    text-align: center;
+    position: relative;
+  }
+  .maturity-staircase .maturity-step:nth-child(1) .maturity-step-bar {
+    height: 3.5rem;
+  }
+  .maturity-staircase .maturity-step:nth-child(2) .maturity-step-bar {
+    height: 5.5rem;
+  }
+  .maturity-staircase .maturity-step:nth-child(3) .maturity-step-bar {
+    height: 7.5rem;
+  }
+  .maturity-staircase .maturity-step:nth-child(4) .maturity-step-bar {
+    height: 9.5rem;
+  }
+  .maturity-staircase .maturity-step:nth-child(5) .maturity-step-bar {
+    height: 11.5rem;
+  }
+  .maturity-staircase .maturity-step:nth-child(6) .maturity-step-bar {
+    height: 13.5rem;
+  }
+  .maturity-staircase .maturity-step-bar {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: flex-start;
+    gap: 0.25rem;
+    padding: 0.75rem 0.5rem 0.5rem;
+    border-radius: 0.5rem 0.5rem 0 0;
+    text-decoration: none;
+    transition: filter 0.18s ease, transform 0.18s ease, box-shadow 0.18s ease;
+    position: relative;
+  }
+  .maturity-staircase .maturity-step-bar::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0) 55%);
+    pointer-events: none;
+  }
+  .maturity-staircase .maturity-step-bar:is(a):hover {
+    filter: brightness(1.12);
+    transform: translateY(-3px);
+    box-shadow: 0 8px 20px rgba(0, 0, 0, 0.18);
+    text-decoration: none;
+  }
+  .maturity-staircase .maturity-step-number {
+    font-size: 1.5rem;
+    font-weight: 800;
+    line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .maturity-staircase .maturity-step-name {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    line-height: 1.2;
+  }
+  .maturity-staircase .maturity-step-summary {
+    font-size: 0.7rem;
+    color: var(--pk-ink-muted);
+    line-height: 1.35;
+    margin: 0.5rem 0 0;
+    padding: 0 0.2rem;
+    min-height: 2.7em;
+  }
+  .maturity-staircase .maturity-step-cta {
+    color: var(--pk-accent-ink);
+    font-size: 0.68rem;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    margin: 0.3rem 0 0;
+    text-decoration: none;
+  }
+  .maturity-staircase .maturity-step-cta:hover {
+    text-decoration: underline;
+  }
+  .maturity-staircase .maturity-step--none .maturity-step-bar {
+    background: rgb(173, 181, 189);
+  }
+  .maturity-staircase .maturity-step--none .maturity-step-bar .maturity-step-number {
+    color: rgb(206, 212, 218);
+  }
+  .maturity-staircase .maturity-step--none .maturity-step-bar .maturity-step-name {
+    color: rgb(206, 212, 218);
+  }
+  .maturity-staircase .maturity-step--gray .maturity-step-bar {
+    background: rgb(108, 117, 125);
+  }
+  .maturity-staircase .maturity-step--gray .maturity-step-bar .maturity-step-number {
+    color: #ffffff;
+  }
+  .maturity-staircase .maturity-step--gray .maturity-step-bar .maturity-step-name {
+    color: #ffffff;
+  }
+  .maturity-staircase .maturity-step--green .maturity-step-bar {
+    background: var(--pk-palette-green);
+  }
+  .maturity-staircase .maturity-step--green .maturity-step-bar .maturity-step-number {
+    color: #ffffff;
+  }
+  .maturity-staircase .maturity-step--green .maturity-step-bar .maturity-step-name {
+    color: #ffffff;
+  }
+  .maturity-staircase .maturity-step--blue .maturity-step-bar {
+    background: rgb(72, 124, 170);
+  }
+  .maturity-staircase .maturity-step--blue .maturity-step-bar .maturity-step-number {
+    color: #ffffff;
+  }
+  .maturity-staircase .maturity-step--blue .maturity-step-bar .maturity-step-name {
+    color: #ffffff;
+  }
+  .maturity-staircase .maturity-step--violet .maturity-step-bar {
+    background: var(--pk-palette-purple);
+  }
+  .maturity-staircase .maturity-step--violet .maturity-step-bar .maturity-step-number {
+    color: #ffffff;
+  }
+  .maturity-staircase .maturity-step--violet .maturity-step-bar .maturity-step-name {
+    color: #ffffff;
+  }
+  .maturity-staircase .maturity-step--purple .maturity-step-bar {
+    background: rgb(89, 53, 154);
+  }
+  .maturity-staircase .maturity-step--purple .maturity-step-bar .maturity-step-number {
+    color: #ffffff;
+  }
+  .maturity-staircase .maturity-step--purple .maturity-step-bar .maturity-step-name {
+    color: #ffffff;
+  }
+  .maturity-staircase .maturity-step--none .maturity-step-bar {
+    border: 2px dashed rgb(173, 181, 189);
+    background: var(--pk-surface-sunk);
+  }
+  .maturity-staircase .maturity-step--none .maturity-step-bar .maturity-step-number {
+    color: var(--pk-ink-muted);
+  }
+  .maturity-staircase .maturity-step--none .maturity-step-bar .maturity-step-name {
+    color: var(--pk-ink-muted);
+  }
+  .maturity-staircase .maturity-step--none .maturity-step-bar::after {
+    display: none;
+  }
+  @media (max-width: 520px) {
+    .maturity-staircase {
+      gap: 0.25rem;
+    }
+    .maturity-staircase .maturity-step {
+      min-width: 52px;
+    }
+    .maturity-staircase .maturity-step:nth-child(1) .maturity-step-bar {
+      height: 2.5rem;
+    }
+    .maturity-staircase .maturity-step:nth-child(2) .maturity-step-bar {
+      height: 3.75rem;
+    }
+    .maturity-staircase .maturity-step:nth-child(3) .maturity-step-bar {
+      height: 5rem;
+    }
+    .maturity-staircase .maturity-step:nth-child(4) .maturity-step-bar {
+      height: 6.25rem;
+    }
+    .maturity-staircase .maturity-step:nth-child(5) .maturity-step-bar {
+      height: 7.5rem;
+    }
+    .maturity-staircase .maturity-step:nth-child(6) .maturity-step-bar {
+      height: 8.75rem;
+    }
+    .maturity-staircase .maturity-step-number {
+      font-size: 1.1rem;
+    }
+    .maturity-staircase .maturity-step-name {
+      display: none;
+    }
+    .maturity-staircase .maturity-step-summary {
+      display: none;
+    }
+    .maturity-staircase .maturity-step-cta {
+      display: none;
+    }
+  }
+
+  .criteria-box {
+    border: 1px solid rgba(72, 124, 170, 0.25);
+    border-left: 4px solid rgb(72, 124, 170);
+    border-radius: 0 0.5rem 0.5rem 0;
+    background: rgba(214, 234, 248, 0.35);
+    padding: 1.25rem 1.5rem 1.25rem 1.5rem;
+    margin: 1rem 0 1.75rem;
+  }
+  .criteria-box .criteria-box-label {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.375rem;
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: rgb(72, 124, 170);
+    margin-bottom: 0.875rem;
+  }
+  .criteria-box .criteria-box-body > p:first-child {
+    font-weight: 500;
+    margin-bottom: 0.75rem;
+  }
+  .criteria-box .criteria-box-body > ul {
+    list-style: none;
+    padding-left: 0;
+    margin: 0;
+  }
+  .criteria-box .criteria-box-body > ul > li {
+    position: relative;
+    padding-left: 1.75rem;
+    margin-bottom: 0.5rem;
+    line-height: 1.55;
+  }
+  .criteria-box .criteria-box-body > ul > li:last-child {
+    margin-bottom: 0;
+  }
+  .criteria-box .criteria-box-body > ul > li::before {
+    content: "✓";
+    position: absolute;
+    left: 0;
+    top: 0.05em;
+    color: rgb(72, 124, 170);
+    font-weight: 700;
+    font-size: 0.9em;
+  }
+}

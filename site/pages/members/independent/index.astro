@@ -1,0 +1,13 @@
+---
+import PublicPage from "../../../layouts/PublicPage.astro";
+import { DirectoryGrid } from "../../../../assets/ts/site/MemberDirectory";
+import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../../../../assets/shared/schemas/membership-categories";
+import { publication } from "../../../publication";
+const members = publication.members.filter((member) => INDIVIDUAL_MEMBERSHIP_CATEGORIES.has(member.memberType));
+---
+<PublicPage title="Independent members">
+  <section class="pk-section pk-container pk-container--wide" data-pagefind-body>
+    <h1>Independent members</h1>
+    <DirectoryGrid members={members} prefix="independent-members" />
+  </section>
+</PublicPage>

@@ -9,7 +9,7 @@ import {
 } from "../functions/_lib/services/member-news/feed-parser";
 import { readMemberNews, readSponsorNews } from "../functions/_lib/services/member-news/read";
 import { refreshMemberNews } from "../functions/_lib/services/member-news/refresh";
-import newsRouter from "../functions/news/router";
+import { renderMemberNews, renderMemberNewsFeed } from "../functions/_lib/services/member-news/render";
 import { insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
@@ -85,70 +85,18 @@ describe("D1 member news cache and public rendering", () => {
     expect(page.page).toMatchObject({ total: 3, hasMore: true });
     expect(page.articles).toHaveLength(2);
     expect(await readSponsorNews(env.DB)).toHaveLength(1);
-    const assets = {
-      fetch: vi.fn(
-        async () =>
-          new Response("<main><div data-member-news></div></main>", { headers: { "content-type": "text/html" } }),
-      ),
-    };
-    const htmlResponse = await newsRouter.request(
-      "https://portal.example.test/news/?limit=2",
-      {},
-      { ...env, ASSETS: assets },
-    );
-    const html = await htmlResponse.text();
+    const html = await renderMemberNews(page, await readSponsorNews(env.DB), memberNewsQuerySchema.parse({ limit: 2 }));
     expect(html).toContain("Certificates &amp; trust");
     expect(html).toContain("Older articles");
-    expect(html).toContain("data-local-time-date-only");
+    expect(html).toContain('data-local-time-format="date"');
     expect(html).toContain("Sponsor Highlights");
-    expect(htmlResponse.headers.get("cache-control")).toBe("public");
-    const feedResponse = await newsRouter.request("https://portal.example.test/news/feed/", {}, env);
-    const parsed = new XMLParser().parse(await feedResponse.text(), true);
+    const parsed = new XMLParser().parse(await renderMemberNewsFeed((await read()).articles, "https://pkic.org"), true);
     expect(parsed.rss.channel.item).toHaveLength(3);
     expect(parsed.rss.channel.item[0].title).toBe(page.articles[0].title);
-    expect(feedResponse.headers.get("content-type")).toContain("application/rss+xml");
     expect(fetcher).toHaveBeenCalledTimes(1);
     expect((await refreshMemberNews(env.DB)).summary.refreshed).toBe(0);
     expect(fetcher).toHaveBeenCalledTimes(1);
   });
-  it("does not reuse static-shell validators for changing D1 content and supports HEAD", async () => {
-    await source();
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () => new Response(rss())),
-    );
-    await refreshMemberNews(env.DB);
-    await env.DB.prepare("UPDATE member_news_articles SET title = 'Updated article'").run();
-    const shellFetch = vi.fn(async (request: Request) => {
-      if (request.headers.has("if-none-match")) return new Response(null, { status: 304 });
-      expect(request.method).toBe("GET");
-      expect(request.headers.has("range")).toBe(false);
-      return new Response("<div data-member-news></div>", {
-        headers: {
-          "content-type": "text/html",
-          etag: '"static-shell"',
-          "last-modified": "Mon, 01 Jan 2024 00:00:00 GMT",
-        },
-      });
-    });
-    const bindings = { ...env, ASSETS: { fetch: shellFetch } };
-    const response = await newsRouter.request(
-      "https://portal.example.test/news/",
-      {
-        headers: { "if-none-match": '"static-shell"', range: "bytes=0-10" },
-      },
-      bindings,
-    );
-    expect(response.status).toBe(200);
-    expect(await response.text()).toContain("Updated article");
-    expect(response.headers.get("etag")).toBeNull();
-    expect(response.headers.get("last-modified")).toBeNull();
-    const head = await newsRouter.request("https://portal.example.test/news/", { method: "HEAD" }, bindings);
-    expect(head.status).toBe(200);
-    expect(await head.text()).toBe("");
-    expect(head.headers.get("cache-control")).toBe("public");
-  });
-
   it("retains last successful articles after a failure and hides changed feeds and ended members", async () => {
     const f = await source();
     vi.stubGlobal(
@@ -200,16 +148,13 @@ describe("D1 member news cache and public rendering", () => {
       vi.fn(async () => new Response(rss("&lt;script&gt;alert(1)&lt;/script&gt;"))),
     );
     await refreshMemberNews(env.DB);
-    const assets = {
-      fetch: async () => new Response("<div data-member-news></div>", { headers: { "content-type": "text/html" } }),
-    };
-    const response = await newsRouter.request("https://portal.example.test/news/", {}, { ...env, ASSETS: assets });
-    expect(await response.text()).not.toContain("<script>");
-    expect((await newsRouter.request("https://portal.example.test/news/?sort=unknown", {}, env)).status).toBe(400);
+    expect(await renderMemberNews(await read(), [], memberNewsQuerySchema.parse({}))).not.toContain("<script>");
+    expect(memberNewsQuerySchema.safeParse({ sort: "unknown" }).success).toBe(false);
     await env.DB.prepare("DELETE FROM member_news_articles").run();
-    const empty = await newsRouter.request("https://portal.example.test/news/", {}, { ...env, ASSETS: assets });
-    expect(await empty.text()).toContain("No news items available");
-    const feed = await newsRouter.request("https://portal.example.test/news/feed/index.xml", {}, env);
-    expect(new XMLParser().parse(await feed.text(), true).rss.channel.item).toBeUndefined();
+    expect(await renderMemberNews(await read(), [], memberNewsQuerySchema.parse({}))).toContain(
+      "No news items available",
+    );
+    const feed = await renderMemberNewsFeed((await read()).articles, "https://pkic.org");
+    expect(new XMLParser().parse(feed, true).rss.channel.item).toBeUndefined();
   });
 });

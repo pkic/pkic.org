@@ -1,0 +1,194 @@
+/*
+ * Leadership and person cards.
+ *
+ * Ported from the published site's leadership-cards stylesheet. The chair,
+ * vice-chair and consortium leadership islands render these class names; with
+ * no rules they stayed on their loading line forever.
+ *
+ * Only `PublicPersonCard` and the grids around it are styled here. The older
+ * `wg-leader-*` card and the `person-tl-*` past-position row have no markup
+ * left: a past position is the same card with an end date on it.
+ */
+
+@layer legacy {
+  .wg-leadership-label {
+    font-size: var(--pk-text-2xs);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--pk-ink-muted);
+    margin-bottom: 1rem;
+  }
+
+  .consortium-leaders {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 1.25rem;
+    margin: 1.5rem 0 2rem;
+  }
+
+  /*
+   * Tokens rather than a literal white: these cards sit on pages that follow
+   * the reader's theme, and a white ground under near-white ink is unreadable
+   * in the dark one.
+   */
+  .person-card {
+    display: flex;
+    flex-direction: column;
+    padding: 1.1rem 1.25rem 0.75rem;
+    background: var(--pk-surface);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-card);
+    flex: 1 1 280px;
+    max-width: 440px;
+    transition:
+      box-shadow var(--pk-dur-fast),
+      border-color var(--pk-dur-fast);
+  }
+  .person-card:hover {
+    box-shadow: var(--pk-shadow-2);
+    border-color: var(--pk-line);
+  }
+  .person-card-main {
+    display: flex;
+    align-items: flex-start;
+    gap: 1.1rem;
+    padding-bottom: var(--pk-4);
+  }
+
+  /*
+   * The ring around the design-system Avatar, which fills the ring's inside.
+   * The gap between ring and portrait is the card's own ground.
+   */
+  .person-card-avatar-frame {
+    --avatar-px: 80px;
+    --pk-avatar-size: var(--avatar-px);
+    position: relative;
+    flex-shrink: 0;
+    width: calc(var(--avatar-px) + 10px);
+    height: calc(var(--avatar-px) + 10px);
+    border-radius: 50%;
+    border: 3px solid var(--pk-accent);
+    padding: 2px;
+    background: var(--pk-surface);
+  }
+  .person-card-avatar-frame--past {
+    border-color: var(--pk-line);
+  }
+  .person-card-avatar-frame--small {
+    --avatar-px: 72px;
+  }
+
+  /* The label hangs across the foot of the ring, rimmed in the card's ground. */
+  .person-card-role-arc {
+    position: absolute;
+    bottom: -2px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: var(--pk-accent);
+    color: var(--pk-on-solid);
+    font-size: var(--pk-text-2xs);
+    font-weight: 900;
+    letter-spacing: 0.07em;
+    text-transform: uppercase;
+    white-space: nowrap;
+    border-radius: var(--pk-radius-pill);
+    padding: 0.13em 0.55em;
+    border: 2px solid var(--pk-surface);
+    line-height: 1.4;
+    z-index: 1;
+    max-width: 120px;
+    text-overflow: ellipsis;
+    overflow: hidden;
+  }
+  .person-card-role-arc--past {
+    background: var(--pk-ink-muted);
+  }
+
+  .person-card:has(.person-card-footer) {
+    padding-bottom: 0;
+  }
+
+  .person-card-body {
+    flex: 1;
+    min-width: 0;
+  }
+
+  .person-card-name {
+    font-size: var(--pk-text-lg);
+    font-weight: 700;
+    color: var(--pk-ink);
+    line-height: 1.3;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+  }
+  .person-card-name:hover {
+    color: var(--pk-accent-ink);
+  }
+
+  .person-card-jobtitle {
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink-muted);
+    line-height: 1.4;
+    margin-top: 0.3rem;
+  }
+
+  .person-card-org {
+    margin-top: 0.45rem;
+  }
+
+  .person-card-org-logo-wrap {
+    display: flex;
+    align-items: center;
+    height: 28px;
+    max-width: 120px;
+    overflow: hidden;
+  }
+
+  .person-card-org-logo {
+    display: block;
+    max-width: 100%;
+    max-height: 100%;
+    width: auto;
+    height: auto;
+    object-fit: contain;
+    filter: var(--pk-member-logo-filter);
+    transition: filter var(--pk-dur-fast);
+  }
+  .person-card:hover .person-card-org-logo {
+    filter: var(--pk-member-logo-hover-filter);
+  }
+
+  .person-card-org-name {
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink-muted);
+    text-decoration: none;
+  }
+  .person-card-org-name:hover {
+    color: var(--pk-accent-ink);
+  }
+
+  .consortium-past-leadership {
+    margin: 2rem 0;
+  }
+
+  .consortium-past-heading {
+    font-size: var(--pk-text-xs);
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.07em;
+    color: var(--pk-ink-muted);
+    margin: 0 0 0.75rem;
+  }
+}
+
+/* Article spacing belongs to prose, not the controls and logos within cards. */
+@layer components {
+  .pk-public-prose .person-card .pk-link-list {
+    margin-block: 0;
+  }
+
+  .pk-public-prose .person-card img {
+    margin: 0;
+  }
+}

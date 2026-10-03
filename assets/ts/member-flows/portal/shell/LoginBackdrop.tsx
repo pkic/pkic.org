@@ -76,8 +76,8 @@ function useMemberCounts(facts: readonly PortalLoginFact[]): Record<string, numb
  * gradient and stripe, which the stylesheet draws, while the words stay in the
  * accessibility tree because they say what this portal is for.
  */
-export function LoginBackdrop() {
-  const copy = readCopy();
+export function LoginBackdrop({ copy: publishedCopy }: { copy?: PortalLoginCopy } = {}) {
+  const copy = publishedCopy ?? readCopy();
   const facts = copy.facts ?? [];
   const counts = useMemberCounts(facts);
 

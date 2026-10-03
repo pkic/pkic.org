@@ -1,5 +1,5 @@
 ---
-date: 2022-06-22T8:50:10Z
+date: 2022-06-22T08:50:10Z
 draft: false
 title: Application process to join the PKI Consortium
 
@@ -56,15 +56,15 @@ flowchart TD
     click Sponsor "/sponsors/"
     click SponsorApplicationForm "/sponsors/sponsor/"
     click WorkingGroups "/wg/"
-    click Profile "https://github.com/pkic/pkic.org#adding-a-new-member"
+    click Profile "/portal/"
 
     class Member,Agreements,Questions,Consultation,EC,MailingList,Website,MeetingInvite grey;
     class END red;
     class ApplicationForm blue;
     class Approved green;
 
-    classDef red color: #fff, fill:#e00, stroke:#a00;
-    classDef blue color: #fff, fill:#87CEFA, stroke:#6495ED;
-    classDef green color: #fff, fill:#32CD32, stroke:#008000;
+    classDef red color: #fff, fill:#b91c1c, stroke:#991b1b;
+    classDef blue color: #fff, fill:#1d4ed8, stroke:#1e40af;
+    classDef green color: #fff, fill:#15803d, stroke:#166534;
     classDef grey color: #000, fill:#eee, stroke:#aaa;
 ```

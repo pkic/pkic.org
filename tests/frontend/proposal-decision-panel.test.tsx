@@ -101,10 +101,10 @@ function stubApi(decide: () => Response): Captured[] {
   return requests;
 }
 
-function mount(record: ProposalDetailRecord, onSaved = () => {}): HTMLElement {
+function mount(record: ProposalDetailRecord, onSaved = () => {}, flushEffects = true): HTMLElement {
   container = document.createElement("div");
   document.body.append(container);
-  void act(() =>
+  const draw = () =>
     render(
       <ProposalDecisionPanel
         proposalId={record.id}
@@ -115,8 +115,9 @@ function mount(record: ProposalDetailRecord, onSaved = () => {}): HTMLElement {
         onSaved={onSaved}
       />,
       container!,
-    ),
-  );
+    );
+  if (flushEffects) void act(draw);
+  else draw();
   return container;
 }
 
@@ -163,6 +164,16 @@ afterEach(() => {
 });
 
 describe("proposal decision panel", () => {
+  it("preserves a decision selected before deferred mount effects run", async () => {
+    const root = mount(editableProposal, () => {}, false);
+    const decision = controlFor<HTMLSelectElement>(root, "Decision");
+    decision.value = "accepted";
+    decision.dispatchEvent(new Event("change", { bubbles: true }));
+    await settle();
+    expect(decision.value).toBe("accepted");
+    expect(root.textContent).toContain("Acceptance registers all speakers");
+  });
+
   it("reads a recorded decision as a decision, with correcting it a deliberate act", async () => {
     const root = mount(proposal);
 

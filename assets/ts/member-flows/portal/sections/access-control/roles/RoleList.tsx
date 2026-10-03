@@ -1,7 +1,7 @@
 import { useRef } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../../components/ConfirmDialog";
-import { EmptyState } from "../../../../../components/EmptyState";
+import { EmptyState } from "../../../../../ui/RecordEmptyState";
 import { Badge } from "../../../../../ui/Badge";
 import { Chip } from "../../../../../ui/Chip";
 import { RowActions } from "../../../../../ui/RowActions";

@@ -11,6 +11,8 @@ import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { expectStaffSessionLanding, signInAsE2eStaff } from "./helpers/staff-auth";
 import { tab } from "./helpers/tabs";
+import { createPortalWaitlistEvent } from "./helpers/waitlist-event";
+import { publishE2eSite } from "./helpers/site-publication";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 
@@ -313,7 +315,9 @@ async function fillRegistrationStep4(page: Page, expectedEmail?: string, expectP
   await expect(page.locator("[data-registration-review]")).toBeVisible();
   if (expectedEmail) {
     await expect(page.locator("[data-registration-review-email]")).toHaveText(expectedEmail);
-    await expect(page.locator("label[for='registration-email-review-confirmed']")).toContainText(expectedEmail);
+    await expect(page.getByRole("checkbox", { name: /I checked that/ })).toHaveAccessibleName(
+      new RegExp(expectedEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
+    );
   }
   await expect(page.locator("[data-registration-review]")).toContainText("Contact");
   if (expectProfileDetails) {
@@ -420,179 +424,48 @@ async function signInAsAdmin(page: Page, scope: "browser-waitlist" | "browser-pr
   await signInAsE2eStaff(page, e2eAdminEmail(scope));
 }
 
-async function createPortalWaitlistEvent(page: Page): Promise<{ eventId: string; slug: string; groupId: string }> {
-  const groupId = "20000000-0000-4000-8000-000000000001";
-  const slug = `e2e-waitlist-${Date.now()}-${test.info().workerIndex}`;
-  const result = await page.evaluate(
-    async ({ groupId, slug }) => {
-      type ApiBody = {
-        event?: { id: string; updatedAt: string };
-        eventUpdatedAt?: string;
-        error?: unknown;
-      };
-      async function request(path: string, init: RequestInit): Promise<{ status: number; body: ApiBody }> {
-        const response = await fetch(path, {
-          ...init,
-          headers: { "content-type": "application/json", ...(init.headers ?? {}) },
-          credentials: "same-origin",
-        });
-        const text = await response.text();
-        const body = (() => {
-          try {
-            return JSON.parse(text) as ApiBody;
-          } catch {
-            return { error: text };
-          }
-        })();
-        return { status: response.status, body };
-      }
-
-      const created = await request(`/api/v1/groups/${groupId}/events`, {
-        method: "POST",
-        body: JSON.stringify({
-          slug,
-          name: `E2E waitlist event ${slug}`,
-          timezone: "Europe/Amsterdam",
-          startsAt: "2026-12-01T09:00:00.000Z",
-          endsAt: "2026-12-03T17:00:00.000Z",
-          profileKey: "workshop",
-          registrationPolicy: "no_registration",
-          inviteLimitAttendee: 5,
-        }),
-      });
-      if (created.status !== 201 || !created.body?.event?.id) {
-        throw new Error(`Portal event creation failed (${created.status}): ${JSON.stringify(created.body)}`);
-      }
-      const eventId = created.body.event.id as string;
-
-      const terms = await request(`/api/v1/groups/${groupId}/events/${eventId}/terms`, {
-        method: "PUT",
-        body: JSON.stringify({
-          expectedUpdatedAt: created.body.event.updatedAt,
-          configuration: {
-            attendee: [
-              { termKey: "privacy_policy", version: "1", required: true, displayText: "I agree to the privacy policy" },
-              {
-                termKey: "code_of_conduct",
-                version: "1",
-                required: true,
-                displayText: "I agree to the code of conduct",
-              },
-              {
-                termKey: "photos_and_videos",
-                version: "1",
-                required: true,
-                displayText: "I agree to photos and videos",
-              },
-            ],
-            speaker: [],
-            presentation: [],
-          },
-        }),
-      });
-      if (terms.status !== 200 || !terms.body?.eventUpdatedAt) {
-        throw new Error(`Portal event terms failed (${terms.status}): ${JSON.stringify(terms.body)}`);
-      }
-
-      const days = await request(`/api/v1/groups/${groupId}/events/${eventId}/days`, {
-        method: "PUT",
-        body: JSON.stringify({
-          expectedUpdatedAt: terms.body.eventUpdatedAt,
-          configuration: {
-            days: [
-              {
-                date: "2026-12-01",
-                label: "Tuesday 1 December 2026",
-                startTime: "09:00",
-                endTime: "17:00",
-                sortOrder: 0,
-                attendanceOptions: [
-                  { value: "in_person", label: "In person", capacity: 1 },
-                  { value: "on_demand", label: "On demand" },
-                ],
-              },
-              {
-                date: "2026-12-02",
-                label: "Wednesday 2 December 2026",
-                startTime: "09:00",
-                endTime: "17:00",
-                sortOrder: 1,
-                attendanceOptions: [{ value: "on_demand", label: "On demand" }],
-              },
-              {
-                date: "2026-12-03",
-                label: "Thursday 3 December 2026",
-                startTime: "09:00",
-                endTime: "17:00",
-                sortOrder: 2,
-                attendanceOptions: [{ value: "on_demand", label: "On demand" }],
-              },
-            ],
-          },
-        }),
-      });
-      if (days.status !== 200 || !days.body?.eventUpdatedAt) {
-        throw new Error(`Portal event days failed (${days.status}): ${JSON.stringify(days.body)}`);
-      }
-
-      const settings = await request(`/api/v1/groups/${groupId}/events/${eventId}/registration-settings`, {
-        method: "PUT",
-        body: JSON.stringify({
-          expectedUpdatedAt: days.body.eventUpdatedAt,
-          registrationPolicy: "public",
-        }),
-      });
-      if (settings.status !== 200) {
-        throw new Error(
-          `Portal event registration settings failed (${settings.status}): ${JSON.stringify(settings.body)}`,
-        );
-      }
-      return { eventId, slug };
-    },
-    { groupId, slug },
-  );
-  return { ...result, groupId };
-}
-
 test.describe("browser workflows", () => {
-  test("places agenda sessions in their scheduled rows without inline styles", async ({ page }) => {
+  test("places agenda sessions beside their scheduled time without inline styles", async ({ page }) => {
     await page.goto("/events/2026/pqc-conference-amsterdam-nl/agenda/");
-    const grid = page.locator(".agenda-grid").first();
-    await expect(grid).toBeVisible();
-    await expect
-      .poll(() => grid.evaluate((element) => getComputedStyle(element).gridTemplateRows.split(" ").length))
-      .toBeGreaterThan(3);
-    const firstTime = grid.locator(".agenda-time").first();
-    const firstSession = grid.locator(".agenda-session").first();
-    expect(await firstTime.evaluate((element) => getComputedStyle(element).gridRowStart)).toBe("1");
-    expect(await firstSession.evaluate((element) => getComputedStyle(element).gridColumnStart)).toBe("2");
-    expect(await firstSession.getAttribute("style")).toBeNull();
-    await grid.scrollIntoViewIfNeeded();
+    const panel = page.getByRole("tabpanel", { name: "Tuesday" });
+    const slot = panel
+      .locator(".pk-content-agenda__slot")
+      .filter({ has: page.locator("[data-agenda-session]") })
+      .first();
+    await expect(slot).toBeVisible();
+    const time = slot.locator('.pk-content-agenda__clock[aria-label="Event time"] > time');
+    const session = slot.locator("[data-agenda-session]").first();
+    await expect(time).toHaveAttribute("datetime", /T\d{2}:\d{2}:00\.000Z$/);
+    await expect(session).not.toHaveAttribute("style");
+    const timeBox = await time.boundingBox();
+    const sessionBox = await session.boundingBox();
+    expect(timeBox).not.toBeNull();
+    expect(sessionBox).not.toBeNull();
+    expect(timeBox!.x).toBeLessThan(sessionBox!.x);
+    await slot.scrollIntoViewIfNeeded();
   });
 
-  test("keeps agenda speakers and later sessions inside their scheduled cards", async ({ page }) => {
+  test("keeps agenda speakers in their scheduled cards and opens session details", async ({ page }) => {
     await page.goto("/events/2026/pqc-conference-amsterdam-nl/agenda/");
-    const panel = page.locator("#nav-tuesday");
-    const grid = panel.locator(".agenda-grid");
-    const opening = grid
-      .locator(".session-card")
+    const panel = page.getByRole("tabpanel", { name: "Tuesday" });
+    const opening = panel
+      .locator("[data-agenda-session]")
       .filter({ has: page.getByRole("heading", { name: "Opening", exact: true }) });
     await expect(opening).toHaveCount(1);
-    await expect(opening.locator(":scope > .session-title")).toHaveText("Opening");
-    await expect(opening.locator(":scope > .session-speakers .speaker-name")).toHaveText([
+    await expect(opening.locator(".pk-content-agenda__session-body > .pk-content-agenda__speaker strong")).toHaveText([
       "Paul van Brouwershaven",
       "Albert de Ruiter",
     ]);
-    await expect(opening.locator(".speaker-info > .speaker-details")).toHaveCount(2);
-    await expect(grid.locator(":scope > .agenda-session .session-card")).toHaveCount(
-      await panel.locator(".mobile-session-card").count(),
-    );
-    await expect(grid.locator(":scope > .speaker-details, :scope > .speaker-info")).toHaveCount(0);
+    await expect(panel.locator(".pk-content-agenda__cell > .pk-content-agenda__speaker")).toHaveCount(0);
     await opening.getByRole("button", { name: "Open session details: Opening", exact: true }).click();
     await expect(page.getByRole("dialog").filter({ visible: true })).toBeVisible();
     await page.keyboard.press("Escape");
+    await expect(page.getByRole("dialog").filter({ visible: true })).toHaveCount(0);
     await page.getByRole("tab", { name: "Wednesday", exact: true }).click();
-    await expect(page.locator("#nav-wednesday")).toBeVisible();
+    await expect(page.getByRole("tabpanel", { name: "Wednesday" })).toBeVisible();
+    await page.keyboard.press("ArrowRight");
+    await expect(page.getByRole("tab", { name: "Thursday" })).toBeFocused();
+    await expect(page.getByRole("tabpanel", { name: "Thursday" })).toBeVisible();
   });
 
   test("stops and reloads an agenda recording when its modal closes", async ({ page }) => {
@@ -611,15 +484,18 @@ test.describe("browser workflows", () => {
     });
 
     await page.goto("/events/2023/pqc-conference-amsterdam-nl/");
-    const watchButton = page.getByRole("button", { name: "Watch", exact: true }).first();
+    const watchButton = page.getByRole("button", { name: "Watch recording", exact: true }).first();
     await watchButton.click();
 
     // The session detail is a native <dialog>; an open one is the only visible
     // dialog on the page, so the role locator is enough and survives the next
     // restyle in a way a class selector would not.
-    const modal = page.getByRole("dialog").first();
+    const modal = page
+      .getByRole("dialog", { includeHidden: true })
+      .filter({ has: page.locator("iframe") })
+      .first();
     await expect(modal).toBeVisible();
-    const iframe = modal.locator('iframe[src*="youtube"]').first();
+    const iframe = modal.locator("iframe").first();
     await expect(iframe).toBeVisible();
 
     const embedUrl = await iframe.getAttribute("src");
@@ -628,16 +504,19 @@ test.describe("browser workflows", () => {
 
     await modal.getByRole("button", { name: "Close", exact: true }).first().click();
     await expect(modal).toBeHidden();
-    await expect.poll(() => embedRequestCounts.get(embedUrl ?? "") ?? 0).toBeGreaterThan(requestsBeforeClose);
+    await expect(iframe).not.toHaveAttribute("src");
+    expect(embedRequestCounts.get(embedUrl ?? "") ?? 0).toBe(requestsBeforeClose);
 
     await watchButton.click();
     await expect(modal).toBeVisible();
     await expect(iframe).toHaveAttribute("src", embedUrl ?? "");
+    await expect.poll(() => embedRequestCounts.get(embedUrl ?? "") ?? 0).toBeGreaterThan(requestsBeforeClose);
 
     errorMonitor.assertClean();
   });
 
   test("shows a friendly partial waitlist state when a selected day is full", async ({ page }) => {
+    test.setTimeout(240_000);
     await setupPage(page);
     const errorMonitor = monitorErrors(page, {
       ignoreConsoleError: (text) => text === "Failed to load resource: the server responded with a status of 500 ()",
@@ -646,7 +525,8 @@ test.describe("browser workflows", () => {
     const screenshot = createScreenshotter(page);
 
     await signInAsAdmin(page, "browser-waitlist");
-    const event = await createPortalWaitlistEvent(page);
+    const event = await createPortalWaitlistEvent(page, `e2e-waitlist-${Date.now()}-${test.info().workerIndex}`);
+    await publishE2eSite(page, `/events/2026/${event.slug}/register/`);
     await page.goto(`/events/2026/${event.slug}/register/`);
     await fillRegistrationStep1(page, {
       firstName: "Capacity",
@@ -1428,9 +1308,9 @@ test.describe("browser workflows", () => {
     await expect(page.getByText(/Please confirm whether you would like to participate/i)).toBeVisible();
     await expect(page.locator("[data-profile-section]")).toBeVisible();
     await expect(page.locator("[data-headshot-preview] img")).toBeVisible();
-    await expect(page.locator("#speaker-organization")).toHaveValue("PKIC Partner Org");
-    await expect(page.locator("#speaker-job-title")).toHaveValue("Applied Cryptography Lead");
-    await page.locator("#speaker-job-title").fill("Cryptography Programme Manager");
+    await expect(page.getByLabel("Organization (optional)", { exact: true })).toHaveValue("PKIC Partner Org");
+    await expect(page.getByLabel("Job title (optional)", { exact: true })).toHaveValue("Applied Cryptography Lead");
+    await page.getByLabel("Job title (optional)", { exact: true }).fill("Cryptography Programme Manager");
     await page
       .locator("#speaker-bio")
       .fill("Updated by the invited speaker after reviewing the proposer-provided draft.");
@@ -1518,7 +1398,7 @@ test.describe("browser workflows", () => {
     await page.getByRole("button", { name: "Upload presentation" }).click();
     const presentationTerms = page.getByRole("dialog", { name: "Before you upload your presentation" });
     await expect(presentationTerms).toBeVisible({ timeout: 10_000 });
-    await presentationTerms.locator(".hsd-agree").check();
+    await presentationTerms.getByRole("checkbox", { name: "I confirm all of the above." }).check();
     await presentationTerms.locator(".hsd-confirm").click();
     await (
       await presentationChooser

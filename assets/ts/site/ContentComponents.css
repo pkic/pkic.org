@@ -1,0 +1,57 @@
+@layer components {
+  /* Authored content cards keep their own surface, ink, and spacing together. */
+  .pkic-card-bento .bento-card[class*="-pale"] {
+    background: var(--pk-surface);
+    color: var(--pk-ink);
+    border-color: var(--pk-line);
+    box-shadow: var(--pk-shadow-1);
+  }
+
+  .pkic-card-bento .bento-card[class*="-pale"] .bento-text {
+    color: var(--pk-ink-muted);
+  }
+
+  .pkic-card-bento .bento-icon {
+    display: inline-flex;
+    align-self: flex-start;
+    width: fit-content;
+    background: transparent;
+    box-shadow: none;
+    backdrop-filter: none;
+  }
+
+  .pkic-card-bento .bento-title {
+    margin-block: 0;
+  }
+
+  .pkic-card-bento .bento-text > :first-child {
+    margin-block-start: 0;
+  }
+
+  .pkic-card-bento .bento-text > :last-child {
+    margin-block-end: 0;
+  }
+
+  .pk-content-alert {
+    display: grid;
+    grid-template-columns: var(--pk-5) minmax(0, 1fr);
+    align-items: start;
+    gap: var(--pk-3);
+  }
+
+  .pk-content-alert .pk-alert__body > :first-child {
+    margin-block-start: 0;
+  }
+
+  .pk-content-alert .pk-alert__body > :last-child {
+    margin-block-end: 0;
+  }
+}
+
+@layer utilities {
+  @media (min-width: 760px) {
+    .pkic-card-bento:has(> :nth-child(4):last-child) {
+      grid-template-columns: repeat(2, 1fr);
+    }
+  }
+}

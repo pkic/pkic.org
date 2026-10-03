@@ -64,7 +64,7 @@ export function PanelHeader({
   );
 }
 
-export type PanelBodyTone = "accent" | "ok" | "info" | "warn";
+export type PanelBodyTone = "accent" | "ok" | "info" | "warn" | "danger";
 
 export interface PanelBodyProps extends JSX.HTMLAttributes<HTMLDivElement> {
   /**

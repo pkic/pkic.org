@@ -12,6 +12,7 @@ import { openMembershipVerificationLink } from "./helpers/member-join";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { runRowAction } from "./helpers/data-table";
 import { signInToPortal } from "./helpers/portal-auth";
+import { publishE2eSite } from "./helpers/site-publication";
 
 const SETTINGS_API = "/api/v1/membership/settings";
 const CATEGORIES_API = "/api/v1/membership/categories";
@@ -154,96 +155,104 @@ test("creates organization and individual categories and removes unused categori
   }
 });
 
-test("publishes membership application form edits to the public join flow", async ({ page }) => {
-  const legacyAdminFormRequests: string[] = [];
-  page.on("request", (request) => {
-    const pathname = new URL(request.url()).pathname;
-    if (pathname === LEGACY_ADMIN_FORMS_API || pathname.startsWith(`${LEGACY_ADMIN_FORMS_API}/`)) {
-      legacyAdminFormRequests.push(`${request.method()} ${pathname}`);
-    }
-  });
-
-  await signInToPortal(page, e2eAdminEmail("portal-membership-form"));
-  await page.goto("/portal/#/settings/membership-application-form");
-  await expect(page.getByRole("heading", { name: "Membership application form" })).toBeVisible();
-
-  const initialResponse = await page.request.get(APPLICATION_FORM_DEFINITION_API);
-  expect(initialResponse.status()).toBe(200);
-  const initial = membershipApplicationFormDefinitionResponseSchema.parse(await initialResponse.json());
-  const field = initial.fields.find((candidate) => candidate.fieldType === "text");
-  expect(field, "The seeded membership application must have an editable text field").toBeDefined();
-  if (!field) throw new Error("No editable membership application text field was returned");
-
-  const originalFields = initial.fields.map(
-    ({ id, key, label, fieldType, required, options, optionSource, validation, sortOrder }) => ({
-      id,
-      key,
-      label,
-      fieldType,
-      required,
-      ...(options === null ? {} : { options }),
-      ...(optionSource === null ? {} : { optionSource }),
-      ...(validation === null ? {} : { validation }),
-      sortOrder,
-    }),
-  );
-  const marker = `E2E ${Date.now()}`;
-  const changedLabel = `${field.label} (${marker})`;
-
-  let changed = false;
-  try {
-    await expect(page.getByLabel("Form title", { exact: true })).toHaveCount(0);
-    async function editForm() {
-      await page.getByRole("button", { name: "Application form actions" }).click();
-      await page.getByRole("menuitem", { name: "Edit form", exact: true }).click();
-    }
-    await editForm();
-    await page.getByLabel("Form title", { exact: true }).fill("Unsaved application title");
-    await page.getByRole("button", { name: "Cancel", exact: true }).click();
-    await editForm();
-    await expect(page.getByLabel("Form title", { exact: true })).toHaveValue(initial.form.title);
-    await page.locator("button.pk-formq").filter({ hasText: field.label }).click();
-    await page.getByLabel("Question", { exact: true }).fill(changedLabel);
-    const saving = page.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname === APPLICATION_FORM_DEFINITION_API && response.request().method() === "PATCH",
-    );
-    await page.getByRole("button", { name: "Save form", exact: true }).click();
-    const updateResponse = await saving;
-    expect(updateResponse.status()).toBe(200);
-    const updated = membershipApplicationFormDefinitionResponseSchema.parse(await updateResponse.json());
-    expect(updated.fields.find((candidate) => candidate.id === field.id)?.label).toBe(changedLabel);
-    changed = true;
-    await expect(page.getByLabel("Form title", { exact: true })).toHaveCount(0);
-    await page.reload();
-    await expect(page.getByRole("list", { name: "Membership application form fields" })).toContainText(changedLabel);
-
-    const email = `membership-form-${Date.now()}@organization-e2e.test`;
-    const sinceVerification = await capturedEmailCount();
-    await page.goto("/join/");
-    await page.getByLabel("Yes — I am employed by or own an organization").check();
-    await page.getByLabel("Your official work or organization email address").fill(email);
-    await page.getByRole("button", { name: "Continue" }).click();
-    await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
-
-    const verification = await waitForCapturedEmail(email, "Verify your email address", {
-      since: sinceVerification,
+test(
+  "publishes membership application form edits to the public join flow",
+  { tag: "@publication" },
+  async ({ page }) => {
+    test.setTimeout(240_000);
+    const legacyAdminFormRequests: string[] = [];
+    page.on("request", (request) => {
+      const pathname = new URL(request.url()).pathname;
+      if (pathname === LEGACY_ADMIN_FORMS_API || pathname.startsWith(`${LEGACY_ADMIN_FORMS_API}/`)) {
+        legacyAdminFormRequests.push(`${request.method()} ${pathname}`);
+      }
     });
-    await openMembershipVerificationLink(page, extractEmailUrl(verification, "#verify="));
-    await expect(page.getByRole("heading", { name: "Membership Application", exact: true })).toBeVisible();
-    await expect(page.getByLabel(changedLabel, { exact: true })).toBeVisible();
-    expect(legacyAdminFormRequests).toEqual([]);
-  } finally {
-    if (changed) {
-      const currentResponse = await page.request.get(APPLICATION_FORM_DEFINITION_API);
-      expect(currentResponse.status()).toBe(200);
-      const current = membershipApplicationFormDefinitionResponseSchema.parse(await currentResponse.json());
-      const restore = membershipApplicationFormDefinitionUpdateSchema.parse({
-        expectedUpdatedAt: current.form.updatedAt,
-        fields: originalFields,
+
+    await signInToPortal(page, e2eAdminEmail("portal-membership-form"));
+    await page.goto("/portal/#/settings/membership-application-form");
+    await expect(page.getByRole("heading", { name: "Membership application form" })).toBeVisible();
+
+    const initialResponse = await page.request.get(APPLICATION_FORM_DEFINITION_API);
+    expect(initialResponse.status()).toBe(200);
+    const initial = membershipApplicationFormDefinitionResponseSchema.parse(await initialResponse.json());
+    const field = initial.fields.find((candidate) => candidate.fieldType === "text");
+    expect(field, "The seeded membership application must have an editable text field").toBeDefined();
+    if (!field) throw new Error("No editable membership application text field was returned");
+
+    const originalFields = initial.fields.map(
+      ({ id, key, label, fieldType, required, options, optionSource, validation, sortOrder }) => ({
+        id,
+        key,
+        label,
+        fieldType,
+        required,
+        ...(options === null ? {} : { options }),
+        ...(optionSource === null ? {} : { optionSource }),
+        ...(validation === null ? {} : { validation }),
+        sortOrder,
+      }),
+    );
+    const marker = `E2E ${Date.now()}`;
+    const changedLabel = `${field.label} (${marker})`;
+
+    let changed = false;
+    try {
+      await expect(page.getByLabel("Form title", { exact: true })).toHaveCount(0);
+      async function editForm() {
+        await page.getByRole("button", { name: "Application form actions" }).click();
+        await page.getByRole("menuitem", { name: "Edit form", exact: true }).click();
+      }
+      await editForm();
+      await page.getByLabel("Form title", { exact: true }).fill("Unsaved application title");
+      await page.getByRole("button", { name: "Cancel", exact: true }).click();
+      await editForm();
+      await expect(page.getByLabel("Form title", { exact: true })).toHaveValue(initial.form.title);
+      await page.locator("button.pk-formq").filter({ hasText: field.label }).click();
+      await page.getByLabel("Question", { exact: true }).fill(changedLabel);
+      const saving = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === APPLICATION_FORM_DEFINITION_API &&
+          response.request().method() === "PATCH",
+      );
+      await page.getByRole("button", { name: "Save form", exact: true }).click();
+      const updateResponse = await saving;
+      expect(updateResponse.status()).toBe(200);
+      const updated = membershipApplicationFormDefinitionResponseSchema.parse(await updateResponse.json());
+      expect(updated.fields.find((candidate) => candidate.id === field.id)?.label).toBe(changedLabel);
+      changed = true;
+      await expect(page.getByLabel("Form title", { exact: true })).toHaveCount(0);
+      await page.reload();
+      await expect(page.getByRole("list", { name: "Membership application form fields" })).toContainText(changedLabel);
+      await publishE2eSite(page, "/join/");
+
+      const email = `membership-form-${Date.now()}@organization-e2e.test`;
+      const sinceVerification = await capturedEmailCount();
+      await page.goto("/join/");
+      await page.getByLabel("Yes — I am employed by or own an organization").check();
+      await page.getByLabel("Your official work or organization email address").fill(email);
+      await page.getByRole("button", { name: "Continue" }).click();
+      await expect(page.getByRole("heading", { name: "Check your email" })).toBeVisible();
+
+      const verification = await waitForCapturedEmail(email, "Verify your email address", {
+        since: sinceVerification,
       });
-      const restoreResponse = await page.request.patch(APPLICATION_FORM_DEFINITION_API, { data: restore });
-      expect(restoreResponse.status()).toBe(200);
+      await openMembershipVerificationLink(page, extractEmailUrl(verification, "#verify="));
+      await expect(page.getByRole("heading", { name: "Membership Application", exact: true })).toBeVisible();
+      await expect(page.getByLabel(changedLabel, { exact: true })).toBeVisible();
+      expect(legacyAdminFormRequests).toEqual([]);
+    } finally {
+      if (changed) {
+        const currentResponse = await page.request.get(APPLICATION_FORM_DEFINITION_API);
+        expect(currentResponse.status()).toBe(200);
+        const current = membershipApplicationFormDefinitionResponseSchema.parse(await currentResponse.json());
+        const restore = membershipApplicationFormDefinitionUpdateSchema.parse({
+          expectedUpdatedAt: current.form.updatedAt,
+          fields: originalFields,
+        });
+        const restoreResponse = await page.request.patch(APPLICATION_FORM_DEFINITION_API, { data: restore });
+        expect(restoreResponse.status()).toBe(200);
+        await publishE2eSite(page, "/join/");
+      }
     }
-  }
-});
+  },
+);

@@ -1,5 +1,5 @@
 ---
-date: 2024-02-01T7:00:00Z
+date: 2024-02-01T07:00:00Z
 title: Remote Key Attestation
 url: /wg/cm/remote-key-attestation/
 aliases:

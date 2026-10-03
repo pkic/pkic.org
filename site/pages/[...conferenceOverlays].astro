@@ -1,0 +1,22 @@
+---
+import { siteConferencePrograms } from "../../functions/_lib/services/site-content";
+import "../../assets/scss/conference-overlays.scss";
+export function getStaticPaths() {
+  return siteConferencePrograms().filter((event) => event.outputs.includes("event-overlays"))
+    .map((event) => ({ params: { conferenceOverlays: `${event.route}event-overlays`.replace(/^\//, "") }, props: { event } }));
+}
+const { event } = Astro.props;
+---
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="robots" content="noindex, nofollow, noarchive" />
+    <title>{event.title} — Event overlays</title>
+  </head>
+  <body data-conference-data={`${event.route}event-data.json`}>
+    <div id="svg-container" aria-live="polite"></div>
+    <script>import "../../assets/js/event-overlays.js";</script>
+  </body>
+</html>

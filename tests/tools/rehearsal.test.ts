@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it } from "vitest";
+import { z } from "zod";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -148,7 +149,7 @@ describe("local migration rehearsal", () => {
         content: [{ type: "text/plain", value: "Sign in: http://localhost:8788/portal/#/verify?token=synthetic" }],
       };
       expect((await fetch(url, { method: "POST", body: JSON.stringify(payload) })).status).toBe(202);
-      const captured = await (await fetch(`${url}/outbox`)).json();
+      const captured = z.array(z.object({ payload: z.json() })).parse(await (await fetch(`${url}/outbox`)).json());
       expect(captured[0].payload).toEqual(payload);
       expect((await fetch(`${url}/clear`, { method: "POST" })).status).toBe(204);
       expect(await (await fetch(`${url}/outbox`)).json()).toEqual([]);

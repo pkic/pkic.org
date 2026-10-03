@@ -15,7 +15,7 @@ module.exports = {
       from: {},
       to: {
         couldNotResolve: true,
-        pathNot: "^(cloudflare:workers|/pagefind/pagefind\\.js|js/bootstrap)$",
+        pathNot: "^(cloudflare:workers|virtual:pkic-content-media|virtual:pkic-trust-list|virtual:pkic-bylines|/pagefind/pagefind\\.js|js/bootstrap)$",
       },
     },
     {
@@ -27,10 +27,17 @@ module.exports = {
     },
     {
       name: "backend-does-not-import-frontend",
-      comment: "Backend code may use shared contracts but cannot import browser implementation.",
+      comment: "Backend code may use shared contracts and the SSR-safe site entry, but not browser implementation.",
       severity: "error",
       from: { path: "^functions" },
-      to: { path: "^assets/ts" },
+      to: { path: "^assets/ts", pathNot: "^assets/ts/site(/|$)" },
+    },
+    {
+      name: "ssr-site-does-not-import-browser-features",
+      comment: "Server-rendered site components may use UI primitives but cannot depend on browser feature modules.",
+      severity: "error",
+      from: { path: "^assets/ts/site(/|$)" },
+      to: { path: "^assets/ts", pathNot: "^assets/ts/(site|ui)(/|$)" },
     },
     {
       name: "frontend-does-not-import-backend",

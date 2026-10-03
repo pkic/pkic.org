@@ -7,7 +7,7 @@ import { Field } from "../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import "../../ui/Content.css";
 import { MarkdownEditor } from "../markdown-editor/MarkdownInput";
-import { Markdown } from "../Markdown";
+import { Markdown } from "../../ui/Markdown";
 
 export interface CancellableProposal {
   status: string;

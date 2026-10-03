@@ -1,0 +1,368 @@
+{
+  "version": 1,
+  "votes": [
+    {
+      "id": "30000000-0000-4000-8000-000000000001",
+      "slug": "charter-amendment",
+      "title": "Charter amendment",
+      "description": "Adopt the revised charter.",
+      "voteType": "motion",
+      "ownerGroupId": "20000000-0000-4000-8000-000000000001",
+      "ownerGroupName": "Post-Quantum Cryptography",
+      "electorateMode": "per_member",
+      "thresholdType": "simple_majority",
+      "questionFormId": null,
+      "quorumPercent": null,
+      "tieBreakMode": "none",
+      "excludedMemberIds": null,
+      "eligibleCategories": null,
+      "opensAt": "2026-09-01T00:00:00.000Z",
+      "closesAt": "2026-09-30T00:00:00.000Z",
+      "currentRound": 1,
+      "status": "closed",
+      "cancellationReason": null,
+      "visibility": "public",
+      "publicDetailLevel": "outcome_only",
+      "createdAt": "2026-08-01T00:00:00.000Z",
+      "updatedAt": "2026-09-30T00:00:00.000Z",
+      "candidates": null,
+      "result": {
+        "outcome": "passed"
+      }
+    }
+  ],
+  "snapshotId": "1111111111111111111111111111111111111111111111111111111111111111",
+  "publicResources": {
+    "/api/v1/events/pqc-conference-amsterdam-nl/forms/placements/event_registration": {
+      "event": {
+        "id": "00000000-0000-4000-8000-000000000009",
+        "slug": "pqc-conference-amsterdam-nl",
+        "name": "Synthetic PQC Conference"
+      },
+      "registrationPolicy": "public",
+      "purpose": "event_registration",
+      "form": null,
+      "requiredTerms": [],
+      "allowedSessionTypes": [],
+      "eventDays": []
+    },
+    "/api/v1/events/static-publication-workshop/forms/placements/event_registration": {
+      "event": {
+        "id": "60000000-0000-4000-8000-000000000099",
+        "slug": "static-publication-workshop",
+        "name": "Static publication workshop (synthetic)"
+      },
+      "registrationPolicy": "public",
+      "purpose": "event_registration",
+      "form": null,
+      "requiredTerms": [],
+      "allowedSessionTypes": [],
+      "eventDays": []
+    },
+    "/api/v1/events/pqc-conference-amsterdam-nl/forms/placements/proposal_submission": {
+      "event": {
+        "id": "00000000-0000-4000-8000-000000000009",
+        "slug": "pqc-conference-amsterdam-nl",
+        "name": "Synthetic PQC Conference"
+      },
+      "registrationPolicy": "public",
+      "purpose": "proposal_submission",
+      "form": null,
+      "requiredTerms": [
+        {
+          "termKey": "synthetic-consent",
+          "version": "1",
+          "required": true,
+          "contentRef": null,
+          "displayText": "Synthetic required agreement"
+        }
+      ],
+      "allowedSessionTypes": [],
+      "eventDays": []
+    }
+  },
+  "news": [
+    {
+      "organizationId": "00000000-0000-4000-8000-000000000001",
+      "url": "https://example.test/published-news",
+      "title": "Synthetic member news",
+      "summary": "An approved member feed article included in the static publication.",
+      "publishedAt": "2026-09-29T00:00:00.000Z",
+      "organizationName": "Example Corp",
+      "sponsorTier": null
+    }
+  ],
+  "sponsorNews": [],
+  "members": [
+    {
+      "id": "00000000-0000-4000-8000-000000000001",
+      "slug": "example-corp",
+      "name": "Example Corp",
+      "memberType": "A",
+      "tier": null,
+      "memberSince": "2024-03-01T00:00:00.000Z",
+      "website": "https://example.test/",
+      "description": "A synthetic certificate authority for publication testing.",
+      "slogan": "Trust, verified.",
+      "logoUrl": "/img/logo.svg",
+      "content": "## Published profile\n\nThis approved content comes from a publication snapshot.",
+      "blogUrl": null,
+      "blogFeedUrl": null,
+      "pressUrl": null,
+      "pressFeedUrl": null,
+      "careersUrl": null,
+      "links": [],
+      "identities": [],
+      "jobTitle": null,
+      "featuredLink": null
+    }
+  ],
+  "groups": {
+    "pkimm": {
+      "group": {
+        "id": "00000000-0000-4000-8000-000000000002",
+        "slug": "pkimm",
+        "name": "PKI Maturity Model Working Group",
+        "type": {
+          "key": "working_group",
+          "singularLabel": "Working group",
+          "pluralLabel": "Working groups"
+        }
+      },
+      "mailingListEmail": null,
+      "leadership": [
+        {
+          "person": {
+            "name": "Synthetic Chair",
+            "jobTitle": "Security architect",
+            "organizationName": "Example Corp",
+            "organizationLogoUrl": "/img/logo-black.svg",
+            "organizationWebsite": "https://example.test/",
+            "photoUrl": null,
+            "featuredLink": "https://www.linkedin.com/in/synthetic-chair/"
+          },
+          "title": "Chair",
+          "startsAt": "2024-03-01T00:00:00.000Z",
+          "endsAt": null,
+          "roleId": "role-group_lead",
+          "sourceGroup": null,
+          "inherited": false
+        }
+      ],
+      "pastLeadership": [],
+      "roster": null
+    },
+    "tcwg": {
+      "group": {
+        "id": "00000000-0000-4000-8000-000000000073",
+        "slug": "tcwg",
+        "name": "Technical Community Working Group",
+        "type": {
+          "key": "working_group",
+          "singularLabel": "Working group",
+          "pluralLabel": "Working groups"
+        }
+      },
+      "mailingListEmail": null,
+      "leadership": [
+        {
+          "person": {
+            "name": "Synthetic TCWG Chair",
+            "jobTitle": "Working group leadership",
+            "organizationName": null,
+            "organizationLogoUrl": null,
+            "organizationWebsite": null,
+            "photoUrl": "/favicon.svg",
+            "featuredLink": "https://www.linkedin.com/in/synthetic-chair/"
+          },
+          "title": "Chair",
+          "startsAt": "2024-03-01T00:00:00.000Z",
+          "endsAt": null,
+          "roleId": "role-group_lead",
+          "sourceGroup": {
+            "id": "00000000-0000-4000-8000-000000000073",
+            "slug": "tcwg",
+            "name": "Technical Community Working Group",
+            "type": {
+              "key": "working_group",
+              "singularLabel": "Working group",
+              "pluralLabel": "Working groups"
+            }
+          },
+          "inherited": false
+        },
+        {
+          "person": {
+            "name": "Synthetic TCWG Deputy",
+            "jobTitle": "Working group leadership",
+            "organizationName": null,
+            "organizationLogoUrl": null,
+            "organizationWebsite": null,
+            "photoUrl": null,
+            "featuredLink": "https://www.linkedin.com/in/synthetic-chair/"
+          },
+          "title": "Vice Chair",
+          "startsAt": "2024-03-01T00:00:00.000Z",
+          "endsAt": null,
+          "roleId": "role-group_deputy_lead",
+          "sourceGroup": {
+            "id": "00000000-0000-4000-8000-000000000073",
+            "slug": "tcwg",
+            "name": "Technical Community Working Group",
+            "type": {
+              "key": "working_group",
+              "singularLabel": "Working group",
+              "pluralLabel": "Working groups"
+            }
+          },
+          "inherited": false
+        }
+      ],
+      "pastLeadership": [],
+      "roster": null
+    }
+  },
+  "groupMembers": {
+    "pkimm": [
+      {
+        "id": "00000000-0000-4000-8000-000000000001",
+        "slug": "example-corp",
+        "name": "Example Corp",
+        "memberType": "A",
+        "tier": null,
+        "memberSince": "2024-03-01T00:00:00.000Z",
+        "website": "https://example.test/",
+        "description": "A synthetic certificate authority for publication testing.",
+        "slogan": "Trust, verified.",
+        "logoUrl": null,
+        "content": "## Published profile\n\nThis approved content comes from a publication snapshot.",
+        "blogUrl": null,
+        "blogFeedUrl": null,
+        "pressUrl": null,
+        "pressFeedUrl": null,
+        "careersUrl": null,
+        "links": [],
+        "identities": [],
+        "jobTitle": null,
+        "featuredLink": null
+      }
+    ]
+  },
+  "sponsors": {
+    "{\"limit\":200,\"offset\":0,\"sort\":\"-weight\",\"eventSlug\":\"pqc-conference-amsterdam-nl\",\"minWeight\":5}": [
+      {
+        "weight": 6,
+        "tierName": "Diamond",
+        "sponsors": [
+          {
+            "id": "00000000-0000-4000-8000-000000000010",
+            "name": "Synthetic conference sponsor",
+            "website": "https://example.test/",
+            "logoUrl": "/img/logo.svg",
+            "tier": null,
+            "eventTier": "Diamond",
+            "effectiveTier": "Diamond",
+            "weight": 6
+          }
+        ]
+      }
+    ],
+    "{\"limit\":200,\"offset\":0,\"sort\":\"-weight\",\"eventName\":\"Post-Quantum Cryptography Conference Kuala Lumpur 2025\",\"minWeight\":4}": [
+      {
+        "weight": 4,
+        "tierName": "Gold",
+        "sponsors": [
+          {
+            "id": "00000000-0000-4000-8000-000000000008",
+            "name": "Kiosk verification sponsor",
+            "website": "https://example.test/",
+            "logoUrl": "/favicon.svg",
+            "tier": null,
+            "eventTier": "Gold",
+            "effectiveTier": "Gold",
+            "weight": 4
+          }
+        ]
+      }
+    ],
+    "{\"limit\":200,\"offset\":0,\"sort\":\"-weight\"}": [
+      {
+        "weight": 6,
+        "tierName": "Sponsor",
+        "sponsors": [
+          {
+            "id": "00000000-0000-4000-8000-000000000071",
+            "name": "Synthetic sponsor 1",
+            "website": "https://example.test/",
+            "logoUrl": "/img/logo-black.svg",
+            "tier": "Sponsor",
+            "eventTier": null,
+            "effectiveTier": "Sponsor",
+            "weight": 6
+          }
+        ]
+      },
+      {
+        "weight": 4,
+        "tierName": "Sponsor",
+        "sponsors": [
+          {
+            "id": "00000000-0000-4000-8000-000000000072",
+            "name": "Synthetic sponsor 2",
+            "website": "https://example.test/",
+            "logoUrl": "/img/logo-color-black.svg",
+            "tier": "Sponsor",
+            "eventTier": null,
+            "effectiveTier": "Sponsor",
+            "weight": 4
+          }
+        ]
+      }
+    ]
+  },
+  "memberWall": [
+    {
+      "key": "synthetic-member",
+      "href": "/members/example-corp/",
+      "logoUrl": "/img/logo.svg",
+      "name": "Example Corp",
+      "slogan": "Synthetic publication wall",
+      "sponsorLevel": 0,
+      "sponsorLevelName": null
+    },
+    {
+      "key": "layout-0",
+      "href": "/members/",
+      "logoUrl": "/img/logo-black.svg",
+      "name": "Synthetic member",
+      "slogan": null,
+      "sponsorLevel": 0,
+      "sponsorLevelName": null
+    },
+    {
+      "key": "layout-1",
+      "href": "/members/",
+      "logoUrl": "/img/logo-color-black.svg",
+      "name": "Synthetic sponsor",
+      "slogan": "Synthetic sponsor slogan.",
+      "sponsorLevel": 5,
+      "sponsorLevelName": "Titanium"
+    },
+    {
+      "key": "layout-2",
+      "href": "/members/",
+      "logoUrl": "/img/logo.svg",
+      "name": "White artwork",
+      "slogan": null,
+      "sponsorLevel": 0,
+      "sponsorLevelName": null
+    }
+  ],
+  "eventFlows": [
+    {
+      "eventName": "Static publication workshop (synthetic)",
+      "flow": "registration",
+      "route": "/events/2026/static-publication-workshop/register/"
+    }
+  ]
+}

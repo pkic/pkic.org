@@ -1,0 +1,13 @@
+---
+import PublicPage from "../../../layouts/PublicPage.astro";
+import { WorkingGroupLandingPage } from "../../../../assets/ts/site/WorkingGroupSection";
+import { loadSiteContent } from "../../../../functions/_lib/services/site-content";
+import { publication } from "../../../publication";
+const content = await loadSiteContent("/wg/pkimm/");
+if (!content?.workingGroup) throw new Error("The PKIMM source is missing");
+const directory = publication.groups.pkimm;
+if (!directory) throw new Error("The public PKIMM directory is missing from the snapshot");
+---
+<PublicPage title={content.title} description={content.description} accent={content.workingGroup.accent} content={content}>
+  <WorkingGroupLandingPage hero={content.hero} section={content.workingGroup} publishedDirectory={directory} />
+</PublicPage>

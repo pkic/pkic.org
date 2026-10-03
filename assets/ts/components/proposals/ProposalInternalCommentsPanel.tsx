@@ -1,8 +1,8 @@
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { PageInfo } from "../../../shared/schemas/pagination";
 import type { ProposalInternalComment } from "../../../shared/schemas/proposal-comments";
-import { EmptyState } from "../EmptyState";
-import { Markdown } from "../Markdown";
+import { EmptyState } from "../../ui/RecordEmptyState";
+import { Markdown } from "../../ui/Markdown";
 import { formatDateTime } from "../../shared/ui";
 import { Button } from "../../ui/Button";
 import { Field } from "../../ui/Field";

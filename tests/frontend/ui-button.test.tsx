@@ -75,6 +75,13 @@ describe("Button", () => {
     expect(onClick).not.toHaveBeenCalled();
   });
 
+  it("can be enabled by a DOM form controller without a stale ARIA refusal", () => {
+    const button = buttonIn(mount(<Button disabled>Continue</Button>));
+    expect(button.disabled).toBe(true);
+    button.disabled = false;
+    expect(button.getAttribute("aria-disabled")).not.toBe("true");
+  });
+
   it("does not fire its handler while disabled", () => {
     const onClick = vi.fn();
     const button = buttonIn(

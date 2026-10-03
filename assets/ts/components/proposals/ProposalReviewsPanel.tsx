@@ -6,7 +6,7 @@ import {
   type ProposalReview,
   type ProposalReviewSummary,
 } from "../../../shared/schemas/proposal-reviews";
-import { EmptyState } from "../EmptyState";
+import { EmptyState } from "../../ui/RecordEmptyState";
 import { ErrorAlert } from "../ErrorAlert";
 import { Spinner } from "../Spinner";
 import { Alert } from "../../ui/Alert";

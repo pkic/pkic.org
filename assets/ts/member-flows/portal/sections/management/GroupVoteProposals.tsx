@@ -12,7 +12,7 @@ import {
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { confirmAction } from "../../../../components/ConfirmDialog";
-import { EmptyState } from "../../../../components/EmptyState";
+import { EmptyState } from "../../../../ui/RecordEmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
@@ -24,7 +24,7 @@ import { PageHeader } from "../../../../ui/PageHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { fmtDate } from "../../ui";
 import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
-import { Markdown } from "../../../../components/Markdown";
+import { Markdown } from "../../../../ui/Markdown";
 
 export function GroupVoteProposalDetail({
   groupId,

@@ -1,0 +1,231 @@
+@use "fonts";
+
+:root {
+  --blue: #2f6d9b;
+  --orange: #b84f0b;
+  --yellow: #ffc000;
+  --margin: clamp(1rem, 2vw, 2rem);
+}
+
+* {
+  box-sizing: border-box;
+}
+[hidden] {
+  display: none !important;
+}
+body {
+  margin: 0;
+  padding: var(--margin);
+  background: #000;
+  color: #fff;
+  font-family: Roboto, sans-serif;
+}
+#header {
+  position: relative;
+  margin-bottom: var(--margin);
+  font-size: clamp(1.25rem, 3vw, 2.5rem);
+  font-weight: 800;
+}
+.white-orange,
+.orange-white,
+.white-blue,
+.blue-white,
+.yellow-black {
+  padding: 1rem var(--margin);
+}
+.white-orange {
+  display: inline-block;
+  background: #fff;
+  color: var(--orange);
+}
+.orange-white {
+  background: var(--orange);
+  color: #fff;
+}
+.white-blue {
+  background: #fff;
+  color: var(--blue);
+}
+.blue-white {
+  background: var(--blue);
+  color: #fff;
+}
+.yellow-black {
+  background: var(--yellow);
+  color: #000;
+  font-weight: 700;
+}
+#logo-element {
+  position: fixed;
+  right: 3vw;
+  bottom: 12vh;
+  width: min(45vw, 60vh);
+  height: auto;
+  opacity: 0.12;
+  pointer-events: none;
+}
+#session {
+  position: relative;
+  margin-bottom: var(--margin);
+}
+#title {
+  margin: 0;
+  font-size: clamp(1.5rem, 3.5vw, 3rem);
+  line-height: 1.15;
+}
+#description {
+  margin-top: 1rem;
+  line-height: 1.5;
+}
+#speakersList {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 22rem), 1fr));
+  gap: 2rem;
+}
+.speaker {
+  display: flex;
+  gap: 1.25rem;
+  align-items: center;
+}
+.headshot-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+.headshot {
+  width: clamp(5rem, 12vw, 10rem);
+  height: clamp(5rem, 12vw, 10rem);
+  border-radius: 50%;
+  object-fit: cover;
+  background: #ffffff26;
+  display: block;
+}
+.moderator-badge {
+  position: absolute;
+  bottom: -0.25rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.3rem 0.5rem;
+  background: #fff;
+  color: var(--blue);
+  border-radius: 0.4rem;
+  font-size: 0.7rem;
+  font-weight: 800;
+  white-space: nowrap;
+}
+.name {
+  font-weight: 800;
+  font-size: clamp(1.25rem, 2.4vw, 2rem);
+  line-height: 1.15;
+}
+.title {
+  margin-top: 0.4rem;
+  font-size: clamp(1rem, 1.5vw, 1.25rem);
+  line-height: 1.35;
+}
+#speakersList.layout-vertical {
+  grid-template-columns: 1fr;
+}
+#speakersList.layout-panel {
+  display: block;
+}
+.headshots-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 2rem;
+}
+.headshot-container {
+  display: flex;
+  flex: 1 1 12rem;
+  flex-direction: column;
+  align-items: center;
+  gap: 1.25rem;
+  text-align: center;
+}
+#footer {
+  position: relative;
+}
+.sponsors-list {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 1.5rem;
+  padding: 1.5rem;
+  background: #fff;
+}
+.sponsors-list a {
+  display: block;
+}
+.sponsor-logo {
+  width: auto;
+  max-width: 10rem;
+  height: 4rem;
+  object-fit: contain;
+}
+#textbar {
+  margin-top: 1rem;
+  text-align: center;
+}
+.dimmed {
+  padding: 1rem 0;
+  font-size: 0.8rem;
+  color: #b9c1c6;
+}
+#logo {
+  width: 12rem;
+  height: auto;
+  max-width: 45vw;
+}
+body.fullscreen-mode {
+  padding: 0;
+}
+body.fullscreen-mode > :not(#session) {
+  display: none;
+}
+#session.fullscreen {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+}
+#session.fullscreen > #speakers {
+  flex: 1;
+}
+body.clean-mode {
+  background: transparent;
+  padding: 0;
+}
+body.clean-mode #header,
+body.clean-mode #footer,
+body.clean-mode #logo-element {
+  display: none;
+}
+body.clean-mode #session {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  margin: 0;
+}
+body.clean-mode #subject {
+  display: none;
+}
+body.clean-mode #subject.show-title {
+  display: block;
+  background: transparent;
+  color: #fff;
+  text-align: center;
+}
+body.clean-mode #speakers {
+  background: transparent;
+}
+body.clean-mode #speakersList {
+  max-width: 90rem;
+  margin: auto;
+}
+@media print {
+  body {
+    print-color-adjust: exact;
+  }
+}

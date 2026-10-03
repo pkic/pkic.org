@@ -84,6 +84,17 @@ export function formatServiceDate(value: string | null | undefined): string {
 }
 
 /**
+ * The day of the week of a `YYYY-MM-DD` calendar date — "Tuesday" — in the
+ * viewer's locale. Day-precise, so it is read on the UTC calendar.
+ */
+export function formatWeekday(value: string | null | undefined): string {
+  if (!value) return EMPTY;
+  const date = toDate(DATE_ONLY.test(value) ? `${value}T00:00:00Z` : value);
+  if (!date) return EMPTY;
+  return date.toLocaleString(undefined, { weekday: "long", timeZone: "UTC" });
+}
+
+/**
  * A month-precise rendering in the viewer's locale — used where only the
  * month matters (leadership terms, membership tenure). Date-only input stays
  * on the UTC calendar so the month cannot shift with the viewer's zone.
@@ -144,6 +155,21 @@ export function formatTimeOfDay(value: string | null | undefined): string {
   return date
     .toLocaleTimeString(undefined, { hour: "numeric", minute: "2-digit", timeZoneName: "short", hour12: false })
     .replace(",", "");
+}
+
+/** An event's clock range in its configured zone, independent of the viewer's clock. */
+export function formatTimeRangeInZone(startsAt: string, endsAt: string | undefined, timeZone: string): string {
+  const start = toDate(startsAt);
+  if (!start) return EMPTY;
+  const end = endsAt ? toDate(endsAt) : null;
+  const formatter = new Intl.DateTimeFormat(undefined, {
+    hour: "numeric",
+    minute: "2-digit",
+    hour12: false,
+    timeZone,
+    timeZoneName: "short",
+  });
+  return end && end >= start ? formatter.formatRange(start, end) : formatter.format(start);
 }
 
 /**
@@ -210,6 +236,33 @@ export function formatDateRange(
   } catch {
     return formatter.format(start);
   }
+}
+
+/**
+ * How a `<time data-local-time>` element reads.
+ *
+ * A server-rendered page cannot know its reader's locale or zone, so it writes
+ * this rendering as fallback text and `local-time.js` writes it again in the
+ * browser. Both call this one function, which is what keeps the two readings
+ * of a date from drifting apart.
+ *
+ * - `date`: a calendar date, or a span of them when `until` is given
+ * - `date-time`: an instant with the viewer's zone named
+ * - `weekday`: the day of the week of a calendar date
+ * - `time`: an instant's time of day with the viewer's zone named
+ */
+export const LOCAL_TIME_FORMATS = ["date", "date-time", "weekday", "time"] as const;
+export type LocalTimeFormat = (typeof LOCAL_TIME_FORMATS)[number];
+
+export function isLocalTimeFormat(value: string | null | undefined): value is LocalTimeFormat {
+  return (LOCAL_TIME_FORMATS as readonly string[]).includes(value ?? "");
+}
+
+export function formatLocalTime(value: string, format: LocalTimeFormat, until?: string | null): string {
+  if (format === "weekday") return formatWeekday(value);
+  if (format === "date-time") return formatDateTime(value, { zoneName: true });
+  if (format === "time") return formatTimeOfDay(value);
+  return until ? formatDateRange(value, until) : formatCalendarDate(value);
 }
 
 /**

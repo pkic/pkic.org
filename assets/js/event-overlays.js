@@ -1,39 +1,29 @@
 import {
-    getHashParams,
-    resolveDayTime,
-    parseOffsetToSeconds,
-    getSpeakersForTime,
-    getNextAgendaSlot,
-    getSpeakersData,
-    getSessionSpeakerGroups,
-    parseTime,
-    formatSecondsAsTime,
-    getAgendaData,
-    createIncrementalSearchBuffer,
-    handleSearchOrNumericShortcut,
-    initializeEventDisplay
-} from './event-common.js';
+  getHashParams,
+  resolveDayTime,
+  parseOffsetToSeconds,
+  getSpeakersForTime,
+  getNextAgendaSlot,
+  getSpeakersData,
+  getSessionSpeakerGroups,
+  parseTime,
+  formatSecondsAsTime,
+  getAgendaData,
+  createIncrementalSearchBuffer,
+  handleSearchOrNumericShortcut,
+  initializeEventDisplay,
+} from "./event-common.js";
 
 const svgTemplate = `
 <svg version="1.2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2500 417" width="100%">
     <title>Lower Third Title</title>
-    <style>
-         tspan { white-space:pre } 
-         .s0 { opacity: .8;fill: #ffffff } 
-         .s1 { fill: #ffffff } 
-         .t2 { font-size: 95px;fill: #000000; font-weight: 900;font-family: "Roboto-Black", "Roboto", "Helvetica" } 
-         .t3 { font-size: 60px;fill: #434343; font-weight: 500;font-family: "Roboto-Medium", "Roboto", "Helvetica" } 
-         .t3-large { font-size: 85px;fill: #434343; font-weight: 500;font-family: "Roboto-Medium", "Roboto", "Helvetica" } 
-         .s4 { fill: #5a9bd5 } 
-         .s5 { fill: #ed7d31 } 
-         .s6 { fill: #188754 }
-    </style>
+
     <path id="Title BG" class="s0" d="m2484 233v184h-1929v-184z"/>
     <path id="Name BG" class="s1" d="m2331 6v228h-1949.5l-19.9-138.3-109.6-89.7z"/>
-    <text id="Name" style="transform: matrix(1,0,0,1,482,160)">
+    <text id="Name" transform="translate(482 160)">
          <tspan x="0" y="0" class="t2">Fullname</tspan>
     </text>
-    <text id="Title" style="transform: matrix(1,0,0,1,625,310)">
+    <text id="Title" transform="translate(625 310)">
          <tspan id="TitleLine1" x="0" y="0" class="t3">Title Line 1</tspan>
          <tspan id="TitleLine2" x="0" y="80" class="t3">Title Line 2</tspan>
     </text>
@@ -48,9 +38,9 @@ const svgTemplate = `
 `;
 
 const ViewMode = {
-    CURRENT: 'current',     // Current session speakers
-    NEXT: 'next',          // Next session speakers  
-    ALL: 'all'             // All speakers (no filters)
+  CURRENT: "current", // Current session speakers
+  NEXT: "next", // Next session speakers
+  ALL: "all", // All speakers (no filters)
 };
 
 let filteredSpeakers = [];
@@ -68,658 +58,618 @@ const incrementalSearch = createIncrementalSearchBuffer();
 let debugOverlay = null;
 
 function createDebugOverlay() {
-    if (debugOverlay) {
-        return;
-    }
-    
-    debugOverlay = document.createElement('div');
-    debugOverlay.id = 'debug-overlay';
-    debugOverlay.style.cssText = `
-        position: fixed;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        background: rgba(0, 0, 0, 0.92);
-        color: #0f0;
-        font-family: 'Courier New', monospace;
-        font-size: 13px;
-        padding: 20px;
-        border-radius: 8px;
-        border: 2px solid #0f0;
-        z-index: 10000;
-        max-width: 600px;
-        line-height: 1.5;
-        box-shadow: 0 0 20px rgba(0, 255, 0, 0.3);
-    `;
-    document.body.appendChild(debugOverlay);
+  if (debugOverlay) {
+    return;
+  }
+
+  debugOverlay = document.createElement("div");
+  debugOverlay.id = "debug-overlay";
+  document.body.appendChild(debugOverlay);
 }
 
 function updateDebugOverlay() {
-    const params = getHashParams();
-    if (!params.debug || params.debug === '0' || params.debug === 'false') {
-        if (debugOverlay) {
-            debugOverlay.remove();
-            debugOverlay = null;
-        }
-        return;
+  const params = getHashParams();
+  if (!params.debug || params.debug === "0" || params.debug === "false") {
+    if (debugOverlay) {
+      debugOverlay.remove();
+      debugOverlay = null;
     }
-    
-    createDebugOverlay();
-    
-    const { time } = resolveDayTime(params);
-    const startOffsetSeconds = parseOffsetToSeconds(params.startOffset);
-    const currentTimeSeconds = time ? parseTime(time) : null;
-    const adjustedTimeSeconds = currentTimeSeconds !== null ? currentTimeSeconds + startOffsetSeconds : null;
-    
-    const currentSlot = sessionOffset === 0 && allSessionSlots.length > 0 ? allSessionSlots[0] : null;
-    const activeSlot = sessionOffset > 0 && sessionOffset <= allSessionSlots.length ? allSessionSlots[sessionOffset - 1] : currentSlot;
-    
-    const prevSlot = sessionOffset > 0 && allSessionSlots[sessionOffset - 2] ? allSessionSlots[sessionOffset - 2] : null;
-    const nextSlot = sessionOffset < allSessionSlots.length && allSessionSlots[sessionOffset] ? allSessionSlots[sessionOffset] : null;
-    
-    // Get session titles
-    const getSessionTitle = (slot) => {
-        if (!slot) return null;
-        const groups = getSessionSpeakerGroups({ 
-            day: slot.day, 
-            time: slot.time,
-            location: params.location
-        });
-        return groups.length > 0 ? groups[0].session?.title : null;
-    };
-    
-    const prevSessionTitle = getSessionTitle(prevSlot);
-    const currentSessionTitle = getSessionTitle(activeSlot);
-    const nextSessionTitle = getSessionTitle(nextSlot);
-    
-    // Build speaker shortcuts list (0-9)
-    let speakerShortcuts = '';
-    if (speakers.length > 0) {
-        const shortcutCount = Math.min(10, speakers.length);
-        for (let i = 0; i < shortcutCount; i++) {
-            const shortcutKey = (i + 1) % 10; // 1-9, then 0 for index 9
-            const speaker = speakers[i];
-            const isActive = i === currentSpeakerIndex ? ' style="color: #ff0; font-weight: bold;"' : '';
-            speakerShortcuts += `<div${isActive}>[${shortcutKey}] ${speaker.name}</div>`;
-        }
-    } else {
-        speakerShortcuts = '<div style="color: #888;">No speakers available</div>';
-    }
-    
-    debugOverlay.innerHTML = `
-        <div style="font-weight: bold; margin-bottom: 10px; color: #ff0; text-align: center; font-size: 16px;">🔧 DEBUG OVERLAY</div>
-        <div><strong>View Mode:</strong> ${viewMode.toUpperCase()}</div>
-        <div><strong>Session Offset:</strong> ${sessionOffset} of ${allSessionSlots.length}</div>
-        <div><strong>Speakers:</strong> ${speakers.length} (showing: ${currentSpeakerIndex + 1}/${speakers.length})</div>
-        <hr style="border-color: #444; margin: 10px 0;">
-        <div><strong>Current Time:</strong> ${time || 'N/A'}</div>
-        <div><strong>Start Offset:</strong> ${params.startOffset || '0'} (${startOffsetSeconds}s)</div>
-        <div><strong>Adjusted Time:</strong> ${adjustedTimeSeconds !== null ? formatSecondsAsTime(adjustedTimeSeconds).substring(0, 5) : 'N/A'}</div>
-        <hr style="border-color: #444; margin: 10px 0;">
-        <div style="color: #f80;"><strong>◀ PREV SESSION:</strong></div>
-        <div style="color: #f80; margin-left: 20px;">${prevSlot ? `${prevSlot.day} ${prevSlot.time}` : 'None'}</div>
-        ${prevSessionTitle ? `<div style="color: #f80; margin-left: 20px; font-style: italic;">"${prevSessionTitle}"</div>` : ''}
-        
-        <div style="color: #0f0; margin-top: 8px;"><strong>● CURRENT SESSION:</strong></div>
-        <div style="color: #0f0; margin-left: 20px;">${activeSlot ? `${activeSlot.day} ${activeSlot.time}` : 'None'}</div>
-        ${currentSessionTitle ? `<div style="color: #0f0; margin-left: 20px; font-style: italic;">"${currentSessionTitle}"</div>` : ''}
-        
-        <div style="color: #08f; margin-top: 8px;"><strong>▶ NEXT SESSION:</strong></div>
-        <div style="color: #08f; margin-left: 20px;">${nextSlot ? `${nextSlot.day} ${nextSlot.time}` : 'None'}</div>
-        ${nextSessionTitle ? `<div style="color: #08f; margin-left: 20px; font-style: italic;">"${nextSessionTitle}"</div>` : ''}
-        <hr style="border-color: #444; margin: 10px 0;">
-        <div style="margin-bottom: 5px;"><strong>Speaker Shortcuts (0-9):</strong></div>
-        <div style="margin-left: 10px; font-size: 12px;">
-            ${speakerShortcuts}
-        </div>
-        <hr style="border-color: #444; margin: 10px 0;">
-        <div style="font-size: 11px; color: #888; text-align: center;">
-            ←→ Navigate speakers | ↑↓ Navigate sessions<br>
-            0-9 Jump to speaker | a-z Search<br>
-            Space: All mode | Ctrl+Space: Freeze | Esc: Reset
-        </div>
-    `;
+    return;
+  }
+
+  createDebugOverlay();
+
+  const { time } = resolveDayTime(params);
+  const startOffsetSeconds = parseOffsetToSeconds(params.startOffset);
+  const currentTimeSeconds = time ? parseTime(time) : null;
+  const adjustedTimeSeconds = currentTimeSeconds !== null ? currentTimeSeconds + startOffsetSeconds : null;
+
+  const currentSlot = sessionOffset === 0 && allSessionSlots.length > 0 ? allSessionSlots[0] : null;
+  const activeSlot =
+    sessionOffset > 0 && sessionOffset <= allSessionSlots.length ? allSessionSlots[sessionOffset - 1] : currentSlot;
+
+  const prevSlot = sessionOffset > 0 && allSessionSlots[sessionOffset - 2] ? allSessionSlots[sessionOffset - 2] : null;
+  const nextSlot =
+    sessionOffset < allSessionSlots.length && allSessionSlots[sessionOffset] ? allSessionSlots[sessionOffset] : null;
+
+  // Get session titles
+  const getSessionTitle = (slot) => {
+    if (!slot) return null;
+    const groups = getSessionSpeakerGroups({
+      day: slot.day,
+      time: slot.time,
+      location: params.location,
+    });
+    return groups.length > 0 ? groups[0].session?.title : null;
+  };
+
+  const prevSessionTitle = getSessionTitle(prevSlot);
+  const currentSessionTitle = getSessionTitle(activeSlot);
+  const nextSessionTitle = getSessionTitle(nextSlot);
+
+  const shortcuts = speakers
+    .slice(0, 10)
+    .map((speaker, index) => `${index === currentSpeakerIndex ? "▶ " : "  "}[${(index + 1) % 10}] ${speaker.name}`);
+  const sessionLabel = (slot, title) => (slot ? `${slot.day} ${slot.time}${title ? ` — ${title}` : ""}` : "None");
+  debugOverlay.textContent = [
+    "DEBUG OVERLAY",
+    `View mode: ${viewMode.toUpperCase()}`,
+    `Session offset: ${sessionOffset} of ${allSessionSlots.length}`,
+    `Speakers: ${speakers.length} (showing ${speakers.length ? currentSpeakerIndex + 1 : 0}/${speakers.length})`,
+    `Current time: ${time || "N/A"}`,
+    `Start offset: ${params.startOffset || "0"} (${startOffsetSeconds}s)`,
+    `Adjusted time: ${adjustedTimeSeconds !== null ? formatSecondsAsTime(adjustedTimeSeconds).substring(0, 5) : "N/A"}`,
+    "",
+    `Previous session: ${sessionLabel(prevSlot, prevSessionTitle)}`,
+    `Current session: ${sessionLabel(activeSlot, currentSessionTitle)}`,
+    `Next session: ${sessionLabel(nextSlot, nextSessionTitle)}`,
+    "",
+    "Speaker shortcuts (0–9):",
+    ...(shortcuts.length ? shortcuts : ["No speakers available"]),
+    "",
+    "←→ Speakers · ↑↓ Sessions · 0–9 Select · a–z Search",
+    "Space: All · Ctrl+Space: Freeze · Escape: Reset",
+  ].join("\n");
 }
 
 function buildAllSessionSlots() {
-    // Build a list of all session time slots in chronological order
-    const params = getHashParams();
-    const { day } = resolveDayTime(params);
-    const agendaData = getAgendaData();
-    const slots = [];
-    
-    const dayKeys = Object.keys(agendaData);
-    const startIndex = dayKeys.indexOf(day);
-    
-    if (startIndex === -1) {
-        return [];
-    }
-    
-    // Get all slots from the starting day onwards
-    for (let i = startIndex; i < dayKeys.length; i++) {
-        const dayKey = dayKeys[i];
-        const dayAgenda = agendaData[dayKey] || [];
-        
-        dayAgenda.forEach((agendaSlot) => {
-            if (agendaSlot.sessions && agendaSlot.sessions.length > 0) {
-                slots.push({
-                    day: dayKey,
-                    time: agendaSlot.time
-                });
-            }
+  // Build a list of all session time slots in chronological order
+  const params = getHashParams();
+  const { day } = resolveDayTime(params);
+  const agendaData = getAgendaData();
+  const slots = [];
+
+  const dayKeys = Object.keys(agendaData);
+  const startIndex = dayKeys.indexOf(day);
+
+  if (startIndex === -1) {
+    return [];
+  }
+
+  // Get all slots from the starting day onwards
+  for (let i = startIndex; i < dayKeys.length; i++) {
+    const dayKey = dayKeys[i];
+    const dayAgenda = agendaData[dayKey] || [];
+
+    dayAgenda.forEach((agendaSlot) => {
+      if (agendaSlot.sessions && agendaSlot.sessions.length > 0) {
+        slots.push({
+          day: dayKey,
+          time: agendaSlot.time,
         });
-    }
-    
-    return slots;
+      }
+    });
+  }
+
+  return slots;
 }
 
 function navigateToSessionOffset(offset) {
-    sessionOffset = offset;
-    
-    if (sessionOffset === 0) {
-        // Return to current session
-        viewMode = ViewMode.CURRENT;
-        synchronizeSpeakers({ preserveSelection: false });
-        showNameAndTitle();
-        console.log(`Session navigation: CURRENT (offset 0)`);
-        return;
-    }
-    
-    // Get the session at the specified offset
-    if (sessionOffset > 0 && sessionOffset <= allSessionSlots.length) {
-        const targetSlot = allSessionSlots[sessionOffset - 1];
-        
-        console.log(`Session navigation: Moving to session +${sessionOffset}`, targetSlot);
-        
-        const params = getHashParams();
-        const targetSpeakers = getSpeakersForTime({
-            day: targetSlot.day,
-            time: targetSlot.time,
-            location: params.location
-        });
-        
-        // Temporarily use filteredSpeakers to show this session
-        filteredSpeakers = targetSpeakers;
-        viewMode = ViewMode.CURRENT;
-        synchronizeSpeakers({ preserveSelection: false });
-        showNameAndTitle();
-        
-        console.log(`Showing session at ${targetSlot.day} ${targetSlot.time} (${targetSpeakers.length} speakers)`);
-    } else {
-        // Offset out of range
-        console.log(`Session offset ${sessionOffset} out of range (max: ${allSessionSlots.length})`);
-        sessionOffset = Math.max(0, Math.min(sessionOffset, allSessionSlots.length));
-    }
+  sessionOffset = offset;
+
+  if (sessionOffset === 0) {
+    // Return to current session
+    viewMode = ViewMode.CURRENT;
+    synchronizeSpeakers({ preserveSelection: false });
+    showNameAndTitle();
+    console.log(`Session navigation: CURRENT (offset 0)`);
+    return;
+  }
+
+  // Get the session at the specified offset
+  if (sessionOffset > 0 && sessionOffset <= allSessionSlots.length) {
+    const targetSlot = allSessionSlots[sessionOffset - 1];
+
+    console.log(`Session navigation: Moving to session +${sessionOffset}`, targetSlot);
+
+    const params = getHashParams();
+    const targetSpeakers = getSpeakersForTime({
+      day: targetSlot.day,
+      time: targetSlot.time,
+      location: params.location,
+    });
+
+    // Temporarily use filteredSpeakers to show this session
+    filteredSpeakers = targetSpeakers;
+    viewMode = ViewMode.CURRENT;
+    synchronizeSpeakers({ preserveSelection: false });
+    showNameAndTitle();
+
+    console.log(`Showing session at ${targetSlot.day} ${targetSlot.time} (${targetSpeakers.length} speakers)`);
+  } else {
+    // Offset out of range
+    console.log(`Session offset ${sessionOffset} out of range (max: ${allSessionSlots.length})`);
+    sessionOffset = Math.max(0, Math.min(sessionOffset, allSessionSlots.length));
+  }
 }
 
 function getSpeakersListForMode(mode) {
-    switch (mode) {
-        case ViewMode.CURRENT:
-            return filteredSpeakers;
-        case ViewMode.NEXT:
-            return nextSpeakers;
-        case ViewMode.ALL:
-        default:
-            return allSpeakers;
-    }
+  switch (mode) {
+    case ViewMode.CURRENT:
+      return filteredSpeakers;
+    case ViewMode.NEXT:
+      return nextSpeakers;
+    case ViewMode.ALL:
+    default:
+      return allSpeakers;
+  }
 }
 
 function clampIndex(index, list) {
-    if (!list.length) {
-        return 0;
-    }
-    return Math.max(0, Math.min(index, list.length - 1));
+  if (!list.length) {
+    return 0;
+  }
+  return Math.max(0, Math.min(index, list.length - 1));
 }
 
 function synchronizeSpeakers({ preserveSelection = true } = {}) {
-    const previousName = preserveSelection && speakers[currentSpeakerIndex] ? speakers[currentSpeakerIndex].name : null;
-    speakers = getSpeakersListForMode(viewMode) || [];
+  const previousName = preserveSelection && speakers[currentSpeakerIndex] ? speakers[currentSpeakerIndex].name : null;
+  speakers = getSpeakersListForMode(viewMode) || [];
 
-    if (!speakers.length) {
-        currentSpeakerIndex = 0;
-        return;
-    }
+  if (!speakers.length) {
+    currentSpeakerIndex = 0;
+    return;
+  }
 
-    if (previousName) {
-        const preservedIndex = speakers.findIndex((speaker) => speaker.name === previousName);
-        currentSpeakerIndex = preservedIndex !== -1 ? preservedIndex : clampIndex(currentSpeakerIndex, speakers);
-    } else {
-        currentSpeakerIndex = clampIndex(currentSpeakerIndex, speakers);
-    }
+  if (previousName) {
+    const preservedIndex = speakers.findIndex((speaker) => speaker.name === previousName);
+    currentSpeakerIndex = preservedIndex !== -1 ? preservedIndex : clampIndex(currentSpeakerIndex, speakers);
+  } else {
+    currentSpeakerIndex = clampIndex(currentSpeakerIndex, speakers);
+  }
 }
 
 function announceViewMode() {
-    const count = speakers.length;
-    let message = `View mode: ${viewMode.toUpperCase()} (${count} speaker${count === 1 ? '' : 's'})`;
-    
-    if (viewMode === ViewMode.CURRENT && filteredSpeakers.length > 0) {
-        const params = getHashParams();
-        const { day, time } = resolveDayTime(params);
-        const groups = getSessionSpeakerGroups({ 
-            day, 
-            time, 
-            location: params.location,
-            startOffsetSeconds: parseOffsetToSeconds(params.startOffset),
-            endOffsetSeconds: parseOffsetToSeconds(params.endOffset)
-        });
-        if (groups.length > 0) {
-            const bestGroup = groups[0]; // selectBestGroup would pick this
-            message += ` – Session: "${bestGroup.session?.title}" at ${day} ${time}`;
-        }
-    } else if (viewMode === ViewMode.NEXT && nextSlotInfo) {
-        const dayText = nextSlotInfo.day ? `${nextSlotInfo.day} ` : '';
-        const groups = getSessionSpeakerGroups({ 
-            day: nextSlotInfo.day, 
-            time: nextSlotInfo.time
-        });
-        if (groups.length > 0) {
-            message += ` – Session: "${groups[0].session?.title}" at ${dayText}${nextSlotInfo.time}`;
-        } else {
-            message += ` – Next slot ${dayText}${nextSlotInfo.time}`;
-        }
+  const count = speakers.length;
+  let message = `View mode: ${viewMode.toUpperCase()} (${count} speaker${count === 1 ? "" : "s"})`;
+
+  if (viewMode === ViewMode.CURRENT && filteredSpeakers.length > 0) {
+    const params = getHashParams();
+    const { day, time } = resolveDayTime(params);
+    const groups = getSessionSpeakerGroups({
+      day,
+      time,
+      location: params.location,
+      startOffsetSeconds: parseOffsetToSeconds(params.startOffset),
+      endOffsetSeconds: parseOffsetToSeconds(params.endOffset),
+    });
+    if (groups.length > 0) {
+      const bestGroup = groups[0]; // selectBestGroup would pick this
+      message += ` – Session: "${bestGroup.session?.title}" at ${day} ${time}`;
     }
-    
-    console.log(message);
+  } else if (viewMode === ViewMode.NEXT && nextSlotInfo) {
+    const dayText = nextSlotInfo.day ? `${nextSlotInfo.day} ` : "";
+    const groups = getSessionSpeakerGroups({
+      day: nextSlotInfo.day,
+      time: nextSlotInfo.time,
+    });
+    if (groups.length > 0) {
+      message += ` – Session: "${groups[0].session?.title}" at ${dayText}${nextSlotInfo.time}`;
+    } else {
+      message += ` – Next slot ${dayText}${nextSlotInfo.time}`;
+    }
+  }
+
+  console.log(message);
 }
 
 function setViewMode(targetMode, { preserveSelection = true, announce = true, show = true } = {}) {
-    if (!Object.values(ViewMode).includes(targetMode)) {
-        return;
-    }
+  if (!Object.values(ViewMode).includes(targetMode)) {
+    return;
+  }
 
-    const previousMode = viewMode;
-    viewMode = targetMode;
+  const previousMode = viewMode;
+  viewMode = targetMode;
 
-    if (viewMode !== ViewMode.CURRENT) {
-        autoUpdateEnabled = false;
-    }
+  if (viewMode !== ViewMode.CURRENT) {
+    autoUpdateEnabled = false;
+  }
 
-    synchronizeSpeakers({ preserveSelection });
+  synchronizeSpeakers({ preserveSelection });
 
-    if (announce && (previousMode !== viewMode || show)) {
-        announceViewMode();
-    }
+  if (announce && (previousMode !== viewMode || show)) {
+    announceViewMode();
+  }
 
-    if (show) {
-        showNameAndTitle();
-    }
+  if (show) {
+    showNameAndTitle();
+  }
 }
 
 function findSpeakerIndexInList(list, query) {
-    if (!list || !list.length) {
-        return -1;
-    }
-
-    const lowerQuery = query.toLowerCase();
-    const passes = [
-        (name) => name.startsWith(lowerQuery),
-        (name) => name.includes(lowerQuery)
-    ];
-
-    for (const predicate of passes) {
-        let index = list.findIndex((speaker, idx) => idx > currentSpeakerIndex && predicate(speaker.name.toLowerCase()));
-        if (index !== -1) {
-            return index;
-        }
-        index = list.findIndex((speaker) => predicate(speaker.name.toLowerCase()));
-        if (index !== -1) {
-            return index;
-        }
-    }
-
+  if (!list || !list.length) {
     return -1;
+  }
+
+  const lowerQuery = query.toLowerCase();
+  const passes = [(name) => name.startsWith(lowerQuery), (name) => name.includes(lowerQuery)];
+
+  for (const predicate of passes) {
+    let index = list.findIndex((speaker, idx) => idx > currentSpeakerIndex && predicate(speaker.name.toLowerCase()));
+    if (index !== -1) {
+      return index;
+    }
+    index = list.findIndex((speaker) => predicate(speaker.name.toLowerCase()));
+    if (index !== -1) {
+      return index;
+    }
+  }
+
+  return -1;
 }
 
 function setSpeakerIndex(index, { fromUser = false } = {}) {
-    if (!speakers.length) {
-        currentSpeakerIndex = 0;
-        showNameAndTitle();
-        return;
-    }
-
-    currentSpeakerIndex = clampIndex(index, speakers);
-
-    if (fromUser) {
-        autoUpdateEnabled = false;
-    }
-
+  if (!speakers.length) {
+    currentSpeakerIndex = 0;
     showNameAndTitle();
+    return;
+  }
+
+  currentSpeakerIndex = clampIndex(index, speakers);
+
+  if (fromUser) {
+    autoUpdateEnabled = false;
+  }
+
+  showNameAndTitle();
 }
 
 function handleSearchKey(key) {
-    const character = key.toLowerCase();
-    const searchBuffer = incrementalSearch.append(character);
+  const character = key.toLowerCase();
+  const searchBuffer = incrementalSearch.append(character);
 
-    // ONLY search within the current speaker list (current group)
-    const inCurrentList = findSpeakerIndexInList(speakers, searchBuffer);
-    if (inCurrentList !== -1) {
-        setSpeakerIndex(inCurrentList, { fromUser: true });
-        return;
-    }
+  // ONLY search within the current speaker list (current group)
+  const inCurrentList = findSpeakerIndexInList(speakers, searchBuffer);
+  if (inCurrentList !== -1) {
+    setSpeakerIndex(inCurrentList, { fromUser: true });
+    return;
+  }
 
-    console.log(`No speaker match for "${searchBuffer}" in current group (${viewMode})`);
+  console.log(`No speaker match for "${searchBuffer}" in current group (${viewMode})`);
 }
 
 function updateNameAndTitle() {
-    const params = getHashParams();
-    const { day, time, autoUpdate } = resolveDayTime(params);
+  const params = getHashParams();
+  const { day, time, autoUpdate } = resolveDayTime(params);
 
-    if (autoUpdate) {
-        autoUpdateEnabled = true;
+  if (autoUpdate) {
+    autoUpdateEnabled = true;
+  }
+
+  // Reset session navigation when updating
+  sessionOffset = 0;
+
+  const startOffsetSeconds = parseOffsetToSeconds(params.startOffset);
+  const endOffsetSeconds = parseOffsetToSeconds(params.endOffset);
+
+  const currentTimeSeconds = time ? parseTime(time) : null;
+  const adjustedTimeSeconds = currentTimeSeconds !== null ? currentTimeSeconds + startOffsetSeconds : null;
+
+  console.log("[updateNameAndTitle] Fetching CURRENT session speakers", {
+    day,
+    time,
+    currentTimeSeconds,
+    startOffset: params.startOffset,
+    startOffsetSeconds,
+    adjustedTimeSeconds,
+    adjustedTimeFormatted: adjustedTimeSeconds !== null ? formatSecondsAsTime(adjustedTimeSeconds) : "N/A",
+    endOffsetSeconds,
+  });
+
+  // Calculate adjusted time for finding next slot
+  // If we have an offset, the "next" slot should be based on the adjusted time, not the current time
+  const adjustedTime =
+    adjustedTimeSeconds !== null && startOffsetSeconds !== 0
+      ? formatSecondsAsTime(adjustedTimeSeconds).substring(0, 5) // Convert back to HH:MM format
+      : time;
+
+  // Use getSpeakersForTime which handles best-group selection logic
+  // Apply the offset to the time for session lookup (the offset is already calculated above)
+  filteredSpeakers = getSpeakersForTime({
+    day,
+    time: adjustedTime, // Use adjusted time instead of raw time
+    location: params.location,
+    startOffsetSeconds: 0, // Offset already applied to time
+    endOffsetSeconds, // Still use endOffset if present (for future sessions)
+  });
+
+  console.log("[updateNameAndTitle] Finding next slot after", {
+    originalTime: time,
+    adjustedTime: adjustedTime,
+    usingAdjusted: startOffsetSeconds !== 0,
+  });
+
+  // Build list of all session slots for navigation
+  allSessionSlots = buildAllSessionSlots();
+  console.log(`[updateNameAndTitle] Built ${allSessionSlots.length} session slots for navigation`);
+
+  // Get next session speakers using getNextAgendaSlot
+  const nextSlot = getNextAgendaSlot({ day, time: adjustedTime });
+  nextSlotInfo = nextSlot;
+  if (nextSlot) {
+    console.log("[updateNameAndTitle] Fetching NEXT session speakers", {
+      day: nextSlot.day,
+      time: nextSlot.time,
+    });
+
+    nextSpeakers = getSpeakersForTime({
+      day: nextSlot.day,
+      time: nextSlot.time,
+      location: params.location,
+    });
+  } else {
+    nextSpeakers = [];
+  }
+
+  allSpeakers = getSpeakersData()
+    .slice()
+    .sort((a, b) => a.name.localeCompare(b.name));
+
+  // Auto-advance: If there's no current session but there's a next one, jump to it
+  // Find the first session that starts after the adjusted time
+  if (filteredSpeakers.length === 0 && allSessionSlots.length > 0 && sessionOffset === 0) {
+    const adjustedSeconds = adjustedTimeSeconds ?? (time ? parseTime(time) : null);
+    let targetIndex = 1; // Default to first session
+
+    if (adjustedSeconds !== null) {
+      // Find the first session starting after the adjusted time
+      targetIndex = allSessionSlots.findIndex((slot) => {
+        const slotSeconds = parseTime(slot.time) ?? 0;
+        return slotSeconds > adjustedSeconds;
+      });
+
+      // If found, add 1 because sessionOffset is 1-indexed
+      if (targetIndex >= 0) {
+        targetIndex += 1;
+      } else {
+        // All sessions are in the past, use the last one
+        targetIndex = allSessionSlots.length;
+      }
     }
 
-    // Reset session navigation when updating
-    sessionOffset = 0;
-
-    const startOffsetSeconds = parseOffsetToSeconds(params.startOffset);
-    const endOffsetSeconds = parseOffsetToSeconds(params.endOffset);
-
-    const currentTimeSeconds = time ? parseTime(time) : null;
-    const adjustedTimeSeconds = currentTimeSeconds !== null ? currentTimeSeconds + startOffsetSeconds : null;
-
-    console.log('[updateNameAndTitle] Fetching CURRENT session speakers', {
-        day,
-        time,
-        currentTimeSeconds,
-        startOffset: params.startOffset,
-        startOffsetSeconds,
-        adjustedTimeSeconds,
-        adjustedTimeFormatted: adjustedTimeSeconds !== null ? formatSecondsAsTime(adjustedTimeSeconds) : 'N/A',
-        endOffsetSeconds
+    console.log("[updateNameAndTitle] No current session, auto-advancing to next session", {
+      adjustedTime: adjustedSeconds ? formatSecondsAsTime(adjustedSeconds) : "N/A",
+      targetIndex,
+      targetSlot: allSessionSlots[targetIndex - 1],
     });
+    sessionOffset = targetIndex;
+    navigateToSessionOffset(targetIndex);
+    return; // navigateToSessionOffset will call showNameAndTitle
+  }
 
-    // Calculate adjusted time for finding next slot
-    // If we have an offset, the "next" slot should be based on the adjusted time, not the current time
-    const adjustedTime = (adjustedTimeSeconds !== null && startOffsetSeconds !== 0) 
-        ? formatSecondsAsTime(adjustedTimeSeconds).substring(0, 5) // Convert back to HH:MM format
-        : time;
+  setViewMode(viewMode, { preserveSelection: true, announce: false, show: false });
 
-    // Use getSpeakersForTime which handles best-group selection logic
-    // Apply the offset to the time for session lookup (the offset is already calculated above)
-    filteredSpeakers = getSpeakersForTime({
-        day,
-        time: adjustedTime,  // Use adjusted time instead of raw time
-        location: params.location,
-        startOffsetSeconds: 0,  // Offset already applied to time
-        endOffsetSeconds     // Still use endOffset if present (for future sessions)
-    });
-
-    console.log('[updateNameAndTitle] Finding next slot after', {
-        originalTime: time,
-        adjustedTime: adjustedTime,
-        usingAdjusted: startOffsetSeconds !== 0
-    });
-
-    // Build list of all session slots for navigation
-    allSessionSlots = buildAllSessionSlots();
-    console.log(`[updateNameAndTitle] Built ${allSessionSlots.length} session slots for navigation`);
-
-    // Get next session speakers using getNextAgendaSlot
-    const nextSlot = getNextAgendaSlot({ day, time: adjustedTime });
-    nextSlotInfo = nextSlot;
-    if (nextSlot) {
-        console.log('[updateNameAndTitle] Fetching NEXT session speakers', {
-            day: nextSlot.day,
-            time: nextSlot.time
-        });
-        
-        nextSpeakers = getSpeakersForTime({
-            day: nextSlot.day,
-            time: nextSlot.time,
-            location: params.location
-        });
+  if (params.speaker) {
+    setViewMode(ViewMode.CURRENT, { preserveSelection: false, announce: false, show: false });
+    const requestedIndex = parseInt(params.speaker, 10) - 1;
+    if (!Number.isNaN(requestedIndex)) {
+      currentSpeakerIndex = clampIndex(requestedIndex, speakers);
+    }
+  } else if (params.name) {
+    const lowerName = params.name.toLowerCase();
+    let index = filteredSpeakers.findIndex((speaker) => speaker.name.toLowerCase().includes(lowerName));
+    if (index !== -1) {
+      setViewMode(ViewMode.CURRENT, { preserveSelection: false, announce: false, show: false });
+      currentSpeakerIndex = clampIndex(index, filteredSpeakers);
     } else {
-        nextSpeakers = [];
-    }
-
-    allSpeakers = getSpeakersData().slice().sort((a, b) => a.name.localeCompare(b.name));
-
-    // Auto-advance: If there's no current session but there's a next one, jump to it
-    // Find the first session that starts after the adjusted time
-    if (filteredSpeakers.length === 0 && allSessionSlots.length > 0 && sessionOffset === 0) {
-        const adjustedSeconds = adjustedTimeSeconds ?? (time ? parseTime(time) : null);
-        let targetIndex = 1; // Default to first session
-        
-        if (adjustedSeconds !== null) {
-            // Find the first session starting after the adjusted time
-            targetIndex = allSessionSlots.findIndex(slot => {
-                const slotSeconds = parseTime(slot.time) ?? 0;
-                return slotSeconds > adjustedSeconds;
-            });
-            
-            // If found, add 1 because sessionOffset is 1-indexed
-            if (targetIndex >= 0) {
-                targetIndex += 1;
-            } else {
-                // All sessions are in the past, use the last one
-                targetIndex = allSessionSlots.length;
-            }
-        }
-        
-        console.log('[updateNameAndTitle] No current session, auto-advancing to next session', {
-            adjustedTime: adjustedSeconds ? formatSecondsAsTime(adjustedSeconds) : 'N/A',
-            targetIndex,
-            targetSlot: allSessionSlots[targetIndex - 1]
-        });
-        sessionOffset = targetIndex;
-        navigateToSessionOffset(targetIndex);
-        return; // navigateToSessionOffset will call showNameAndTitle
-    }
-
-    setViewMode(viewMode, { preserveSelection: true, announce: false, show: false });
-
-    if (params.speaker) {
-        setViewMode(ViewMode.CURRENT, { preserveSelection: false, announce: false, show: false });
-        const requestedIndex = parseInt(params.speaker, 10) - 1;
-        if (!Number.isNaN(requestedIndex)) {
-            currentSpeakerIndex = clampIndex(requestedIndex, speakers);
-        }
-    } else if (params.name) {
-        const lowerName = params.name.toLowerCase();
-        let index = filteredSpeakers.findIndex((speaker) => speaker.name.toLowerCase().includes(lowerName));
+      index = nextSpeakers.findIndex((speaker) => speaker.name.toLowerCase().includes(lowerName));
+      if (index !== -1) {
+        setViewMode(ViewMode.NEXT, { preserveSelection: false, announce: false, show: false });
+        currentSpeakerIndex = clampIndex(index, nextSpeakers);
+      } else {
+        index = allSpeakers.findIndex((speaker) => speaker.name.toLowerCase().includes(lowerName));
         if (index !== -1) {
-            setViewMode(ViewMode.CURRENT, { preserveSelection: false, announce: false, show: false });
-            currentSpeakerIndex = clampIndex(index, filteredSpeakers);
-        } else {
-            index = nextSpeakers.findIndex((speaker) => speaker.name.toLowerCase().includes(lowerName));
-            if (index !== -1) {
-                setViewMode(ViewMode.NEXT, { preserveSelection: false, announce: false, show: false });
-                currentSpeakerIndex = clampIndex(index, nextSpeakers);
-            } else {
-                index = allSpeakers.findIndex((speaker) => speaker.name.toLowerCase().includes(lowerName));
-                if (index !== -1) {
-                    setViewMode(ViewMode.ALL, { preserveSelection: false, announce: false, show: false });
-                    currentSpeakerIndex = clampIndex(index, allSpeakers);
-                }
-            }
+          setViewMode(ViewMode.ALL, { preserveSelection: false, announce: false, show: false });
+          currentSpeakerIndex = clampIndex(index, allSpeakers);
         }
+      }
     }
+  }
 
-    synchronizeSpeakers({ preserveSelection: false });
+  synchronizeSpeakers({ preserveSelection: false });
 
-    console.log('[updateNameAndTitle] Speaker lists:', {
-        filteredSpeakers,
-        nextSpeakers,
-        allSpeakersCount: allSpeakers.length,
-        viewMode,
-        currentSpeakerIndex,
-        activeSpeakers: speakers
-    });
-    
-    showNameAndTitle();
+  console.log("[updateNameAndTitle] Speaker lists:", {
+    filteredSpeakers,
+    nextSpeakers,
+    allSpeakersCount: allSpeakers.length,
+    viewMode,
+    currentSpeakerIndex,
+    activeSpeakers: speakers,
+  });
+
+  showNameAndTitle();
 }
 
 function showNameAndTitle() {
-    const selectedSpeaker = speakers[Math.min(currentSpeakerIndex, speakers.length - 1)] || null;
+  const selectedSpeaker = speakers[Math.min(currentSpeakerIndex, speakers.length - 1)] || null;
 
-    console.log('[showNameAndTitle] Displaying speaker:', {
-        selectedSpeaker,
-        currentSpeakerIndex,
-        totalSpeakers: speakers.length,
-        viewMode
-    });
+  console.log("[showNameAndTitle] Displaying speaker:", {
+    selectedSpeaker,
+    currentSpeakerIndex,
+    totalSpeakers: speakers.length,
+    viewMode,
+  });
 
-    updateDebugOverlay();
+  updateDebugOverlay();
 
-    let name, title;
-    if (selectedSpeaker) {
-        name = selectedSpeaker.name;
-        title = selectedSpeaker.title;
-    } else {
-        name = "No speaker scheduled";
-        title = "";
+  let name, title;
+  if (selectedSpeaker) {
+    name = selectedSpeaker.name;
+    title = selectedSpeaker.title || "";
+  } else {
+    name = "No speaker scheduled";
+    title = "";
+  }
+
+  const parser = new DOMParser();
+  const svgDoc = parser.parseFromString(svgTemplate, "image/svg+xml");
+
+  const nameTspan = svgDoc.querySelector("#Name tspan");
+  const titleLine1Tspan = svgDoc.querySelector("#TitleLine1");
+  const titleLine2Tspan = svgDoc.querySelector("#TitleLine2");
+
+  nameTspan.textContent = name;
+
+  if (title.length > 63) {
+    let splitIndex = title.lastIndexOf(" ", 63);
+    const preferredSplitIndexAnd = title.lastIndexOf(" and ", 63);
+    const preferredSplitIndexComma = title.lastIndexOf(",", 63);
+    const preferredSplitIndexAmpersand = title.lastIndexOf(" & ", 63);
+
+    if (preferredSplitIndexAnd >= 20) {
+      splitIndex = preferredSplitIndexAnd;
+    } else if (preferredSplitIndexComma >= 20) {
+      splitIndex = preferredSplitIndexComma;
+    } else if (preferredSplitIndexAmpersand >= 20) {
+      splitIndex = preferredSplitIndexAmpersand;
     }
 
-    const parser = new DOMParser();
-    const svgDoc = parser.parseFromString(svgTemplate, 'image/svg+xml');
+    const titleLine1 = title.substring(0, splitIndex);
+    let titleLine2 = title.substring(splitIndex + 1).trim();
 
-    const nameTspan = svgDoc.querySelector('#Name tspan');
-    const titleLine1Tspan = svgDoc.querySelector('#TitleLine1');
-    const titleLine2Tspan = svgDoc.querySelector('#TitleLine2');
-
-    nameTspan.textContent = name;
-
-    if (title.length > 63) {
-        let splitIndex = title.lastIndexOf(' ', 63);
-        const preferredSplitIndexAnd = title.lastIndexOf(' and ', 63);
-        const preferredSplitIndexComma = title.lastIndexOf(',', 63);
-        const preferredSplitIndexAmpersand = title.lastIndexOf(' & ', 63);
-
-        if (preferredSplitIndexAnd >= 20) {
-            splitIndex = preferredSplitIndexAnd;
-        } else if (preferredSplitIndexComma >= 20) {
-            splitIndex = preferredSplitIndexComma;
-        } else if (preferredSplitIndexAmpersand >= 20) {
-            splitIndex = preferredSplitIndexAmpersand;
-        }
-
-        const titleLine1 = title.substring(0, splitIndex);
-        let titleLine2 = title.substring(splitIndex + 1).trim();
-
-        if (titleLine2.startsWith('and ')) {
-            titleLine2 = titleLine2.substring(4);
-        } else if (titleLine2.startsWith(',')) {
-            titleLine2 = titleLine2.substring(1).trim();
-        } else if (titleLine2.startsWith('& ')) {
-            titleLine2 = titleLine2.substring(2);
-        }
-
-        titleLine1Tspan.textContent = titleLine1;
-        titleLine2Tspan.textContent = titleLine2;
-        titleLine2Tspan.style.display = 'inline';
-        titleLine1Tspan.setAttribute('y', '0');
-        titleLine1Tspan.setAttribute('class', 't3');
-    } else {
-        titleLine1Tspan.textContent = title;
-        titleLine2Tspan.textContent = '';
-        titleLine2Tspan.style.display = 'none';
-        if (title.length > 30) {
-            titleLine1Tspan.setAttribute('y', '35');
-            titleLine1Tspan.setAttribute('class', 't3');
-        } else {
-            titleLine1Tspan.setAttribute('y', '40');
-            titleLine1Tspan.setAttribute('class', 't3-large');
-        }
+    if (titleLine2.startsWith("and ")) {
+      titleLine2 = titleLine2.substring(4);
+    } else if (titleLine2.startsWith(",")) {
+      titleLine2 = titleLine2.substring(1).trim();
+    } else if (titleLine2.startsWith("& ")) {
+      titleLine2 = titleLine2.substring(2);
     }
 
-    const svgContainer = document.getElementById('svg-container');
-    svgContainer.innerHTML = '';
-    svgContainer.appendChild(svgDoc.documentElement);
+    titleLine1Tspan.textContent = titleLine1;
+    titleLine2Tspan.textContent = titleLine2;
+    titleLine2Tspan.classList.remove("hidden-line");
+    titleLine1Tspan.setAttribute("y", "0");
+    titleLine1Tspan.setAttribute("class", "t3");
+  } else {
+    titleLine1Tspan.textContent = title;
+    titleLine2Tspan.textContent = "";
+    titleLine2Tspan.classList.add("hidden-line");
+    if (title.length > 30) {
+      titleLine1Tspan.setAttribute("y", "35");
+      titleLine1Tspan.setAttribute("class", "t3");
+    } else {
+      titleLine1Tspan.setAttribute("y", "40");
+      titleLine1Tspan.setAttribute("class", "t3-large");
+    }
+  }
+
+  const svgContainer = document.getElementById("svg-container");
+  svgContainer.replaceChildren();
+  svgContainer.appendChild(svgDoc.documentElement);
 }
 
 function navigateSpeakers(event) {
-    // Ctrl+Space : Disable auto-update (freeze current view)
-    if (event.key === ' ' && event.ctrlKey) {
-        event.preventDefault();
-        if (autoUpdateEnabled) {
-            console.log("Auto-update DISABLED. Current view frozen. Press Escape to resume.");
-            autoUpdateEnabled = false;
-        } else {
-            console.log("Auto-update already disabled. Press Escape to re-enable.");
-        }
-        return;
+  // Ctrl+Space : Disable auto-update (freeze current view)
+  if (event.key === " " && event.ctrlKey) {
+    event.preventDefault();
+    if (autoUpdateEnabled) {
+      console.log("Auto-update DISABLED. Current view frozen. Press Escape to resume.");
+      autoUpdateEnabled = false;
+    } else {
+      console.log("Auto-update already disabled. Press Escape to re-enable.");
     }
-    
-    // ← → : Navigate within current speaker group
-    if (event.key === 'ArrowLeft') {
-        if (!speakers.length) {
-            return;
-        }
-        incrementalSearch.reset();
-        currentSpeakerIndex = (currentSpeakerIndex > 0) ? currentSpeakerIndex - 1 : speakers.length - 1;
-        autoUpdateEnabled = false;
-        setSpeakerIndex(currentSpeakerIndex, { fromUser: true });
-        return;
-    } else if (event.key === 'ArrowRight') {
-        if (!speakers.length) {
-            return;
-        }
-        incrementalSearch.reset();
-        currentSpeakerIndex = (currentSpeakerIndex < speakers.length - 1) ? currentSpeakerIndex + 1 : 0;
-        autoUpdateEnabled = false;
-        setSpeakerIndex(currentSpeakerIndex, { fromUser: true });
-        return;
+    return;
+  }
+
+  // ← → : Navigate within current speaker group
+  if (event.key === "ArrowLeft") {
+    if (!speakers.length) {
+      return;
     }
-    
-    // ↑ ↓ : Navigate between sessions (CURRENT <-> NEXT <-> NEXT+1...)
-    else if (event.key === 'ArrowUp') {
-        event.preventDefault();
-        incrementalSearch.reset();
-        if (sessionOffset > 0) {
-            navigateToSessionOffset(sessionOffset - 1);
-        } else {
-            console.log('Already at current session');
-        }
-        return;
-    } else if (event.key === 'ArrowDown') {
-        event.preventDefault();
-        incrementalSearch.reset();
-        navigateToSessionOffset(sessionOffset + 1);
-        return;
+    incrementalSearch.reset();
+    currentSpeakerIndex = currentSpeakerIndex > 0 ? currentSpeakerIndex - 1 : speakers.length - 1;
+    autoUpdateEnabled = false;
+    setSpeakerIndex(currentSpeakerIndex, { fromUser: true });
+    return;
+  } else if (event.key === "ArrowRight") {
+    if (!speakers.length) {
+      return;
     }
-    
-    // Space : Toggle ALL sessions/speakers mode (removes all filters, shows everyone)
-    else if (event.key === ' ') {
-        event.preventDefault();
-        incrementalSearch.reset();
-        if (viewMode === ViewMode.ALL) {
-            // Go back to filtered mode with auto-update
-            console.log("Returning to filtered view with auto-update.");
-            setViewMode(ViewMode.CURRENT);
-            autoUpdateEnabled = true;
-            updateNameAndTitle();
-        } else {
-            // Switch to ALL speakers mode (no filters)
-            console.log("Showing ALL speakers (all filters removed).");
-            setViewMode(ViewMode.ALL);
-            autoUpdateEnabled = false;
-        }
-        return;
+    incrementalSearch.reset();
+    currentSpeakerIndex = currentSpeakerIndex < speakers.length - 1 ? currentSpeakerIndex + 1 : 0;
+    autoUpdateEnabled = false;
+    setSpeakerIndex(currentSpeakerIndex, { fromUser: true });
+    return;
+  }
+
+  // ↑ ↓ : Navigate between sessions (CURRENT <-> NEXT <-> NEXT+1...)
+  else if (event.key === "ArrowUp") {
+    event.preventDefault();
+    incrementalSearch.reset();
+    if (sessionOffset > 0) {
+      navigateToSessionOffset(sessionOffset - 1);
+    } else {
+      console.log("Already at current session");
     }
-    
-    // Escape : Return to CURRENT mode with auto-update
-    else if (event.key === 'Escape') {
-        incrementalSearch.reset();
-        console.log("Returning to current session with auto-update.");
-        setViewMode(ViewMode.CURRENT);
-        autoUpdateEnabled = true;
-        updateNameAndTitle();
-        return;
+    return;
+  } else if (event.key === "ArrowDown") {
+    event.preventDefault();
+    incrementalSearch.reset();
+    navigateToSessionOffset(sessionOffset + 1);
+    return;
+  }
+
+  // Space : Toggle ALL sessions/speakers mode (removes all filters, shows everyone)
+  else if (event.key === " ") {
+    event.preventDefault();
+    incrementalSearch.reset();
+    if (viewMode === ViewMode.ALL) {
+      // Go back to filtered mode with auto-update
+      console.log("Returning to filtered view with auto-update.");
+      setViewMode(ViewMode.CURRENT);
+      autoUpdateEnabled = true;
+      updateNameAndTitle();
+    } else {
+      // Switch to ALL speakers mode (no filters)
+      console.log("Showing ALL speakers (all filters removed).");
+      setViewMode(ViewMode.ALL);
+      autoUpdateEnabled = false;
     }
-    
-    else if (handleSearchOrNumericShortcut(event, {
-        onSearch: handleSearchKey,
-        items: speakers,
-        onBeforeSelect: incrementalSearch.reset,
-        onSelect: (index) => setSpeakerIndex(index, { fromUser: true })
-    })) {
-        return;
-    }
+    return;
+  }
+
+  // Escape : Return to CURRENT mode with auto-update
+  else if (event.key === "Escape") {
+    incrementalSearch.reset();
+    console.log("Returning to current session with auto-update.");
+    setViewMode(ViewMode.CURRENT);
+    autoUpdateEnabled = true;
+    updateNameAndTitle();
+    return;
+  } else if (
+    handleSearchOrNumericShortcut(event, {
+      onSearch: handleSearchKey,
+      items: speakers,
+      onBeforeSelect: incrementalSearch.reset,
+      onSelect: (index) => setSpeakerIndex(index, { fromUser: true }),
+    })
+  ) {
+    return;
+  }
 }
 
 initializeEventDisplay({
-    update: updateNameAndTitle,
-    onKeyDown: navigateSpeakers,
-    isAutoUpdateEnabled: () => autoUpdateEnabled
-})
-    .catch(error => console.error('Error loading event data:', error));
+  update: updateNameAndTitle,
+  onKeyDown: navigateSpeakers,
+  isAutoUpdateEnabled: () => autoUpdateEnabled,
+}).catch((error) => console.error("Error loading event data:", error));

@@ -11,7 +11,10 @@
  * belongs to the parent — `pk-btn` and `pk-cluster` are both flex with a
  * `gap` — so a margin here would be a second, disagreeing decision.
  */
-import type { ComponentChildren, JSX } from "preact";
+import type { JSX } from "preact";
+
+import { StrokeIcon } from "../../ui/MediaIcons";
+export { StrokeIcon, IconVideo, IconDownload } from "../../ui/MediaIcons";
 
 type SvgProps = Omit<JSX.SVGAttributes<SVGSVGElement>, "xmlns" | "viewBox" | "fill">;
 
@@ -391,27 +394,6 @@ export function IconCalendarDownload(props: SvgProps) {
 // four words took. Each is decorative — the button around it carries the
 // command's name — and inherits the button's ink.
 
-export function StrokeIcon({ children, ...props }: SvgProps & { children: ComponentChildren }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="1.6"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-      focusable="false"
-      {...props}
-    >
-      {children}
-    </svg>
-  );
-}
-
 export function IconHeading(props: SvgProps) {
   return (
     <StrokeIcon {...props}>
@@ -426,15 +408,6 @@ export function IconImage(props: SvgProps) {
       <rect x="2" y="2" width="12" height="12" rx="1" />
       <circle cx="5.5" cy="5.5" r="1" />
       <path d="m2 12 4-4 3 3 2-2 3 3" />
-    </StrokeIcon>
-  );
-}
-
-export function IconVideo(props: SvgProps) {
-  return (
-    <StrokeIcon {...props}>
-      <rect x="2" y="2" width="12" height="12" rx="2" />
-      <path d="m6 5 5 3-5 3z" />
     </StrokeIcon>
   );
 }
@@ -552,26 +525,6 @@ export function IconLayers() {
       aria-hidden="true"
     >
       <path d="m12 3 9 5-9 5-9-5 9-5Zm-9 9 9 5 9-5M3 16l9 5 9-5" />
-    </svg>
-  );
-}
-
-export function IconDownload(props: SvgProps) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="16"
-      height="16"
-      viewBox="0 0 16 16"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.5"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-      {...props}
-    >
-      <path d="M8 1.5v9m-3-3 3 3 3-3M2 10.5v3h12v-3" />
     </svg>
   );
 }

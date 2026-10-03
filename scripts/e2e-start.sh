@@ -1,14 +1,27 @@
 #!/bin/sh
-# E2E test startup: builds Hugo, seeds a fresh database, then launches
-# the SendGrid interceptor + wrangler.
+# E2E test startup: bundles the Vite public shell and Worker, seeds a fresh
+# database, then launches the SendGrid interceptor + bundled Worker.
 # Playwright calls this as webServer and waits for port 8788 to be reachable.
 set -e
 
 STATE_ROOT="${E2E_STATE_ROOT:-${TMPDIR:-/tmp}}"
 mkdir -p "$STATE_ROOT"
-STATE_DIR=$(mktemp -d "${STATE_ROOT%/}/pkic-e2e.XXXXXX")
+if [ -n "${E2E_PREPARED_STATE_DIR:-}" ]; then
+  case "$E2E_PREPARED_STATE_DIR" in
+    "${STATE_ROOT%/}"/pkic-e2e.*) ;;
+    *) echo "[e2e-start] Prepared state must belong to the E2E state root" >&2; exit 1 ;;
+  esac
+  STATE_DIR="$E2E_PREPARED_STATE_DIR"
+  if [ ! -f "$STATE_DIR/.prepared" ] || [ ! -d "$STATE_DIR/site" ]; then
+    echo "[e2e-start] Prepared static release is missing" >&2
+    exit 1
+  fi
+else
+  STATE_DIR=$(mktemp -d "${STATE_ROOT%/}/pkic-e2e.XXXXXX")
+fi
 INTERCEPT_URL_FILE="${E2E_SENDGRID_URL_FILE:-test-results/e2e-sendgrid-url}"
 PAYMENT_URL_FILE="${E2E_STRIPE_URL_FILE:-test-results/e2e-stripe-url}"
+STATE_PATH_FILE="test-results/e2e-state-dir"
 E2E_ENV_FILE="$STATE_DIR/.e2e.vars"
 E2E_PORT="${E2E_PORT:-8788}"
 
@@ -26,35 +39,34 @@ rm -f test-results/portal-mobile-navigation-auth.json
 rm -f test-results/portal-groups-auth.json
 rm -f test-results/portal-vote-management-auth.json
 
-# ── 0. Clean stale build artifacts ───────────────────────────────────────────
-# A previous `pnpm build` or `deploy:preview` may have left dist/ and
-# .wrangler/deploy/config.json targeting a different environment (e.g.
-# "production" or "preview"). Remove them so wrangler dev --env=local
-# can start cleanly without an environment mismatch error.
-rm -rf dist/ .wrangler/deploy/config.json
+cleanup() {
+  if [ -n "${WORKER_PID:-}" ]; then
+    kill "$WORKER_PID" 2>/dev/null || true
+    wait "$WORKER_PID" 2>/dev/null || true
+  fi
+  if [ -n "${INTERCEPTOR_PID:-}" ]; then
+    kill "$INTERCEPTOR_PID" 2>/dev/null || true
+  fi
+  if [ -n "${PAYMENT_INTERCEPTOR_PID:-}" ]; then
+    kill "$PAYMENT_INTERCEPTOR_PID" 2>/dev/null || true
+  fi
+  rm -rf "$STATE_DIR"
+  rm -f "$INTERCEPT_URL_FILE" "$PAYMENT_URL_FILE"
+  rm -f "$STATE_PATH_FILE"
+}
+trap cleanup EXIT INT TERM
 
-# ── 1. Build static site ────────────────────────────────────────────────────
-node scripts/build-frontend.mjs --dev
-HUGO_PARAMS_SKIPREMOTEFEEDS=true hugo --configDir='' --baseURL=/ -e development
-
-# ── 2. Seed a fresh database ────────────────────────────────────────────────
-printf 'y\n' | pnpm exec wrangler d1 migrations apply pkic-db-local --env local --local --persist-to="$STATE_DIR"
-node scripts/seed-initial-admin.mjs  --env local --local --db pkic-db-local --persist-to "$STATE_DIR" --e2e-worker-pool
-node scripts/seed-event.mjs          --env local --local --db pkic-db-local --persist-to "$STATE_DIR" --skip-email-templates
-node scripts/seed-email-templates.mjs --env local --local --db pkic-db-local --persist-to "$STATE_DIR"
-# The member-profile demo record, so portal specs and manual review both have a
-# contact page with skills, participation and standing on it.
-node --experimental-strip-types scripts/seed-member-profiles.mjs --local --persist-to "$STATE_DIR"
-pnpm exec wrangler d1 execute pkic-db-local --env local --local --persist-to="$STATE_DIR" --file tests/fixtures/e2e-donations.sql
-pnpm exec wrangler d1 execute pkic-db-local --env local --local --persist-to="$STATE_DIR" --file tests/fixtures/e2e-settings.sql
+# CI prepares the release in its own build step. Local runs prepare here.
+if [ -z "${E2E_PREPARED_STATE_DIR:-}" ]; then
+  sh scripts/e2e-prepare.sh "$STATE_DIR"
+fi
+printf '%s\n' "$STATE_DIR" > "$STATE_PATH_FILE"
 
 # ── 3. Start servers ────────────────────────────────────────────────────────
 node scripts/e2e-interceptor.mjs 0 "$INTERCEPT_URL_FILE" &
 INTERCEPTOR_PID=$!
 node scripts/e2e-payment-interceptor.mjs "$PAYMENT_URL_FILE" &
 PAYMENT_INTERCEPTOR_PID=$!
-
-trap 'kill "$INTERCEPTOR_PID" "$PAYMENT_INTERCEPTOR_PID" 2>/dev/null; rm -rf "$STATE_DIR"; rm -f "$INTERCEPT_URL_FILE" "$PAYMENT_URL_FILE"' EXIT INT TERM
 
 INTERCEPTOR_READY=0
 INTERCEPTOR_ATTEMPTS=0
@@ -100,20 +112,15 @@ EOF
 # this run actually uses, which the static local value cannot know.
 #
 # ── Serve a snapshot, not the live build directory ──────────────────────────
-# `public/` is rewritten by every `hugo` run. When anything rebuilds the site
+# `public/` is rewritten by every public-shell build. When anything rebuilds the site
 # while the suite is running — another worktree task, a developer checking a
 # page — the directory disappears for a moment, Wrangler's asset walk fails
 # with ENOENT, and the worker dies. Every test after that point fails with
 # ERR_CONNECTION_REFUSED, which looks like sixty broken tests rather than one
 # broken server. Copying the built site into this run's own state directory
 # costs a second and makes the run immune to what else is happening on disk.
-SITE_DIR="$STATE_DIR/site"
-cp -R public "$SITE_DIR"
-
-pnpm exec wrangler dev \
-  --env=local \
-  --assets="$SITE_DIR" \
-  --port="$E2E_PORT" \
-  --persist-to="$STATE_DIR" \
-  --env-file="$E2E_ENV_FILE" \
-  < /dev/null
+node --experimental-strip-types scripts/e2e-publication-server.mjs \
+  "$STATE_DIR" "$E2E_ENV_FILE" "$E2E_PORT" \
+  < /dev/null &
+WORKER_PID=$!
+wait "$WORKER_PID"

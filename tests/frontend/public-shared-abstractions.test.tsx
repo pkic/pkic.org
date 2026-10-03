@@ -90,12 +90,15 @@ describe("public shared frontend abstractions", () => {
     const message = container.querySelector('[role="alert"]');
     expect(message?.textContent).toContain("You need to agree to this to continue.");
     expect(consent.getAttribute("aria-invalid")).toBe("true");
+    expect(container.querySelector(".pk-panel__body--danger")).not.toBeNull();
     expect(consent.getAttribute("aria-describedby")).toBe(message?.id);
 
     // Agreeing clears it, without anything else having to be told.
     void act(() => consent.click());
     expect(container.querySelector('[role="alert"]')).toBeNull();
     expect(consent.getAttribute("aria-invalid")).toBeNull();
+    expect(container.querySelector(".pk-panel__body--danger")).toBeNull();
+    expect(container.querySelector(".pk-panel__body--ok")).not.toBeNull();
     form.remove();
   });
 

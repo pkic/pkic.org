@@ -19,7 +19,7 @@ import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { publicMemberDetailSchema, type PublicMemberDetail } from "../../shared/schemas/members-directory";
 import { getJson } from "../shared/api-client";
-import { PublicPersonCard, type PublicPerson } from "./components/public-person-card";
+import { PublicPersonCard, type PublicPerson } from "../site/PublicPersonCard";
 
 const API_BASE_FALLBACK = "/api/v1";
 
@@ -52,7 +52,6 @@ export function MemberPersonCard({
   member,
   name,
   role,
-  color,
   avatarSize,
 }: {
   apiBase: string;
@@ -60,7 +59,6 @@ export function MemberPersonCard({
   member: string;
   name: string;
   role: string;
-  color: string;
   avatarSize?: "default" | "small";
 }) {
   const [person, setPerson] = useState<PublicPerson | null>(null);
@@ -97,7 +95,7 @@ export function MemberPersonCard({
   }, [apiBase, member, name]);
 
   if (!person) return null;
-  return <PublicPersonCard person={person} role={role} color={color} avatarSize={avatarSize} />;
+  return <PublicPersonCard person={person} role={role} avatarSize={avatarSize} />;
 }
 
 function main(): void {
@@ -111,7 +109,6 @@ function main(): void {
         member={member}
         name={name}
         role={root.dataset.role ?? "Speaker"}
-        color={root.dataset.color ?? "green"}
         avatarSize={root.dataset.size === "sm" ? "small" : "default"}
       />,
       root,

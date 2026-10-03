@@ -1,0 +1,10 @@
+---
+import PublicPage from "../../layouts/PublicPage.astro";
+import { loadSiteContent } from "../../../functions/_lib/services/site-content";
+import { ContentPage } from "../../../assets/ts/site/SitePages";
+const content = await loadSiteContent("/search/");
+if (!content) throw new Error("The search page source is missing");
+---
+<PublicPage title={content.title} robots={content.robots}>
+  <ContentPage hero={content.hero} html={content.html} />
+</PublicPage>

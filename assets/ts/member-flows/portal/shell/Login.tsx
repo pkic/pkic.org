@@ -28,7 +28,7 @@ import { postJson } from "../../../shared/api-client";
 import { authenticateWithPasskey } from "../../../shared/passkey-authentication";
 import { MagicLinkSubmitButton, SignInError } from "../../../components/MagicLinkFeedback";
 import { useMagicLinkRequest } from "../../../hooks/useMagicLinkRequest";
-import { emailFromSubmitEvent } from "../../../shared/form/helpers";
+import { useContractForm } from "../../../hooks/useContractForm";
 import { successResponseSchema } from "../../../../shared/schemas/api-common";
 import { userAuthRequestSchema } from "../../../../shared/schemas/user-auth";
 import { portalReturnPath } from "../hash-route";
@@ -38,12 +38,12 @@ import { Field } from "../../../ui/Field";
 import { TextInput } from "../../../ui/TextControl";
 import { LoginBackdrop } from "./LoginBackdrop";
 import "./Login.css";
+import type { PortalLoginCopy } from "../../../../shared/schemas/portal-login-copy";
 
-async function requestMagicLink(email: string): Promise<void> {
+async function requestMagicLink(body: ReturnType<typeof userAuthRequestSchema.parse>): Promise<void> {
   // The route the sign-in interrupted rides along, so the link the email
   // carries brings the reader back to it — a working group they came to
   // join — rather than to the portal's front page.
-  const body = userAuthRequestSchema.parse({ email, returnPath: portalReturnPath(window.location.hash) });
   await postJson("/api/v1/auth/request-link", body, successResponseSchema);
   // Always show success to prevent email enumeration (as in the shared auth flow).
 }
@@ -52,9 +52,14 @@ async function signInWithPasskey(): Promise<void> {
   await authenticateWithPasskey();
 }
 
-export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }) {
+export function Login({ onSignedIn, copy }: { onSignedIn: () => void | Promise<void>; copy?: PortalLoginCopy }) {
   const [passkeySubmitting, setPasskeySubmitting] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
+  const [email, setEmail] = useState("");
+  const form = useContractForm(userAuthRequestSchema, {
+    email,
+    returnPath: typeof window === "undefined" ? "/portal/" : portalReturnPath(window.location.hash),
+  });
   const magicLink = useMagicLinkRequest("Something went wrong. Please try again.");
   const passkeysSupported = typeof window !== "undefined" && browserSupportsWebAuthn();
 
@@ -71,9 +76,17 @@ export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }
   const emailShown = (emailOpen || !passkeysSupported) && !magicLink.sent;
 
   async function handleSubmit(e: Event): Promise<void> {
-    const email = emailFromSubmitEvent(e);
-    if (!email) return;
-    await magicLink.request(() => requestMagicLink(email));
+    e.preventDefault();
+    const checked = form.submit();
+    if (!checked.data) return;
+    await magicLink.request(async () => {
+      try {
+        await requestMagicLink(checked.data);
+      } catch (error) {
+        form.refuse(error);
+        throw error;
+      }
+    });
   }
 
   async function handlePasskeySignIn(): Promise<void> {
@@ -91,8 +104,8 @@ export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }
 
   return (
     <div class="pk pk-login">
-      <LoginBackdrop />
-      <main class="pk-login__panel">
+      <LoginBackdrop copy={copy} />
+      <section class="pk-login__panel" aria-label="Sign in">
         <div class="pk-login__card-wrap">
           <div class="pk-login__card">
             <div class="pk-login__card-rule" aria-hidden="true" />
@@ -135,17 +148,21 @@ export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }
 
               {emailShown && (
                 <form
+                  noValidate
+                  {...form.handlers}
                   class="pk-stack pk-stack--tight"
                   onSubmit={(e) => {
                     void handleSubmit(e);
                   }}
                 >
-                  <Field label="Work email" required>
+                  <Field label="Work email" required {...form.of("email")}>
                     {(control) => (
                       <TextInput
                         {...control}
                         type="email"
                         name="email"
+                        value={email}
+                        onInput={(event) => setEmail(event.currentTarget.value)}
                         placeholder="you@organization.org"
                         autocomplete="email"
                       />
@@ -178,7 +195,7 @@ export function Login({ onSignedIn }: { onSignedIn: () => void | Promise<void> }
             <a href="/about/privacy-policy/">privacy policy</a>.
           </p>
         </div>
-      </main>
+      </section>
     </div>
   );
 }

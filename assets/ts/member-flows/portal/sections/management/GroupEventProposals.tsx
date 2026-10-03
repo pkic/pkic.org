@@ -10,7 +10,7 @@
  * needs; when a caller cannot supply it, the program catalogue resolves it.
  */
 import { proposalProgramsListResponseSchema } from "../../../../../shared/schemas/proposal-programs";
-import { EmptyState } from "../../../../components/EmptyState";
+import { EmptyState } from "../../../../ui/RecordEmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { EventProposalsTable } from "../../../../components/proposals/EventProposalsTable";

@@ -239,8 +239,8 @@ export function applyJoinApplicantKindUI(form: HTMLFormElement, applicantKind: J
   const individualPolicy = form.querySelector<HTMLElement>("[data-join-individual-policy]");
   const individualCategories = form.querySelector<HTMLElement>("[data-join-individual-categories]");
   const email = form.querySelector<HTMLInputElement>("#joinEmail");
-  const emailLabel = form.querySelector<HTMLElement>("[data-join-email-label]");
-  const emailHelp = form.querySelector<HTMLElement>("[data-join-email-help]");
+  const emailLabel = form.querySelector<HTMLElement>('[data-join-email-label], label[for="joinEmail"]');
+  const emailHelp = form.querySelector<HTMLElement>("[data-join-email-help], #joinEmail-help");
   if (!details || !organizationPolicy || !individualPolicy || !email || !emailLabel || !emailHelp) return;
 
   const selected = applicantKind !== null;

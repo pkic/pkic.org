@@ -29,7 +29,7 @@ export function ConsentCard({ term }: { term: RequiredTerm }) {
         </PanelBody>
       )}
       <PanelBody
-        tone={checked ? "ok" : undefined}
+        tone={invalid ? "danger" : checked ? "ok" : undefined}
         class={`pk-stack pk-stack--snug${invalid ? " pk-field--invalid" : ""}`}
       >
         <div class="pk-cluster pk-cluster--nowrap">

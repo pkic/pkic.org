@@ -217,7 +217,18 @@ describe("what the wall reports about itself", () => {
     const root = mountShell("wall");
     await boot();
     expect(root.dataset.state).toBe("ready");
-    expect(root.querySelectorAll("img").length).toBe(1);
+    /*
+     * One anchor per member, carrying what the wall's effects read: the
+     * sponsor level, the name and the slogan for the hover card. The scrolling
+     * track is built from these by `members-overview-effects.js` once the data
+     * has arrived, so the component renders the logos and nothing else.
+     */
+    expect(root.querySelectorAll("a > img.member-logo").length).toBe(1);
+    const anchor = root.querySelector("a");
+    expect(anchor?.dataset.memberName).toBe("Alpha");
+    expect(anchor?.dataset.sponsorLevel).toBe("0");
+    // A member is not a sponsor: the colour treatment stays off its logo.
+    expect(root.querySelector("img.member-logo")?.classList.contains("member-logo-sponsor")).toBe(false);
   });
 
   it("says so in words when the request fails, rather than rendering the same blank as success", async () => {

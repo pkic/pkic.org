@@ -22,7 +22,6 @@ import {
   registrationSubmissionResponseSchema,
   type RegistrationSubmissionResponse,
 } from "../../shared/schemas/registration";
-import { geolocationCountryResponseSchema } from "../../shared/schemas/geolocation";
 import { eventFormsResponseSchema } from "../../shared/schemas/forms";
 import { readField, deriveEventAttendanceType, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
@@ -390,15 +389,6 @@ function updateRegistrationReview(root: HTMLElement, form: HTMLFormElement, cust
   if (inlineEmailEl) inlineEmailEl.textContent = email || "the email address above";
 }
 
-async function applyGeolocationCountryHint(controller: CustomFieldsController, apiBase: string): Promise<void> {
-  try {
-    const geolocationCountry = await getJson(`${apiBase}/geolocation/country`, geolocationCountryResponseSchema);
-    if (geolocationCountry.country) controller.setGeoHint(geolocationCountry.country);
-  } catch {
-    // Geo lookup is best-effort — never block or break the form.
-  }
-}
-
 async function main(): Promise<void> {
   const boot = bootstrap("[data-event-registration]");
   if (!boot) {
@@ -452,10 +442,6 @@ async function main(): Promise<void> {
     const nextButton = boot.root.querySelector<HTMLButtonElement>("[data-step-next]");
     if (nextButton) nextButton.disabled = false;
     await invitation.check(forms.registrationPolicy);
-
-    // Apply Cloudflare geo hint to any country-select widgets.
-    // Fire-and-forget: we don't block form load on this.
-    if (customFields) void applyGeolocationCountryHint(customFields, apiBase);
   } catch {
     invitation.loadFailed();
     setStatus(statusEl, "Could not load registration form details. Reload this page to try again.", true);
@@ -491,7 +477,14 @@ async function main(): Promise<void> {
   }
 
   const identityMount = form.querySelector<HTMLElement>("[data-registration-identity]");
-  if (identityMount) render(<RegistrationIdentitySelect form={form} />, identityMount);
+  if (identityMount)
+    render(
+      <RegistrationIdentitySelect
+        form={form}
+        deferUntilRequested={Boolean(document.querySelector("#pkic-public-form-resources"))}
+      />,
+      identityMount,
+    );
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();

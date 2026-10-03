@@ -14,7 +14,7 @@ import r_Router from "./r/router";
 import newsRouter from "./news/router";
 import members_Router from "./members/router";
 import events_Router from "./events/router";
-import { onRequestGet as OgCardGet } from "./og/[...path]";
+import site_Router from "./site/router";
 import type { Env } from "./_lib/types";
 import { processIncomingEmail } from "./_lib/services/calendar-rsvp-email-ingest";
 import { decorateOpenApiSpec, filterOpenApiSpecForMcp } from "./_lib/openapi/mcp";
@@ -99,7 +99,6 @@ async function getMcpOpenApiSchema(request: Request, env: Env): Promise<Record<s
   return filterOpenApiSpecForMcp(openapi.schema);
 }
 
-app.get("/og/*", OgCardGet);
 app.get(OPENAPI_JSON_PATH, (c) => builtDocumentResponse(c.req.raw, c.env, OPENAPI_JSON_PATH, openApiSpecResponse));
 app.get(MCP_OPENAPI_JSON_PATH, (c) =>
   builtDocumentResponse(c.req.raw, c.env, MCP_OPENAPI_JSON_PATH, mcpOpenApiSpecResponse),
@@ -112,6 +111,7 @@ openapi.route("/r", r_Router);
 openapi.route("/members", members_Router);
 app.route("/news", newsRouter);
 app.route("/events", events_Router);
+app.route("/", site_Router);
 
 // Build the MCP fetch handler after OpenAPI routes are registered.
 const fetchWithMcp = createMcpWorkerFetch({ app, getMcpOpenApiSchema });

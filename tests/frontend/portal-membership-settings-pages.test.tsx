@@ -275,6 +275,26 @@ describe("membership application form page", () => {
     expect(requests.map((request) => request.path)).toEqual([FORM_DEFINITION_API]);
   });
 
+  it("discards an unsaved title when canceling and reopening the form", async () => {
+    const requests = stubApi((url) => (url.pathname === FORM_DEFINITION_API ? json(applicationForm) : null));
+    const page = mount(<MembershipApplicationForm canWrite />);
+    await settle();
+    await settle();
+    await beginRecordEdit(page, "Application form actions", "Edit form");
+    await typeInto(
+      page.querySelector<HTMLInputElement>('input[aria-label="Form title"]')!,
+      "Unsaved application title",
+    );
+    await act(async () => buttonNamed(page, "Cancel").click());
+    expect(page.querySelector("input")).toBeNull();
+    expect(page.textContent).toContain(applicationForm.form.title);
+    expect(requests.filter((request) => request.method !== "GET")).toEqual([]);
+    await beginRecordEdit(page, "Application form actions", "Edit form");
+    expect(page.querySelector<HTMLInputElement>('input[aria-label="Form title"]')!.value).toBe(
+      applicationForm.form.title,
+    );
+  });
+
   it("saves an edited field through only the canonical definition route", async () => {
     const requests = stubApi((url) => (url.pathname === FORM_DEFINITION_API ? json(applicationForm) : null));
 
@@ -302,6 +322,8 @@ describe("membership application form page", () => {
     const update = membershipApplicationFormDefinitionUpdateSchema.parse(mutation?.body);
     expect(update.expectedUpdatedAt).toBe(NOW);
     expect(update.fields).toMatchObject([{ key: "interest", label: "How will you contribute?" }]);
+    expect(page.querySelectorAll("input, textarea")).toHaveLength(0);
+    expect(page.querySelector('[aria-label="Application form actions"]')).not.toBeNull();
     // The workflow-owned consent fields are never resubmitted as editable ones.
     expect(update.fields?.map((field) => field.key)).not.toContain("agrees_bylaws");
     expect(requests.some((request) => request.path.startsWith("/api/v1/admin/forms"))).toBe(false);

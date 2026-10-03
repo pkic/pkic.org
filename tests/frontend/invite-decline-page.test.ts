@@ -10,7 +10,6 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { inviteDeclineSchema } from "../../assets/shared/schemas/registration";
-// @ts-expect-error Vite's raw-loader suffix is available to frontend tests.
 import inviteDeclineTemplate from "../../layouts/shortcodes/invite-decline.html?raw";
 import { mountTemplate } from "./helpers/hugo-template";
 

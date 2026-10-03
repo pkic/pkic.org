@@ -1,0 +1,97 @@
+/*
+ * GENERATED FILE — do not edit.
+ *
+ * Source: assets/design/tokens.ts (tokens the public site alone reads)
+ * Regenerate: pnpm run build:tokens
+ */
+@layer legacy, tokens, base, components, utilities;
+
+@layer tokens {
+  :root {
+    --pk-public-text-hero: clamp(1.6rem, 5.5vw, 3.5rem);
+    --pk-public-text-stat: 1.6rem;
+    --pk-public-text-wg-title: 2rem;
+    --pk-public-text-card-icon: 2.25rem;
+    --pk-public-radius-card-lg: 1.5rem;
+    --pk-public-prose-callout: #111827;
+    --pk-public-home-feature-ink: #cde8d8;
+    --pk-public-wg-header-ground: #0d0d0d;
+    --pk-public-wg-shade: #000000;
+    --pk-public-hero-action: color-mix(in srgb, #ed7d31 75%, #000);
+    --pk-wg-green: rgb(25, 135, 84);
+    --pk-wg-blue: rgb(90, 155, 213);
+    --pk-wg-orange: rgb(237, 125, 49);
+    --pk-wg-purple: rgb(111, 66, 193);
+    --pk-wg-teal: rgb(32, 201, 151);
+    --pk-public-hero: linear-gradient(135deg, #0a1f14 0%, #0d3d24 55%, #0a2f40 100%);
+    --pk-public-hero-home: linear-gradient(135deg, #0a1f14 0%, #0d3d24 45%, #0a2f40 100%);
+    --pk-public-hero-blog: linear-gradient(135deg, #0c0e2a 0%, #142058 50%, #0a183a 100%);
+    --pk-public-hero-members: linear-gradient(135deg, #10082a 0%, #200d42 50%, #0c0820 100%);
+    --pk-public-hero-about: linear-gradient(135deg, #0a0c20 0%, #141c3a 50%, #0a1428 100%);
+    --pk-public-hero-events: linear-gradient(135deg, #1a0a04 0%, #38200a 50%, #1a1408 100%);
+    --pk-public-hero-resources: linear-gradient(135deg, #041a18 0%, #083430 50%, #041a24 100%);
+    --pk-public-hero-working-groups: linear-gradient(135deg, #062719 0%, #0b4a2c 48%, #093849 100%);
+    --pk-public-hero-blue: linear-gradient(135deg, #08152e 0%, #0d2452 55%, #081a38 100%);
+    --pk-public-hero-green: linear-gradient(135deg, #0a1f14 0%, #0d3d24 55%, #0a2f14 100%);
+    --pk-public-hero-orange: linear-gradient(135deg, #1e0c05 0%, #3d1a08 55%, #2a140a 100%);
+    --pk-public-hero-purple: linear-gradient(135deg, #110820 0%, #2a0d3d 55%, #1a0c2a 100%);
+    --pk-public-hero-teal: linear-gradient(135deg, #041a18 0%, #083430 55%, #04201f 100%);
+    --pk-public-card-1: linear-gradient(135deg, #073922 0%, #0b5041 52%, #122139 100%);
+    --pk-public-card-2: linear-gradient(135deg, #071c35 0%, #163e4a 52%, #0b2f2a 100%);
+    --pk-public-card-3: linear-gradient(135deg, #2a0d3d 0%, #173b42 52%, #0d3d24 100%);
+    --pk-public-card-4: linear-gradient(135deg, #3d1a08 0%, #572119 52%, #29102d 100%);
+    --pk-public-card-5: linear-gradient(135deg, #381020 0%, #301447 52%, #142058 100%);
+    --pk-public-card-6: linear-gradient(135deg, #0d3d24 0%, #3d2c08 100%);
+    --pk-public-card-shade: linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.24) 64%, rgba(0,0,0,0.08) 100%);
+    --pk-public-hero-image-scrim: linear-gradient(180deg, rgba(0,0,0,0.22), rgba(0,0,0,0.62));
+    --pk-public-hero-sponsor-scrim: rgba(0,0,0,0.42);
+    --pk-public-wg-1: linear-gradient(135deg, #34115f, #792fc3);
+    --pk-public-wg-pkimm: linear-gradient(135deg, #1e3a5f, #0d2040);
+    --pk-public-wg-pqc: linear-gradient(135deg, #4a1d8e, #1c0852);
+    --pk-public-wg-cm: linear-gradient(135deg, #8b3200, #4a1a00);
+    --pk-public-wg-tc: linear-gradient(135deg, #1a5a3a, #0a2d1e);
+    --pk-public-wg-cbom: linear-gradient(135deg, #006a6a, #003333);
+    --pk-public-wg-radius: 0.875rem;
+    --pk-public-wg-label-text: 0.65rem;
+    --pk-public-wg-heading-text: 1.1rem;
+    --pk-public-wg-body-text: 0.83rem;
+    --pk-public-wg-chip-text: 0.72rem;
+    --pk-public-wg-label-ink: rgba(255,255,255,0.55);
+    --pk-public-wg-icon-ink: rgba(255,255,255,0.88);
+    --pk-public-wg-circle-strong: rgba(255,255,255,0.07);
+    --pk-public-wg-circle-soft: rgba(255,255,255,0.05);
+    --pk-public-wg-chip-muted: rgba(0,0,0,0.055);
+    --pk-public-wg-chip-muted-hover: rgba(0,0,0,0.11);
+    --pk-public-wg-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.07);
+    --pk-public-wg-shadow-hover: 0 4px 8px rgba(0,0,0,0.08), 0 16px 48px rgba(0,0,0,0.14);
+    --pk-public-support: linear-gradient(135deg, #0a1f14 0%, #0d3d24 45%, #0a2f40 100%);
+    --pk-public-support-stripe: linear-gradient(to right, #198754, #20c997, #5a9bd5, #ffc000, #ed7d31, #dc3545);
+    --pk-public-support-stat: #20c997;
+    --pk-public-support-heading: #cde8d8;
+    --pk-public-support-body: rgba(255,255,255,0.7);
+    --pk-public-support-label: rgba(255,255,255,0.55);
+    --pk-public-support-link: rgba(255,255,255,0.6);
+    --pk-public-support-circle: rgba(255,255,255,0.05);
+    --pk-public-support-circle-soft: rgba(255,255,255,0.035);
+    --pk-public-support-stat-text: 2.75rem;
+    --pk-public-support-body-text: 0.9rem;
+    --pk-public-support-link-text: 0.875rem;
+    --pk-public-support-label-text: 0.75rem;
+    --pk-public-support-button-text: 0.95rem;
+    --pk-public-support-shadow: 0 4px 12px rgba(0,0,0,0.08), 0 16px 40px rgba(0,0,0,0.12);
+    --pk-public-member-wall-duration: 30s;
+    --pk-public-member-wall-mask: linear-gradient(to bottom, transparent 0%, #000 8%, #000 92%, transparent 100%);
+
+
+  }
+
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+
+    }
+  }
+
+  :root[data-theme="dark"] {
+
+  }
+}

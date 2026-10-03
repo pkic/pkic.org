@@ -19,23 +19,20 @@
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { getJson } from "../shared/api-client";
-import { formatDate } from "../shared/ui";
+import { VoteCard } from "../site/PublicVoteCard";
 import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
-import { EmptyState } from "../components/EmptyState";
-import { Badge as StatusBadge } from "../components/Badge";
-import { Badge } from "../ui/Badge";
+import { EmptyState } from "../ui/RecordEmptyState";
 import { Button } from "../ui/Button";
 import { publicVotesListResponseSchema, type PublicVotesListResponse } from "../../shared/schemas/votes";
+
+import "../site/member-directory.css";
 
 const API_BASE_FALLBACK = "/api/v1";
 const PAGE_SIZE = 20;
 
-type PublicVote = PublicVotesListResponse["votes"][number];
-type VoteType = PublicVote["voteType"];
-
 interface VoteSection {
-  votes: PublicVote[];
+  votes: PublicVotesListResponse["votes"];
   page: PublicVotesListResponse["page"];
 }
 
@@ -44,12 +41,6 @@ type SectionKey = "open" | "closed";
 const SECTION_STATUS_FILTER: Record<SectionKey, string> = {
   open: "open,scheduled",
   closed: "closed",
-};
-
-const VOTE_TYPE_LABELS: Record<VoteType, string> = {
-  election: "Election",
-  motion: "Motion",
-  consultation: "Consultation",
 };
 
 export function buildVotesSectionUrl(apiBase: string, section: SectionKey, offset: number): string {
@@ -67,37 +58,6 @@ async function fetchVotesSection(
   offset: number,
 ): Promise<PublicVotesListResponse> {
   return getJson(buildVotesSectionUrl(apiBase, section, offset), publicVotesListResponseSchema);
-}
-
-function VoteCard({ vote, detailBase }: { vote: PublicVote; detailBase: string }) {
-  const href = `${detailBase}?slug=${encodeURIComponent(vote.slug)}`;
-  return (
-    <div class="member-card bento-card">
-      <a class="pk-stretched" href={href} aria-label={vote.title}></a>
-      <div class="pk-cluster">
-        {/* The lifecycle badge comes from the product's own status vocabulary,
-            so "open" and "scheduled" read the same here as they do in the
-            portal, and the tone carries a dot rather than colour alone. */}
-        <StatusBadge status={vote.status} />
-        <Badge tone="neutral" dot={false}>
-          {VOTE_TYPE_LABELS[vote.voteType]}
-        </Badge>
-        <Badge tone="neutral" dot={false}>
-          {vote.ownerGroupName}
-        </Badge>
-      </div>
-      <div class="member-card-name">{vote.title}</div>
-      {vote.description && (
-        <p class="member-card-description">
-          {vote.description.length > 160 ? `${vote.description.slice(0, 160).trimEnd()}…` : vote.description}
-        </p>
-      )}
-      <p class="pk-small">
-        {vote.status === "closed" ? "Closed " : "Closes "}
-        {formatDate(vote.closesAt)}
-      </p>
-    </div>
-  );
 }
 
 function VoteSectionView({

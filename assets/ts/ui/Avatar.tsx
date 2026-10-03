@@ -2,7 +2,9 @@ import type { ComponentChildren, JSX } from "preact";
 import { useState } from "preact/hooks";
 
 import "./Avatar.css";
-import { initialsFrom } from "../shared/initials";
+// The ring and label only portal surfaces wear; kept out of the entry stylesheet public pages link.
+import "./AvatarStanding.css";
+import { initialsFrom, monogramFrom } from "../shared/initials";
 
 export { initialsFrom, monogramFrom } from "../shared/initials";
 
@@ -27,7 +29,8 @@ export interface AvatarProps extends Omit<JSX.ImgHTMLAttributes<HTMLImageElement
    * `round` is a person. An organization's mark is a logo, and a logo in a
    * circle is cropped where a face is framed — so a square with the picture
    * fitted inside it, never cut. Every surface that draws people round keeps
-   * doing so; the shape is the caller's because the subject is.
+   * doing so; the shape is the caller's because the subject is. The letters
+   * follow the subject too: a person's initials, an organization's monogram.
    */
   shape?: "round" | "square";
 }
@@ -61,7 +64,7 @@ export function Avatar({ name, src, size = "md", status, shape = "round", ...res
       {src && !broken ? (
         <img {...rest} src={src} alt="" loading="lazy" class="pk-avatar__img" onError={() => setBroken(true)} />
       ) : (
-        <span class="pk-avatar__initials">{initialsFrom(name)}</span>
+        <span class="pk-avatar__initials">{shape === "square" ? monogramFrom(name) : initialsFrom(name)}</span>
       )}
     </div>
   );

@@ -2,25 +2,20 @@
  * Vite frontend build script.
  *
  * Bundles assets/ts/loader.ts (the single client-side entry point) into
- * static/js/built/ with a content-hashed filename, then writes a minimal
- * manifest to data/asset-manifest.json so Hugo can emit the correct <script>
- * tag.
+ * public/js/built/ with a content-hashed filename, then writes a minimal
+ * manifest beside the bundle so the Worker renderer can emit the current
+ * script and stylesheet URLs.
  *
  * Each dynamic import() in loader.ts becomes a separate lazy chunk with a
  * content-hashed name — only the chunk needed by the current page is fetched.
  *
- * Output goes to static/js/built/ (not public/) so that Hugo's
- * --cleanDestinationDir never deletes the built files; Hugo copies static/
- * into public/ during every build, restoring them automatically.
- *
- * This script is invoked automatically by the Hugo plugin in vite.config.ts
- * before every Hugo build. It can also be run standalone:
- *   node scripts/build-frontend.mjs [--dev]
+ * The Vite-only public preparation script invokes this after copying ordinary
+ * static files into public/.
  */
 
 import { build } from "vite";
 import { resolve, relative, dirname } from "node:path";
-import { writeFileSync, mkdirSync, readFileSync, rmSync } from "node:fs";
+import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
 import { entryStylesheets } from "./lib/frontend-entry-assets.mjs";
@@ -28,34 +23,21 @@ import { assertFrontendBundleBudget } from "./lib/frontend-bundle-budget.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const root = resolve(__dirname, "..");
-const outDir = resolve(root, "static", "js", "built");
-const dataDir = resolve(root, "data");
-const publicBuiltDir = resolve(root, "public", "js", "built");
+const outDir = resolve(root, "public", "js", "built");
 
 const entries = {
   loader: resolve(root, "assets/ts/loader.ts"),
+  publicSite: resolve(root, "assets/ts/public-site.ts"),
 };
 
-const isDev = process.argv.includes("--dev");
-
-// Hugo copies static/js/built/ into public/js/built/ on every build, but it
-// never deletes files that exist in the destination and not the source —
-// so chunks left behind by a previous build (renamed/removed components,
-// stale content hashes) accumulate in public/ forever. Vite's own
-// `emptyOutDir` only clears static/js/built/, not Hugo's copy of it.
-// Clearing public/js/built/ before this build runs (and therefore before
-// Hugo's next copy) guarantees Hugo repopulates it as an exact mirror of
-// the fresh static/js/built/ output instead of layering on top of stale
-// files. This runs unconditionally: it's a no-op on first run (directory
-// doesn't exist yet) and production builds already get an equivalent
-// clean via Hugo's `--cleanDestinationDir`.
-rmSync(publicBuiltDir, { recursive: true, force: true });
+const isDev = process.argv.includes("--dev") || process.argv.includes("--client-dev");
 
 /** @type {import('vite').UserConfig} */
 const config = {
   root,
   configFile: false,
-  // Disable public directory copying — this script writes to static/, not public/.
+  // The preparation step already copied static files. This nested client build
+  // must only write its own bundle directory.
   publicDir: false,
   // base must match the public URL prefix so chunk imports resolve correctly.
   // Without this, dynamic imports reference /chunks/... instead of /js/built/chunks/...
@@ -67,6 +49,7 @@ const config = {
       react: "preact/compat",
       "react-dom/test-utils": "preact/test-utils",
       "react-dom": "preact/compat",
+      "react/jsx-dev-runtime": "preact/jsx-runtime",
       "react/jsx-runtime": "preact/jsx-runtime",
     },
   },
@@ -83,6 +66,10 @@ const config = {
     rollupOptions: {
       preserveEntrySignatures: false,
       input: entries,
+      // Pagefind's runtime lives beside the generated search index, not in the
+      // module graph. `navbar.js` imports it by absolute URL at the moment the
+      // reader opens search, so the bundler must leave that import alone.
+      external: ["/pagefind/pagefind.js"],
       output: {
         strictExecutionOrder: true,
         entryFileNames: isDev ? "[name].js" : "[name].[hash].js",
@@ -107,11 +94,31 @@ const config = {
           groups: [
             // The visual editor loads only on Edit. Cache its stable engine
             // layers independently from the form UI and optional table support.
-            { name: "editor-model", includeDependenciesRecursively: false, test: /node_modules[\\/]prosemirror-(model|state|transform)[\\/]/ },
-            { name: "editor-view", includeDependenciesRecursively: false, test: /node_modules[\\/]prosemirror-view[\\/]/ },
-            { name: "editor-tables", includeDependenciesRecursively: false, test: /node_modules[\\/](prosemirror-tables|@tiptap[\\/]extension-table)[\\/]/ },
-            { name: "editor-core", includeDependenciesRecursively: false, test: /node_modules[\\/]@tiptap[\\/]core[\\/]/ },
-            { name: "editor-markdown", includeDependenciesRecursively: false, test: /node_modules[\\/]@tiptap[\\/]markdown[\\/]/ },
+            {
+              name: "editor-model",
+              includeDependenciesRecursively: false,
+              test: /node_modules[\\/]prosemirror-(model|state|transform)[\\/]/,
+            },
+            {
+              name: "editor-view",
+              includeDependenciesRecursively: false,
+              test: /node_modules[\\/]prosemirror-view[\\/]/,
+            },
+            {
+              name: "editor-tables",
+              includeDependenciesRecursively: false,
+              test: /node_modules[\\/](prosemirror-tables|@tiptap[\\/]extension-table)[\\/]/,
+            },
+            {
+              name: "editor-core",
+              includeDependenciesRecursively: false,
+              test: /node_modules[\\/]@tiptap[\\/]core[\\/]/,
+            },
+            {
+              name: "editor-markdown",
+              includeDependenciesRecursively: false,
+              test: /node_modules[\\/]@tiptap[\\/]markdown[\\/]/,
+            },
             {
               name: "vendor",
               test: /node_modules[\\/]zod[\\/]/,
@@ -122,7 +129,7 @@ const config = {
     },
     target: "es2022",
   },
-  plugins: [manifestPlugin({ entries, dataDir, root, isDev })],
+  plugins: [manifestPlugin({ entries, outDir, root, isDev })],
 };
 
 await build(config);
@@ -130,11 +137,11 @@ await build(config);
 // ─── Manifest plugin ──────────────────────────────────────────────────────────
 
 /**
- * Writes data/asset-manifest.json after each successful build.
+ * Writes public/js/built/manifest.json after each successful build.
  * Maps the "loader" entry key to its public URL (/js/built/loader.HASH.js)
- * so Hugo's footer.html can emit the correct hashed <script> tag.
+ * so the Worker-rendered document can emit the current asset tags.
  */
-function manifestPlugin({ entries, dataDir, root, isDev }) {
+function manifestPlugin({ entries, outDir, root, isDev }) {
   return {
     name: "pkic-asset-manifest",
     writeBundle(_options, bundle) {
@@ -162,34 +169,34 @@ function manifestPlugin({ entries, dataDir, root, isDev }) {
         const url = `/js/built/${fileName}`;
 
         // CSS imported by the entry is emitted as its own asset rather than
-        // injected by script, so Hugo has to link it. Lazy chunks are not
+        // injected by script, so the server renderer has to link it. Lazy chunks are not
         // recorded here on purpose: Vite injects their stylesheets when the
         // chunk loads, which is what keeps component CSS off pages that never
         // reach that component.
         const entryCss = entryStylesheets(fileName, bundle);
-        const cssUrl = entryCss.length > 0 ? `/js/built/${entryCss[0]}` : null;
-        if (entryCss.length > 1) {
-          throw new Error(`Entry "${key}" needs ${entryCss.length} stylesheets; consolidate its static styles before publishing.`);
-        }
+        const stylesheets = entryCss.map((file) => {
+          const stylesheet = { url: `/js/built/${file}` };
+          if (!isDev) {
+            const hash = createHash("sha256")
+              .update(readFileSync(resolve(outDir, file)))
+              .digest("base64");
+            stylesheet.integrity = `sha256-${hash}`;
+          }
+          return stylesheet;
+        });
 
         if (isDev) {
-          manifest[key] = cssUrl ? { url, css: cssUrl } : { url };
+          manifest[key] = { url, stylesheets };
         } else {
           const filePath = resolve(outDir, fileName);
           const fileContent = readFileSync(filePath);
           const hash = createHash("sha256").update(fileContent).digest("base64");
-          manifest[key] = { url, integrity: `sha256-${hash}` };
-          if (cssUrl) {
-            const cssContent = readFileSync(resolve(outDir, entryCss[0]));
-            const cssHash = createHash("sha256").update(cssContent).digest("base64");
-            manifest[key].css = cssUrl;
-            manifest[key].cssIntegrity = `sha256-${cssHash}`;
-          }
+          manifest[key] = { url, integrity: `sha256-${hash}`, stylesheets };
         }
       }
 
-      mkdirSync(dataDir, { recursive: true });
-      const outPath = resolve(dataDir, "asset-manifest.json");
+      mkdirSync(outDir, { recursive: true });
+      const outPath = resolve(outDir, "manifest.json");
       writeFileSync(outPath, JSON.stringify(manifest, null, 2) + "\n");
       console.log(`[build-frontend] manifest written → ${relative(root, outPath)}`);
     },

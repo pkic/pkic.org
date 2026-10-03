@@ -35,7 +35,6 @@ export const NODE_UNIT_TEST_FILES = [
   "tests/og-badge-hero-image.test.ts",
   "tests/og-badge-http.test.ts",
   "tests/og-badge-prerender-image.test.ts",
-  "tests/og-card-rendering.test.ts",
   "tests/og-image-type.test.ts",
   "tests/openapi-route-validation.test.ts",
   "tests/pagination-sort-schema.test.ts",

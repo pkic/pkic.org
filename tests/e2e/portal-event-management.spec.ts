@@ -11,6 +11,7 @@ import {
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { openRow } from "./helpers/data-table";
 import { signInToPortal } from "./helpers/portal-auth";
+import { publishE2eSite } from "./helpers/site-publication";
 import { tab } from "./helpers/tabs";
 
 test.use({ timezoneId: "Europe/Amsterdam" });
@@ -44,6 +45,7 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   await page.getByLabel("End date").fill("2027-06-10T17:00");
   await page.getByLabel("Timezone").fill("Europe/Amsterdam");
   await page.getByLabel("Event profile").selectOption("workshop");
+  await page.getByLabel("Visibility", { exact: true }).selectOption("public");
   await page.getByLabel("Peer invitation limit").fill("7");
   await page.getByLabel("Location").fill("Amsterdam and online");
   await page.getByLabel("Event resource URL").fill("https://example.test/portal-workshop");
@@ -309,6 +311,7 @@ test("a portal manager creates and edits a group-owned standalone event", async 
     ["propose/presentation/", "data-event-speaker-presentation"],
     ["invite/decline/", "data-invite-decline"],
   ] as const;
+  await publishE2eSite(page, `/events/2027/${eventSlug}/register/`);
   for (const [suffix, marker] of publicShells) {
     const response = await page.request.get(`/events/2027/${eventSlug}/${suffix}`);
     expect(response.status(), suffix).toBe(200);

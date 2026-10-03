@@ -103,8 +103,8 @@ describe("GroupMembersWidget", () => {
      */
     expect([...container.querySelectorAll("a")].map((link) => [link.textContent, link.getAttribute("href")])).toEqual([
       ["Acme Corp", "/members/acme-corp/"],
-      ["Bravo Ltd", "/members/profile/?id=o2"],
-      ["Charlie GmbH", "/members/profile/?id=o3"],
+      ["Bravo Ltd", "/members/o2/"],
+      ["Charlie GmbH", "/members/o3/"],
     ]);
     expect(container.textContent).toBe("Acme Corp, Bravo Ltd, Charlie GmbH");
   });

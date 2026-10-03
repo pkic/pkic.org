@@ -1,10 +1,15 @@
+import { prepareStaticPublicationFixture } from "./tests/helpers/prepare-static-publication.mjs";
 import path from "node:path";
 import { builtinModules } from "node:module";
 import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-pool-workers";
 import { defineConfig } from "vitest/config";
+import { contentMediaPlugin } from "./scripts/lib/content-media-plugin.mjs";
+import { bylinesPlugin } from "./scripts/lib/bylines-plugin.mjs";
+import { trustListPlugin } from "./scripts/lib/trust-list-plugin.mjs";
 import { NODE_UNIT_TEST_FILES } from "./vitest.config.unit";
 
 export default defineConfig(async () => {
+  await prepareStaticPublicationFixture(import.meta.dirname);
   const migrationsPath = path.join(import.meta.dirname, "migrations");
   const migrations = (await readD1Migrations(migrationsPath)).filter(
     (migration) => !path.basename(migration.name).startsWith("._"),
@@ -62,14 +67,31 @@ export default defineConfig(async () => {
   // Only SELF.fetch needs an eagerly loaded entry point. Other tests import
   // their actual router/service explicitly, still inside isolated workerd
   // with the same bindings and real migrations.
-  const workerFetchFiles = ["tests/api-security.test.ts"];
+  const workerFetchFiles = ["tests/api-security.test.ts", "tests/public-site-rendering.test.ts"];
+  const siteOptions = {
+    resolve: {
+      alias: {
+        react: "preact/compat",
+        "react-dom/test-utils": "preact/test-utils",
+        "react-dom": "preact/compat",
+        "react/jsx-dev-runtime": "preact/jsx-runtime",
+        "react/jsx-runtime": "preact/jsx-runtime",
+      },
+    },
+  };
+  const sitePlugins = () => [
+    contentMediaPlugin(import.meta.dirname),
+    trustListPlugin(import.meta.dirname),
+    bylinesPlugin(import.meta.dirname),
+  ];
   return {
     test: {
       maxWorkers: 3,
       reporters: ["default", "./tests/tools/slowest-tests-reporter.ts"],
       projects: [
         {
-          plugins: [cloudflareTest({ ...workerOptions, main: "./tests/helpers/d1-test-worker.ts" })],
+          ...siteOptions,
+          plugins: [...sitePlugins(), cloudflareTest({ ...workerOptions, main: "./tests/helpers/d1-test-worker.ts" })],
           test: {
             ...testOptions,
             name: "d1",
@@ -85,7 +107,8 @@ export default defineConfig(async () => {
           },
         },
         {
-          plugins: [cloudflareTest({ ...workerOptions, main: "./functions/router.ts" })],
+          ...siteOptions,
+          plugins: [...sitePlugins(), cloudflareTest({ ...workerOptions, main: "./functions/router.ts" })],
           test: { ...testOptions, name: "worker-fetch", include: workerFetchFiles, exclude: ["**/._*"] },
         },
       ],

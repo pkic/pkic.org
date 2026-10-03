@@ -16,6 +16,8 @@ import {
   proposalAccessReadResponseSchema,
 } from "../../shared/schemas/proposal-management";
 import { proposalAccessPath } from "../../shared/proposal-access-paths";
+import { eventFormsResponseSchema } from "../../shared/schemas/forms";
+import { proposalSessionTypeLabel } from "../../shared/proposal-session-types";
 
 function tokenFromRoot(root: HTMLElement, fallback: string | null): string | null {
   const token = root.dataset.manageToken?.trim();
@@ -106,6 +108,16 @@ async function main(): Promise<void> {
 
   try {
     proposalData = await getJson(proposalAccessPath(apiBase, manageToken), proposalAccessReadResponseSchema);
+    const configuration = await getJson(
+      `${apiBase}/events/${boot.eventSlug}/forms/placements/proposal_submission`,
+      eventFormsResponseSchema,
+    );
+    const typeSelect = boot.form.elements.namedItem("proposalType");
+    if (typeSelect instanceof HTMLSelectElement) {
+      typeSelect.replaceChildren(
+        ...configuration.allowedSessionTypes.map((type) => new Option(proposalSessionTypeLabel(type), type)),
+      );
+    }
     setField(boot.form, "proposalType", proposalData.proposal.proposal_type);
     setField(boot.form, "title", proposalData.proposal.title);
     setField(boot.form, "abstract", proposalData.proposal.abstract);

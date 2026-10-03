@@ -1763,7 +1763,7 @@ cards:
 
 This conference was made possible through the support of the Post-Quantum Cryptography Working Group and the following organizations:
 
-{{< figure src="organizational-support.jpg" >}}
+{{< figure src="organizational-support.jpg" alt="Main conference organizers" >}}
 
 ## Program & Speakers
 

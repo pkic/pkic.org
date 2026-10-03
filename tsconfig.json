@@ -14,10 +14,13 @@
     "resolveJsonModule": true,
     "allowJs": false,
     "forceConsistentCasingInFileNames": true,
-    "verbatimModuleSyntax": true
+    "verbatimModuleSyntax": true,
+    "jsx": "react-jsx",
+    "jsxImportSource": "preact"
   },
   "include": [
     "functions/**/*.ts",
+    "functions/**/*.tsx",
     "tests/**/*.ts",
     "assets/shared/**/*.ts"
   ],

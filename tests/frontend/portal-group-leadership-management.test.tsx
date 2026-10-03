@@ -401,6 +401,29 @@ describe("portal group leadership management", () => {
     expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/leadership`);
   });
 
+  it("cancels a term draft without saving and restores persisted values when reopened", async () => {
+    const requests = stubFetch(() => json(leadership));
+    const container = mount(<GroupLeadership groupId={GROUP_ID} assignmentSegment={PAST_USER_ROLE_ID} />);
+    await settle();
+    await settle();
+    const originalStart = controlFor<HTMLInputElement>(container, "Term starts").value;
+    const originalEnd = controlFor<HTMLInputElement>(container, "Term ends").value;
+    setValue(controlFor(container, "Title"), "Co-Chair", "change");
+    setValue(controlFor(container, "Term starts"), "2024-07-01", "input");
+    setValue(controlFor(container, "Term ends"), "2026-10-01", "input");
+    await act(async () => button(container, "Cancel").click());
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/leadership`);
+    expect(requests.filter(({ method }) => method !== "GET")).toEqual([]);
+    await act(() => render(<GroupLeadership groupId={GROUP_ID} />, container));
+    await settle();
+    await act(() => render(<GroupLeadership groupId={GROUP_ID} assignmentSegment={PAST_USER_ROLE_ID} />, container));
+    await settle();
+    await settle();
+    expect(controlFor<HTMLSelectElement>(container, "Title").value).toBe("Chair");
+    expect(controlFor<HTMLInputElement>(container, "Term starts").value).toBe(originalStart);
+    expect(controlFor<HTMLInputElement>(container, "Term ends").value).toBe(originalEnd);
+  });
+
   it("edits a term's title and dates through the canonical update route", async () => {
     const requests = stubFetch(() => json(leadership));
     const container = mount(<GroupLeadership groupId={GROUP_ID} assignmentSegment={PAST_USER_ROLE_ID} />);

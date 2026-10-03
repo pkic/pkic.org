@@ -87,7 +87,46 @@ mermaid.initialize({
   mindmap:   { useMaxWidth: true },
 });
 
-document.addEventListener('DOMContentLoaded', () => {
+/*
+ * Hugo loaded this script in the document, so mermaid's own `startOnLoad` and
+ * the listener below both caught `DOMContentLoaded`. Here the module arrives
+ * later, on a page that actually has a diagram, by which time that event has
+ * already fired — so the diagrams are drawn explicitly and the wrapper setup
+ * runs straight away.
+ */
+/*
+ * Mermaid writes each diagram's theme into a `<style>` inside the SVG it
+ * draws. The site's CSP is `style-src 'self'`, which refuses those, and the
+ * diagram renders as black boxes. A constructed stylesheet is CSSOM rather
+ * than inline style, so the policy does not apply to it — the rules are moved
+ * across after each render, which keeps the diagrams themed without the site
+ * having to allow inline styles everywhere.
+ */
+function adoptDiagramStyles() {
+  document.querySelectorAll('.mermaid svg style').forEach(function (style) {
+    var css = style.textContent;
+    if (!css) return;
+    style.textContent = '';
+    try {
+      var sheet = new CSSStyleSheet();
+      sheet.replaceSync(css);
+      document.adoptedStyleSheets = document.adoptedStyleSheets.concat(sheet);
+    } catch {
+      style.textContent = css; // No constructed stylesheets: leave it to the policy.
+    }
+  });
+}
+
+if (document.readyState !== 'loading') {
+  mermaid.run().then(adoptDiagramStyles, adoptDiagramStyles);
+}
+
+function whenReady(run) {
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+}
+
+whenReady(() => {
   document.querySelectorAll('.mermaid-wrap').forEach(wrap => {
     // Add title attribute to hint that it's clickable
     wrap.setAttribute('title', 'Click to view fullscreen');

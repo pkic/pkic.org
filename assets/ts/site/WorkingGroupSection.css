@@ -1,0 +1,261 @@
+@layer components {
+  /*
+   * A working group's sub-pages carry the group's own accent: the header
+   * gradient, the rule above the section nav, the current tab and the card
+   * tint all read from one custom property, so a new group needs a colour
+   * and nothing else.
+   */
+  .pk-wg {
+    --pk-wg-accent: var(--pk-wg-green);
+  }
+
+  .pk-wg--blue {
+    --pk-wg-accent: var(--pk-wg-blue);
+  }
+
+  .pk-wg--orange {
+    --pk-wg-accent: var(--pk-wg-orange);
+  }
+
+  .pk-wg--purple {
+    --pk-wg-accent: var(--pk-wg-purple);
+  }
+
+  .pk-wg--teal {
+    --pk-wg-accent: var(--pk-wg-teal);
+  }
+
+  .pk-wg-header {
+    padding-block: var(--pk-6) calc(var(--pk-6) - var(--pk-1));
+    row-gap: var(--pk-5);
+    border-top: 3px solid var(--pk-wg-accent);
+    background:
+      radial-gradient(at 0% 50%, color-mix(in srgb, var(--pk-wg-accent) 22%, transparent) 0%, transparent 65%),
+      radial-gradient(at 100% 0%, color-mix(in srgb, var(--pk-wg-accent) 10%, transparent) 0%, transparent 50%),
+      linear-gradient(
+        120deg,
+        color-mix(in srgb, var(--pk-wg-accent) 45%, var(--pk-public-wg-shade)) 0%,
+        var(--pk-public-wg-header-ground) 60%
+      );
+    color: var(--pk-on-solid);
+  }
+
+  .pk-wg-header__eyebrow {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+    margin: 0;
+    color: color-mix(in srgb, var(--pk-on-solid) 55%, transparent);
+    font-size: var(--pk-text-2xs);
+    font-weight: 700;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  .pk-wg-header__eyebrow a {
+    color: inherit;
+    text-decoration: none;
+  }
+
+  .pk-wg-header__eyebrow a:hover,
+  .pk-wg-header__eyebrow a:focus-visible {
+    color: var(--pk-on-solid);
+  }
+
+  .pk-wg-header__title {
+    margin-block: var(--pk-5) 0;
+    color: var(--pk-on-solid);
+    font-size: var(--pk-public-text-wg-title);
+    font-weight: 800;
+    line-height: 1.2;
+  }
+
+  /* The tab strip. It scrolls sideways rather than wrapping onto a second row. */
+  .pk-wg-nav {
+    position: sticky;
+    z-index: 30;
+    top: 3.5rem;
+    border-top: 3px solid var(--pk-wg-accent);
+    border-bottom: 1px solid color-mix(in srgb, var(--pk-on-solid) 8%, transparent);
+    background: var(--pk-chrome-deep);
+  }
+
+  .pk-wg-nav__items {
+    display: flex;
+    overflow-x: auto;
+    align-items: stretch;
+    scrollbar-width: none;
+  }
+
+  .pk-wg-nav__items::-webkit-scrollbar {
+    display: none;
+  }
+
+  .pk-wg-nav__items a {
+    padding: var(--pk-2) var(--pk-4);
+    border-bottom: 2px solid transparent;
+    color: color-mix(in srgb, var(--pk-on-solid) 66%, transparent);
+    font-size: var(--pk-text-sm);
+    font-weight: 600;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .pk-wg-nav__items a:hover,
+  .pk-wg-nav__items a:focus-visible {
+    color: var(--pk-on-solid);
+  }
+
+  .pk-wg-nav__items a.is-current {
+    border-bottom-color: var(--pk-wg-accent);
+    color: var(--pk-on-solid);
+  }
+
+  .pk-wg-body {
+    padding-block: var(--pk-7) var(--pk-8);
+  }
+
+  /* The section heading takes the group's accent and a full-measure rule. */
+  .pk-wg-body__heading {
+    padding-bottom: var(--pk-3);
+    border-bottom: 1px solid var(--pk-line-soft);
+    margin: 0;
+    color: var(--pk-wg-accent);
+    font-size: var(--pk-text-2xl);
+    font-weight: 700;
+  }
+
+  .pk-wg-body__lead {
+    margin: 0;
+    color: var(--pk-ink-muted);
+  }
+
+  /* The card grid the working-group sections share. */
+  .pk-bento {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(min(15rem, 100%), 1fr));
+    gap: var(--pk-5);
+  }
+
+  .pk-bento__card {
+    display: flex;
+    min-height: 10rem;
+    flex-direction: column;
+    padding: 1.75rem;
+    border: 1px solid color-mix(in srgb, var(--pk-wg-accent) 15%, transparent);
+    border-radius: var(--pk-public-radius-card-lg);
+    background: linear-gradient(145deg, var(--pk-surface) 0%, color-mix(in srgb, var(--pk-wg-accent) 8%, transparent) 100%);
+    box-shadow: 0 4px 12px color-mix(in srgb, var(--pk-wg-accent) 5%, transparent);
+    color: var(--pk-ink);
+    text-decoration: none;
+    transition:
+      transform var(--pk-dur),
+      box-shadow var(--pk-dur);
+  }
+
+  .pk-bento__card--link:hover,
+  .pk-bento__card--link:focus-visible {
+    box-shadow: var(--pk-shadow-3);
+    transform: translateY(-4px);
+  }
+
+  .pk-bento__icon {
+    display: block;
+    margin-bottom: var(--pk-4);
+    color: color-mix(in srgb, var(--pk-wg-accent) 90%, var(--pk-public-wg-shade));
+    font-size: var(--pk-public-text-card-icon);
+    line-height: 1;
+  }
+
+  .pk-bento__badge {
+    align-self: flex-start;
+    padding: 0.25em 0.6em;
+    border-radius: var(--pk-radius-pill);
+    margin-bottom: var(--pk-2);
+    color: var(--pk-on-solid);
+    font-size: var(--pk-text-2xs);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+  }
+
+  .pk-bento__badge--ok {
+    background: var(--pk-ok);
+  }
+
+  .pk-bento__badge--warn {
+    background: var(--pk-warn);
+  }
+
+  .pk-bento__badge--info {
+    background: var(--pk-info);
+  }
+
+  .pk-bento__title {
+    margin: 0 0 var(--pk-2);
+    font-size: var(--pk-text-xl);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1.35;
+  }
+
+  .pk-bento__text {
+    margin: 0;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-lg);
+  }
+
+  .pk-bento__footer {
+    padding-top: var(--pk-3);
+    margin-top: auto;
+    color: var(--pk-accent-ink);
+    font-size: var(--pk-text-sm);
+    font-weight: 600;
+  }
+
+
+  .pk-wg-cta {
+    padding-block: var(--pk-7);
+    background: var(--pk-surface-sunk);
+  }
+
+  /*
+   * The introduction and the leadership beside it are two complementary
+   * columns, not a card grid: the prose takes two thirds and the leaders one,
+   * and on a narrow screen the leaders follow the prose.
+   */
+  .wg-intro-layout {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    gap: var(--pk-6);
+    align-items: start;
+  }
+
+  .wg-intro-layout > :first-child {
+    line-height: 1.65;
+  }
+
+  @media (min-width: 60rem) {
+    .wg-intro-layout {
+      grid-template-columns: minmax(0, 2fr) minmax(20rem, 1fr);
+    }
+  }
+
+  /* Join and Back are separate actions, stacked with room between them rather than run together. */
+  .wg-page-actions {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: var(--pk-4);
+  }
+
+  @media (max-width: 42rem) {
+    .pk-wg-header__title {
+      font-size: var(--pk-public-text-stat);
+    }
+
+    .pk-wg-nav {
+      top: 3.5rem;
+    }
+  }
+}

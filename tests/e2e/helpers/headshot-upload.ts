@@ -57,7 +57,7 @@ export async function agreeToHeadshotTerms(page: Page): Promise<Locator> {
   const disclaimer = page.getByRole("dialog", { name: "Before uploading a photo" });
   await expect(disclaimer).toBeVisible({ timeout: 10_000 });
   await expect(disclaimer.locator(".hsd-title")).toHaveText("Before uploading a photo");
-  await disclaimer.locator(".hsd-agree").check();
+  await disclaimer.getByRole("checkbox", { name: "I confirm all of the above.", exact: true }).check();
   await disclaimer.locator(".hsd-confirm").click();
 
   const crop = page.getByRole("dialog", { name: "Crop headshot" });

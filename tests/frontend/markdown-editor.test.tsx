@@ -7,7 +7,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { editorExtensions } from "../../assets/ts/components/markdown-editor/editor-extensions";
 import { insertEditorBlock, moveEditorBlock } from "../../assets/ts/components/markdown-editor/editor-blocks";
-import { Markdown } from "../../assets/ts/components/Markdown";
+import { Markdown } from "../../assets/ts/ui/Markdown";
 import { markdownMediaInsertSchema } from "../../assets/shared/schemas/markdown-editor";
 import { markdownVideoEmbed } from "../../assets/shared/markdown-media";
 

@@ -5,20 +5,9 @@ export const FRONTEND_BUNDLE_BUDGETS = Object.freeze({
   chunk: Object.freeze({ rawBytes: 200 * 1024, gzipBytes: 45 * 1024 }),
 });
 
-// Compiled size of assets/scss/main.scss (public/scss/main.css after a Hugo
-// build).
-//
-// This was 640 KiB / 88 KiB, holding the status quo of ~591 KiB raw / ~80 KiB
-// gzip, with a note saying it would come down once the Bootstrap migration
-// trimmed the stylesheet. It has: removing the framework took the compiled
-// sheet to 305 KiB raw / 47 KiB gzip, a little under half. The ceiling is
-// lowered to match, so the space Bootstrap used to occupy cannot quietly
-// fill back up.
-export const FRONTEND_CSS_BUDGET = Object.freeze({ rawBytes: 340 * 1024, gzipBytes: 54 * 1024 });
-
 /*
  * The design system's entry stylesheet: tokens, the base layer, the utilities,
- * and the few primitives whose class names appear in server-rendered Hugo
+ * and the primitives whose class names appear in server-rendered Preact
  * markup. It is linked on every page, so it has to stay small — and the
  * pressure on it is one-directional, because adding "just one more" component
  * is always locally convenient. This ceiling is what makes that a decision
@@ -44,10 +33,20 @@ export const FRONTEND_CSS_BUDGET = Object.freeze({ rawBytes: 340 * 1024, gzipByt
  *   Table        content tables authored in Markdown, which had been
  *                unreadable in the dark theme
  *
- * That is the whole justification. A fourth addition needs its own, in this
+ * Raised again, on 2026-09-17, from 24 KiB raw, for a fourth:
+ *
+ *   Avatar       the portrait on server-rendered blog author cards and agenda
+ *                speakers, where a missing photo shows initials. Drawing those
+ *                initials is this component's job alone, so the public pages
+ *                use it rather than keeping hand-drawn copies. Only the base
+ *                portrait joined; the standing ring and label stay in the
+ *                component's lazy chunk.
+ *
+ * That is the whole justification. A fifth addition needs its own, in this
  * comment, or it does not belong in the entry.
  */
-export const DESIGN_ENTRY_CSS_BUDGET = Object.freeze({ rawBytes: 24 * 1024, gzipBytes: 6 * 1024 });
+export const DESIGN_ENTRY_CSS_BUDGET = Object.freeze({ rawBytes: 25 * 1024, gzipBytes: 6 * 1024 });
+export const FRONTEND_CSS_BUDGET = DESIGN_ENTRY_CSS_BUDGET;
 
 function kilobytes(bytes) {
   return `${(bytes / 1024).toFixed(2)} KiB`;

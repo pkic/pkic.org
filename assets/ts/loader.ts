@@ -10,7 +10,7 @@
  *   data-module="shared/donation-form"              → ./shared/donation-form
  *
  * Built by scripts/build-frontend.mjs (Vite/Rolldown) from a single entry point
- * into hashed chunks and a manifest (data/asset-manifest.json). Each entry
+ * into hashed chunks and a manifest (public/js/built/manifest.json). Each entry
  * below becomes a lazy-loaded chunk, fetched only when the corresponding
  * [data-module] element is present on the page.
  */
@@ -22,8 +22,8 @@ import "./design-system";
 // Site chrome rather than a page module: the toggle is in every navbar, and a
 // lazy chunk would mean a request on every page for forty lines — and a window
 // in which the control is rendered but does not respond.
-import { installAvailabilityNotice } from "./shared/availability-notice";
 import { installThemeToggles } from "./theme";
+import { installDeferredAvailabilityNotice } from "./shared/availability-notice-loader";
 
 // Each value is a function returning a dynamic import — esbuild turns each
 // import() into a separate chunk. Only the chunk requested by the page is
@@ -39,6 +39,8 @@ const modules: Record<string, () => Promise<unknown>> = {
   "event-flows/speaker-manage-page": () => import("./event-flows/speaker-manage-page"),
   "event-flows/speaker-presentation-page": () => import("./event-flows/speaker-presentation-page"),
   "modules/photo-grid": () => import("./modules/photo-grid"),
+  "site/self-assessment": () => import("./site/self-assessment"),
+  "site/agenda": () => import("./site/agenda"),
   "member-flows/join-form": () => import("./member-flows/join-form"),
   "member-flows/application-status-page": () => import("./member-flows/application-status-page"),
   "member-flows/sponsor-form": () => import("./member-flows/sponsor-form"),
@@ -59,29 +61,31 @@ const modules: Record<string, () => Promise<unknown>> = {
   "shared/donation-thank-you": () => import("./shared/donation/thank-you"),
 };
 
+let validationReady: Promise<unknown> | undefined;
+
 async function loadModule(name: string): Promise<void> {
   const loader = modules[name];
   if (!loader) {
     console.warn(`[loader] unknown module: ${name}`);
     return;
   }
+  validationReady ??= import("./shared/browser-validation");
+  await validationReady;
   await loader();
 }
 
 function init(): void {
   installThemeToggles();
+  installDeferredAvailabilityNotice();
   const moduleElements = [...document.querySelectorAll<HTMLElement>("[data-module]")];
-  const hasOnlineModule = moduleElements.some(
-    (element) =>
-      element.dataset.module &&
-      !["ui/preview/preview-page", "modules/photo-grid", "member-flows/sponsors-wall"].includes(element.dataset.module),
-  );
-  // Static pages and the site-wide sponsor footer do not need a status polling timer.
-  // The sponsor widget reports its own fetch failure without blocking static content.
-  if (hasOnlineModule || window.location.pathname === "/maintenance/") installAvailabilityNotice();
   moduleElements.forEach((el) => {
     const name = el.dataset.module;
-    if (name) void loadModule(name);
+    if (!name) return;
+    // The server's "Loading…" line is a placeholder for this module, not
+    // content it should diff against: an island that renders nothing would
+    // otherwise leave the loading message standing.
+    el.querySelector(":scope > .pk-island-placeholder")?.remove();
+    void loadModule(name);
   });
 }
 

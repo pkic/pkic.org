@@ -28,7 +28,7 @@ import {
 import { PROPOSAL_ADMIN_STATUS_FILTERS } from "../../../../../shared/schemas/proposal-status";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
 import { Badge, statusLabel } from "../../../../components/Badge";
-import { EmptyState } from "../../../../components/EmptyState";
+import { EmptyState } from "../../../../ui/RecordEmptyState";
 import type { Column } from "../../../../components/Table";
 import { TabList } from "../../../../ui/TabList";
 import { usePortalHashLocation } from "../../hash-location";

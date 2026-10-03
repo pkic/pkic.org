@@ -1,0 +1,6 @@
+@use "sass:meta";
+
+// The same authored column sizes and sticky behavior as the content shortcodes.
+@layer components {
+  @include meta.load-css("../../scss/layout-utilities");
+}

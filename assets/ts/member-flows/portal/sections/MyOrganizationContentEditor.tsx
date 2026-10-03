@@ -18,7 +18,7 @@ import { useMemo, useState } from "preact/hooks";
 import { ApiClientError, deleteJson, postJson } from "../../../shared/api-client";
 import { confirmAction } from "../../../components/ConfirmDialog";
 import { ErrorAlert } from "../../../components/ErrorAlert";
-import { Markdown } from "../../../components/Markdown";
+import { Markdown } from "../../../ui/Markdown";
 import { EditActions } from "../../../ui/EditActions";
 import { useContractForm } from "../../../hooks/useContractForm";
 import { Alert } from "../../../ui/Alert";

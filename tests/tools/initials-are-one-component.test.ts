@@ -104,7 +104,8 @@ describe("initials avatars", () => {
     const fontSize = /font-size:\s*([^;]+);/.exec(rule)?.[1] ?? "";
     // `em` measured the inherited body size, so one nine-pixel size served
     // both a 2rem list marker and a 5.75rem portrait — which is #44 itself.
-    expect(fontSize).toContain("var(--pk-avatar-size)");
+    // A fallback default is allowed; what matters is the variable is the diameter.
+    expect(fontSize).toMatch(/var\(--pk-avatar-size\b/);
     expect(fontSize).not.toMatch(/\d\s*em\b/);
   });
 });

@@ -194,12 +194,12 @@ describe("public member directory", () => {
 
     const link = container.querySelector<HTMLAnchorElement>(".member-card a.pk-stretched");
     expect(link).not.toBeNull();
-    expect(link?.getAttribute("aria-label")).toBe("Example Corp");
+    expect(link?.textContent).toBe("Example Corp");
     expect(link?.getAttribute("href")).toBe("/members/example-corp/");
   });
 
   it("keeps the id-keyed address for a member with no organization row to hold a slug", async () => {
-    // The only surviving `?id=` case (#15), and the branch nothing covered.
+    // Independent members have a static path even without an organization slug.
     stubFetch(
       listingResponse([
         member({ id: "49e927b2-1163-4efb-b1b3-c5bd7971b685", slug: null, name: "Ada Lovelace", memberType: "person" }),
@@ -209,7 +209,7 @@ describe("public member directory", () => {
     const container = await mountDirectory();
 
     expect(container.querySelector<HTMLAnchorElement>(".member-card a.pk-stretched")?.getAttribute("href")).toBe(
-      "/members/profile/?id=49e927b2-1163-4efb-b1b3-c5bd7971b685",
+      "/members/49e927b2-1163-4efb-b1b3-c5bd7971b685/",
     );
   });
 });

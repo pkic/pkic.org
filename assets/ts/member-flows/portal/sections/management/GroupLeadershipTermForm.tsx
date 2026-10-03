@@ -117,11 +117,7 @@ export function GroupLeadershipTermForm({
   return (
     // This is the primary heading on the term page.
     <Panel class="pk" aria-label={`Edit term for ${assignment.userName}`}>
-      <PanelHeader title={`Edit term for ${assignment.userName}`} headingLevel={2} breadcrumb>
-        <Button size="sm" disabled={saving} onClick={onCancel}>
-          Cancel
-        </Button>
-      </PanelHeader>
+      <PanelHeader title={`Edit term for ${assignment.userName}`} headingLevel={2} breadcrumb />
       <PanelBody>
         <form class="pk-stack pk-stack--snug" onSubmit={(event) => void submit(event)}>
           <p class="pk-muted pk-small">
@@ -166,6 +162,9 @@ export function GroupLeadershipTermForm({
           <div class="pk-cluster">
             <Button type="submit" size="sm" variant="primary" loading={saving} disabled={!title.trim() || !startsOn}>
               {saving ? "Saving…" : "Save term"}
+            </Button>
+            <Button size="sm" disabled={saving} onClick={onCancel}>
+              Cancel
             </Button>
           </div>
         </form>

@@ -7,7 +7,7 @@
  * row — that nothing previously covered.
  */
 import { describe, expect, it } from "vitest";
-import { MEMBER_PROFILE_SHELL_PATH, memberProfileHref } from "../../assets/shared/member-profile-url";
+import { memberProfileHref } from "../../assets/shared/member-profile-url";
 
 describe("memberProfileHref", () => {
   it("gives an organization the readable address its Hugo page had", () => {
@@ -18,18 +18,18 @@ describe("memberProfileHref", () => {
     );
   });
 
-  it("falls back to the id-keyed shell only when there is no slug to use", () => {
+  it("uses a static id-keyed page only when there is no slug to use", () => {
     // An individual member has no organizations row, so nothing holds a slug.
     expect(memberProfileHref({ id: "49e927b2-1163-4efb-b1b3-c5bd7971b685", slug: null })).toBe(
-      `${MEMBER_PROFILE_SHELL_PATH}?id=49e927b2-1163-4efb-b1b3-c5bd7971b685`,
+      `/members/49e927b2-1163-4efb-b1b3-c5bd7971b685/`,
     );
-    expect(memberProfileHref({ id: "49e927b2" })).toBe(`${MEMBER_PROFILE_SHELL_PATH}?id=49e927b2`);
+    expect(memberProfileHref({ id: "49e927b2" })).toBe(`/members/49e927b2/`);
     // An empty slug is no slug, not a link to `/members//`.
-    expect(memberProfileHref({ id: "x", slug: "" })).toBe(`${MEMBER_PROFILE_SHELL_PATH}?id=x`);
+    expect(memberProfileHref({ id: "x", slug: "" })).toBe(`/members/x/`);
   });
 
   it("escapes what it puts in the address", () => {
-    expect(memberProfileHref({ id: "a b/c", slug: null })).toBe(`${MEMBER_PROFILE_SHELL_PATH}?id=a%20b%2Fc`);
+    expect(memberProfileHref({ id: "a b/c", slug: null })).toBe(`/members/a%20b%2Fc/`);
     expect(memberProfileHref({ id: "x", slug: "a b" })).toBe("/members/a%20b/");
   });
 });

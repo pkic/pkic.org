@@ -1,5 +1,5 @@
 ---
-date: 2021-06-21T7:55:00Z
+date: 2021-06-21T07:55:00Z
 draft: false
 title: What We’re Working On
 description: Activities the PKI Consortium (PKIC) is working on

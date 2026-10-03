@@ -8,148 +8,20 @@
  * groups the complete directory into presentation buckets.
  */
 import { render } from "preact";
-import { useMemo, useState } from "preact/hooks";
+import { useState } from "preact/hooks";
+import { DirectoryGrid, MemberCard } from "../site/MemberDirectory";
 import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
-import { EmptyState } from "../components/EmptyState";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
-import { memberProfileHref } from "../../shared/member-profile-url";
-import { publicMembersListResponseSchema, type PublicMemberSummary } from "../../shared/schemas/members-directory";
+import { publicMembersListResponseSchema } from "../../shared/schemas/members-directory";
 import { useApiPage } from "../hooks/useApiPage";
 import { useMemberDirectory } from "./use-member-directory";
-import { monogramFrom } from "../shared/initials";
+
+import "../site/member-directory.css";
 
 const API_BASE_FALLBACK = "/api/v1";
-const DIGITS = new Set("0123456789".split(""));
-
-export type DirectoryMember = PublicMemberSummary;
-
-function letterBucket(name: string): string {
-  const c = name.trim().charAt(0).toUpperCase();
-  if (DIGITS.has(c)) return "#";
-  if (/^[A-Z]$/.test(c)) return c;
-  return "…";
-}
-
-function MemberCard({ member }: { member: DirectoryMember }) {
-  // Decided in `assets/shared/member-profile-url.ts`, not here: the wall, the
-  // charter roll and this grid all link to the same page and used to answer
-  // "where is it?" three separate ways (#15).
-  const href = memberProfileHref(member);
-  const colorIdx = member.name.length % 6;
-
-  return (
-    <div class="member-card bento-card">
-      <a class="pk-stretched" href={href} aria-label={member.name}></a>
-      <div class="member-card-logo-wrap">
-        {member.logoUrl ? (
-          <img class="member-card-logo" src={member.logoUrl} alt={`${member.name} logo`} loading="lazy" />
-        ) : (
-          <div class={`member-card-initials initial-color-${colorIdx}`}>{monogramFrom(member.name)}</div>
-        )}
-      </div>
-      <div class="member-card-name">{member.name}</div>
-      {member.slogan && <div class="member-card-slogan">{member.slogan}</div>}
-      {member.description && (
-        <p class="member-card-description">
-          {member.description.length > 160 ? `${member.description.slice(0, 160).trimEnd()}…` : member.description}
-        </p>
-      )}
-    </div>
-  );
-}
-
-function DirectoryGrid({ members, prefix }: { members: DirectoryMember[]; prefix: string }) {
-  const buckets = useMemo(() => {
-    const map = new Map<string, DirectoryMember[]>();
-    for (const m of members) {
-      const key = letterBucket(m.name);
-      if (!map.has(key)) map.set(key, []);
-      map.get(key)!.push(m);
-    }
-    return map;
-  }, [members]);
-
-  const letters = "ABCDEFGHIJKLMNOPQRSTUVWXYZ".split("");
-  const hasNum = buckets.has("#");
-  const hasOther = buckets.has("…");
-  const presentLetters = letters.filter((l) => buckets.has(l));
-
-  if (members.length === 0) {
-    return (
-      <EmptyState
-        title="No members found."
-        body="No member matches your search. Try a shorter term, or clear the search to see everyone."
-      />
-    );
-  }
-
-  return (
-    <div class="members-layout">
-      {/* When the rail appears is a property of the rail, so it lives with
-          the rest of its shape in `_members-directory.scss` rather than as a
-          responsive display class here. */}
-      <nav class="members-az-sidebar" aria-label="Jump to letter">
-        {hasNum && (
-          <a class="az-sidebar-link" href={`#${prefix}-NUM`}>
-            #
-          </a>
-        )}
-        {letters.map((l) =>
-          buckets.has(l) ? (
-            <a key={l} class="az-sidebar-link" href={`#${prefix}-${l}`}>
-              {l}
-            </a>
-          ) : (
-            <span key={l} class="az-sidebar-link is-empty" aria-disabled="true">
-              {l}
-            </span>
-          ),
-        )}
-        {hasOther && (
-          <a class="az-sidebar-link" href={`#${prefix}-OTHER`}>
-            …
-          </a>
-        )}
-      </nav>
-      <div class="members-content">
-        {hasNum && (
-          <section class="member-letter-group" id={`${prefix}-NUM`}>
-            <h3 class="member-letter-heading">0 – 9</h3>
-            <div class="members-grid">
-              {buckets.get("#")!.map((m) => (
-                <MemberCard key={m.id} member={m} />
-              ))}
-            </div>
-          </section>
-        )}
-        {presentLetters.map((l) => (
-          <section class="member-letter-group" id={`${prefix}-${l}`} key={l}>
-            <h3 class="member-letter-heading">{l}</h3>
-            <div class="members-grid">
-              {buckets.get(l)!.map((m) => (
-                <MemberCard key={m.id} member={m} />
-              ))}
-            </div>
-          </section>
-        ))}
-        {hasOther && (
-          <section class="member-letter-group" id={`${prefix}-OTHER`}>
-            <h3 class="member-letter-heading">Other</h3>
-            <div class="members-grid">
-              {buckets.get("…")!.map((m) => (
-                <MemberCard key={m.id} member={m} />
-              ))}
-            </div>
-          </section>
-        )}
-      </div>
-    </div>
-  );
-}
-
 /**
  * The same roll, narrowed to one group and shown as a plain grid.
  *

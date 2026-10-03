@@ -1,0 +1,337 @@
+/*
+ * The site footer and the member-logo marquee above it.
+ *
+ * Ported from the published site's footer-and-edit stylesheet. It also owns
+ * `.member-logo`, which is what keeps a member's logo greyscale and a
+ * sponsor's in colour on both the footer marquee and the home-page wall.
+ */
+
+@layer legacy {
+  #participate {
+    padding-block: var(--pk-5);
+    background: #000;
+    border-top: 3px solid transparent;
+    border-image: linear-gradient(
+        to right,
+        var(--pk-palette-green),
+        var(--pk-palette-teal),
+        var(--pk-palette-blue),
+        var(--pk-palette-yellow),
+        var(--pk-palette-orange),
+        var(--pk-palette-red)
+      )
+      1;
+    color: rgba(255, 255, 255, 0.65);
+    text-align: center;
+    font-size: 1.1em;
+    font-weight: 300;
+    letter-spacing: 0.01em;
+  }
+  #participate a {
+    color: #fff;
+    font-weight: 500;
+    text-decoration: underline;
+    text-decoration-color: rgba(255, 255, 255, 0.25);
+    text-underline-offset: 3px;
+    transition: text-decoration-color 0.2s ease;
+  }
+  #participate a:hover {
+    text-decoration-color: var(--pk-palette-green);
+  }
+
+  .footer-body {
+    border-top: 1px solid rgba(255, 255, 255, 0.06);
+    padding-block: var(--pk-7);
+  }
+
+  .footer-columns {
+    --pk-col-min: 14rem;
+  }
+
+  .footer-member-wall {
+    white-space: nowrap;
+    overflow: hidden;
+    margin-block: 1.5rem;
+  }
+
+  .footer-brand {
+    padding-right: 2rem;
+  }
+  @media (min-width: 992px) {
+    .footer-brand {
+      border-right: 1px solid rgba(255, 255, 255, 0.07);
+    }
+  }
+
+  .footer-logo-link {
+    display: inline-block;
+    opacity: 0.85;
+    transition: opacity 0.2s ease;
+  }
+  .footer-logo-link:hover {
+    opacity: 1;
+  }
+
+  .footer-logo-img {
+    height: 42px;
+    width: auto;
+    opacity: 0.9;
+  }
+
+  .footer-tagline {
+    margin-top: 0.75rem;
+    font-size: 0.82rem;
+    font-weight: 300;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.65);
+  }
+
+  .footer-social a {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+    background: rgba(255, 255, 255, 0.05);
+    color: rgba(255, 255, 255, 0.45);
+    margin-right: 6px;
+    transition:
+      background 0.2s ease,
+      color 0.2s ease;
+  }
+  .footer-social a:hover {
+    background: rgba(25, 135, 84, 0.15);
+    color: var(--pk-palette-green);
+  }
+  .footer-social svg {
+    display: block;
+  }
+
+  .edit-on-github {
+    position: fixed;
+    bottom: 1.5rem;
+    right: 1.5rem;
+    z-index: 1000;
+    display: inline-flex;
+    align-items: center;
+    gap: 0;
+    overflow: hidden;
+    background: rgba(26, 26, 26, 0.85);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: rgba(255, 255, 255, 0.45);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 8px;
+    padding: 7px 9px;
+    text-decoration: none;
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    max-width: 36px;
+    transition:
+      max-width 0.25s ease,
+      color 0.2s ease,
+      border-color 0.2s ease,
+      background 0.2s ease;
+  }
+  .edit-on-github svg {
+    flex-shrink: 0;
+  }
+  .edit-on-github-label {
+    opacity: 0;
+    max-width: 0;
+    overflow: hidden;
+    transition:
+      opacity 0.2s ease 0.05s,
+      max-width 0.25s ease;
+    margin-left: 0;
+  }
+  .edit-on-github:hover {
+    max-width: 180px;
+    color: rgba(255, 255, 255, 0.9);
+    border-color: rgba(25, 135, 84, 0.5);
+    background: rgba(26, 26, 26, 0.95);
+  }
+  .edit-on-github:hover .edit-on-github-label {
+    opacity: 1;
+    max-width: 140px;
+    margin-left: 6px;
+  }
+  @media (max-width: 767px) {
+    .edit-on-github {
+      display: none;
+    }
+  }
+
+  .selection-edit-tooltip {
+    position: fixed;
+    z-index: 1100;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(26, 26, 26, 0.92);
+    backdrop-filter: blur(8px);
+    -webkit-backdrop-filter: blur(8px);
+    color: rgba(255, 255, 255, 0.9);
+    border: 1px solid rgba(25, 135, 84, 0.5);
+    border-radius: 6px;
+    padding: 5px 10px;
+    font-size: 0.72rem;
+    font-weight: 500;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+    text-decoration: none;
+    pointer-events: auto;
+    user-select: none;
+    opacity: 0;
+    transform: translateY(4px);
+    transition:
+      opacity 0.15s ease,
+      transform 0.15s ease;
+  }
+  .selection-edit-tooltip.is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .selection-edit-tooltip svg {
+    flex-shrink: 0;
+  }
+  .selection-edit-tooltip::after {
+    content: "";
+    position: absolute;
+    top: 100%;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-top-color: rgba(25, 135, 84, 0.5);
+  }
+  .selection-edit-tooltip:hover {
+    color: #fff;
+    border-color: rgba(25, 135, 84, 0.8);
+    background: #1a1a1a;
+  }
+  @media (max-width: 767px) {
+    .selection-edit-tooltip {
+      display: none;
+    }
+  }
+
+  .footer-col-title {
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.65);
+    margin-bottom: 1.1rem;
+  }
+
+  .footer-col-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+  }
+  .footer-col-list li {
+    margin-bottom: 0.6rem;
+  }
+
+  .footer-col-link {
+    font-size: 0.875rem;
+    font-weight: 400;
+    color: rgba(255, 255, 255, 0.55);
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+  .footer-col-link:hover {
+    color: #fff;
+  }
+
+  .footer-bottom {
+    border-top: 1px solid rgba(255, 255, 255, 0.07);
+  }
+
+  .footer-disclaimer {
+    font-size: 0.73rem;
+    line-height: 1.6;
+    color: rgba(255, 255, 255, 0.65);
+  }
+  .footer-disclaimer a {
+    color: rgba(255, 255, 255, 0.65);
+    text-decoration: underline;
+    text-decoration-color: rgba(255, 255, 255, 0.15);
+    text-underline-offset: 2px;
+  }
+  .footer-disclaimer a:hover {
+    color: rgba(255, 255, 255, 0.6);
+  }
+
+  .footer-copy {
+    color: rgba(255, 255, 255, 0.65);
+    font-size: 0.75rem;
+  }
+
+  .footer-legal {
+    font-size: 0.75rem;
+    color: rgba(255, 255, 255, 0.65);
+  }
+  .footer-legal a {
+    color: rgba(255, 255, 255, 0.65);
+    text-decoration: none;
+    transition: color 0.2s ease;
+  }
+  .footer-legal a:hover {
+    color: rgba(255, 255, 255, 0.8);
+  }
+
+  .member-logo {
+    margin: 5px 20px;
+    height: 18px;
+    max-width: 90px;
+    filter: grayscale(1) opacity(0.55) contrast(0.5);
+    transition:
+      filter 0.2s ease,
+      transform 0.2s ease;
+  }
+
+  .member-logo-sponsor {
+    filter: none;
+    opacity: 1;
+    transition: transform 0.2s ease;
+  }
+
+  /* Every logo on the wall is the same size. A sponsor is told apart by
+     keeping its color while member logos sit in grayscale; rank is the
+     sponsors page's job, where the tier wall sizes by weight. */
+  .members a:hover .member-logo {
+    filter: none;
+  }
+
+  .members a:hover .member-logo-sponsor {
+    transform: scale(1.12);
+  }
+}
+
+@layer components {
+  /* Intrinsic image dimensions reserve space without stretching the artwork. */
+  .member-logo {
+    width: auto;
+    height: var(--pk-6);
+    max-width: calc(var(--pk-8) * 3);
+    object-fit: contain;
+    filter: var(--pk-member-logo-filter);
+    mix-blend-mode: var(--pk-member-logo-blend);
+  }
+
+  .members .member-logo-sponsor {
+    filter: var(--pk-member-logo-hover-filter);
+  }
+
+  .members a:hover .member-logo {
+    filter: var(--pk-member-logo-hover-filter);
+  }
+
+  .members .member-logo[data-logo-ink="light"] {
+    filter: var(--pk-member-logo-filter) invert(1);
+  }
+}

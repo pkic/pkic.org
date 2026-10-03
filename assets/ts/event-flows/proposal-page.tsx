@@ -19,21 +19,9 @@ import { ButtonLink } from "../ui/Button";
 import { Radio } from "../ui/Checkbox";
 import type { ProfileLinksHandle } from "../components/ProfileLinksInput";
 import { handleFormInviteSubmitError } from "../shared/widgets/invite-recovery";
+import { proposalSessionTypeLabel } from "../../shared/proposal-session-types";
 
 // ── Session type labels ───────────────────────────────────────────────────────
-
-const SESSION_TYPE_LABELS: Record<string, string> = {
-  talk: "Talk",
-  keynote: "Keynote",
-  panel: "Panel",
-  workshop: "Workshop",
-  tutorial: "Tutorial",
-  lightning_talk: "Lightning talk",
-  roundtable: "Roundtable",
-  birds_of_a_feather: "Birds of a feather",
-  fireside_chat: "Fireside chat",
-  demo: "Demo",
-};
 
 /**
  * Renders session-type radio buttons into the [data-session-types] container.
@@ -46,7 +34,7 @@ function renderSessionTypes(root: HTMLElement, types: string[]): void {
     <>
       {types.map((type, i) => {
         const id = `type-${type}`;
-        const label = SESSION_TYPE_LABELS[type] ?? type.replace(/_/g, " ");
+        const label = proposalSessionTypeLabel(type);
         return <Radio name="proposalType" id={id} value={type} defaultChecked={i === 0} label={label} />;
       })}
     </>,

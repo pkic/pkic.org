@@ -1,0 +1,26 @@
+---
+import PublicPage from "../../layouts/PublicPage.astro";
+import { SiteHero } from "../../../assets/ts/site/SitePrimitives";
+import { loadSiteContent } from "../../../functions/_lib/services/site-content";
+import { renderMemberNews } from "../../../functions/_lib/services/member-news/render";
+import { publication } from "../../publication";
+import { newsPageHref, publishedNewsPages } from "../../news-pages";
+
+export function getStaticPaths() {
+  return publishedNewsPages(publication.news).map((entry) => ({
+    params: { page: entry.route === "/news/" ? undefined : entry.route.slice("/news/".length, -1) },
+    props: entry,
+  }));
+}
+const content = await loadSiteContent("/news/");
+if (!content) throw new Error("The member news page source is missing");
+const { page, query } = Astro.props;
+const articles = await renderMemberNews(page, publication.sponsorNews, query, newsPageHref);
+---
+<PublicPage title={content.title} description={content.description} content={content}>
+  <SiteHero hero={content.hero} />
+  <section class="pk-section pk-container pk-container--wide" data-pagefind-body>
+    <p><a href="/news/feed.xml">Subscribe to member news</a></p>
+    <div set:html={articles} />
+  </section>
+</PublicPage>

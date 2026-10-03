@@ -1,0 +1,16 @@
+---
+import PublicPage from "../../layouts/PublicPage.astro";
+import { publication } from "../../publication";
+import { VoteCard } from "../../../assets/ts/site/PublicVoteCard";
+---
+<PublicPage title="Votes" description="Public votes and results from the PKI Consortium">
+  <section class="pk-container pk-container--wide pk-section pk-stack pk-stack--loose">
+    <h1>Votes</h1>
+    <p>Public results are published at the detail level selected by the vote organizer.</p>
+    {publication.votes.length ? (
+      <div class="members-grid">
+        {publication.votes.map((vote) => <VoteCard vote={vote} href={`/votes/${encodeURIComponent(vote.slug)}/`} />)}
+      </div>
+    ) : <p>No public votes have been published.</p>}
+  </section>
+</PublicPage>

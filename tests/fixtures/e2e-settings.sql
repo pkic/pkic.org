@@ -3,6 +3,7 @@
 -- event URLs exercise their redirect into the canonical group workspace.
 UPDATE events
 SET owner_group_id = '20000000-0000-4000-8000-000000000003',
+    visibility = 'public',
     profile_key = COALESCE(profile_key, 'conference'),
     source_mode = COALESCE(source_mode, 'hugo')
 WHERE slug = 'pqc-conference-amsterdam-nl';

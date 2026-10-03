@@ -8,7 +8,7 @@ import {
   type MailingList,
 } from "../../../../../shared/schemas/mailing-lists";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
-import { EmptyState } from "../../../../components/EmptyState";
+import { EmptyState } from "../../../../ui/RecordEmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Badge } from "../../../../ui/Badge";
 import { Button } from "../../../../ui/Button";

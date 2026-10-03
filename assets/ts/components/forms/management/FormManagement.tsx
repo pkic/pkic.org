@@ -29,7 +29,7 @@ import { deleteJson, getJson, patchJson, postJson } from "../../../shared/api-cl
 import { formatDateTime } from "../../../shared/ui";
 import { ApiDataTable } from "../../ApiDataTable";
 import { confirmAction } from "../../ConfirmDialog";
-import { EmptyState } from "../../EmptyState";
+import { EmptyState } from "../../../ui/RecordEmptyState";
 import { ErrorAlert } from "../../ErrorAlert";
 import { FilterSelect, type FilterOption } from "../../FilterSelect";
 import { Spinner } from "../../Spinner";

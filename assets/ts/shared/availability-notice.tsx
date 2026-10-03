@@ -65,7 +65,7 @@ function AvailabilityNotice() {
     </Alert>
   );
 }
-/** All public pages and portal modules share one status feed; recovery never discards a form. */
+/** Observe actual API refusals without polling during anonymous browsing. Recovery is explicit. */
 export function installAvailabilityNotice(): () => void {
   const host = document.createElement("div");
   host.className = "pk";
@@ -83,18 +83,8 @@ export function installAvailabilityNotice(): () => void {
     if (!host.isConnected) document.body.prepend(host);
     render(<AvailabilityNotice />, host);
   });
-  const refresh = () => {
-    if (document.visibilityState !== "hidden") void checkAvailability().catch(() => undefined);
-  };
-  refresh();
-  const interval = window.setInterval(refresh, 60_000);
-  window.addEventListener("focus", refresh);
-  document.addEventListener("visibilitychange", refresh);
   return () => {
     dispose();
-    window.clearInterval(interval);
-    window.removeEventListener("focus", refresh);
-    document.removeEventListener("visibilitychange", refresh);
     render(null, host);
     host.remove();
   };

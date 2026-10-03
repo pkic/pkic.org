@@ -1,5 +1,5 @@
 ---
-date: 2021-06-21T7:55:00Z
+date: 2021-06-21T07:55:00Z
 draft: false
 title: Improving quality of address information in certificates
 description: A linter to improve address validation, using authoritative sources to support the linter and avoid errors and inconsistencies.

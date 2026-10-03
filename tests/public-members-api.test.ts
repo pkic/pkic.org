@@ -383,7 +383,7 @@ describe("GET /api/v1/members/wall", () => {
     const body = memberWallResponseSchema.parse(await response.json());
     const hrefByName = new Map(body.entries.map((entry) => [entry.name, entry.href]));
     expect(hrefByName.get("Slugged Member")).toBe("/members/slugged-member/");
-    expect(hrefByName.get("Unslugged Member")).toBe(`/members/profile/?id=${unslugged}`);
+    expect(hrefByName.get("Unslugged Member")).toBe(`/members/${unslugged}/`);
   });
 
   it("never lets sponsor rows bypass the final wall bound", async () => {

@@ -7,7 +7,7 @@ import { usePortalHashLocation } from "../../hash-location";
 import { useMeetingCancellation } from "./useMeetingCancellation";
 import { downloadMeetingCalendar } from "./meeting-calendar-actions";
 import { Badge } from "../../../../components/Badge";
-import { EmptyState } from "../../../../components/EmptyState";
+import { EmptyState } from "../../../../ui/RecordEmptyState";
 import { RowActions } from "../../../../ui/RowActions";
 import { fmt } from "../../ui";
 

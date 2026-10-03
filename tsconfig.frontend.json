@@ -11,7 +11,7 @@
     "allowImportingTsExtensions": true,
     "noUnusedLocals": true,
     "skipLibCheck": true,
-    "allowJs": false,
+    "allowJs": true,
     "resolveJsonModule": true,
     "forceConsistentCasingInFileNames": true,
     "verbatimModuleSyntax": true,
@@ -19,6 +19,7 @@
     "jsxImportSource": "preact"
   },
   "include": [
+    "assets/js/**/*.js",
     "assets/ts/**/*.ts",
     "assets/ts/**/*.tsx",
     "assets/shared/**/*.ts",

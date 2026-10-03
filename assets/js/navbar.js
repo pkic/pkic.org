@@ -225,6 +225,10 @@
   var sSubfilters = document.getElementById("pkicSearchSubfilters");
   var sPanelClose = document.getElementById("pkicSearchPanelClose");
   var pf = null;
+  var initialQuery =
+    window.location.pathname === "/search/"
+      ? new URLSearchParams(window.location.hash.slice(1)).get("q")?.trim() || ""
+      : "";
   var currentQuery = "";
   var currentType = "";
   var currentTag = "";
@@ -241,9 +245,16 @@
   function loadPagefind() {
     if (pf) return;
     import("/pagefind/pagefind.js")
-      .then(function (m) {
+      .then(async function (m) {
         pf = m;
-        if (pf.init) pf.init();
+        if (pf.init) await pf.init();
+        if (initialQuery) {
+          currentQuery = initialQuery;
+          initialQuery = "";
+          if (sInput) sInput.value = currentQuery;
+          if (sInputMobile) sInputMobile.value = currentQuery;
+          await runSearch(currentQuery);
+        }
       })
       .catch(function () {});
   }
@@ -282,6 +293,7 @@
     if (sInput) sInput.value = "";
     if (sInputMobile) sInputMobile.value = "";
     currentQuery = "";
+    writeSearchFragment("");
     allResults = [];
     currentType = "";
     clearTimeout(debounce);
@@ -310,6 +322,8 @@
 
   var searchToggleMobile = document.getElementById("pkicSearchToggleMobile");
   if (searchToggleMobile) searchToggleMobile.addEventListener("click", openSearch);
+  var searchToggleQuick = document.getElementById("pkicSearchToggleQuick");
+  if (searchToggleQuick) searchToggleQuick.addEventListener("click", openSearch);
 
   if (sClose) sClose.addEventListener("click", closeSearch);
   if (sPanelClose) sPanelClose.addEventListener("click", closeSearch);
@@ -376,7 +390,16 @@
     }
   });
 
+  function writeSearchFragment(q) {
+    if (window.location.pathname !== "/search/") return;
+    var url = new URL(window.location.href);
+    url.search = "";
+    url.hash = q ? new URLSearchParams({ q: q }).toString() : "";
+    window.history.replaceState(window.history.state, "", url);
+  }
+
   function handleSearchInput(q) {
+    writeSearchFragment(q);
     clearTimeout(debounce);
     currentQuery = q;
     if (!q) {
@@ -608,6 +631,21 @@
 
     sSubfilters.innerHTML = html;
     sSubfilters.hidden = false;
+  }
+
+  if (window.location.pathname === "/search/") {
+    openSearch();
+    window.addEventListener("hashchange", function () {
+      initialQuery = new URLSearchParams(window.location.hash.slice(1)).get("q")?.trim() || "";
+      var q = initialQuery;
+      openSearch();
+      if (sInput) sInput.value = q;
+      if (sInputMobile) sInputMobile.value = q;
+      if (pf) {
+        initialQuery = "";
+        handleSearchInput(q);
+      }
+    });
   }
 
   async function runSearch(q) {

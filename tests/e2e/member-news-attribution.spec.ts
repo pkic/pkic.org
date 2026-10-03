@@ -28,59 +28,18 @@ test("member news arrives in the HTML and agrees with its RSS feed on desktop an
   await page.screenshot({ path: testInfo.outputPath("member-news-phone.png"), fullPage: true });
 });
 
-test("a blog post keeps its published byline while its sponsor sidebar uses the shared display", async ({
-  page,
-}, testInfo) => {
+test("a blog post keeps its published byline without browser sponsor requests", async ({ page }, testInfo) => {
   const requests: string[] = [];
-  await page.route("**/api/v1/sponsors/display?*", async (route) => {
+  await page.route("**/api/**", async (route) => {
     requests.push(route.request().url());
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({ groups: [], page: { limit: 200, offset: 0, total: 0, hasMore: false } }),
-    });
+    await route.abort();
   });
-  await page.goto(articlePath);
+  const response = await page.goto(articlePath);
+  expect(response?.status()).toBe(200);
+  expect(response!.headers()["x-pkic-publication"]).toContain("static;");
+  expect(await response!.text()).toContain("Tomas Gustavsson");
   await expect(page.getByText("Tomas Gustavsson", { exact: true }).first()).toBeVisible();
   await expect(page.getByText("Chief PKI Officer", { exact: true })).toBeVisible();
-  await expect.poll(() => requests.length).toBe(1);
+  expect(requests).toEqual([]);
   await page.screenshot({ path: testInfo.outputPath("post-owned-byline.png"), fullPage: true });
-});
-
-test("the event kiosk loads sponsors from the shared bounded D1 endpoint", async ({ page }, testInfo) => {
-  const requests: string[] = [];
-  await page.route("**/api/v1/sponsors?*", async (route) => {
-    const url = new URL(route.request().url());
-    expect(url.searchParams.get("eventName")).toBe("Post-Quantum Cryptography Conference Kuala Lumpur 2025");
-    expect(url.searchParams.get("minWeight")).toBe("4");
-    requests.push(url.href);
-    await route.fulfill({
-      contentType: "application/json",
-      body: JSON.stringify({
-        sponsors: [
-          {
-            id: "00000000-0000-4000-8000-000000000008",
-            name: "Kiosk verification sponsor",
-            website: "https://example.test/",
-            logoUrl: "/favicon.svg",
-            tier: "Gold",
-            eventTier: "Leader",
-            effectiveTier: "Leader",
-            weight: 4,
-          },
-        ],
-        page: { limit: 200, offset: 0, total: 1, hasMore: false },
-      }),
-    });
-  });
-  await page.goto("/events/2025/pqc-conference-kuala-lumpur-my/event-session.html");
-  await expect(page.getByRole("img", { name: /Kiosk verification sponsor/ })).toBeVisible();
-  expect(requests).toHaveLength(1);
-  await expect
-    .poll(() =>
-      page
-        .getByRole("img", { name: /Kiosk verification sponsor/ })
-        .evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0),
-    )
-    .toBe(true);
-  await page.screenshot({ path: testInfo.outputPath("kiosk-sponsors.png"), fullPage: true });
 });

@@ -23,7 +23,7 @@ import { Select, TextInput } from "../../../../../ui/TextControl";
 import { SponsorshipHistory } from "./SponsorshipHistory";
 import { SponsorshipLogo } from "./SponsorshipLogo";
 import { SponsorshipRecordForm } from "./SponsorshipRecordForm";
-import { Markdown } from "../../../../../components/Markdown";
+import { Markdown } from "../../../../../ui/Markdown";
 
 /** What the sponsorship is called, falling through the names it may carry. */
 function sponsorTitle(sponsorship: Sponsorship): string {

@@ -1,0 +1,14 @@
+---
+import PublicPage from "../../../layouts/PublicPage.astro";
+---
+<PublicPage title="Member profile" privatePage>
+  <section class="pk-section pk-container pk-stack">
+    <h1>Member profile</h1>
+    <p data-profile-redirect-status>Member profiles now have their own permanent addresses.</p>
+    <a href="/members/">Browse member profiles</a>
+  </section>
+  <script>
+    await import("../../../../assets/ts/shared/browser-validation");
+    await import("../../../../assets/ts/site/member-profile-redirect");
+  </script>
+</PublicPage>

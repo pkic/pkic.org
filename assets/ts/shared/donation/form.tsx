@@ -2,8 +2,7 @@
  * Donation form logic — initializes the donation widget rendered by the
  * `donation-form.html` Hugo shortcode.
  *
- * On load it auto-detects the visitor's country via `/api/v1/geolocation/country` and maps
- * it to a default currency. The donor can switch currencies via a `<select>`.
+ * On load it uses the browser locale to suggest a default currency. The donor can switch currencies via a `<select>`.
  * Preset amount buttons (50/100/250/500/1000) and a custom-amount input are
  * provided. Clicking "Donate" creates a Stripe Checkout Session via the
  * backend and mounts Stripe Embedded Checkout inline.
@@ -16,10 +15,9 @@
 import { render } from "preact";
 
 import "./donation-presets.css";
-import { postJson, getJson } from "../api-client";
+import { postJson } from "../api-client";
 import { donationCheckoutSchema } from "../../../shared/schemas/donation";
 import { donationCheckoutEmbeddedResponseSchema } from "../../../shared/schemas/donation";
-import { geolocationCountryResponseSchema } from "../../../shared/schemas/geolocation";
 import {
   CURRENCIES,
   currencyForCountry,
@@ -84,14 +82,9 @@ function readConfig(root: HTMLElement): DonationConfig {
 async function initForm(root: HTMLElement): Promise<void> {
   const config = readConfig(root);
 
-  // ── Detect currency from geo ───────────────────────────────────────────
-  let defaultCurrency = "usd";
-  try {
-    const geolocationCountry = await getJson(`${API_BASE}/geolocation/country`, geolocationCountryResponseSchema);
-    defaultCurrency = currencyForCountry(geolocationCountry.country);
-  } catch {
-    // Geo detection is best-effort; default to USD
-  }
+  // Currency selection is local; opening the form does not contact the API.
+  const region = new Intl.Locale(navigator.language).region;
+  const defaultCurrency = region ? currencyForCountry(region) : "usd";
 
   // ── State ──────────────────────────────────────────────────────────────
   let selectedCurrency = defaultCurrency;

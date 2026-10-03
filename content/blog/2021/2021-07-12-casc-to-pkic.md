@@ -2,7 +2,7 @@
 title: From CASC to the Public Key Infrastructure Consortium
 summary: Over the years, the need for private, industry, or solution-specific PKI has grown significantly, with stricter policies and the revocation of certificates and CAs becoming more common. The impact of changes in centralized PKI have caused delays and disruption of third-party services that may or may not have been considered. Any PKI (public, private, or specific) must operate according to best practices, clear policies and without a single point of failure.
 authors: [Paul van Brouwershaven, Chris Bailey]
-date: 2021-07-12T7:43:06+00:00
+date: 2021-07-12T07:43:06+00:00
 categories:
 tags: [PKI, PKIC, CASC]
 

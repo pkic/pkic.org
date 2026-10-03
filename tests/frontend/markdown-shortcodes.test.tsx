@@ -12,7 +12,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { render } from "preact";
 import type { ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
-import { Markdown } from "../../assets/ts/components/Markdown";
+import { Markdown } from "../../assets/ts/ui/Markdown";
 import {
   findMarkdownShortcodes,
   markdownShortcodeUrl,

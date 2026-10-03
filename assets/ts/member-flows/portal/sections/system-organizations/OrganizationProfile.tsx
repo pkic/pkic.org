@@ -26,7 +26,7 @@ import { Select, TextInput } from "../../../../ui/TextControl";
 import { fmt, fmtDate } from "../../ui";
 import type { OrganizationDraft, OrganizationTextField } from "./OrganizationDraft";
 import "../../../../ui/Content.css";
-import { Markdown } from "../../../../components/Markdown";
+import { Markdown } from "../../../../ui/Markdown";
 
 /** What a card needs to read the record and, while the page edits, the draft. */
 export interface OrganizationCardProps {

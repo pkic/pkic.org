@@ -10,7 +10,7 @@ heroHeader: PKI Consortium | PKIC
 heroTitle: Public Key Infrastructure Consortium
 heroDescription: Trusted digital assets and communication for everyone and everything
 heroLinks:
-  - text: Learn more
+  - text: About the Consortium
     url: /about/
     primary: true
   - text: Join the Consortium

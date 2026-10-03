@@ -149,7 +149,6 @@
   }
 
   .pk :where(img, svg, video, canvas) {
-    max-width: 100%;
     display: block;
   }
 
@@ -194,6 +193,16 @@
       animation-iteration-count: 1 !important;
       transition-duration: var(--pk-dur-instant) !important;
       scroll-behavior: auto !important;
+    }
+  }
+}
+
+/* Keep editable controls comfortably readable on touch screens and avoid
+   focus-triggered viewport zoom without restricting the reader's own zoom. */
+@layer utilities {
+  @media (pointer: coarse), (max-width: 48rem) {
+    :where(input, textarea, select) {
+      font-size: max(var(--pk-text-lg), 1em);
     }
   }
 }

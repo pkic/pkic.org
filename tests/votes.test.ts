@@ -1538,7 +1538,7 @@ describe("canonical group voting", () => {
     const capacity = await createOrganizationCapacity(env.DB);
     await joinVotingGroup(env.DB, TEST_GROUPS.pqc, capacity.userId, [capacity.memberId]);
     const vote = await createCanonicalVote(env.DB, admin, {
-      closesAt: new Date(Date.now() + 100).toISOString(),
+      closesAt: new Date(Date.now() + 60_000).toISOString(),
     });
     const member = await resolveAuthMember(env.DB, capacity.userId);
     const memberToken = await createMemberSession(env.DB, capacity.userId, `ballot-detail-${crypto.randomUUID()}`);

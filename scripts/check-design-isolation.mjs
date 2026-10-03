@@ -32,6 +32,7 @@ const root = process.cwd();
  */
 const scanned = [
   "assets/ts/ui",
+  "assets/ts/site",
   "assets/design",
   "layouts/design",
   // Individual files, so a directory can be locked in one surface at a time
@@ -333,7 +334,8 @@ function inspect(file) {
   const rel = relative(root, file);
   // The generated stylesheet is the one place literals are correct: it is the
   // rendered output of the token module, which is where they are defined.
-  const isGeneratedTokens = rel === "assets/design/tokens.generated.css";
+  const isGeneratedTokens =
+    rel === "assets/design/tokens.generated.css" || rel === "assets/design/tokens.public.generated.css";
   const isTokenSource = rel.startsWith("assets/design/") && /\.ts$/.test(rel);
 
   readFileSync(file, "utf8")

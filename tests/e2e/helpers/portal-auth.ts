@@ -17,11 +17,15 @@ export function clientIpForIdentity(email: string): string {
  * caller that is already looking at the form can call it anyway.
  */
 export async function openEmailSignIn(page: Page): Promise<void> {
+  const signIn = page.getByRole("button", { name: "Sign in", exact: true });
+  const passkey = page.getByRole("button", { name: "Sign in with a passkey" });
+  await expect(signIn.or(passkey)).toBeVisible({ timeout: 15_000 });
+  if (await signIn.isVisible()) await signIn.click();
   // Wait for the screen itself before asking what is on it. Probing the
   // disclosure while the portal is still mounting reports "not visible", the
   // click is skipped, and the wait that follows is for a field still folded
   // away — which is a ten-second timeout rather than a useful failure.
-  await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible({ timeout: 15_000 });
+  await expect(passkey).toBeVisible({ timeout: 15_000 });
   const disclosure = page.getByRole("button", { name: "Sign in with an email link", exact: true });
   if (await disclosure.isVisible().catch(() => false)) await disclosure.click();
   await expect(page.getByLabel("Work email")).toBeVisible({ timeout: 10_000 });
