@@ -1,0 +1,28 @@
+---
+import { publishedSiteRoutes } from "../../functions/_lib/services/site-content";
+import PublicPage from "../layouts/PublicPage.astro";
+import { publication } from "../publication";
+import { publishedEventAgendas } from "../../functions/_lib/services/site-published-event-agendas";
+import { renderContentMarkdown } from "../../functions/_lib/services/site-components";
+export function getStaticPaths() {
+  const authored = new Set(publishedSiteRoutes());
+  return publishedEventAgendas(publication).filter(({ route }) => !authored.has(route)).map(({ snapshot, route }) => ({
+    params: { eventAgenda: route.replace(/^\/|\/$/g, "") }, props: { snapshot, route },
+  }));
+}
+const { snapshot, route } = Astro.props;
+const title = `${snapshot.eventName ?? "Event"} agenda`;
+const html = await renderContentMarkdown("{{< agenda >}}", {
+  publication, eventSlug: snapshot.eventSlug,
+  eventData: { name: snapshot.eventName, timezone: snapshot.timeZone, agenda: {} },
+  data: {}, route, sourcePath: "",
+  assetUrl: () => undefined, assetUrls: () => [], listing: () => ({ heading: "", items: [], page: 1, pageCount: 1 }),
+});
+---
+<PublicPage title={title}>
+  <section class="pk-section pk-container pk-container--wide" data-pagefind-body>
+  <h1>{title}</h1>
+  <p>Times in {snapshot.timeZone}. <a href={`${route}calendar.ics`}>Add to calendar</a></p>
+  <div set:html={html} />
+  </section>
+</PublicPage>

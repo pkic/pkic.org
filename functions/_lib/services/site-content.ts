@@ -429,6 +429,7 @@ export async function loadSiteContent(
     assetUrls: (pattern) => matchingContentAssetUrls(document.sourcePath, contentMediaPaths, pattern),
     data: document.data,
     eventData: eventDocument?.data.data,
+    eventSlug: eventDocument?.route.split("/").filter(Boolean).at(-1),
     eventAssetUrls: (pattern) =>
       matchingContentAssetUrls(eventDocument?.sourcePath ?? document.sourcePath, contentMediaPaths, pattern),
     listing: (kind, limit) =>

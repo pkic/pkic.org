@@ -1,6 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { expect, it } from "vitest";
-import { siteContentSecurityPolicy, siteStaticHeaders } from "../../assets/shared/site-security-policy";
+import {
+  siteContentSecurityPolicy,
+  siteStaticHeaders,
+  siteSecurityHeaders,
+} from "../../assets/shared/site-security-policy";
 
 function directive(policy: string, name: string) {
   return policy.split("; ").find((entry) => entry.startsWith(`${name} `));
@@ -43,4 +47,10 @@ it("keeps native Cloudflare headers identical to the canonical policy and within
   expect(headers.split("\n").every((line) => line.length <= 2000)).toBe(true);
   expect(headers).toContain("Strict-Transport-Security: max-age=31536000");
   expect(headers).toContain("Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()");
+});
+
+it("allows a first-party camera only in the portal scanner shell", () => {
+  expect(siteSecurityHeaders("/portal/")["Permissions-Policy"]).toContain("camera=(self)");
+  expect(siteSecurityHeaders("/events/example/")["Permissions-Policy"]).toContain("camera=()");
+  expect(siteStaticHeaders()).toContain("/portal/*\n    ! Permissions-Policy\n    Permissions-Policy: camera=(self)");
 });

@@ -5,7 +5,7 @@ import { conferenceProgramSchema } from "../../assets/shared/schemas/conference-
 
 /** Astro endpoint outputs must belong to the release, so assembly and withdrawal include them. */
 export async function collectConferenceOutputs(output) {
-  const directory = resolve(output, "events");
+  const directory = resolve(output);
   let entries;
   try {
     entries = await readdir(directory, { recursive: true, withFileTypes: true });
@@ -15,10 +15,15 @@ export async function collectConferenceOutputs(output) {
   }
   const files = [];
   for (const entry of entries) {
-    if (!entry.isFile() || !["event-data.json", "agenda.ics"].includes(entry.name)) continue;
+    if (!entry.isFile()) continue;
+    const owned =
+      (["event-data.json", "agenda.ics"].includes(entry.name) &&
+        relative(output, entry.parentPath).split("\\").join("/").startsWith("events/")) ||
+      (["data.json", "calendar.ics"].includes(entry.name) && entry.parentPath.endsWith("/agenda"));
+    if (!owned) continue;
     const path = resolve(entry.parentPath, entry.name);
     const source = await readFile(path, "utf8");
-    if (entry.name === "event-data.json") conferenceProgramSchema.parse(JSON.parse(source));
+    if (entry.name.endsWith(".json")) conferenceProgramSchema.parse(JSON.parse(source));
     else if (new ICAL.Component(ICAL.parse(source)).name !== "vcalendar")
       throw new Error(`Conference calendar is invalid: ${path}`);
     files.push(relative(output, path).split("\\").join("/"));

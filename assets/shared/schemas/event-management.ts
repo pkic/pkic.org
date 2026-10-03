@@ -183,6 +183,9 @@ export const eventAudienceDetailSchema = eventResourceCoreSchema
     links: linksSchema,
     /** The public page path for this event, when the event has one. */
     basePath: z.string().nullable(),
+    scannerAccess: z
+      .object({ canScan: z.boolean(), sponsors: z.array(z.object({ id: z.string(), name: z.string() })) })
+      .optional(),
     viewer: eventViewerStateSchema.nullable(),
     registrationPath: z.string().nullable().optional(),
   });

@@ -133,7 +133,11 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     access: (session) =>
       Boolean(session?.eventParticipation) ||
       portalHasPermissionAtAnyScope(session, "events:read") ||
-      portalHasPermissionAtAnyScope(session, "proposals:read"),
+      portalHasPermissionAtAnyScope(session, "proposals:read") ||
+      portalHasPermissionAtAnyScope(session, "agenda:read") ||
+      portalHasPermissionAtAnyScope(session, "agenda:scan") ||
+      portalHasPermissionAtAnyScope(session, "agenda:attendance_read") ||
+      portalHasPermissionAtAnyScope(session, "agenda:leads_capture"),
     children: [
       {
         path: "/events/analytics",

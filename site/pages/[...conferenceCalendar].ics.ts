@@ -1,9 +1,10 @@
+import { publication } from "../publication";
 import type { APIContext } from "astro";
 import { siteConferencePrograms } from "../../functions/_lib/services/site-content";
 import { conferenceAgendaCalendar } from "../../functions/_lib/services/site-conference-calendar";
 
 export function getStaticPaths() {
-  return siteConferencePrograms()
+  return siteConferencePrograms(publication)
     .filter((event) => event.outputs.includes("event-agenda"))
     .map((event) => ({
       params: { conferenceCalendar: `${event.route}agenda`.replace(/^\//, "") },

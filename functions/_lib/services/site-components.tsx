@@ -60,6 +60,7 @@ export interface ContentComponentContext {
   assetUrls: (pattern?: string) => string[];
   data: FrontMatter;
   eventData?: Record<string, unknown>;
+  eventSlug?: string;
   /** Assets owned by the page that declares the inherited event data. */
   eventAssetUrls?: (pattern?: string) => string[];
   listing: (kind: ContentCollectionKind, limit?: number) => SiteListing;

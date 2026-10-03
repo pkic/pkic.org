@@ -68,7 +68,9 @@ export async function assembleStaticRelease(source, destination, environment) {
     )
     .join("");
   const conferenceRules = release.files
-    .filter((file) => /^events\/.*\/(?:event-data\.json|agenda\.ics)$/.test(file))
+    .filter((file) =>
+      /^(?:events\/.*\/(?:event-data\.json|agenda\.ics)|.*\/agenda\/(?:data\.json|calendar\.ics))$/.test(file),
+    )
     .map((file) => `\n/${file}\n    ! X-Robots-Tag\n    X-Robots-Tag: noindex, nofollow, noarchive\n`)
     .join("");
   const immutableRules = [
@@ -79,7 +81,10 @@ export async function assembleStaticRelease(source, destination, environment) {
     "/_published/diagrams/*",
     "/_published/agenda/*",
   ]
-    .map((path) => `\n${path}\n    ! Cache-Control\n    Cache-Control: public, max-age=31536000, immutable\n`)
+    .map(
+      (path) =>
+        `\n${path}\n    ! Cache-Control\n    Cache-Control: public, max-age=31536000, immutable\n${path === "/_assets/*" ? "    Service-Worker-Allowed: /portal/\n" : ""}`,
+    )
     .join("");
   const rules =
     immutableRules +

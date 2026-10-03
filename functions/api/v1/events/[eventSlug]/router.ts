@@ -18,6 +18,31 @@ import { EventTeamRoleDelete } from "./roles/[roleAssignmentId]";
 import { EventPromotersList } from "./promoters";
 import { EventPresentationArchiveGet } from "./presentations/archive";
 import { EventAnalyticsGet } from "./analytics";
+import {
+  AgendaGet,
+  AgendaSettingsPost,
+  AgendaPeopleGet,
+  AgendaOccurrencesGet,
+  AgendaRoomCreate,
+  AgendaOccurrenceCreate,
+  AgendaOccurrencePatch,
+  AgendaSwap,
+  AgendaStaffing,
+  AgendaAllocation,
+  AgendaPublication,
+  AgendaImport,
+} from "./agenda";
+import { SponsorLeadsExportGet } from "./lead-export";
+import { EventAttendanceGet, EventSponsorLeadCreate, SessionAttendancePeopleGet } from "./attendance";
+import {
+  SessionParticipationPut,
+  PersonalAgendaGet,
+  SessionParticipationReviewPut,
+  SessionBookingsGet,
+} from "./participation";
+import { EventBadgeCreate, EventBadgeDelete, EventBadgeAttendeesGet } from "./badges";
+import { EventScanCreate, ScannerTargetsGet } from "./scans";
+import { OfflineEligibilityGet } from "./offline-eligibility";
 import emailRouter from "./email/router";
 import proposals_Router from "./proposals/router";
 import registrations_Router from "./registrations/router";
@@ -75,6 +100,32 @@ openapi.delete("/roles/:roleAssignmentId", EventTeamRoleDelete);
 openapi.get("/promoters", EventPromotersList);
 openapi.get("/presentations/archive", EventPresentationArchiveGet);
 openapi.get("/analytics", EventAnalyticsGet);
+openapi.get("/agenda", AgendaGet);
+openapi.post("/agenda/settings", AgendaSettingsPost);
+openapi.get("/agenda/people", AgendaPeopleGet);
+openapi.get("/agenda/occurrences", AgendaOccurrencesGet);
+openapi.post("/agenda/rooms", AgendaRoomCreate);
+openapi.post("/agenda/occurrences", AgendaOccurrenceCreate);
+openapi.patch("/agenda/occurrences/:occurrenceId", AgendaOccurrencePatch);
+openapi.post("/agenda/swaps", AgendaSwap);
+openapi.post("/agenda/staffing", AgendaStaffing);
+openapi.post("/agenda/allocations", AgendaAllocation);
+openapi.post("/agenda/publications", AgendaPublication);
+openapi.post("/agenda/imports", AgendaImport);
+openapi.post("/scans", EventScanCreate);
+openapi.get("/scans/targets", ScannerTargetsGet);
+openapi.get("/offline-eligibility", OfflineEligibilityGet);
+openapi.get("/badges/attendees", EventBadgeAttendeesGet);
+openapi.post("/badges", EventBadgeCreate);
+openapi.delete("/badges/:badgeId", EventBadgeDelete);
+openapi.get("/agenda/:occurrenceId/participation", SessionBookingsGet);
+openapi.get("/agenda/:occurrenceId/attendance", SessionAttendancePeopleGet);
+openapi.put("/agenda/:occurrenceId/participation", SessionParticipationPut);
+openapi.put("/agenda/:occurrenceId/participation/:userId", SessionParticipationReviewPut);
+openapi.get("/agenda/participation", PersonalAgendaGet);
+openapi.get("/attendance", EventAttendanceGet);
+openapi.get("/sponsors/:sponsorId/leads.csv", SponsorLeadsExportGet);
+openapi.post("/sponsors/:sponsorId/leads", EventSponsorLeadCreate);
 openapi.route("/email", emailRouter);
 openapi.route("/proposals", proposals_Router);
 openapi.route("/registrations", registrations_Router);

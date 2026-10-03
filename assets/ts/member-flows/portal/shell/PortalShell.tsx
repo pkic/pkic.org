@@ -1,3 +1,4 @@
+import { portalEventScannerRoutes } from "./portal-event-scanner-routes";
 import { portalEventParticipantRoutes } from "./portal-event-participant-routes";
 import { portalEventResponseRoutes } from "./portal-event-response-routes";
 import { portalMemberApplicationRoutes } from "./portal-member-application-routes";
@@ -111,6 +112,7 @@ export function PortalShell() {
             )}
             {access.hasEventWorkspace && portalEventResponseRoutes()}
             {access.hasEventWorkspace && portalEventParticipantRoutes()}
+            {access.hasEventWorkspace && portalEventScannerRoutes()}
             {access.hasEventWorkspace && (
               // A team member is added on a page below the Team tab, which is
               // one segment deeper than the generic route reaches — the same

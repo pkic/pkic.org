@@ -3,6 +3,12 @@ import { usePortalHashLocation } from "../../hash-location";
 
 /** Use the caller-scoped API projection, never the roles of the person being viewed. */
 export function eventDestination(event: EventAudienceDetail | EventManagementSummary): string | null {
+  if ("scannerAccess" in event && event.scannerAccess?.canScan)
+    return usePortalHashLocation.hrefs(`/events/${encodeURIComponent(event.slug)}/scanner`);
+  if ("scannerAccess" in event && event.scannerAccess?.sponsors.length)
+    return usePortalHashLocation.hrefs(
+      `/events/${encodeURIComponent(event.slug)}/sponsors/${encodeURIComponent(event.scannerAccess.sponsors[0].id)}/scanner`,
+    );
   if (event.participation?.registrationId || event.participation?.proposals || event.participation?.speakerProposals)
     return usePortalHashLocation.hrefs(`/events/${encodeURIComponent(event.slug)}`);
   if (!("viewer" in event)) {

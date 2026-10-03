@@ -12,6 +12,7 @@ const template = {
 };
 
 const EXPECTED_BASELINE_TEMPLATE_KEYS = [
+  "agenda_changed",
   "attendee_invite",
   "co_speaker_invite",
   "donation_expired",

@@ -112,6 +112,7 @@ describe("group event workspace", () => {
     expect(tabLabels(container)).toEqual([
       "Overview",
       "Registrations",
+      "Badges",
       "Invitations",
       "Communications",
       "Team",

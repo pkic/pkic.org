@@ -1,0 +1,23 @@
+.pk-badge-credential {
+  max-width: 24rem;
+  text-align: center;
+  overflow-wrap: anywhere;
+  margin-block: var(--pk-4);
+}
+.pk-badge-credential img {
+  width: 100%;
+  height: auto;
+}
+@media print {
+  body * {
+    visibility: hidden;
+  }
+  .pk-badge-credential,
+  .pk-badge-credential * {
+    visibility: visible;
+  }
+  .pk-badge-credential {
+    position: absolute;
+    inset: 0 auto auto 0;
+  }
+}

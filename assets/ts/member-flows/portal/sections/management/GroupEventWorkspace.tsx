@@ -9,6 +9,8 @@
 import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { usePortalHashLocation } from "../../hash-location";
+import { hasEventAgendaPermission } from "../events/event-agenda-access";
+import { portalSession } from "../../state";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
 import type { EventFormsPurpose } from "../../../../../shared/schemas/forms";
 import {
@@ -28,6 +30,20 @@ import { Menu } from "../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import { formatEventWhen } from "../../ui";
+import { lazy, Suspense } from "preact/compat";
+import { Spinner } from "../../../../components/Spinner";
+const BadgeIssuance = lazy(() =>
+  import("../events/detail/scanner/BadgeIssuance").then((module) => ({ default: module.BadgeIssuance })),
+);
+const AttendanceReport = lazy(() =>
+  import("../events/detail/agenda/AttendanceReport").then((module) => ({ default: module.AttendanceReport })),
+);
+const EventScanner = lazy(() =>
+  import("../events/detail/scanner/EventScanner").then((module) => ({ default: module.EventScanner })),
+);
+const AgendaEditor = lazy(() =>
+  import("../events/detail/agenda/AgendaEditor").then((module) => ({ default: module.AgendaEditor })),
+);
 import { EventStats } from "../events/detail/EventStats";
 import { Promoters } from "../events/detail/Promoters";
 import { Team } from "../events/detail/Team";
@@ -110,6 +126,14 @@ const EVENT_WORKSPACE_TABS: readonly EventWorkspaceTabDef[] = [
     label: "Registrations",
     visible: (event) => event.capabilities.includes("manage_attendance"),
   },
+  { key: "agenda", label: "Agenda", visible: (event) => hasEventAgendaPermission(event.id, "agenda:read") },
+  { key: "scanner", label: "Scanner", visible: (event) => hasEventAgendaPermission(event.id, "agenda:scan") },
+  {
+    key: "attendance",
+    label: "Attendance",
+    visible: (event) => hasEventAgendaPermission(event.id, "agenda:attendance_read"),
+  },
+  { key: "badges", label: "Badges", visible: (event) => event.capabilities.includes("manage") },
   { key: "proposals", label: "Proposals", visible: (event) => event.proposalAccess?.canRead === true },
   {
     key: "invitations",
@@ -392,6 +416,35 @@ export function GroupEventWorkspace({
               />
             )}
 
+            {activeTab === "agenda" && (
+              <Suspense fallback={<Spinner />}>
+                <AgendaEditor slug={event.slug} canEdit={hasEventAgendaPermission(event.id, "agenda:write")} />
+              </Suspense>
+            )}
+            {activeTab === "scanner" && (
+              <Suspense fallback={<Spinner />}>
+                <EventScanner
+                  slug={event.slug}
+                  operatorUserId={portalSession.value?.identity.id ?? ""}
+                  canAdmitExceptions={hasEventAgendaPermission(event.id, "agenda:admit_exceptions")}
+                />
+              </Suspense>
+            )}
+            {activeTab === "attendance" && (
+              <Suspense fallback={<Spinner />}>
+                <AttendanceReport slug={event.slug} timeZone={event.timezone} />
+              </Suspense>
+            )}
+            {activeTab === "badges" && (
+              <Panel>
+                <PanelHeader title="Attendee badges" />
+                <PanelBody>
+                  <Suspense fallback={<Spinner />}>
+                    <BadgeIssuance slug={event.slug} />
+                  </Suspense>
+                </PanelBody>
+              </Panel>
+            )}
             {activeTab === "team" && <Team slug={event.slug} teamSegment={detailId} teamPath={tabPath("team")} />}
 
             {activeTab === "promoters" && (

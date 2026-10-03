@@ -45,6 +45,11 @@ export const PERMISSIONS = [
   "proposals:cancel_accepted",
   "agenda:read",
   "agenda:write",
+  "agenda:scan",
+  "agenda:admit_exceptions",
+  "agenda:attendance_read",
+  "agenda:leads_capture",
+  "agenda:leads_export",
   "admin:read",
   "admin:write",
 ] as const;

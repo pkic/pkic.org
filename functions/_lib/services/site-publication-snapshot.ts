@@ -1,3 +1,4 @@
+import { agendaSnapshotSchema } from "../../../assets/shared/schemas/event-agenda";
 import { listPublicVotes } from "./votes/public";
 import { publicVotesListQuerySchema } from "../../../assets/shared/schemas/votes";
 import { all } from "../db/queries";
@@ -184,6 +185,33 @@ export async function readSitePublicationSnapshot(
     if (!events.length) break;
     for (const row of events) await publishEventForms(row.slug);
     eventAfter = events[events.length - 1]!.slug;
+  }
+  snapshot.eventAgendas = {};
+  let agendaAfter = "";
+  for (;;) {
+    const agendas = await all<{ slug: string; base_path: string | null; snapshot_json: string }>(
+      db,
+      `SELECT e.slug, e.base_path, p.snapshot_json FROM event_agenda_publications p
+       JOIN event_agenda_state s ON s.event_id = p.event_id AND s.published_revision = p.revision
+       JOIN events e ON e.id = p.event_id WHERE e.visibility = 'public' AND e.slug > ? ORDER BY e.slug LIMIT 100`,
+      [agendaAfter],
+    );
+    if (!agendas.length) break;
+    for (const row of agendas) {
+      const approved = agendaSnapshotSchema.parse(JSON.parse(row.snapshot_json));
+      snapshot.eventAgendas[row.slug] = {
+        ...approved,
+        publicAgendaPath:
+          (row.base_path?.startsWith("/") && !row.base_path.startsWith("//")
+            ? row.base_path.replace(/\/$/u, "")
+            : `/events/${row.slug}`) + "/agenda/",
+        occurrences: approved.occurrences.filter((item) => item.visibility === "public" && item.startAt && item.endAt),
+        blocks: [],
+        assignments: [],
+        roleMembers: [],
+      };
+    }
+    agendaAfter = agendas[agendas.length - 1]!.slug;
   }
   return createSitePublicationSnapshot(snapshot);
 }
