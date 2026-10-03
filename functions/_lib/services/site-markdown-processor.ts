@@ -78,14 +78,15 @@ function sitePresentation() {
   };
 }
 
-export const siteMarkdownProcessor = unified({
+// Cloudflare Workers cannot load Sätteri's native or threaded WASM binding.
+// Astro replaces this module with site/markdown-processor.ts at build time.
+const runtimeMarkdownProcessor = unified({
   smartypants: false,
   remarkPlugins: [remarkGemoji],
   rehypePlugins: [sitePresentation],
 });
 
-// The same official processor renders shortcode bodies and dynamically loaded documents.
-const renderer = siteMarkdownProcessor.createRenderer({ syntaxHighlight: false });
+const renderer = runtimeMarkdownProcessor.createRenderer({ syntaxHighlight: false });
 type SiteImageRenderer = (src: string, alt: string, title?: string) => Promise<string>;
 export async function renderSiteMarkdown(source: string, renderSiteImage?: SiteImageRenderer): Promise<string> {
   return (await (await renderer).render(source, { frontmatter: { renderSiteImage } })).code;

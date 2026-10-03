@@ -1,5 +1,5 @@
 import { expect, it } from "vitest";
-import { renderSiteMarkdown } from "../../functions/_lib/services/site-markdown-processor";
+import { renderSiteMarkdown } from "../../site/markdown-processor";
 
 it("renders authored emoji shortcodes in prose and capability tables", async () => {
   const html = await renderSiteMarkdown(
@@ -30,7 +30,7 @@ it("supports catalog names and aliases beyond the legacy content", async () => {
 
 it("preserves published heading anchors, aligned tables, and Mermaid blocks", async () => {
   const html = await renderSiteMarkdown(
-    "## Trust & Keys\n\n## Trust & Keys\n\n| Center | Right |\n| :---: | ---: |\n| A | B |\n\n```mermaid\ngraph TD\nA-->B\n```",
+    "## Trust  & Keys\n\n## Trust & Keys\n\n| Center | Right |\n| :---: | ---: |\n| A | B |\n| https://example.com/docs||\n\n```mermaid\ngraph TD\nA-->B\n```",
   );
   expect(html).toContain('id="trust--keys"');
   expect(html).toContain('id="trust--keys-1"');
@@ -39,6 +39,8 @@ it("preserves published heading anchors, aligned tables, and Mermaid blocks", as
   expect(html).toContain('class="pk-center"');
   expect(html).toContain('class="pk-end"');
   expect(html).not.toContain("style=");
+  expect(html).toContain('href="https://example.com/docs"');
+  expect(html).not.toContain("docs||");
   expect(html).toContain('class="mermaid-wrap"');
   expect(html).toContain('<pre class="mermaid">');
 });

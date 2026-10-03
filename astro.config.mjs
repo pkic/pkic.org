@@ -1,4 +1,4 @@
-import { siteMarkdownProcessor } from "./functions/_lib/services/site-markdown-processor.ts";
+import { siteMarkdownProcessor } from "./site/markdown-processor.ts";
 import { logPublicationBuildCache } from "./scripts/publication/log-build-cache.mjs";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
@@ -50,6 +50,13 @@ export default defineConfig({
     },
   ],
   vite: {
+    resolve: {
+      // Use the native processor for every authored document and shortcode in
+      // Astro. The standalone Worker retains its supported runtime processor.
+      alias: [
+        { find: /^.*\/site-markdown-processor(?:\.ts)?$/, replacement: resolve(root, "site/markdown-processor.ts") },
+      ],
+    },
     ssr: { external: ["@resvg/resvg-wasm"] },
     plugins: [contentMediaPlugin(root), bylinesPlugin(root), trustListPlugin(root)],
     build: {

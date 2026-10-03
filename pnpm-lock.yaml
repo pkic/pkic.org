@@ -280,6 +280,9 @@ importers:
       '@astrojs/check':
         specifier: ^0.9.10
         version: 0.9.10(@emnapi/runtime@1.11.3)(prettier@3.9.6)(typescript@5.9.3)
+      '@astrojs/markdown-satteri':
+        specifier: 0.4.2
+        version: 0.4.2
       '@astrojs/preact':
         specifier: 6.0.5
         version: 6.0.5(@babel/core@7.29.7(supports-color@10.2.2))(@types/node@24.13.3)(esbuild@0.28.2)(preact@10.29.8)(sass@1.104.0)(supports-color@10.2.2)(yaml@2.9.0)
@@ -337,6 +340,9 @@ importers:
       eslint-plugin-prettier:
         specifier: ^5.5.6
         version: 5.5.6(eslint-config-prettier@10.1.8(eslint@10.8.1(supports-color@10.2.2)))(eslint@10.8.1(supports-color@10.2.2))(prettier@3.9.6)
+      gemoji:
+        specifier: 8.1.0
+        version: 8.1.0
       globals:
         specifier: 17.11.0
         version: 17.11.0
@@ -364,6 +370,9 @@ importers:
       satori:
         specifier: ^0.33.5
         version: 0.33.5
+      satteri:
+        specifier: 0.10.5
+        version: 0.10.5
       sharp:
         specifier: ^0.35.5
         version: 0.35.5(@types/node@24.13.3)
