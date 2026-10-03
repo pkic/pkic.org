@@ -8,6 +8,7 @@
     "node": "^22.12.0 || ^24 || >=26"
   },
   "scripts": {
+    "preinstall": "node scripts/publication/log-build-cache.mjs",
     "maintenance:preview": "node --experimental-strip-types scripts/preview-maintenance.mjs",
     "dev": "node --experimental-strip-types scripts/prepare-public.mjs --dev && pnpm run publish:local && CLOUDFLARE_ENV=local vite dev --host 0.0.0.0 --port 8788",
     "dev:rehearsal": "node scripts/dev-rehearsal.mjs",

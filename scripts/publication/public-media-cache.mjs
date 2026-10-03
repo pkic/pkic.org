@@ -4,8 +4,13 @@ import { resolve } from "node:path";
 
 const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
-/** Revalidate approved derivatives through R2 without transferring unchanged bodies. */
-export async function publicMediaCache(directory, revision, getObject) {
+/** @typedef {Map<string, Pick<import("@cloudflare/workers-types").R2Object, "etag" | "size">>} PublicMediaManifest */
+
+/**
+ * Revalidate approved derivatives through R2 without transferring unchanged bodies.
+ * @param {PublicMediaManifest} [manifest]
+ */
+export async function publicMediaCache(directory, revision, getObject, manifest = undefined) {
   await mkdir(directory, { recursive: true });
   const stats = { reused: 0, downloaded: 0, downloadedBytes: 0 };
   async function atomicWrite(file, bytes) {
@@ -27,7 +32,18 @@ export async function publicMediaCache(directory, revision, getObject) {
       } catch (error) {
         if (error.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
       }
-      const object = await getObject(key, cached ? { onlyIf: { etagDoesNotMatch: cached.etag } } : undefined);
+      const listed = manifest?.get(key);
+      if (manifest && !listed) throw new Error("A published image source is missing from R2");
+      if (cached && listed?.etag === cached.etag) {
+        stats.reused++;
+        return { cached };
+      }
+      const condition = listed
+        ? { onlyIf: { etagMatches: listed.etag } }
+        : cached
+          ? { onlyIf: { etagDoesNotMatch: cached.etag } }
+          : undefined;
+      const object = await getObject(key, condition);
       if (!object) throw new Error("A published image source is missing from R2");
       if (cached && typeof object.arrayBuffer !== "function" && object.etag === cached.etag) {
         stats.reused++;

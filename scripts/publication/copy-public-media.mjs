@@ -40,12 +40,19 @@ async function vectorBytes(bytes) {
 }
 
 /** Native R2 binding reads; private object keys never enter public output. */
-export async function copyPublicMedia({ snapshot, keys, getObject, output, cacheDirectory = undefined }) {
+export async function copyPublicMedia({
+  snapshot,
+  keys,
+  getObject,
+  output,
+  cacheDirectory = undefined,
+  manifest = /** @type {import("./public-media-cache.mjs").PublicMediaManifest | undefined} */ (undefined),
+}) {
   const started = performance.now();
   const revision = createHash("sha256")
-    .update(await readFile(new URL(import.meta.url)))
-    .update(await readFile(new URL("./optimize-public-svg.mjs", import.meta.url)))
-    .update(await readFile(new URL("../../pnpm-lock.yaml", import.meta.url)))
+    .update(await readFile(resolve("scripts/publication/copy-public-media.mjs")))
+    .update(await readFile(resolve("scripts/publication/optimize-public-svg.mjs")))
+    .update(await readFile(resolve("pnpm-lock.yaml")))
     .update(JSON.stringify(sharp.versions))
     .update(await readFile(createRequire(import.meta.url).resolve("@resvg/resvg-wasm/index_bg.wasm")))
     .digest("hex");
@@ -53,6 +60,7 @@ export async function copyPublicMedia({ snapshot, keys, getObject, output, cache
     resolve(cacheDirectory ?? `node_modules/.astro/publication-media/${process.env.CLOUDFLARE_ENV ?? "local"}`),
     revision,
     getObject,
+    manifest,
   );
   let serialized = JSON.stringify(snapshot);
   const missingLogo = (reference) => {

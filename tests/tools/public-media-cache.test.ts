@@ -48,3 +48,24 @@ it("conditionally reuses derivatives and downloads only changed or uncached obje
     await rm(directory, { recursive: true, force: true });
   }
 });
+
+it("uses the listing manifest to reuse images without individual R2 requests", async () => {
+  const directory = await mkdtemp(resolve(tmpdir(), "pkic-media-manifest-"));
+  const getObject = vi.fn(async () => ({ etag: "v1", size: 8, arrayBuffer: async () => Buffer.from("original") }));
+  const manifest = new Map([["private/image", { etag: "v1", size: 8 }]]);
+  try {
+    const cache = await publicMediaCache(directory, "processor-v1", getObject, manifest);
+    const cold = await cache.read("private/image");
+    if (!cold.store) throw new Error("Expected a cold cache");
+    await cold.store(Buffer.from("optimized"), "svg");
+    expect(getObject).toHaveBeenCalledOnce();
+    expect(getObject).toHaveBeenLastCalledWith("private/image", { onlyIf: { etagMatches: "v1" } });
+    expect((await cache.read("private/image")).cached.bytes.toString()).toBe("optimized");
+    expect(getObject).toHaveBeenCalledOnce();
+    manifest.delete("private/image");
+    await expect(cache.read("private/image")).rejects.toThrow("missing from R2");
+    expect(getObject).toHaveBeenCalledOnce();
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
