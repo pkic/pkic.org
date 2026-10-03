@@ -234,6 +234,9 @@ importers:
       fast-xml-parser:
         specifier: ^5.11.1
         version: 5.11.1
+      gemoji:
+        specifier: ^8.1.0
+        version: 8.1.0
       handlebars:
         specifier: ^4.7.9
         version: 4.7.9
@@ -246,6 +249,9 @@ importers:
       marked:
         specifier: ^17.0.6
         version: 17.0.6
+      marked-emoji:
+        specifier: ^3.0.0
+        version: 3.0.0(marked@17.0.6)
       postal-mime:
         specifier: ^2.7.4
         version: 2.7.6
@@ -3596,6 +3602,9 @@ packages:
   function-bind@1.1.2:
     resolution: {integrity: sha512-7XHNxH7qX9xG5mIwxkhumTox/MIRNcOgDrxWsMt2pAr23WHp6MrRlN7FBSFpCpr+oVO0F744iUgR82nJMfG2SA==}
 
+  gemoji@8.1.0:
+    resolution: {integrity: sha512-HA4Gx59dw2+tn+UAa7XEV4ufUKI4fH1KgcbenVA9YKSj1QJTT0xh5Mwv5HMFNN3l2OtUe3ZIfuRwSyZS5pLIWw==}
+
   gensync@1.0.0-beta.2:
     resolution: {integrity: sha512-3hN7NaskYvMDLQY55gnW3NQ+mesEAepTqlg+VEbj7zzqEMBVNhzcGYYeqFo/TlYz6eQiFcp1HcsCZO+nGgS8zg==}
     engines: {node: '>=6.9.0'}
@@ -4066,6 +4075,11 @@ packages:
 
   magicast@0.5.5:
     resolution: {integrity: sha512-UicdXN8zQ3JHlxVq+28afMXPr1z7WNY6+7EJnzTdQWkTAlMLF5fNCCKxJHBQwGaNGR11581EiQmQzx73+MvszA==}
+
+  marked-emoji@3.0.0:
+    resolution: {integrity: sha512-4IODef6jiQfuRsWOXSH/q9YiXmpVemvm1raj4WmObkWeAPg5bMMPTvbDpxbn4BIvbM245a1Dhq6RAzCS0WFGOw==}
+    peerDependencies:
+      marked: '>=4 <19'
 
   marked@16.4.2:
     resolution: {integrity: sha512-TI3V8YYWvkVf3KJe1dRkpnjs68JUPyEa5vjKrp1XEEJUAOaQc+Qj+L1qWbPd0SJuAdQkFU0h73sXXqwDYxsiDA==}
@@ -8800,6 +8814,8 @@ snapshots:
 
   function-bind@1.1.2: {}
 
+  gemoji@8.1.0: {}
+
   gensync@1.0.0-beta.2: {}
 
   get-caller-file@2.0.5: {}
@@ -9203,6 +9219,10 @@ snapshots:
       '@babel/parser': 7.29.9
       '@babel/types': 7.29.8
       source-map-js: 1.2.1
+
+  marked-emoji@3.0.0(marked@17.0.6):
+    dependencies:
+      marked: 17.0.6
 
   marked@16.4.2: {}
 

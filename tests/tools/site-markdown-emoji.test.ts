@@ -19,3 +19,11 @@ it("preserves shortcodes in code, URLs, escaped text, and unknown names", async 
   expect(html).toContain("Available ✔️");
   expect(html).toContain(":warning: :unknown:");
 });
+
+it("supports catalog names and aliases beyond the legacy content", async () => {
+  const html = await createContentMarked().parse(":rocket: :tada: :+1: :thumbsup:");
+  expect(html).toContain("🚀");
+  expect(html).toContain("🎉");
+  expect(html.match(/👍/gu)).toHaveLength(2);
+  expect(html).not.toContain("<img");
+});
