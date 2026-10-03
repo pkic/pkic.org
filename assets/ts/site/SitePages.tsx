@@ -142,10 +142,9 @@ export function HomePage({ hero, home, html }: { hero: SiteHero; home: SiteHomeC
 }
 
 function ArticleMeta({ meta }: { meta?: SitePageMeta }) {
-  if (!meta?.date && !meta?.authors?.length && !meta?.tags?.length) return null;
+  if (!meta?.authors?.length && !meta?.tags?.length) return null;
   return (
     <div class="pk-public-article-meta pk-cluster pk-cluster--center">
-      {meta.date ? <LocalTime value={meta.date} /> : null}
       {meta.authors?.length ? <span>By {meta.authors.join(", ")}</span> : null}
       {meta.tags?.length ? <span>{meta.tags.join(" · ")}</span> : null}
     </div>
