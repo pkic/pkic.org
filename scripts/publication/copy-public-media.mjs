@@ -5,6 +5,7 @@ import { createRequire } from "node:module";
 import { initWasm, Resvg } from "@resvg/resvg-wasm";
 import sharp from "sharp";
 import { JSDOM } from "jsdom";
+import { publicMediaCache } from "./public-media-cache.mjs";
 import { optimizePublicSvg } from "./optimize-public-svg.mjs";
 
 let vectorReady;
@@ -39,15 +40,35 @@ async function vectorBytes(bytes) {
 }
 
 /** Native R2 binding reads; private object keys never enter public output. */
-export async function copyPublicMedia({ snapshot, keys, getObject, output }) {
+export async function copyPublicMedia({ snapshot, keys, getObject, output, cacheDirectory = undefined }) {
+  const started = performance.now();
+  const revision = createHash("sha256")
+    .update(await readFile(new URL(import.meta.url)))
+    .update(await readFile(new URL("./optimize-public-svg.mjs", import.meta.url)))
+    .update(await readFile(new URL("../../pnpm-lock.yaml", import.meta.url)))
+    .update(JSON.stringify(sharp.versions))
+    .update(await readFile(createRequire(import.meta.url).resolve("@resvg/resvg-wasm/index_bg.wasm")))
+    .digest("hex");
+  const cache = await publicMediaCache(
+    resolve(cacheDirectory ?? `node_modules/.astro/publication-media/${process.env.CLOUDFLARE_ENV ?? "local"}`),
+    revision,
+    getObject,
+  );
   let serialized = JSON.stringify(snapshot);
   const missingLogo = (reference) => {
     console.warn(`[publication] Unusable approved member logo ${reference}; using the missing-logo fallback`);
     serialized = serialized.replaceAll(JSON.stringify(reference), "null");
   };
   for (const [reference, key] of Object.entries(keys)) {
-    const object = await getObject(key);
-    if (!object) throw new Error("A published image source is missing from R2");
+    const { object, cached, store } = await cache.read(key);
+    if (cached) {
+      const path = `/_published/media/${cached.filename}`;
+      const destination = resolve(output, path.slice(1));
+      await mkdir(dirname(destination), { recursive: true });
+      await writeFile(destination, cached.bytes);
+      serialized = serialized.replaceAll(JSON.stringify(reference), JSON.stringify(path));
+      continue;
+    }
     if (object.size > 25 * 1024 * 1024) throw new Error("A published image exceeds the Static Assets file limit");
     const original = Buffer.from(await object.arrayBuffer());
     if (/<svg\b/i.test(original.toString("utf8"))) {
@@ -66,6 +87,7 @@ export async function copyPublicMedia({ snapshot, keys, getObject, output }) {
       const destination = resolve(output, path.slice(1));
       await mkdir(dirname(destination), { recursive: true });
       await writeFile(destination, bytes);
+      await store(bytes, "svg");
       serialized = serialized.replaceAll(JSON.stringify(reference), JSON.stringify(path));
       continue;
     }
@@ -92,11 +114,15 @@ export async function copyPublicMedia({ snapshot, keys, getObject, output }) {
     const destination = resolve(output, path.slice(1));
     await mkdir(dirname(destination), { recursive: true });
     await writeFile(destination, bytes);
+    await store(bytes, "webp");
     serialized = serialized.replaceAll(JSON.stringify(reference), JSON.stringify(path));
   }
   const published = JSON.parse(serialized);
   // Profile/directory logos are nullable and render initials. Legacy logo walls
   // require a URL and already use the consortium mark when a logo is missing.
   for (const entry of published.memberWall ?? []) entry.logoUrl ??= "/img/logo.svg";
+  console.log(
+    `[publication] R2 media: ${cache.stats.reused} reused, ${cache.stats.downloaded} downloaded (${(cache.stats.downloadedBytes / 1024 / 1024).toFixed(2)} MiB), ${((performance.now() - started) / 1000).toFixed(2)} s`,
+  );
   return published;
 }

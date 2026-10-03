@@ -79,7 +79,8 @@ export async function readPublicationSource() {
       await copyPublicMedia({
         snapshot,
         keys,
-        getObject: (key: string) => requireProfileImageBucket(platform.env, key).get(key),
+        getObject: (key: string, options?: R2GetOptions) =>
+          requireProfileImageBucket(platform.env, key).get(key, options),
         output: resolve(output, "media"),
       }),
     );
