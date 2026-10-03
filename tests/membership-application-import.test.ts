@@ -26,7 +26,12 @@ import {
   membershipApplicationsListResponseSchema,
   membershipApplicationDetailSchema,
 } from "../assets/shared/schemas/membership-application-management";
-import type { UserBackedAuthAdmin } from "../functions/_lib/types";
+import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
+import {
+  getApplicationSource,
+  getHistoricalApplicationDetail,
+} from "../functions/_lib/services/membership/applications/source-detail";
+import type { DatabaseLike, UserBackedAuthAdmin } from "../functions/_lib/types";
 
 const created = "2020-01-01T00:00:00.000Z";
 const closed = "2020-02-01T00:00:00.000Z";
@@ -60,6 +65,7 @@ function evidence(number = 101, state: "open" | "closed" = "closed") {
 }
 function mapping(): ApplicationImportMapping {
   return {
+    manualHold: false,
     answers: { ...requiredMembershipApplicationAnswers, reason: "Our organization contributes to the consortium." },
     applicantName: "Example User",
     applicantEmail: "user@example.test",
@@ -131,9 +137,10 @@ describe("membership application imports and scoped history", () => {
     number = 101,
     overrides: Partial<ApplicationImportMapping> = {},
     state: "open" | "closed" = "closed",
+    db: DatabaseLike = env.DB,
   ) {
     const source = evidence(number, state);
-    return importMembershipApplication(env.DB, actor, {
+    return importMembershipApplication(db, actor, {
       runId: "synthetic-run",
       sourceIssueNumber: number,
       expectedUpdatedAt: source.issue.updated_at,
@@ -141,6 +148,112 @@ describe("membership application imports and scoped history", () => {
       readSource: async () => source,
     });
   }
+  it.each(["applicantName", "applicantEmail", "categoryCode", "workflow"] as const)(
+    "rejects a missing active %s before identity, form, and workflow reads",
+    async (field) => {
+      const budgeted = createD1QueryBudgetedDatabase(env.DB, 1);
+      await expect(importSource(102, { outcome: null, [field]: null }, "open", budgeted.db)).rejects.toMatchObject({
+        code: field === "workflow" ? "IMPORT_WORKFLOW_REQUIRED" : "IMPORT_FIELDS_REQUIRED",
+      });
+      expect(budgeted.budget.usedQueries()).toBe(1);
+      expect(await queryAll(env.DB, "SELECT id FROM membership_application_sources")).toHaveLength(0);
+    },
+  );
+  it("requires the reviewed mapping to acknowledge the requester-mandated hold", async () => {
+    const budgeted = createD1QueryBudgetedDatabase(env.DB, 1);
+    await expect(
+      importSource(
+        795,
+        {
+          outcome: null,
+          workflow: { versionId: crypto.randomUUID(), currentPosition: 0, steps: [], objections: [] },
+        },
+        "open",
+        budgeted.db,
+      ),
+    ).rejects.toMatchObject({ code: "IMPORT_MANUAL_HOLD_REQUIRED" });
+    expect(budgeted.budget.usedQueries()).toBe(1);
+  });
+  it("does not record a hold release when activating an application already processing", async () => {
+    await createApplicationFormSubmission({ reason: "Synthetic application form" });
+    const [category] = await queryAll<{ workflow_version_id: string }>(
+      env.DB,
+      "SELECT workflow_version_id FROM membership_categories WHERE code = 'F'",
+    );
+    const record = await importSource(
+      102,
+      {
+        outcome: null,
+        workflow: { versionId: category.workflow_version_id, currentPosition: 0, steps: [], objections: [] },
+      },
+      "open",
+    );
+    const before = await queryAll(
+      env.DB,
+      "SELECT stage, stage_entered_at, transition_revision FROM member_applications WHERE id = ?",
+      record.id,
+    );
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/members/applications/${record.id}/activation`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify({
+          reason: "Reconciled source evidence and portal processing ownership.",
+          releaseManualHold: true,
+        }),
+      }),
+      env,
+      createExecutionContext(),
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT stage, stage_entered_at, transition_revision FROM member_applications WHERE id = ?",
+        record.id,
+      ),
+    ).toEqual(before);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM member_application_events WHERE application_id = ?", record.id),
+    ).toHaveLength(0);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT activated_at FROM membership_application_sources WHERE application_id = ?",
+        record.id,
+      ),
+    ).toEqual([{ activated_at: expect.any(String) }]);
+  });
+  it("keeps historical source IDs distinct from live application IDs when they collide", async () => {
+    const history = await importSource(101);
+    await createApplicationFormSubmission({ reason: "Synthetic application form" });
+    const [category] = await queryAll<{ workflow_version_id: string }>(
+      env.DB,
+      "SELECT workflow_version_id FROM membership_categories WHERE code = 'F'",
+    );
+    const active = await importSource(
+      102,
+      {
+        outcome: null,
+        applicantEmail: "other@other.test",
+        workflow: { versionId: category.workflow_version_id, currentPosition: 0, steps: [], objections: [] },
+      },
+      "open",
+    );
+    await env.DB.prepare("UPDATE membership_application_sources SET id = ? WHERE id = ?")
+      .bind(active.id, history.id)
+      .run();
+    const response = await request(token, `/${active.id}`);
+    expect(response.status).toBe(200);
+    expect(membershipApplicationDetailSchema.parse(await response.json()).source?.issueNumber).toBe(102);
+    expect((await getHistoricalApplicationDetail(env.DB, active.id))?.source?.issueNumber).toBe(101);
+    const [liveSource] = await queryAll<{ id: string }>(
+      env.DB,
+      "SELECT id FROM membership_application_sources WHERE application_id = ?",
+      active.id,
+    );
+    expect(await getApplicationSource(env.DB, liveSource.id, "source")).toBeNull();
+  });
   it("requires staff authorization and re-reads every source page through the mounted import endpoint", async () => {
     const source = evidence();
     const paths: string[] = [];
@@ -314,45 +427,64 @@ describe("membership application imports and scoped history", () => {
     ).rejects.toMatchObject({ code: "IMPORT_REVIEW_TIMING_REQUIRED" });
   });
 
-  it("keeps #795 on indefinite manual hold across scheduler runs and reruns", async () => {
-    const [category] = await queryAll<{ workflow_version_id: string }>(
-      env.DB,
-      "SELECT workflow_version_id FROM membership_categories WHERE code = 'F'",
-    );
-    await createApplicationFormSubmission({ reason: "Synthetic application form" });
-    const workflow = { versionId: category.workflow_version_id, currentPosition: 0, steps: [], objections: [] };
-    const result = await importSource(795, { outcome: null, workflow }, "open");
-    await env.DB.prepare("UPDATE member_applications SET stage_entered_at = ? WHERE id = ?")
-      .bind(created, result.id)
-      .run();
-    expect(await runOnHoldReminders(env.DB, env)).toEqual({ remindersSent: 0, autoClosed: 0 });
-    expect(await evaluateMembershipApplication(env.DB, result.id, "https://app.test")).toMatchObject({
-      approved: false,
-    });
-    await importSource(795, { outcome: null, workflow }, "open");
-    expect(
-      await queryAll(
+  it.each([795, 902])(
+    "keeps source #%i on its reviewed manual hold across scheduler runs and reruns",
+    async (number) => {
+      const [category] = await queryAll<{ workflow_version_id: string }>(
         env.DB,
-        "SELECT stage, on_hold_subtype, review_notes FROM member_applications WHERE id = ?",
+        "SELECT workflow_version_id FROM membership_categories WHERE code = 'F'",
+      );
+      await createApplicationFormSubmission({ reason: "Synthetic application form" });
+      const workflow = { versionId: category.workflow_version_id, currentPosition: 0, steps: [], objections: [] };
+      const result = await importSource(number, { outcome: null, workflow, manualHold: true }, "open");
+      const [audit] = await queryAll<{ details_json: string }>(
+        env.DB,
+        "SELECT details_json FROM audit_log WHERE entity_id = ? AND action = 'membership_application_imported'",
         result.id,
-      ),
-    ).toEqual([
-      { stage: "on_hold", on_hold_subtype: "manual", review_notes: "On hold until explicitly instructed otherwise" },
-    ]);
-    expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
-    await expect(
-      activateImportedApplication(env.DB, actor, result.id, "Review evidence is reconciled."),
-    ).rejects.toMatchObject({ code: "IMPORT_MANUAL_HOLD" });
-    await activateImportedApplication(
-      env.DB,
-      actor,
-      result.id,
-      "Requester explicitly released the hold; staff review must now proceed.",
-      true,
-    );
-    await importSource(795, { outcome: null, workflow }, "open");
-    expect(await queryAll(env.DB, "SELECT stage FROM member_applications WHERE id = ?", result.id)).toEqual([
-      { stage: "processing" },
-    ]);
-  });
+      );
+      expect(JSON.parse(audit.details_json)).toMatchObject({
+        manualHold: { from: null, to: true },
+        reason: { from: null, to: mapping().mappingReason },
+      });
+      await env.DB.prepare("UPDATE member_applications SET stage_entered_at = ? WHERE id = ?")
+        .bind(created, result.id)
+        .run();
+      expect(await runOnHoldReminders(env.DB, env)).toEqual({ remindersSent: 0, autoClosed: 0 });
+      expect(await evaluateMembershipApplication(env.DB, result.id, "https://app.test")).toMatchObject({
+        approved: false,
+      });
+      await importSource(number, { outcome: null, workflow, manualHold: true }, "open");
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT stage, on_hold_subtype, review_notes FROM member_applications WHERE id = ?",
+          result.id,
+        ),
+      ).toEqual([
+        { stage: "on_hold", on_hold_subtype: "manual", review_notes: "On hold until explicitly instructed otherwise" },
+      ]);
+      expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
+      await expect(
+        activateImportedApplication(env.DB, actor, result.id, "Review evidence is reconciled."),
+      ).rejects.toMatchObject({ code: "IMPORT_MANUAL_HOLD" });
+      await activateImportedApplication(
+        env.DB,
+        actor,
+        result.id,
+        "Requester explicitly released the hold; staff review must now proceed.",
+        true,
+      );
+      await importSource(number, { outcome: null, workflow, manualHold: true }, "open");
+      expect(await queryAll(env.DB, "SELECT stage FROM member_applications WHERE id = ?", result.id)).toEqual([
+        { stage: "processing" },
+      ]);
+      expect(
+        await queryAll(
+          env.DB,
+          "SELECT from_stage, to_stage FROM member_application_events WHERE application_id = ?",
+          result.id,
+        ),
+      ).toEqual([{ from_stage: "on_hold", to_stage: "processing" }]);
+    },
+  );
 });

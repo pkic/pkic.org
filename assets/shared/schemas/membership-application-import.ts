@@ -60,6 +60,7 @@ export const githubApplicationEvidenceSchema = z.object({
 });
 export type GithubApplicationEvidence = z.infer<typeof githubApplicationEvidenceSchema>;
 export const applicationImportMappingSchema = z.object({
+  manualHold: z.boolean().default(false),
   answers: formAnswersSchema.default({}),
   applicantName: z.string().trim().min(1).nullable(),
   applicantEmail: normalizedEmailSchema.nullable(),

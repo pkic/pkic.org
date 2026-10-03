@@ -1,5 +1,10 @@
 import type { GithubApplicationEvidence } from "./schemas/membership-application-import";
 
+/** The requester-required hold must be acknowledged in the reviewed mapping before first import. */
+export function applicationImportRequiresManualHold(source: GithubApplicationEvidence): boolean {
+  return source.repository === "pkic/members" && source.issue.number === 795 && source.issue.state === "open";
+}
+
 /** Eligibility never interprets a GitHub completion as membership approval. */
 export function applicationImportEligibility(source: GithubApplicationEvidence): { eligible: boolean; reason: string } {
   const issue = source.issue;

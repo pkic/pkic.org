@@ -3,7 +3,7 @@ import { membershipApplicationDetailSchema } from "../../../../../assets/shared/
 import { first } from "../../../db/queries";
 import type { DatabaseLike } from "../../../types";
 
-export async function getApplicationSource(db: DatabaseLike, id: string) {
+export async function getApplicationSource(db: DatabaseLike, id: string, by: "application" | "source") {
   const row = await first<{
     repository: string;
     issue_id: string;
@@ -16,8 +16,8 @@ export async function getApplicationSource(db: DatabaseLike, id: string) {
   }>(
     db,
     `SELECT repository, issue_id, issue_number, issue_url, imported_at, activated_at, application_id, snapshot_json
-    FROM membership_application_sources WHERE id = ? OR application_id = ?`,
-    [id, id],
+    FROM membership_application_sources WHERE ${by === "source" ? "id = ? AND application_id IS NULL" : "application_id = ?"}`,
+    [id],
   );
   return row
     ? applicationSourceSchema.parse({
@@ -74,6 +74,6 @@ export async function getHistoricalApplicationDetail(db: DatabaseLike, id: strin
     requestedWorkingGroups: [],
     events: [],
     communications: [],
-    source: await getApplicationSource(db, id),
+    source: await getApplicationSource(db, id, "source"),
   });
 }

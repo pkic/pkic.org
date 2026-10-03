@@ -1,6 +1,9 @@
 import { prepareImportedApplicationForm } from "./import-form";
 import { prepareImportedIdentityLinks } from "./import-identities";
-import { applicationImportEligibility } from "../../../../../assets/shared/membership-application-import";
+import {
+  applicationImportEligibility,
+  applicationImportRequiresManualHold,
+} from "../../../../../assets/shared/membership-application-import";
 import {
   applicationImportMappingSchema,
   githubApplicationEvidenceSchema,
@@ -57,6 +60,22 @@ export async function importMembershipApplication(
   if (existing) return { id: existing.application_id ?? existing.id, imported: false };
   const mapping = applicationImportMappingSchema.parse(input.mapping);
   const historical = source.issue.state === "closed";
+  if (!historical) {
+    if (!mapping.applicantName || !mapping.applicantEmail || !mapping.categoryCode)
+      throw new AppError(
+        422,
+        "IMPORT_FIELDS_REQUIRED",
+        "Reconcile the active applicant, email, and category before import",
+      );
+    if (!mapping.workflow)
+      throw new AppError(
+        422,
+        "IMPORT_WORKFLOW_REQUIRED",
+        "Reconcile the active application's category and workflow before import",
+      );
+    if (applicationImportRequiresManualHold(source) && !mapping.manualHold)
+      throw new AppError(422, "IMPORT_MANUAL_HOLD_REQUIRED", "Acknowledge the required manual hold in the mapping");
+  }
   if (historical !== (mapping.outcome !== null))
     throw new AppError(
       422,
@@ -110,19 +129,13 @@ export async function importMembershipApplication(
       .bind(input.runId, actor.id, now),
   );
   if (applicationId) {
-    if (!mapping.applicantName || !mapping.applicantEmail || !mapping.categoryCode)
-      throw new AppError(
-        422,
-        "IMPORT_FIELDS_REQUIRED",
-        "Reconcile the active applicant, email, and category before import",
-      );
-    const category = await requireMembershipCategory(db, mapping.categoryCode);
+    const category = await requireMembershipCategory(db, mapping.categoryCode!);
     membershipApplicantPolicySchema(category).parse({
       applicantEmail: mapping.applicantEmail,
       organizationName: mapping.organizationName ?? undefined,
     });
-    const domain = category.isIndividual ? null : mapping.applicantEmail.split("@")[1];
-    const held = source.issue.number === 795;
+    const domain = category.isIndividual ? null : mapping.applicantEmail!.split("@")[1];
+    const held = mapping.manualHold;
     const form = await prepareImportedApplicationForm(db, applicationId, mapping, source.issue.created_at);
     statements.push(...form.statements);
     statements.push(
@@ -191,6 +204,7 @@ export async function importMembershipApplication(
         repository: source.repository,
         issueId: String(source.issue.id),
         reason: mapping.mappingReason,
+        manualHold: mapping.manualHold,
       },
       now,
     ),

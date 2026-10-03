@@ -80,7 +80,7 @@ export async function getMembershipApplicationDetail(
 
   return membershipApplicationDetailSchema.parse({
     ...toSummary(application, category?.label ?? application.membership_category),
-    source: await getApplicationSource(db, applicationId),
+    source: await getApplicationSource(db, applicationId, "application"),
     stageEnteredAt: application.stage_entered_at,
     answers,
     answerFields: form?.fields ?? [],

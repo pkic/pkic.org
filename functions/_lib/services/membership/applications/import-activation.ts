@@ -87,7 +87,7 @@ export async function activateImportedApplication(
       { reason, processingOwner: "portal" },
       now,
     ),
-    ...(releaseManualHold
+    ...(releaseManualHold && execution.application.stage === "on_hold"
       ? [
           db
             .prepare(
