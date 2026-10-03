@@ -1,6 +1,8 @@
 import type { MembershipWorkflowDefinition, MembershipWorkflowStep } from "./schemas/membership-workflows";
 
 export interface MembershipStepEvidence {
+  sourceNoticeOpenedAt?: string | null;
+  sourceNoticeDeadlineAt?: string | null;
   completedAt: string | null;
   reviewAccepted: boolean;
   noticeSentAt: string | null;
@@ -43,7 +45,8 @@ export function evaluateMembershipRequirement(
           blocker: "An authorized reviewer must complete this review.",
         };
   }
-  if (!evidence.noticeSentAt || !["sent", "delivered"].includes(evidence.noticeStatus ?? "")) {
+  const sourceNotice = evidence.sourceNoticeOpenedAt && evidence.sourceNoticeDeadlineAt;
+  if (!sourceNotice && (!evidence.noticeSentAt || !["sent", "delivered"].includes(evidence.noticeStatus ?? ""))) {
     return {
       complete: false,
       openedAt: null,
@@ -51,8 +54,10 @@ export function evaluateMembershipRequirement(
       blocker: "The response window starts after the review notice is sent.",
     };
   }
-  const deadlineAt = new Date(Date.parse(evidence.noticeSentAt) + step.durationDays * 86_400_000).toISOString();
-  const window = { openedAt: evidence.noticeSentAt, deadlineAt };
+  const deadlineAt = sourceNotice
+    ? evidence.sourceNoticeDeadlineAt!
+    : new Date(Date.parse(evidence.noticeSentAt!) + step.durationDays * 86_400_000).toISOString();
+  const window = { openedAt: sourceNotice ? evidence.sourceNoticeOpenedAt! : evidence.noticeSentAt, deadlineAt };
   if (now < deadlineAt) return { ...window, complete: false, blocker: "The review response window is still open." };
   if (unresolvedObjections && step.objectionHandling === "hold_for_resolution") {
     return {

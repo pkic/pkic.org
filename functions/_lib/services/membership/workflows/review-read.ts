@@ -1,3 +1,4 @@
+import { applicationImportPending } from "../applications/import-activation";
 import { getGlobalFormByKey } from "../../forms";
 import { MEMBERSHIP_APPLICATION_FORM_KEY } from "../../../../../assets/shared/schemas/membership-application-form";
 import type { UserCatalogListQuery } from "../../../../../assets/shared/schemas/user-catalog";
@@ -52,7 +53,9 @@ async function authorizedReview(db: DatabaseLike, applicationId: string, actor: 
 export async function getMembershipReview(db: DatabaseLike, applicationId: string, actor: MembershipReviewer) {
   const { execution, eligible, step } = await authorizedReview(db, applicationId, actor);
   const application = execution.application;
-  const open = !["approved", "declined", "withdrawn"].includes(application.stage);
+  const open =
+    !["approved", "declined", "withdrawn"].includes(application.stage) &&
+    !(await applicationImportPending(db, applicationId));
   const answers = await getApplicationAnswers(db, application.form_submission_id);
   return membershipWorkflowReviewResponseSchema.parse({
     application: {

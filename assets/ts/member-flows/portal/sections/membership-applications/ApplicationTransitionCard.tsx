@@ -117,7 +117,7 @@ export function ApplicationTransitionCard({
                     >
                       {ON_HOLD_SUBTYPES.map((s) => (
                         <option key={s} value={s}>
-                          {s}
+                          {statusLabel(s)}
                         </option>
                       ))}
                     </Select>

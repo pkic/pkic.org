@@ -97,7 +97,7 @@ export async function submitMembershipApplication(
  */
 export async function openApplicationDetail(page: Page, email: string, stage: string): Promise<void> {
   await page.goto("/portal/#/membership/applications");
-  await expect(page.getByRole("heading", { name: "Membership" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Active applications", exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Stage column options" }).click();
   await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
   await page.getByRole("menuitemradio", { name: new RegExp(`^${stage.replace(/_/g, " ")}$`, "i") }).click();
@@ -138,10 +138,10 @@ export async function transitionStageInUi(
 ): Promise<void> {
   const card = transitionCard(page);
   await expect(card).toBeVisible();
-  const moveTo = card.locator("select").first();
+  const moveTo = card.getByLabel(/^Move to/);
   await moveTo.selectOption(toStage);
   if (toStage === "on_hold" && options.onHoldSubtype) {
-    await card.locator("select").nth(1).selectOption(options.onHoldSubtype);
+    await card.getByLabel(/^Reason/).selectOption(options.onHoldSubtype);
   }
   // Located by the name the field announces rather than by a control class:
   // the note has a real `for`/`id` pair now, so the spec can use it.

@@ -136,6 +136,8 @@ const STATUS_LABEL: Record<string, string> = {
   rsvp_tentative: "RSVP tentative",
   delivery_unknown: "Delivery unknown",
   on_hold: "On hold",
+  closed_unknown: "Closed — outcome unknown",
+  manual: "Manual hold",
   board_review: "Board review",
   pending_review: "Pending review",
   new_inquiry: "New inquiry",

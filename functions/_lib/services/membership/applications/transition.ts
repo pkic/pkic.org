@@ -1,3 +1,4 @@
+import { applicationImportPending, prepareApplicationImportActivationGuard } from "./import-activation";
 import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../../db/authorization-guard";
 /**
  * Membership application stage machine. Split out of the former
@@ -29,7 +30,7 @@ export { ON_HOLD_SUBTYPES, allowedTransitions };
 export type OnHoldSubtype = (typeof ON_HOLD_SUBTYPES)[number];
 const ON_HOLD_SUBTYPE_SET = new Set<string>(ON_HOLD_SUBTYPES);
 
-export const ON_HOLD_SUBTYPE_EMAIL_TEMPLATES: Record<OnHoldSubtype, string> = {
+export const ON_HOLD_SUBTYPE_EMAIL_TEMPLATES: Partial<Record<OnHoldSubtype, string>> = {
   request_authority: "application-hold-authority",
   request_org_email: "application-hold-org-email",
   request_pki_experience: "application-hold-pki-experience",
@@ -132,7 +133,7 @@ export function prepareApplicationStageTransition(
 
   const suggestedEmailTemplateKey =
     params.toStage === "on_hold"
-      ? ON_HOLD_SUBTYPE_EMAIL_TEMPLATES[params.onHoldSubtype as OnHoldSubtype]
+      ? (ON_HOLD_SUBTYPE_EMAIL_TEMPLATES[params.onHoldSubtype as OnHoldSubtype] ?? null)
       : (STAGE_EMAIL_TEMPLATES[params.toStage] ?? null);
 
   const stageEmail =
@@ -160,9 +161,19 @@ export function prepareApplicationStageTransition(
          SET stage = ?, stage_entered_at = ?, transition_revision = transition_revision + 1,
              on_hold_subtype = ?, updated_at = ?,
              on_hold_reminder_sent_at = NULL
-         WHERE id = ? AND stage = ? AND transition_revision = ?`,
+         WHERE id = ? AND stage = ? AND transition_revision = ?
+           AND (on_hold_subtype IS NOT 'manual' OR ? IS NOT NULL)`,
       )
-      .bind(params.toStage, now, nextOnHoldSubtype, now, application.id, fromStage, application.transition_revision),
+      .bind(
+        params.toStage,
+        now,
+        nextOnHoldSubtype,
+        now,
+        application.id,
+        fromStage,
+        application.transition_revision,
+        params.actor?.id ?? null,
+      ),
     db
       .prepare(
         `INSERT INTO member_application_events (id, application_id, from_stage, to_stage, actor_user_id, note, created_at)
@@ -189,6 +200,7 @@ export function prepareApplicationStageTransition(
       .bind(params.toStage === "processing" ? now : null, application.id),
   );
 
+  statements.push(prepareApplicationImportActivationGuard(db, application.id));
   const outboxIds: string[] = [];
   if (params.toStage === "declined" || params.toStage === "withdrawn") {
     statements.push(prepareReleaseApplicationDomainClaim(db, application.id));
@@ -298,6 +310,14 @@ export async function transitionApplicationStage(
     throw new AppError(404, "APPLICATION_NOT_FOUND", "Application not found");
   }
 
+  if (await applicationImportPending(db, application.id))
+    throw new AppError(409, "IMPORT_RECONCILIATION_REQUIRED", "Reconcile the import before changing its stage");
+  if (application.on_hold_subtype === "manual" && (!params.actor || !params.note || params.note.trim().length < 10))
+    throw new AppError(
+      422,
+      "MANUAL_HOLD_RELEASE_REASON_REQUIRED",
+      "Record the explicit release instruction and reconciled review timing before releasing this hold",
+    );
   const notification = params.notification;
   const token = notification
     ? await queuedCapabilityTokenBoundToSecret(

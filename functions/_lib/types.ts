@@ -127,6 +127,8 @@ export interface Env {
   APPLICATION_DOCUMENT_MAX_BYTES?: string;
   APPLICATION_DOCUMENT_MAX_COUNT?: string;
   APPLICATION_DOCUMENT_TOTAL_MAX_BYTES?: string;
+  /** Enabled only for a separately authorized import; never configure private source access in preview. */
+  GITHUB_MEMBERS_IMPORT_TOKEN?: string;
   SENDGRID_API_KEY?: string;
   SENDGRID_API_BASE?: string;
   FROM_EMAIL?: string;

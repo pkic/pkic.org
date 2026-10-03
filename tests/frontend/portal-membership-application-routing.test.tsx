@@ -3,6 +3,13 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+vi.mock("wouter", () => ({
+  Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
+    <a href={`#${href}`} {...rest}>
+      {children}
+    </a>
+  ),
+}));
 vi.mock("../../assets/ts/shared/api-client", () => ({
   getJson: vi.fn(async () => ({ categories: [] })),
 }));
@@ -50,7 +57,7 @@ describe("portal membership application routing", () => {
   it("opens list rows at a stable portal detail URL", () => {
     const container = mount(<MembershipApplications canWrite={false} canApprove={false} />);
 
-    const link = container.querySelector<HTMLAnchorElement>("a");
+    const link = container.querySelector<HTMLAnchorElement>('a[href="#/membership/applications/application-2"]');
     expect(link?.getAttribute("href")).toBe("#/membership/applications/application-2");
   });
 });

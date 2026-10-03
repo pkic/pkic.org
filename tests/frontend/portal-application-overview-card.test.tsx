@@ -44,6 +44,8 @@ function detail(overrides: Partial<MembershipApplicationDetail> = {}): Membershi
     organizationName: "Example Organization",
     membershipCategory: "F",
     membershipCategoryLabel: "General Member",
+    source: null,
+    closedAt: null,
     currentRequirement: "Review the application form",
     stage: "processing",
     onHoldSubtype: null,

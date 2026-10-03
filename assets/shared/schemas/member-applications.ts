@@ -41,9 +41,25 @@ export const APPLICATION_TERMINAL_STAGES = [
   "withdrawn",
 ] as const satisfies readonly ApplicationStage[];
 
+export const APPLICATION_ACTIVE_STAGES = [
+  "submitted",
+  "processing",
+  "on_hold",
+] as const satisfies readonly ApplicationStage[];
+export const APPLICATION_HISTORY_OUTCOMES = [...APPLICATION_TERMINAL_STAGES, "closed_unknown"] as const;
+export const APPLICATION_SCOPE_STAGES = {
+  active: APPLICATION_ACTIVE_STAGES,
+  history: APPLICATION_HISTORY_OUTCOMES,
+} as const;
+export const applicationScopeSchema = z.enum(["active", "history"]);
+export type ApplicationScope = z.infer<typeof applicationScopeSchema>;
+
 export function isApplicationTerminalStage(stage: string): boolean {
   return (APPLICATION_TERMINAL_STAGES as readonly string[]).includes(stage);
 }
+
+export const MANUAL_APPLICATION_HOLD = "manual";
+export const MANUAL_APPLICATION_HOLD_REASON = "On hold until explicitly instructed otherwise";
 
 export const ON_HOLD_SUBTYPES = [
   "request_authority",
@@ -51,6 +67,7 @@ export const ON_HOLD_SUBTYPES = [
   "request_pki_experience",
   "request_org_application",
   "request_information",
+  MANUAL_APPLICATION_HOLD,
 ] as const;
 export const onHoldSubtypeSchema = z.enum(ON_HOLD_SUBTYPES);
 

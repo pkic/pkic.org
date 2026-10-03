@@ -102,14 +102,18 @@ export function ApplicationOverviewCard({
               <dd>{detail.applicantName}</dd>
 
               <dt>Email</dt>
-              <dd class="pk-break">{detail.applicantEmail}</dd>
+              <dd class="pk-break">{detail.applicantEmail || "Not recorded"}</dd>
 
               <dt>Organization</dt>
-              <dd>{detail.organizationName ?? "Individual — no organization"}</dd>
+              <dd>
+                {detail.organizationName ??
+                  (detail.source?.historical ? "Not recorded" : "Individual — no organization")}
+              </dd>
 
               <dt>Category</dt>
               <dd>
-                {detail.membershipCategoryLabel} <span class="pk-mono">({detail.membershipCategory})</span>
+                {detail.membershipCategoryLabel}{" "}
+                {detail.membershipCategory && <span class="pk-mono">({detail.membershipCategory})</span>}
               </dd>
 
               <dt>Stage</dt>
@@ -124,8 +128,12 @@ export function ApplicationOverviewCard({
                 </>
               )}
 
-              <dt>Stage entered</dt>
-              <dd class="pk-mono">{fmt(detail.stageEnteredAt)}</dd>
+              <dt>{detail.source?.historical ? "Closed" : "Stage entered"}</dt>
+              <dd class="pk-mono">
+                {(detail.source?.historical ? detail.closedAt : detail.stageEnteredAt)
+                  ? fmt(detail.source?.historical ? detail.closedAt : detail.stageEnteredAt)
+                  : "Not recorded"}
+              </dd>
 
               <dt>Submitted</dt>
               <dd class="pk-mono">{fmt(detail.createdAt)}</dd>

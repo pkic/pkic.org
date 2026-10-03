@@ -1,3 +1,4 @@
+import { applicationImportPending, prepareApplicationImportActivationGuard } from "../applications/import-activation";
 import {
   evaluateMembershipRequirement,
   evaluateMembershipWorkflow,
@@ -29,6 +30,12 @@ export async function commitMembershipWorkflow(
   now = nowIso(),
 ) {
   const application = execution.application;
+  if (await applicationImportPending(db, application.id))
+    throw new AppError(
+      409,
+      "IMPORT_RECONCILIATION_REQUIRED",
+      "Reconcile and activate the imported application before processing",
+    );
   if (isApplicationTerminalStage(application.stage))
     throw new AppError(409, "MEMBERSHIP_APPLICATION_CLOSED", "This application is already closed");
   const held = application.stage === "on_hold";
@@ -45,12 +52,13 @@ export async function commitMembershipWorkflow(
       const requirement = evaluateMembershipRequirement(step, evidence[position], false, now);
       if (!requirement.openedAt) continue;
       // Provider acceptance can race a webhook changing delivery state. Recheck the exact notice evidence.
-      updates.push(
-        prepareAuthorizationGuard(db, {
-          sql: "SELECT 1 FROM email_outbox WHERE id = ? AND sent_at = ? AND status IN ('sent', 'delivered')",
-          bindings: [row.notice_outbox_id, requirement.openedAt],
-        }),
-      );
+      if (!row.source_notice_opened_at)
+        updates.push(
+          prepareAuthorizationGuard(db, {
+            sql: "SELECT 1 FROM email_outbox WHERE id = ? AND sent_at = ? AND status IN ('sent', 'delivered')",
+            bindings: [row.notice_outbox_id, requirement.openedAt],
+          }),
+        );
       if (row.opened_at !== requirement.openedAt || row.deadline_at !== requirement.deadlineAt) {
         updates.push(
           db
@@ -113,6 +121,7 @@ export async function commitMembershipWorkflow(
   if (!evidenceChanged && !readyToProvision) {
     await db.batch([
       snapshot,
+      prepareApplicationImportActivationGuard(db, application.id),
       db
         .prepare(
           `UPDATE membership_application_workflows SET next_evaluation_at = ?
@@ -122,7 +131,7 @@ export async function commitMembershipWorkflow(
     ]);
     return { approved: false, outboxIds: [], approval: null };
   }
-  const statements: StatementLike[] = [snapshot];
+  const statements: StatementLike[] = [snapshot, prepareApplicationImportActivationGuard(db, application.id)];
   let approval: Awaited<ReturnType<typeof buildApplicationApproval>> | null = null;
   if (readyToProvision) {
     updates.push(
@@ -220,6 +229,7 @@ export async function commitMembershipWorkflow(
   };
 }
 export async function evaluateMembershipApplication(db: DatabaseLike, applicationId: string, appBaseUrl: string) {
+  if (await applicationImportPending(db, applicationId)) return { approved: false, outboxIds: [], approval: null };
   const execution = await getMembershipExecution(db, applicationId);
   if (isApplicationTerminalStage(execution.application.stage) || execution.application.stage === "on_hold")
     return { approved: false, outboxIds: [], approval: null };

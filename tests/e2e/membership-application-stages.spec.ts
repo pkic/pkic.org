@@ -18,6 +18,8 @@ import {
   uniqueSuffix,
 } from "./helpers/membership";
 
+test.use({ actionTimeout: 20_000 });
+
 test("staff hold and resume an application, then complete its required review", async ({ page }) => {
   const suffix = uniqueSuffix();
   const email = `stages-${suffix}@stages-${suffix}.test`;
@@ -66,7 +68,7 @@ test("staff hold and resume an application, then complete its required review", 
     onHoldSubtype: "request_information",
     note: "Awaiting a signed policy.",
   });
-  await expect(stageBadge(page, name).filter({ hasText: "On Hold" })).toBeVisible();
+  await expect(stageBadge(page, name).filter({ hasText: "On hold" })).toBeVisible();
 
   await transitionStageInUi(page, "processing", { note: "Applicant responded." });
   await expect(stageBadge(page, name).filter({ hasText: "Processing" })).toBeVisible();
@@ -111,6 +113,28 @@ test("a declined application is terminal and never reaches onboarding", async ({
   await expect(transitionCard(page).getByText("No further transitions from this stage.")).toBeVisible();
   // A terminal decline cannot complete another review.
   await expect(page.getByRole("button", { name: "Approve & run onboarding" })).toHaveCount(0);
+  await page.goto("/portal/#/membership/applications");
+  await page.getByRole("searchbox").fill(email);
+  await page.getByRole("searchbox").press("Enter");
+  await expect(page.getByText("No active applications match this view")).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "Application views" })
+    .getByRole("link", { name: "Application history" })
+    .click();
+  await page.getByRole("searchbox").fill(email);
+  await page.getByRole("searchbox").press("Enter");
+  const historyRow = page.getByRole("row").filter({ hasText: email });
+  await expect(historyRow).toBeVisible();
+  await expect(historyRow).toContainText("Declined");
+  await expect(page).toHaveURL(/applicationHistory\.q=/);
+  const historyUrl = page.url();
+  await historyRow.click();
+  await expect(page.getByRole("heading", { name, exact: true })).toBeVisible();
+  await page.goBack();
+  await expect(page).toHaveURL(historyUrl);
+  await expect(page.getByRole("searchbox")).toHaveValue(email);
+  await expect(page.getByRole("row").filter({ hasText: email })).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("application-history.png"), fullPage: true });
 });
 
 test("staff email the applicant and record an internal note through the Communications card", async ({ page }) => {
@@ -211,4 +235,30 @@ test("staff email the applicant and record an internal note through the Communic
   ).toBeLessThanOrEqual(1);
   await card.evaluate((element) => element.scrollIntoView({ block: "start" }));
   await page.screenshot({ path: test.info().outputPath("pkic-application-populated.png") });
+});
+
+test("imported history shows source evidence without live processing controls", async ({ page }) => {
+  const { seedSyntheticApplicationHistory } = await import("./helpers/application-history");
+  const { id, issueNumber } = seedSyntheticApplicationHistory();
+  await signInToPortal(page, e2eAdminEmail("portal-application-stages-decline"));
+  await page.goto("/portal/#/membership/applications/history");
+  await page.getByRole("searchbox").fill("Example Historical Organization");
+  await page.getByRole("searchbox").press("Enter");
+  const row = page.getByRole("row").filter({ hasText: "Example Historical User" });
+  await expect(row).toContainText("Closed — outcome unknown");
+  await expect(row).toContainText(`GitHub #${issueNumber}`);
+  await row.click();
+  await expect(page).toHaveURL(new RegExp(`/membership/applications/${id}$`));
+  await expect(page.getByRole("heading", { name: "Example Historical User", exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: `pkic/members #${issueNumber}` })).toBeVisible();
+  await expect(
+    page.getByText("Historical evidence is read-only. Missing answers and consent remain unknown."),
+  ).toBeVisible();
+  await expect(page.getByRole("region", { name: "Stage transition" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Application actions" })).toHaveCount(0);
+  await page.getByText("Source discussion and timeline (1)", { exact: true }).click();
+  await expect(
+    page.getByText("The application was closed; the membership outcome is unknown.", { exact: true }),
+  ).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("imported-application-history.png"), fullPage: true });
 });

@@ -9,6 +9,7 @@
  * useApplicationDetail and the Application*Card components in this
  * directory. This file is just the list/detail top-level composition.
  */
+import { Tabs } from "../../../../components/Tabs";
 import { useMembershipCategoryCatalog } from "../../../../hooks/useMembershipCategoryCatalog";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { ApplicationDetailView } from "./ApplicationDetailView";
@@ -28,7 +29,8 @@ export function MembershipApplications({
 }) {
   const categories = useMembershipCategoryCatalog();
 
-  if (initialApplicationId) {
+  const scope = initialApplicationId === "history" ? "history" : "active";
+  if (initialApplicationId && initialApplicationId !== "history") {
     return (
       <ApplicationDetailView
         applicationId={initialApplicationId}
@@ -41,8 +43,17 @@ export function MembershipApplications({
   }
   return (
     <div class="pk pk-stack">
-      <PageHeader title="Membership applications" />
-      <ApplicationsList />
+      <PageHeader title={scope === "active" ? "Active applications" : "Application history"} />
+      <Tabs
+        label="Application views"
+        items={[
+          { key: "active", label: "Active applications" },
+          { key: "history", label: "Application history" },
+        ]}
+        active={scope}
+        hrefFor={(key) => (key === "active" ? "/membership/applications" : "/membership/applications/history")}
+      />
+      <ApplicationsList key={scope} scope={scope} />
     </div>
   );
 }

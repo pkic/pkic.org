@@ -20,14 +20,16 @@ export const ON_HOLD_CLOSURE_DUE_QUERY = `
   SELECT id, applicant_email, applicant_name, stage, stage_entered_at, transition_revision,
          on_hold_reminder_sent_at
   FROM member_applications INDEXED BY idx_member_applications_on_hold_closure_due
-  WHERE stage = 'on_hold' AND stage_entered_at <= ?
+  WHERE stage = 'on_hold' AND on_hold_subtype IS NOT 'manual'
+    AND NOT EXISTS (SELECT 1 FROM membership_application_sources source WHERE source.application_id = member_applications.id AND source.activated_at IS NULL) AND stage_entered_at <= ?
   ORDER BY stage_entered_at ASC, id ASC
   LIMIT ?`;
 
 export const ON_HOLD_REMINDER_DUE_QUERY = `
   SELECT id, applicant_email, applicant_name, stage, stage_entered_at, transition_revision, on_hold_subtype
   FROM member_applications INDEXED BY idx_member_applications_on_hold_reminder_due
-  WHERE stage = 'on_hold'
+  WHERE stage = 'on_hold' AND on_hold_subtype IS NOT 'manual'
+    AND NOT EXISTS (SELECT 1 FROM membership_application_sources source WHERE source.application_id = member_applications.id AND source.activated_at IS NULL)
     AND stage_entered_at > ?
     AND stage_entered_at <= ?
     AND on_hold_reminder_sent_at IS NULL
@@ -50,7 +52,7 @@ type OnHoldWorkItem =
   | { kind: "reminder"; application: OnHoldReminderCandidate };
 
 const ON_HOLD_SELECTION_STATEMENTS = 3;
-const ON_HOLD_MAX_ACTION_STATEMENTS = 6;
+const ON_HOLD_MAX_ACTION_STATEMENTS = 7;
 const ON_HOLD_REMINDER_STATEMENTS = 4;
 
 function selectFairWork(
