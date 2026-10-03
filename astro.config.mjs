@@ -31,7 +31,7 @@ export default defineConfig({
     preact({ compat: true }),
     sitemap({ filter: (url) => !url.includes("/portal/") && !url.includes("/search/") }),
     {
-      name: "pkic-publication-search",
+      name: "pkic-publication-post-processing",
       hooks: {
         "astro:build:start": async () => {
           await preparePublicationPublicAssets(resolve(root, "public"), publicAssets);
