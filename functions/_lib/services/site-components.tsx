@@ -369,17 +369,19 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
     const directory =
       context.publication.groups[group] ??
       Object.values(context.publication.groups).find((directory) => directory.group.id === group);
-    return directory
-      ? component(
-          await render(
-            <GroupGovernanceView
-              directory={directory}
-              view={call.props.view === "leadership" ? "leadership" : "roster"}
-              pastHeadingHtml={await markdownHtml(call.inner)}
-            />,
-          ),
-        )
-      : component("");
+    if (!directory)
+      throw new Error(
+        `Leadership group "${group}" referenced in ${context.sourcePath} (${context.route}) is missing from the publication snapshot. Check the group slug, active status, and public visibility settings before publishing.`,
+      );
+    return component(
+      await render(
+        <GroupGovernanceView
+          directory={directory}
+          view={call.props.view === "leadership" ? "leadership" : "roster"}
+          pastHeadingHtml={await markdownHtml(call.inner)}
+        />,
+      ),
+    );
   },
   ltl: trustLists,
   "maturity-staircase": maturity,

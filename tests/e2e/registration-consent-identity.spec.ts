@@ -25,7 +25,7 @@ test("event confirmation joins nobody; explicit organization consent joins once 
   );
   const organizationName = owner.user.identities[0].organizationName!;
   const email = `event-${Date.now()}@${representative.email.split("@")[1]}`;
-  const listResponse = await page.request.post("/api/v1/groups/all-members/mailing-lists", {
+  const listResponse = await page.request.post("/api/v1/groups/pkic/mailing-lists", {
     data: groupMailingListCreateSchema.parse({
       email: `consent-${Date.now()}@lists.example.test`,
       label: "Consent verification",
@@ -41,9 +41,7 @@ test("event confirmation joins nobody; explicit organization consent joins once 
   const subscribers = async () =>
     mailingListSubscribersResponseSchema.parse(
       await (
-        await page.request.get(
-          `/api/v1/groups/all-members/mailing-lists/${listId}/subscribers?q=${encodeURIComponent(email)}`,
-        )
+        await page.request.get(`/api/v1/groups/pkic/mailing-lists/${listId}/subscribers?q=${encodeURIComponent(email)}`)
       ).json(),
     );
   const attendeeContext = await browser.newContext({ baseURL: new URL(page.url()).origin });

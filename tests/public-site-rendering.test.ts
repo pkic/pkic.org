@@ -468,22 +468,42 @@ describe("Vite public-site rendering", () => {
     expect(html).not.toContain('data-module="member-flows/leadership-widget"');
   });
 
-  it("publishes About leadership using the configured pkic forum slug", async () => {
-    const slug = "pkic";
+  it.each([
+    ["chair only", ["role-group_lead"]],
+    ["vice chair only", ["role-group_deputy_lead"]],
+    ["chair and vice chair", ["role-group_lead", "role-group_deputy_lead"]],
+    ["no current leaders", []],
+  ])("publishes About leadership with %s", async (_description, roles) => {
     const publication = sitePublicationSnapshotSchema.parse(fixturePublication);
-    const forum = publication.groups.tcwg!;
-    forum.group = { ...forum.group, id: "20000000-0000-4000-8000-000000000001", slug };
-    publication.groups = { [slug]: forum };
+    const forum = publication.groups.pkic!;
+    const assignments = [...forum.leadership];
+    forum.leadership = assignments.filter((leader) => roles.includes(leader.roleId));
 
     const content = await loadSiteContent("/about/", { publication });
-    for (const leader of forum.leadership) expect(content?.html).toContain(leader.person.name);
-    expect(content?.html).toContain("person-card-name");
+    expect(content?.html).toContain("Chair and Vice Chair");
+    for (const leader of assignments) {
+      if (roles.includes(leader.roleId)) expect(content?.html).toContain(leader.person.name);
+      else expect(content?.html).not.toContain(leader.person.name);
+    }
     expect(content?.html).not.toContain('data-module="member-flows/leadership-widget"');
-
-    publication.groups = {};
-    const unpublished = await loadSiteContent("/about/", { publication });
-    expect(unpublished?.html).not.toContain("person-card-name");
   });
+
+  it.each(["all-members", "missing"])(
+    "rejects publication when the About group is %s instead of pkic",
+    async (slug) => {
+      const publication = sitePublicationSnapshotSchema.parse(fixturePublication);
+      const forum = publication.groups.pkic!;
+      delete publication.groups.pkic;
+      if (slug !== "missing") {
+        forum.group.slug = slug;
+        publication.groups[slug] = forum;
+      }
+
+      await expect(loadSiteContent("/about/", { publication })).rejects.toThrow(
+        /Leadership group "pkic" referenced in .*about\/_index\.md \(\/about\/\) is missing from the publication snapshot/,
+      );
+    },
+  );
 
   it("renders structured YAML components without exposing migration syntax", async () => {
     const response = await SELF.fetch("https://app.test/events/2026/pqc-conference-amsterdam-nl/sponsors/");
