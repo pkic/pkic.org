@@ -37,7 +37,7 @@ The Public Key Infrastructure Consortium is comprised of leading organizations t
 
 ### Chair and Vice Chair
 
-{{< leadership group="20000000-0000-4000-8000-000000000001" view="leadership" >}}
+{{< leadership group="pkic" view="leadership" >}}
 
 ## Past Leadership
 
