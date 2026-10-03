@@ -18,7 +18,12 @@ const locations = [
   ".next/cache",
   resolve(store, "pkic-publication-cache"),
 ];
-const report = { experiment: "repeat-persistence", commit: process.env.WORKERS_CI_COMMIT_SHA, store, locations: {} };
+const report = {
+  experiment: "repeat-directory-persistence",
+  commit: process.env.WORKERS_CI_COMMIT_SHA,
+  store,
+  locations: {},
+};
 // Expose only HTTP status and the cache-enabled flag, never API payloads or logs.
 report.configuration = { buildStatus: null, triggerStatus: null, cacheEnabled: null };
 if (process.env.CLOUDFLARE_API_TOKEN) {
