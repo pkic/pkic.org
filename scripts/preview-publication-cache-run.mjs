@@ -19,7 +19,7 @@ const locations = [
   resolve(store, "pkic-publication-cache"),
 ];
 const report = {
-  experiment: "repeat-directory-persistence",
+  experiment: "astro-native-cache-location",
   commit: process.env.WORKERS_CI_COMMIT_SHA,
   store,
   locations: {},
@@ -61,7 +61,7 @@ for (const location of locations) {
   await mkdir(location, { recursive: true });
   await writeFile(resolve(location, "diagnostic-marker.json"), JSON.stringify({ commit: report.commit }));
 }
-process.env.PKIC_PROBE_CACHE_DIRECTORY = locations[0];
+process.env.PKIC_PROBE_CACHE_DIRECTORY = ".next/cache/astro";
 await import("./preview-cache-probe.mjs");
 report.nativeImage = JSON.parse(await readFile("dist/cache-probe-assets/cache-probe.json", "utf8"));
 await writeFile("dist/client/cache-probe.json", JSON.stringify(report));
