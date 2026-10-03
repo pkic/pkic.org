@@ -8,7 +8,16 @@ if (process.env.WORKERS_CI_BRANCH !== "test/astro-cache-reuse" || process.env.CL
 const result = spawnSync("pnpm", ["store", "path"], { encoding: "utf8" });
 if (result.status !== 0) throw new Error(result.stderr);
 const store = result.stdout.trim();
-const locations = ["node_modules/.astro", resolve(store, "pkic-publication-cache")];
+const locations = [
+  "node_modules/.astro",
+  "node_modules/.cache",
+  ".astro",
+  ".cache",
+  "resources/_gen",
+  "public",
+  ".next/cache",
+  resolve(store, "pkic-publication-cache"),
+];
 const report = { experiment: "repeat-persistence", commit: process.env.WORKERS_CI_COMMIT_SHA, store, locations: {} };
 // Expose only HTTP status and the cache-enabled flag, never API payloads or logs.
 report.configuration = { buildStatus: null, triggerStatus: null, cacheEnabled: null };
@@ -43,11 +52,11 @@ for (const location of locations) {
     if (error.code !== "ENOENT") throw error;
     return null;
   });
-  report.locations[location] = { entries, marker };
+  report.locations[location] = { entryCount: entries.length, marker };
   await mkdir(location, { recursive: true });
   await writeFile(resolve(location, "diagnostic-marker.json"), JSON.stringify({ commit: report.commit }));
 }
-process.env.PKIC_PROBE_CACHE_DIRECTORY = locations[1];
+process.env.PKIC_PROBE_CACHE_DIRECTORY = locations[0];
 await import("./preview-cache-probe.mjs");
 report.nativeImage = JSON.parse(await readFile("dist/cache-probe-assets/cache-probe.json", "utf8"));
 await writeFile("dist/client/cache-probe.json", JSON.stringify(report));
