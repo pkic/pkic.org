@@ -468,6 +468,43 @@ describe("Vite public-site rendering", () => {
     expect(html).not.toContain('data-module="member-flows/leadership-widget"');
   });
 
+  it.each([
+    ["chair only", ["role-group_lead"]],
+    ["vice chair only", ["role-group_deputy_lead"]],
+    ["chair and vice chair", ["role-group_lead", "role-group_deputy_lead"]],
+    ["no current leaders", []],
+  ])("publishes About leadership with %s", async (_description, roles) => {
+    const publication = sitePublicationSnapshotSchema.parse(fixturePublication);
+    const forum = publication.groups.pkic!;
+    const assignments = [...forum.leadership];
+    forum.leadership = assignments.filter((leader) => roles.includes(leader.roleId));
+
+    const content = await loadSiteContent("/about/", { publication });
+    expect(content?.html).toContain("Chair and Vice Chair");
+    for (const leader of assignments) {
+      if (roles.includes(leader.roleId)) expect(content?.html).toContain(leader.person.name);
+      else expect(content?.html).not.toContain(leader.person.name);
+    }
+    expect(content?.html).not.toContain('data-module="member-flows/leadership-widget"');
+  });
+
+  it.each(["all-members", "missing"])(
+    "rejects publication when the About group is %s instead of pkic",
+    async (slug) => {
+      const publication = sitePublicationSnapshotSchema.parse(fixturePublication);
+      const forum = publication.groups.pkic!;
+      delete publication.groups.pkic;
+      if (slug !== "missing") {
+        forum.group.slug = slug;
+        publication.groups[slug] = forum;
+      }
+
+      await expect(loadSiteContent("/about/", { publication })).rejects.toThrow(
+        /Leadership group "pkic" referenced in .*about\/_index\.md \(\/about\/\) is missing from the publication snapshot/,
+      );
+    },
+  );
+
   it("renders structured YAML components without exposing migration syntax", async () => {
     const response = await SELF.fetch("https://app.test/events/2026/pqc-conference-amsterdam-nl/sponsors/");
     const html = await response.text();

@@ -220,6 +220,113 @@
       ],
       "pastLeadership": [],
       "roster": null
+    },
+    "pkic": {
+      "group": {
+        "id": "20000000-0000-4000-8000-000000000001",
+        "slug": "pkic",
+        "name": "Synthetic member forum",
+        "type": {
+          "key": "community",
+          "singularLabel": "Community",
+          "pluralLabel": "Communities"
+        }
+      },
+      "mailingListEmail": null,
+      "leadership": [
+        {
+          "person": {
+            "name": "Synthetic Forum Chair",
+            "jobTitle": "Working group leadership",
+            "organizationName": null,
+            "organizationLogoUrl": null,
+            "organizationWebsite": null,
+            "photoUrl": "/favicon.svg",
+            "featuredLink": "https://www.linkedin.com/in/synthetic-chair/"
+          },
+          "title": "Chair",
+          "startsAt": "2024-03-01T00:00:00.000Z",
+          "endsAt": null,
+          "roleId": "role-group_lead",
+          "sourceGroup": {
+            "id": "20000000-0000-4000-8000-000000000001",
+            "slug": "pkic",
+            "name": "Synthetic member forum",
+            "type": {
+              "key": "community",
+              "singularLabel": "Community",
+              "pluralLabel": "Communities"
+            }
+          },
+          "inherited": false
+        },
+        {
+          "person": {
+            "name": "Synthetic Forum Deputy",
+            "jobTitle": "Working group leadership",
+            "organizationName": null,
+            "organizationLogoUrl": null,
+            "organizationWebsite": null,
+            "photoUrl": null,
+            "featuredLink": "https://www.linkedin.com/in/synthetic-chair/"
+          },
+          "title": "Vice Chair",
+          "startsAt": "2024-03-01T00:00:00.000Z",
+          "endsAt": null,
+          "roleId": "role-group_deputy_lead",
+          "sourceGroup": {
+            "id": "20000000-0000-4000-8000-000000000001",
+            "slug": "pkic",
+            "name": "Synthetic member forum",
+            "type": {
+              "key": "community",
+              "singularLabel": "Community",
+              "pluralLabel": "Communities"
+            }
+          },
+          "inherited": false
+        }
+      ],
+      "pastLeadership": [],
+      "roster": null
+    },
+    "board": {
+      "group": {
+        "id": "20000000-0000-4000-8000-000000000009",
+        "slug": "board",
+        "name": "Synthetic Board of Directors",
+        "type": {
+          "key": "board",
+          "singularLabel": "Board",
+          "pluralLabel": "Boards"
+        }
+      },
+      "mailingListEmail": null,
+      "leadership": [],
+      "pastLeadership": [],
+      "roster": {
+        "current": [],
+        "past": []
+      }
+    },
+    "executive-council": {
+      "group": {
+        "id": "20000000-0000-4000-8000-000000000002",
+        "slug": "executive-council",
+        "name": "Synthetic Executive Council",
+        "type": {
+          "key": "board",
+          "singularLabel": "Board",
+          "pluralLabel": "Boards"
+        }
+      },
+      "mailingListEmail": null,
+      "leadership": [],
+      "pastLeadership": [],
+      "roster": {
+        "current": [],
+        "past": []
+      }
     }
   },
   "groupMembers": {

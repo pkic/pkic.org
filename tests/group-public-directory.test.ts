@@ -106,6 +106,29 @@ describe("public generic group directory", () => {
     );
   });
 
+  it("publishes forum chairs anonymously without exposing the authenticated group's roster", async () => {
+    const groupId = await insertGroup({
+      slug: "forum-directory",
+      name: "Example Member Forum",
+      typeKey: "community",
+      visibility: "authenticated",
+      publicLeadership: true,
+      publicRoster: false,
+    });
+    await insertLeader(groupId, "role-group_lead", "Forum Chair", "Standards Lead");
+    await insertLeader(groupId, "role-group_deputy_lead", "Forum Deputy", "Security Engineer");
+
+    const response = await callApi(env as any, "/api/v1/groups/forum-directory/directory");
+    expect(response.status).toBe(200);
+    const directory = groupDirectoryResponseSchema.parse(await response.json());
+    expect(directory.leadership.map((entry) => entry.person.name)).toEqual(["Forum Chair", "Forum Deputy"]);
+    expect(directory.roster).toBeNull();
+    expect(directory.mailingListEmail).toBeNull();
+
+    await env.DB.prepare("UPDATE groups SET public_leadership = 0 WHERE id = ?").bind(groupId).run();
+    expect((await callApi(env as any, "/api/v1/groups/forum-directory/directory")).status).toBe(404);
+  });
+
   it("labels an H6 chair Independent while retaining organization job titles", async () => {
     const groupId = await insertGroup({ slug: "independent-chair", name: "Example Working Group", publicRoster: true });
     const userId = await insertLeader(groupId, "role-group_lead", "Independent User");
