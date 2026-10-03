@@ -1,3 +1,4 @@
+import { publicationCacheDirectory } from "./build-context.mjs";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -57,7 +58,7 @@ export async function copyPublicMedia({
     .update(await readFile(createRequire(import.meta.url).resolve("@resvg/resvg-wasm/index_bg.wasm")))
     .digest("hex");
   const cache = await publicMediaCache(
-    resolve(cacheDirectory ?? `node_modules/.astro/publication-media/${process.env.CLOUDFLARE_ENV ?? "local"}`),
+    resolve(cacheDirectory ?? publicationCacheDirectory("publication-media", process.env.CLOUDFLARE_ENV ?? "local")),
     revision,
     getObject,
     manifest,
