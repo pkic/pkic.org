@@ -187,6 +187,14 @@ export async function readSitePublicationSnapshot(
     eventAfter = events[events.length - 1]!.slug;
   }
   snapshot.eventAgendas = {};
+  const agendaTables = await all<{ name: string }>(
+    db,
+    "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('event_agenda_publications','event_agenda_state')",
+  );
+  // Preview builds may run against the baseline database before additive migration 0037.
+  // Only the entirely absent feature schema falls back; partial migrations and query failures remain fatal.
+  if (!agendaTables.length) return createSitePublicationSnapshot(snapshot);
+  if (agendaTables.length !== 2) throw new Error("Event agenda publication schema is incomplete; apply migration 0037");
   let agendaAfter = "";
   for (;;) {
     const agendas = await all<{ slug: string; base_path: string | null; snapshot_json: string }>(
