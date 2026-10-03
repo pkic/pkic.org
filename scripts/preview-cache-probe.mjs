@@ -1,4 +1,4 @@
-import { readFile, writeFile, mkdir } from "node:fs/promises";
+import { readFile, writeFile, mkdir, readdir } from "node:fs/promises";
 import { resolve } from "node:path";
 import { spawnSync } from "node:child_process";
 import sharp from "sharp";
@@ -13,6 +13,10 @@ process.env.CLOUDFLARE_ENV = "preview";
 const cache = resolve(local ? ".cache/probe-local-cache" : "node_modules/.astro");
 process.env.PKIC_PROBE_CACHE_DIRECTORY = cache;
 const marker = resolve(cache, "preview-cache-probe.json");
+const cachedImages = await readdir(resolve(cache, "assets")).catch((error) => {
+  if (error.code !== "ENOENT") throw error;
+  return [];
+});
 let previous;
 try {
   previous = JSON.parse(await readFile(marker, "utf8"));
@@ -46,14 +50,27 @@ await writeFile(
   }),
 );
 const started = performance.now();
-for (const args of [
-  ["exec", "astro", "build", "--config", "scripts/preview-cache-probe.astro.mjs"],
-  ["exec", "vite", "build", "--config", "scripts/preview-cache-probe.vite.mjs"],
-]) {
+function run(args) {
   const result = spawnSync("pnpm", args, { stdio: "inherit", env: process.env });
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
+run(["exec", "astro", "build", "--config", "scripts/preview-cache-probe.astro.mjs"]);
+const html = await readFile("dist/cache-probe-assets/index.html", "utf8");
+const image = html.match(/src="\/_assets\/([^"]+\.webp)"/)?.[1];
+if (!image) throw new Error("Probe output has no optimized image");
+await writeFile(
+  "dist/cache-probe-assets/cache-probe.json",
+  JSON.stringify({
+    commit: process.env.WORKERS_CI_COMMIT_SHA ?? "local",
+    markerRestored: Boolean(previous),
+    previous: previous ?? null,
+    imageRestored: cachedImages.includes(image),
+    image,
+    cachedImagesBeforeBuild: cachedImages.length,
+  }),
+);
+run(["exec", "vite", "build", "--config", "scripts/preview-cache-probe.vite.mjs"]);
 await mkdir(cache, { recursive: true });
 await writeFile(marker, JSON.stringify({ completedAt: new Date().toISOString(), run: (previous?.run ?? 0) + 1 }));
 console.log(
