@@ -1,3 +1,4 @@
+import { grantAdministrator } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { createGroup } from "../functions/_lib/services/groups";
@@ -27,8 +28,8 @@ interface Fixture {
 async function userActor(label: string, role = "user"): Promise<UserBackedAuthAdmin> {
   const email = `${label}-${crypto.randomUUID()}@example.test`;
   const id = await insertUser(env.DB, email);
-  await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
-  return { identityType: "user", id, email, role };
+  const grants = role === "admin" ? await grantAdministrator(env.DB, id) : [];
+  return { identityType: "user", id, email, role: "user", grants };
 }
 
 async function createFixture(): Promise<Fixture> {
@@ -135,6 +136,33 @@ async function seedAttendees(eventId: string): Promise<{ registrationId: string;
 
 describe("group event attendee management", () => {
   beforeEach(resetDb);
+
+  it("lets the event manager resend registration email and refuses other groups", async () => {
+    const fixture = await createFixture();
+    const event = await createEvent(fixture);
+    const { registrationId } = await seedAttendees(event.id);
+    const endpoint = `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations/${registrationId}/notifications`;
+    const init = { method: "POST", body: JSON.stringify({ type: "confirmation" }) };
+    expect((await request(fixture.granteeLeaderToken, endpoint, init)).status).toBe(403);
+    const allowed = await request(fixture.ownerLeaderToken, endpoint, init);
+    expect(allowed.status, await allowed.clone().text()).toBe(200);
+    expect(await allowed.json()).toEqual({ success: true, message: "Email queued" });
+    const wrongEvent = await createEvent(fixture);
+    expect(
+      (
+        await request(
+          fixture.ownerLeaderToken,
+          `/api/v1/groups/${fixture.ownerGroupId}/events/${wrongEvent.id}/registrations/${registrationId}/notifications`,
+          init,
+        )
+      ).status,
+    ).toBe(404);
+    const invalid = await request(fixture.ownerLeaderToken, endpoint, {
+      method: "POST",
+      body: JSON.stringify({ type: "unknown" }),
+    });
+    expect(invalid.status).toBe(400);
+  });
 
   it("allows owner managers to inspect, waitlist, and admit selected days", async () => {
     const fixture = await createFixture();

@@ -1,3 +1,4 @@
+import { grantAdministrator } from "./helpers/administrator";
 import {
   dispatchEventEmailCampaignPage,
   dispatchEventEmailCampaignPages,
@@ -624,12 +625,13 @@ describe("event email campaign recipients", () => {
 
   it("uses the same campaign resource for a selected group event manager", async () => {
     const administratorId = await insertUser(env.DB, `campaign-admin-${crypto.randomUUID()}@example.test`);
-    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(administratorId).run();
+    const grants = await grantAdministrator(env.DB, administratorId);
     const administrator = {
       identityType: "user" as const,
       id: administratorId,
       email: `campaign-admin-${administratorId}@example.test`,
-      role: "admin",
+      role: "user",
+      grants,
     };
     const group = await createGroup(env.DB, administrator, {
       typeKey: "working_group",

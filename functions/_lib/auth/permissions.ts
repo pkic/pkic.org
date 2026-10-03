@@ -114,7 +114,7 @@ export function hasPermission(actor: AuthAdmin, permission: string, context?: Pe
   if (actor.scopeRestricted && actor.scopes?.includes(permission) !== true) {
     return false;
   }
-  if (actor.role === "admin") {
+  if (!isUserBackedAuthAdmin(actor) && actor.role === "admin") {
     return true;
   }
 
@@ -197,8 +197,7 @@ export function permissionsAuthorizationEvidence(
                SELECT 1
                  FROM required requirement
                 WHERE NOT (
-                  actor.role = 'admin'
-                  OR EXISTS (
+                  EXISTS (
                     SELECT 1
                       FROM user_roles role
                       JOIN role_permissions role_permission ON role_permission.role_id = role.role_id
@@ -318,8 +317,7 @@ interface PermissionRecipientRow {
  */
 export function staffPermissionPredicate(userAlias = "u"): string {
   return `(
-    ${userAlias}.role = 'admin'
-    OR EXISTS (
+    EXISTS (
       SELECT 1
       FROM user_roles ur
       JOIN role_permissions rp ON rp.role_id = ur.role_id
@@ -353,17 +351,14 @@ export async function findUserPermissionRecipients(
 }
 
 /**
- * Every user who can act on `permission` — role='admin' (always, matching
- * hasPermission's bypass) plus every user_roles/permission_grants holder,
+ * Every user who holds `permission` through user_roles or permission_grants,
  * global grants only (no context filtering — used for email fanout, e.g.
  * "Staff admins with organizations:content-review permission").
  */
 export async function findUsersWithPermission(db: DatabaseLike, permission: string): Promise<string[]> {
   const rows = await all<EmailRow>(
     db,
-    `SELECT DISTINCT email FROM users WHERE role = 'admin'
-     UNION
-     SELECT DISTINCT u.email FROM users u
+    `SELECT DISTINCT u.email FROM users u
        JOIN user_roles ur ON ur.user_id = u.id
        JOIN role_permissions rp ON rp.role_id = ur.role_id
      WHERE rp.permission = ?

@@ -1,3 +1,5 @@
+import { administratorGrants } from "./helpers/administrator";
+import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { currentUserFormsListResponseSchema } from "../assets/shared/schemas/member-forms";
@@ -15,8 +17,14 @@ import { resetDb } from "./helpers/reset-db";
 
 async function adminActor(): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, `current-forms-admin-${crypto.randomUUID()}@example.test`);
-  await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(id).run();
-  return { identityType: "user", id, email: "current-forms-admin@example.test", role: "admin" };
+  await grantAdministrator(env.DB, id);
+  return {
+    identityType: "user",
+    id,
+    email: "current-forms-admin@example.test",
+    role: "admin",
+    grants: administratorGrants,
+  };
 }
 
 async function createSurveyForm(title: string): Promise<string> {
@@ -190,7 +198,7 @@ describe("GET /api/v1/users/current/forms", () => {
     expect((await callApi(env, "/api/v1/users/current/forms")).status).toBe(401);
 
     const staffOnlyUserId = await insertUser(env.DB, `current-forms-staff-${crypto.randomUUID()}@example.test`);
-    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(staffOnlyUserId).run();
+    await grantAdministrator(env.DB, staffOnlyUserId);
     const staffToken = await createMemberSession(env.DB, staffOnlyUserId, `current-forms-staff-${crypto.randomUUID()}`);
     expect((await getAs(staffToken, "/api/v1/users/current/forms")).status).toBe(403);
   });

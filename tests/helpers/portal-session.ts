@@ -1,3 +1,4 @@
+import { administratorGrants } from "./administrator-grants";
 import type { PortalSession } from "../../assets/ts/member-flows/portal/types";
 
 interface PortalSessionFixtureOptions {
@@ -22,9 +23,11 @@ export function portalSessionFixture(capacities: PortalSessionFixtureOptions): P
       ? {
           staff: {
             ...identity,
-            role: capacities.staffRole ?? "admin",
+            role: "user",
             scopes: [],
-            grants: capacities.grants ?? [],
+            grants:
+              capacities.grants ??
+              (!capacities.staffRole || capacities.staffRole === "admin" ? administratorGrants : []),
             expiresAt: "2026-08-26T00:00:00.000Z",
             idleExpiresAt: "2026-08-26T00:00:00.000Z",
           },

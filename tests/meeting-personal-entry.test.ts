@@ -1,3 +1,4 @@
+import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import app from "../functions/router";
@@ -35,8 +36,8 @@ async function send(path: string, method = "GET", body?: unknown, headers?: Head
 
 async function fixture() {
   const adminId = await insertUser(env.DB, `personal-admin-${crypto.randomUUID()}@example.test`);
-  await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(adminId).run();
-  const admin: AuthAdmin = { identityType: "user", id: adminId, email: "admin@example.test", role: "admin" };
+  const grants = await grantAdministrator(env.DB, adminId);
+  const admin: AuthAdmin = { identityType: "user", id: adminId, email: "admin@example.test", role: "user", grants };
   const email = `personal-member-${crypto.randomUUID()}@example.test`;
   const userId = await insertUser(env.DB, email);
   await ensureGroupMembershipCapacity(env.DB, GROUP_ID, userId);

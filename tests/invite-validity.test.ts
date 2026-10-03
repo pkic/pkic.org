@@ -1,3 +1,4 @@
+import { administratorGrants, grantAdministrator } from "./helpers/administrator";
 import { configureMeetingOccurrence } from "./helpers/meeting-occurrence";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
@@ -29,12 +30,13 @@ const GROUP_ID = "20000000-0000-4000-8000-000000000003";
 
 async function seedMeetingWindow() {
   const adminId = await insertUser(env.DB, `meeting-validity-${crypto.randomUUID()}@example.test`);
-  await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(adminId).run();
+  await grantAdministrator(env.DB, adminId);
   const admin: AuthAdmin = {
     identityType: "user",
     id: adminId,
     email: "meeting-validity@example.test",
     role: "admin",
+    grants: administratorGrants,
   };
   const startsAt = "2099-04-01T09:00:00.000Z";
   const endsAt = "2099-04-01T10:00:00.000Z";

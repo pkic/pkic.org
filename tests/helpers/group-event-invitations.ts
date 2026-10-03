@@ -1,3 +1,4 @@
+import { administratorGrants, grantAdministrator } from "./administrator";
 import { createAdminSession } from "./auth";
 import { insertUser } from "./membership";
 import { createGroup } from "../../functions/_lib/services/groups";
@@ -25,8 +26,14 @@ export async function createGroupEventInvitationFixture(
   const suffix = crypto.randomUUID();
   const email = `${label}-${suffix}@example.test`;
   const userId = await insertUser(db, email);
-  await db.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(userId).run();
-  const actor: UserBackedAuthAdmin = { identityType: "user", id: userId, email, role: "admin" };
+  await grantAdministrator(db, userId);
+  const actor: UserBackedAuthAdmin = {
+    identityType: "user",
+    id: userId,
+    email,
+    role: "admin",
+    grants: administratorGrants,
+  };
   const group = await createGroup(db, actor, {
     typeKey: "working_group",
     name: `${label} ${suffix}`,

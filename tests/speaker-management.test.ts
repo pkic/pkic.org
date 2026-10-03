@@ -1,3 +1,4 @@
+import { administratorGrants } from "./helpers/administrator";
 /**
  * speaker-management.test.ts
  *
@@ -832,7 +833,13 @@ describe("speaker self-management endpoints", () => {
 
     await expect(
       removeProposalSpeakerByManager(racingDb, {
-        actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
+        actor: {
+          identityType: "user",
+          id: adminUserId,
+          email: "admin@pkic.org",
+          role: "admin",
+          grants: administratorGrants,
+        },
         proposalId,
         userId: before.proposer_user_id,
         replacementProposerUserId: coSpeakerUserId,
@@ -2556,7 +2563,13 @@ describe("speaker self-management endpoints", () => {
         sendProposalSpeakerReminders(env.DB, {
           proposalId,
           kind,
-          actor: { identityType: "user", id: adminUserId, email: "admin@example.test", role: "admin" },
+          actor: {
+            identityType: "user",
+            id: adminUserId,
+            email: "admin@example.test",
+            role: "admin",
+            grants: administratorGrants,
+          },
           appBaseUrl: "https://app.test",
         }),
       ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_CLOSED" });
@@ -2664,7 +2677,13 @@ describe("speaker self-management endpoints", () => {
         proposalId,
         userId: coSpeakerUserId,
         kind: "profile",
-        actor: { identityType: "user", id: adminUserId, email: "admin@example.test", role: "admin" },
+        actor: {
+          identityType: "user",
+          id: adminUserId,
+          email: "admin@example.test",
+          role: "admin",
+          grants: administratorGrants,
+        },
         appBaseUrl: "https://app.test",
       }),
     ).rejects.toThrow("forced admin reminder audit failure");

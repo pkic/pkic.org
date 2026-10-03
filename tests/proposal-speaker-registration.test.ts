@@ -1,3 +1,4 @@
+import { administratorGrants } from "./helpers/administrator";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { createExecutionContext } from "cloudflare:test";
 import { createRegistration } from "../functions/_lib/services/registrations/create";
@@ -33,7 +34,13 @@ describe("accepted proposal speaker registration", () => {
   const accept = (proposalId: string) =>
     finalizeProposalDecision(env.DB, {
       proposalId,
-      actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
+      actor: {
+        identityType: "user",
+        id: adminUserId,
+        email: "admin@pkic.org",
+        role: "admin",
+        grants: administratorGrants,
+      },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });
@@ -248,7 +255,13 @@ describe("accepted proposal speaker registration", () => {
     await expect(
       finalizeProposalDecision(racingDb, {
         proposalId,
-        actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
+        actor: {
+          identityType: "user",
+          id: adminUserId,
+          email: "admin@pkic.org",
+          role: "admin",
+          grants: administratorGrants,
+        },
         finalStatus: "accepted",
         minReviewsRequired: 0,
       }),

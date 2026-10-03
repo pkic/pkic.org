@@ -16,6 +16,17 @@ import {
 import { portalSessionFixture } from "../helpers/portal-session";
 
 describe("portal capability-derived navigation", () => {
+  it("does not expose permissioned screens from a stale legacy administrator label", () => {
+    const session = portalSessionFixture({ staff: true, grants: [] });
+    session.staff!.role = "admin";
+    for (const permission of ["forms:read", "organizations:read", "users:read"]) {
+      expect(portalHasGlobalPermission(session, permission)).toBe(false);
+      expect(portalHasPermissionAtAnyScope(session, permission)).toBe(false);
+    }
+    const labels = portalNavigationItems(session).map((item) => item.label);
+    for (const label of ["Forms", "Organizations", "Users", "Settings"]) expect(labels).not.toContain(label);
+  });
+
   it("reads magic-link credentials only from the URL fragment", () => {
     expect(portalMagicLinkToken("#/verify?token=secret-token")).toBe("secret-token");
     expect(portalMagicLinkToken("#/verify")).toBeNull();

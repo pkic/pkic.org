@@ -1,3 +1,4 @@
+import { administratorGrants } from "./helpers/administrator";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
@@ -336,7 +337,7 @@ describe("proposal speaker capacity conflicts", () => {
     await expect(
       finalizeProposalDecision(racingDb, {
         proposalId,
-        actor: { identityType: "user", id: admin.id, email: admin.email, role: "admin" },
+        actor: { identityType: "user", id: admin.id, email: admin.email, role: "admin", grants: administratorGrants },
         finalStatus: "accepted",
         minReviewsRequired: 0,
       }),
@@ -367,7 +368,7 @@ describe("proposal speaker capacity conflicts", () => {
     await expect(
       finalizeProposalDecision(racingDb, {
         proposalId,
-        actor: { identityType: "user", id: admin.id, email: admin.email, role: "admin" },
+        actor: { identityType: "user", id: admin.id, email: admin.email, role: "admin", grants: administratorGrants },
         finalStatus: "accepted",
         minReviewsRequired: 0,
       }),
@@ -416,7 +417,7 @@ describe("proposal speaker capacity conflicts", () => {
     });
     await finalizeProposalDecision(env.DB, {
       proposalId: secondProposal.id,
-      actor: { identityType: "user", id: admin.id, email: admin.email, role: "admin" },
+      actor: { identityType: "user", id: admin.id, email: admin.email, role: "admin", grants: administratorGrants },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });

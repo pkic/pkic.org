@@ -1,3 +1,4 @@
+import { administratorGrants } from "./administrator";
 import { env } from "cloudflare:workers";
 import { queryAll, seedEventAndAdmin } from "./context";
 import app from "../../functions/router";
@@ -24,7 +25,7 @@ export async function setupProposalSpeakerCapacityWorkflow(): Promise<{
   )[0];
   const group = await createGroup(
     env.DB,
-    { identityType: "user", id: adminUser.id, email: adminUser.email, role: "admin" },
+    { identityType: "user", id: adminUser.id, email: adminUser.email, role: "admin", grants: administratorGrants },
     {
       typeKey: "working_group",
       name: `Proposal speaker fixture ${crypto.randomUUID()}`,

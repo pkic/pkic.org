@@ -95,7 +95,6 @@ describe("admin list D1 query plans", () => {
   it("counts users from canonical filters without membership or participation projections", async () => {
     const { pageSql, countSql, bindings, countBindings } = await explainOffsetPage(
       buildUsersPageQuery({
-        role: "user",
         type: "contact_only",
         q: "contact@example.test",
         sort: "email",
