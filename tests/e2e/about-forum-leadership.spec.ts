@@ -15,7 +15,7 @@ import { signInToPortal } from "./helpers/portal-auth";
 import { publishE2eSite } from "./helpers/site-publication";
 
 test(
-  "the About page publishes the forum chair and vice chair for anonymous visitors",
+  "the About page publishes the pkic forum chair and vice chair for anonymous visitors",
   { tag: "@publication" },
   async ({ page, browser }) => {
     test.setTimeout(240_000);
@@ -27,7 +27,7 @@ test(
     );
     try {
       const renamedGroup = await page.request.patch(`/api/v1/groups/${forumId}`, {
-        data: groupUpdateSchema.parse({ slug: "example-member-forum" }),
+        data: groupUpdateSchema.parse({ slug: "pkic" }),
       });
       expect(renamedGroup.ok(), await renamedGroup.text()).toBe(true);
       const names = ["Example Forum Chair", "Example Forum Deputy"];

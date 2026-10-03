@@ -468,24 +468,22 @@ describe("Vite public-site rendering", () => {
     expect(html).not.toContain('data-module="member-flows/leadership-widget"');
   });
 
-  it.each(["pkic", "renamed-member-forum"])(
-    "publishes About leadership after the forum slug changes to %s",
-    async (slug) => {
-      const publication = sitePublicationSnapshotSchema.parse(fixturePublication);
-      const forum = publication.groups.tcwg!;
-      forum.group = { ...forum.group, id: "20000000-0000-4000-8000-000000000001", slug };
-      publication.groups = { [slug]: forum };
+  it("publishes About leadership using the configured pkic forum slug", async () => {
+    const slug = "pkic";
+    const publication = sitePublicationSnapshotSchema.parse(fixturePublication);
+    const forum = publication.groups.tcwg!;
+    forum.group = { ...forum.group, id: "20000000-0000-4000-8000-000000000001", slug };
+    publication.groups = { [slug]: forum };
 
-      const content = await loadSiteContent("/about/", { publication });
-      for (const leader of forum.leadership) expect(content?.html).toContain(leader.person.name);
-      expect(content?.html).toContain("person-card-name");
-      expect(content?.html).not.toContain('data-module="member-flows/leadership-widget"');
+    const content = await loadSiteContent("/about/", { publication });
+    for (const leader of forum.leadership) expect(content?.html).toContain(leader.person.name);
+    expect(content?.html).toContain("person-card-name");
+    expect(content?.html).not.toContain('data-module="member-flows/leadership-widget"');
 
-      publication.groups = {};
-      const unpublished = await loadSiteContent("/about/", { publication });
-      expect(unpublished?.html).not.toContain("person-card-name");
-    },
-  );
+    publication.groups = {};
+    const unpublished = await loadSiteContent("/about/", { publication });
+    expect(unpublished?.html).not.toContain("person-card-name");
+  });
 
   it("renders structured YAML components without exposing migration syntax", async () => {
     const response = await SELF.fetch("https://app.test/events/2026/pqc-conference-amsterdam-nl/sponsors/");
