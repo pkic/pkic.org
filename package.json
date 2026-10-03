@@ -13,7 +13,7 @@
     "dev": "node --experimental-strip-types scripts/prepare-public.mjs --dev && pnpm run publish:local && CLOUDFLARE_ENV=local vite dev --host 0.0.0.0 --port 8788",
     "dev:rehearsal": "node scripts/dev-rehearsal.mjs",
     "dev:intercepted": "sh scripts/e2e-start.sh",
-    "build": "node scripts/preview-cache-probe.mjs",
+    "build": "node scripts/preview-publication-cache-run.mjs",
     "build:preview": "CLOUDFLARE_ENV=preview bash scripts/build.sh",
     "build:production": "CLOUDFLARE_ENV=production bash scripts/build.sh",
     "preview": "pnpm run build && vite preview --host 0.0.0.0 --port 8788",
