@@ -9,7 +9,7 @@ const result = spawnSync("pnpm", ["store", "path"], { encoding: "utf8" });
 if (result.status !== 0) throw new Error(result.stderr);
 const store = result.stdout.trim();
 const locations = ["node_modules/.astro", resolve(store, "pkic-publication-cache")];
-const report = { commit: process.env.WORKERS_CI_COMMIT_SHA, store, locations: {} };
+const report = { experiment: "repeat-persistence", commit: process.env.WORKERS_CI_COMMIT_SHA, store, locations: {} };
 for (const location of locations) {
   const entries = await readdir(location).catch((error) => {
     if (error.code !== "ENOENT") throw error;
