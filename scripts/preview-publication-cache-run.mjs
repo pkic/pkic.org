@@ -19,7 +19,7 @@ const locations = [
   resolve(store, "pkic-publication-cache"),
 ];
 const report = {
-  experiment: "astro-native-cache-location",
+  experiment: "repeat-astro-native-cache-location",
   commit: process.env.WORKERS_CI_COMMIT_SHA,
   store,
   locations: {},
