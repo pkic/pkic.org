@@ -12,6 +12,7 @@ import { publishedMediaReferences, resolvePublishedMediaKeys } from "../function
 import { requireProfileImageBucket } from "../functions/_lib/services/profile-image-storage";
 import type { Env } from "../functions/_lib/types";
 import { publicationBindingConfig } from "../scripts/publication/binding-config.mjs";
+import { listPublicMedia } from "../scripts/publication/list-public-media.mjs";
 import { copyPublicMedia } from "../scripts/publication/copy-public-media.mjs";
 import { siteDiscoveryRedirectEntries } from "../functions/_lib/services/site-discovery";
 import {
@@ -75,11 +76,16 @@ export async function readPublicationSource() {
       throw new Error("Public media requires the native R2 binding");
     await mkdir(resolve(output, "media", "_published"), { recursive: true });
     const keys = await resolvePublishedMediaKeys(platform.env.DB, references);
+    const manifest = await listPublicMedia(Object.values(keys), (key: string) =>
+      requireProfileImageBucket(platform.env, key),
+    );
     const published = await createSitePublicationSnapshot(
       await copyPublicMedia({
         snapshot,
         keys,
-        getObject: (key: string) => requireProfileImageBucket(platform.env, key).get(key),
+        manifest,
+        getObject: (key: string, options?: R2GetOptions) =>
+          requireProfileImageBucket(platform.env, key).get(key, options),
         output: resolve(output, "media"),
       }),
     );

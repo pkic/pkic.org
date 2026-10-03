@@ -1,3 +1,4 @@
+import { publicationCacheDirectory } from "./build-context.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { access, mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
@@ -19,7 +20,7 @@ async function launchDiagramBrowser() {
   if (process.platform === "linux" && process.arch === "x64") {
     return puppeteer.launch(await linuxDiagramBrowserOptions());
   }
-  process.env.PLAYWRIGHT_BROWSERS_PATH ??= resolve("node_modules/.astro/publication-browser");
+  process.env.PLAYWRIGHT_BROWSERS_PATH ??= publicationCacheDirectory("publication-browser");
   const { chromium } = require("@playwright/test");
   const executablePath = chromium.executablePath();
   try {
@@ -40,7 +41,10 @@ async function launchDiagramBrowser() {
 }
 
 /** Render each distinct definition once, with the official Mermaid CLI and a persistent cache. */
-export async function publicDiagramPublisher(output, cacheDirectory = "node_modules/.astro/publication-diagrams") {
+export async function publicDiagramPublisher(
+  output,
+  cacheDirectory = publicationCacheDirectory("publication-diagrams"),
+) {
   const cache = resolve(cacheDirectory);
   const directory = resolve(output, "_published/diagrams");
   await Promise.all([mkdir(cache, { recursive: true }), mkdir(directory, { recursive: true })]);

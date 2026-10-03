@@ -60,3 +60,6 @@ types/
 
 # Astro generated types and build cache
 .astro/
+
+# Cloudflare publication cache transport
+/.next/cache/
