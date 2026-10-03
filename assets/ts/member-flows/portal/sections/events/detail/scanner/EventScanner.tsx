@@ -25,6 +25,9 @@ import { FastScannerView } from "./FastScannerView";
 import { enterScannerFullscreen, scannerImmersiveLifecycle } from "./immersive-scanner";
 import { useEligibilityManifest } from "./useEligibilityManifest";
 import { ScannerFeedback } from "./ScannerFeedback";
+import { useScanCooldown } from "./useScanCooldown";
+import { ScannerPacing } from "./ScannerPacing";
+import { ScannerRecovery } from "./ScannerRecovery";
 
 export function EventScanner({
   slug,
@@ -61,6 +64,9 @@ export function EventScanner({
   const [busy, setBusy] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
   const [cameraActive, setCameraActive] = useState(false);
+  const [screenAwake, setScreenAwake] = useState(false);
+  const [feedbackPause, setFeedbackPause] = useState(600);
+  const cooldown = useScanCooldown(feedbackPause);
   const [fastMode, setFastMode] = useState(false);
   const [preview, setPreview] = useState(false);
   const scannerShell = useRef<HTMLDivElement>(null);
@@ -80,9 +86,10 @@ export function EventScanner({
   );
   useEffect(() => {
     if (!fastMode || !scannerShell.current) return;
-    const release = scannerImmersiveLifecycle(scannerShell.current, () => setFastMode(false));
+    const release = scannerImmersiveLifecycle(scannerShell.current, () => setFastMode(false), setScreenAwake);
     return () => {
       stopCamera.current();
+      cooldown.reset();
       release();
     };
   }, [fastMode]);
@@ -285,6 +292,7 @@ export function EventScanner({
       setMessage("Badge detected. Review and confirm before recording.");
       return;
     }
+    if (fastMode && !cooldown.ready()) return;
     const parsed = eventScanRequestSchema.safeParse({
       operatorUserId: current.operatorUserId,
       operationId: crypto.randomUUID(),
@@ -295,12 +303,15 @@ export function EventScanner({
       observedAt: new Date().toISOString(),
     });
     if (!parsed.success) {
+      if (fastMode && !cooldown.accept()) return;
       lastOperation.current = null;
       setResult(unknownScanResponse(crypto.randomUUID()));
       setMessage("Invalid QR code. Scan a PKI Consortium badge.");
+      if (fastMode) cooldown.feedback();
       return;
     }
     if (fromCamera && !cameraFrames.current.accept(parsed.data.badgeId, Date.now())) return;
+    if (fastMode && !cooldown.accept()) return;
     const operation = parsed.data.operationId;
     lastOperation.current = operation;
     lastBadge.current = parsed.data.badgeId;
@@ -311,8 +322,10 @@ export function EventScanner({
       setUploadStatus("Uploading scans in the background…");
       setPending(await pendingScanCount(operatorUserId));
       await showLocalEligibility(parsed.data);
+      if (fastMode) cooldown.feedback();
       void sync();
     } catch {
+      if (fastMode) cooldown.reset();
       if (receiptMatchesOperation(operation, lastOperation.current)) setMessage("Unable to save scan. Retry.");
     }
   }
@@ -359,8 +372,10 @@ export function EventScanner({
           )}
           <PanelBody>
             <p>No attendee names or contact details are stored on this phone.</p>
+            <ScannerRecovery slug={slug} operatorUserId={operatorUserId} />
             <ScannerFeedback result={result} action={action} message={message} pending={pending} />
             <form noValidate {...form.handlers} onSubmit={submit}>
+              <ScannerPacing value={feedbackPause} onChange={setFeedbackPause} />
               <Field
                 label="Check-in location"
                 {...form.of("occurrenceId")}
@@ -553,10 +568,13 @@ export function EventScanner({
           pending={pending}
           message={message}
           uploadStatus={uploadStatus}
+          cooldown={cooldown}
+          screenAwake={screenAwake}
           cameraActive={cameraActive}
           preview={preview}
           onPreview={() => setPreview(!preview)}
           onExit={() => {
+            cooldown.reset();
             lastOperation.current = null;
             setResult(null);
             setFastMode(false);

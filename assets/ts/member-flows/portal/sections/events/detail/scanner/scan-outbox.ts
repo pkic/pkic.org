@@ -2,6 +2,7 @@ import {
   offlineScanRecordSchema,
   eventScanResponseSchema,
   type OfflineScanRecord,
+  type EventScanResponse,
 } from "../../../../../../../shared/schemas/event-participation-scanning";
 
 type QueuedScan = OfflineScanRecord & {
@@ -10,32 +11,16 @@ type QueuedScan = OfflineScanRecord & {
   attempts?: number;
   nextAttemptAt?: number;
 };
-const STORE = "scans";
-const DATABASE = "pkic-scanner-outbox";
-
-function request<T>(value: IDBRequest<T>): Promise<T> {
-  return new Promise((resolve, reject) => {
-    value.onsuccess = () => resolve(value.result);
-    value.onerror = () => reject(value.error ?? new Error("IndexedDB request failed"));
-  });
-}
-function completion(transaction: IDBTransaction): Promise<void> {
-  return new Promise((resolve, reject) => {
-    transaction.oncomplete = () => resolve();
-    transaction.onerror = () => reject(transaction.error ?? new Error("IndexedDB transaction failed"));
-    transaction.onabort = () => reject(transaction.error ?? new Error("Queue transaction aborted"));
-  });
-}
-async function openOutbox(): Promise<IDBDatabase> {
-  const opening = indexedDB.open(DATABASE, 2);
-  opening.onupgradeneeded = () => {
-    const store = opening.result.objectStoreNames.contains(STORE)
-      ? opening.transaction!.objectStore(STORE)
-      : opening.result.createObjectStore(STORE, { keyPath: "scan.operationId" });
-    if (!store.indexNames.contains("operator")) store.createIndex("operator", "scan.operatorUserId");
-  };
-  return request(opening);
-}
+import {
+  SCAN_STORE as STORE,
+  HISTORY_STORE,
+  HISTORY_RETENTION_MS,
+  openScanStorage as openOutbox,
+  idbRequest as request,
+  idbCompletion as completion,
+} from "./outbox-storage";
+import { pruneScanHistory } from "./scan-history";
+import { archivedScanSchema, type ArchivedScan } from "../../../../../../../shared/schemas/event-scan-recovery";
 
 export async function queueScan(record: OfflineScanRecord): Promise<void> {
   const parsed = offlineScanRecordSchema.parse(record);
@@ -106,6 +91,7 @@ export async function drainScanOutbox(
         return { uploaded, state: "retry", retryAfterMs: Math.max(1000, next - Date.now()) };
       }
       let acknowledged = false;
+      let receipt: EventScanResponse | null = null;
       let state: ScanDrainResult["state"] = "retry";
       const attempts = (queued.attempts ?? 0) + 1;
       let retryAfterMs = Math.min(60_000, 1000 * 2 ** Math.min(attempts, 6)) + Math.floor(Math.random() * 1000);
@@ -121,19 +107,33 @@ export async function drainScanOutbox(
         }
         if (response.status === 401 || response.status === 403) state = "authentication_required";
         else if (response.ok) {
-          const receipt = eventScanResponseSchema.parse(await response.json());
+          receipt = eventScanResponseSchema.parse(await response.json());
           acknowledged = receipt.operationId === queued.scan.operationId;
         }
       } catch {
         /* Retain the queued operation for a later attempt. */
       }
-      const transaction = db.transaction(STORE, "readwrite");
+      const transaction = db.transaction([STORE, HISTORY_STORE], "readwrite");
       const done = completion(transaction);
       const store = transaction.objectStore(STORE);
       const current = await request<QueuedScan | undefined>(store.get(queued.scan.operationId));
       if (current?.owner === owner) {
-        if (acknowledged) store.delete(queued.scan.operationId);
-        else
+        if (acknowledged && receipt) {
+          const history = transaction.objectStore(HISTORY_STORE);
+          const existing = await request<ArchivedScan | undefined>(history.get(queued.scan.operationId));
+          const acknowledgedAt = Date.now();
+          if (!existing)
+            history.put(
+              archivedScanSchema.parse({
+                eventId: queued.eventId,
+                scan: queued.scan,
+                receipt,
+                acknowledgedAt,
+                expiresAt: acknowledgedAt + HISTORY_RETENTION_MS,
+              }),
+            );
+          store.delete(queued.scan.operationId);
+        } else
           store.put({
             ...current,
             owner: null,
@@ -148,6 +148,11 @@ export async function drainScanOutbox(
     }
     return { uploaded, state: "retry", retryAfterMs: 100 };
   } finally {
+    try {
+      await pruneScanHistory(db);
+    } catch {
+      /* Retry acknowledged-history cleanup on the next visit. */
+    }
     db.close();
   }
 }

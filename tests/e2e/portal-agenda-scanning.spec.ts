@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
+import { archivedScanSchema } from "../../assets/shared/schemas/event-scan-recovery";
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
@@ -14,7 +15,7 @@ test.use({ actionTimeout: 20_000 });
 
 async function queuedRecords(page: Page) {
   return page.evaluate(async () => {
-    const opening = indexedDB.open("pkic-scanner-outbox", 2);
+    const opening = indexedDB.open("pkic-scanner-outbox", 3);
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
       opening.onsuccess = () => resolve(opening.result);
       opening.onerror = () => reject(opening.error ?? new Error("Could not open scanner queue"));
@@ -82,6 +83,45 @@ test("phone scanner retains an IDs-only offline scan and acknowledges it after r
   await expect(page.getByText("Unknown badge", { exact: true })).toBeVisible();
   await expect(page.getByText("0 scans awaiting upload", { exact: true })).toBeVisible();
   expect(await queuedRecords(page)).toHaveLength(0);
+  const retained = await page.evaluate(async () => {
+    const opening = indexedDB.open("pkic-scanner-outbox", 3);
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      opening.onsuccess = () => resolve(opening.result);
+      opening.onerror = () => reject(opening.error ?? new Error("History open failed"));
+    });
+    try {
+      const read = db.transaction("history").objectStore("history").getAll();
+      return await new Promise<unknown[]>((resolve, reject) => {
+        read.onsuccess = () => resolve(read.result);
+        read.onerror = () => reject(read.error ?? new Error("History read failed"));
+      });
+    } finally {
+      db.close();
+    }
+  });
+  expect(retained).toHaveLength(1);
+  const archived = archivedScanSchema.parse(retained[0]);
+  expect(archived.scan.operationId).toBe(record.scan.operationId);
+  expect(archived.scan.observedAt).toBe(record.scan.observedAt);
+  expect(archived.receipt).toMatchObject({ outcome: "unknown", recorded: false, attendanceRecorded: false });
+  expect(archived.expiresAt - archived.acknowledgedAt).toBeGreaterThanOrEqual(14 * 24 * 60 * 60 * 1000);
+  await page.getByText("Recovery backup", { exact: true }).click();
+  await expect(
+    page.getByText("1 uploaded scans available for this event and your account.", { exact: true }),
+  ).toBeVisible();
+  const replay = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === `/api/v1/events/${slug}/scans` && response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Restore uploaded scans", exact: true }).click();
+  const replayResponse = await replay;
+  expect(replayResponse.request().postDataJSON()).toMatchObject({
+    operationId: record.scan.operationId,
+    observedAt: record.scan.observedAt,
+  });
+  expect(await replayResponse.json()).toMatchObject({ operationId: record.scan.operationId, outcome: "unknown" });
+  await expect(page.getByText("0 scans awaiting upload", { exact: true })).toBeVisible();
+
   expect(
     await page.evaluate(async () => {
       const cachesForScanner = await caches.keys();

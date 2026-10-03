@@ -18,6 +18,7 @@ test("phone scanner opens an immersive view and safely exits without camera perm
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsE2eStaff(page, e2eAdminEmail("default"));
   await page.goto("/portal/#/events/pqc-conference-amsterdam-nl/scanner");
+  await page.getByLabel("Feedback pause", { exact: true }).selectOption("1000");
   await page.getByRole("button", { name: "Start scanning", exact: true }).click();
   const scanner = page.getByRole("dialog", { name: "Continuous badge scanner" });
   await expect(scanner).toBeVisible();
@@ -76,18 +77,21 @@ test("continuous local verification queues a burst while attendance uploads are 
     await new Promise(() => {});
   });
   await page.goto("/portal/#/events/pqc-conference-amsterdam-nl/scanner");
+  await page.getByLabel("Feedback pause", { exact: true }).selectOption("1000");
   await page.getByRole("button", { name: "Start scanning", exact: true }).click();
   const scanner = page.getByRole("dialog", { name: "Continuous badge scanner" });
   for (const credential of credentials) {
+    await expect(scanner.getByText("Ready for the next badge", { exact: true })).toBeVisible();
     await page.keyboard.type(credential);
     await page.keyboard.press("Enter");
     await expect(scanner.getByText("Eligibility verified", { exact: true })).toBeVisible();
   }
   await expect(scanner.getByText("3 pending", { exact: true })).toBeVisible();
+  await page.screenshot({ path: testInfo.outputPath("scanner-local-verified-phone.png") });
   await expect(scanner.getByText("All pending scans uploaded.", { exact: true })).toHaveCount(0);
   await expect(scanner.getByText("Attendance recorded", { exact: true })).toHaveCount(0);
   await expect.poll(() => uploads).toBeGreaterThan(0);
-  await page.screenshot({ path: testInfo.outputPath("scanner-local-verified-phone.png") });
+  await expect(scanner.getByText("Ready for the next badge", { exact: true })).toBeVisible();
   await page.keyboard.type("invalid-qr-content");
   await page.keyboard.press("Enter");
   await expect(scanner.getByText("Unknown badge", { exact: true })).toBeVisible();
