@@ -8,7 +8,6 @@ import { indexPublicPages } from "./index-public-pages.mjs";
 import { publishedNewsPages } from "../../site/news-pages.ts";
 import { mkdir } from "node:fs/promises";
 import { XMLValidator } from "fast-xml-parser";
-import { publicImageOptimizer } from "./optimize-public-images.mjs";
 import { optimizePublicSvgFiles, publicInlineSvgOptimizer } from "./optimize-public-svg.mjs";
 import { publicDownloadPublisher } from "./publish-linked-downloads.mjs";
 import { publicSocialCardPublisher } from "./publish-social-cards.mjs";
@@ -31,6 +30,11 @@ export async function finishAstroRelease(output, pages) {
 }
 
 async function finishRelease(output, pages, timings) {
+  // Content-addressed originals are only inputs to Astro's image service.
+  // Generated variants have a transform suffix; retain those and all other framework assets.
+  for (const name of await readdir(resolve(output, "_assets"))) {
+    if (/^[a-f0-9]{64}\.(png|jpe?g|webp|avif|gif)$/i.test(name)) await rm(resolve(output, "_assets", name));
+  }
   const environment = process.env.CLOUDFLARE_ENV ?? "local";
   const source = process.env.PKIC_PUBLICATION_SNAPSHOT;
   const snapshot = JSON.parse(
@@ -40,10 +44,6 @@ async function finishRelease(output, pages, timings) {
     await cp(resolve(publicationStagingDirectory(), "media", "_published"), resolve(output, "_published"), {
       recursive: true,
     });
-  const media = source
-    ? {}
-    : JSON.parse(await readFile(resolve(publicationStagingDirectory(), "media", "responsive-images.json"), "utf8"));
-  const optimizeImages = publicImageOptimizer(output, media);
   const socialCards = await timings.measure("OG image setup", () => publicSocialCardPublisher(output));
   const diagrams = await timings.measure("diagram setup", () => publicDiagramPublisher(output));
   try {
@@ -93,7 +93,6 @@ async function finishRelease(output, pages, timings) {
         );
         if (agendaLayout) files.push(agendaLayout);
         await timings.measure("OG images", () => socialCards.publish(document.window.document));
-        await timings.measure("responsive images", () => optimizeImages(document.window.document));
         await timings.measure("diagrams", () => diagrams.publish(document.window.document));
         timings.measureSync("inline SVG optimization", () => optimizeInlineSvg(document.window.document));
         for (const download of await timings.measure("linked downloads", () =>

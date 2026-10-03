@@ -1,3 +1,4 @@
+import { SiteImage } from "../site/SiteImage";
 import type { ComponentChildren, JSX } from "preact";
 import { useState } from "preact/hooks";
 
@@ -62,7 +63,15 @@ export function Avatar({ name, src, size = "md", status, shape = "round", ...res
   const portrait = (
     <div class={classes} aria-hidden="true">
       {src && !broken ? (
-        <img {...rest} src={src} alt="" loading="lazy" class="pk-avatar__img" onError={() => setBroken(true)} />
+        <SiteImage
+          portrait
+          {...rest}
+          src={src}
+          alt=""
+          loading="lazy"
+          class="pk-avatar__img"
+          onError={() => setBroken(true)}
+        />
       ) : (
         <span class="pk-avatar__initials">{shape === "square" ? monogramFrom(name) : initialsFrom(name)}</span>
       )}

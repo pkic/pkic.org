@@ -1,3 +1,4 @@
+import { SiteImage } from "./SiteImage";
 import { useMemo, useState } from "preact/hooks";
 import type { PublicMemberSummary } from "../../shared/schemas/members-directory";
 import { memberProfileHref } from "../../shared/member-profile-url";
@@ -33,7 +34,7 @@ export function MemberCard({ member }: { member: DirectoryMember }) {
     <div class="member-card bento-card">
       <div class="member-card-logo-wrap">
         {showLogo ? (
-          <img
+          <SiteImage
             class="member-card-logo"
             src={member.logoUrl ?? undefined}
             alt={`${member.name} logo`}

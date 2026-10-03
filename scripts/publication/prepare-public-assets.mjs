@@ -24,7 +24,9 @@ export async function preparePublicationPublicAssets(source, output) {
     mode: constants.COPYFILE_FICLONE,
     filter(path) {
       const name = relative(source, path).split("\\").join("/");
-      return !owned.has(name) && !["_astro", "_published", "pagefind", "publication.json"].includes(name.split("/")[0]);
+      return (
+        !owned.has(name) && !["_assets", "_published", "pagefind", "publication.json"].includes(name.split("/")[0])
+      );
     },
   });
   return output;

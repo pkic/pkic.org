@@ -1,3 +1,4 @@
+import { SiteImage } from "./SiteImage";
 import { sponsorPublicationKey } from "../../shared/sponsor-publication-query";
 import { SponsorGridView } from "./SponsorDisplays";
 import type { SiteContentPage } from "../../shared/site-content";
@@ -83,7 +84,7 @@ export function SitePageBody({
       {content.webinarSponsor ? (
         <aside class="pk-webinar-sponsor-notice" aria-label="Sponsored webinar">
           {content.webinarSponsor.logoSrc ? (
-            <img src={content.webinarSponsor.logoSrc} alt={content.webinarSponsor.name} loading="lazy" />
+            <SiteImage src={content.webinarSponsor.logoSrc} alt={content.webinarSponsor.name} loading="lazy" />
           ) : null}
           <p>
             This is a sponsored webinar hosted by the PKI Consortium to help fund our activities and keep membership

@@ -1,3 +1,4 @@
+import { SiteImage } from "./SiteImage";
 import type { SiteListingItem } from "../../shared/site-content";
 
 import "./BlogCard.css";
@@ -36,7 +37,9 @@ export function EventCard({ item, upcoming }: { item: SiteListingItem; upcoming:
       <div
         class={`event-card-header blog-card-header ${item.imageSrc ? "blog-card-header--photo" : "blog-card-header--gradient"}`}
       >
-        {item.imageSrc ? <img src={item.imageSrc} alt={item.title} loading="lazy" width="600" height="320" /> : null}
+        {item.imageSrc ? (
+          <SiteImage src={item.imageSrc} alt={item.title} loading="lazy" width="600" height="320" />
+        ) : null}
         <div class="blog-card-header-overlay" />
         <span class={`blog-card-tag event-card-badge event-card-badge--${upcoming ? "upcoming" : "past"}`}>
           {upcoming ? "Upcoming" : "Past event"}

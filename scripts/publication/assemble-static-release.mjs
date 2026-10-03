@@ -28,7 +28,7 @@ export async function assembleStaticRelease(source, destination, environment) {
       if (!incoming.has(file)) await rm(resolve(destination, file), { force: true });
     }
   }
-  for (const directory of ["_astro", "_published", "pagefind", "js/built"]) {
+  for (const directory of ["_assets", "_published", "pagefind", "js/built"]) {
     try {
       await access(resolve(source, directory));
     } catch (error) {
@@ -72,9 +72,8 @@ export async function assembleStaticRelease(source, destination, environment) {
     .map((file) => `\n/${file}\n    ! X-Robots-Tag\n    X-Robots-Tag: noindex, nofollow, noarchive\n`)
     .join("");
   const immutableRules = [
-    "/_astro/*",
+    "/_assets/*",
     "/_published/media/*",
-    "/_published/images/*",
     "/_published/social/*.jpg",
     "/_published/assessment/*",
     "/_published/diagrams/*",

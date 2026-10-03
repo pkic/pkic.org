@@ -26,7 +26,7 @@ export default defineConfig({
   output: "static",
   compressHTML: true,
   trailingSlash: "always",
-  build: { inlineStylesheets: "never" },
+  build: { assets: "_assets", inlineStylesheets: "never" },
   integrations: [
     preact({ compat: true }),
     sitemap({ filter: (url) => !url.includes("/portal/") && !url.includes("/search/") }),

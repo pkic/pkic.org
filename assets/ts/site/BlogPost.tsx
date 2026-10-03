@@ -1,3 +1,4 @@
+import { SiteImage } from "./SiteImage";
 import { siteContentSlug } from "../../shared/site-content-slug";
 import { siteContentLanguagePrefix } from "../../shared/site-content-language";
 import type { SiteBlogSidebar, SiteAuthor } from "../../shared/site-content";
@@ -36,7 +37,7 @@ export function BlogHeroMeta({ date, sidebar }: { date?: string; sidebar: SiteBl
 function AuthorCard({ author }: { author: SiteAuthor }) {
   const organization = author.organization;
   const mark = organization?.logo ? (
-    <img src={organization.logo} alt={organization.name} class="blog-author-org-logo" />
+    <SiteImage src={organization.logo} alt={organization.name} class="blog-author-org-logo" />
   ) : (
     organization?.name
   );

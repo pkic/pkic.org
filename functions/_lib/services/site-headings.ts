@@ -50,11 +50,22 @@ export function headingAnchor(text: string): string {
  * heading within the page it belongs to, so the parser cannot be shared
  * between two pages being rendered at once.
  */
-export function createContentMarked(): Marked {
+export function createContentMarked(renderImage?: (token: Tokens.Image) => Promise<string>): Marked {
+  const images = new Map<Tokens.Image, string>();
   const used = new Map<string, number>();
   const parser = new Marked();
   parser.use({
+    async: true,
+    async walkTokens(token) {
+      if (token.type === "image" && renderImage) {
+        const image = token as Tokens.Image;
+        images.set(image, await renderImage(image));
+      }
+    },
     renderer: {
+      image(token: Tokens.Image) {
+        return images.get(token) ?? false;
+      },
       heading(token: Tokens.Heading) {
         const { depth, tokens } = token;
         const body = this.parser.parseInline(tokens);

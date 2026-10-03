@@ -296,9 +296,7 @@ describe("Vite public-site rendering", () => {
     expect(html).toContain("pk-content-gallery");
     const photographs = await publicPageImages(html, ".pk-content-gallery img");
     expect(photographs.length).toBeGreaterThan(1);
-    expect(
-      photographs.every((image) => image.src.startsWith("/_published/images/") && image.srcset.includes("640w")),
-    ).toBe(true);
+    expect(photographs.every((image) => image.src.startsWith("/_assets/") && image.srcset.includes("640w"))).toBe(true);
     expect(html).not.toContain('data-component="photo-gallery"');
   });
 
@@ -316,10 +314,10 @@ describe("Vite public-site rendering", () => {
     expect(html).toContain('data-local-time-format="time"');
     const portraits = await publicPageImages(html, ".pk-content-agenda__speaker .pk-avatar__img");
     expect(portraits.length).toBeGreaterThan(0);
-    expect(portraits[0]?.src).toMatch(/^\/_published\/images\//);
+    expect(portraits[0]?.src).toMatch(/^\/_assets\//);
     expect((await SELF.fetch(`https://app.test${portraits[0]!.src}`)).status).toBe(200);
     const [hero] = await publicPageImages(html, ".pkic-hero-media__image");
-    expect(hero?.src).toMatch(/^\/_published\/images\/.*\.webp$/);
+    expect(hero?.src).toMatch(/^\/_assets\/.*\.webp$/);
     expect((await SELF.fetch(`https://app.test${hero!.src}`)).status).toBe(200);
     expect(html).toContain('class="pk pk-section-navigation"');
     expect(html).toContain("Post-Quantum Security of IPsec / IKEv2");
@@ -615,7 +613,7 @@ describe("Vite public-site rendering", () => {
       true,
     );
     const [portrait] = await publicPageImages(html, ".blog-author-card .pk-avatar__img");
-    expect(portrait?.src).toMatch(/^\/_published\/images\/.*\.webp$/);
+    expect(portrait?.src).toMatch(/^\/_assets\/.*\.webp$/);
     expect((await SELF.fetch(`https://app.test${portrait!.src}`)).status).toBe(200);
     expect(html).toContain("/images/members/entrust/entrust.svg");
     // Profile links use the shared link vocabulary rather than a card of their own.

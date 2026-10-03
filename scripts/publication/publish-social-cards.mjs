@@ -6,7 +6,7 @@ import satori from "satori";
 import sharp from "sharp";
 import { socialCardLayout } from "./social-card-layout.mjs";
 import { formatServiceDate, EMPTY_DATE } from "../../assets/shared/format-date.ts";
-import { boundedImageSource } from "./responsive-images.mjs";
+import { boundedImageSource } from "./bounded-image-source.mjs";
 import { publicImageFile } from "./public-image-source.mjs";
 
 const WIDTH = 1200;
