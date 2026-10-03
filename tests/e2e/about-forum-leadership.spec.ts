@@ -4,6 +4,8 @@ import {
   groupDetailResponseSchema,
   groupUpdateSchema,
   groupLeadershipAssignSchema,
+  groupLeadershipListResponseSchema,
+  groupLeadershipUpdateSchema,
 } from "../../assets/shared/schemas/groups";
 import { groupDirectoryResponseSchema } from "../../assets/shared/schemas/group-directory";
 import { userUpdateSchema } from "../../assets/shared/schemas/user-management";
@@ -19,6 +21,7 @@ test(
     test.setTimeout(240_000);
     await signInToPortal(page, e2eAdminEmail());
     const forumId = "20000000-0000-4000-8000-000000000001";
+    const userRoleIds: string[] = [];
     const original = groupDetailResponseSchema.parse(
       await (await page.request.get(`/api/v1/groups/${forumId}`)).json(),
     );
@@ -44,6 +47,11 @@ test(
           }),
         });
         expect(assigned.ok(), await assigned.text()).toBe(true);
+        const assignment = groupLeadershipListResponseSchema
+          .parse(await assigned.json())
+          .assignments.find((entry) => entry.userId === member.userId && entry.identityId === member.identityId);
+        expect(assignment).toBeDefined();
+        userRoleIds.push(assignment!.userRoleId);
       }
       await publishE2eSite(page, "/about/");
       const anonymous = await browser.newContext();
@@ -61,7 +69,9 @@ test(
         for (const width of [1440, 390]) {
           await visitor.setViewportSize({ width, height: 1000 });
           for (const name of names) {
-            await expect(visitor.locator(".person-card").filter({ hasText: name })).toBeVisible();
+            await expect(
+              visitor.locator('[data-positions="current"] .person-card').filter({ hasText: name }),
+            ).toBeVisible();
           }
           await expect
             .poll(() => visitor.evaluate(() => document.documentElement.scrollWidth <= innerWidth))
@@ -72,10 +82,20 @@ test(
         await anonymous.close();
       }
     } finally {
+      // Attempt every cleanup and restore the slug even if one term cannot be ended.
+      const ended = await Promise.allSettled(
+        userRoleIds.map(async (userRoleId) => {
+          const response = await page.request.patch(`/api/v1/groups/${forumId}/leadership/${userRoleId}`, {
+            data: groupLeadershipUpdateSchema.parse({ endsAt: new Date(Date.now() - 60_000).toISOString() }),
+          });
+          expect(response.ok(), await response.text()).toBe(true);
+        }),
+      );
       const restored = await page.request.patch(`/api/v1/groups/${forumId}`, {
         data: groupUpdateSchema.parse({ slug: original.group.slug }),
       });
-      expect(restored.ok(), await restored.text()).toBe(true);
+      expect.soft(restored.ok(), await restored.text()).toBe(true);
+      expect(ended.filter((result) => result.status === "rejected")).toEqual([]);
     }
   },
 );
