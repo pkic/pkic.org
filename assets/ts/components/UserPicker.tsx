@@ -44,6 +44,8 @@ export function UserPicker({
   placeholder = "Search by email or name…",
   endpoint = "/api/v1/users",
   inputProps,
+  responseSchema = userPickerListResponseSchema,
+  sort = "email",
   emptyMessage = "No matching users found.",
 }: {
   value: PickedUser | null;
@@ -51,6 +53,8 @@ export function UserPicker({
   disabled?: boolean;
   placeholder?: string;
   endpoint?: string;
+  responseSchema?: z.ZodType<z.infer<typeof userPickerListResponseSchema>>;
+  sort?: string;
   inputProps?: FieldControlProps & { name?: string };
   emptyMessage?: string;
 }) {
@@ -117,8 +121,8 @@ export function UserPicker({
       const request = requestGate.current!.start();
       try {
         const data = await getJson(
-          buildServerCollectionUrl(endpoint, { limit: "8", offset: "0", sort: "email", q: term }),
-          userPickerListResponseSchema,
+          buildServerCollectionUrl(endpoint, { limit: "8", offset: "0", sort, q: term }),
+          responseSchema,
           { signal: request.signal },
         );
         if (!request.isCurrent()) return;
@@ -136,7 +140,7 @@ export function UserPicker({
   function pick(user: UserCatalogItem): void {
     cancelPendingSearch();
     onChange({ id: user.id, email: user.email, firstName: user.first_name, lastName: user.last_name });
-    setQuery(user.email);
+    setQuery(user.email || [user.first_name, user.last_name].filter(Boolean).join(" "));
     anchorRef.current?.querySelector("input")?.focus();
     setOpen(false);
     setResults([]);
@@ -158,7 +162,7 @@ export function UserPicker({
              of them can point a `for` at an id they do not own, so the field
              carried no accessible name at all. This one names it. */
           aria-label={inputProps?.id ? undefined : "Search for a user"}
-          value={value ? value.email : query}
+          value={value ? value.email || [value.firstName, value.lastName].filter(Boolean).join(" ") : query}
           onInput={(event) => handleInput((event.target as HTMLInputElement).value)}
           onFocus={() => results.length > 0 && setOpen(true)}
           disabled={disabled}
@@ -193,7 +197,9 @@ export function UserPicker({
               onClick={() => pick(user)}
             >
               <span class="pk-stack pk-stack--tight">
-                <span class="pk-strong">{user.email}</span>
+                <span class="pk-strong">
+                  {user.email || [user.first_name, user.last_name].filter(Boolean).join(" ")}
+                </span>
                 <span class="pk-small">
                   {[user.first_name, user.last_name].filter(Boolean).join(" ") || "—"}
                   {user.organization_name ? ` · ${user.organization_name}` : ""}

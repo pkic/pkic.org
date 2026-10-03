@@ -1,3 +1,4 @@
+import { agendaSnapshotSchema } from "./event-agenda";
 import { publicVoteSchema } from "./votes";
 import { z } from "zod";
 import { sitePublicationSnapshotIdSchema } from "./site-publication-release";
@@ -23,6 +24,7 @@ export const sitePublishedEventFlowSchema = z
 /** Only canonical public projections may cross the publication boundary. */
 export const sitePublicationContentSchema = z.object({
   version: z.literal(1),
+  eventAgendas: z.record(z.string(), agendaSnapshotSchema).optional(),
   votes: z.array(publicVoteSchema),
   publicResources: publishedFormResourcesSchema,
   eventFlows: z.array(sitePublishedEventFlowSchema).optional(),

@@ -54,10 +54,30 @@ function eventWhen(event: EventRow): string {
  * owning group — gets no menu at all.
  */
 function workspaceActions(event: EventRow, navigate: (path: string) => void): MenuItem[] {
-  if (isAudienceEvent(event) || !event.ownerGroupId) return [];
+  const scanningActions: MenuItem[] = isAudienceEvent(event)
+    ? [
+        ...(event.scannerAccess?.canScan
+          ? [
+              {
+                id: "event-scanner",
+                label: "Open event scanner",
+                onSelect: () => navigate(`/events/${encodeURIComponent(event.slug)}/scanner`),
+              },
+            ]
+          : []),
+        ...(event.scannerAccess?.sponsors.map((sponsor) => ({
+          id: `sponsor-scanner-${sponsor.id}`,
+          label: `Scan leads for ${sponsor.name}`,
+          onSelect: () =>
+            navigate(`/events/${encodeURIComponent(event.slug)}/sponsors/${encodeURIComponent(sponsor.id)}/scanner`),
+        })) ?? []),
+      ]
+    : [];
+  if (isAudienceEvent(event) || !event.ownerGroupId) return scanningActions;
   const groupId = event.ownerGroupId;
   const groupLabel = event.ownerGroupName ?? "group";
   return [
+    ...scanningActions,
     {
       id: "open-workspace",
       label: `Open in ${groupLabel} workspace`,

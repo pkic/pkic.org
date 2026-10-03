@@ -67,4 +67,24 @@ describe("published agenda presentation", () => {
     expect(content.querySelector('a[href="/slides/example.pdf"]')?.textContent).toContain("Download slides");
     expect(dialog.querySelector("iframe")?.hasAttribute("src")).toBe(false);
   });
+  it("supports generic recording links while retaining the existing YouTube embed", () => {
+    const generic = structuredClone(days);
+    generic[0].slots[0].sessions[0].youtube = undefined;
+    generic[0].slots[0].sessions[0].recordingUrl = "https://media.example.test/session";
+    const container = document.createElement("div");
+    container.innerHTML = render(<ContentAgenda days={generic} speakers={[]} timeZone="Europe/Amsterdam" />);
+    const recording = container.querySelector<HTMLAnchorElement>('a[href="https://media.example.test/session"]')!;
+    expect(recording.textContent).toContain("Watch recording");
+    expect(recording.rel).toContain("noopener");
+    expect(recording.rel).toContain("noreferrer");
+    expect(container.querySelector("iframe")).toBeNull();
+    expect(agenda().querySelector("iframe")).not.toBeNull();
+  });
+  it("does not render recording links with executable schemes", () => {
+    const unsafe = structuredClone(days);
+    unsafe[0].slots[0].sessions[0].youtube = undefined;
+    unsafe[0].slots[0].sessions[0].recordingUrl = "javascript:alert(1)";
+    const output = render(<ContentAgenda days={unsafe} speakers={[]} timeZone="Europe/Amsterdam" />);
+    expect(output).not.toContain("javascript:");
+  });
 });

@@ -19,7 +19,9 @@ export function conferenceAgendaCalendar(program: ConferenceProgram, eventUrl: s
         const item = new ICAL.Component("vevent");
         item.addPropertyWithValue(
           "uid",
-          `${siteContentSlug(`${session.locations.join(" ")}-${date}-${slot.time}`)}@ics.pkic.org`,
+          session.id
+            ? `agenda-${session.id}@ics.pkic.org`
+            : `${siteContentSlug(`${session.locations.join(" ")}-${date}-${slot.time}`)}@ics.pkic.org`,
         );
         item.addPropertyWithValue("dtstamp", utc(updatedAt));
         item.addPropertyWithValue("dtstart", utc(slot.startsAt));

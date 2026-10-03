@@ -1,7 +1,7 @@
 import type { ContentAgendaDay } from "../../shared/site-agenda";
 
 /** Native table spans preserve room alignment across overlapping time slots. */
-export function agendaRows(day: ContentAgendaDay) {
+export function agendaRows(day: ContentAgendaDay, controlsHeight = 0) {
   const occupiedUntil = day.locations.map(() => 0);
   const rows = day.slots.map((slot, index) => ({
     slot,
@@ -16,7 +16,7 @@ export function agendaRows(day: ContentAgendaDay) {
         const following = day.slots[next]!;
         if (
           Date.parse(following.startsAt) >= endsAt ||
-          !following.sessions.length ||
+          (!controlsHeight && !following.sessions.length) ||
           following.sessions.some((session) => session.locations.includes(location.id))
         )
           break;
@@ -31,7 +31,8 @@ export function agendaRows(day: ContentAgendaDay) {
     cells.forEach((cell) =>
       cell?.sessions.forEach((session) => {
         const titleLines = Math.min(3, Math.ceil(session.title.length / 28));
-        const required = 70 + titleLines * 24 + session.speakers.length * 50 + (session.descriptionHtml ? 68 : 0);
+        const required =
+          70 + controlsHeight + titleLines * 24 + session.speakers.length * 50 + (session.descriptionHtml ? 68 : 0);
         for (let row = index; row < index + cell.rowSpan; row++) {
           floors[row] = Math.max(floors[row]!, Math.ceil(required / cell.rowSpan));
         }

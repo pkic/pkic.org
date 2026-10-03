@@ -1,3 +1,5 @@
+import { httpOrSameOriginUrlSchema } from "../../shared/schemas/urls";
+import type { ComponentChildren, JSX } from "preact";
 import { IconDownload, IconVideo } from "../ui/MediaIcons";
 import { LinkList } from "../ui/LinkList";
 import { Badge } from "../ui/Badge";
@@ -44,13 +46,22 @@ export function AgendaSession({
   locations,
   dialogId,
   timeZone,
+  editor,
 }: {
   session: ContentAgendaDay["slots"][number]["sessions"][number];
   slot: ContentAgendaDay["slots"][number];
   locations: ContentAgendaLocation[];
   dialogId: string;
   timeZone: string;
+  editor?: {
+    resizeHandle?: ComponentChildren;
+    controls: ComponentChildren;
+    onDragStart?: JSX.DragEventHandler<HTMLElement>;
+    onOpen?: () => void;
+  };
 }) {
+  const recording = httpOrSameOriginUrlSchema.safeParse(session.recordingUrl);
+  const recordingUrl = recording.success ? recording.data : undefined;
   const locationIndex = Math.max(
     0,
     locations.findIndex((location) => location.id === session.locations[0]),
@@ -62,9 +73,13 @@ export function AgendaSession({
   return (
     <article
       class={`pk-content-agenda__session pk-content-agenda__session--${locationIndex % 7}`}
+      data-agenda-occurrence={session.id}
+      draggable={Boolean(editor?.onDragStart)}
+      onDragStart={editor?.onDragStart}
       data-agenda-session={session.locations.join(" ")}
       data-agenda-session-dialog={dialogId}
     >
+      {editor?.controls}
       <div class="pk-content-agenda__room">
         <span>{roomNames}</span>
         {session.track ? <span class="pk-content-agenda__track">{session.track}</span> : null}
@@ -74,6 +89,14 @@ export function AgendaSession({
           <button
             type="button"
             class="pk-content-agenda__title-action"
+            onClick={
+              editor
+                ? (event) => {
+                    if (editor.onOpen) editor.onOpen();
+                    else event.currentTarget.closest("article")?.querySelector("dialog")?.showModal();
+                  }
+                : undefined
+            }
             data-agenda-open-session={dialogId}
             aria-label={`Open session details: ${session.title}`}
           >
@@ -86,13 +109,18 @@ export function AgendaSession({
         {session.descriptionHtml ? (
           <div class="pk-content-agenda__description" dangerouslySetInnerHTML={{ __html: session.descriptionHtml }} />
         ) : null}
-        {session.youtube || session.presentationUrl ? (
+        {session.youtube || recordingUrl || session.presentationUrl ? (
           <div class="pk-content-agenda__actions">
             {session.youtube ? (
               <button type="button" class="pk-content-agenda__media-action" data-agenda-open-session={dialogId}>
                 <IconVideo /> Watch recording
               </button>
             ) : null}
+            {!session.youtube && recordingUrl && (
+              <a class="pk-content-agenda__media-action" href={recordingUrl} target="_blank" rel="noopener noreferrer">
+                <IconVideo /> Watch recording
+              </a>
+            )}
             {session.presentationUrl ? (
               <a class="pk-content-agenda__media-action" href={session.presentationUrl} download>
                 <IconDownload /> Download slides
@@ -101,6 +129,7 @@ export function AgendaSession({
           </div>
         ) : null}
       </div>
+      {editor?.resizeHandle}
       {session.durationMinutes ? (
         <small class="pk-content-agenda__duration">
           <ClockIcon /> {session.durationMinutes} min
@@ -120,7 +149,13 @@ export function AgendaSession({
               {session.durationMinutes ? <span>{session.durationMinutes} min</span> : null}
             </div>
           </div>
-          <Button variant="ghost" icon data-agenda-close-session aria-label="Close session details">
+          <Button
+            variant="ghost"
+            icon
+            data-agenda-close-session
+            onClick={editor ? (event) => event.currentTarget.closest("dialog")?.close() : undefined}
+            aria-label="Close session details"
+          >
             ×
           </Button>
         </div>
@@ -153,12 +188,22 @@ export function AgendaSession({
           ) : null}
         </div>
         <div class="session-modal__footer pk-cluster pk-cluster--end">
+          {recordingUrl && (
+            <ButtonLink href={recordingUrl} target="_blank" rel="noopener noreferrer">
+              Watch recording
+            </ButtonLink>
+          )}
           {session.presentationUrl ? (
             <ButtonLink href={session.presentationUrl} variant="primary" download>
               Download Slides
             </ButtonLink>
           ) : null}
-          <Button data-agenda-close-session>Close</Button>
+          <Button
+            data-agenda-close-session
+            onClick={editor ? (event) => event.currentTarget.closest("dialog")?.close() : undefined}
+          >
+            Close
+          </Button>
         </div>
       </dialog>
     </article>

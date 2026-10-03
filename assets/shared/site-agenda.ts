@@ -5,11 +5,13 @@ export interface ContentAgendaDay {
     durationMinutes?: number;
     startsAt: string;
     sessions: Array<{
+      id?: string;
       descriptionHtml: string;
       durationMinutes?: number;
       endsAt?: string;
       locations: string[];
       presentationUrl?: string;
+      recordingUrl?: string;
       speakers: ContentAgendaSpeaker[];
       title: string;
       track?: string;

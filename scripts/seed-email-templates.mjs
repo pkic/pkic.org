@@ -127,6 +127,14 @@ export const DEFAULT_LAYOUT_HTML = `<!doctype html>
 // Keep these in sync with the editor labels and the partial loader.
 export const DEFAULT_TEMPLATES = [
   {
+    key: "agenda_changed",
+    subjectTemplate: "Your schedule has changed — {{eventName}}",
+    content:
+      "The organizers have approved changes to **{{eventName}}** that affect a session in your personal agenda. Open the event portal to review your updated schedule before attending. Your existing registration remains in place.",
+    contentType: "markdown",
+    messageType: "transactional",
+  },
+  {
     key: "email_layout",
     subjectTemplate: null,
     contentType: "html",

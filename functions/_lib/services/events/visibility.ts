@@ -1,14 +1,17 @@
+import type { PermissionGrant } from "../../types";
 import type { UserSessionResult } from "../../auth/user-session";
 import { activeEffectiveInviteExpirySql, effectiveInviteExpirySql } from "../../invite-validity";
 
 export interface EventAudienceViewer {
   userId: string | null;
   canReadAll: boolean;
+  scannerGrants?: readonly PermissionGrant[];
 }
 
 export function eventAudienceViewer(session: UserSessionResult | null): EventAudienceViewer {
   return {
     userId: session?.identity.id ?? null,
+    scannerGrants: session?.staff?.grants ?? [],
     canReadAll: session?.staff?.role === "admin" || false,
   };
 }
@@ -110,24 +113,26 @@ export function buildEventAudiencePredicate(
           FROM user_roles audience_role
           JOIN role_permissions audience_role_permission
             ON audience_role_permission.role_id = audience_role.role_id
-           AND audience_role_permission.permission = 'events:read'
+           AND audience_role_permission.permission IN ('events:read','agenda:read','agenda:scan','agenda:attendance_read','agenda:leads_capture')
          WHERE audience_role.user_id = ?
            AND audience_role.revoked_at IS NULL
            AND (audience_role.expires_at IS NULL OR audience_role.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
            AND (
              (audience_role.context_type IS NULL AND audience_role.context_id IS NULL)
              OR (audience_role.context_type = 'event' AND audience_role.context_id = ${eventAlias}.id)
+             OR (audience_role.context_type = 'event_sponsor' AND audience_role_permission.permission = 'agenda:leads_capture' AND EXISTS(SELECT 1 FROM sponsorships sponsor_scope WHERE sponsor_scope.id=audience_role.context_id AND sponsor_scope.event_id=${eventAlias}.id AND sponsor_scope.pipeline_stage='active'))
            )
       )
       OR EXISTS (
         SELECT 1 FROM permission_grants audience_permission
          WHERE audience_permission.user_id = ?
-           AND audience_permission.permission = 'events:read'
+           AND audience_permission.permission IN ('events:read','agenda:read','agenda:scan','agenda:attendance_read','agenda:leads_capture')
            AND audience_permission.revoked_at IS NULL
            AND (audience_permission.expires_at IS NULL OR audience_permission.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
            AND (
              (audience_permission.context_type IS NULL AND audience_permission.context_id IS NULL)
              OR (audience_permission.context_type = 'event' AND audience_permission.context_id = ${eventAlias}.id)
+             OR (audience_permission.context_type = 'event_sponsor' AND audience_permission.permission = 'agenda:leads_capture' AND EXISTS(SELECT 1 FROM sponsorships sponsor_scope WHERE sponsor_scope.id=audience_permission.context_id AND sponsor_scope.event_id=${eventAlias}.id AND sponsor_scope.pipeline_stage='active'))
            )
       )
     )`,

@@ -1,12 +1,12 @@
 ---
+import { publication } from "../publication";
 import { siteConferencePrograms } from "../../functions/_lib/services/site-content";
 import { SponsorStripView } from "../../assets/ts/site/SponsorDisplays";
 import { sponsorPublicationKey } from "../../assets/shared/sponsor-publication-query";
 import { formatDateRange } from "../../assets/shared/format-date";
-import { publication } from "../publication";
 import "../../assets/scss/conference-session.scss";
 export function getStaticPaths() {
-  return siteConferencePrograms().filter((event) => event.outputs.includes("event-session"))
+  return siteConferencePrograms(publication).filter((event) => event.outputs.includes("event-session"))
     .map((event) => ({ params: { conferenceSession: `${event.route}event-session`.replace(/^\//, "") }, props: { event } }));
 }
 const { event } = Astro.props;

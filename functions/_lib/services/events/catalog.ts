@@ -1,3 +1,4 @@
+import { readEventScannerAccess } from "./scanner-access";
 import { fetchEventParticipation } from "./participation";
 import { resolveEventFrontendRoutes } from "../event-presentation";
 import {
@@ -149,10 +150,16 @@ export async function listVisibleEvents(db: DatabaseLike, viewer: EventAudienceV
     viewer.userId,
     page.rows.map((row) => row.id),
   );
+  const scannerAccess = await readEventScannerAccess(
+    db,
+    viewer,
+    page.rows.map((row) => row.id),
+  );
   return {
     events: page.rows.map((row) => ({
       ...mapEventAudience(row, viewerStates.get(row.id) ?? null),
       participation: participation.get(row.id),
+      scannerAccess: scannerAccess.get(row.id),
     })),
     total: page.total,
   };
@@ -325,5 +332,9 @@ export async function getVisibleEventAudienceDetail(
   );
   if (!row) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found or not visible to this caller");
   const viewerState = await fetchViewerEventState(db, viewer.userId, row.id);
-  return mapEventAudience(row, viewerState);
+  const scannerAccess = await readEventScannerAccess(db, viewer, [row.id]);
+  return eventAudienceDetailSchema.parse({
+    ...mapEventAudience(row, viewerState),
+    scannerAccess: scannerAccess.get(row.id),
+  });
 }

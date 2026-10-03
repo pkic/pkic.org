@@ -1,3 +1,5 @@
+import { httpOrSameOriginUrlSchema } from "../../../assets/shared/schemas/urls";
+import { applyApprovedAgenda } from "./site-approved-agenda";
 import { normalizeLinks } from "../../../assets/shared/schemas/links";
 import { renderToStringAsync as render } from "preact-render-to-string";
 import { ContentAgenda } from "../../../assets/ts/site/ContentAgenda";
@@ -5,13 +7,27 @@ import type { ContentComponentContext } from "./site-components";
 import { conferenceLocation } from "./site-conference-location";
 import { publishedConferenceProgram } from "./site-conference-program";
 
+function agendaPresentationUrl(
+  value: string | undefined,
+  eventAssets: ContentComponentContext["assetUrls"],
+): string | undefined {
+  if (!value) return undefined;
+  const direct = httpOrSameOriginUrlSchema.safeParse(value);
+  if (direct.success) return direct.data;
+  const resolved = httpOrSameOriginUrlSchema.safeParse(eventAssets(value)[0]);
+  return resolved.success ? resolved.data : undefined;
+}
+
 export async function renderContentAgenda(
   context: ContentComponentContext,
   markdownHtml: (value: unknown) => Promise<string>,
 ): Promise<string> {
   if (!context.eventData?.agenda) return "";
   const eventAssets = context.eventAssetUrls ?? context.assetUrls;
-  const program = publishedConferenceProgram(context.eventData, eventAssets);
+  const program = applyApprovedAgenda(
+    publishedConferenceProgram(context.eventData, eventAssets),
+    context.publication?.eventAgendas?.[context.eventSlug ?? ""],
+  );
   const rawAgenda = program.agenda;
   const timeZone = program.timezone;
   const rawLocations = program.locations;
@@ -53,12 +69,12 @@ export async function renderContentAgenda(
                 sessions: await Promise.all(
                   slot.sessions.map(async (session) => {
                     return {
+                      id: session.id,
                       descriptionHtml: await markdownHtml(session.description),
                       durationMinutes: session.durationMinutes,
                       endsAt: session.endsAt,
                       locations: session.locations,
-                      presentationUrl:
-                        typeof session.presentation === "string" ? eventAssets(session.presentation)[0] : undefined,
+                      presentationUrl: agendaPresentationUrl(session.presentation, eventAssets),
                       speakers: session.speakers.map((name) => ({
                         ...(speakerByName.get(name.replace(/ \*$/, "")) ?? { name: name.replace(/ \*$/, "") }),
                         moderator: name.endsWith(" *"),
@@ -66,6 +82,7 @@ export async function renderContentAgenda(
                       title: session.title,
                       track: session.track ?? undefined,
                       youtube: session.youtube,
+                      recordingUrl: session.recordingUrl,
                     };
                   }),
                 ),

@@ -50,6 +50,7 @@ export const OPENAPI_TAGS: readonly { name: string; description: string }[] = [
   { name: "Authentication", description: "Session sign-in, sign-out, and the current session." },
   { name: "Passkeys", description: "WebAuthn credential registration and authentication." },
 
+  { name: "Event agenda", description: "Approved schedules, organizer drafts, locations, imports, and staffing." },
   { name: "Events", description: "The event catalogue and one event's configuration." },
   { name: "Event registrations", description: "Attendee registration, attendance days, and waitlists." },
   { name: "Event proposals", description: "Submitted session proposals for an event." },
@@ -113,6 +114,7 @@ export const OPENAPI_TAG_GROUPS: readonly { name: string; tags: string[] }[] = [
     name: "Events and meetings",
     tags: [
       "Events",
+      "Event agenda",
       "Event registrations",
       "Event proposals",
       "Proposals",

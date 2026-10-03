@@ -1,3 +1,4 @@
+import type { ComponentChildren, JSX } from "preact";
 import "./ContentAgenda.css";
 import { LocalTime } from "./SiteDate";
 import { Button } from "../ui/Button";
@@ -10,42 +11,54 @@ export function ContentAgenda({
   days,
   speakers,
   timeZone,
+  editor,
 }: {
   days: ContentAgendaDay[];
   speakers: ContentAgendaSpeaker[];
   timeZone: string;
+  editor?: {
+    session: (id: string) => {
+      controls: ComponentChildren;
+      resizeHandle?: ComponentChildren;
+      onDragStart?: JSX.DragEventHandler<HTMLElement>;
+      onOpen?: () => void;
+    };
+    dropTarget: (startsAt: string, roomId: string) => ComponentChildren;
+  };
 }) {
   if (!days.length) return null;
   const venueLabel = timeZone.split("/").slice(1).join(" / ").replaceAll("_", " ") || timeZone;
   return (
     <section class="pk-content-agenda" aria-label="Event agenda" data-module="site/agenda">
       <h2 class="pk-sr-only">Event agenda</h2>
-      <div class="pk-content-agenda__tabs" role="tablist" aria-label="Agenda days">
-        {days.map((day, dayIndex) => (
+      {!editor && (
+        <div class="pk-content-agenda__tabs" role="tablist" aria-label="Agenda days">
+          {days.map((day, dayIndex) => (
+            <button
+              class={dayIndex === 0 ? "is-active" : undefined}
+              type="button"
+              role="tab"
+              id={`agenda-tab-${day.date}`}
+              aria-controls={`agenda-day-${day.date}`}
+              aria-selected={dayIndex === 0 ? "true" : "false"}
+              data-agenda-tab={day.date}
+              key={day.date}
+            >
+              <LocalTime value={day.date} format="weekday" />
+            </button>
+          ))}
           <button
-            class={dayIndex === 0 ? "is-active" : undefined}
             type="button"
             role="tab"
-            id={`agenda-tab-${day.date}`}
-            aria-controls={`agenda-day-${day.date}`}
-            aria-selected={dayIndex === 0 ? "true" : "false"}
-            data-agenda-tab={day.date}
-            key={day.date}
+            id="agenda-tab-speakers"
+            aria-controls="agenda-speakers"
+            aria-selected="false"
+            data-agenda-tab="speakers"
           >
-            <LocalTime value={day.date} format="weekday" />
+            Speakers
           </button>
-        ))}
-        <button
-          type="button"
-          role="tab"
-          id="agenda-tab-speakers"
-          aria-controls="agenda-speakers"
-          aria-selected="false"
-          data-agenda-tab="speakers"
-        >
-          Speakers
-        </button>
-      </div>
+        </div>
+      )}
       <div class="pk-content-agenda__controls" data-agenda-controls hidden>
         <Button
           variant="secondary"
@@ -98,8 +111,9 @@ export function ContentAgenda({
         <section
           class="pk-content-agenda__day"
           id={`agenda-day-${day.date}`}
-          role="tabpanel"
-          aria-labelledby={`agenda-tab-${day.date}`}
+          role={editor ? undefined : "tabpanel"}
+          aria-label={editor ? `Agenda for ${day.date}` : undefined}
+          aria-labelledby={editor ? undefined : `agenda-tab-${day.date}`}
           data-agenda-panel={day.date}
           key={day.date}
         >
@@ -135,7 +149,7 @@ export function ContentAgenda({
               </tr>
             </thead>
             <tbody>
-              {agendaRows(day).map(({ slot, cells, height }, slotIndex) => (
+              {agendaRows(day, editor ? 80 : 0).map(({ slot, cells, height }, slotIndex) => (
                 <tr class="pk-content-agenda__slot" data-agenda-height={height} key={`${slot.time}-${slotIndex}`}>
                   <th scope="row" class="pk-content-agenda__time">
                     <div class="pk-content-agenda__clock" aria-label="Event time">
@@ -153,7 +167,7 @@ export function ContentAgenda({
                       <LocalTime value={slot.startsAt} format="time" />
                     </div>
                   </th>
-                  {slot.sessions.length ? (
+                  {slot.sessions.length || editor ? (
                     cells.map(
                       (cell, locationIndex) =>
                         cell && (
@@ -163,9 +177,11 @@ export function ContentAgenda({
                             data-agenda-cell={day.locations[locationIndex]?.id}
                             key={locationIndex}
                           >
+                            {editor?.dropTarget(slot.startsAt, day.locations[locationIndex]?.id ?? "")}
                             {cell.sessions.map((session, sessionIndex) => (
                               <AgendaSession
                                 session={session}
+                                editor={editor && session.id ? editor.session(session.id) : undefined}
                                 slot={slot}
                                 locations={day.locations}
                                 timeZone={timeZone}
@@ -194,19 +210,21 @@ export function ContentAgenda({
           </table>
         </section>
       ))}
-      <section
-        class="pk-content-agenda__speakers"
-        id="agenda-speakers"
-        role="tabpanel"
-        aria-labelledby="agenda-tab-speakers"
-        data-agenda-panel="speakers"
-      >
-        {speakers.map((speaker) => (
-          <article key={speaker.name}>
-            <AgendaSpeaker speaker={speaker} detail />
-          </article>
-        ))}
-      </section>
+      {!editor && (
+        <section
+          class="pk-content-agenda__speakers"
+          id="agenda-speakers"
+          role="tabpanel"
+          aria-labelledby="agenda-tab-speakers"
+          data-agenda-panel="speakers"
+        >
+          {speakers.map((speaker) => (
+            <article key={speaker.name}>
+              <AgendaSpeaker speaker={speaker} detail />
+            </article>
+          ))}
+        </section>
+      )}
     </section>
   );
 }

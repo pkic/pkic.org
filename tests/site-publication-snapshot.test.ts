@@ -107,3 +107,40 @@ it("publishes authored legacy event forms while excluding private portal events 
   await env.DB.prepare("UPDATE events SET visibility = 'invitation_only' WHERE id = ?").bind(eventId).run();
   expect((await readSitePublicationSnapshot(env.DB, [])).eventFlows).toEqual([]);
 });
+
+it("exports the existing public site when the additive agenda schema is not installed", async () => {
+  const baseline = await readSitePublicationSnapshot(env.DB, []);
+  await env.DB.prepare("ALTER TABLE event_agenda_publications RENAME TO test_saved_agenda_publications").run();
+  await env.DB.prepare("ALTER TABLE event_agenda_state RENAME TO test_saved_agenda_state").run();
+  try {
+    const snapshot = await readSitePublicationSnapshot(env.DB, []);
+    expect(snapshot.eventAgendas).toEqual({});
+    expect(snapshot.members).toEqual(baseline.members);
+    expect(snapshot.publicResources).toEqual(baseline.publicResources);
+    expect(snapshot.eventFlows).toEqual(baseline.eventFlows);
+  } finally {
+    await env.DB.prepare("ALTER TABLE test_saved_agenda_state RENAME TO event_agenda_state").run();
+    await env.DB.prepare("ALTER TABLE test_saved_agenda_publications RENAME TO event_agenda_publications").run();
+  }
+});
+
+it("refuses a partially installed agenda publication schema", async () => {
+  await env.DB.prepare("ALTER TABLE event_agenda_publications RENAME TO test_saved_agenda_publications").run();
+  try {
+    await expect(readSitePublicationSnapshot(env.DB, [])).rejects.toThrow("publication schema is incomplete");
+  } finally {
+    await env.DB.prepare("ALTER TABLE test_saved_agenda_publications RENAME TO event_agenda_publications").run();
+  }
+});
+
+it("propagates agenda extraction failures when the feature tables exist", async () => {
+  const original = env.DB;
+  const broken = {
+    prepare(sql: string) {
+      if (sql.includes("FROM event_agenda_publications p")) throw new Error("Synthetic agenda database failure");
+      return original.prepare(sql);
+    },
+    batch: original.batch.bind(original),
+  };
+  await expect(readSitePublicationSnapshot(broken, [])).rejects.toThrow("Synthetic agenda database failure");
+});

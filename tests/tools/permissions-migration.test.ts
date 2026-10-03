@@ -16,6 +16,10 @@ describe("access-control migration permission snapshot", () => {
     expect(permissionSeed).toBeDefined();
     const seeded = Array.from(permissionSeed!.matchAll(/'role-admin', '([^']+)'/g), (match) => match[1]);
 
+    // Applied history is immutable; later additive migrations extend the vocabulary.
+    const agendaMigration = fs.readFileSync(path.resolve("migrations/0037_event_agenda_platform.sql"), "utf8");
+    const additions = Array.from(agendaMigration.matchAll(/SELECT '(agenda:[^']+)'/g), (match) => match[1]);
+    seeded.push(...additions);
     expect(new Set(seeded)).toEqual(new Set(PERMISSIONS));
     expect(seeded).toHaveLength(PERMISSIONS.length);
   });

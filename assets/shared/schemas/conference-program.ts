@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { httpOrSameOriginUrlSchema } from "./urls";
 import { utcInstantSchema } from "./api-common";
 
 const names = z
@@ -28,6 +29,7 @@ const speaker = z.object({
   headshot: z.object({ x150: z.string(), x250: z.string(), x600: z.string() }).optional(),
 });
 const session = z.object({
+  id: z.string().optional(),
   title: z
     .string()
     .nullish()
@@ -45,6 +47,7 @@ const session = z.object({
     .nullish()
     .transform((value) => value ?? undefined),
   youtube: z.string().optional(),
+  recordingUrl: httpOrSameOriginUrlSchema.nullish().transform((value) => value ?? undefined),
 });
 const slot = z.object({
   time: z.string(),
