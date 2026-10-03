@@ -63,6 +63,7 @@ await writeFile(
   "dist/cache-probe-assets/cache-probe.json",
   JSON.stringify({
     commit: process.env.WORKERS_CI_COMMIT_SHA ?? "local",
+    frameworkDependencyGroup: "dependencies",
     markerRestored: Boolean(previous),
     previous: previous ?? null,
     imageRestored: cachedImages.includes(image),
