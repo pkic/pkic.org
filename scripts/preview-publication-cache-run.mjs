@@ -8,12 +8,15 @@ if (process.env.WORKERS_CI_BRANCH !== "test/astro-cache-reuse" || process.env.CL
 }
 process.env.CLOUDFLARE_ENV = "preview";
 const before = {};
+const cacheFiles = {};
 for (const group of ["assets", "publication-social", "publication-diagrams"]) {
   try {
-    before[group] = (await readdir(publicationCacheDirectory(group))).length;
+    cacheFiles[group] = await readdir(publicationCacheDirectory(group));
+    before[group] = cacheFiles[group].length;
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
     before[group] = 0;
+    cacheFiles[group] = [];
   }
 }
 const metrics = { reusedImages: 0, generatedImages: 0, publicationLogs: [] };
@@ -39,11 +42,17 @@ const exitCode = await new Promise((resolveExit, reject) => {
   child.once("exit", resolveExit);
 });
 if (exitCode !== 0) process.exit(exitCode ?? 1);
+const added = {};
+for (const group of Object.keys(cacheFiles)) {
+  const previous = new Set(cacheFiles[group]);
+  added[group] = (await readdir(publicationCacheDirectory(group))).filter((file) => !previous.has(file)).length;
+}
 const report = {
   commit: process.env.WORKERS_CI_COMMIT_SHA,
   cacheDirectory: publicationCacheDirectory(),
   buildSeconds: Number(((performance.now() - started) / 1000).toFixed(2)),
   cacheEntriesBeforeBuild: before,
+  cacheFilesAdded: added,
   ...metrics,
 };
 await writeFile("dist/client/cache-probe.json", JSON.stringify(report));
