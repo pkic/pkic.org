@@ -1,3 +1,4 @@
+import { SiteImage } from "./SiteImage";
 import { Fragment } from "preact";
 
 import type { SiteAuthor, SiteListingItem } from "../../shared/site-content";
@@ -54,7 +55,9 @@ export function BlogCard({ item }: { item: SiteListingItem }) {
   return (
     <article class="blog-card">
       <div class={`blog-card-header ${hasPhoto ? "blog-card-header--photo" : "blog-card-header--gradient"}`}>
-        {item.imageSrc ? <img src={item.imageSrc} alt={item.title} loading="lazy" width="600" height="260" /> : null}
+        {item.imageSrc ? (
+          <SiteImage src={item.imageSrc} alt={item.title} loading="lazy" width="600" height="260" />
+        ) : null}
         <div class="blog-card-header-overlay" />
         {item.tag ? <span class="blog-card-tag">{item.tag}</span> : null}
         <div class="blog-card-header-content">

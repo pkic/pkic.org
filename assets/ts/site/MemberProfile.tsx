@@ -1,3 +1,4 @@
+import { SiteImage } from "./SiteImage";
 import { Fragment } from "preact";
 import { memberProfileLinks } from "../../shared/member-profile-links";
 import { formatMonthYear } from "../../shared/format-date";
@@ -54,7 +55,7 @@ export function MemberDetailView({
       <header class="pk-container member-profile-header">
         <div class="member-profile-logo-wrap pk-cluster pk-cluster--center">
           {member.logoUrl ? (
-            <img class="member-profile-logo" alt={member.name} src={member.logoUrl} />
+            <SiteImage class="member-profile-logo" alt={member.name} src={member.logoUrl} />
           ) : (
             <Avatar name={member.name} shape="square" size="xl" />
           )}

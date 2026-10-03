@@ -1,3 +1,4 @@
+import { SiteImage } from "./SiteImage";
 import type { ComponentChildren } from "preact";
 import type { PublicOrganizationPerson } from "../../shared/schemas/public-person";
 import { Avatar } from "../ui/Avatar";
@@ -52,7 +53,8 @@ function OrganizationBlock({ person }: { person: PublicPerson }) {
     <div class="person-card-org">
       {person.organizationLogoUrl ? (
         <PublicPersonOrgLink person={person} className="person-card-org-logo-wrap">
-          <img
+          <SiteImage
+            portrait
             src={person.organizationLogoUrl}
             alt={person.organizationName}
             class="person-card-org-logo"

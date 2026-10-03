@@ -1,3 +1,5 @@
+import { siteMarkdownProcessor } from "./site/markdown-processor.ts";
+import { logPublicationBuildCache } from "./scripts/publication/log-build-cache.mjs";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { preparePublicationPublicAssets } from "./scripts/publication/prepare-public-assets.mjs";
@@ -25,25 +27,36 @@ export default defineConfig({
   outDir: "./dist/astro",
   output: "static",
   compressHTML: true,
+  markdown: { processor: siteMarkdownProcessor, syntaxHighlight: false },
   trailingSlash: "always",
-  build: { inlineStylesheets: "never" },
+  build: { assets: "_assets", inlineStylesheets: "never" },
   integrations: [
     preact({ compat: true }),
     sitemap({ filter: (url) => !url.includes("/portal/") && !url.includes("/search/") }),
     {
-      name: "pkic-publication-search",
+      name: "pkic-publication-post-processing",
       hooks: {
         "astro:build:start": async () => {
+          await logPublicationBuildCache("before Astro generation");
           await preparePublicationPublicAssets(resolve(root, "public"), publicAssets);
           await publishAssessmentScripts(publicAssets);
         },
         "astro:build:done": async ({ dir, pages }) => {
+          await logPublicationBuildCache("after Astro generation");
           await finishAstroRelease(fileURLToPath(dir), pages);
+          await logPublicationBuildCache("after post-processing");
         },
       },
     },
   ],
   vite: {
+    resolve: {
+      // Use the native processor for every authored document and shortcode in
+      // Astro. The standalone Worker retains its supported runtime processor.
+      alias: [
+        { find: /^.*\/site-markdown-processor(?:\.ts)?$/, replacement: resolve(root, "site/markdown-processor.ts") },
+      ],
+    },
     ssr: { external: ["@resvg/resvg-wasm"] },
     plugins: [contentMediaPlugin(root), bylinesPlugin(root), trustListPlugin(root)],
     build: {

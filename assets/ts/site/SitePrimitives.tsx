@@ -1,3 +1,4 @@
+import { SiteImage } from "./SiteImage";
 import type { ComponentChildren } from "preact";
 import type { SiteHero, SiteListing, SiteListingItem } from "../../shared/site-content";
 import { ButtonLink } from "../ui/Button";
@@ -39,7 +40,7 @@ export function SiteHero({ children, hero }: { children?: ComponentChildren; her
       <div
         class={`pk pk-on-solid pkic-hero-media${hero.imageSize && hero.imageSize !== "default" ? ` pkic-hero-media--${hero.imageSize}` : ""}${hero.sponsor ? " pkic-hero-media--sponsored" : ""}`}
       >
-        <img class="pkic-hero-media__image" src={hero.imageSrc} alt={hero.imageAlt ?? ""} />
+        <SiteImage class="pkic-hero-media__image" src={hero.imageSrc} alt={hero.imageAlt ?? ""} />
         <div class="pk pkic-hero-media__scrim">
           <div class="pk-container pk-container--wide pk-stack pk-center pkic-hero-media__content">
             {hero.eyebrow ? <p class="pkic-page-hero-kicker">{hero.eyebrow}</p> : null}

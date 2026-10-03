@@ -19,7 +19,7 @@ export async function readMembershipAgreementDocuments(
         childRoutes(href).map(async (route) => {
           const child = await loadPage(route);
           if (!child) throw new Error(`Membership legal document is missing: ${route}`);
-          return `<h3>${inlineMarkdownHtml(child.title)}</h3>${child.html}`;
+          return `<h3>${await inlineMarkdownHtml(child.title)}</h3>${child.html}`;
         }),
       );
       return { key, href, title: page.title, html: children.join("") + page.html };

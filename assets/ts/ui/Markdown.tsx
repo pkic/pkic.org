@@ -1,3 +1,4 @@
+import { SiteImage } from "../site/SiteImage";
 import type { ComponentChildren } from "preact";
 import { Marked, type Token, type Tokens } from "marked";
 import { resolveMarkdownShortcodes } from "../../shared/markdown-shortcodes";
@@ -71,7 +72,7 @@ function renderTokens(tokens: Token[]): ComponentChildren {
         );
       case "image":
         return markdownSafeUrl(token.href, true) ? (
-          <img key={index} src={token.href} alt={token.text} title={token.title ?? undefined} loading="lazy" />
+          <SiteImage key={index} src={token.href} alt={token.text} title={token.title ?? undefined} loading="lazy" />
         ) : (
           token.text
         );

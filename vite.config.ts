@@ -1,3 +1,4 @@
+import { astroMarkdownWorkerPlugin } from "./scripts/lib/astro-markdown-worker-plugin.mjs";
 import { publicationEnvironment } from "./scripts/publication/build-context.mjs";
 import { readFileSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
@@ -60,6 +61,12 @@ export default defineConfig(() => {
       port: 8788,
       strictPort: true,
     },
-    plugins: [contentMediaPlugin(projectRoot), trustListPlugin(projectRoot), bylinesPlugin(projectRoot), cloudflare()],
+    plugins: [
+      astroMarkdownWorkerPlugin(),
+      contentMediaPlugin(projectRoot),
+      trustListPlugin(projectRoot),
+      bylinesPlugin(projectRoot),
+      cloudflare(),
+    ],
   };
 });

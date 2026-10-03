@@ -33,9 +33,9 @@ it("replaces withdrawn pages and media without removing unrelated Vite assets", 
     await put(destination, "events/withdrawn/slides.pdf", "withdrawn slides");
     await put(destination, "members/withdrawn/index.html", "withdrawn profile");
     await put(destination, "_published/media/withdrawn.webp", "withdrawn image");
-    await put(destination, "_astro/shared.css", "body{color:black}");
-    await put(destination, "_astro/withdrawn.css", "obsolete styles");
-    const sharedStylesheet = resolve(destination, "_astro/shared.css");
+    await put(destination, "_assets/shared.css", "body{color:black}");
+    await put(destination, "_assets/withdrawn.css", "obsolete styles");
+    const sharedStylesheet = resolve(destination, "_assets/shared.css");
     const stylesheetIdentity = await stat(sharedStylesheet);
     await put(destination, "js/portal.js", "existing portal");
     await put(destination, "js/built/loader.js", "previous development loader");
@@ -50,13 +50,13 @@ it("replaces withdrawn pages and media without removing unrelated Vite assets", 
     await put(source, "members/current/index.html", "approved current profile");
     await put(source, "news/feed.xml", "<rss><channel/></rss>");
     await put(source, "_published/media/current.webp", "current image");
-    await put(source, "_astro/shared.css", "body{color:black}");
+    await put(source, "_assets/shared.css", "body{color:black}");
     await put(source, "js/built/loader.release.js", 'import("./form.release.js")');
     await put(source, "js/built/form.release.js", "published form");
     await put(source, "js/built/manifest.json", '{"loader":{"url":"/js/built/loader.release.js"}}');
     await assembleStaticRelease(source, destination, "preview");
     expect((await stat(sharedStylesheet)).ino).toBe(stylesheetIdentity.ino);
-    await expect(readFile(resolve(destination, "_astro/withdrawn.css"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(resolve(destination, "_assets/withdrawn.css"))).rejects.toMatchObject({ code: "ENOENT" });
     expect(await readFile(resolve(destination, "members/current/index.html"), "utf8")).toBe("approved current profile");
     expect(await readFile(resolve(destination, "img/logo.svg"), "utf8")).toBe('<svg viewBox="0 0 1 1"/>');
     expect(await readFile(resolve(destination, "sponsors/brochure.pdf"), "utf8")).toBe("%PDF-synthetic");
@@ -85,7 +85,7 @@ it("replaces withdrawn pages and media without removing unrelated Vite assets", 
     expect(headers).not.toContain("/members/withdrawn/");
     expect(headers).toContain("max-age=31536000, immutable");
     expect(headers).toContain(
-      "/_published/images/*\n    ! Cache-Control\n    Cache-Control: public, max-age=31536000, immutable",
+      "/_assets/*\n    ! Cache-Control\n    Cache-Control: public, max-age=31536000, immutable",
     );
     expect(headers).toContain(
       "/_published/news/*\n    ! Cache-Control\n    Cache-Control: public, max-age=300, must-revalidate",
