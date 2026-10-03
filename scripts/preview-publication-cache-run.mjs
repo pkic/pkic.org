@@ -1,4 +1,5 @@
 import { spawn } from "node:child_process";
+import { stripVTControlCharacters } from "node:util";
 import { readdir, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 
@@ -24,7 +25,7 @@ child.stdout.on("data", (chunk) => {
   pending += chunk.toString();
   let end;
   while ((end = pending.indexOf("\n")) !== -1) {
-    const line = pending.slice(0, end).replace(/\u001b\[[0-9;]*m/g, "");
+    const line = stripVTControlCharacters(pending.slice(0, end));
     pending = pending.slice(end + 1);
     if (line.includes("reused cache entry")) metrics.reusedImages++;
     if (line.includes("(before:") && line.includes("after:")) {
