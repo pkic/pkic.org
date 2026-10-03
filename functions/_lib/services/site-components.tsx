@@ -1,3 +1,4 @@
+import { SiteImage, prepareSiteImage } from "../../../assets/ts/site/SiteImage";
 import { DonationForm } from "../../../assets/ts/site/DonationForm";
 import { ApplicationStatusView } from "../../../assets/ts/site/ApplicationStatusView";
 import { EventRegistrationConfirmation } from "../../../assets/ts/site/EventRegistrationConfirmation";
@@ -10,9 +11,8 @@ import { EventProposalManagement } from "../../../assets/ts/site/EventProposalMa
 import { EventSpeakerManagement } from "../../../assets/ts/site/EventSpeakerManagement";
 import { EventSpeakerPresentation } from "../../../assets/ts/site/EventSpeakerPresentation";
 import { renderContentAgenda } from "./site-agenda";
-import { render } from "preact-render-to-string";
-import { marked } from "marked";
-import { createContentMarked } from "./site-headings";
+import { renderToStringAsync as render } from "preact-render-to-string";
+import { renderSiteMarkdown } from "./site-markdown-processor";
 import {
   SHORTCODE_BLOCK,
   SHORTCODE_LEAF,
@@ -78,11 +78,11 @@ type ContentRenderer = (call: ContentCall, context: ContentComponentContext) => 
 
 /** One line of Markdown as inline HTML, the way Hugo's `markdownify` renders it. */
 export async function inlineMarkdownHtml(value: string): Promise<string> {
-  return await marked.parseInline(value);
+  return (await renderSiteMarkdown(value)).replace(/^<p>([\s\S]*)<\/p>\s*$/, "$1");
 }
 
 async function markdownHtml(value: unknown): Promise<string> {
-  return value == null ? "" : await marked.parse(String(value));
+  return value == null ? "" : await renderSiteMarkdown(String(value));
 }
 
 function component(html: string, block = true): RenderedCall {
@@ -93,7 +93,7 @@ function component(html: string, block = true): RenderedCall {
 const memberWall: ContentRenderer = async (call, context) => {
   if (context.publication)
     return component(
-      render(
+      await render(
         <div class="members" data-published-member-wall>
           <MemberWallView entries={context.publication.memberWall.slice(0, Number(call.props.limit ?? 200))} />
         </div>,
@@ -113,7 +113,7 @@ function sponsors(mode: "grid" | "level"): ContentRenderer {
     if (!groups) throw new Error("Sponsor selection is missing from the publication");
     const display = { groups };
     return component(
-      render(
+      await render(
         mode === "level" ? (
           <SponsorLevelView display={display} eventName={call.props.eventName} />
         ) : (
@@ -127,7 +127,7 @@ function sponsors(mode: "grid" | "level"): ContentRenderer {
 function frame(kind: Parameters<typeof ContentFrame>[0]["kind"]): ContentRenderer {
   return async (call, context) =>
     component(
-      render(
+      await render(
         <ContentFrame kind={kind}>
           <ContentHtml html={await renderContentMarkdown(call.inner ?? "", context)} />
         </ContentFrame>,
@@ -145,13 +145,13 @@ function frame(kind: Parameters<typeof ContentFrame>[0]["kind"]): ContentRendere
  * allow it either, so the page showed a failure notice instead of the list.
  */
 async function trustLists(): Promise<RenderedCall> {
-  return component(render(<TrustLists publishers={trustListPublishers} />));
+  return component(await render(<TrustLists publishers={trustListPublishers} />));
 }
 
 function island(module?: string, defaults: Record<string, string> = {}): ContentRenderer {
   return async (call) =>
     component(
-      render(
+      await render(
         <ContentIsland
           attributes={{ "api-base": "/api/v1", ...defaults, ...call.props }}
           label={call.props.label ?? module?.split("/").at(-1)?.replaceAll("-", " ") ?? "content"}
@@ -193,7 +193,7 @@ async function cards(call: ContentCall, context: ContentComponentContext): Promi
       };
     }),
   );
-  return component(render(<ContentCards cards={normalized} style={cardStyle} />));
+  return component(await render(<ContentCards cards={normalized} style={cardStyle} />));
 }
 
 async function faq(call: ContentCall): Promise<RenderedCall> {
@@ -219,7 +219,7 @@ async function faq(call: ContentCall): Promise<RenderedCall> {
       };
     }),
   );
-  return component(render(<ContentFaq groups={groups} />));
+  return component(await render(<ContentFaq groups={groups} />));
 }
 
 async function glossary(call: ContentCall): Promise<RenderedCall> {
@@ -235,14 +235,14 @@ async function glossary(call: ContentCall): Promise<RenderedCall> {
     }),
   );
   terms.sort((a, b) => a.term.localeCompare(b.term));
-  return component(render(<ContentGlossary terms={terms} />));
+  return component(await render(<ContentGlossary terms={terms} />));
 }
 
 async function maturity(call: ContentCall): Promise<RenderedCall> {
   const data = objectValue(call.inner);
   const rawLevels = Array.isArray(data.levels) ? data.levels : [];
   return component(
-    render(
+    await render(
       <ContentMaturity
         levels={rawLevels.map((value) => {
           const level = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
@@ -266,7 +266,7 @@ async function banner(call: ContentCall): Promise<RenderedCall> {
   // an emphasis in the YAML reaches the page as markup.
   const body = typeof data.body === "string" ? await inlineMarkdownHtml(data.body) : undefined;
   return component(
-    render(
+    await render(
       <ContentBanner
         body={body}
         heading={typeof data.heading === "string" ? data.heading : undefined}
@@ -297,7 +297,7 @@ async function collection(
   const listing = context.listing(kind, limit);
   if (typeof data.heading === "string") listing.heading = data.heading;
   return component(
-    render(
+    await render(
       <SiteListingSection
         listing={listing}
         moreHref={typeof data.moreUrl === "string" ? data.moreUrl : undefined}
@@ -311,13 +311,15 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
   agenda: async (_call, context) => component(await renderContentAgenda(context, markdownHtml)),
   alert: async (call, context) =>
     component(
-      render(<ContentAlert tone={call.props.type} html={await renderContentMarkdown(call.inner ?? "", context)} />),
+      await render(
+        <ContentAlert tone={call.props.type} html={await renderContentMarkdown(call.inner ?? "", context)} />,
+      ),
     ),
-  "application-status": async () => component(render(<ApplicationStatusView />)),
+  "application-status": async () => component(await render(<ApplicationStatusView />)),
   banner,
   button: async (call) =>
     component(
-      render(
+      await render(
         <ContentButtonLink
           href={call.props.link}
           label={call.props.label}
@@ -329,25 +331,27 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
     ),
   cards,
   carousel: async (call, context) =>
-    component(render(<ContentGallery images={context.assetUrls(call.positional[0] ?? "*")} />)),
+    component(await render(<ContentGallery images={context.assetUrls(call.positional[0] ?? "*")} />)),
   col: async (call, context) =>
     component(
-      render(<ContentColumn html={await renderContentMarkdown(call.inner ?? "", context)} options={call.props} />),
+      await render(
+        <ContentColumn html={await renderContentMarkdown(call.inner ?? "", context)} options={call.props} />,
+      ),
     ),
   criteria: frame("criteria"),
   "donation-disclaimer": async () =>
     component(
-      render(
+      await render(
         <ContentFrame kind="donation">
           Donations to the PKI Consortium, a 501(c)(6) organization, are generally not tax deductible as charitable
           contributions. Please consult your tax adviser.
         </ContentFrame>,
       ),
     ),
-  "donation-form": async (call) => component(render(<DonationForm options={call.props} />)),
+  "donation-form": async (call) => component(await render(<DonationForm options={call.props} />)),
   "donation-thank-you": async (call, context) =>
     component(
-      render(
+      await render(
         <div data-module="shared/donation-thank-you">
           <div data-donation-badge hidden />
           <div
@@ -358,14 +362,14 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
         </div>,
       ),
     ),
-  "event-proposal": async () => component(render(<EventProposalForm />)),
-  "event-proposal-manage": async () => component(render(<EventProposalManagement />)),
-  "event-registration": async () => component(render(<EventRegistrationForm />)),
+  "event-proposal": async () => component(await render(<EventProposalForm />)),
+  "event-proposal-manage": async () => component(await render(<EventProposalManagement />)),
+  "event-registration": async () => component(await render(<EventRegistrationForm />)),
   "event-registration-confirm": async (call) =>
-    component(render(<EventRegistrationConfirmation options={call.props} />)),
-  "event-registration-manage": async () => component(render(<EventRegistrationManagement />)),
-  "event-speaker-manage": async () => component(render(<EventSpeakerManagement />)),
-  "event-speaker-presentation": async () => component(render(<EventSpeakerPresentation />)),
+    component(await render(<EventRegistrationConfirmation options={call.props} />)),
+  "event-registration-manage": async () => component(await render(<EventRegistrationManagement />)),
+  "event-speaker-manage": async () => component(await render(<EventSpeakerManagement />)),
+  "event-speaker-presentation": async () => component(await render(<EventSpeakerPresentation />)),
   "event-sponsor-checkout": island("member-flows/event-sponsor-page", { "event-sponsor": "" }),
   "events-cards": (call, context) => collection("events", call, context),
   // The published shortcode only stashes its YAML for the events layout to
@@ -375,7 +379,7 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
   figure: async (call, context) => {
     const src = context.assetUrl(call.props.src) ?? call.props.src;
     return component(
-      render(
+      await render(
         <ContentFigure
           alt={call.props.alt}
           caption={call.props.title}
@@ -390,10 +394,10 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
     );
   },
   glossary,
-  "invite-decline": async () => component(render(<InvitationDeclineForm />)),
+  "invite-decline": async () => component(await render(<InvitationDeclineForm />)),
   joinform: async (_call, context) => {
     if (!context.membershipDocuments) throw new Error("Membership legal documents are unavailable");
-    return component(render(<JoinFlow documents={await context.membershipDocuments()} />));
+    return component(await render(<JoinFlow documents={await context.membershipDocuments()} />));
   },
   leadership: async (call, context) => {
     if (!context.publication) return island("member-flows/leadership-widget", { leadership: "" })(call, context);
@@ -403,7 +407,7 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
       Object.values(context.publication.groups).find((directory) => directory.group.id === group);
     return directory
       ? component(
-          render(
+          await render(
             <GroupGovernanceView
               directory={directory}
               view={call.props.view === "leadership" ? "leadership" : "roster"}
@@ -418,7 +422,7 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
   members: async (call, context) => {
     const island = await memberWall(call, context);
     return component(
-      render(
+      await render(
         <ContentMemberWall className={call.props.class} title={call.props.title}>
           <ContentHtml html={island.html} />
         </ContentMemberWall>,
@@ -428,7 +432,7 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
   // The slot the news route fills from the D1 cache; the empty state stands when nothing is cached.
   news: async () =>
     component(
-      render(
+      await render(
         <div data-member-news>
           <p class="pk-center pk-muted pk-section">No news items available at this time.</p>
         </div>,
@@ -436,7 +440,7 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
     ),
   "recent-posts": (call, context) => collection("recent-posts", call, context),
   row: async (call, context) =>
-    component(render(<ContentRow html={await renderContentMarkdown(call.inner ?? "", context)} />)),
+    component(await render(<ContentRow html={await renderContentMarkdown(call.inner ?? "", context)} />)),
   "self-assessment": (call, context) =>
     island("site/self-assessment", {
       "config-url": call.props["config-url"] ?? "config.yaml",
@@ -449,14 +453,14 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
       "self-assessment": "",
       version: call.props.version ?? "develop",
     })(call, context),
-  sponsorform: async () => component(render(<SponsorshipInquiryForm />)),
+  sponsorform: async () => component(await render(<SponsorshipInquiryForm />)),
   sponsors: sponsors("grid"),
   "sponsors-level": sponsors("level"),
   "stat-grid": async (call) => {
     const data = objectValue(call.inner);
     const rawStats = Array.isArray(data.stats) ? data.stats : [];
     return component(
-      render(
+      await render(
         <ContentStats
           stats={rawStats.map((value) => {
             const stat = value && typeof value === "object" ? (value as Record<string, unknown>) : {};
@@ -479,13 +483,13 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
    * working group is addressed the same way its parent is. `category` narrows
    * further when a page wants one membership category within the group.
    */
-  wgmembers: (call, context) => {
+  wgmembers: async (call, context) => {
     const group = (call.props.group ?? call.positional[0] ?? "").toLowerCase();
     if (context.publication) {
       const members = context.publication.groupMembers[group] ?? [];
       return Promise.resolve(
         component(
-          render(
+          await render(
             <DirectoryGrid
               members={
                 call.props.category ? members.filter((member) => member.memberType === call.props.category) : members
@@ -509,7 +513,7 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
   },
   "working-groups": (call, context) => collection("working-groups", call, context),
   youtube: async (call) =>
-    component(render(<ContentVideo id={call.props.id ?? call.positional[0]} title={call.props.title} />)),
+    component(await render(<ContentVideo id={call.props.id ?? call.positional[0]} title={call.props.title} />)),
 };
 
 export const contentComponentNames = Object.freeze(Object.keys(renderers).sort());
@@ -559,7 +563,10 @@ export async function renderContentMarkdown(markdown: string, context: ContentCo
     const replacement = rendered.block ? `\n\n${token}\n\n` : token;
     source = `${source.slice(0, match.index)}${replacement}${source.slice(match.index + match[0].length)}`;
   }
-  let html = await createContentMarked().parse(source);
+  let html = await renderSiteMarkdown(source, async (src, alt, title) => {
+    await prepareSiteImage(src);
+    return render(<SiteImage src={src} alt={alt} title={title} loading="lazy" />);
+  });
   for (const call of calls) {
     if (call.block) html = html.replace(new RegExp(`<p>\\s*${call.token}\\s*</p>`, "g"), () => call.html);
     html = html.replaceAll(call.token, () => call.html);

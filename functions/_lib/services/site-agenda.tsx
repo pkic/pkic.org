@@ -1,5 +1,5 @@
 import { normalizeLinks } from "../../../assets/shared/schemas/links";
-import { render } from "preact-render-to-string";
+import { renderToStringAsync as render } from "preact-render-to-string";
 import { ContentAgenda } from "../../../assets/ts/site/ContentAgenda";
 import type { ContentComponentContext } from "./site-components";
 import { conferenceLocation } from "./site-conference-location";
@@ -77,5 +77,5 @@ export async function renderContentAgenda(
         };
       }),
   );
-  return render(<ContentAgenda days={days} speakers={speakers} timeZone={timeZone} />);
+  return await render(<ContentAgenda days={days} speakers={speakers} timeZone={timeZone} />);
 }

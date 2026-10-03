@@ -1,6 +1,6 @@
 import { parseEventFlowPath } from "../assets/shared/event-flow-paths";
 import { publicationStagingDirectory } from "../scripts/publication/build-context.mjs";
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { getPlatformProxy, unstable_readConfig as readConfig } from "wrangler";
 import { sitePublicationSnapshotSchema } from "../assets/shared/schemas/site-publication";
@@ -83,6 +83,7 @@ export async function readPublicationSource() {
         output: resolve(output, "media"),
       }),
     );
+    await cp(resolve(output, "media", "_published"), resolve(output, "public", "_published"), { recursive: true });
     const verified = await readSitePublicationSnapshot(platform.env.DB, selections, authoredEventSlugs);
     const verifiedKeys = await resolvePublishedMediaKeys(platform.env.DB, publishedMediaReferences(verified));
     const mediaChanged =

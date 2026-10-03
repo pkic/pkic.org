@@ -1,3 +1,4 @@
+import "./native-images.mjs";
 import { readPublicationSource } from "./publication-source";
 import { INDIVIDUAL_MEMBERSHIP_CATEGORIES } from "../assets/shared/schemas/membership-categories";
 

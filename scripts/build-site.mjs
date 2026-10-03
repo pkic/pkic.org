@@ -1,3 +1,4 @@
+import { logPublicationBuildCache } from "./publication/log-build-cache.mjs";
 import { spawnSync } from "node:child_process";
 import { publicationEnvironment } from "./publication/build-context.mjs";
 
@@ -8,6 +9,7 @@ function run(command, args) {
   if (result.error) throw result.error;
   if (result.status !== 0) process.exit(result.status ?? 1);
 }
+await logPublicationBuildCache("after dependency installation");
 run(process.execPath, ["--experimental-strip-types", "scripts/prepare-public.mjs"]);
 run("pnpm", ["exec", "vite", "build"]);
 run("pnpm", ["exec", "astro", "build", "--config", "astro.config.mjs"]);

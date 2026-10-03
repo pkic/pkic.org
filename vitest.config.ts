@@ -1,3 +1,4 @@
+import { astroMarkdownWorkerPlugin } from "./scripts/lib/astro-markdown-worker-plugin.mjs";
 import { prepareStaticPublicationFixture } from "./tests/helpers/prepare-static-publication.mjs";
 import path from "node:path";
 import { builtinModules } from "node:module";
@@ -68,6 +69,7 @@ export default defineConfig(async () => {
   // their actual router/service explicitly, still inside isolated workerd
   // with the same bindings and real migrations.
   const workerFetchFiles = ["tests/api-security.test.ts", "tests/public-site-rendering.test.ts"];
+  if (process.env.PKIC_VALIDATE_SITE_MIGRATION === "1") workerFetchFiles.push("tests/public-site-catalog.migration.ts");
   const siteOptions = {
     resolve: {
       alias: {
@@ -80,6 +82,7 @@ export default defineConfig(async () => {
     },
   };
   const sitePlugins = () => [
+    astroMarkdownWorkerPlugin(),
     contentMediaPlugin(import.meta.dirname),
     trustListPlugin(import.meta.dirname),
     bylinesPlugin(import.meta.dirname),

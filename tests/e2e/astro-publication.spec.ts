@@ -124,7 +124,7 @@ test("responsive image variants load as static assets at mobile, tablet, and des
       candidates: image.srcset,
       format: image.parentElement?.querySelector("source")?.type,
     }));
-    expect(loaded.source).toMatch(/\/_published\/images\/.*\.avif$/);
+    expect(loaded.source).toMatch(/\/_assets\/.*\.avif$/);
     expect(loaded.width).toBeGreaterThan(0);
     expect(loaded.renderedWidth).toBeCloseTo(width, 0);
     expect(loaded.format).toBe("image/avif");
@@ -562,7 +562,7 @@ test("PQC agenda uses full-width mobile sessions and bounded desktop scrolling",
   const session = slot.locator(".pk-content-agenda__session").first();
   await expect(session.locator(".pk-content-agenda__room")).toHaveText("Red hall");
   const portrait = session.locator(".pk-avatar__img").first();
-  await expect(portrait).toHaveAttribute("src", /^\/_published\/images\//);
+  await expect(portrait).toHaveAttribute("src", /^\/_assets\//);
   if (testInfo.project.name === "mobile") {
     const controls = agenda.locator("[data-agenda-controls]");
     await slot.scrollIntoViewIfNeeded();

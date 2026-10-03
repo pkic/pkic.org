@@ -1,3 +1,4 @@
+import { SiteImage } from "./SiteImage";
 import type { SiteEventsIndex, SiteListingItem } from "../../shared/site-content";
 import { EventCard } from "./EventCard";
 import { LocalTime } from "./SiteDate";
@@ -38,7 +39,7 @@ function WebinarCard({ item, upcoming }: { item: SiteListingItem; upcoming: bool
     <div class="event-webinar-card">
       <div class={`event-webinar-card-banner${item.imageSrc ? " event-webinar-card-banner--photo" : ""}`}>
         {item.imageSrc ? (
-          <img
+          <SiteImage
             src={item.imageSrc}
             alt={item.title}
             class="event-webinar-card-banner-img"

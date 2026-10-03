@@ -1,3 +1,4 @@
+import { SiteImage } from "./SiteImage";
 import { useState } from "preact/hooks";
 import type { MemberWallEntry } from "../../shared/schemas/members-directory";
 import type { PublicSponsor, SponsorsDisplayResponse } from "../../shared/schemas/public-sponsors";
@@ -37,7 +38,7 @@ function SponsorLogo({
   const title = titleFor(s, level, eventName);
   return (
     <a href={s.website ?? "#"} title={title} target="_blank" rel="noopener noreferrer" class="sponsor-link">
-      <img
+      <SiteImage
         src={s.logoUrl}
         alt={title}
         title={title}
@@ -177,7 +178,7 @@ export function SponsorStripView({
               rel="noopener noreferrer"
               class={`${linkClass} ${sponsorWeightClass(weight)}`}
             >
-              <img class={`${logoClass} sponsor-strip-default-logo`} alt={title} src={s.logoUrl} loading="lazy" />
+              <SiteImage class={`${logoClass} sponsor-strip-default-logo`} alt={title} src={s.logoUrl} loading="lazy" />
             </a>
           );
         })}
@@ -216,7 +217,7 @@ function MemberWallLogo({ entry }: { entry: MemberWallEntry }) {
       data-member-slogan={entry.slogan ?? undefined}
       data-sponsor-level-name={entry.sponsorLevel > 0 ? (entry.sponsorLevelName ?? undefined) : undefined}
     >
-      <img
+      <SiteImage
         class={`member-logo${entry.sponsorLevel > 0 ? ` member-logo-sponsor sponsor-lvl-${entry.sponsorLevel}` : ""}`}
         alt={entry.name}
         src={entry.logoUrl}

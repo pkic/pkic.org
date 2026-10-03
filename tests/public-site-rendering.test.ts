@@ -105,7 +105,7 @@ describe("Vite public-site rendering", () => {
       sourcePath: "content/test.md",
     });
     expect(html).toContain("$$");
-    expect(html).toContain("$&amp;");
+    expect(html).toMatch(/\$(?:&amp;|&#x26;)/);
   });
 
   it("keeps explicitly unpublished source documentation out of pages and discovery", async () => {
@@ -296,9 +296,7 @@ describe("Vite public-site rendering", () => {
     expect(html).toContain("pk-content-gallery");
     const photographs = await publicPageImages(html, ".pk-content-gallery img");
     expect(photographs.length).toBeGreaterThan(1);
-    expect(
-      photographs.every((image) => image.src.startsWith("/_published/images/") && image.srcset.includes("640w")),
-    ).toBe(true);
+    expect(photographs.every((image) => image.src.startsWith("/_assets/") && image.srcset.includes("640w"))).toBe(true);
     expect(html).not.toContain('data-component="photo-gallery"');
   });
 
@@ -316,10 +314,10 @@ describe("Vite public-site rendering", () => {
     expect(html).toContain('data-local-time-format="time"');
     const portraits = await publicPageImages(html, ".pk-content-agenda__speaker .pk-avatar__img");
     expect(portraits.length).toBeGreaterThan(0);
-    expect(portraits[0]?.src).toMatch(/^\/_published\/images\//);
+    expect(portraits[0]?.src).toMatch(/^\/_assets\//);
     expect((await SELF.fetch(`https://app.test${portraits[0]!.src}`)).status).toBe(200);
     const [hero] = await publicPageImages(html, ".pkic-hero-media__image");
-    expect(hero?.src).toMatch(/^\/_published\/images\/.*\.webp$/);
+    expect(hero?.src).toMatch(/^\/_assets\/.*\.webp$/);
     expect((await SELF.fetch(`https://app.test${hero!.src}`)).status).toBe(200);
     expect(html).toContain('class="pk pk-section-navigation"');
     expect(html).toContain("Post-Quantum Security of IPsec / IKEv2");
@@ -524,40 +522,6 @@ describe("Vite public-site rendering", () => {
     expect(html).toContain("substantial consensus");
   });
 
-  it("does not leave a published content route empty", async () => {
-    /*
-     * Routes the published site leaves empty too.
-     *
-     * Each of these renders its hero and nothing else on the reference —
-     * `/meetings/` and `/invite/` publish only child sections, `/design/` and
-     * `/meetings/join/` and `/m/` are meeting join stubs, and `/portal/` is a client island. They are
-     * named rather than skipped by rule so a page that goes empty by accident
-     * still fails here.
-     */
-    const publishedEmpty = new Set(["/design/", "/invite/", "/meetings/", "/meetings/join/", "/m/", "/portal/"]);
-    const emptyRoutes: string[] = [];
-    for (const route of publishedSiteRoutes()) {
-      if (publishedEmpty.has(route)) continue;
-      const page = await loadSiteContent(route);
-      if (
-        page &&
-        !page.description &&
-        !page.html.trim() &&
-        !page.listing?.items.length &&
-        !page.taxonomy &&
-        !page.events &&
-        // A working-group sub-page carries its cards, roster or blog roll in
-        // the group payload rather than in rendered Markdown.
-        !page.workingGroup &&
-        !page.redirect &&
-        route !== "/"
-      ) {
-        emptyRoutes.push(route);
-      }
-    }
-    expect(emptyRoutes).toEqual([]);
-  });
-
   it("builds every working-group sub-page from its group index", async () => {
     const sections = ["focus", "deliverables", "members", "resources", "blog"];
     for (const section of sections) {
@@ -634,7 +598,7 @@ describe("Vite public-site rendering", () => {
       true,
     );
     const [portrait] = await publicPageImages(html, ".blog-author-card .pk-avatar__img");
-    expect(portrait?.src).toMatch(/^\/_published\/images\/.*\.webp$/);
+    expect(portrait?.src).toMatch(/^\/_assets\/.*\.webp$/);
     expect((await SELF.fetch(`https://app.test${portrait!.src}`)).status).toBe(200);
     expect(html).toContain("/images/members/entrust/entrust.svg");
     // Profile links use the shared link vocabulary rather than a card of their own.

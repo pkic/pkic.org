@@ -1,3 +1,4 @@
+import { SiteImage } from "./SiteImage";
 import type { ComponentChildren, JSX } from "preact";
 import { ButtonLink, type ButtonVariant } from "../ui/Button";
 import { ContentIcon } from "./ContentIcon";
@@ -121,7 +122,13 @@ export function ContentFigure({
   const numericWidth = width && /^\d+$/.test(width) ? Number(width) : undefined;
   const numericHeight = height && /^\d+$/.test(height) ? Number(height) : undefined;
   const image = (
-    <img src={safeHref(src)} alt={alt ?? caption ?? ""} width={numericWidth} height={numericHeight} loading="lazy" />
+    <SiteImage
+      src={safeHref(src)}
+      alt={alt ?? caption ?? ""}
+      width={numericWidth}
+      height={numericHeight}
+      loading="lazy"
+    />
   );
   return (
     <figure class={["pk-content-figure", className].filter(Boolean).join(" ")}>
@@ -153,7 +160,7 @@ export function ContentGallery({ images }: { images: string[] }) {
       {images.map((src) => {
         const filename = decodeURIComponent(src.split("/").at(-1) ?? "Photo");
         const alt = filename.replace(/\.[^.]+$/, "").replaceAll(/[-_]+/g, " ");
-        return <img src={safeHref(src)} alt={alt} loading="lazy" key={src} />;
+        return <SiteImage src={safeHref(src)} alt={alt} loading="lazy" key={src} />;
       })}
     </div>
   );
@@ -180,7 +187,12 @@ export function ContentCards({ cards, style }: { cards: ContentCardData[]; style
         >
           {card.image ? (
             <div class={bento ? "bento-hero-image-wrapper" : undefined}>
-              <img class={bento ? "bento-hero-image" : undefined} src={safeHref(card.image)} alt="" loading="lazy" />
+              <SiteImage
+                class={bento ? "bento-hero-image" : undefined}
+                src={safeHref(card.image)}
+                alt=""
+                loading="lazy"
+              />
             </div>
           ) : null}
           {bento && card.icon ? <ContentIcon name={card.icon} /> : null}

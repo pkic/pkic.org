@@ -1,3 +1,4 @@
+import { publicationTimings } from "./publication-timings.mjs";
 import { sitePublicationReleaseSchema } from "../../assets/shared/schemas/site-publication-release.ts";
 import { publicationStagingDirectory } from "./build-context.mjs";
 import { cp, readFile, writeFile, access, rm, readdir } from "node:fs/promises";
@@ -7,7 +8,6 @@ import { indexPublicPages } from "./index-public-pages.mjs";
 import { publishedNewsPages } from "../../site/news-pages.ts";
 import { mkdir } from "node:fs/promises";
 import { XMLValidator } from "fast-xml-parser";
-import { publicImageOptimizer } from "./optimize-public-images.mjs";
 import { optimizePublicSvgFiles, publicInlineSvgOptimizer } from "./optimize-public-svg.mjs";
 import { publicDownloadPublisher } from "./publish-linked-downloads.mjs";
 import { publicSocialCardPublisher } from "./publish-social-cards.mjs";
@@ -18,6 +18,23 @@ import { collectConferenceOutputs, conferenceDisplayRedirects } from "./collect-
 
 /** Verify the framework's generated pages before exposing them as a static release. */
 export async function finishAstroRelease(output, pages) {
+  const timings = publicationTimings();
+  console.log(`[publication] post-processing started: ${pages.length} routes`);
+  let status = "failed";
+  try {
+    await finishRelease(output, pages, timings);
+    status = "completed";
+  } finally {
+    timings.report(status);
+  }
+}
+
+async function finishRelease(output, pages, timings) {
+  // Content-addressed originals are only inputs to Astro's image service.
+  // Generated variants have a transform suffix; retain those and all other framework assets.
+  for (const name of await readdir(resolve(output, "_assets"))) {
+    if (/^[a-f0-9]{64}\.(png|jpe?g|webp|avif|gif)$/i.test(name)) await rm(resolve(output, "_assets", name));
+  }
   const environment = process.env.CLOUDFLARE_ENV ?? "local";
   const source = process.env.PKIC_PUBLICATION_SNAPSHOT;
   const snapshot = JSON.parse(
@@ -27,14 +44,10 @@ export async function finishAstroRelease(output, pages) {
     await cp(resolve(publicationStagingDirectory(), "media", "_published"), resolve(output, "_published"), {
       recursive: true,
     });
-  const media = source
-    ? {}
-    : JSON.parse(await readFile(resolve(publicationStagingDirectory(), "media", "responsive-images.json"), "utf8"));
-  const optimizeImages = publicImageOptimizer(output, media);
-  const socialCards = await publicSocialCardPublisher(output);
-  const diagrams = await publicDiagramPublisher(output);
+  const socialCards = await timings.measure("OG image setup", () => publicSocialCardPublisher(output));
+  const diagrams = await timings.measure("diagram setup", () => publicDiagramPublisher(output));
   try {
-    const svgFiles = await optimizePublicSvgFiles(output);
+    const svgFiles = await timings.measure("SVG file optimization", () => optimizePublicSvgFiles(output));
     const optimizeInlineSvg = publicInlineSvgOptimizer();
     const publishDownloads = publicDownloadPublisher(output);
     const downloads = new Set();
@@ -51,7 +64,8 @@ export async function finishAstroRelease(output, pages) {
     for (const [index, entry] of publishedNewsPages(snapshot.news).entries()) {
       await writeFile(resolve(newsData, `page-${index + 1}.json`), JSON.stringify(entry.page));
     }
-    for (const { pathname } of pages) {
+    for (const [index, { pathname }] of pages.entries()) {
+      if (index % 250 === 0) console.log(`[publication] processing route ${index + 1}/${pages.length}`);
       const route = pathname.replace(/^\//, "").replace(/\/$/, "");
       const file = pathname.endsWith(".xml")
         ? route
@@ -69,15 +83,21 @@ export async function finishAstroRelease(output, pages) {
         files.push(file);
         continue;
       }
-      const document = new JSDOM(await readFile(resolve(output, file), "utf8"));
+      const document = await timings.measure(
+        "HTML read and parse",
+        async () => new JSDOM(await readFile(resolve(output, file), "utf8")),
+      );
       try {
-        const agendaLayout = await publishAgendaLayout(document.window.document, output);
+        const agendaLayout = await timings.measure("agenda layout", () =>
+          publishAgendaLayout(document.window.document, output),
+        );
         if (agendaLayout) files.push(agendaLayout);
-        await socialCards.publish(document.window.document);
-        await optimizeImages(document.window.document);
-        await diagrams.publish(document.window.document);
-        optimizeInlineSvg(document.window.document);
-        for (const download of await publishDownloads(document.window.document, `/${file.replace(/index\.html$/, "")}`))
+        await timings.measure("OG images", () => socialCards.publish(document.window.document));
+        await timings.measure("diagrams", () => diagrams.publish(document.window.document));
+        timings.measureSync("inline SVG optimization", () => optimizeInlineSvg(document.window.document));
+        for (const download of await timings.measure("linked downloads", () =>
+          publishDownloads(document.window.document, `/${file.replace(/index\.html$/, "")}`),
+        ))
           downloads.add(download);
         if (/noindex/.test(document.window.document.querySelector('meta[name="robots"]')?.content ?? ""))
           privatePaths.push(`/${file.replace(/index\.html$/, "")}`);
@@ -87,7 +107,9 @@ export async function finishAstroRelease(output, pages) {
               throw new Error(`An API media reference remains on ${file}`);
           }
         }
-        await writeFile(resolve(output, file), document.serialize());
+        await timings.measure("HTML serialization and write", () =>
+          writeFile(resolve(output, file), document.serialize()),
+        );
       } finally {
         document.window.close();
       }
@@ -126,7 +148,7 @@ export async function finishAstroRelease(output, pages) {
     await access(resolve(output, "robots.txt"));
     files.push("robots.txt");
     if (!files.some((file) => file.startsWith("members/"))) throw new Error("Publication contains no member pages");
-    await indexPublicPages(output);
+    await timings.measure("Pagefind search", () => indexPublicPages(output));
     await writeFile(
       resolve(output, "publication.json"),
       JSON.stringify(
