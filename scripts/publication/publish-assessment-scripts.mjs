@@ -1,3 +1,4 @@
+import { publicationCacheDirectory } from "./build-context.mjs";
 import { createHash, randomUUID } from "node:crypto";
 import { mkdir, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { dirname, resolve } from "node:path";
@@ -40,7 +41,7 @@ async function readApprovedAsset(url, integrity, cache, download) {
 
 /** Publish pinned SDK bytes and their licenses so browsing never depends on GitHub. */
 export async function publishAssessmentScripts(output, options = {}) {
-  const cache = resolve(options.cache ?? "node_modules/.astro/publication-assessment");
+  const cache = resolve(options.cache ?? publicationCacheDirectory("publication-assessment"));
   const download = options.download ?? fetch;
   const releases = options.releases ?? Object.values(selfAssessmentReleases);
   await mkdir(cache, { recursive: true });

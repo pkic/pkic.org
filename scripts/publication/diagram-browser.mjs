@@ -1,3 +1,4 @@
+import { publicationCacheDirectory } from "./build-context.mjs";
 import { createReadStream, createWriteStream } from "node:fs";
 import { access, mkdir, mkdtemp, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { createRequire } from "node:module";
@@ -8,7 +9,7 @@ import { createBrotliDecompress } from "node:zlib";
 const require = createRequire(import.meta.url);
 
 /** Build-only Linux runtime: bundled libraries, no root or system package installation. */
-export async function linuxDiagramBrowserOptions(cacheDirectory = "node_modules/.astro/publication-browser") {
+export async function linuxDiagramBrowserOptions(cacheDirectory = publicationCacheDirectory("publication-browser")) {
   const packageDirectory = resolve(dirname(require.resolve("@sparticuz/chromium")), "..");
   const { version } = JSON.parse(await readFile(join(packageDirectory, "package.json"), "utf8"));
   const cache = resolve(cacheDirectory, `linux-x64-${version}`);

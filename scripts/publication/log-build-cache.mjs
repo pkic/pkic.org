@@ -1,8 +1,10 @@
+import { publicationCacheDirectory } from "./build-context.mjs";
 import { readdir, stat } from "node:fs/promises";
 import { resolve } from "node:path";
+import { fileURLToPath } from "node:url";
 
 /** Observe the standard Astro cache without altering its contents or ownership. */
-export async function logPublicationBuildCache(stage, cacheDirectory = "node_modules/.astro") {
+export async function logPublicationBuildCache(stage, cacheDirectory = publicationCacheDirectory()) {
   const started = performance.now();
   const groups = ["assets", "publication-social", "publication-diagrams"];
   const summaries = await Promise.all(
@@ -23,4 +25,9 @@ export async function logPublicationBuildCache(stage, cacheDirectory = "node_mod
   console.log(
     `[publication] build cache ${stage}: ${cacheDirectory}; ${summaries.join("; ")} (inspection ${(performance.now() - started).toFixed(0)} ms)`,
   );
+}
+
+// Observe framework output during the dependency-install lifecycle hook.
+if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  await logPublicationBuildCache(process.argv[2] ?? "dependency-install hook");
 }
