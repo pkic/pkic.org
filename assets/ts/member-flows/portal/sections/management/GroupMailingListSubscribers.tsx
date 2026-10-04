@@ -1,3 +1,6 @@
+import { useCallback } from "preact/hooks";
+import type { CollectionLoader } from "../../../../hooks/useServerCollection";
+import { getJson } from "../../../../shared/api-client";
 import {
   mailingListSubscribersResponseSchema,
   type MailingListSubscriber,
@@ -38,13 +41,23 @@ export function GroupMailingListSubscribers({
   groupId,
   listId,
   onData,
+  onLoadStart,
 }: {
   groupId: string;
   listId: string;
   onData: (response: MailingListSubscribersResponse) => void;
+  onLoadStart: () => void;
 }) {
+  const load = useCallback<CollectionLoader>(
+    (url, signal, schema) => {
+      onLoadStart();
+      return getJson(url, schema, { signal });
+    },
+    [onLoadStart],
+  );
   return (
     <ApiDataTable
+      load={load}
       onData={onData}
       caption="Mailing-list subscribers"
       endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/mailing-lists/${encodeURIComponent(listId)}/subscribers`}

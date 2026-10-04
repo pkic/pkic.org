@@ -63,6 +63,7 @@ export function GroupMailingListRecord({
   const [, navigate] = usePortalHashLocation();
   const sync = useMailingListSync(groupId, listId);
   const [representation, setRepresentation] = useState<{ listId: string; counts: Representation } | null>(null);
+  const clearRepresentation = useCallback(() => setRepresentation(null), []);
   const receiveSubscribers = useCallback(
     (response: MailingListSubscribersResponse) => {
       setRepresentation({ listId, counts: response.representation });
@@ -176,6 +177,7 @@ export function GroupMailingListRecord({
                     groupId={groupId}
                     listId={list.id}
                     onData={receiveSubscribers}
+                    onLoadStart={clearRepresentation}
                   />
                 </section>
               )}
