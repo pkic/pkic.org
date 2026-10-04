@@ -2,14 +2,16 @@ import {
   MAILING_LIST_SUBSCRIBER_SORT_COLUMNS,
   mailingListSubscriberSchema,
   type MailingListSubscribersListQuery,
+  type MailingListSubscribersResponse,
 } from "../../../../assets/shared/schemas/mailing-lists";
-import { buildPageInfo, type PageInfo } from "../../../../assets/shared/schemas/pagination";
-import { queryPage } from "../../db/pagination";
+import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
+import { buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuery } from "../../db/pagination";
 import { first } from "../../db/queries";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
+import { publicUserHeadshotPath } from "../user-headshot";
 import { activeUserCapacitiesCte } from "../membership/capacity-query";
 import {
   EFFECTIVE_SUBSCRIPTION_VALUE_SQL,
@@ -23,6 +25,7 @@ interface MailingListSubscriberRow {
   first_name: string | null;
   last_name: string | null;
   organization_name: string | null;
+  headshot_r2_key: string | null;
   preference: "subscribed" | "unsubscribed" | null;
   eligible: number;
   default_subscribed: number;
@@ -86,7 +89,7 @@ export async function listMailingListSubscribers(
   db: DatabaseLike,
   listId: string,
   query: MailingListSubscribersListQuery,
-): Promise<{ subscribers: ReturnType<typeof mailingListSubscriberSchema.parse>[]; page: PageInfo }> {
+): Promise<MailingListSubscribersResponse> {
   const list = await first<{ purpose: string }>(db, "SELECT purpose FROM mailing_lists WHERE id = ?", [listId]);
   if (!list) throw new AppError(404, "MAILING_LIST_NOT_FOUND", "Mailing list not found");
 
@@ -102,11 +105,21 @@ export async function listMailingListSubscribers(
   }
   if (query.subscribed !== undefined) conditions.push(query.subscribed ? "subscribed = 1" : "subscribed = 0");
 
-  const { rows, total } = await queryPage<MailingListSubscriberRow>(db, {
-    sql: `${activeUserCapacitiesCte(candidates.sql)},
+  const rosterCte = `${activeUserCapacitiesCte(candidates.sql)},
+      represented_organizations AS (
+        SELECT DISTINCT capacity.user_id, member.organization_id, capacity.organization_name
+          FROM active_user_capacities capacity
+          JOIN members member ON member.id = capacity.member_id
+         WHERE member.organization_id IS NOT NULL
+      ),
       roster AS (
-        SELECT person.id AS user_id, person.email, person.first_name, person.last_name,
-               person.organization_name, preference.preference AS preference,
+        SELECT person.id AS user_id, person.email, person.first_name, person.last_name, person.headshot_r2_key,
+               (SELECT group_concat(organization_name, ', ') FROM (
+                  SELECT organization_name FROM represented_organizations
+                   WHERE user_id = person.id
+                   ORDER BY organization_name COLLATE NOCASE, organization_id
+               )) AS organization_name,
+               preference.preference AS preference,
                ${mailingListEligibilitySql("list", "person.id")} AS eligible,
                ${mailingListDefaultSubscribedSql("list", "person.id")} AS default_subscribed
           FROM eligible_input candidate
@@ -116,11 +129,13 @@ export async function listMailingListSubscribers(
             ON preference.mailing_list_id = list.id AND preference.user_id = person.id
       ),
       roster_state AS (
-        SELECT user_id, email, first_name, last_name, organization_name, preference, eligible,
+        SELECT user_id, email, first_name, last_name, headshot_r2_key, organization_name, preference, eligible,
                default_subscribed, ${EFFECTIVE_SUBSCRIPTION_VALUE_SQL} AS subscribed
           FROM roster
-      )
-      SELECT user_id, email, first_name, last_name, organization_name, preference, eligible,
+      )`;
+  const pageQuery: OffsetPageQuery = {
+    sql: `${rosterCte}
+      SELECT user_id, email, first_name, last_name, headshot_r2_key, organization_name, preference, eligible,
              default_subscribed, subscribed
         FROM roster_state
        ${conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : ""}`,
@@ -138,7 +153,23 @@ export async function listMailingListSubscribers(
     ),
     limit: query.limit,
     offset: query.offset,
-  });
+  };
+  const [pageResult, countResult, representationResult] = await db.batch([
+    ...buildOffsetPageStatements(db, pageQuery),
+    db
+      .prepare(
+        `${rosterCte}
+      SELECT (SELECT COUNT(*) FROM roster_state WHERE subscribed = 1) AS people_count,
+             COUNT(DISTINCT organization.organization_id) AS organization_count
+        FROM roster_state person
+        JOIN represented_organizations organization ON organization.user_id = person.user_id
+       WHERE person.subscribed = 1`,
+      )
+      .bind(...candidates.bindings, listId),
+  ]);
+  const { rows, total } = decodeOffsetPageResults<MailingListSubscriberRow>(pageResult, countResult);
+  const representation = representationResult.results?.[0] as
+    { people_count: number; organization_count: number } | undefined;
 
   const subscribers = rows.map((row) =>
     mailingListSubscriberSchema.parse({
@@ -148,6 +179,7 @@ export async function listMailingListSubscribers(
         first_name: row.first_name,
         last_name: row.last_name,
         organization_name: row.organization_name,
+        headshotUrl: publicUserHeadshotPath(row.user_id, row.headshot_r2_key),
       },
       eligible: row.eligible === 1,
       defaultSubscribed: row.default_subscribed === 1,
@@ -155,5 +187,12 @@ export async function listMailingListSubscribers(
       subscribed: row.subscribed === 1,
     }),
   );
-  return { subscribers, page: buildPageInfo(query.limit, query.offset, total, subscribers.length) };
+  return {
+    subscribers,
+    page: buildPageInfo(query.limit, query.offset, total, subscribers.length),
+    representation: {
+      people: { count: Number(representation?.people_count ?? 0) },
+      organizations: { count: Number(representation?.organization_count ?? 0) },
+    },
+  };
 }

@@ -20,7 +20,7 @@ const baseStats = {
   generatedAt: "2026-08-26T12:00:00.000Z",
   scope: "current" as const,
   window: { from: null, to: "2026-08-26T12:00:00.000Z" },
-  participation: { people: { count: 2 }, capacities: { count: 3 } },
+  participation: { people: { count: 2 }, organizations: { count: 1 }, capacities: { count: 3 } },
   activity: {
     people: { actorCount: 2, actionCount: 4 },
     capacities: { joinedCount: 1, leftCount: 0 },
@@ -105,6 +105,7 @@ describe("portal group statistics", () => {
     expect(container.textContent).toContain("Distinct people");
     expect(container.textContent).toContain("One per Member represented");
     expect(statValue(container, "People")).toBe("2");
+    expect(statValue(container, "Organizations")).toBe("1");
     expect(statValue(container, "Memberships")).toBe("3");
     expect(statValue(container, "Active people")).toBe("2");
     expect(statValue(container, "Actions")).toBe("4");
@@ -240,7 +241,7 @@ describe("portal group statistics", () => {
       vi.fn(async () =>
         json({
           ...baseStats,
-          participation: { people: { count: 0 }, capacities: { count: 0 } },
+          participation: { people: { count: 0 }, organizations: { count: 0 }, capacities: { count: 0 } },
           activity: { people: { actorCount: 0, actionCount: 0 }, capacities: { joinedCount: 0, leftCount: 0 } },
         }),
       ),
