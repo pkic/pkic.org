@@ -1,8 +1,3 @@
-import {
-  isRegistrationTransitionConflict,
-  prepareRegistrationTransitionGuard,
-  registrationChangedError,
-} from "./transition-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -39,7 +34,7 @@ export async function resendRegistrationEmail(
   }
 
   const now = nowIso();
-  const statements: StatementLike[] = [prepareRegistrationTransitionGuard(db, registration)];
+  const statements: StatementLike[] = [];
   let email;
   if (registration.status === "pending_email_confirmation") {
     const user = await first<UserRecord & { confirmation_email: string }>(
@@ -100,11 +95,6 @@ export async function resendRegistrationEmail(
       },
     ),
   );
-  try {
-    await db.batch(statements);
-  } catch (error) {
-    if (isRegistrationTransitionConflict(error)) throw registrationChangedError();
-    throw error;
-  }
+  await db.batch(statements);
   return { outboxId: email.outboxId };
 }

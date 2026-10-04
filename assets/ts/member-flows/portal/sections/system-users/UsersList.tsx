@@ -1,10 +1,16 @@
-import { ApiDataTable } from "../../../../components/ApiDataTable";
+import { useRef } from "preact/hooks";
+import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
+import { confirmAction } from "../../../../components/ConfirmDialog";
 import { PersonCell, personDisplayName } from "../../../../components/PersonCell";
-import { ButtonLink } from "../../../../ui/Button";
-import { fmtDate } from "../../ui";
+import { RowActions } from "../../../../ui/RowActions";
+import { patchJson } from "../../../../shared/api-client";
+import { fmtDate, toast } from "../../ui";
 import {
+  USER_ROLE_LABELS,
+  USER_ROLES,
   USER_TYPE_LABELS,
   USER_TYPE_VALUES,
+  userUpdateResponseSchema,
   usersListResponseSchema,
   type UserListItem,
 } from "../../../../../shared/schemas/user-management";
@@ -26,6 +32,11 @@ function filterOptions<Value extends string>(
   return [{ value: "", label: everything }, ...values.map((value) => ({ value, label: label(value) }))];
 }
 
+/** Only noteworthy roles get a label in a row; the default "user" stays quiet. */
+function roleLabel(role: string): string | null {
+  return role === "admin" || role === "guest" ? USER_ROLE_LABELS[role] : null;
+}
+
 /**
  * Who the person represents, as names: "Digitorus", "Entrust, HID + 2 more".
  * A name identifies which Ada this is; the count of identities it replaces
@@ -42,6 +53,42 @@ function representation(user: UserListItem): string {
 
 export function UsersList({ canWrite, canGrantAccess }: { canWrite: boolean; canGrantAccess: boolean }) {
   const [, navigate] = usePortalHashLocation();
+  const tableRef = useRef<ApiTableActions | null>(null);
+
+  async function updateRole(user: UserListItem, newRole: "admin" | "user"): Promise<void> {
+    const name = personDisplayName(user.first_name, user.last_name, user.email);
+    const confirmed = await confirmAction(
+      newRole === "admin"
+        ? {
+            title: `Make ${name} an administrator?`,
+            consequences: [
+              "They gain every administrative permission across the portal",
+              "The change takes effect on their next request",
+            ],
+            confirmLabel: "Grant administrator role",
+            tone: "primary",
+          }
+        : {
+            title: `Remove the administrator role from ${name}?`,
+            consequences: [
+              "They keep their account and any individually granted permissions",
+              "They lose the blanket administrative access immediately",
+            ],
+            confirmLabel: "Revoke administrator role",
+          },
+    );
+    if (!confirmed) return;
+    try {
+      await patchJson(`/api/v1/users/${encodeURIComponent(user.id)}`, { role: newRole }, userUpdateResponseSchema);
+      toast(
+        newRole === "admin" ? `${name} is now an administrator` : `Administrator role removed from ${name}`,
+        "success",
+      );
+      await tableRef.current?.reload();
+    } catch (error) {
+      toast((error as Error).message, "error");
+    }
+  }
 
   return (
     <ApiDataTable
@@ -52,17 +99,9 @@ export function UsersList({ canWrite, canGrantAccess }: { canWrite: boolean; can
       resolve={(data) => data.users}
       resolvePage={(data) => data.page}
       paginate
+      actionsRef={tableRef}
       searchPlaceholder="email or name"
       createAction={canWrite ? { label: "Create user", onSelect: () => navigate("/users/new") } : undefined}
-      toolbar={
-        canGrantAccess
-          ? () => (
-              <ButtonLink href={usePortalHashLocation.hrefs("/settings/access-control/people")} size="sm">
-                Manage access
-              </ButtonLink>
-            )
-          : undefined
-      }
       columns={[
         {
           header: "Person",
@@ -94,6 +133,17 @@ export function UsersList({ canWrite, canGrantAccess }: { canWrite: boolean; can
           },
         },
         {
+          header: "Role",
+          cell: (user) => roleLabel(user.role) ?? <span class="pk-muted">User</span>,
+          width: "fit",
+          filter: {
+            param: "role",
+            // A filter names a set, so the words are the plural of the role's
+            // own label rather than a second, independent list of them.
+            options: filterOptions(USER_ROLES, "All roles", (role) => `${USER_ROLE_LABELS[role]}s`),
+          },
+        },
+        {
           header: "Since",
           cell: (user) => fmtDate(user.created_at),
           // A date has a bounded length, so the column says that rather than
@@ -103,6 +153,33 @@ export function UsersList({ canWrite, canGrantAccess }: { canWrite: boolean; can
           // nothing in the row reading as the record's own data.
           width: "fit",
           sort: { asc: "created_at", desc: "-created_at", defaultDirection: "desc" },
+        },
+        {
+          header: "",
+          cell: (user) => (
+            <RowActions
+              subject={personDisplayName(user.first_name, user.last_name, user.email)}
+              actions={
+                canWrite && canGrantAccess
+                  ? user.role === "admin"
+                    ? [
+                        {
+                          id: "revoke-admin",
+                          label: "Revoke administrator role",
+                          onSelect: () => void updateRole(user, "user"),
+                        },
+                      ]
+                    : [
+                        {
+                          id: "grant-admin",
+                          label: "Grant administrator role",
+                          onSelect: () => void updateRole(user, "admin"),
+                        },
+                      ]
+                  : []
+              }
+            />
+          ),
         },
       ]}
       empty="No users found"

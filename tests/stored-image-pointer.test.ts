@@ -1,4 +1,3 @@
-import { administratorGrants } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
@@ -56,13 +55,7 @@ async function setup() {
   )
     .bind(organizationId)
     .run();
-  const actor: AuthAdmin = {
-    identityType: "user",
-    id: adminId,
-    email: "admin@pkic.org",
-    role: "admin",
-    grants: administratorGrants,
-  };
+  const actor: AuthAdmin = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" };
   return { actor, organizationId };
 }
 

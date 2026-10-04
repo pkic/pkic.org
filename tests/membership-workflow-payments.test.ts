@@ -1,4 +1,3 @@
-import { grantAdministrator } from "./helpers/administrator";
 import { prepareMembershipCategoryRename } from "../functions/_lib/services/membership/category-renaming";
 import { membershipWorkflowProgress } from "../functions/_lib/services/membership/workflows/progress";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -143,7 +142,6 @@ it("reconciles a paid membership checkout manually without a webhook secret", as
   )
     .bind(adminId)
     .run();
-  await grantAdministrator(env.DB, adminId);
   const token = await createAdminSession(env.DB, adminId, "membership-fee-sync");
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(prepared.session)));
 
@@ -207,7 +205,6 @@ it("records an idempotent offline membership settlement and advances the same wo
   )
     .bind(adminId)
     .run();
-  await grantAdministrator(env.DB, adminId);
   const token = await createAdminSession(env.DB, adminId, "offline-membership-settlement");
   const body = {
     idempotencyKey: crypto.randomUUID(),

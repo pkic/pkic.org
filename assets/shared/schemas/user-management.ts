@@ -6,28 +6,47 @@
  * canonical listing endpoint.
  */
 import { z } from "zod";
-import { userIdParamsSchema, successResponseSchema } from "./api-common";
+import { userIdParamsSchema, successResponseSchema, trimmedString } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { memberStatusSchema, membershipCategorySchema } from "./membership-categories";
 import { linksSchema } from "./links";
 import { groupLabelSchema } from "./groups";
 import { httpOrSameOriginUrlSchema } from "./urls";
 
+export const USER_ROLES = ["admin", "user", "guest"] as const;
+export const userRoleValueSchema = z.enum(USER_ROLES);
+export type UserRoleValue = z.infer<typeof userRoleValueSchema>;
+
+/**
+ * The words each role is offered and shown under.
+ *
+ * They live beside the vocabulary, the way `EVENT_REGISTRATION_POLICY_LABELS`
+ * does, so a surface that offers the roles cannot offer a different set than
+ * the one this contract accepts — the shape issue #24 reported. Being a total
+ * `Record`, a role added above is a compile error here rather than a choice
+ * that quietly stops being offered.
+ */
+export const USER_ROLE_LABELS: Record<UserRoleValue, string> = {
+  admin: "Administrator",
+  user: "User",
+  guest: "Guest",
+};
+
 export const userUpdateSchema = z
   .object({
+    role: userRoleValueSchema.optional(),
     active: z.boolean().optional(),
     email: z.string().trim().toLowerCase().email().optional(),
     firstName: z.string().trim().max(80).nullable().optional(),
     lastName: z.string().trim().max(120).nullable().optional(),
     preferredName: z.string().trim().max(80).nullable().optional(),
   })
-  .strict()
   .refine((value) => Object.values(value).some((field) => field !== undefined), {
     message: "At least one field must be provided",
   });
 
 /** Allowlisted sort columns for GET /api/v1/users — unqualified, matching the route's SELECT-list aliases. */
-export const USERS_SORT_COLUMNS = ["last_name", "email", "created_at"] as const;
+export const USERS_SORT_COLUMNS = ["last_name", "email", "role", "created_at"] as const;
 
 /**
  * GET /api/v1/users `type` filter — computed from membership and the
@@ -46,6 +65,11 @@ export const USER_TYPE_LABELS: Record<UserTypeValue, string> = {
 };
 
 export const usersListQuerySchema = listQuerySchema(USERS_SORT_COLUMNS).extend({
+  // `role` is a passthrough filter against users.role — never validated
+  // against a fixed vocabulary by the pre-chanfana handler (unlike `type`
+  // below), so an unrecognized value simply matches zero rows rather than
+  // 400ing; preserved as-is rather than tightened into an enum here.
+  role: trimmedString(1, 100).optional(),
   type: userTypeValueSchema,
 });
 export type UsersListQuery = z.infer<typeof usersListQuerySchema>;
@@ -55,6 +79,7 @@ const userResponseBaseSchema = z.object({
   email: z.string(),
   first_name: z.string().nullable(),
   last_name: z.string().nullable(),
+  role: userRoleValueSchema,
   created_at: z.string(),
   headshotUrl: httpOrSameOriginUrlSchema.nullable(),
 });
@@ -144,7 +169,7 @@ export const userDetailRouteSchema = {
 };
 /** PATCH /api/v1/users/:userId keeps the command acknowledgement and returns the edited user. */
 export const userUpdateResponseSchema = successResponseSchema.extend({
-  user: userDetailSchema.pick({ id: true, email: true, active: true }).extend({
+  user: userDetailSchema.pick({ id: true, email: true, role: true, active: true }).extend({
     isEcMember: z.boolean(),
   }),
 });
@@ -168,7 +193,7 @@ export const userUpdateRouteSchema = {
   tags: ["Users"],
   summary: "Update a user",
   description:
-    "Updates profile fields with users:write. Changing the primary email address additionally requires access:grant.",
+    "Updates profile fields with users:write. Changing the primary email address or legacy role additionally requires access:grant.",
   "x-pkic-auth": { required: true, scopes: ["users:write"] },
   request: {
     params: userIdParamsSchema,

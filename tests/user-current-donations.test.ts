@@ -1,4 +1,3 @@
-import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { currentUserDonationsListResponseSchema } from "../assets/shared/schemas/current-user-donations";
@@ -73,7 +72,7 @@ describe("GET /api/v1/users/current/donations", () => {
   it("allows a staff-only identity with no member capacity to read its own donations", async () => {
     const email = `current-donations-staff-${crypto.randomUUID()}@example.test`;
     const staffOnlyUserId = await insertUser(env.DB, email);
-    await grantAdministrator(env.DB, staffOnlyUserId);
+    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(staffOnlyUserId).run();
     await verifyPrimaryEmail(staffOnlyUserId);
     const donationId = await insertDonation(email);
     const token = await createMemberSession(env.DB, staffOnlyUserId, `current-donations-staff-${crypto.randomUUID()}`);

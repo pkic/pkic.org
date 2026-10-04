@@ -1,4 +1,3 @@
-import { administratorGrants } from "./helpers/administrator";
 /**
  * sponsorship-scheduled-jobs.test.ts — "Renewal Reminders",
  * Direct unit tests of runSponsorshipDueWork against env.DB,
@@ -78,7 +77,6 @@ describe("Sponsorship renewal reminders & auto-lapse", () => {
       identityType: "user",
       email: "admin@pkic.org",
       role: "admin",
-      grants: administratorGrants,
     };
 
     organizationId = crypto.randomUUID();

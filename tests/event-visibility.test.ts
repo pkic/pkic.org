@@ -1,4 +1,3 @@
-import { administratorGrants, grantAdministrator } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
@@ -143,13 +142,11 @@ describe("event audience visibility", () => {
     )
       .bind(adminUserId)
       .run();
-    await grantAdministrator(env.DB, adminUserId);
     const admin: UserBackedAuthAdmin = {
       identityType: "user",
       id: adminUserId,
       email: "event-visibility-admin@example.test",
       role: "admin",
-      grants: administratorGrants,
     };
     const group = await createGroup(env.DB, admin, {
       typeKey: "working_group",

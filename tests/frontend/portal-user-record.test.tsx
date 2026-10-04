@@ -42,6 +42,7 @@ const user: UserDetail = {
   first_name: "Ada",
   last_name: "Lovelace",
   preferred_name: null,
+  role: "user",
   active: true,
   isEcMember: false,
   headshotUrl: null,
@@ -137,8 +138,8 @@ describe("portal System Users detail record", () => {
     // The address is not here: it answers "how do I reach this person", which
     // is the Contact panel's question, and a fact stated in two panels on one
     // page is a fact the reader has to check for agreement.
-    expect(terms(list!)).toEqual(["First name", "Last name", "Preferred name", "Active", "Created"]);
-    expect(list!.querySelectorAll(":scope > dd")).toHaveLength(5);
+    expect(terms(list!)).toEqual(["First name", "Last name", "Preferred name", "Role", "Active", "Created"]);
+    expect(list!.querySelectorAll(":scope > dd")).toHaveLength(6);
     // An absent value is still a value, so the pairing never goes out of step.
     expect([...list!.querySelectorAll(":scope > dd")][2]?.textContent).toBe("—");
 
@@ -389,6 +390,7 @@ describe("portal System Users anonymize confirmation", () => {
       first_name: "Dana",
       last_name: "Yu",
       preferred_name: null,
+      role: "user",
       active: true,
       isEcMember: false,
       headshotUrl: null,

@@ -56,6 +56,7 @@ const subscriber = {
     first_name: "Ada",
     last_name: "Lovelace",
     organization_name: "Analytical Engines",
+    headshotUrl: "/api/v1/users/example/headshots/portrait.png",
   },
   eligible: true,
   defaultSubscribed: true,
@@ -87,6 +88,12 @@ async function settle(): Promise<void> {
 function stubApi(
   list: MailingList,
   write: (url: URL, method: string) => Response = () => json({ mailingList: list }),
+  readSubscribers: () => Response | Promise<Response> = () =>
+    json({
+      subscribers: [subscriber],
+      representation: { people: { count: 1 }, organizations: { count: 1 } },
+      page: PAGE,
+    }),
 ): Array<{ url: URL; method: string; body?: unknown }> {
   const calls: Array<{ url: URL; method: string; body?: unknown }> = [];
   vi.stubGlobal(
@@ -97,7 +104,7 @@ function stubApi(
       const method = init.method ?? "GET";
       calls.push({ url, method, body: typeof init.body === "string" ? JSON.parse(init.body) : undefined });
       if (method === "GET" && url.pathname.endsWith("/subscribers")) {
-        return json({ subscribers: [subscriber], page: PAGE });
+        return readSubscribers();
       }
       if (method === "GET" && url.pathname.endsWith("/grants")) return json({ grants: [], page: PAGE });
       if (method === "GET" && url.pathname === "/api/v1/groups") return json({ groups: [], page: PAGE });
@@ -145,6 +152,57 @@ afterEach(() => {
 });
 
 describe("group mailing-list record", () => {
+  it.each(["refresh", "return to Subscribers"])(
+    "clears representation during %s and restores it only after success",
+    async (action) => {
+      const payload = (count: number) =>
+        json({
+          subscribers: [subscriber],
+          page: PAGE,
+          representation: { people: { count }, organizations: { count } },
+        });
+      let respond: () => Response | Promise<Response> = () => payload(7);
+      stubApi(activeList, undefined, () => respond());
+      const record = (initialTab?: string) => (
+        <GroupMailingListRecord groupId={GROUP_ID} listId={LIST_ID} initialTab={initialTab} onLeave={() => {}} />
+      );
+      const container = mount(record());
+      await settle();
+      await settle();
+      const summary = () => container.querySelector('[aria-label="Representation"]')!;
+      expect(summary().textContent).toContain("People7");
+
+      let finish!: (response: Response) => void;
+      respond = () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve;
+        });
+      if (action === "refresh") {
+        await act(() => buttonNamed(container, "Refresh").click());
+      } else {
+        await act(() => render(record("settings"), container));
+        await settle();
+        await act(() => render(record("subscribers"), container));
+      }
+      await settle();
+      expect(summary().textContent).toContain("Loading representation");
+      expect(summary().querySelectorAll(".pk-stat-card")).toHaveLength(0);
+      await act(async () =>
+        finish(json({ error: { code: "SERVER_ERROR", message: "Subscriber reload failed" } }, 500)),
+      );
+      await settle();
+      expect(container.textContent).toContain("Subscriber reload failed");
+      expect(summary().querySelectorAll(".pk-stat-card")).toHaveLength(0);
+
+      respond = () => payload(2);
+      await act(() => buttonNamed(container, "Refresh").click());
+      await settle();
+      await settle();
+      expect(summary().textContent).toContain("People2");
+      expect(summary().textContent).not.toContain("Loading representation");
+    },
+  );
+
   it("opens on the subscribers, and gives every tab its own address", async () => {
     stubApi(activeList);
     const container = mount(<GroupMailingListRecord groupId={GROUP_ID} listId={LIST_ID} onLeave={() => {}} />);
@@ -170,7 +228,15 @@ describe("group mailing-list record", () => {
     // Without a tab segment the page opens on the people the list reaches.
     expect(container.querySelector('section[aria-label="Architecture discussion subscribers"]')).not.toBeNull();
     expect(container.textContent).toContain("Ada Lovelace");
+    const portrait = container.querySelector<HTMLImageElement>(".pk-person-cell img");
+    expect(portrait?.getAttribute("src")).toBe(subscriber.user.headshotUrl);
     expect(container.textContent).toContain("Subscribed");
+    const representation = container.querySelector('[aria-label="Representation"]');
+    expect(representation?.textContent).toContain("Subscribed people across the whole list");
+    expect([...representation!.querySelectorAll(".pk-stat-card")].map((card) => card.textContent)).toEqual([
+      "People1",
+      "Organizations1",
+    ]);
 
     // Choosing a tab navigates rather than swapping a panel in place.
     await act(() => {

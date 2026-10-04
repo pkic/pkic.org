@@ -35,7 +35,7 @@ describe("initial admin seed SQL", () => {
 
   it("writes every address exactly once, across the chunks", () => {
     const emails = workerAdminEmails();
-    const statements = insertStatements(emails).filter((statement) => statement.startsWith("INSERT INTO users "));
+    const statements = insertStatements(emails);
     expect(statements).toHaveLength(Math.ceil(emails.length / ROWS_PER_STATEMENT));
 
     const written = statements.flatMap((statement) => [...statement.matchAll(/'([^']+@pkic\.org)'/g)].map((m) => m[1]));
@@ -45,12 +45,8 @@ describe("initial admin seed SQL", () => {
   });
 
   it("upserts rather than failing on a database that already has the pool", () => {
-    const [user, assignment] = insertStatements(["admin@pkic.org"]);
-    expect(user).toContain("ON CONFLICT(email) DO UPDATE SET");
-    expect(user).not.toContain("role = 'admin'");
-    expect(assignment).toContain("INSERT INTO user_roles");
-    expect(assignment).toContain("'role-admin'");
-    expect(assignment).toContain("NOT EXISTS");
-    expect(assignment).toContain("ur.revoked_at IS NULL");
+    for (const statement of insertStatements(["admin@pkic.org"])) {
+      expect(statement).toContain("ON CONFLICT(email) DO UPDATE SET");
+    }
   });
 });

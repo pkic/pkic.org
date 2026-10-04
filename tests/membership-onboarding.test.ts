@@ -1,4 +1,3 @@
-import { administratorGrants } from "./helpers/administrator";
 import { pinReviewedStaffWorkflow } from "./helpers/membership-workflows";
 /**
  * membership-onboarding.test.ts
@@ -94,13 +93,7 @@ describe("Post-approval onboarding", () => {
     await seedEventAndAdmin(env.DB);
     const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'"))[0];
     adminId = adminRow.id;
-    adminActor = {
-      identityType: "user",
-      id: adminId,
-      email: "admin@pkic.org",
-      role: "admin",
-      grants: administratorGrants,
-    };
+    adminActor = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" };
     adminToken = await createAdminSession(env.DB, adminId, "onboarding-admin-token");
     await seedWorkingGroup("pqc", "pqc@lists.pkic.org");
     await seedWorkingGroup("ca", "ca@lists.pkic.org");

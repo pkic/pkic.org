@@ -1,4 +1,3 @@
-import { administratorGrants } from "./helpers/administrator-grants";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { userCreateResponseSchema } from "../assets/shared/schemas/user-create";
@@ -57,16 +56,9 @@ describe("staff user creation", () => {
     expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'user_created'")).toHaveLength(1);
   });
   it("rolls back when user-write authority is removed before commit", async () => {
-    const actor = createUserBackedAuthAdmin({
-      id: actorId,
-      email: "admin@pkic.org",
-      role: "user",
-      grants: administratorGrants,
-    });
+    const actor = createUserBackedAuthAdmin({ id: actorId, email: "admin@pkic.org", role: "admin" });
     const raced = mutateBeforeNextBatch(env.DB, async () => {
-      await env.DB.prepare("UPDATE user_roles SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE user_id = ?")
-        .bind(actorId)
-        .run();
+      await env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(actorId).run();
     });
     await expect(createUser(raced, actor, { email: "blocked@example.test" })).rejects.toMatchObject({
       code: "USER_AUTHORIZATION_CHANGED",

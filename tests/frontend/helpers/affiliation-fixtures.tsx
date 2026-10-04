@@ -61,6 +61,7 @@ export function userWith(identities: UserMembership[]): UserDetail {
     first_name: "Test",
     last_name: "User",
     preferred_name: null,
+    role: "user",
     active: true,
     isEcMember: false,
     headshotUrl: null,

@@ -1,4 +1,3 @@
-import { administratorGrants } from "./helpers/administrator";
 import { describe, expect, it, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import type { AuthAdmin, DatabaseLike } from "../functions/_lib/types";
@@ -793,7 +792,7 @@ describe("admin proposal endpoints", () => {
     await expect(
       editProposalSpeaker(
         racingDb,
-        { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin", grants: administratorGrants },
+        { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
         proposalId,
         speakerId,
         { biography: "This stale biography must not be stored.", role: "moderator" },

@@ -436,9 +436,7 @@ describe("membership application form definition", () => {
       grants: [],
     });
     const racedDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE user_roles SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE user_id = ?")
-        .bind(adminId)
-        .run(),
+      env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(adminId).run(),
     );
 
     await expect(

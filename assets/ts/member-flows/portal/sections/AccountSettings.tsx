@@ -121,7 +121,9 @@ function AccessSummaryCard({ session }: { session: PortalSession }) {
         {staff && (
           <div>
             <h6 class="pk-small pk-strong pk-muted">Permissions</h6>
-            {staff.grants.length === 0 ? (
+            {staff.role === "admin" ? (
+              <p class="pk-small">Administrator — this account holds every administrative permission.</p>
+            ) : staff.grants.length === 0 ? (
               <p class="pk-small">No individual permissions are granted to this account.</p>
             ) : (
               <ul class="pk-stack pk-stack--tight">

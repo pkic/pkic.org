@@ -3,6 +3,8 @@
  */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { runRowAction } from "./helpers/data-table";
+import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { openProfileEditor, signInToPortal } from "./helpers/portal-auth";
 import { approveMemberThroughReview, uniqueSuffix } from "./helpers/membership";
 import { agreeToHeadshotTerms, chooseHeadshotThroughUploadButton } from "./helpers/headshot-upload";
@@ -138,7 +140,7 @@ test("permitted staff filter, sort, and manage columns in the users list", async
   // it belongs to — "Members" is the filter menu's option label for that
   // category, not text the cell itself ever renders.
   await expect(row).toContainText(organizationName);
-  await expect(page.getByRole("columnheader", { name: "Role", exact: true })).toHaveCount(0);
+  await expect(row.getByText("User", { exact: true })).toBeVisible();
 
   // "Represents" column filter — narrowing to "Members" still shows the row;
   // narrowing to "Event attendees" hides it.
@@ -155,6 +157,21 @@ test("permitted staff filter, sort, and manage columns in the users list", async
   await page.getByRole("menuitemradio", { name: "Everyone" }).click();
   await expect(row).toBeVisible();
 
+  // "Role" column filter — narrowing to "Users" still shows the row (its
+  // role is the plain default); narrowing to "Administrators" hides it.
+  await page.getByRole("button", { name: "Role column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
+  await page.getByRole("menuitemradio", { name: "Users" }).click();
+  await expect(row).toBeVisible();
+  await page.getByRole("button", { name: "Role column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
+  await page.getByRole("menuitemradio", { name: "Administrators" }).click();
+  await expect(row).toHaveCount(0);
+  await page.getByRole("button", { name: "Role column options" }).click();
+  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
+  await page.getByRole("menuitemradio", { name: "All roles" }).click();
+  await expect(row).toBeVisible();
+
   // Column visibility — hiding "Since" drops the column header and shows it
   // again once re-checked, without losing the row underneath it.
   await expect(page.getByRole("columnheader", { name: "Since" })).toBeVisible();
@@ -166,8 +183,102 @@ test("permitted staff filter, sort, and manage columns in the users list", async
   await page.getByRole("menuitemradio", { name: "Since" }).click();
   await expect(page.getByRole("columnheader", { name: "Since" })).toBeVisible();
 
-  await page.getByRole("link", { name: "Manage access", exact: true }).click();
-  await expect(page).toHaveURL(/#\/settings\/access-control/);
+  /*
+   * #36: a row's menu opens AT the "…" that opened it.
+   *
+   * Measured, not merely reached. Every assertion above finds its menu by
+   * role and passes wherever the popup happens to be drawn, which is why this
+   * survived being "fixed" twice: the popup was opening hundreds of pixels
+   * away — off the right of the viewport in a wide table — while every
+   * role-based assertion in the suite went on passing.
+   *
+   * The cause was a stacking rule on clickable rows that lifted the row's
+   * interactive children with `position: relative`, and named `[role="menu"]`
+   * among them. That is the popup, not the trigger, and the selector outranked
+   * `.pk-menu__popup { position: fixed }` — so the viewport coordinates the
+   * placement writes were read as offsets from the popup's static spot in the
+   * row. It only ever happened in tables whose rows activate something, which
+   * is what "not fixed in all tables" meant.
+   */
+  const trigger = row.getByRole("button", { name: /^Actions for/ });
+  await trigger.click();
+  const popup = page.getByRole("menu");
+  await expect(popup).toBeVisible();
+
+  const anchor = (await trigger.boundingBox())!;
+  const margin = 8;
+  /*
+   * End-aligned with the trigger, or held at the viewport's margin when the
+   * trigger has been scrolled past the right edge — that is the whole policy,
+   * stated rather than approximated. A tolerance loose enough to be safe is
+   * loose enough to accept a menu nobody would call anchored.
+   */
+  const expectedRight = Math.min(anchor.x + anchor.width, (page.viewportSize()?.width ?? 1280) - margin);
+
+  const read = () =>
+    popup.evaluate(
+      (menu, viewport) => {
+        const rect = menu.getBoundingClientRect();
+        return {
+          position: getComputedStyle(menu).position,
+          top: rect.top,
+          right: rect.right,
+          insideViewport:
+            rect.left >= 0 && rect.top >= 0 && rect.right <= viewport.width && rect.bottom <= viewport.height,
+        };
+      },
+      page.viewportSize() ?? { width: 1280, height: 720 },
+    );
+
+  /*
+   * Polled, because settling is the behaviour under test: the popup places
+   * itself before paint and corrects on the next frame once fonts and column
+   * widths stop moving. What a reader must never see is a menu that stays put
+   * in the wrong place.
+   */
+  await expect.poll(async () => (await read()).right, { timeout: 5_000 }).toBeCloseTo(expectedRight, 0);
+
+  const placement = await read();
+  // It stays out of the row's stacking context, which is the whole reason it
+  // can hang over a table with `overflow: auto`.
+  expect(placement.position).toBe("fixed");
+  // Wholly on screen: the failure mode was a menu drawn where nobody could
+  // reach it.
+  expect(placement.insideViewport).toBe(true);
+  // And hanging from its own trigger rather than from somewhere else on the page.
+  expect(Math.abs(placement.top - (anchor.y + anchor.height))).toBeLessThan(12);
+});
+
+test("permitted staff grant and revoke the administrator role from a user list row", async ({ page }) => {
+  const suffix = crypto.randomUUID().slice(0, 8);
+  await signInToPortal(page, e2eAdminEmail("portal-users-role-management"));
+  const { email } = await createNonAdminUser(page, suffix);
+
+  await page.goto("/portal/#/users");
+  const search = page.getByPlaceholder("email or name");
+  await search.fill(email);
+  await search.press("Enter");
+  const row = page.locator("tr").filter({ hasText: email });
+  await expect(row).toBeVisible();
+
+  const grantResponse = page.waitForResponse(
+    (response) =>
+      /^\/api\/v1\/users\/[^/]+$/.test(new URL(response.url()).pathname) && response.request().method() === "PATCH",
+  );
+  await runRowAction(page, row, "Grant administrator role");
+  await acceptConfirmDialog(page, "Grant administrator role");
+  expect((await grantResponse).status()).toBe(200);
+  await expect(row.getByText("Administrator", { exact: true })).toBeVisible();
+
+  const revokeResponse = page.waitForResponse(
+    (response) =>
+      /^\/api\/v1\/users\/[^/]+$/.test(new URL(response.url()).pathname) && response.request().method() === "PATCH",
+  );
+  await runRowAction(page, row, "Revoke administrator role");
+  await acceptConfirmDialog(page, "Revoke administrator role");
+  expect((await revokeResponse).status()).toBe(200);
+  await expect(row.getByText("Administrator", { exact: true })).toHaveCount(0);
+  await expect(row.getByText("User", { exact: true })).toBeVisible();
 });
 
 /*

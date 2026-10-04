@@ -1,5 +1,3 @@
-import { administratorGrants } from "./helpers/administrator";
-import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createGroupManagedEvent } from "../functions/_lib/services/events/group-management";
@@ -48,7 +46,7 @@ interface Fixture {
 async function user(emailPrefix: string, role = "user"): Promise<{ id: string; email: string }> {
   const email = emailPrefix + "-" + crypto.randomUUID() + "@example.test";
   const id = await insertUser(env.DB, email);
-  if (role === "admin") await grantAdministrator(env.DB, id);
+  await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
   return { id, email };
 }
 
@@ -63,7 +61,7 @@ async function grant(userId: string, eventId: string, permission: string): Promi
 
 async function setupFixture(): Promise<Fixture> {
   const administrator = await user("proposal-route-administrator", "admin");
-  const adminActor: AuthAdmin = { identityType: "user", ...administrator, role: "admin", grants: administratorGrants };
+  const adminActor: AuthAdmin = { identityType: "user", ...administrator, role: "admin" };
   const owner = await createGroup(env.DB, adminActor, {
     typeKey: "working_group",
     name: "Proposal route owner " + crypto.randomUUID(),

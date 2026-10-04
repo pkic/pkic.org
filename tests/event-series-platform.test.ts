@@ -1,4 +1,3 @@
-import { grantAdministrator } from "./helpers/administrator";
 import { configureMeetingOccurrence } from "./helpers/meeting-occurrence";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -23,8 +22,8 @@ const GROUP_ID = "20000000-0000-4000-8000-000000000003";
 
 async function insertAdmin(): Promise<AuthAdmin> {
   const id = await insertUser(env.DB, `meeting-admin-${crypto.randomUUID()}@example.test`);
-  const grants = await grantAdministrator(env.DB, id);
-  return { identityType: "user", id, email: "meeting-admin@example.test", role: "user", grants };
+  await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(id).run();
+  return { identityType: "user", id, email: "meeting-admin@example.test", role: "admin" };
 }
 
 async function addGroupMember(): Promise<string> {

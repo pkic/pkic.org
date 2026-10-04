@@ -1,4 +1,3 @@
-import { hasPermission } from "../../auth/permissions";
 import type { UserSessionResult } from "../../auth/user-session";
 import { activeEffectiveInviteExpirySql, effectiveInviteExpirySql } from "../../invite-validity";
 
@@ -10,7 +9,7 @@ export interface EventAudienceViewer {
 export function eventAudienceViewer(session: UserSessionResult | null): EventAudienceViewer {
   return {
     userId: session?.identity.id ?? null,
-    canReadAll: Boolean(session?.staff && hasPermission(session.staff, "events:read")),
+    canReadAll: session?.staff?.role === "admin" || false,
   };
 }
 

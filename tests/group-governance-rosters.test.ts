@@ -1,4 +1,3 @@
-import { administratorGrants, grantAdministrator } from "./helpers/administrator";
 /**
  * Governance rosters on ordinary groups: dated seats, leadership
  * terms with titles and tenures, and the public directory that renders the
@@ -44,7 +43,7 @@ async function okJson(response: Response): Promise<unknown> {
 
 async function seedAdmin(): Promise<{ id: string; token: string }> {
   const id = await insertUser(env.DB, `governance-admin-${crypto.randomUUID()}@example.test`);
-  await grantAdministrator(env.DB, id);
+  await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(id).run();
   return { id, token: await createAdminSession(env.DB, id, `governance-admin-${crypto.randomUUID()}`) };
 }
 
@@ -256,7 +255,7 @@ describe("governance rosters on groups", () => {
       // concatenation would offer "Lead" twice and rank it third.
       const taskForce = await createGroup(
         env.DB,
-        { identityType: "user", id: admin.id, email: "", role: "admin", grants: administratorGrants },
+        { identityType: "user", id: admin.id, email: "", role: "admin" },
         { typeKey: "task_force", name: "Interop Task Force", slug: "interop-task-force" },
       );
       const leadership = groupLeadershipListResponseSchema.parse(
@@ -638,7 +637,7 @@ describe("governance rosters on groups", () => {
     const admin = await seedAdmin();
     const group = await createGroup(
       env.DB,
-      { identityType: "user", id: admin.id, email: "", role: "admin", grants: administratorGrants },
+      { identityType: "user", id: admin.id, email: "", role: "admin" },
       {
         typeKey: "board",
         name: "Public Directory Board",
@@ -743,7 +742,7 @@ describe("governance rosters on groups", () => {
     const admin = await seedAdmin();
     const group = await createGroup(
       env.DB,
-      { identityType: "user", id: admin.id, email: "", role: "admin", grants: administratorGrants },
+      { identityType: "user", id: admin.id, email: "", role: "admin" },
       {
         typeKey: "board",
         name: "Category Loss Board",

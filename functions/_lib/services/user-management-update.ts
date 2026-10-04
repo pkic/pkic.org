@@ -1,8 +1,8 @@
 import type { z } from "zod";
 import { executiveCouncilSeatSql } from "../auth/executive-council";
 import { userUpdateSchema } from "../../../assets/shared/schemas/user-management";
-import { first } from "../db/queries";
-import { requirePermission } from "../auth/permissions";
+import { all, first } from "../db/queries";
+import { hasPermission, requirePermission } from "../auth/permissions";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../types";
 import { normalizeEmail } from "../validation";
@@ -24,6 +24,7 @@ interface UserUpdateRow {
   first_name: string | null;
   last_name: string | null;
   preferred_name: string | null;
+  role: string;
   active: number;
   is_ec_member: number;
   pii_redacted_at: string | null;
@@ -57,15 +58,59 @@ function changedProfileFields(user: UserUpdateRow, patch: UserProfilePatch): str
     .map(([inputKey]) => inputKey);
 }
 
+/**
+ * The legacy users.role column is still an authorization boundary: role=admin
+ * is the global permission bypass. Keep its mutation subject to the same
+ * permission-bundle containment rule as assigning role-admin through
+ * user_roles, rather than allowing users:write to manufacture access:grant.
+ */
+async function requireLegacyRoleChangeAuthorization(
+  db: DatabaseLike,
+  actor: UserBackedAuthAdmin,
+  targetUserId: string,
+  currentRole: string,
+  nextRole: string,
+): Promise<void> {
+  if (currentRole === nextRole) return;
+  if (actor.identityType === "user" && actor.id === targetUserId) {
+    throw new AppError(403, "FORBIDDEN", "You cannot change your own account role");
+  }
+
+  requirePermission(actor, "access:grant");
+
+  // role=admin is a global all-permissions role. Match assignUserRole's
+  // containment check so a scoped staff actor cannot grant a bundle broader
+  // than the permissions they themselves hold.
+  if (nextRole !== "admin") return;
+  const bundledPermissions = await all<{ permission: string }>(
+    db,
+    `SELECT rp.permission
+       FROM role_permissions rp
+       JOIN roles r ON r.id = rp.role_id
+      WHERE r.name = 'admin'`,
+  );
+  if (bundledPermissions.length === 0) {
+    throw new AppError(500, "ROLE_CONFIGURATION_INVALID", "The admin role has no configured permission bundle");
+  }
+  for (const { permission } of bundledPermissions) {
+    if (!hasPermission(actor, permission)) {
+      throw new AppError(403, "PERMISSION_REQUIRED", `Cannot grant the admin role without holding: ${permission}`);
+    }
+  }
+}
+
 /** Validates and commits an user update and its audit row atomically. */
 export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, userId: string, input: UserUpdateInput) {
+  if (userId === actor.id && input.role !== undefined && input.role !== "admin") {
+    throw new AppError(403, "FORBIDDEN", "You cannot demote your own account");
+  }
   if (userId === actor.id && input.active === false) {
     throw new AppError(403, "FORBIDDEN", "You cannot deactivate your own account");
   }
   const user = await first<UserUpdateRow>(
     db,
     `SELECT id, email, first_name, last_name, preferred_name,
-            active, ${executiveCouncilSeatSql("users.id")} AS is_ec_member, pii_redacted_at,
+            role, active, ${executiveCouncilSeatSql("users.id")} AS is_ec_member, pii_redacted_at,
             merged_into_user_id, pending_email, pending_email_change_registration_id, updated_at
      FROM users WHERE id = ?`,
     [userId],
@@ -77,6 +122,9 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
   if (user.merged_into_user_id) {
     throw new AppError(409, "IDENTITY_RETIRED", "A previously merged account cannot be modified or reactivated");
   }
+
+  const role = input.role ?? user.role;
+  await requireLegacyRoleChangeAuthorization(db, actor, user.id, user.role, role);
 
   let email = user.email;
   let promotedSecondaryEmail: string | null = null;
@@ -108,10 +156,11 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
   const changedFields = [
     ...(email !== user.email ? ["email"] : []),
     ...profileFields,
+    ...(input.role !== undefined && role !== user.role ? ["role"] : []),
     ...(input.active !== undefined && active !== Boolean(user.active) ? ["active"] : []),
   ];
   if (changedFields.length === 0) {
-    return { id: user.id, email, active, isEcMember };
+    return { id: user.id, email, role, active, isEcMember };
   }
   const statements: StatementLike[] = [];
   const at = new Date().toISOString();
@@ -147,7 +196,7 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
     db
       .prepare(
         `UPDATE users
-         SET email = ?, normalized_email = ?, active = ?,
+         SET email = ?, normalized_email = ?, role = ?, active = ?,
              pending_email = CASE WHEN ? = 1 THEN NULL ELSE pending_email END,
              pending_email_expires_at = CASE WHEN ? = 1 THEN NULL ELSE pending_email_expires_at END,
              pending_email_change_registration_id = CASE
@@ -161,6 +210,7 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
       .bind(
         email,
         normalizeEmail(email),
+        role,
         active ? 1 : 0,
         clearPendingEmailChange ? 1 : 0,
         clearPendingEmailChange ? 1 : 0,
@@ -171,6 +221,7 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
       ),
     prepareAuditLogAfterOneChange(db, "admin", actor.id, "user_updated", "user", user.id, {
       changedFields,
+      ...(role !== user.role ? { role: { from: user.role, to: role } } : {}),
       ...(active !== Boolean(user.active) ? { active: { from: Boolean(user.active), to: active } } : {}),
     }),
   );
@@ -179,7 +230,7 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
   const changingPrimaryEmail = email !== user.email;
   const authorizedDb = authorizedUserMutationDb(db, actor, [
     "users:write",
-    ...(changingPrimaryEmail ? (["access:grant"] as const) : []),
+    ...(role !== user.role || changingPrimaryEmail ? (["access:grant"] as const) : []),
   ]);
   if (deactivating || changingPrimaryEmail) {
     // Deactivation and canonical login changes share one credential-revocation
@@ -222,5 +273,5 @@ export async function updateUser(db: DatabaseLike, actor: UserBackedAuthAdmin, u
     }
     throw new AppError(409, "USER_UPDATE_CONFLICT", "The user changed while this update was being prepared");
   }
-  return { id: user.id, email, active, isEcMember };
+  return { id: user.id, email, role, active, isEcMember };
 }

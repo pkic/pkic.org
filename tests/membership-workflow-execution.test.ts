@@ -1,4 +1,3 @@
-import { administratorGrants } from "./helpers/administrator";
 import { insertUser } from "./helpers/membership";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
 import { recordMembershipObjection } from "../functions/_lib/services/membership/workflows/objections";
@@ -149,13 +148,7 @@ it("requires an authorized staff review, a sent notice and a full window, then r
     applicationId,
     {
       userId: admin.id,
-      staff: {
-        identityType: "user",
-        id: admin.id,
-        email: "admin@pkic.org",
-        role: "admin",
-        grants: administratorGrants,
-      },
+      staff: { identityType: "user", id: admin.id, email: "admin@pkic.org", role: "admin" },
     },
     {
       expectedRevision: review.revision,

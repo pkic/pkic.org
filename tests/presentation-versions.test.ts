@@ -1,4 +1,3 @@
-import { administratorGrants } from "./helpers/administrator";
 /**
  * presentation-versions.test.ts
  *
@@ -207,13 +206,7 @@ async function seed() {
   // Accept the proposal so uploads are allowed.
   await finalizeProposalDecision(env.DB, {
     proposalId: proposal.id,
-    actor: {
-      identityType: "user",
-      id: adminRow.id,
-      email: "admin@pkic.org",
-      role: "admin",
-      grants: administratorGrants,
-    },
+    actor: { identityType: "user", id: adminRow.id, email: "admin@pkic.org", role: "admin" },
     finalStatus: "accepted",
     minReviewsRequired: 0,
   });
@@ -774,13 +767,7 @@ describe("presentation versioning", () => {
     });
     await finalizeProposalDecision(env.DB, {
       proposalId: secondProposal.id,
-      actor: {
-        identityType: "user",
-        id: adminUserId,
-        email: "admin@pkic.org",
-        role: "admin",
-        grants: administratorGrants,
-      },
+      actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });

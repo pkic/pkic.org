@@ -1,4 +1,3 @@
-import { GroupEventRegistrationNotificationsCreate } from "./[groupId]/events/[eventId]/registration-notifications";
 import {
   MailingListSyncGet,
   MailingListSyncUpdate,
@@ -179,10 +178,6 @@ openapi.post("/:groupId/events/:eventId/registrations/promotions", GroupEventReg
 openapi.get("/:groupId/events/:eventId/registrations/exports", GroupEventRegistrationExportGet);
 openapi.get("/:groupId/events/:eventId/registrations/:registrationId", GroupEventRegistrationDetailGet);
 openapi.patch("/:groupId/events/:eventId/registrations/:registrationId", GroupEventRegistrationManagerUpdate);
-openapi.post(
-  "/:groupId/events/:eventId/registrations/:registrationId/notifications",
-  GroupEventRegistrationNotificationsCreate,
-);
 openapi.patch(
   "/:groupId/events/:eventId/registrations/:registrationId/day-attendance",
   GroupEventRegistrationDayAttendancePatch,

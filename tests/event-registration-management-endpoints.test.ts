@@ -131,61 +131,6 @@ describe("canonical event registration management", () => {
     expect(user.first_name).toBe("Test");
   });
 
-  it.each(["pending_email_confirmation", "registered"] as const)("resends the email for %s", async (status) => {
-    const fixture = await registrationFixture();
-    await env.DB.prepare("UPDATE registrations SET status = ? WHERE id = ?").bind(status, fixture.registrationId).run();
-    const response = await callApi(
-      `/api/v1/events/pqc-2026/registrations/${fixture.registrationId}/notifications`,
-      await adminToken(),
-      {
-        method: "POST",
-        body: JSON.stringify({ type: "confirmation" }),
-      },
-    );
-    expect(response.status, await response.clone().text()).toBe(200);
-    const messages = await queryAll<{ template_key: string }>(
-      env.DB,
-      "SELECT template_key FROM email_outbox WHERE recipient_user_id = ?",
-      [fixture.userId],
-    );
-    expect(messages.at(-1)?.template_key).toBe(
-      status === "registered" ? "registration_confirmed" : "registration_confirm_email",
-    );
-  });
-
-  it("does not queue confirmation when the registration is canceled during resend", async () => {
-    const fixture = await registrationFixture();
-    const token = await adminToken();
-    const before = await env.DB.prepare("SELECT COUNT(*) AS total FROM email_outbox").first<number>("total");
-    const racedDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare(
-        "UPDATE registrations SET status = 'cancelled', transition_revision = transition_revision + 1 WHERE id = ?",
-      )
-        .bind(fixture.registrationId)
-        .run(),
-    );
-    const response = await callApi(
-      `/api/v1/events/pqc-2026/registrations/${fixture.registrationId}/notifications`,
-      token,
-      {
-        method: "POST",
-        body: JSON.stringify({ type: "confirmation" }),
-      },
-      racedDb,
-    );
-    expect(response.status, await response.clone().text()).toBe(409);
-    expect(await env.DB.prepare("SELECT COUNT(*) AS total FROM email_outbox").first<number>("total")).toBe(before);
-    const canceled = await callApi(
-      `/api/v1/events/pqc-2026/registrations/${fixture.registrationId}/notifications`,
-      token,
-      {
-        method: "POST",
-        body: JSON.stringify({ type: "confirmation" }),
-      },
-    );
-    expect(canceled.status).toBe(409);
-  });
-
   it("uses noun resources and validates notification creation", async () => {
     const fixture = await registrationFixture();
     const token = await adminToken();

@@ -1,4 +1,3 @@
-import { administratorGrants } from "./helpers/administrator";
 /**
  * membership-application-management.test.ts
  *
@@ -94,13 +93,7 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
     await seedEventAndAdmin(env.DB);
     const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'"))[0];
     adminId = adminRow.id;
-    adminActor = {
-      identityType: "user",
-      id: adminId,
-      email: "admin@pkic.org",
-      role: "admin",
-      grants: administratorGrants,
-    };
+    adminActor = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" };
     adminToken = await createAdminSession(env.DB, adminId, "membership-application-management-token");
   });
 

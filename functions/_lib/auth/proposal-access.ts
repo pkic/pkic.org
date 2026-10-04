@@ -20,7 +20,7 @@ export interface ProposalAccess {
  * grants finalize. These are separate capabilities: custom roles must
  * explicitly receive `proposals:score` to author reviews. Seeded roles retain
  * both permissions, matching the old REVIEW_PERMISSIONS/FINALIZE_PERMISSIONS
- * sets. Access-control grants determine each permission.
+ * sets. Global admins keep full access via hasPermission's role bypass.
  */
 export async function getProposalAccessForEvent(
   _db: DatabaseLike,

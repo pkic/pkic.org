@@ -1,4 +1,3 @@
-import { grantAdministrator } from "./helpers/administrator";
 import { configureMeetingOccurrence } from "./helpers/meeting-occurrence";
 /**
  * Sending every participant of a meeting their own link to it (#6).
@@ -77,8 +76,8 @@ describe("meeting participant invitations", () => {
   beforeEach(async () => {
     await resetDb();
     const adminId = await insertUser(env.DB, `meeting-round-admin-${crypto.randomUUID()}@example.test`);
-    const grants = await grantAdministrator(env.DB, adminId);
-    admin = { identityType: "user", id: adminId, email: "meeting-round-admin@example.test", role: "user", grants };
+    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(adminId).run();
+    admin = { identityType: "user", id: adminId, email: "meeting-round-admin@example.test", role: "admin" };
 
     const startsAt = new Date(Date.now() + 3_600_000).toISOString();
     const series = await createGroupEventSeries(env.DB, admin, GROUP_ID, {

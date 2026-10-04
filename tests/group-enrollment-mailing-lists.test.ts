@@ -1,5 +1,3 @@
-import { administratorGrants } from "./helpers/administrator";
-import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -30,14 +28,8 @@ const ALL_MEMBERS_GROUP_ID = "20000000-0000-4000-8000-000000000001";
 
 async function insertAdmin(): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, `group-platform-admin-${crypto.randomUUID()}@example.test`);
-  await grantAdministrator(env.DB, id);
-  return {
-    identityType: "user",
-    id,
-    email: "group-platform-admin@example.test",
-    role: "admin",
-    grants: administratorGrants,
-  };
+  await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(id).run();
+  return { identityType: "user", id, email: "group-platform-admin@example.test", role: "admin" };
 }
 
 async function addOrganizationCapacity(userId: string, category: string): Promise<string> {

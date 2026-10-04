@@ -8,14 +8,13 @@
  * the group's own attendance route, so a copied URL opens the same record
  * the list row did.
  */
-import { eventRegistrationNotificationResponseSchema } from "../../../../../shared/schemas/route-contracts-event-registration-management";
 import { useState } from "preact/hooks";
 import {
   eventRegistrationAttendanceDetailResponseSchema,
   eventRegistrationManagerUpdateResponseSchema,
 } from "../../../../../shared/schemas/event-registration-detail";
 import { confirmAction } from "../../../../components/ConfirmDialog";
-import { patchJson, postJson } from "../../../../shared/api-client";
+import { patchJson } from "../../../../shared/api-client";
 import type { MenuItem } from "../../../../ui/Menu";
 import { toast } from "../../ui";
 import type { RegistrationDayState } from "../../../../../shared/schemas/event-registrations";
@@ -126,33 +125,8 @@ export function GroupEventRegistrationRecord({
     }
   }
 
-  async function resendEmail(): Promise<void> {
-    setBusy(true);
-    try {
-      await postJson(
-        `${registrationEndpoint}/notifications`,
-        { type: "confirmation" },
-        eventRegistrationNotificationResponseSchema,
-      );
-      toast("Registration email queued", "success");
-    } catch (error) {
-      toast((error as Error).message, "error");
-    } finally {
-      setBusy(false);
-    }
-  }
-
   const commands: MenuItem[] = canVip
     ? [
-        {
-          id: "resend-email",
-          label:
-            registration.status === "pending_email_confirmation"
-              ? "Resend confirmation email"
-              : "Resend registration email",
-          disabled: busy || cancelled,
-          onSelect: () => void resendEmail(),
-        },
         {
           id: "cancel",
           label: "Cancel registration…",

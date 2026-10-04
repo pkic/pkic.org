@@ -37,7 +37,7 @@ function permittedProposalPermissions(actor: AuthAdmin): readonly (typeof PROPOS
 
 function permissionEvidence(permission: (typeof PROPOSAL_PERMISSIONS)[number], permitted: readonly string[]): string {
   if (!permitted.includes(permission)) return "0";
-  return `(EXISTS (
+  return `(actor.role = 'admin' OR EXISTS (
     SELECT 1 FROM active_permissions permission_row
      WHERE permission_row.permission = '${permission}'
        AND (permission_row.context_type IS NULL OR (permission_row.context_type = 'event' AND permission_row.context_id = event.id))

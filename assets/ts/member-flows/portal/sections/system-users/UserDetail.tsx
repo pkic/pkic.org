@@ -21,7 +21,7 @@ import { UserProfileEditor } from "./UserProfileEditor";
 import { CURRENT_USER_API, SelfProfilePanel } from "./SelfProfilePanel";
 import { profile as profileSignal, saveProfile } from "../../state";
 import { myProfileSchema } from "../../../../../shared/schemas/me";
-import { Badge } from "../../../../components/Badge";
+import { Badge, statusLabel } from "../../../../components/Badge";
 import { usePortalHashLocation } from "../../hash-location";
 import { Alert } from "../../../../ui/Alert";
 import { Avatar } from "../../../../ui/Avatar";
@@ -305,7 +305,7 @@ export function UserDetail({
           */
           portraitEditable ? (
             <UserPortrait
-              status={{ label: user.active ? "Active" : "Inactive", tone: user.active ? "accent" : "neutral" }}
+              status={{ label: statusLabel(user.role), tone: user.active ? "accent" : "neutral" }}
               userId={user.id}
               displayName={displayName}
               headshotUrl={user.headshotUrl ?? null}
@@ -321,7 +321,7 @@ export function UserDetail({
               name={displayName}
               src={user.headshotUrl ?? undefined}
               size="xl"
-              status={{ label: user.active ? "Active" : "Inactive", tone: user.active ? "accent" : "neutral" }}
+              status={{ label: statusLabel(user.role), tone: user.active ? "accent" : "neutral" }}
             />
           )
         }

@@ -1,4 +1,3 @@
-import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -73,8 +72,8 @@ async function dispatch(seriesId: string, limit = 20) {
 beforeEach(async () => {
   await resetDb();
   const id = await insertUser(env.DB, "calendar-admin@example.test");
-  const grants = await grantAdministrator(env.DB, id);
-  admin = { identityType: "user", id, email: "calendar-admin@example.test", role: "user", grants };
+  await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(id).run();
+  admin = { identityType: "user", id, email: "calendar-admin@example.test", role: "admin" };
   email = "organization-user@example.test";
   userId = await insertUser(env.DB, email);
   await ensureGroupMembershipCapacity(env.DB, GROUP, userId);

@@ -105,7 +105,7 @@ export const groupEventProfilesRouteSchema = {
 };
 
 export const groupEventParamsSchema = groupReferenceParamsSchema.extend({ eventId: eventIdSchema });
-export const groupEventRegistrationParamsSchema = groupEventParamsSchema.extend({ registrationId: databaseIdSchema });
+const groupEventRegistrationParamsSchema = groupEventParamsSchema.extend({ registrationId: databaseIdSchema });
 const groupEventInviteParamsSchema = groupEventParamsSchema.extend({ inviteId: databaseIdSchema });
 export const groupEventTermsReplaceSchema = eventConfigurationRevisionSchema.extend({
   configuration: eventTermsReplaceSchema,

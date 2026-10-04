@@ -1,4 +1,3 @@
-import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { callApi } from "./helpers/app";
@@ -215,7 +214,7 @@ describe("organization identity API", () => {
       .run();
 
     const staffUserId = await insertUser(env.DB, "staff@headshot-projection.example");
-    await grantAdministrator(env.DB, staffUserId);
+    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(staffUserId).run();
     const staffToken = await createAdminSession(env.DB, staffUserId, "headshot-projection-staff-token");
     const listed = await jsonRequest(`/api/v1/organizations/${organizationId}/identities`, staffToken, "GET");
     expect(listed.status).toBe(200);

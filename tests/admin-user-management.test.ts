@@ -1,10 +1,11 @@
-import { administratorGrants } from "./helpers/administrator";
 import { describe, it, expect, beforeEach } from "vitest";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { env } from "cloudflare:workers";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { resetDb } from "./helpers/reset-db";
+import { seedPersona } from "./personas/seed";
+import { onlyPersona } from "./personas/catalog";
 import app from "../functions/router";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
@@ -144,15 +145,102 @@ describe("admin user deactivation", () => {
     expect(data.user.active).toBe(true);
   });
 
-  it("rejects legacy role changes even when combined with an ordinary profile update", async () => {
+  it("can update role and active together", async () => {
     await setup();
-    const targetId = await seedUser(env.DB, "legacy-role-target@example.test");
+    const userId = await seedUser(env.DB, "combo@example.test");
+
+    const response = await patchUser(
+      createContext(env, adminRequest(`/api/v1/users/${userId}`, "PATCH", { role: "guest", active: false }), {
+        userId,
+      }),
+    );
+
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as { user: { role: string; active: boolean } };
+    expect(data.user.role).toBe("guest");
+    expect(data.user.active).toBe(false);
+  });
+
+  it("does not let a users:write-only staff actor promote another account to admin", async () => {
+    await setup();
+    // Editing user records is not the same authority as making an
+    // administrator; only the first is granted here.
+    const writer = await seedPersona(env.DB, onlyPersona("users:write"));
+    const targetId = await seedUser(env.DB, "promotion-target@example.test");
+    const staffToken = writer.token!;
+
     const response = await app.fetch(
-      adminRequest(`/api/v1/users/${targetId}`, "PATCH", { role: "admin", firstName: "Unauthorized" }),
+      adminRequest(`/api/v1/users/${targetId}`, "PATCH", { role: "admin" }, staffToken),
       env as any,
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
-    expect(response.status).toBe(400);
+
+    expect(response.status).toBe(403);
+    expect((await queryAll<{ role: string }>(env.DB, "SELECT role FROM users WHERE id = ?", targetId))[0].role).toBe(
+      "user",
+    );
+  });
+
+  it("rejects self-promotion even when the actor has access:grant", async () => {
+    await setup();
+    const staffId = await seedUser(env.DB, "self-promoter@example.test");
+    const adminId = (
+      await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
+    )[0].id;
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+         VALUES (?, ?, 'users:write', ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), staffId, adminId),
+      env.DB.prepare(
+        `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
+         VALUES (?, ?, 'access:grant', ?, datetime('now'))`,
+      ).bind(crypto.randomUUID(), staffId, adminId),
+    ]);
+    const staffToken = await createAdminSession(env.DB, staffId, "self-promoter-session");
+
+    const response = await app.fetch(
+      adminRequest(`/api/v1/users/${staffId}`, "PATCH", { role: "admin" }, staffToken),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(403);
+    expect((await queryAll<{ role: string }>(env.DB, "SELECT role FROM users WHERE id = ?", staffId))[0].role).toBe(
+      "user",
+    );
+  });
+
+  it("allows a global admin to promote another account", async () => {
+    await setup();
+    const targetId = await seedUser(env.DB, "admin-promotion-target@example.test");
+
+    const response = await app.fetch(
+      adminRequest(`/api/v1/users/${targetId}`, "PATCH", { role: "admin" }),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(200);
+    expect((await queryAll<{ role: string }>(env.DB, "SELECT role FROM users WHERE id = ?", targetId))[0].role).toBe(
+      "admin",
+    );
+  });
+
+  it("fails closed when the admin role permission bundle is missing", async () => {
+    await setup();
+    const targetId = await seedUser(env.DB, "misconfigured-promotion-target@example.test");
+    await env.DB.prepare(
+      "DELETE FROM role_permissions WHERE role_id = (SELECT id FROM roles WHERE name = 'admin')",
+    ).run();
+
+    const response = await app.fetch(
+      adminRequest(`/api/v1/users/${targetId}`, "PATCH", { role: "admin" }),
+      env as any,
+      { passThroughOnException: () => {}, waitUntil: () => {} } as any,
+    );
+
+    expect(response.status).toBe(500);
     expect((await queryAll<{ role: string }>(env.DB, "SELECT role FROM users WHERE id = ?", targetId))[0].role).toBe(
       "user",
     );
@@ -296,14 +384,9 @@ describe("admin user deactivation", () => {
     ]);
     const speakerCapability = await seedProposalSpeakerCapability(userId, eventId, signingSecret);
 
-    await updateUser(
-      env.DB,
-      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin", grants: administratorGrants },
-      userId,
-      {
-        email: "email-admin-set@example.test",
-      },
-    );
+    await updateUser(env.DB, { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" }, userId, {
+      email: "email-admin-set@example.test",
+    });
 
     expect(
       (
@@ -466,13 +549,14 @@ describe("admin user deactivation", () => {
     const userId = await seedUser(env.DB, "ec-member@example.test");
     // The field is no longer part of the update contract; the report of the
     // flag comes from the group (#104).
-    await expect(
-      patchUser(
-        createContext(env, adminRequest(`/api/v1/users/${userId}`, "PATCH", { isEcMember: true, firstName: "Sam" }), {
-          userId,
-        }),
-      ),
-    ).rejects.toMatchObject({ status: 400 });
+    const response = await patchUser(
+      createContext(env, adminRequest(`/api/v1/users/${userId}`, "PATCH", { isEcMember: true, firstName: "Sam" }), {
+        userId,
+      }),
+    );
+    expect(response.status).toBe(200);
+    const data = (await response.json()) as { user: { isEcMember: boolean } };
+    expect(data.user.isEcMember).toBe(false);
 
     await seatInExecutiveCouncil(env.DB, userId);
     const getResponse = await app.fetch(
@@ -751,7 +835,7 @@ describe("admin user anonymization", () => {
     const gate = gateNextBatch(env.DB);
     const staleUpdate = updateUser(
       gate.db,
-      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin", grants: administratorGrants },
+      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
       userId,
       {
         email: "restored@example.test",
@@ -763,7 +847,7 @@ describe("admin user anonymization", () => {
 
     await anonymizeUserService(
       env.DB,
-      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin", grants: administratorGrants },
+      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
       userId,
     );
     gate.release();
@@ -792,20 +876,15 @@ describe("admin user anonymization", () => {
     const gate = gateNextBatch(env.DB);
     const staleAnonymization = anonymizeUserService(
       gate.db,
-      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin", grants: administratorGrants },
+      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
       userId,
     );
     await gate.reached;
 
-    await updateUser(
-      env.DB,
-      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin", grants: administratorGrants },
-      userId,
-      {
-        email: "race-winner@example.test",
-        firstName: "Winner",
-      },
-    );
+    await updateUser(env.DB, { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" }, userId, {
+      email: "race-winner@example.test",
+      firstName: "Winner",
+    });
     gate.release();
 
     await expect(staleAnonymization).rejects.toMatchObject({ code: "ANONYMIZATION_CONFLICT" });

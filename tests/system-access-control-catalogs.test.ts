@@ -1,4 +1,3 @@
-import { administratorGrants } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { permissionTargetsListResponseSchema } from "../assets/shared/schemas/access-control";
@@ -109,7 +108,6 @@ describe("Permission subjects and targets", () => {
       id: adminId,
       email: "admin@pkic.org",
       role: "admin",
-      grants: administratorGrants,
     };
     const group = await createGroup(env.DB, actor, {
       typeKey: "working_group",

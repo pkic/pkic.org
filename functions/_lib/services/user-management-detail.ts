@@ -11,6 +11,7 @@ interface UserDetailRow {
   first_name: string | null;
   last_name: string | null;
   preferred_name: string | null;
+  role: string;
   active: number;
   is_ec_member: number;
   headshot_r2_key: string | null;
@@ -62,7 +63,7 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
     db
       .prepare(
         `SELECT id, email, first_name, last_name, preferred_name,
-                active, ${executiveCouncilSeatSql("users.id")} AS is_ec_member,
+                role, active, ${executiveCouncilSeatSql("users.id")} AS is_ec_member,
                 headshot_r2_key, headshot_updated_at, created_at, updated_at, pii_redacted_at
          FROM users WHERE id = ?`,
       )

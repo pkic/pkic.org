@@ -1,4 +1,3 @@
-import { grantAdministrator } from "./helpers/administrator";
 import { configureMeetingOccurrence } from "./helpers/meeting-occurrence";
 import { env } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -37,13 +36,12 @@ async function seedActiveTemplate(
 
 async function fixture() {
   const adminId = await insertUser(env.DB, `meeting-invitation-admin-${crypto.randomUUID()}@example.test`);
-  const grants = await grantAdministrator(env.DB, adminId);
+  await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(adminId).run();
   const admin: AuthAdmin = {
     identityType: "user",
     id: adminId,
     email: "meeting-invitation-admin@example.test",
-    role: "user",
-    grants,
+    role: "admin",
   };
   const startsAt = new Date(Date.now() + 3_600_000).toISOString();
   const series = await createGroupEventSeries(env.DB, admin, GROUP_ID, {

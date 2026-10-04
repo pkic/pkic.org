@@ -83,8 +83,8 @@ export function RegistrationDetailPage({
         { type: "confirmation" },
         eventRegistrationNotificationResponseSchema,
       );
-      toast("Registration email queued", "success");
-      setResendOutcome({ tone: "ok", message: "Registration email queued." });
+      toast("Confirmation email queued", "success");
+      setResendOutcome({ tone: "ok", message: "Confirmation email queued." });
     } catch (e) {
       const message = (e as Error).message;
       setResendOutcome({ tone: "danger", message });
@@ -237,22 +237,11 @@ export function RegistrationDetailPage({
           </Panel>
 
           <Panel>
-            <PanelHeader title="Registration email" />
+            <PanelHeader title="Confirmation email" />
             <PanelBody class="pk-stack pk-stack--snug">
-              <p class="pk-small">
-                {reg.status === "cancelled"
-                  ? "Canceled registrations cannot receive confirmation emails."
-                  : reg.status === "pending_email_confirmation"
-                    ? "Send another email asking the attendee to confirm their email address."
-                    : "Send the attendee their current registration details and calendar invitation again."}
-              </p>
+              <p class="pk-small">Rotates the token and re-queues the email.</p>
               <div class="pk-cluster">
-                <Button
-                  size="sm"
-                  loading={resending}
-                  disabled={reg.status === "cancelled"}
-                  onClick={() => void handleResend()}
-                >
+                <Button size="sm" loading={resending} onClick={() => void handleResend()}>
                   {resending ? "Sending…" : "Resend email"}
                 </Button>
               </div>

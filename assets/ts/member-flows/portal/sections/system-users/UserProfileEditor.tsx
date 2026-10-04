@@ -1,10 +1,15 @@
 import { useState } from "preact/hooks";
 import { patchJson } from "../../../../shared/api-client";
-import { userUpdateResponseSchema, userUpdateSchema } from "../../../../../shared/schemas/user-management";
+import {
+  USER_ROLE_LABELS,
+  userRoleValueSchema,
+  userUpdateResponseSchema,
+  userUpdateSchema,
+} from "../../../../../shared/schemas/user-management";
 import { FormActions } from "../../../../components/FormActions";
 import { useContractForm } from "../../../../hooks/useContractForm";
 import { useEditorDraft } from "../../../../hooks/useEditorDraft";
-import { Checkbox } from "../../../../ui/Checkbox";
+import { Checkbox, Radio } from "../../../../ui/Checkbox";
 import { Field } from "../../../../ui/Field";
 import { TextInput } from "../../../../ui/TextControl";
 import { toast } from "../../ui";
@@ -15,6 +20,7 @@ type EditableUser = {
   firstName: string;
   lastName: string;
   preferredName: string;
+  role: string;
   active: boolean;
 };
 
@@ -32,6 +38,7 @@ function editFormFor(user: UserDetail): EditableUser {
     firstName: user.first_name ?? "",
     lastName: user.last_name ?? "",
     preferredName: user.preferred_name ?? "",
+    role: user.role,
     active: user.active,
   };
 }
@@ -40,12 +47,12 @@ function editFormFor(user: UserDetail): EditableUser {
  * The update the form would send, built from its draft. A cleared name is
  * sent as null so the contract clears it; a blank address is left out so the
  * current one is kept, which is what the field's help promises. Only a reader
- * with access:grant may move the address, so it is included in the request
- * only for an authorized reader.
+ * with access:grant may move the address or the role, so only then are they
+ * part of the request at all.
  */
 function payloadFromDraft(draft: EditableUser, canGrantAccess: boolean) {
   return {
-    ...(canGrantAccess ? { email: draft.email.trim() ? draft.email : undefined } : {}),
+    ...(canGrantAccess ? { email: draft.email.trim() ? draft.email : undefined, role: draft.role } : {}),
     firstName: draft.firstName || null,
     lastName: draft.lastName || null,
     preferredName: draft.preferredName || null,
@@ -159,6 +166,26 @@ export function UserProfileEditor({
               </Field>
             )}
           </div>
+
+          {canGrantAccess && (
+            <fieldset class="pk-fieldset pk-field">
+              <legend class="pk-field__label">Role</legend>
+              <div class="pk-cluster">
+                {userRoleValueSchema.options.map((role) => (
+                  <Radio
+                    key={role}
+                    name="role"
+                    value={role}
+                    checked={draft.role === role}
+                    onChange={() => update({ role })}
+                    // The role's own word rather than its stored code: the
+                    // reader is choosing "Administrator", not typing `admin`.
+                    label={USER_ROLE_LABELS[role]}
+                  />
+                ))}
+              </div>
+            </fieldset>
+          )}
 
           <fieldset class="pk-fieldset pk-field">
             <legend class="pk-field__label">Standing</legend>

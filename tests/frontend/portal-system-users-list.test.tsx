@@ -24,6 +24,7 @@ function mount(canGrantAccess: boolean, headshotUrl: string | null = null): HTML
                 first_name: "Ada",
                 last_name: "Lovelace",
                 organization_name: null,
+                role: "user",
                 active: 1,
                 created_at: "2026-01-01T00:00:00.000Z",
                 headshotUrl,
@@ -67,21 +68,19 @@ afterEach(() => {
 });
 
 describe("portal System Users list permissions", () => {
-  it("hides access-control navigation without access:grant", async () => {
+  it("hides the role actions for users:write without access:grant", async () => {
     const container = mount(false);
     await settle();
     // Not a menu holding nothing, and not a button either: no row command at all.
     expect(rowActionControlNames(container)).toEqual([]);
-    expect(container.querySelector('a[href="#/settings/access-control/people"]')).toBeNull();
   });
 
-  it("offers one access-control destination for authorized readers", async () => {
+  it("offers the administrator-role action only when both permissions are present", async () => {
     const container = mount(true);
     await settle();
-    expect(rowActionControlNames(container)).toEqual([]);
-    const accessLinks = container.querySelectorAll('a[href="#/settings/access-control/people"]');
-    expect(accessLinks).toHaveLength(1);
-    expect(accessLinks[0].textContent).toContain("Manage access");
+    // The row's commands live behind the `…` menu, whose trigger names the
+    // person it acts on rather than every row reading the same label.
+    expect(rowActionControlNames(container)).toEqual(["Actions for Ada Lovelace"]);
   });
 
   it("renders initials when a user has no headshot, and an image when one is set", async () => {
@@ -117,7 +116,7 @@ describe("portal System Users list permissions", () => {
 });
 
 describe("portal System Users list controls", () => {
-  it("names the table, keeps the filters in the column heads, and sends the chosen representation type to the query", async () => {
+  it("names the table, keeps the filters in the column heads, and sends the chosen role to the query", async () => {
     const requested: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -140,11 +139,11 @@ describe("portal System Users list controls", () => {
     // No row of selects above the table: each filter lives in its column's
     // own menu, beside the sort it shares a head with.
     expect(container.querySelector('[role="toolbar"] select')).toBeNull();
-    const roleMenu = container.querySelector<HTMLButtonElement>('button[aria-label="Represents column options"]');
+    const roleMenu = container.querySelector<HTMLButtonElement>('button[aria-label="Role column options"]');
     expect(roleMenu).not.toBeNull();
-    openColumnFilterMenu(container, "Represents");
+    openColumnFilterMenu(container, "Role");
     const admins = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')].find((item) =>
-      item.textContent!.includes("Members"),
+      item.textContent!.includes("Administrators"),
     );
     expect(admins).not.toBeUndefined();
     await act(async () => {
@@ -153,10 +152,10 @@ describe("portal System Users list controls", () => {
     });
     await settle();
 
-    expect(requested.some((url) => url.searchParams.get("type") === "member")).toBe(true);
+    expect(requested.some((url) => url.searchParams.get("role") === "admin")).toBe(true);
     // The head says what the column is narrowed to.
-    const roleHead = [...container.querySelectorAll("th")].find((th) => th.textContent!.includes("Represents"));
-    expect(roleHead?.querySelector(".pk-table__head-filter")?.textContent).toBe("Members");
+    const roleHead = [...container.querySelectorAll("th")].find((th) => th.textContent!.includes("Role"));
+    expect(roleHead?.querySelector(".pk-table__head-filter")?.textContent).toBe("Administrators");
   });
 
   it("states a refused user listing as a sentence rather than an empty table", async () => {

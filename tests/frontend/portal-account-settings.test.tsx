@@ -175,7 +175,7 @@ describe("portal account settings capacity cutover", () => {
     expect(requests).toEqual(["/api/v1/users/current/notifications/preferences"]);
   });
 
-  it("lists the effective permissions of an administrator assignment", async () => {
+  it("summarizes administrator access without listing individual grants", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => {
@@ -190,10 +190,7 @@ describe("portal account settings capacity cutover", () => {
     expect(container.textContent).toContain("Your access");
     expect(container.textContent).toContain("Permissions");
     expect(container.textContent).not.toContain("Staff access");
-    expect(container.textContent).not.toContain("Administrator — this account holds every administrative permission.");
-    for (const permission of ["forms:read", "organizations:write", "users:write"]) {
-      expect(container.textContent).toContain(permission);
-    }
+    expect(container.textContent).toContain("Administrator — this account holds every administrative permission.");
   });
 
   it("lists granular staff grants with their scopes", async () => {

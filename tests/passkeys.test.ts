@@ -1,4 +1,3 @@
-import { grantAdministrator } from "./helpers/administrator";
 /**
  * passkeys.test.ts
  *
@@ -58,7 +57,6 @@ async function insertStaffUser(email: string): Promise<string> {
   )
     .bind(id, email, email)
     .run();
-  await grantAdministrator(env.DB, id);
   return id;
 }
 

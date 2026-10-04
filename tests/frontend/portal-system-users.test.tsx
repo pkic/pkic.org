@@ -6,7 +6,7 @@ import { UserProfileEditor } from "../../assets/ts/member-flows/portal/sections/
 
 import type { UserDetail } from "../../assets/ts/member-flows/portal/sections/system-users/model";
 import { controlFor, groupNames, labelNames, namedGroup, submitForm, typeInto } from "./helpers/labelled-control";
-import { userUpdateSchema } from "../../assets/shared/schemas/user-management";
+import { USER_ROLE_LABELS, USER_ROLES, userUpdateSchema } from "../../assets/shared/schemas/user-management";
 // Resolved through the mock below, which keeps the real class.
 import { ApiClientError } from "../../assets/ts/shared/api-client";
 
@@ -50,6 +50,7 @@ const user: UserDetail = {
   first_name: "Ada",
   last_name: "Lovelace",
   preferred_name: null,
+  role: "user",
   active: true,
   isEcMember: false,
   headshotUrl: null,
@@ -93,16 +94,16 @@ describe("portal System Users profile permissions", () => {
     expect(container.querySelector('input[name="role"]')).toBeNull();
   });
 
-  it("exposes email correction with access:grant but never legacy role controls", () => {
+  it("exposes email and role controls only with access:grant", () => {
     const container = mount(true);
     expect(container.querySelector('input[type="email"]')).not.toBeNull();
-    expect(container.querySelector('input[name="role"]')).toBeNull();
+    expect(container.querySelector('input[name="role"]')).not.toBeNull();
   });
 
   it("stores preferred names on the user rather than an acting identity", async () => {
     apiClient.patchJson.mockResolvedValue({
       success: true,
-      user: { id: user.id, email: user.email, active: true, isEcMember: false },
+      user: { id: user.id, email: user.email, role: user.role, active: true, isEcMember: false },
     });
     const linkedUser = { ...user, preferred_name: "Ada" };
     const container = document.createElement("div");
@@ -135,9 +136,15 @@ describe("portal System Users profile permissions", () => {
     // and the words come from the vocabulary itself — so a role added to the
     // contract is offered here without anybody editing the form.
     expect(labelNames(container)).toEqual(
-      expect.arrayContaining(["First name", "Last name", "Preferred name", "Email"]),
+      expect.arrayContaining([
+        "First name",
+        "Last name",
+        "Preferred name",
+        "Email",
+        ...USER_ROLES.map((role) => USER_ROLE_LABELS[role]),
+      ]),
     );
-    expect(groupNames(container)).toEqual(["Standing"]);
+    expect(groupNames(container)).toEqual(["Role", "Standing"]);
     // A checkbox needs all three parts, or it renders an operating-system
     // default control that no stylesheet reaches.
     const standing = namedGroup(container, "Standing");

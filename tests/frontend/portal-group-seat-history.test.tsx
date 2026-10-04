@@ -123,7 +123,7 @@ describe("portal group seat history", () => {
     const container = mount(<GroupMembers groupId={GROUP_ID} canManage onChanged={async () => {}} />);
     await settle();
 
-    expect(container.textContent).toContain("No members yet");
+    expect(container.textContent).toContain("No members to show");
     expect([...container.querySelectorAll("th")].map((cell) => cell.textContent).join(" ")).not.toContain(
       "Joined through",
     );

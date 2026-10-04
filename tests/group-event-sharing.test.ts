@@ -1,5 +1,3 @@
-import { z } from "zod";
-import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
@@ -74,8 +72,8 @@ interface Fixture {
 async function userActor(label: string, role = "user"): Promise<UserBackedAuthAdmin> {
   const email = `${label}-${crypto.randomUUID()}@example.test`;
   const id = await insertUser(env.DB, email);
-  const grants = role === "admin" ? await grantAdministrator(env.DB, id) : [];
-  return { identityType: "user", id, email, role: "user", grants };
+  await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
+  return { identityType: "user", id, email, role };
 }
 
 async function createFixture(): Promise<Fixture> {
@@ -199,63 +197,52 @@ function registrationSubmissionMetadata() {
 beforeEach(resetDb);
 
 describe("group event sharing", () => {
-  it.each(["generated", "migration-seeded"])(
-    "schedules %s meeting containers without changing their event identity",
-    async (kind) => {
-      const fixture = await createFixture();
-      const draftId = kind === "generated" ? crypto.randomUUID() : "event-meeting-fixture";
-      await env.DB.prepare(
-        `INSERT INTO events
+  it("separates unscheduled meeting containers from ordinary group events", async () => {
+    const fixture = await createFixture();
+    const draftId = crypto.randomUUID();
+    await env.DB.prepare(
+      `INSERT INTO events
       (id, slug, name, timezone, owner_group_id, profile_key, source_mode, created_at, updated_at)
       VALUES (?, 'draft-meeting', 'Unscheduled meeting', 'UTC', ?, 'meeting', 'portal',
         '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
-      )
-        .bind(draftId, fixture.ownerId)
-        .run();
-      const base = `/api/v1/groups/${fixture.ownerId}/events`;
-      const events = await authenticatedRequest(fixture.adminToken, `${base}?collection=events`);
-      expect(events.status).toBe(200);
-      expect(await events.json()).toMatchObject({ events: [{ id: fixture.eventId }], page: { total: 1 } });
-      const drafts = await authenticatedRequest(fixture.adminToken, `${base}?collection=unscheduled_meetings`);
-      expect(drafts.status).toBe(200);
-      expect(await drafts.json()).toMatchObject({ events: [{ id: draftId, seriesId: null }], page: { total: 1 } });
-      const input = {
-        existingEventId: draftId,
-        eventSlug: "draft-meeting",
-        eventName: "Scheduled meeting",
-        profileKey: "meeting" as const,
-        policy: {
-          registrationPolicy: "no_registration" as const,
-          visibility: "group_members" as const,
-          memberEligibility: "owner_group" as const,
-          guestPolicy: "occurrence_invitation" as const,
-        },
-        startsAt: "2027-01-10T10:00:00.000Z",
-        recurrenceRule: "FREQ=WEEKLY;COUNT=2",
-        timezone: "UTC",
-        durationMinutes: 60,
-      };
-      await expect(createGroupEventSeries(env.DB, fixture.admin, fixture.granteeId, input)).rejects.toMatchObject({
-        status: 409,
-      });
-      const series = await createGroupEventSeries(env.DB, fixture.admin, fixture.ownerId, input);
-      expect(series.eventId).toBe(draftId);
-      expect(z.uuid().safeParse(series.id).success).toBe(true);
-      const occurrences = await queryAll<{ id: string }>(
-        env.DB,
-        "SELECT id FROM event_occurrences WHERE series_id = ?",
-        [series.id],
-      );
-      expect(occurrences.length).toBeGreaterThan(0);
-      for (const occurrence of occurrences) expect(z.uuid().safeParse(occurrence.id).success).toBe(true);
-      expect(series.eventSlug).toBe("draft-meeting");
-      await expect(createGroupEventSeries(env.DB, fixture.admin, fixture.ownerId, input)).rejects.toMatchObject({
-        status: 409,
-      });
-      const after = await authenticatedRequest(fixture.adminToken, `${base}?collection=unscheduled_meetings`);
-      expect(await after.json()).toMatchObject({ events: [], page: { total: 0 } });
-    },
-  );
+    )
+      .bind(draftId, fixture.ownerId)
+      .run();
+    const base = `/api/v1/groups/${fixture.ownerId}/events`;
+    const events = await authenticatedRequest(fixture.adminToken, `${base}?collection=events`);
+    expect(events.status).toBe(200);
+    expect(await events.json()).toMatchObject({ events: [{ id: fixture.eventId }], page: { total: 1 } });
+    const drafts = await authenticatedRequest(fixture.adminToken, `${base}?collection=unscheduled_meetings`);
+    expect(drafts.status).toBe(200);
+    expect(await drafts.json()).toMatchObject({ events: [{ id: draftId, seriesId: null }], page: { total: 1 } });
+    const input = {
+      existingEventId: draftId,
+      eventSlug: "draft-meeting",
+      eventName: "Scheduled meeting",
+      profileKey: "meeting" as const,
+      policy: {
+        registrationPolicy: "no_registration" as const,
+        visibility: "group_members" as const,
+        memberEligibility: "owner_group" as const,
+        guestPolicy: "occurrence_invitation" as const,
+      },
+      startsAt: "2027-01-10T10:00:00.000Z",
+      recurrenceRule: "FREQ=WEEKLY;COUNT=2",
+      timezone: "UTC",
+      durationMinutes: 60,
+    };
+    await expect(createGroupEventSeries(env.DB, fixture.admin, fixture.granteeId, input)).rejects.toMatchObject({
+      status: 409,
+    });
+    const series = await createGroupEventSeries(env.DB, fixture.admin, fixture.ownerId, input);
+    expect(series.eventId).toBe(draftId);
+    expect(series.eventSlug).toBe("draft-meeting");
+    await expect(createGroupEventSeries(env.DB, fixture.admin, fixture.ownerId, input)).rejects.toMatchObject({
+      status: 409,
+    });
+    const after = await authenticatedRequest(fixture.adminToken, `${base}?collection=unscheduled_meetings`);
+    expect(await after.json()).toMatchObject({ events: [], page: { total: 0 } });
+  });
 
   it("discovers and reads an event only through the selected member grant context", async () => {
     const fixture = await createFixture();

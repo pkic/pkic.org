@@ -1,4 +1,3 @@
-import { hasPermission } from "../../auth/permissions";
 import { normalizeEventRegistrationPolicy } from "./detail";
 import {
   GROUP_EVENTS_SORT_COLUMNS,
@@ -125,7 +124,7 @@ export function buildGroupEventsPageQuery(
     : buildAccessibleGroupResourceIdsCte("event", groupId, access, "view");
   const audience = buildEventAudiencePredicate("event", {
     userId: viewer.userId,
-    canReadAll: Boolean(viewer.admin && hasPermission(viewer.admin, "events:read")),
+    canReadAll: viewer.admin?.role === "admin",
   });
   const managerAccess = live ? "group_access.manager_access" : access.manager ? "1" : "0";
   const conditions = ["event.owner_group_id IS NOT NULL", `(${managerAccess} = 1 OR ${audience.sql})`];
@@ -209,7 +208,7 @@ export async function getGroupEvent(db: DatabaseLike, viewer: GroupResourceViewe
   const accessibleEvents = buildLiveAccessibleGroupResourceIdsCte("event", groupId, access, "view");
   const audience = buildEventAudiencePredicate("event", {
     userId: viewer.userId,
-    canReadAll: Boolean(viewer.admin && hasPermission(viewer.admin, "events:read")),
+    canReadAll: viewer.admin?.role === "admin",
   });
   const row = await first<GroupEventRow>(
     db,

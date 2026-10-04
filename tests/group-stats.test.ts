@@ -1,4 +1,3 @@
-import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { groupStatsQuerySchema, groupStatsResponseSchema } from "../assets/shared/schemas/group-statistics";
@@ -8,19 +7,40 @@ import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
-import { grantGroupLeadershipCapacity } from "./helpers/group-leadership";
-import { insertOrgRepresentative, insertUser } from "./helpers/membership";
+import { grantGroupLeadershipCapacity, ensureGroupMembershipCapacity } from "./helpers/group-leadership";
+import { insertOrgRepresentative, insertUser, insertIndividualMember } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
 async function adminActor(email: string, role = "admin"): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, email);
-  const grants = role === "admin" ? await grantAdministrator(env.DB, id) : [];
-  return { identityType: "user", id, email, role: "user", grants };
+  await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
+  return { identityType: "user", id, email, role };
 }
 
 beforeEach(resetDb);
 
 describe("group statistics", () => {
+  it("deduplicates organizations across people and excludes individual and ended seats from current representation", async () => {
+    const admin = await adminActor("representation-admin@example.test");
+    const group = await createGroup(env.DB, admin, { typeKey: "working_group", name: "Organization representation" });
+    const first = await insertOrgRepresentative(env.DB);
+    const colleague = await insertOrgRepresentative(env.DB, { organizationId: first.organizationId });
+    const individual = await insertIndividualMember(env.DB);
+    const ended = await insertOrgRepresentative(env.DB);
+    for (const person of [first, colleague, individual, ended]) {
+      await ensureGroupMembershipCapacity(env.DB, group.id, person.userId);
+    }
+    await env.DB.prepare("UPDATE group_memberships SET left_at = ? WHERE group_id = ? AND user_id = ?")
+      .bind(new Date().toISOString(), group.id, ended.userId)
+      .run();
+    const stats = await getGroupStatistics(env.DB, admin, group.id, groupStatsQuerySchema.parse({}));
+    expect(stats.participation).toEqual({
+      people: { count: 3 },
+      organizations: { count: 1 },
+      capacities: { count: 3 },
+    });
+  });
+
   it("computes distinct people separately from membership capacities and scopes historical rows in D1", async () => {
     const admin = await adminActor(`group-stats-admin-${crypto.randomUUID()}@example.test`);
     const group = await createGroup(env.DB, admin, { typeKey: "working_group", name: `Stats ${crypto.randomUUID()}` });
@@ -63,7 +83,11 @@ describe("group statistics", () => {
       to: "2026-01-31T00:00:00.000Z",
     });
     const stats = await getGroupStatistics(env.DB, admin, group.id, historical);
-    expect(stats.participation).toEqual({ people: { count: 2 }, capacities: { count: 2 } });
+    expect(stats.participation).toEqual({
+      people: { count: 2 },
+      organizations: { count: 2 },
+      capacities: { count: 2 },
+    });
     expect(stats.window).toEqual({ from: historical.from, to: historical.to });
     expect(groupStatsResponseSchema.parse(stats)).toEqual(stats);
   });
@@ -118,7 +142,7 @@ describe("group statistics", () => {
     expect(groupStatsResponseSchema.parse(payload)).toMatchObject({
       group: { id: group.id },
       scope: "current",
-      participation: { people: { count: 0 }, capacities: { count: 0 } },
+      participation: { people: { count: 0 }, organizations: { count: 0 }, capacities: { count: 0 } },
       activity: { people: { actorCount: 1, actionCount: 2 }, capacities: { joinedCount: 0, leftCount: 0 } },
     });
 

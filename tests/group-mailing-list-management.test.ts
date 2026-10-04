@@ -1,4 +1,3 @@
-import { grantAdministrator } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import {
@@ -37,8 +36,8 @@ import { seedPersona } from "./personas/seed";
 
 async function actor(email: string, role = "user"): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, email);
-  const grants = role === "admin" ? await grantAdministrator(env.DB, id) : [];
-  return { identityType: "user", id, email, role: "user", grants };
+  await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
+  return { identityType: "user", id, email, role };
 }
 
 async function token(userId: string, raw = crypto.randomUUID()): Promise<string> {

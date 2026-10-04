@@ -1,4 +1,3 @@
-import { grantAdministrator, administratorGrants } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
@@ -17,7 +16,7 @@ import { resetDb } from "./helpers/reset-db";
 import { proposalReviewsListResponseSchema } from "../assets/shared/schemas/proposal-reviews";
 
 function decisionActor(id: string) {
-  return { identityType: "user" as const, id, email: "admin@pkic.org", role: "user", grants: administratorGrants };
+  return { identityType: "user" as const, id, email: "admin@pkic.org", role: "admin" };
 }
 
 interface SeededDecisionWorkflow {
@@ -64,7 +63,6 @@ async function seedDecisionWorkflow(): Promise<SeededDecisionWorkflow> {
       ).bind(reviewerId, `round-reviewer-${index}@pkic.org`, `round-reviewer-${index}@pkic.org`),
     ),
   ]);
-  for (const reviewerId of reviewerIds) await grantAdministrator(env.DB, reviewerId);
   const { proposal, manageToken } = await createProposal(env.DB, {
     eventId,
     proposerUserId: proposerId,
