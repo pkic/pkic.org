@@ -275,7 +275,7 @@ describe("portal navigation shell", () => {
     const donationsReader = portalSessionFixture({
       staff: true,
       member: true,
-      staffRole: "user",
+      administrator: false,
       grants: [
         { permission: "donations:read", contextType: null, contextId: null },
         { permission: "analytics:read", contextType: null, contextId: null },

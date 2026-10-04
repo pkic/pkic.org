@@ -1,3 +1,4 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
@@ -94,7 +95,7 @@ describe("admin proposal speaker headshots", () => {
     "serves inherited imported portraits and scoped overrides to the %s",
     async (actor) => {
       const { eventId } = await seedEventAndAdmin(env.DB);
-      const [{ id: adminId }] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin'");
+      const [{ id: adminId }] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
       const { proposalId, userId, proposerToken, speakerToken } = await seedProposalSpeaker(eventId);
       const adminToken = await createAdminSession(env.DB, adminId, "admin-imported-headshot");
       const assets = new FakeUploadsBucket();
@@ -141,7 +142,7 @@ describe("admin proposal speaker headshots", () => {
 
   it("uploads only to the proposal speaker override and returns a working cache-busted URL", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const [{ id: adminId }] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin'");
+    const [{ id: adminId }] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
     const { proposalId, userId } = await seedProposalSpeaker(eventId);
     const token = await createAdminSession(env.DB, adminId, "admin-scoped-headshot-upload");
     const bucket = new FakeUploadsBucket();
@@ -169,7 +170,7 @@ describe("admin proposal speaker headshots", () => {
 
   it("imports only a validated Gravatar into the proposal-scoped headshot override", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const [{ id: adminId }] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin'");
+    const [{ id: adminId }] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
     const { proposalId, userId } = await seedProposalSpeaker(eventId);
     const token = await createAdminSession(env.DB, adminId, "admin-scoped-headshot-gravatar");
     const bucket = new FakeUploadsBucket();
@@ -232,8 +233,8 @@ describe("admin proposal speaker headshots", () => {
     const reviewerId = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-         VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+        `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+         VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
       ).bind(reviewerId, `reviewer-${reviewerId}@example.test`, `reviewer-${reviewerId}@example.test`),
       env.DB.prepare(
         `INSERT INTO permission_grants (id, user_id, permission, context_type, context_id, created_at)

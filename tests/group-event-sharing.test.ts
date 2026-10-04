@@ -75,7 +75,7 @@ async function userActor(label: string, role = "user"): Promise<UserBackedAuthAd
   const email = `${label}-${crypto.randomUUID()}@example.test`;
   const id = await insertUser(env.DB, email);
   const grants = role === "admin" ? await grantAdministrator(env.DB, id) : [];
-  return { identityType: "user", id, email, role: "user", grants };
+  return { identityType: "user", id, email, grants };
 }
 
 async function createFixture(): Promise<Fixture> {
@@ -119,7 +119,6 @@ async function createFixture(): Promise<Fixture> {
     identityType: "user",
     id: leaderPersona.userId,
     email: leaderPersona.email,
-    role: "user",
     memberId: leaderPersona.capacities[0]!.memberId,
   };
   const series = await createGroupEventSeries(env.DB, admin, owner.id, {

@@ -138,8 +138,8 @@ it("reconciles a paid membership checkout manually without a webhook secret", as
     .first<{ id: string }>();
   const adminId = crypto.randomUUID();
   await env.DB.prepare(
-    "INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at) " +
-      "VALUES (?, 'sync@example.test', 'sync@example.test', 'Sync', 'admin', 1, datetime('now'), datetime('now'))",
+    "INSERT INTO users (id, email, normalized_email, first_name, active, created_at, updated_at) " +
+      "VALUES (?, 'sync@example.test', 'sync@example.test', 'Sync', 1, datetime('now'), datetime('now'))",
   )
     .bind(adminId)
     .run();
@@ -202,8 +202,8 @@ it("records an idempotent offline membership settlement and advances the same wo
   const { id, metadata, session } = await prepareFeeApplication();
   const adminId = crypto.randomUUID();
   await env.DB.prepare(
-    "INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at) " +
-      "VALUES (?, 'payments@example.test', 'payments@example.test', 'Payments', 'admin', 1, datetime('now'), datetime('now'))",
+    "INSERT INTO users (id, email, normalized_email, first_name, active, created_at, updated_at) " +
+      "VALUES (?, 'payments@example.test', 'payments@example.test', 'Payments', 1, datetime('now'), datetime('now'))",
   )
     .bind(adminId)
     .run();

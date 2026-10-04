@@ -111,8 +111,8 @@ export async function seedEventAndAdmin(db: DatabaseLike): Promise<{ eventId: st
        'invite_or_open', 5, '{}', datetime('now'), datetime('now'))`,
     ),
     db.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES ('${adminId}', 'admin@pkic.org', 'admin@pkic.org', 'admin', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+       VALUES ('${adminId}', 'admin@pkic.org', 'admin@pkic.org', 1, datetime('now'), datetime('now'))`,
     ),
     db.prepare(
       `INSERT INTO event_terms (id, event_id, audience_type, term_key, version, required, content_ref, active, created_at) VALUES

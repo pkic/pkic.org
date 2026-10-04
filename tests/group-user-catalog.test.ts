@@ -16,7 +16,7 @@ import { resetDb } from "./helpers/reset-db";
 async function actor(email: string, role = "user"): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, email);
   const grants = role === "admin" ? await grantAdministrator(env.DB, id) : [];
-  return { identityType: "user", id, email, role: "user", grants };
+  return { identityType: "user", id, email, grants };
 }
 
 beforeEach(resetDb);

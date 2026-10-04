@@ -48,7 +48,7 @@ import { activeIdentityIdForMember, ensureGroupMembershipCapacity } from "./help
 async function insertActor(email: string, role = "user"): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, email);
   const grants = role === "admin" ? await grantAdministrator(env.DB, id) : [];
-  return { identityType: "user", id, email, role: "user", grants };
+  return { identityType: "user", id, email, grants };
 }
 
 async function grantGroupLeadership(groupId: string, actor: AuthAdmin, roleId = "role-group_lead"): Promise<string> {

@@ -65,8 +65,8 @@ describe("event imports", () => {
     const staffId = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-         VALUES (?, 'event-import-denied@example.test', 'event-import-denied@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+        `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+         VALUES (?, 'event-import-denied@example.test', 'event-import-denied@example.test', 1, datetime('now'), datetime('now'))`,
       ).bind(staffId),
       env.DB.prepare(
         `INSERT INTO user_roles (id, user_id, role_id, granted_by_user_id, created_at)
@@ -229,8 +229,8 @@ describe("event imports", () => {
     const roleAssignmentId = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-         VALUES (?, 'event-import-raced@example.test', 'event-import-raced@example.test', 'user', 1,
+        `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+         VALUES (?, 'event-import-raced@example.test', 'event-import-raced@example.test', 1,
                  strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
       ).bind(staffId),
       env.DB.prepare(
@@ -241,7 +241,6 @@ describe("event imports", () => {
     const actor = createUserBackedAuthAdmin({
       id: staffId,
       email: "event-import-raced@example.test",
-      role: "user",
       scopes: [],
       grants: [{ permission: "events:write", contextType: null, contextId: null }],
     });

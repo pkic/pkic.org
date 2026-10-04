@@ -205,7 +205,7 @@ describe("portal account settings capacity cutover", () => {
     );
     portalSession.value = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [
         { permission: "audit:read", contextType: null, contextId: null },
         { permission: "events:read", contextType: "event", contextId: "event-1" },

@@ -22,7 +22,6 @@ async function adminActor(): Promise<UserBackedAuthAdmin> {
     identityType: "user",
     id,
     email: "current-forms-admin@example.test",
-    role: "admin",
     grants: administratorGrants,
   };
 }

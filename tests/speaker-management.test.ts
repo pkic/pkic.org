@@ -1,3 +1,4 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { administratorGrants } from "./helpers/administrator";
 /**
  * speaker-management.test.ts
@@ -116,7 +117,7 @@ let adminSessionToken: string;
 
 async function setupWorkflow() {
   const { eventId, adminSessionToken: sessionToken } = await setupProposalSpeakerCapacityWorkflow();
-  const adminUser = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+  const adminUser = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
   adminSessionToken = sessionToken;
   return { eventId, adminUserId: adminUser.id };
 }
@@ -837,7 +838,6 @@ describe("speaker self-management endpoints", () => {
           identityType: "user",
           id: adminUserId,
           email: "admin@pkic.org",
-          role: "admin",
           grants: administratorGrants,
         },
         proposalId,
@@ -2501,7 +2501,7 @@ describe("speaker self-management endpoints", () => {
       .bind(
         crypto.randomUUID(),
         proposalId,
-        (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0].id,
+        (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0].id,
       )
       .run();
 
@@ -2567,7 +2567,6 @@ describe("speaker self-management endpoints", () => {
             identityType: "user",
             id: adminUserId,
             email: "admin@example.test",
-            role: "admin",
             grants: administratorGrants,
           },
           appBaseUrl: "https://app.test",
@@ -2681,7 +2680,6 @@ describe("speaker self-management endpoints", () => {
           identityType: "user",
           id: adminUserId,
           email: "admin@example.test",
-          role: "admin",
           grants: administratorGrants,
         },
         appBaseUrl: "https://app.test",

@@ -74,7 +74,7 @@ beforeEach(async () => {
   await resetDb();
   const id = await insertUser(env.DB, "calendar-admin@example.test");
   const grants = await grantAdministrator(env.DB, id);
-  admin = { identityType: "user", id, email: "calendar-admin@example.test", role: "user", grants };
+  admin = { identityType: "user", id, email: "calendar-admin@example.test", grants };
   email = "organization-user@example.test";
   userId = await insertUser(env.DB, email);
   await ensureGroupMembershipCapacity(env.DB, GROUP, userId);

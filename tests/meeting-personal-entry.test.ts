@@ -37,7 +37,7 @@ async function send(path: string, method = "GET", body?: unknown, headers?: Head
 async function fixture() {
   const adminId = await insertUser(env.DB, `personal-admin-${crypto.randomUUID()}@example.test`);
   const grants = await grantAdministrator(env.DB, adminId);
-  const admin: AuthAdmin = { identityType: "user", id: adminId, email: "admin@example.test", role: "user", grants };
+  const admin: AuthAdmin = { identityType: "user", id: adminId, email: "admin@example.test", grants };
   const email = `personal-member-${crypto.randomUUID()}@example.test`;
   const userId = await insertUser(env.DB, email);
   await ensureGroupMembershipCapacity(env.DB, GROUP_ID, userId);

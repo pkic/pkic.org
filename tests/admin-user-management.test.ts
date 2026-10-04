@@ -97,8 +97,8 @@ async function seedUser(_db: DatabaseLike, email: string): Promise<string> {
   const userId = crypto.randomUUID();
   await env.DB.prepare(
     `
-    INSERT INTO users (id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at)
-    VALUES (?, ?, ?, 'Test', 'User', 'user', 1, datetime('now'), datetime('now'));
+    INSERT INTO users (id, email, normalized_email, first_name, last_name, active, created_at, updated_at)
+    VALUES (?, ?, ?, 'Test', 'User', 1, datetime('now'), datetime('now'));
   `,
   )
     .bind(userId, email, email)
@@ -153,9 +153,10 @@ describe("admin user deactivation", () => {
       { passThroughOnException: () => {}, waitUntil: () => {} } as any,
     );
     expect(response.status).toBe(400);
-    expect((await queryAll<{ role: string }>(env.DB, "SELECT role FROM users WHERE id = ?", targetId))[0].role).toBe(
-      "user",
-    );
+    expect(
+      (await queryAll<{ first_name: string | null }>(env.DB, "SELECT first_name FROM users WHERE id = ?", targetId))[0]
+        .first_name,
+    ).toBe("Test");
   });
 
   it("preserves users:write name updates without access:grant", async () => {
@@ -298,7 +299,7 @@ describe("admin user deactivation", () => {
 
     await updateUser(
       env.DB,
-      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin", grants: administratorGrants },
+      { identityType: "user", id: adminId, email: "admin@pkic.org", grants: administratorGrants },
       userId,
       {
         email: "email-admin-set@example.test",
@@ -653,7 +654,7 @@ describe("admin user anonymization", () => {
       env.DB.prepare(
         `UPDATE users SET pending_email = 'pending@example.test', pending_email_expires_at = datetime('now', '+1 day'),
                             pending_email_change_registration_id = ?,
-                            role = 'admin', is_ec_member = 1
+                            is_ec_member = 1
            WHERE id = ?`,
       ).bind(registrationId, userId),
     ]);
@@ -665,10 +666,9 @@ describe("admin user anonymization", () => {
     expect(await queryAll(env.DB, "SELECT id FROM passkey_credentials WHERE user_id = ?", userId)).toHaveLength(0);
     const [user] = await queryAll<{
       pending_email: string | null;
-      role: string;
       is_ec_member: number;
-    }>(env.DB, "SELECT pending_email, role, is_ec_member FROM users WHERE id = ?", userId);
-    expect(user).toMatchObject({ pending_email: null, role: "user", is_ec_member: 0 });
+    }>(env.DB, "SELECT pending_email, is_ec_member FROM users WHERE id = ?", userId);
+    expect(user).toMatchObject({ pending_email: null, is_ec_member: 0 });
     const [registration] = await queryAll<{
       confirmation_link_secret: string | null;
       manage_link_secret: string;
@@ -751,7 +751,7 @@ describe("admin user anonymization", () => {
     const gate = gateNextBatch(env.DB);
     const staleUpdate = updateUser(
       gate.db,
-      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin", grants: administratorGrants },
+      { identityType: "user", id: adminId, email: "admin@pkic.org", grants: administratorGrants },
       userId,
       {
         email: "restored@example.test",
@@ -763,7 +763,7 @@ describe("admin user anonymization", () => {
 
     await anonymizeUserService(
       env.DB,
-      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin", grants: administratorGrants },
+      { identityType: "user", id: adminId, email: "admin@pkic.org", grants: administratorGrants },
       userId,
     );
     gate.release();
@@ -792,14 +792,14 @@ describe("admin user anonymization", () => {
     const gate = gateNextBatch(env.DB);
     const staleAnonymization = anonymizeUserService(
       gate.db,
-      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin", grants: administratorGrants },
+      { identityType: "user", id: adminId, email: "admin@pkic.org", grants: administratorGrants },
       userId,
     );
     await gate.reached;
 
     await updateUser(
       env.DB,
-      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin", grants: administratorGrants },
+      { identityType: "user", id: adminId, email: "admin@pkic.org", grants: administratorGrants },
       userId,
       {
         email: "race-winner@example.test",
@@ -841,7 +841,7 @@ describe("admin user anonymization", () => {
     const gate = gateNextBatch(env.DB);
     const mutation = updateUser(
       gate.db,
-      { identityType: "user", id: actorId, email: "revoked-user-write@example.test", role: "user" },
+      { identityType: "user", id: actorId, email: "revoked-user-write@example.test" },
       targetUserId,
       { firstName: "This update must not commit" },
     );

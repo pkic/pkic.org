@@ -35,7 +35,6 @@ async function seedMeetingWindow() {
     identityType: "user",
     id: adminId,
     email: "meeting-validity@example.test",
-    role: "admin",
     grants: administratorGrants,
   };
   const startsAt = "2099-04-01T09:00:00.000Z";

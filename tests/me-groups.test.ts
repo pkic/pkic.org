@@ -31,7 +31,6 @@ async function adminActor(): Promise<UserBackedAuthAdmin> {
     identityType: "user",
     id,
     email: "self-groups-admin@example.test",
-    role: "admin",
     grants: administratorGrants,
   };
 }

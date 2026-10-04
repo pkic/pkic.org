@@ -62,7 +62,7 @@ describe("Membership workflow settings", () => {
     const current = await getMembershipCategory(env.DB, "A");
     const vote = await createCanonicalVote(
       env.DB,
-      createUserBackedAuthAdmin({ id: adminId, email: "admin@pkic.org", role: "admin", grants: [] }),
+      createUserBackedAuthAdmin({ id: adminId, email: "admin@pkic.org", grants: [] }),
       { eligibleCategories: ["A", "B"] },
     );
     const beforeRules = await queryAll(
@@ -325,8 +325,8 @@ describe("Membership workflow settings", () => {
   it("membership:read is sufficient for GET but cannot update configuration", async () => {
     const staffId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES (?, 'processor@example.test', 'processor@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+       VALUES (?, 'processor@example.test', 'processor@example.test', 1, datetime('now'), datetime('now'))`,
     )
       .bind(staffId)
       .run();
@@ -395,8 +395,8 @@ describe("Membership workflow settings", () => {
   it("a staff user with an unrelated role is denied", async () => {
     const staffId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES (?, 'wgchair@example.test', 'wgchair@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+       VALUES (?, 'wgchair@example.test', 'wgchair@example.test', 1, datetime('now'), datetime('now'))`,
     )
       .bind(staffId)
       .run();
@@ -507,7 +507,7 @@ describe("Membership workflow settings", () => {
   });
 
   it("rolls back a rename if the category changes before the atomic batch", async () => {
-    const actor = createUserBackedAuthAdmin({ id: adminId, email: "admin@pkic.org", role: "admin", grants: [] });
+    const actor = createUserBackedAuthAdmin({ id: adminId, email: "admin@pkic.org", grants: [] });
     const category = await getMembershipCategory(env.DB, "A");
     const racedDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE membership_categories SET revision = revision + 1 WHERE code = 'A'").run(),
@@ -526,7 +526,6 @@ describe("Membership workflow settings", () => {
     const actor = createUserBackedAuthAdmin({
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
       grants: [],
     });
     const settings = await getMembershipSettings(env.DB);

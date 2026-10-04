@@ -78,7 +78,7 @@ describe("meeting participant invitations", () => {
     await resetDb();
     const adminId = await insertUser(env.DB, `meeting-round-admin-${crypto.randomUUID()}@example.test`);
     const grants = await grantAdministrator(env.DB, adminId);
-    admin = { identityType: "user", id: adminId, email: "meeting-round-admin@example.test", role: "user", grants };
+    admin = { identityType: "user", id: adminId, email: "meeting-round-admin@example.test", grants };
 
     const startsAt = new Date(Date.now() + 3_600_000).toISOString();
     const series = await createGroupEventSeries(env.DB, admin, GROUP_ID, {
@@ -165,8 +165,8 @@ describe("meeting participant invitations", () => {
       });
       statements.push(
         env.DB.prepare(
-          `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-           VALUES (?, ?, ?, 'user', 1, ?, ?)`,
+          `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+           VALUES (?, ?, ?, 1, ?, ?)`,
         ).bind(userId, email, email, now, now),
         ...member.statements,
         identity.statement,

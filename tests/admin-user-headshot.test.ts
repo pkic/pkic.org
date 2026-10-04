@@ -126,8 +126,8 @@ async function setup(): Promise<{ adminId: string; targetUserId: string }> {
 
   const targetUserId = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO users (id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at)
-     VALUES (?, ?, ?, 'Upload', 'Target', 'user', 1, datetime('now'), datetime('now'))`,
+    `INSERT INTO users (id, email, normalized_email, first_name, last_name, active, created_at, updated_at)
+     VALUES (?, ?, ?, 'Upload', 'Target', 1, datetime('now'), datetime('now'))`,
   )
     .bind(targetUserId, "upload-target@example.test", "upload-target@example.test")
     .run();
@@ -468,7 +468,6 @@ describe("admin user headshot upload", () => {
       identityType: "user",
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
       grants: administratorGrants,
     } as const;
     const mutation = replaceUserHeadshot({

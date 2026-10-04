@@ -20,7 +20,7 @@ export async function insertResourceGrantActor(label: string, role = "user"): Pr
   const email = `${label}-${crypto.randomUUID()}@example.test`;
   const id = await insertUser(env.DB, email);
   const grants = role === "admin" ? await grantAdministrator(env.DB, id) : [];
-  return { identityType: "user", id, email, role: "user", grants };
+  return { identityType: "user", id, email, grants };
 }
 
 export async function addResourceGrantParticipant(groupId: string, label: string): Promise<UserBackedAuthAdmin> {

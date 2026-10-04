@@ -13,6 +13,7 @@ import {
   MCP_OAUTH_TOKEN_PATH,
   parseMcpOauthProps,
   resolveMcpExternalToken,
+  toOAuthErrorResponse,
   type McpOAuthEnv,
   type McpOAuthProps,
 } from "./oauth";
@@ -109,7 +110,6 @@ async function authorizationHeaderForMcp(
     sid: oauthProps.sessionId,
     exp: Math.floor(new Date(oauthProps.sessionExpiresAt).getTime() / 1000),
     email: oauthProps.email,
-    role: oauthProps.role,
     state: oauthProps.state ?? undefined,
     scopes: oauthProps.scopes,
   });
@@ -140,7 +140,11 @@ export function createMcpWorkerFetch(
 
   class McpApiHandler extends WorkerEntrypoint<McpOAuthEnv> {
     fetch(request: Request): Promise<Response> {
-      return mcpResponse(request, this.env, this.ctx, parseMcpOauthProps(this.ctx.props));
+      try {
+        return mcpResponse(request, this.env, this.ctx, parseMcpOauthProps(this.ctx.props));
+      } catch (error) {
+        return Promise.resolve(toOAuthErrorResponse(error));
+      }
     }
   }
 

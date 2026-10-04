@@ -57,7 +57,6 @@ async function fixture(options: { memberGroup?: "owner" | "shared" } = {}) {
     identityType: "user",
     id: adminId,
     email: "meeting-security-admin@example.test",
-    role: "user",
     grants,
   };
 

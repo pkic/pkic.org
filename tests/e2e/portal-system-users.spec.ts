@@ -77,6 +77,8 @@ test("permitted staff manage users through the canonical domain API", async ({ p
 
   await page.reload();
   await expect(page.getByText(updatedPreferredName, { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Account role", { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: test.info().outputPath("user-record-without-legacy-role.png"), fullPage: true });
 
   await page.goto("/portal/#/users");
   await expect(page).toHaveURL(/\/portal\/#\/users$/);
@@ -166,6 +168,7 @@ test("permitted staff filter, sort, and manage columns in the users list", async
   await page.getByRole("menuitemradio", { name: "Since" }).click();
   await expect(page.getByRole("columnheader", { name: "Since" })).toBeVisible();
 
+  await page.screenshot({ path: test.info().outputPath("users-list-without-legacy-role.png"), fullPage: true });
   await page.getByRole("link", { name: "Manage access", exact: true }).click();
   await expect(page).toHaveURL(/#\/settings\/access-control/);
 });

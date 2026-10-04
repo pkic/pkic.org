@@ -88,7 +88,6 @@ async function createScopedEventManager(eventId: string) {
     actor: createUserBackedAuthAdmin({
       id: organizer.userId,
       email: organizer.email,
-      role: "user",
       scopes: [],
       grants: [{ permission: "events:manage", contextType: "event", contextId: eventId }],
     }),
@@ -209,13 +208,13 @@ describe("admin event management endpoints", () => {
          VALUES (?, 'z-unrelated-event', 'Z unrelated event', 'UTC', '2027-01-01T09:00:00.000Z', '2027-01-01T17:00:00.000Z', 'open', 5, '{}', datetime('now'), datetime('now'))`,
       ).bind(unrelatedEventId),
       env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-         VALUES (?, 'page-event@example.test', 'page-event@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+        `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+         VALUES (?, 'page-event@example.test', 'page-event@example.test', 1, datetime('now'), datetime('now'))`,
       ).bind(pageUserId),
       ...unrelatedUserIds.map((userId, index) =>
         env.DB.prepare(
-          `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-           VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+          `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+           VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
         ).bind(userId, `unrelated-${index}@example.test`, `unrelated-${index}@example.test`),
       ),
       env.DB.prepare(
@@ -318,8 +317,8 @@ describe("admin event management endpoints", () => {
     const registrationId = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-         VALUES (?, 'multi-referral@example.test', 'multi-referral@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+        `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+         VALUES (?, 'multi-referral@example.test', 'multi-referral@example.test', 1, datetime('now'), datetime('now'))`,
       ).bind(userId),
       env.DB.prepare(
         `INSERT INTO registrations
@@ -1415,8 +1414,8 @@ describe("admin event management endpoints", () => {
     await setupAdmin();
     const staffId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES (?, 'no-events-perm@example.test', 'no-events-perm@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+       VALUES (?, 'no-events-perm@example.test', 'no-events-perm@example.test', 1, datetime('now'), datetime('now'))`,
     )
       .bind(staffId)
       .run();

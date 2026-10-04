@@ -89,7 +89,6 @@ describe("admin user membership capacities", () => {
       identityType: "user",
       id: userId,
       email: "representative-conflict@example.test",
-      role: "admin",
       grants: administratorGrants,
     };
     await expect(
@@ -118,7 +117,6 @@ describe("admin user membership capacities", () => {
       identityType: "user",
       id: actorUserId,
       email: "capacity-admin@example.test",
-      role: "admin",
       grants: administratorGrants,
     };
     await grantAdministrator(env.DB, actorUserId);
@@ -165,7 +163,6 @@ describe("admin user membership capacities", () => {
       identityType: "user",
       id: actorId,
       email: "membership-race-admin@example.test",
-      role: "admin",
       grants: administratorGrants,
     };
     const gate = gateNextBatch(env.DB);
@@ -196,7 +193,6 @@ describe("admin user membership capacities", () => {
       identityType: "user",
       id: actorId,
       email: "membership-update-race-admin@example.test",
-      role: "admin",
       grants: administratorGrants,
     };
     const gate = gateNextBatch(env.DB);
@@ -234,7 +230,6 @@ describe("admin user membership capacities", () => {
       identityType: "user",
       id: actorId,
       email: "membership-lifecycle-admin@example.test",
-      role: "admin",
       grants: administratorGrants,
     };
 
@@ -262,7 +257,6 @@ describe("admin user membership capacities", () => {
       identityType: "user",
       id: actorId,
       email: "membership-response-admin@example.test",
-      role: "admin",
       grants: administratorGrants,
     };
 
@@ -286,7 +280,6 @@ describe("admin user membership capacities", () => {
       identityType: "user",
       id: actorId,
       email: "profile-admin@example.test",
-      role: "admin",
       grants: administratorGrants,
     };
 
@@ -314,7 +307,6 @@ describe("admin user membership capacities", () => {
       identityType: "user",
       id: actorId,
       email: "representative-profile-admin@example.test",
-      role: "admin",
       grants: administratorGrants,
     };
 
@@ -334,7 +326,6 @@ describe("admin user membership capacities", () => {
       identityType: "user",
       id: actorId,
       email: "representative-response-admin@example.test",
-      role: "admin",
       grants: administratorGrants,
     };
 

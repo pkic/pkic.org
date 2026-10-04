@@ -98,7 +98,6 @@ describe("Post-approval onboarding", () => {
       identityType: "user",
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
       grants: administratorGrants,
     };
     adminToken = await createAdminSession(env.DB, adminId, "onboarding-admin-token");

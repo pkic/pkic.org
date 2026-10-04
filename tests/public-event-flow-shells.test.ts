@@ -84,7 +84,7 @@ async function createPortalEvent(): Promise<string> {
   await grantAdministrator(env.DB, adminId);
   const created = await createGroupManagedEvent(
     env.DB,
-    { identityType: "user", id: adminId, email, role: "admin", grants: administratorGrants },
+    { identityType: "user", id: adminId, email, grants: administratorGrants },
     OWNER_GROUP_ID,
     {
       slug: EVENT_SLUG,

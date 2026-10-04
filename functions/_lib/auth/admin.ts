@@ -17,7 +17,6 @@ interface AdminSessionRow {
   expires_at: string;
   revoked_at: string | null;
   email: string;
-  role: string;
 }
 
 const adminByRequest = new WeakMap<Request, AuthAdmin>();
@@ -133,7 +132,7 @@ export async function getCurrentUserBackedAdmin(
 ): Promise<UserBackedAuthAdmin | null> {
   const session = await first<AdminSessionRow>(
     db,
-    `SELECT s.id, s.user_id, s.expires_at, s.revoked_at, u.email, u.role
+    `SELECT s.id, s.user_id, s.expires_at, s.revoked_at, u.email
        FROM sessions s
        JOIN users u ON u.id = s.user_id
       WHERE s.id = ? AND s.user_id = ? AND u.active = 1 AND ${STAFF_ACCESS_CONDITION}`,
@@ -148,7 +147,6 @@ export async function getCurrentUserBackedAdmin(
   return createUserBackedAuthAdmin({
     id: session!.user_id,
     email: session!.email,
-    role: session!.role,
     scopes: [],
     grants: await computeGrantsForUser(db, session!.user_id),
     sessionId: session!.id,

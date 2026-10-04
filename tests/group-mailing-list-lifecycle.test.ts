@@ -45,7 +45,7 @@ async function staffActor(label: string): Promise<UserBackedAuthAdmin> {
   const email = `mailing-list-${label}-${crypto.randomUUID()}@example.test`;
   const id = await insertUser(env.DB, email);
   await grantAdministrator(env.DB, id);
-  return { identityType: "user", id, email, role: "admin", grants: administratorGrants };
+  return { identityType: "user", id, email, grants: administratorGrants };
 }
 
 /** One staff-managed group with one list on it: the smallest thing a lifecycle command can act on. */

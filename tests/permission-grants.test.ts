@@ -35,8 +35,8 @@ async function call(token: string, path: string, init: RequestInit = {}): Promis
 async function insertUser(email: string): Promise<string> {
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-     VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+    `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+     VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
   )
     .bind(id, email, email)
     .run();
@@ -332,7 +332,6 @@ describe("permission_grants (Permission grants)", () => {
       identityType: "user",
       id: "wg-chair-user",
       email: "chair@example.test",
-      role: "user",
       grants: [
         {
           permission: "groups:write",
@@ -351,7 +350,6 @@ describe("permission_grants (Permission grants)", () => {
       identityType: "user",
       id: "oauth-admin",
       email: "oauth-admin@example.test",
-      role: "admin",
       grants: administratorGrants,
       scopes: ["proposals:read"],
       scopeRestricted: true,
@@ -397,7 +395,6 @@ describe("permission_grants (Permission grants)", () => {
       identityType: "user",
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
       grants: administratorGrants,
     };
     const racingDb = mutateBeforeNextBatch(env.DB, () =>
@@ -429,7 +426,6 @@ describe("permission_grants (Permission grants)", () => {
       identityType: "user",
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
       grants: administratorGrants,
     };
     const racingDb = mutateBeforeNextBatch(env.DB, () =>
@@ -478,7 +474,6 @@ describe("permission_grants (Permission grants)", () => {
       identityType: "user",
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
       grants: administratorGrants,
     };
     const racingDb = mutateBeforeNextBatch(env.DB, () =>
@@ -510,7 +505,6 @@ describe("permission_grants (Permission grants)", () => {
       identityType: "user",
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
       grants: administratorGrants,
     };
     const racingDb = mutateBeforeNextBatch(env.DB, () =>

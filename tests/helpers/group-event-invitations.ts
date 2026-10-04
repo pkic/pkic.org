@@ -31,7 +31,6 @@ export async function createGroupEventInvitationFixture(
     identityType: "user",
     id: userId,
     email,
-    role: "admin",
     grants: administratorGrants,
   };
   const group = await createGroup(db, actor, {

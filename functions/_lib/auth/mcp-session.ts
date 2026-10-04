@@ -5,7 +5,6 @@ export interface McpSessionTokenClaims {
   sub: string;
   sid: string;
   email: string;
-  role: string;
   scopes: string[];
   state?: string;
   exp: number;
@@ -15,10 +14,10 @@ function isMcpSessionClaims(value: object): value is McpSessionTokenClaims {
   const claims = value as Partial<McpSessionTokenClaims>;
   return (
     claims.typ === "mcp-session" &&
+    !("role" in claims) &&
     typeof claims.sub === "string" &&
     typeof claims.sid === "string" &&
     typeof claims.email === "string" &&
-    typeof claims.role === "string" &&
     Array.isArray(claims.scopes) &&
     claims.scopes.every((scope) => typeof scope === "string") &&
     (claims.state === undefined || typeof claims.state === "string") &&

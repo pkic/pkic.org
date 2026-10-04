@@ -302,9 +302,13 @@ export const USERS_TOTALS_SQL = `
   FROM users`;
 
 export const USERS_BY_ROLE_SQL = `
-  SELECT role AS status, COUNT(*) AS count
-  FROM users
-  GROUP BY role`;
+  SELECT r.name AS status, COUNT(DISTINCT ur.user_id) AS count
+  FROM user_roles ur
+  JOIN roles r ON r.id = ur.role_id
+  JOIN users u ON u.id = ur.user_id AND u.active = 1
+  WHERE ur.revoked_at IS NULL
+    AND (ur.expires_at IS NULL OR ur.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+  GROUP BY r.id, r.name`;
 
 /**
  * Whether the account acts in any capacity at all.

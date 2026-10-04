@@ -256,7 +256,7 @@ describe("governance rosters on groups", () => {
       // concatenation would offer "Lead" twice and rank it third.
       const taskForce = await createGroup(
         env.DB,
-        { identityType: "user", id: admin.id, email: "", role: "admin", grants: administratorGrants },
+        { identityType: "user", id: admin.id, email: "", grants: administratorGrants },
         { typeKey: "task_force", name: "Interop Task Force", slug: "interop-task-force" },
       );
       const leadership = groupLeadershipListResponseSchema.parse(
@@ -638,7 +638,7 @@ describe("governance rosters on groups", () => {
     const admin = await seedAdmin();
     const group = await createGroup(
       env.DB,
-      { identityType: "user", id: admin.id, email: "", role: "admin", grants: administratorGrants },
+      { identityType: "user", id: admin.id, email: "", grants: administratorGrants },
       {
         typeKey: "board",
         name: "Public Directory Board",
@@ -743,7 +743,7 @@ describe("governance rosters on groups", () => {
     const admin = await seedAdmin();
     const group = await createGroup(
       env.DB,
-      { identityType: "user", id: admin.id, email: "", role: "admin", grants: administratorGrants },
+      { identityType: "user", id: admin.id, email: "", grants: administratorGrants },
       {
         typeKey: "board",
         name: "Category Loss Board",

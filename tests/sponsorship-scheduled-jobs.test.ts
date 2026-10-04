@@ -77,7 +77,6 @@ describe("Sponsorship renewal reminders & auto-lapse", () => {
       id: staffUserId,
       identityType: "user",
       email: "admin@pkic.org",
-      role: "admin",
       grants: administratorGrants,
     };
 

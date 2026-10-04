@@ -47,8 +47,8 @@ async function insertUser(
 ): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, role, active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))`,
     )
     .bind(id, email, email.toLowerCase(), firstName, lastName, org)
     .run();

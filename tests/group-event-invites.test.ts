@@ -24,7 +24,7 @@ async function actor(label: string, role = "user"): Promise<UserBackedAuthAdmin>
   const email = `${label}-${crypto.randomUUID()}@example.test`;
   const id = await insertUser(env.DB, email);
   const grants = role === "admin" ? await grantAdministrator(env.DB, id) : [];
-  return { identityType: "user", id, email, role: "user", grants };
+  return { identityType: "user", id, email, grants };
 }
 
 async function insertInvite(eventId: string, inviteType: "attendee" | "speaker"): Promise<string> {

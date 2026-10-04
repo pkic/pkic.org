@@ -110,7 +110,7 @@ export function buildProposalProgramsPageQuery(
   // The page needs the complete capability projection. The count repeats the
   // same authority CTE, joins, filters, and bindings, but deliberately omits
   // page-only capability CASE expressions and JSON aggregation.
-  const sourcePrefixSql = `WITH actor AS MATERIALIZED (SELECT id, role FROM users WHERE id = ? AND active = 1),
+  const sourcePrefixSql = `WITH actor AS MATERIALIZED (SELECT id FROM users WHERE id = ? AND active = 1),
     ${activePermissionsCte}
     `;
   const sourceFromSql = `FROM actor

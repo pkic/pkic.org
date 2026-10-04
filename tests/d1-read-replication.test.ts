@@ -310,7 +310,6 @@ describe("D1 read replication", () => {
     const admin: AuthAdmin = createUserBackedAuthAdmin({
       id: "admin-user",
       email: "admin@example.test",
-      role: "admin",
     });
     const throwingDb: DatabaseLike = {
       prepare() {

@@ -41,8 +41,8 @@ async function seedProposal(
 
   await env.DB.batch([
     env.DB.prepare(`
-      INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-      VALUES ('${admin2Id}', 'committee2@pkic.org', 'committee2@pkic.org', 'admin', 1, datetime('now'), datetime('now'))
+      INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+      VALUES ('${admin2Id}', 'committee2@pkic.org', 'committee2@pkic.org', 1, datetime('now'), datetime('now'))
     `),
     env.DB.prepare(`
       INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, job_title, data_json, created_at, updated_at)
@@ -299,8 +299,8 @@ describe("proposal review and finalize", () => {
         [moderatorId, "moderator-owner-test@pkic.org"],
       ].map(([id, email]) =>
         env.DB.prepare(
-          `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-             VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+          `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+             VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
         ).bind(id, email, email),
       ),
       ...[
@@ -399,7 +399,6 @@ describe("proposal review and finalize", () => {
       identityType: "user",
       id: admin1Id,
       email: "admin@pkic.org",
-      role: "admin",
       grants: administratorGrants,
     };
     await upsertProposalReview(env.DB, actor, proposalId, { recommendation: "accept", score: 9 });
@@ -464,7 +463,6 @@ describe("proposal review and finalize", () => {
       identityType: "user",
       id: admin1Id,
       email: "admin@pkic.org",
-      role: "admin",
       grants: administratorGrants,
     };
     const baseDb: DatabaseLike = env.DB;
@@ -509,7 +507,6 @@ describe("proposal review and finalize", () => {
       identityType: "user",
       id: admin1Id,
       email: "admin@pkic.org",
-      role: "admin",
       grants: administratorGrants,
     };
     await upsertProposalReview(env.DB, actor, proposalId, { recommendation: "accept", score: 9 });

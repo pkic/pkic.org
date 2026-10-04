@@ -53,8 +53,8 @@ async function call(path: string, init: RequestInit = {}, token?: string): Promi
 async function insertStaffUser(email: string): Promise<string> {
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-     VALUES (?, ?, ?, 'admin', 1, datetime('now'), datetime('now'))`,
+    `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+     VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
   )
     .bind(id, email, email)
     .run();
@@ -76,8 +76,8 @@ async function insertActiveMemberUser(email: string): Promise<string> {
   });
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at)
-       VALUES (?, ?, ?, 'Test', 'user', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, first_name, active, created_at, updated_at)
+       VALUES (?, ?, ?, 'Test', 1, datetime('now'), datetime('now'))`,
     ).bind(userId, email, email),
     ...statements,
     identity.statement,

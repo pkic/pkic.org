@@ -40,8 +40,8 @@ class StoredObjects {
 async function seedUserWithHeadshot(email: string, storageKey: string | null): Promise<{ userId: string }> {
   const userId = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO users (id, email, normalized_email, first_name, role, active, headshot_r2_key, created_at, updated_at)
-     VALUES (?, ?, ?, 'Portrait', 'user', 1, ?, datetime('now'), datetime('now'))`,
+    `INSERT INTO users (id, email, normalized_email, first_name, active, headshot_r2_key, created_at, updated_at)
+     VALUES (?, ?, ?, 'Portrait', 1, ?, datetime('now'), datetime('now'))`,
   )
     .bind(userId, email, email, storageKey)
     .run();

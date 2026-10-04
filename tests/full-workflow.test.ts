@@ -112,7 +112,7 @@ describe("full workflow", () => {
     )[0];
     const ownerGroup = await createGroup(
       env.DB,
-      { identityType: "user", id: adminUser.id, email: adminUser.email, role: "admin", grants: administratorGrants },
+      { identityType: "user", id: adminUser.id, email: adminUser.email, grants: administratorGrants },
       {
         typeKey: "working_group",
         name: `Full workflow ${crypto.randomUUID()}`,
@@ -163,8 +163,8 @@ describe("full workflow", () => {
       const reviewerUserId = crypto.randomUUID();
       await env.DB.prepare(
         `
-      INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-      VALUES ('${reviewerUserId}', 'reviewer2@pkic.org', 'reviewer2@pkic.org', 'admin', 1, datetime('now'), datetime('now'));
+      INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+      VALUES ('${reviewerUserId}', 'reviewer2@pkic.org', 'reviewer2@pkic.org', 1, datetime('now'), datetime('now'));
     `,
       ).run();
       await grantAdministrator(env.DB, reviewerUserId);

@@ -22,7 +22,6 @@ async function setupProgram(): Promise<{ actor: AuthAdmin; eventId: string; grou
     identityType: "user",
     id: administratorId,
     email: administratorEmail,
-    role: "admin",
     grants: administratorGrants,
   };
   const group = await createGroup(env.DB, administrator, {
@@ -58,7 +57,6 @@ async function setupProgram(): Promise<{ actor: AuthAdmin; eventId: string; grou
       identityType: "user",
       id: userId,
       email: userEmail,
-      role: "user",
       grants: [{ permission: "proposals:read", contextType: "event", contextId: event.eventId }],
     },
   };

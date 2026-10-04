@@ -153,7 +153,6 @@ it("requires an authorized staff review, a sent notice and a full window, then r
         identityType: "user",
         id: admin.id,
         email: "admin@pkic.org",
-        role: "admin",
         grants: administratorGrants,
       },
     },

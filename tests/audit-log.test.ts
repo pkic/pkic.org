@@ -181,12 +181,12 @@ describe("GET /api/v1/audit-log", () => {
     const userId = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at)
-         VALUES (?, ?, ?, 'Mira', 'Okafor', 'user', 1, datetime('now'), datetime('now'))`,
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, active, created_at, updated_at)
+         VALUES (?, ?, ?, 'Mira', 'Okafor', 1, datetime('now'), datetime('now'))`,
       ).bind(memberId, `mira-${memberId}@example.test`, `mira-${memberId}@example.test`),
       env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at)
-         VALUES (?, ?, ?, 'Solo', NULL, 'user', 1, datetime('now'), datetime('now'))`,
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, active, created_at, updated_at)
+         VALUES (?, ?, ?, 'Solo', NULL, 1, datetime('now'), datetime('now'))`,
       ).bind(userId, `solo-${userId}@example.test`, `solo-${userId}@example.test`),
     ]);
     await insertAuditLogRow({

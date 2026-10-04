@@ -38,7 +38,7 @@ import { seedPersona } from "./personas/seed";
 async function actor(email: string, role = "user"): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, email);
   const grants = role === "admin" ? await grantAdministrator(env.DB, id) : [];
-  return { identityType: "user", id, email, role: "user", grants };
+  return { identityType: "user", id, email, grants };
 }
 
 async function token(userId: string, raw = crypto.randomUUID()): Promise<string> {
@@ -82,7 +82,6 @@ describe("group mailing-list management routes", () => {
       identityType: "user",
       id: leaderPersona.userId,
       email: leaderPersona.email,
-      role: "user",
       memberId: leaderPersona.capacities[0]!.memberId,
     };
     const leaderToken = leaderPersona.token!;

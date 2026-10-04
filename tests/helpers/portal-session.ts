@@ -4,7 +4,7 @@ import type { PortalSession } from "../../assets/ts/member-flows/portal/types";
 interface PortalSessionFixtureOptions {
   staff?: boolean;
   member?: boolean;
-  staffRole?: string;
+  administrator?: boolean;
   pendingIdentityCount?: number;
   grants?: Array<{ permission: string; contextType: string | null; contextId: string | null }>;
 }
@@ -23,11 +23,8 @@ export function portalSessionFixture(capacities: PortalSessionFixtureOptions): P
       ? {
           staff: {
             ...identity,
-            role: "user",
             scopes: [],
-            grants:
-              capacities.grants ??
-              (!capacities.staffRole || capacities.staffRole === "admin" ? administratorGrants : []),
+            grants: capacities.grants ?? (capacities.administrator === false ? [] : administratorGrants),
             expiresAt: "2026-08-26T00:00:00.000Z",
             idleExpiresAt: "2026-08-26T00:00:00.000Z",
           },

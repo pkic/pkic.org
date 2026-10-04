@@ -137,8 +137,8 @@ describe("event audience visibility", () => {
   it("filters rows in D1 and projects fields according to the caller's live audience", async () => {
     const adminUserId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES (?, 'event-visibility-admin@example.test', 'event-visibility-admin@example.test', 'admin', 1,
+      `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+       VALUES (?, 'event-visibility-admin@example.test', 'event-visibility-admin@example.test', 1,
                datetime('now'), datetime('now'))`,
     )
       .bind(adminUserId)
@@ -148,7 +148,6 @@ describe("event audience visibility", () => {
       identityType: "user",
       id: adminUserId,
       email: "event-visibility-admin@example.test",
-      role: "admin",
       grants: administratorGrants,
     };
     const group = await createGroup(env.DB, admin, {

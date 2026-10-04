@@ -81,7 +81,6 @@ describe("membership access offboarding", () => {
       identityType: "user",
       id: actorId,
       email: "offboarding-admin@example.test",
-      role: "admin",
       grants: administratorGrants,
     };
     const groupId = await insertGroup("Offboarding Group", "offboarding-group@lists.pkic.org");
@@ -125,7 +124,6 @@ describe("membership access offboarding", () => {
       identityType: "user",
       id: actorId,
       email: "rollback-admin@example.test",
-      role: "admin",
       grants: administratorGrants,
     };
     const groupId = await insertGroup("Rollback Group", "rollback-group@lists.pkic.org");
@@ -221,7 +219,6 @@ describe("membership access offboarding", () => {
         identityType: "user",
         id: actorId,
         email: "representative-admin@example.test",
-        role: "admin",
         grants: administratorGrants,
       },
       representativeA,

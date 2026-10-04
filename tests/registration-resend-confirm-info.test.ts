@@ -1,3 +1,4 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 /**
  * registration-resend-confirm-info.test.ts
  *
@@ -86,7 +87,7 @@ describe("confirm-info endpoint", () => {
 
   it("returns attendee info for a valid confirmation token", async () => {
     await seedEventAndAdmin(env.DB);
-    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
 
     const { confirmationToken, registrationId } = await registerAttendee();
@@ -154,7 +155,7 @@ describe("resend-confirmation endpoint", () => {
 
   it("queues a fresh expiring confirmation link without invalidating the earlier link", async () => {
     await seedEventAndAdmin(env.DB);
-    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
 
     const { confirmationToken, registrationId } = await registerAttendee();
@@ -220,7 +221,7 @@ describe("resend-confirmation endpoint", () => {
 
   it("rolls back recovery when managed email change makes the recipient snapshot stale", async () => {
     await seedEventAndAdmin(env.DB);
-    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
 
     const { confirmationToken, registrationId, manageToken } = await registerAttendee();
@@ -320,7 +321,7 @@ describe("resend-confirmation endpoint", () => {
 
   it("resends only to the new address and invalidates delayed confirmation capabilities after promotion", async () => {
     await seedEventAndAdmin(env.DB);
-    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
     const { registrationId, manageToken } = await registerAttendee();
 
@@ -399,7 +400,7 @@ describe("resend-confirmation endpoint", () => {
 
   it("reactivates a cancelled registration when the attendee registers again", async () => {
     await seedEventAndAdmin(env.DB);
-    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
 
     await registerAttendee();
@@ -444,7 +445,7 @@ describe("resend-confirmation endpoint", () => {
 
   it("does not authorize a resend by registration ID after token verification fails", async () => {
     await seedEventAndAdmin(env.DB);
-    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
 
     const { registrationId } = await registerAttendee();
@@ -479,7 +480,7 @@ describe("resend-manage-link endpoint", () => {
 
   it("sends a fresh manage link without invalidating the earlier link", async () => {
     await seedEventAndAdmin(env.DB);
-    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
 
     // Register + confirm
@@ -533,7 +534,7 @@ describe("resend-manage-link endpoint", () => {
 
   it("never sends a manage capability to an unverified pending address", async () => {
     await seedEventAndAdmin(env.DB);
-    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
     const { manageToken, email } = await registerAttendee();
 

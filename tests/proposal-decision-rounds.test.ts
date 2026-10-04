@@ -54,13 +54,13 @@ async function seedDecisionWorkflow(): Promise<SeededDecisionWorkflow> {
   const reviewerIds = [crypto.randomUUID(), crypto.randomUUID()];
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-         VALUES (?, 'round-proposer@pkic.org', 'round-proposer@pkic.org', 'user', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+         VALUES (?, 'round-proposer@pkic.org', 'round-proposer@pkic.org', 1, datetime('now'), datetime('now'))`,
     ).bind(proposerId),
     ...reviewerIds.map((reviewerId, index) =>
       env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-           VALUES (?, ?, ?, 'admin', 1, datetime('now'), datetime('now'))`,
+        `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+           VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
       ).bind(reviewerId, `round-reviewer-${index}@pkic.org`, `round-reviewer-${index}@pkic.org`),
     ),
   ]);
@@ -133,7 +133,6 @@ describe("proposal decision review rounds", () => {
           identityType: "user",
           id: seeded.adminId,
           email: "admin@pkic.org",
-          role: "user",
           grants: [],
         },
         finalStatus: "accepted",

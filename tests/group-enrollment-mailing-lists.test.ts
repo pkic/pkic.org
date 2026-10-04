@@ -35,7 +35,6 @@ async function insertAdmin(): Promise<UserBackedAuthAdmin> {
     identityType: "user",
     id,
     email: "group-platform-admin@example.test",
-    role: "admin",
     grants: administratorGrants,
   };
 }

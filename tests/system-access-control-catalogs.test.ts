@@ -31,12 +31,12 @@ describe("Permission subjects and targets", () => {
     const inactiveId = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, role, active, created_at, updated_at)
-           VALUES (?, 'ada.catalog@example.test', 'ada.catalog@example.test', 'Ada', 'Lovelace', 'Analytical Engines', 'user', 1, datetime('now'), datetime('now'))`,
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, active, created_at, updated_at)
+           VALUES (?, 'ada.catalog@example.test', 'ada.catalog@example.test', 'Ada', 'Lovelace', 'Analytical Engines', 1, datetime('now'), datetime('now'))`,
       ).bind(activeId),
       env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-           VALUES (?, 'inactive.catalog@example.test', 'inactive.catalog@example.test', 'user', 0, datetime('now'), datetime('now'))`,
+        `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+           VALUES (?, 'inactive.catalog@example.test', 'inactive.catalog@example.test', 0, datetime('now'), datetime('now'))`,
       ).bind(inactiveId),
     ]);
 
@@ -76,8 +76,8 @@ describe("Permission subjects and targets", () => {
     const operatorId = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-           VALUES (?, 'revoke-reader@example.test', 'revoke-reader@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+        `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+           VALUES (?, 'revoke-reader@example.test', 'revoke-reader@example.test', 1, datetime('now'), datetime('now'))`,
       ).bind(operatorId),
       env.DB.prepare(
         `INSERT INTO permission_grants (id, user_id, permission, granted_by_user_id, created_at)
@@ -108,7 +108,6 @@ describe("Permission subjects and targets", () => {
       identityType: "user",
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
       grants: administratorGrants,
     };
     const group = await createGroup(env.DB, actor, {

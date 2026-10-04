@@ -60,7 +60,6 @@ async function setup() {
     identityType: "user",
     id: adminId,
     email: "admin@pkic.org",
-    role: "admin",
     grants: administratorGrants,
   };
   return { actor, organizationId };

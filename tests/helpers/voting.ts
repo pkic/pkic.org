@@ -75,7 +75,6 @@ export async function seedVotingAdmin(
     identityType: "user",
     id: row.id,
     email: row.email,
-    role: "admin",
     grants: administratorGrants,
   };
   return {

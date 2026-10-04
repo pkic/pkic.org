@@ -270,8 +270,8 @@ async function seedScopedProposalEditor(
   const email = `proposal-editor-${userId}@example.test`;
   await env.DB.prepare(
     `INSERT INTO users (
-       id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at
-     ) VALUES (?, ?, ?, 'Proposal', 'Editor', 'user', 1, datetime('now'), datetime('now'))`,
+       id, email, normalized_email, first_name, last_name, active, created_at, updated_at
+     ) VALUES (?, ?, ?, 'Proposal', 'Editor', 1, datetime('now'), datetime('now'))`,
   )
     .bind(userId, email, email)
     .run();
@@ -291,7 +291,6 @@ async function seedScopedProposalEditor(
       identityType: "user",
       id: userId,
       email,
-      role: "user",
       grants: permissions.map((permission) => ({ permission, contextType: "event", contextId: eventId })),
     },
   };
@@ -793,7 +792,7 @@ describe("admin proposal endpoints", () => {
     await expect(
       editProposalSpeaker(
         racingDb,
-        { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin", grants: administratorGrants },
+        { identityType: "user", id: adminId, email: "admin@pkic.org", grants: administratorGrants },
         proposalId,
         speakerId,
         { biography: "This stale biography must not be stored.", role: "moderator" },
@@ -911,8 +910,8 @@ describe("admin proposal endpoints", () => {
     const secondReviewerId = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at)
-           VALUES (?, 'second-reviewer@pkic.org', 'second-reviewer@pkic.org', 'Second', 'admin', 1, datetime('now'), datetime('now'))`,
+        `INSERT INTO users (id, email, normalized_email, first_name, active, created_at, updated_at)
+           VALUES (?, 'second-reviewer@pkic.org', 'second-reviewer@pkic.org', 'Second', 1, datetime('now'), datetime('now'))`,
       ).bind(secondReviewerId),
       env.DB.prepare(
         `INSERT INTO proposal_reviews (

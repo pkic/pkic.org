@@ -518,7 +518,6 @@ describe("proposal participants", () => {
         identityType: "user",
         id: adminRow.id,
         email: "admin@pkic.org",
-        role: "admin",
         grants: administratorGrants,
       },
       finalStatus: "accepted",

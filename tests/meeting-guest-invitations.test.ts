@@ -42,7 +42,6 @@ async function fixture() {
     identityType: "user",
     id: adminId,
     email: "meeting-invitation-admin@example.test",
-    role: "user",
     grants,
   };
   const startsAt = new Date(Date.now() + 3_600_000).toISOString();

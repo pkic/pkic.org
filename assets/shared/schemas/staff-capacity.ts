@@ -12,7 +12,6 @@ export const publicStaffGrantSchema = z.object({
 export const publicStaffCapacitySchema = z.object({
   id: z.string().min(1),
   email: z.string().min(1),
-  role: z.string().min(1),
   scopes: z.array(z.string().min(1)),
   grants: z.array(publicStaffGrantSchema),
   expiresAt: z.string().nullable(),

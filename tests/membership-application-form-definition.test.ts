@@ -40,8 +40,8 @@ async function call(token: string | null, path: string, init: RequestInit = {}):
 async function createStaff(permission: Permission): Promise<{ id: string; token: string }> {
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-     VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+    `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+     VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
   )
     .bind(id, `${id}@example.test`, `${id}@example.test`)
     .run();
@@ -432,7 +432,6 @@ describe("membership application form definition", () => {
     const actor = createUserBackedAuthAdmin({
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
       grants: [],
     });
     const racedDb = mutateBeforeNextBatch(env.DB, () =>

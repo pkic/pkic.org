@@ -64,8 +64,8 @@ async function seedOrganization(name: string): Promise<{ organizationId: string;
        VALUES (?, ?, ?, datetime('now'), datetime('now'))`,
     ).bind(organizationId, name, name.toLowerCase()),
     env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at)
-       VALUES (?, ?, ?, 'Test', 'user', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, first_name, active, created_at, updated_at)
+       VALUES (?, ?, ?, 'Test', 1, datetime('now'), datetime('now'))`,
     ).bind(userId, `contact@${name.toLowerCase()}.test`, `contact@${name.toLowerCase()}.test`),
   ]);
 
@@ -93,7 +93,6 @@ describe("Sponsorship sales pipeline", () => {
       identityType: "user",
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
       grants: administratorGrants,
     };
     adminToken = await createAdminSession(env.DB, adminId, "admin-sponsorship-token");

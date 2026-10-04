@@ -55,8 +55,8 @@ describe("event registration list generic form contract", () => {
       return [
         env.DB.prepare(
           `INSERT INTO users
-             (id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'Attendee', 'user', 1, datetime('now'), datetime('now'))`,
+             (id, email, normalized_email, first_name, last_name, active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'Attendee', 1, datetime('now'), datetime('now'))`,
         ).bind(userId, `generic-${index}@example.test`, `generic-${index}@example.test`, `Attendee${index}`),
         env.DB.prepare(
           `INSERT INTO registrations

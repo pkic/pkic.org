@@ -1,3 +1,4 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { administratorGrants } from "./helpers/administrator-grants";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
@@ -15,7 +16,7 @@ let actorId: string;
 beforeEach(async () => {
   await resetDb();
   await seedEventAndAdmin(env.DB);
-  actorId = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0].id;
+  actorId = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0].id;
   token = await createAdminSession(env.DB, actorId, "user-create-tests");
 });
 function request(body: unknown, authenticated = true) {
@@ -33,12 +34,12 @@ describe("staff user creation", () => {
     const response = await request({ email: "New.Person@Example.test", firstName: "New", lastName: "Person" });
     expect(response.status).toBe(201);
     const { userId } = userCreateResponseSchema.parse(await response.json());
-    const users = await queryAll<{ role: string; normalized_email: string }>(
+    const users = await queryAll<{ normalized_email: string }>(
       env.DB,
-      "SELECT role, normalized_email, email_verified_at FROM users WHERE id = ?",
+      "SELECT normalized_email, email_verified_at FROM users WHERE id = ?",
       userId,
     );
-    expect(users).toEqual([{ role: "user", normalized_email: "new.person@example.test", email_verified_at: null }]);
+    expect(users).toEqual([{ normalized_email: "new.person@example.test", email_verified_at: null }]);
     expect(await queryAll(env.DB, "SELECT id FROM identities WHERE user_id = ?", userId)).toHaveLength(0);
     expect(
       await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'user_created' AND entity_id = ?", userId),
@@ -60,7 +61,6 @@ describe("staff user creation", () => {
     const actor = createUserBackedAuthAdmin({
       id: actorId,
       email: "admin@pkic.org",
-      role: "user",
       grants: administratorGrants,
     });
     const raced = mutateBeforeNextBatch(env.DB, async () => {
