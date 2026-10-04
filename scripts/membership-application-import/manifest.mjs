@@ -4,6 +4,8 @@ import { isAbsolute } from "node:path";
 import { githubApplicationEvidenceSchema } from "./source-contracts.mjs";
 import { applicationImportEligibility } from "./eligibility.mjs";
 
+export const backfillEnvironmentSchema = z.enum(["production", "preview", "local"]);
+
 export function digest(value) {
   const canonical = JSON.stringify(value, (_key, item) =>
     item && typeof item === "object" && !Array.isArray(item)
@@ -49,7 +51,7 @@ export function manifestSchema(contracts) {
       version: z.literal(2),
       runId: contracts.databaseIdSchema,
       actorUserId: contracts.databaseIdSchema,
-      environment: z.enum(["production", "local"]),
+      environment: backfillEnvironmentSchema,
       databaseId: z.string().min(1),
       localDirectory: z.string().refine(isAbsolute).nullable(),
       sourceData: z.enum(["private", "synthetic"]),
@@ -83,10 +85,12 @@ export function parseManifest(input, contracts, databaseId) {
   }
   const manifest = parsed.data;
   if (manifest.databaseId !== databaseId) throw new Error("Destination must match the configured database");
-  if (manifest.environment === "local" && (manifest.sourceData !== "synthetic" || !manifest.localDirectory))
-    throw new Error("Local rehearsal requires synthetic data and a dedicated local directory");
-  if (manifest.environment === "production" && manifest.localDirectory !== null)
-    throw new Error("Production must not specify a local directory");
+  if (manifest.environment !== "production" && manifest.sourceData !== "synthetic")
+    throw new Error("Local and preview rehearsal require synthetic data");
+  if (manifest.environment === "local" && !manifest.localDirectory)
+    throw new Error("Local rehearsal requires a local database directory");
+  if (manifest.environment !== "local" && manifest.localDirectory !== null)
+    throw new Error("Remote environments must not specify a local directory");
   return manifest;
 }
 

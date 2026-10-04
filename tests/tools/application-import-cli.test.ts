@@ -153,6 +153,47 @@ describe("backfill against the unchanged D1 schema", () => {
     expect(await readFile(report, "utf8")).toBe("null");
     expect((await query("SELECT count(*) AS n FROM member_applications"))[0].results[0].n).toBe(0);
   });
+  it("selects the preview binding for dry runs and rejects private or misdirected manifests", async () => {
+    const input = {
+      ...reviewedManifest(),
+      environment: "preview",
+      databaseId: "0647ba62-4bf0-40e5-b547-62f992acbbf0",
+      sourceData: "synthetic",
+    };
+    const manifest = join(directory, "preview.json");
+    const report = join(directory, "preview-dry.json");
+    const args = ["--manifest", manifest, "--report", report];
+    await writeFile(manifest, JSON.stringify(input));
+    const result = await cli(args);
+    expect(result.code, result.output).toBe(0);
+    expect(await readJson(report)).toMatchObject({
+      destination: `preview:${input.databaseId}:`,
+      summary: { ready: 2 },
+    });
+    for (const invalid of [
+      { ...input, sourceData: "private" },
+      { ...input, databaseId: reviewedManifest().databaseId },
+      { ...input, environment: "unknown" },
+    ]) {
+      await writeFile(manifest, JSON.stringify(invalid));
+      expect((await cli(args)).code).toBe(1);
+    }
+  });
+  it("accepts a canonical local development persistence directory inside the checkout", async () => {
+    const persistence = await realpath(await mkdtemp(resolve("node_modules", "backfill-local-")));
+    try {
+      const manifest = join(directory, "development-local.json");
+      await writeFile(manifest, JSON.stringify(reviewedManifest(persistence)));
+      const report = join(directory, "development-local-dry.json");
+      const result = await cli(["--manifest", manifest, "--report", report]);
+      expect(result.code, result.output).toBe(0);
+      expect(await readJson(report)).toMatchObject({
+        destination: `local:${reviewedManifest().databaseId}:${persistence}`,
+      });
+    } finally {
+      await rm(persistence, { recursive: true, force: true });
+    }
+  });
   it("executes the real CLI, preserves original evidence, and resumes without schema or onboarding changes", async () => {
     const input = reviewedManifest(localDirectory);
     const manifest = join(directory, "reviewed.json");

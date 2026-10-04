@@ -14,7 +14,7 @@ export function databaseArguments(manifest) {
     "DB",
     "--env",
     manifest.environment,
-    ...(manifest.environment === "production" ? ["--remote"] : ["--local", "--persist-to", manifest.localDirectory]),
+    ...(manifest.environment === "local" ? ["--local", "--persist-to", manifest.localDirectory] : ["--remote"]),
     "--json",
   ];
 }

@@ -1,7 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { createReport, executeBatch, resumeReport } from "../../scripts/membership-application-import/batch.mjs";
 import { parseManifest, unresolvedReason } from "../../scripts/membership-application-import/manifest.mjs";
-import { importEntry, databaseArguments } from "../../scripts/membership-application-import/database.mjs";
+import { importEntry } from "../../scripts/membership-application-import/database.mjs";
 import { applicationBackfillSql, sourceId } from "../../scripts/membership-application-import/sql.mjs";
 import { readGithubSource } from "../../scripts/membership-application-import/github.mjs";
 import {
@@ -79,16 +79,6 @@ describe("backfill-only manifests", () => {
     expect(unresolvedReason(entry)).toBeNull();
     entry.source.timeline.reverse();
     expect(unresolvedReason(entry)).toBe("source_duplicate");
-  });
-  it("requires synthetic isolated local targets and never allows preview", () => {
-    expect(() => parseManifest({ ...reviewedManifest(), environment: "preview" }, contracts, databaseId)).toThrow();
-    expect(() =>
-      parseManifest({ ...reviewedManifest("/tmp/example"), sourceData: "private" }, contracts, databaseId),
-    ).toThrow("synthetic");
-    expect(databaseArguments(manifest())).toContain("--remote");
-    expect(databaseArguments(parseManifest(reviewedManifest("/tmp/example"), contracts, databaseId))).not.toContain(
-      "--remote",
-    );
   });
   it.each(["outcome", "applicantName", "applicantEmail", "membershipCategory", "decisionAt"])(
     "keeps missing %s unresolved",
