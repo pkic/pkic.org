@@ -189,13 +189,6 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     label: "Applications",
     sidebar: true,
     access: (session) => portalHasGlobalPermission(session, "membership:read"),
-    children: [
-      {
-        path: "/membership/applications/history",
-        label: "Application history",
-        access: (session) => portalHasGlobalPermission(session, "membership:read"),
-      },
-    ],
   },
   {
     /*

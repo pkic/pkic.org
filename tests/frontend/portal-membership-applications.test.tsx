@@ -27,8 +27,6 @@ const detail = {
   applicantName: "Example Applicant",
   organizationName: "Example Organization",
   membershipCategory: "F",
-  source: null,
-  closedAt: null,
   currentRequirement: null,
   membershipCategoryLabel: "General Member",
   stage: "processing" as const,
@@ -134,79 +132,6 @@ describe("portal membership-application management", () => {
     expect(requests.every((url) => !url.pathname.startsWith("/api/v1/admin/"))).toBe(true);
   });
 
-  it("requests History with independent URL state and only historical outcomes", async () => {
-    history.replaceState(
-      null,
-      "",
-      "#/membership/applications/history?applicationHistory.q=Organization&applications.q=Active",
-    );
-    const requests: URL[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        requests.push(new URL(String(input), location.origin));
-        return json({ applications: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
-      }),
-    );
-    const page = mount(<ApplicationsList scope="history" />);
-    await settle();
-    expect(requests[0].searchParams.get("scope")).toBe("history");
-    expect(requests[0].searchParams.get("q")).toBe("Organization");
-    expect(page.textContent).toContain("No application history matches this view");
-    expect(page.querySelector("caption")?.textContent).toBe("Application history");
-    history.replaceState(null, "", "#/membership/applications");
-  });
-
-  it("renders imported unknown history as read-only source evidence without loading private images", async () => {
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async () =>
-        json({
-          ...detail,
-          stage: "closed_unknown",
-          source: {
-            repository: "pkic/members",
-            issueId: "1001",
-            issueNumber: 101,
-            issueUrl: "https://github.com/pkic/members/issues/101",
-            importedAt: NOW,
-            activatedAt: null,
-            historical: true,
-            snapshot: {
-              title: "Example Organization application",
-              body: "![private evidence](https://github.com/user-attachments/assets/example)",
-              labels: [],
-              state: "closed",
-              closureReason: "completed",
-              events: [
-                {
-                  id: "1",
-                  kind: "comment",
-                  author: "reviewer",
-                  body: "Reviewing the application form",
-                  createdAt: NOW,
-                },
-              ],
-              attachmentUrls: [],
-              warnings: [],
-            },
-          },
-        }),
-      ),
-    );
-    const page = mountDetail({ canWrite: true, canApprove: true });
-    await settle();
-    expect(page.textContent).toContain("Closed — outcome unknown");
-    expect(page.textContent).toContain("Historical evidence is read-only");
-    expect(page.textContent).not.toContain("Application answers");
-    expect(page.textContent).not.toContain("No stage changes yet");
-    expect(page.querySelector('a[href="https://github.com/pkic/members/issues/101"]')).not.toBeNull();
-    expect(page.querySelector('img[src^="https://github.com"]')).toBeNull();
-    expect(page.querySelector('[aria-label="Application actions"]')).toBeNull();
-    expect(page.querySelector('[aria-label="Stage transition"]')).toBeNull();
-    expect(page.querySelector('nav[aria-label="Breadcrumb"] a')?.textContent).toBe("Application history");
-  });
-
   it("narrows by stage from the Stage column, sends it to the collection query, without a separate consultation queue", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
@@ -230,7 +155,7 @@ describe("portal membership-application management", () => {
     // No select above the table: the stage filter is the Stage column's own.
     expect(page.querySelector('[role="toolbar"] select')).toBeNull();
     // And the table names itself, so several tables on one page are told apart.
-    expect(page.querySelector("caption")?.textContent).toBe("Active applications");
+    expect(page.querySelector("caption")?.textContent).toBe("Membership applications");
     // The default view is the server default: no `stage` on the list request.
     expect(requests.some((url) => !url.searchParams.has("stage"))).toBe(true);
 
@@ -315,7 +240,7 @@ describe("portal membership-application management", () => {
     const trail = page.querySelector('nav[aria-label="Breadcrumb"]');
     expect(trail).not.toBeNull();
     const backLink = trail!.querySelector<HTMLAnchorElement>("a");
-    expect(backLink?.textContent).toBe("Active applications");
+    expect(backLink?.textContent).toBe("Membership applications");
     expect(backLink?.getAttribute("href")).toBe("#/membership/applications");
   });
 

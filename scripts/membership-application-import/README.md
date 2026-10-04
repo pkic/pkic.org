@@ -1,120 +1,101 @@
-# Batch membership application import
+# Membership application backfill
 
-Run `pnpm import:applications` from the repository checkout. The default is an **offline dry run**. Execution uses the existing authenticated import API, one reviewed GitHub issue at a time. It never activates workflows, creates onboarding messages, or edits GitHub issues.
+`pnpm import:applications` is an operator-run batch CLI for writing supported GitHub history into the **existing** portal application records. It needs no application deployment, new API endpoint, Worker secret, or schema migration. Applications use the normal list, stage filters, detail screen, and private internal notes.
 
-This tool consumes reviewed mappings; it does not infer approvals, match users by similar names, or generate a reviewed manifest from raw issues. Review the source inventory first. Keep manifests and reports in a restricted directory outside the repository; never attach them to a public issue or pull request. The CLI rejects paths inside the repository and writes reports with owner-only permissions.
+The default is an offline dry run. Execution is explicit, checkpointed, and resumable. The CLI writes only `member_applications`, `application_communications` with `kind = note`, and the existing audit log. It does not create users, organizations, memberships, form answers, workflows, outbox messages, domain claims, or GitHub comments. Original application-form content and source evidence are retained as internal notes; missing current-form answers and consent stay unknown.
 
-## Prepare a reviewed manifest
+## Supported records and unresolved work
 
-The following is synthetic historical data illustrating the format, not a production-ready mapping. Replace every example with reviewed source evidence before a real import. Include every inventoried issue exactly once, as `import`, `exclude`, or `unresolved`. Exclusions and unresolved entries require a reason and an owner; import entries require a reviewer and review time.
+An import must be an actual issue with the exact `Membership application` label, currently closed as completed with an unambiguous final closure and no effective duplicate disposition. GitHub completion is **not** proof of membership approval. A reviewer must supply a supported outcome (`approved`, `declined`, or `withdrawn`), its evidenced decision time, applicant name and email, and an existing category. Organization categories require an organization name; individual categories require null. An optional applicant user link must match an existing non-redacted user's exact normalized email.
+
+Open applications, indefinite holds (including source #795), unknown outcomes, missing required fields, and unsupported review timing remain explicitly `unresolved`. They are not coerced into another lifecycle state and are never submitted to the database. Keep their reasons and owners in the reviewed inventory. Their exclusion from this backfill is not a claim that the entire original migration request is complete.
+
+The source issue URL, body, labels, timestamps, comments with original authors, and timeline evidence are retained in ordinary private notes. The note's staff actor identifies the operator recording the evidence; its text identifies the original GitHub author and source timestamp. Notes are recorded at the actual backfill time; staff actions are not backdated. Attachments remain source links, and their continued availability must be reviewed. No private files are copied into public assets.
+
+## Reviewed manifest, version 2
+
+Keep the manifest, source exports, generated SQL, and reports in a restricted directory **outside the repository**. The directory must already exist. Reports and temporary SQL files use owner-only permissions. Never publish them in a PR or issue. Version-1 manifests and reports from the superseded portal-API importer are rejected; review a new version-2 manifest.
+
+The root fields are:
+
+| Field | Meaning |
+| --- | --- |
+| `version` | `2` |
+| `runId` | UUID used only in private reports, never stored in application tables |
+| `actorUserId` | Existing active, non-redacted staff user recording the source notes |
+| `environment` | `production` or `local`; preview is not supported |
+| `databaseId` | Exact `DB` binding ID from that environment in `wrangler.jsonc` |
+| `localDirectory` | `null` for production; canonical absolute isolated D1 persistence directory for local use |
+| `sourceData` | `private` or `synthetic`; local use requires `synthetic` |
+| `entries` | Up to 2,000 reviewed entries, with unique source issue numbers |
+
+An `import` entry contains the full reviewed `source` object (`repository: "pkic/members"`, numeric `labelId`, `issue`, all `comments`, and all `timeline` pages), plus:
 
 ```json
 {
-  "version": 1,
-  "runId": "22222222-2222-4222-8222-222222222222",
-  "portalOrigin": "https://pkic.org",
-  "environment": "production",
-  "sourceData": "private",
-  "entries": [
-    {
-      "decision": "import",
-      "sourceIssueNumber": 123,
-      "expectedUpdatedAt": "2026-01-01T00:00:00.000Z",
-      "reviewedBy": "Application reviewer",
-      "reviewedAt": "2026-01-02T00:00:00.000Z",
-      "mapping": {
-        "manualHold": false,
-        "answers": {},
-        "applicantName": "Example User",
-        "applicantEmail": "user@example.org",
-        "organizationName": "Example Organization",
-        "categoryCode": null,
-        "applicantUserId": null,
-        "organizationId": null,
-        "outcome": "closed_unknown",
-        "mappingReason": "Reviewed the historical application form; its closure does not establish approval.",
-        "workflow": null
-      }
-    },
-    {
-      "decision": "exclude",
-      "sourceIssueNumber": 124,
-      "reason": "Not a membership application",
-      "owner": "Application reviewer"
-    },
-    {
-      "decision": "unresolved",
-      "sourceIssueNumber": 125,
-      "reason": "The organization and portal user identity need reconciliation",
-      "owner": "Application reviewer"
-    }
-  ]
+  "decision": "import",
+  "sourceIssueNumber": 123,
+  "reviewedBy": "Application reviewer",
+  "reviewedAt": "2026-10-04T12:00:00.000Z",
+  "mapping": {
+    "applicantName": "Example User",
+    "applicantEmail": "user@example.org",
+    "organizationName": "Example Organization",
+    "membershipCategory": "A",
+    "applicantUserId": null,
+    "outcome": "declined",
+    "decisionAt": "2020-01-02T00:00:00.000Z",
+    "mappingReason": "The source review comment explicitly records the rejection decision."
+  }
 }
 ```
 
-`mapping` and timestamps use the canonical [import request schema](../../assets/shared/schemas/membership-application-import.ts). Use ISO-8601 UTC instants with milliseconds and `Z`. `expectedUpdatedAt` is the reviewed GitHub issue's update time, normalized to that format. Use a fresh UUID for a new reviewed batch. Manifests support up to 2,000 entries; split larger inventories into separately reviewed batches.
+This fragment omits `source` for readability; it is not executable as-is. See the complete [synthetic fixture builder](../../tests/helpers/application-backfill.ts) for the source shape. Actual manifests must use independently reviewed evidence. Use UTC timestamps with milliseconds and `Z`. Do not use closure time as decision time without evidence, or fill missing fields with placeholders. Nullable mapping values remain unresolved rather than inventing history.
 
-Historical unknown fields may be null. Active applications need current form answers, exact user and organization identities, a category, and workflow evidence accepted by the server. Preserve source event references and original review windows. Set `manualHold: true` for an indefinite hold and explain it in `mappingReason`; source issue 795 requires this acknowledgment. See the [import operations guide](../../functions/_lib/services/membership/applications/IMPORTS.md) for eligibility, workflow mapping, and activation rules.
+For decisions not ready for import, use:
 
-The production destination must match `env.production.vars.APP_BASE_URL` in `wrangler.jsonc`. Preview is not an import target. For isolated local rehearsals only, use `environment: "local"`, `sourceData: "synthetic"`, and an HTTP loopback origin. Never put private production data into a local or preview rehearsal.
-
-## Validate without importing
-
-```sh
-pnpm import:applications --manifest /secure/pkic-import/reviewed.json --report /secure/pkic-import/dry-run.json
+```json
+{"decision":"unresolved","sourceIssueNumber":795,"reason":"Indefinite hold cannot be represented safely by the current portal","owner":"Application reviewer"}
 ```
 
-No credential or network access is needed. The dry run validates the manifest against the shared request contract and writes counts and per-issue decisions. It cannot verify live GitHub eligibility, the latest source revision, portal identities, form versions, workflow evidence, or server configuration. `ready` means contract-valid for submission, not approved or confirmed importable. Unresolved entries produce exit code 2 even in a dry run.
+`exclude` has the same reason/owner shape. Include every inventoried issue exactly once. Review potential existing portal matches and exact identities before executing; the database guard additionally refuses another application with the same email and source creation time.
 
-## Execute the reviewed batch
-
-Obtain explicit operational approval separately from deploying this code. Migration 0037 must already be applied through the approved migration process, and production must have `GITHUB_MEMBERS_IMPORT_TOKEN` configured with read-only access to `pkic/members`. The CLI does not configure secrets or apply migrations.
-
-Supply `PKIC_PORTAL_SESSION_TOKEN` securely through the environment: an unexpired portal **user session** with `membership:approve`, not a portal API key or the GitHub source token. Do not put credentials in arguments, manifests, reports, or shell history. The CLI sends this bearer credential only to the validated origin and refuses HTTP redirects.
-
-Use a different report path from the dry run:
+## Dry run
 
 ```sh
-pnpm import:applications --manifest /secure/pkic-import/reviewed.json --report /secure/pkic-import/results.json --execute
+pnpm import:applications --manifest /secure/reviewed.json --report /secure/dry-run.json
 ```
 
-The server rereads each source and validates eligibility and mappings before its atomic import. Excluded and unresolved rows are never submitted. Per-issue refusals such as 409 or 422 are recorded and execution continues; authentication failures (401/403), rate limiting (429), server failures, transport failures, and invalid responses stop the batch. Requests have a 120-second timeout, adjustable with `--timeout-seconds` from 1 to 600. There are no automatic retries.
+No GitHub or Cloudflare access is used. The report distinguishes ready, excluded, and unresolved entries and includes safe reason codes for automatically unresolved imports. `ready` means the offline contract and evidence checks passed; it does not confirm current GitHub state, database identities, or category availability. Unresolved work returns exit code 2.
 
-## Resume and recover
+## Execute and resume
 
-Each request has a saved `in_flight` checkpoint before transmission and a saved result afterward. Reports are replaced atomically. Ctrl+C or SIGTERM records an interruption when possible. A timeout, lost response, or process crash can leave a request's outcome uncertain; the server's stable source identity prevents a replay from creating another application.
-
-After resolving the failure, resume with the **same manifest, run ID, destination, and report**:
+Production backfill remains a separately authorized data operation. Authenticate the operator's existing `gh` and Wrangler sessions for read-only access to `pkic/members` and the intended D1 database. Do not put credentials in arguments, source files, manifests, or reports. No portal session token or deployed GitHub import secret is used. The existing schema through migration 0036 must already be present; this CLI never applies migrations.
 
 ```sh
-pnpm import:applications --manifest /secure/pkic-import/reviewed.json --report /secure/pkic-import/results.json --execute --resume
+pnpm import:applications --manifest /secure/reviewed.json --report /secure/results.json --execute
+pnpm import:applications --manifest /secure/reviewed.json --report /secure/results.json --execute --resume
 ```
 
-Resume skips imported, already-present, excluded, and unresolved rows. It retries failed, uncertain, in-flight, and pending rows. It refuses a dry-run report, changed manifest, missing report, or mismatched row identity. It also refuses to overwrite an existing report without `--resume`.
+Execution rereads every source's issue, comments, and timeline using `gh`, and verifies it matches the reviewed evidence. It checks for an existing source-derived application identity, then submits one bounded SQL file per source through Wrangler's D1 import command. The file uses the existing tables and constraints. All dependent inserts are guarded so replay cannot change an existing application, restore removed notes, or duplicate the audit. Existing records with a conflicting identity stop the run for reconciliation. Database constraints also protect category, user, and duplicate-match checks within the write boundary.
 
-A `.lock` file beside the report prevents concurrent runs against that report. After a hard termination, inspect the lock's PID and verify the previous process is no longer running before removing the stale lock. Never remove a live run's lock. Keep the directory on a local filesystem with reliable exclusive creation and atomic rename.
+A source change is recorded as a failure without writing it. Operational failures stop the batch; a write whose result cannot be confirmed is `uncertain`. Resolve the problem, then resume the exact manifest and report. Confirmed rows are skipped. Stable source-derived record IDs protect against repeating a committed write after a lost response. An `already_present` result confirms an earlier record, not that its mapping equals a later proposal. Corrections require a separately reviewed normal data correction, not another import.
 
-If a mapping or source revision must change, obtain a new review and use a new manifest, run ID, and report. Preserve the earlier files for reconciliation. Do not edit a report to mark work successful. Already imported sources retain their first mapping; reimporting does not correct them. Follow the operations guide's guarded correction process for an erroneous committed mapping.
+Ctrl+C and SIGTERM stop child processes and checkpoint when possible. A remote import already submitted may still complete; resume reconciles its identity. `--timeout-seconds` sets a per-source bound (default 120, range 1–600). There is no automatic retry. An exclusive `.lock` beside the report prevents concurrent runs using that report; after a hard termination, verify its PID is no longer running before removing a stale lock. Keep files on a filesystem supporting reliable exclusive creation and atomic rename.
 
-## Read the results
+The report contains counts, issue numbers, fingerprints, destination, attempts, result IDs, and safe failure categories. It omits applicant data, source bodies, reviewer names, credentials, and raw command errors. The run ID and bookkeeping stay outside the database. Preserve prior reports for recovery; never edit them to mark a row successful. A changed manifest needs a new review and a new report.
 
-The JSON report includes the manifest fingerprint, destination, run ID, phase, counts, and each issue's status, request fingerprint, attempt count, timestamps, and returned application ID when available. It intentionally omits form answers, applicant details, reviewer names, mapping reasons, credentials, and raw response/error bodies. Issue numbers and application IDs remain sensitive operational references; keep the report private.
+Exit codes: **0** complete; **1** invalid input or local failure; **2** unresolved/incomplete; **130** interrupted. Completion of supported rows does not resolve unsupported inventory entries.
 
-- `ready`: offline contract validation passed; no request sent.
-- `pending` / `in_flight`: not yet submitted / checkpointed before submission.
-- `imported` / `already_present`: server confirmed a new import / an existing source import.
-- `excluded` / `unresolved`: reviewed inventory decisions; no request sent.
-- `failed`: server refused this request; inspect its HTTP status and reconcile.
-- `uncertain`: the CLI cannot confirm the server's final outcome; resume safely by source identity.
-
-Exit codes: **0** means a valid dry run without unresolved rows or a completed execution; **1** means invalid input or a local failure; **2** means unresolved or incomplete work; **130** means interrupted execution. An already-present result confirms source identity, not that a later proposed mapping matches the stored record.
-
-Reconcile total inventory counts and inspect application history in the portal before declaring the import complete. For an example organization, verify its application form answers, linked user, source attribution, discussion, and outcome. Imported active applications remain suspended until the separately authorized activation process. Remove production GitHub source access when cutover is complete.
-
-## Focused verification
+## Synthetic verification and operational review
 
 ```sh
 pnpm run test:tools tests/tools/application-import-batch.test.ts tests/tools/application-import-cli.test.ts
+pnpm run test:e2e tests/e2e/application-backfill.spec.ts
 ```
 
-Tests use synthetic organizations, users, and forms. They cover offline validation, real CLI execution against a local HTTP fixture, private report writes, interrupted/ambiguous requests, and resume without repeating successful work. They do not contact production or import GitHub data.
+The tests apply the unchanged schema to a fresh isolated local D1 database. They exercise the actual CLI, rollback, replay after portal edits, private reports, and absence of account, membership, workflow, or email effects. Never use production source exports or credentials for local/preview rehearsal.
+
+After an authorized backfill, use the normal portal Applications list and its existing stage filter to find an example organization. Open its detail and inspect the applicant, category, terminal status, and original form/discussion evidence in internal notes. The existing Communications table clips long note text; verify the complete stored `application_communications.body` against the reviewed evidence through an authorized read-only database query. Improving that general-purpose note display is outside this backfill-only PR. Missing form answers should remain empty; no review should restart. Confirm no onboarding or email was produced and reconcile imported, already-present, excluded, and unresolved counts against the complete source inventory.
+
+For a wrong committed mapping, stop the run, preserve the reviewed manifest and report, and identify affected records by their reported IDs. Prepare a guarded correction that preserves later portal edits and evidence. Do not restore the whole database, delete arbitrary application records, or attempt to overwrite them with this CLI. Retire the operational tool after all supported cutover work and reconciliation are complete; no deployed code depends on it.

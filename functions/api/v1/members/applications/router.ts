@@ -1,4 +1,3 @@
-import { MembershipApplicationImport } from "./imports";
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
 import { MembersApplicationsPost } from "./index";
@@ -10,7 +9,6 @@ import applicationId_Router from "./[id]/router";
 const app = new Hono();
 export const openapi = fromHono(app);
 
-openapi.post("/imports", MembershipApplicationImport);
 openapi.get("/form", MembersApplicationsFormGet);
 openapi.get("/form/definition", MembersApplicationsFormDefinitionGet);
 openapi.patch("/form/definition", MembersApplicationsFormDefinitionPatch);

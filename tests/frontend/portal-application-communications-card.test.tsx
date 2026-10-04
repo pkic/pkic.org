@@ -68,8 +68,6 @@ function detail(communications: MembershipApplicationCommunication[] = []): Memb
     applicantName: "Example Applicant",
     organizationName: "Example Organization",
     membershipCategory: "F",
-    source: null,
-    closedAt: null,
     currentRequirement: null,
     membershipCategoryLabel: "General Member",
     stage: "processing",

@@ -1,31 +1,30 @@
 import { parseArgs } from "node:util";
-import { readFile } from "node:fs/promises";
-import { resolve } from "node:path";
-import { fileURLToPath } from "node:url";
+import { readFile, realpath } from "node:fs/promises";
+import { resolve, dirname, join } from "node:path";
+import { repositoryRoot as root } from "./process.mjs";
 import ts from "typescript";
-import { loadImportContracts, parseManifest } from "./manifest.mjs";
+import { parseManifest } from "./manifest.mjs";
+import { loadImportContracts } from "./load-contracts.mjs";
 import { privatePaths, readJson, existingReport, lockReport, writeReport } from "./files.mjs";
 import { createReport, resumeReport, executeBatch } from "./batch.mjs";
 
-const root = fileURLToPath(new URL("../../", import.meta.url));
 const help = `Usage: pnpm import:applications --manifest /secure/reviewed.json --report /secure/results.json [--execute [--resume]]
 
-Default: offline dry-run; validates reviewed entries and writes a report without network requests.
---dry-run          Explicit offline validation (also the default).
---execute          Import reviewed entries through the existing portal API, sequentially.
---resume           Resume an execution report for the exact same manifest and destination.
---timeout-seconds  Per-request timeout (default 120, range 1–600). No automatic retries.
---help             Show this help.
+Default: offline dry-run. --dry-run makes this explicit.
+--execute          Backfill supported closed applications directly into existing D1 tables.
+--resume           Resume an execution report for exactly the same manifest and database.
+--timeout-seconds  Per-source timeout (default 120, range 1–600). No automatic retry.
+--help             Show help.
 
-Execution reads PKIC_PORTAL_SESSION_TOKEN from the environment (a staff user session with membership:approve).
-Keep both files outside the repository. Production targets the configured production origin.
-Local rehearsal requires sourceData=synthetic and an HTTP loopback origin. Preview is not an import target.
-The server must have migration 0037 and production GitHub source access configured separately.
-This command never activates workflows or changes GitHub issues.
-Exit codes: 0 complete/valid dry-run, 1 invalid input or local failure, 2 unresolved/incomplete, 130 interrupted.
-See scripts/membership-application-import/README.md for the manifest format and recovery steps.`;
+Use reviewed version-2 manifests. Unsupported history and active work remain unresolved.
+Execution uses the operator's existing gh and Wrangler credentials; no portal token is needed.
+Production requires separately authorized data backfill. Local rehearsal is synthetic only.
+The command does not deploy code, change schema, activate workflows, or edit GitHub issues.
+Keep manifests and reports outside the repository.
+Exit codes: 0 complete, 1 invalid input/local failure, 2 unresolved/incomplete, 130 interrupted.
+See scripts/membership-application-import/README.md for mapping and recovery.`;
 
-export async function runCli(argv, environment = process.env) {
+export async function runCli(argv) {
   let options;
   try {
     options = parseArgs({
@@ -59,15 +58,16 @@ export async function runCli(argv, environment = process.env) {
     "wrangler.jsonc",
     await readFile(resolve(root, "wrangler.jsonc"), "utf8"),
   );
-  if (config.error) throw new Error("Cannot read the configured production portal origin");
-  const manifest = parseManifest(
-    await readJson(paths.manifest),
-    contracts,
-    config.config.env.production.vars.APP_BASE_URL,
-  );
-  const token = options.execute ? environment.PKIC_PORTAL_SESSION_TOKEN?.trim() : null;
-  if (options.execute && !token)
-    throw new Error("Execution requires PKIC_PORTAL_SESSION_TOKEN for an authorized staff user");
+  if (config.error) throw new Error("Cannot read the configured database destination");
+  const input = await readJson(paths.manifest);
+  const target = input?.environment === "local" ? "local" : "production";
+  const databaseId = config.config.env[target].d1_databases.find((binding) => binding.binding === "DB")?.database_id;
+  const manifest = parseManifest(input, contracts, databaseId);
+  if (manifest.localDirectory) {
+    const directory = await realpath(manifest.localDirectory);
+    await privatePaths(paths.manifest, join(directory, ".backfill-target"), root);
+    if (directory !== manifest.localDirectory) throw new Error("Use the canonical local database directory path");
+  }
   const unlock = await lockReport(paths.report);
   const controller = new AbortController();
   const interrupt = () => controller.abort();
@@ -88,14 +88,12 @@ export async function runCli(argv, environment = process.env) {
         manifest,
         report,
         contracts,
-        token,
+        directory: dirname(paths.report),
         signal: controller.signal,
         timeoutMs: seconds * 1000,
         save: (state) => writeReport(paths.report, state),
         onResult: (entry) =>
-          console.log(
-            `Issue #${entry.sourceIssueNumber}: ${entry.status}${entry.httpStatus ? ` (HTTP ${entry.httpStatus})` : ""}`,
-          ),
+          console.log(`Issue #${entry.sourceIssueNumber}: ${entry.status}${entry.error ? ` (${entry.error})` : ""}`),
       });
     } else {
       await writeReport(paths.report, report);
@@ -105,7 +103,7 @@ export async function runCli(argv, environment = process.env) {
     console.log(`Results report: ${paths.report}`);
     if (!options.execute)
       console.log(
-        "Offline validation only; source eligibility, identities, forms, and workflow evidence are rechecked by the server during execution.",
+        "Offline validation only; execution rechecks GitHub evidence, existing records, identities, and categories before writing supported history.",
       );
     return exitCode;
   } finally {

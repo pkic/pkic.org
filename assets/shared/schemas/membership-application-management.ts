@@ -1,4 +1,3 @@
-import { applicationSourceSchema, historicalApplicationOutcomeSchema } from "./membership-application-source";
 /**
  * Staff membership application management — list/detail, stage
  * transitions, communications/notes, and evidence-based approval.
@@ -7,12 +6,7 @@ import { z } from "zod";
 import { formFieldDefinitionSchema } from "./forms";
 import { databaseIdSchema } from "./identifiers";
 import { normalizedEmailSchema } from "./api-common";
-import {
-  membershipCategorySchema,
-  applicationStageSchema,
-  applicationScopeSchema,
-  onHoldSubtypeSchema,
-} from "./member-applications";
+import { membershipCategorySchema, applicationStageSchema, onHoldSubtypeSchema } from "./member-applications";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { httpUrlSchema } from "./urls";
 import { groupIdSchema, groupLabelSchema } from "./groups";
@@ -24,12 +18,10 @@ export const MEMBERSHIP_APPLICATIONS_SORT_COLUMNS = [
   "membership_category",
   "stage",
   "created_at",
-  "closed_at",
 ] as const;
 
 export const membershipApplicationsListQuerySchema = listQuerySchema(MEMBERSHIP_APPLICATIONS_SORT_COLUMNS).extend({
-  stage: applicationStageSchema.or(historicalApplicationOutcomeSchema).optional(),
-  scope: applicationScopeSchema.default("active"),
+  stage: applicationStageSchema.optional(),
 });
 export type MembershipApplicationsListQuery = z.infer<typeof membershipApplicationsListQuerySchema>;
 
@@ -40,10 +32,8 @@ export const membershipApplicationSummarySchema = z.object({
   organizationName: z.string().nullable(),
   membershipCategory: z.string(),
   membershipCategoryLabel: z.string(),
-  source: applicationSourceSchema.omit({ snapshot: true }).nullable().default(null),
-  closedAt: z.string().nullable().default(null),
   currentRequirement: z.string().nullable().default(null),
-  stage: applicationStageSchema.or(historicalApplicationOutcomeSchema),
+  stage: applicationStageSchema,
   onHoldSubtype: onHoldSubtypeSchema.nullable(),
   assignedToUserId: z.string().nullable(),
   createdAt: z.string(),
@@ -76,8 +66,7 @@ export const membershipApplicationCommunicationSchema = z.object({
 });
 
 export const membershipApplicationDetailSchema = membershipApplicationSummarySchema.extend({
-  source: applicationSourceSchema.nullable().default(null),
-  stageEnteredAt: z.string().nullable(),
+  stageEnteredAt: z.string(),
   answers: z.record(z.string(), z.unknown()),
   answerFields: z.array(formFieldDefinitionSchema).optional(),
   requestedWorkingGroups: z.array(groupLabelSchema.pick({ slug: true, name: true })),
@@ -139,13 +128,11 @@ export const applicationStageTransitionSchema = z
     note: z.string().trim().max(2000).optional(),
   })
   .superRefine((input, context) => {
-    if (input.toStage === "on_hold" && input.onHoldSubtype === "manual" && !input.note?.trim())
-      context.addIssue({ code: "custom", path: ["note"], message: "Record why this application must remain on hold." });
     if (input.toStage === "on_hold" && !input.onHoldSubtype)
       context.addIssue({
         code: "custom",
         path: ["onHoldSubtype"],
-        message: "Choose the reason for the hold.",
+        message: "Choose the information needed from the applicant.",
       });
   });
 

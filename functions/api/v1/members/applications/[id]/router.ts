@@ -1,4 +1,3 @@
-import { MembershipApplicationActivate } from "./activation";
 import { MembershipWorkflowReviewersGet } from "./workflow-review";
 import { MembershipWorkflowMigration, MembershipWorkflowMigrationPreview } from "./workflow-migration";
 import { MembershipWorkflowReviewGet, MembershipWorkflowObjectionsGet } from "./workflow-review";
@@ -20,7 +19,6 @@ import { ApplicationApprovePost } from "./approve";
 const app = new Hono();
 export const openapi = fromHono(app);
 
-openapi.post("/activation", MembershipApplicationActivate);
 openapi.get("/workflow/migration", MembershipWorkflowMigrationPreview);
 openapi.post("/workflow/migration", MembershipWorkflowMigration);
 openapi.get("/reviews/users", MembershipWorkflowReviewersGet);

@@ -1,4 +1,3 @@
-import { prepareApplicationImportActivationGuard } from "./import-activation";
 import { prepareQueueEmailStatement } from "../../../email/outbox";
 import { DIRECT_EMAIL_TEMPLATE_KEY, directEmailBodyPayload } from "../../../email/direct-body";
 import { AppError } from "../../../errors";
@@ -62,7 +61,6 @@ export async function sendApplicationCommunication(
     emailOutboxId: queued.id,
   });
   await db.batch([
-    prepareApplicationImportActivationGuard(db, payload.applicationId),
     queued.statement,
     prepared.statement,
     prepareAuditLog(

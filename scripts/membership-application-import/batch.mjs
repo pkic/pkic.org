@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { digest, requestFor } from "./manifest.mjs";
-import { postImport } from "./http.mjs";
+import { digest, requestFor, unresolvedReason } from "./manifest.mjs";
+import { importEntry } from "./database.mjs";
 
 const states = [
   "ready",
@@ -30,11 +30,14 @@ export function createReport(manifest, contracts, execute) {
   const now = new Date().toISOString();
   const entries = manifest.entries.map((entry) => ({
     ...identity(manifest, entry, contracts),
+    ...(unresolvedReason(entry) ? { reason: unresolvedReason(entry) } : {}),
     status:
       entry.decision === "import"
-        ? execute
-          ? "pending"
-          : "ready"
+        ? unresolvedReason(entry)
+          ? "unresolved"
+          : execute
+            ? "pending"
+            : "ready"
         : entry.decision === "exclude"
           ? "excluded"
           : "unresolved",
@@ -42,11 +45,11 @@ export function createReport(manifest, contracts, execute) {
     updatedAt: now,
   }));
   return {
-    version: 1,
+    version: 2,
     mode: execute ? "execute" : "dry-run",
     runId: manifest.runId,
     manifestHash: digest(manifest),
-    portalOrigin: manifest.portalOrigin,
+    destination: `${manifest.environment}:${manifest.databaseId}:${manifest.localDirectory ?? ""}`,
     createdAt: now,
     updatedAt: now,
     phase: execute ? "running" : "planned",
@@ -63,18 +66,18 @@ export function resumeReport(input, manifest, contracts) {
       status: z.enum(states),
       attempts: z.number().int().nonnegative(),
       updatedAt: contracts.utcInstantSchema,
-      resultId: contracts.membershipApplicationImportResponseSchema.shape.id.optional(),
-      httpStatus: z.number().int().min(100).max(599).optional(),
-      error: z.enum(["http", "invalid_response", "interrupted", "transport_or_response"]).optional(),
+      resultId: contracts.databaseIdSchema.optional(),
+      reason: z.string().max(100).optional(),
+      error: z.enum(["source_changed", "identity_conflict", "interrupted", "operational_command"]).optional(),
     })
     .strict();
   const parsed = z
     .object({
-      version: z.literal(1),
+      version: z.literal(2),
       mode: z.literal("execute"),
       runId: z.literal(manifest.runId),
       manifestHash: z.literal(digest(manifest)),
-      portalOrigin: z.literal(manifest.portalOrigin),
+      destination: z.literal(`${manifest.environment}:${manifest.databaseId}:${manifest.localDirectory ?? ""}`),
       createdAt: contracts.utcInstantSchema,
       updatedAt: contracts.utcInstantSchema,
       phase: z.enum(["running", "complete", "incomplete", "interrupted"]),
@@ -94,7 +97,10 @@ export function resumeReport(input, manifest, contracts) {
       entry.requestHash !== expected.requestHash ||
       (decision === "exclude" && entry.status !== "excluded") ||
       (decision === "unresolved" && entry.status !== "unresolved") ||
-      (decision === "import" && ["ready", "excluded", "unresolved"].includes(entry.status)) ||
+      (decision === "import" &&
+        (unresolvedReason(manifest.entries[index])
+          ? entry.status !== "unresolved"
+          : ["ready", "excluded", "unresolved"].includes(entry.status))) ||
       (["imported", "already_present"].includes(entry.status) && !entry.resultId)
     )
       throw new Error("Resume report entries do not match the reviewed manifest");
@@ -103,16 +109,15 @@ export function resumeReport(input, manifest, contracts) {
   return report;
 }
 
-/** Persist intent before POST and the result afterward. An interrupted POST can be safely replayed by source identity. */
+/** Persist intent before database execution and the result afterward. An interrupted write can be safely replayed by source identity. */
 export async function executeBatch({
   manifest,
   report,
-  contracts,
-  token,
+  directory,
   save,
   signal,
   timeoutMs = 120_000,
-  fetchImpl = fetch,
+  performImport = importEntry,
   onResult = () => {},
 }) {
   report.phase = "running";
@@ -129,17 +134,14 @@ export async function executeBatch({
     entry.attempts += 1;
     entry.updatedAt = new Date().toISOString();
     delete entry.error;
-    delete entry.httpStatus;
     delete entry.resultId;
     await checkpoint();
-    const { stop, ...result } = await postImport({
-      origin: manifest.portalOrigin,
-      token,
-      request: requestFor(manifest, manifest.entries[index], contracts),
-      responseSchema: contracts.membershipApplicationImportResponseSchema,
+    const { stop, ...result } = await performImport({
+      manifest,
+      entry: manifest.entries[index],
+      directory,
       timeoutMs,
       signal,
-      fetchImpl,
     });
     Object.assign(entry, result, { updatedAt: new Date().toISOString() });
     await checkpoint();

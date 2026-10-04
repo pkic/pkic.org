@@ -10,8 +10,6 @@ import { getMemberApplicationById, type MemberApplicationRow } from "../applicat
 import { getMembershipWorkflowVersion } from "./catalog";
 
 export interface MembershipExecutionStep {
-  source_notice_opened_at: string | null;
-  source_notice_deadline_at: string | null;
   position: number;
   step_id: string;
   state: string;
@@ -59,7 +57,7 @@ export async function getMembershipExecution(db: DatabaseLike, applicationId: st
   const version = await getMembershipWorkflowVersion(db, execution.version_id);
   const steps = await all<MembershipExecutionStep>(
     db,
-    `SELECT step.source_notice_opened_at, step.source_notice_deadline_at, step.position, step.step_id, step.state, step.notice_outbox_id,
+    `SELECT step.position, step.step_id, step.state, step.notice_outbox_id,
     step.opened_at, step.deadline_at, step.completed_at, step.completed_by_user_id, step.completion_reason,
     notice.sent_at AS notice_sent_at, notice.status AS notice_status,
     fee.id AS fee_id, fee.status AS fee_status, fee.paid_at AS fee_paid_at, fee.deadline_at AS fee_deadline_at,
@@ -124,8 +122,6 @@ export function membershipStepEvidence(execution: MembershipExecution): Membersh
   return execution.steps.map((step) => ({
     completedAt: step.completed_at,
     reviewAccepted: step.completed_at !== null,
-    sourceNoticeOpenedAt: step.source_notice_opened_at,
-    sourceNoticeDeadlineAt: step.source_notice_deadline_at,
     noticeSentAt: step.notice_sent_at,
     noticeStatus: step.notice_status,
     paidAt: step.fee_status === "paid" && step.fee_handling_required === 0 ? step.fee_paid_at : null,

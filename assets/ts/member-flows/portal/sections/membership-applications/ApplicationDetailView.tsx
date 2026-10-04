@@ -1,4 +1,3 @@
-import { ApplicationSourceCard } from "./ApplicationSourceCard";
 import { WorkflowMigrationCard } from "./WorkflowMigrationCard";
 import { isApplicationTerminalStage } from "../../../../../shared/schemas/member-applications";
 import { WorkflowReviewPage } from "./WorkflowReviewPage";
@@ -67,36 +66,25 @@ export function ApplicationDetailView({
   if (error && !detail) return <ErrorAlert error={error} />;
   if (!detail) return null;
 
-  const historical = detail.source?.historical ?? false;
-  const processingEnabled = !historical && (!detail.source || !!detail.source.activatedAt);
-  const commands: MenuItem[] =
-    canWrite && processingEnabled
-      ? [
-          {
-            id: "edit",
-            label: editing ? "Close the editor" : "Edit application…",
-            // The category list is what the edit form's one required choice is
-            // built from, so without it there is nothing to edit into.
-            disabled: !editing && categories.length === 0,
-            onSelect: () => setEditing((current) => !current),
-          },
-        ]
-      : [];
+  const commands: MenuItem[] = canWrite
+    ? [
+        {
+          id: "edit",
+          label: editing ? "Close the editor" : "Edit application…",
+          // The category list is what the edit form's one required choice is
+          // built from, so without it there is nothing to edit into.
+          disabled: !editing && categories.length === 0,
+          onSelect: () => setEditing((current) => !current),
+        },
+      ]
+    : [];
 
   return (
     <div class="pk pk-stack" data-application-id={applicationId}>
       {error && <ErrorAlert error={error} />}
       <Breadcrumb
         items={[
-          {
-            label:
-              historical || isApplicationTerminalStage(detail.stage) ? "Application history" : "Active applications",
-            href: usePortalHashLocation.hrefs(
-              historical || isApplicationTerminalStage(detail.stage)
-                ? "/membership/applications/history"
-                : "/membership/applications",
-            ),
-          },
+          { label: "Membership applications", href: usePortalHashLocation.hrefs("/membership/applications") },
           { label: detail.applicantName },
         ]}
       />
@@ -104,7 +92,7 @@ export function ApplicationDetailView({
         media={<Avatar name={detail.applicantName} size="xl" />}
         title={detail.applicantName}
         context={<Badge status={detail.stage} />}
-        lede={detail.organizationName ?? (historical ? "Organization not recorded" : "Individual applicant")}
+        lede={detail.organizationName ?? "Individual applicant"}
         facts={[
           detail.applicantEmail,
           detail.membershipCategoryLabel,
@@ -115,15 +103,14 @@ export function ApplicationDetailView({
         navigation={
           <Tabs
             label="Application sections"
-            items={historical ? [APPLICATION_TABS[0]] : [...APPLICATION_TABS]}
+            items={[...APPLICATION_TABS]}
             active={activeTab}
             hrefFor={(key) => (key === "overview" ? basePath : `${basePath}/${key}`)}
           />
         }
       />
 
-      {detail.source && <ApplicationSourceCard source={detail.source} />}
-      {(activeTab === "overview" || historical) && (
+      {activeTab === "overview" && (
         <div class="pk-record">
           <div class="pk-stack">
             <ApplicationOverviewCard
@@ -133,27 +120,25 @@ export function ApplicationDetailView({
               onEditingChange={setEditing}
               onSave={saveEdit}
             />
-            {!historical && <ApplicationAnswersCard detail={detail} />}
-            {!historical && <ApplicationDocumentsCard applicationId={detail.id} />}
+            <ApplicationAnswersCard detail={detail} />
+            <ApplicationDocumentsCard applicationId={detail.id} />
           </div>
           <aside class="pk-stack">
-            {processingEnabled && (canWrite || canApprove) && (
+            {(canWrite || canApprove) && (
               <ApplicationTransitionCard detail={detail} canWrite={canWrite} onTransition={transition} />
             )}
-            {processingEnabled && canApprove && !isApplicationTerminalStage(detail.stage) && (
+            {canApprove && !isApplicationTerminalStage(detail.stage) && (
               <WorkflowMigrationCard applicationId={applicationId} />
             )}
-            {!historical && <ApplicationTimelineCard detail={detail} />}
+            <ApplicationTimelineCard detail={detail} />
           </aside>
         </div>
       )}
-      {!historical && activeTab === "review" && (
-        <WorkflowReviewPage applicationId={applicationId} embedded onSaved={reload} />
-      )}
-      {!historical && activeTab === "communications" && (
+      {activeTab === "review" && <WorkflowReviewPage applicationId={applicationId} embedded onSaved={reload} />}
+      {activeTab === "communications" && (
         <ApplicationCommunicationsCard
           detail={detail}
-          canWrite={canWrite && processingEnabled}
+          canWrite={canWrite}
           onSendCommunication={sendCommunication}
           onAddNote={addNote}
         />

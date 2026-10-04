@@ -1,4 +1,3 @@
-import { prepareApplicationImportActivationGuard } from "../applications/import-activation";
 import type { z } from "zod";
 import {
   membershipWorkflowMigrationPreviewResponseSchema,
@@ -88,7 +87,6 @@ export async function migrateMembershipWorkflow(
   try {
     await db.batch([
       preparePermissionsAuthorizationGuard(db, actor, [{ permission: "membership:approve" }]),
-      prepareApplicationImportActivationGuard(db, applicationId),
       prepareAuthorizationGuard(db, {
         sql: `SELECT 1 FROM member_applications application JOIN membership_application_workflows workflow
           ON workflow.application_id = application.id AND workflow.superseded_at IS NULL
