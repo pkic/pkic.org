@@ -21,7 +21,14 @@ import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
 import { ensureGroupMembershipCapacity } from "./helpers/group-leadership";
-import { insertUser } from "./helpers/membership";
+import {
+  insertUser,
+  insertOrgRepresentative,
+  insertIndividualMember,
+  addRepresentative,
+  insertOrganization,
+  seedOrganizationAggregate,
+} from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
 interface Fixture {
@@ -214,6 +221,46 @@ describe("group mailing-list lifecycle", () => {
 });
 
 describe("group mailing-list subscribers", () => {
+  it("counts distinct represented organizations for subscribed people independently of filters and pages", async () => {
+    const fixture = await seedManagedList("representation");
+    const empty = await apiCall(fixture, `${listPath(fixture)}/subscribers`);
+    expect(mailingListSubscribersResponseSchema.parse(await empty.json()).representation).toEqual({
+      people: { count: 0 },
+      organizations: { count: 0 },
+    });
+    const first = await insertOrgRepresentative(env.DB);
+    const colleague = await insertOrgRepresentative(env.DB, { organizationId: first.organizationId });
+    const optedOut = await insertOrgRepresentative(env.DB);
+    const individual = await insertIndividualMember(env.DB);
+    const inactive = await insertOrgRepresentative(env.DB);
+    const secondMember = await seedOrganizationAggregate(env.DB, await insertOrganization(env.DB));
+    await addRepresentative(env.DB, secondMember, first.userId);
+    for (const person of [first, colleague, optedOut, individual, inactive]) {
+      await ensureGroupMembershipCapacity(env.DB, fixture.groupId, person.userId);
+    }
+    await env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(inactive.userId).run();
+    await setMailingListPreference(env.DB, optedOut.userId, fixture.groupId, fixture.listId, "unsubscribed");
+    const expected = { people: { count: 3 }, organizations: { count: 2 } };
+    for (const query of ["limit=1", "limit=1&offset=2", "q=no-such-user", "subscribed=false"]) {
+      const response = await apiCall(fixture, `${listPath(fixture)}/subscribers?${query}`);
+      expect(response.status).toBe(200);
+      const page = mailingListSubscribersResponseSchema.parse(await response.json());
+      expect(page.representation).toEqual(expected);
+      if (query === "q=no-such-user") expect(page.subscribers).toEqual([]);
+    }
+    await env.DB.prepare("UPDATE identities SET ended_at = ? WHERE user_id = ? AND organization_id = ?")
+      .bind(
+        new Date().toISOString(),
+        first.userId,
+        (await env.DB.prepare("SELECT organization_id FROM members WHERE id = ?")
+          .bind(secondMember)
+          .first<{ organization_id: string }>())!.organization_id,
+      )
+      .run();
+    const after = await apiCall(fixture, `${listPath(fixture)}/subscribers`);
+    expect(mailingListSubscribersResponseSchema.parse(await after.json()).representation.organizations.count).toBe(1);
+  });
+
   it("answers who is on the list, and narrows and counts that in D1", async () => {
     const fixture = await seedManagedList("roster");
     const subscribed = await insertUser(env.DB, `roster-subscribed-${crypto.randomUUID()}@example.test`);

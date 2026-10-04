@@ -42,8 +42,10 @@ export function buildGroupStatsQuerySet(
   return {
     participation: {
       sql: `SELECT COUNT(*) AS capacity_count,
-                   COUNT(DISTINCT membership.user_id) AS people_count
+                   COUNT(DISTINCT membership.user_id) AS people_count,
+                   COUNT(DISTINCT member.organization_id) AS organization_count
               FROM group_memberships membership
+              JOIN members member ON member.id = membership.member_id
              WHERE membership.group_id = ?
                AND ${participationPredicate}`,
       bindings: participationBindings,
@@ -83,6 +85,7 @@ export function buildGroupStatsQuerySet(
 interface ParticipationRow {
   capacity_count: number;
   people_count: number;
+  organization_count: number;
 }
 
 interface ActivityRow {
@@ -140,6 +143,7 @@ export async function getGroupStatistics(
     window: { from: query.from ? from : null, to },
     participation: {
       people: { count: count(participation?.people_count) },
+      organizations: { count: count(participation?.organization_count) },
       capacities: { count: count(participation?.capacity_count) },
     },
     activity: {

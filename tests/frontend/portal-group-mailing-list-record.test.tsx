@@ -97,7 +97,11 @@ function stubApi(
       const method = init.method ?? "GET";
       calls.push({ url, method, body: typeof init.body === "string" ? JSON.parse(init.body) : undefined });
       if (method === "GET" && url.pathname.endsWith("/subscribers")) {
-        return json({ subscribers: [subscriber], page: PAGE });
+        return json({
+          subscribers: [subscriber],
+          representation: { people: { count: 1 }, organizations: { count: 1 } },
+          page: PAGE,
+        });
       }
       if (method === "GET" && url.pathname.endsWith("/grants")) return json({ grants: [], page: PAGE });
       if (method === "GET" && url.pathname === "/api/v1/groups") return json({ groups: [], page: PAGE });
@@ -171,6 +175,12 @@ describe("group mailing-list record", () => {
     expect(container.querySelector('section[aria-label="Architecture discussion subscribers"]')).not.toBeNull();
     expect(container.textContent).toContain("Ada Lovelace");
     expect(container.textContent).toContain("Subscribed");
+    const representation = container.querySelector('[aria-label="Representation"]');
+    expect(representation?.textContent).toContain("Subscribed people across the whole list");
+    expect([...representation!.querySelectorAll(".pk-stat-card")].map((card) => card.textContent)).toEqual([
+      "People1",
+      "Organizations1",
+    ]);
 
     // Choosing a tab navigates rather than swapping a panel in place.
     await act(() => {

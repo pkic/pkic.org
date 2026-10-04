@@ -1,6 +1,9 @@
+import type { Representation } from "../../../../../shared/schemas/representation";
+import type { MailingListSubscribersResponse } from "../../../../../shared/schemas/mailing-lists";
+import { RepresentationSummary } from "./RepresentationSummary";
 import { useMailingListSync, MailingListSyncSettings } from "./MailingListSync";
 import { BreadcrumbBranch } from "../../../../ui/BreadcrumbScope";
-import { useState } from "preact/hooks";
+import { useCallback, useState } from "preact/hooks";
 import {
   mailingListResponseSchema,
   MAILING_LIST_POSTING_POLICY_LABELS,
@@ -59,6 +62,13 @@ export function GroupMailingListRecord({
 }) {
   const [, navigate] = usePortalHashLocation();
   const sync = useMailingListSync(groupId, listId);
+  const [representation, setRepresentation] = useState<{ listId: string; counts: Representation } | null>(null);
+  const receiveSubscribers = useCallback(
+    (response: MailingListSubscribersResponse) => {
+      setRepresentation({ listId, counts: response.representation });
+    },
+    [listId],
+  );
   const [commandError, setCommandError] = useState<Error | null>(null);
   const detail = useData(
     () =>
@@ -161,7 +171,12 @@ export function GroupMailingListRecord({
             >
               {tab === "subscribers" && (
                 <section aria-label={`${list.label} subscribers`}>
-                  <GroupMailingListSubscribers groupId={groupId} listId={list.id} />
+                  <GroupMailingListSubscribers
+                    key={list.id}
+                    groupId={groupId}
+                    listId={list.id}
+                    onData={receiveSubscribers}
+                  />
                 </section>
               )}
               {tab === "settings" && (
@@ -182,6 +197,16 @@ export function GroupMailingListRecord({
               )}
             </ProfileHeader>
             <aside class="pk-stack">
+              {tab === "subscribers" && (
+                <RepresentationSummary
+                  representation={representation?.listId === list.id ? representation.counts : null}
+                  description={
+                    list.active
+                      ? "Subscribed people across the whole list and the organizations they currently represent as members. Each organization is counted once."
+                      : "Subscribed people and their organizations if this list is restored. Archived lists do not deliver mail."
+                  }
+                />
+              )}
               <GroupMailingListStanding key={list.id} groupId={groupId} list={list} onSaved={detail.reload} />
             </aside>
           </div>

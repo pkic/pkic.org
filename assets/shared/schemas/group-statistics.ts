@@ -1,3 +1,4 @@
+import { representationSchema } from "./representation";
 import { z } from "zod";
 import { groupLabelSchema, groupReferenceParamsSchema } from "./groups";
 import { jsonErrorResponse, utcInstantSchema } from "./api-common";
@@ -34,9 +35,7 @@ export const groupStatsResponseSchema = z.object({
   generatedAt: utcInstantSchema,
   scope: groupStatsScopeSchema,
   window: z.object({ from: utcInstantSchema.nullable(), to: utcInstantSchema }),
-  participation: z.object({
-    /** Distinct people, independent of how many Members they represent. */
-    people: participationCountSchema,
+  participation: representationSchema.extend({
     /** Membership-capacity rows; one person may contribute several rows. */
     capacities: participationCountSchema,
   }),
@@ -54,7 +53,7 @@ export const groupStatsRouteSchema = {
   tags: ["Groups", "Statistics"],
   summary: "Read statistics for one managed group",
   description:
-    "Returns D1-computed person and membership-capacity counts. Current scope counts active capacities now; historical scope counts capacities overlapping the requested UTC window. No engagement score is inferred.",
+    "Returns D1-computed person, organization, and membership-capacity counts. Current scope counts active capacities now; historical scope counts capacities overlapping the requested UTC window. No engagement score is inferred.",
   request: { params: groupReferenceParamsSchema, query: groupStatsQuerySchema },
   responses: {
     "200": {

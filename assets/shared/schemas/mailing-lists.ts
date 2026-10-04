@@ -1,3 +1,4 @@
+import { representationSchema } from "./representation";
 import { z } from "zod";
 import { booleanQueryFlagSchema, successResponseSchema, trimmedString } from "./api-common";
 import { groupIdSchema, groupReferenceParamsSchema } from "./groups";
@@ -275,7 +276,14 @@ export const mailingListSubscribersListQuerySchema = listQuerySchema(MAILING_LIS
   subscribed: booleanQueryFlagSchema.optional(),
 });
 export type MailingListSubscribersListQuery = z.infer<typeof mailingListSubscribersListQuerySchema>;
-export const mailingListSubscribersResponseSchema = paginatedResponseSchema("subscribers", mailingListSubscriberSchema);
+export const mailingListSubscribersResponseSchema = paginatedResponseSchema(
+  "subscribers",
+  mailingListSubscriberSchema,
+).extend({
+  /** Full-list subscribed population, independent of search and pagination. */
+  representation: representationSchema,
+});
+export type MailingListSubscribersResponse = z.infer<typeof mailingListSubscribersResponseSchema>;
 
 export const groupMailingListSubscribersRouteSchema = {
   ...requiresSession(),

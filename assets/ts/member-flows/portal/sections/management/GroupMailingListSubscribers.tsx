@@ -1,6 +1,7 @@
 import {
   mailingListSubscribersResponseSchema,
   type MailingListSubscriber,
+  type MailingListSubscribersResponse,
 } from "../../../../../shared/schemas/mailing-lists";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
 import { EmptyState } from "../../../../ui/RecordEmptyState";
@@ -33,9 +34,18 @@ function standingReason(subscriber: MailingListSubscriber): string {
  * ordering, and the count. Nothing is narrowed here after the fact, so what
  * the pager says is what the server counted.
  */
-export function GroupMailingListSubscribers({ groupId, listId }: { groupId: string; listId: string }) {
+export function GroupMailingListSubscribers({
+  groupId,
+  listId,
+  onData,
+}: {
+  groupId: string;
+  listId: string;
+  onData: (response: MailingListSubscribersResponse) => void;
+}) {
   return (
     <ApiDataTable
+      onData={onData}
       caption="Mailing-list subscribers"
       endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/mailing-lists/${encodeURIComponent(listId)}/subscribers`}
       responseSchema={mailingListSubscribersResponseSchema}
@@ -86,8 +96,8 @@ export function GroupMailingListSubscribers({ groupId, listId }: { groupId: stri
       rowKey={(subscriber) => subscriber.user.id}
       empty={
         <EmptyState
-          title="Nobody is on this list yet"
-          body="Members appear here once they are eligible for the list through this group or their membership category."
+          title="No subscribers to show"
+          body="Try a different search or subscription filter. Eligible members appear here through this group or their membership category."
         />
       }
     />

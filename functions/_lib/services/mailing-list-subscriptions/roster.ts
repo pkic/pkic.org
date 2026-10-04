@@ -2,9 +2,10 @@ import {
   MAILING_LIST_SUBSCRIBER_SORT_COLUMNS,
   mailingListSubscriberSchema,
   type MailingListSubscribersListQuery,
+  type MailingListSubscribersResponse,
 } from "../../../../assets/shared/schemas/mailing-lists";
-import { buildPageInfo, type PageInfo } from "../../../../assets/shared/schemas/pagination";
-import { queryPage } from "../../db/pagination";
+import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
+import { buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuery } from "../../db/pagination";
 import { first } from "../../db/queries";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
@@ -86,7 +87,7 @@ export async function listMailingListSubscribers(
   db: DatabaseLike,
   listId: string,
   query: MailingListSubscribersListQuery,
-): Promise<{ subscribers: ReturnType<typeof mailingListSubscriberSchema.parse>[]; page: PageInfo }> {
+): Promise<MailingListSubscribersResponse> {
   const list = await first<{ purpose: string }>(db, "SELECT purpose FROM mailing_lists WHERE id = ?", [listId]);
   if (!list) throw new AppError(404, "MAILING_LIST_NOT_FOUND", "Mailing list not found");
 
@@ -102,8 +103,7 @@ export async function listMailingListSubscribers(
   }
   if (query.subscribed !== undefined) conditions.push(query.subscribed ? "subscribed = 1" : "subscribed = 0");
 
-  const { rows, total } = await queryPage<MailingListSubscriberRow>(db, {
-    sql: `${activeUserCapacitiesCte(candidates.sql)},
+  const rosterCte = `${activeUserCapacitiesCte(candidates.sql)},
       roster AS (
         SELECT person.id AS user_id, person.email, person.first_name, person.last_name,
                person.organization_name, preference.preference AS preference,
@@ -119,7 +119,9 @@ export async function listMailingListSubscribers(
         SELECT user_id, email, first_name, last_name, organization_name, preference, eligible,
                default_subscribed, ${EFFECTIVE_SUBSCRIPTION_VALUE_SQL} AS subscribed
           FROM roster
-      )
+      )`;
+  const pageQuery: OffsetPageQuery = {
+    sql: `${rosterCte}
       SELECT user_id, email, first_name, last_name, organization_name, preference, eligible,
              default_subscribed, subscribed
         FROM roster_state
@@ -138,7 +140,24 @@ export async function listMailingListSubscribers(
     ),
     limit: query.limit,
     offset: query.offset,
-  });
+  };
+  const [pageResult, countResult, representationResult] = await db.batch([
+    ...buildOffsetPageStatements(db, pageQuery),
+    db
+      .prepare(
+        `${rosterCte}
+      SELECT (SELECT COUNT(*) FROM roster_state WHERE subscribed = 1) AS people_count,
+             COUNT(DISTINCT member.organization_id) AS organization_count
+        FROM roster_state person
+        JOIN active_user_capacities capacity ON capacity.user_id = person.user_id
+        JOIN members member ON member.id = capacity.member_id
+       WHERE person.subscribed = 1`,
+      )
+      .bind(...candidates.bindings, listId),
+  ]);
+  const { rows, total } = decodeOffsetPageResults<MailingListSubscriberRow>(pageResult, countResult);
+  const representation = representationResult.results?.[0] as
+    { people_count: number; organization_count: number } | undefined;
 
   const subscribers = rows.map((row) =>
     mailingListSubscriberSchema.parse({
@@ -155,5 +174,12 @@ export async function listMailingListSubscribers(
       subscribed: row.subscribed === 1,
     }),
   );
-  return { subscribers, page: buildPageInfo(query.limit, query.offset, total, subscribers.length) };
+  return {
+    subscribers,
+    page: buildPageInfo(query.limit, query.offset, total, subscribers.length),
+    representation: {
+      people: { count: Number(representation?.people_count ?? 0) },
+      organizations: { count: Number(representation?.organization_count ?? 0) },
+    },
+  };
 }
