@@ -53,10 +53,11 @@ function emptyStatement(query: string, queries: string[], options: StatementOpti
           revoked_at: null,
         } as T;
       }
-      if (query.includes("SELECT id, email, active FROM users u WHERE u.id")) {
+      if (query.includes("FROM users u WHERE u.id = ? AND u.active = 1")) {
         return {
           id: "admin-user",
           email: "admin@example.test",
+          role: "admin",
           active: 1,
         } as T;
       }
