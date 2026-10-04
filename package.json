@@ -75,7 +75,8 @@
     "check:astro": "astro check --tsconfig tsconfig.astro.json",
     "test:e2e:astro": "PKIC_PUBLICATION_SNAPSHOT=tests/fixtures/site-publication.json pnpm run build:astro && playwright test --config playwright.astro.config.ts",
     "test:e2e:contrast": "PKIC_PUBLICATION_SNAPSHOT=tests/fixtures/site-publication.json pnpm run build:astro && playwright test --config playwright.contrast.config.ts",
-    "publish:local": "node --experimental-strip-types scripts/publication/build-local-publication.mjs"
+    "publish:local": "node --experimental-strip-types scripts/publication/build-local-publication.mjs",
+    "import:applications": "node scripts/import-membership-applications.mjs"
   },
   "dependencies": {
     "@astrojs/markdown-remark": "^7.3.1",
