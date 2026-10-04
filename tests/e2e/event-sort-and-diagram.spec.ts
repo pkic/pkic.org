@@ -69,10 +69,12 @@ test("Next sorts the displayed dates of ordinary group events in both directions
   await search.press("Enter");
   const rows = page.getByRole("row").filter({ hasText: prefix });
   await expect(rows).toHaveCount(3);
-  for (const direction of ["ascending", "descending"] as const) {
+  // Next defaults to ascending, so exercise a change in both directions.
+  for (const direction of ["descending", "ascending"] as const) {
+    const expected = direction === "ascending" ? [names[1], names[2], names[0]] : [names[0], names[2], names[1]];
+    expect(await rows.allTextContents()).not.toEqual(expected.map((name) => expect.stringContaining(name)));
     await page.getByRole("button", { name: "Next column options" }).click();
     await page.getByRole("menuitemradio", { name: `Sort ${direction}`, exact: true }).click();
-    const expected = direction === "ascending" ? [names[1], names[2], names[0]] : [names[0], names[2], names[1]];
     await expect
       .poll(async () => rows.allTextContents())
       .toEqual(expected.map((name) => expect.stringContaining(name)));
