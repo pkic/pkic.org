@@ -17,7 +17,12 @@ import {
   confirmationQuery,
 } from "../../scripts/membership-application-import/sql.mjs";
 import { runCommand } from "../../scripts/membership-application-import/process.mjs";
-import { actorId, reviewedManifest, parsedReviewedManifest } from "./helpers/application-import-fixtures";
+import {
+  actorId,
+  reviewedManifest,
+  parsedReviewedManifest,
+  crossReferenceEvents,
+} from "./helpers/application-import-fixtures";
 
 const exec = promisify(execFile);
 let directory: string;
@@ -178,6 +183,32 @@ describe("backfill against the unchanged D1 schema", () => {
     expect(rows[4].results[0].n).toBe(1);
     expect(rows[5].results[0].n).toBe(0);
     expect(rows[6].results).toEqual([]);
+  });
+
+  it("stores each ID-less timeline event and replays without duplicating evidence", async () => {
+    const input = parsedReviewedManifest(localDirectory);
+    const entry = input.entries[0];
+    entry.source.issue.id = 500;
+    entry.mapping.applicantEmail = "cross-referenced@example.org";
+    entry.source.timeline.push(...crossReferenceEvents());
+    const sql = applicationBackfillSql(input, entry);
+    await sqlFile(sql);
+    const evidenceQuery = `SELECT id, body FROM application_communications WHERE application_id = '${sourceId(entry.source)}' ORDER BY id`;
+    const before = (await query(evidenceQuery))[0].results;
+    expect(before).toHaveLength(5);
+    const crossReferences = before.filter((note) =>
+      String(note.body).includes("Original GitHub event: cross-referenced"),
+    );
+    expect(crossReferences).toHaveLength(2);
+    expect(crossReferences[0].id).not.toBe(crossReferences[1].id);
+    for (const number of [1, 2])
+      expect(
+        crossReferences.some((note) =>
+          String(note.body).includes(`https://github.com/example/project/issues/${number}`),
+        ),
+      ).toBe(true);
+    await sqlFile(sql);
+    expect((await query(evidenceQuery))[0].results).toEqual(before);
   });
 
   it("records approved and withdrawn history without provisioning or workflow side effects", async () => {

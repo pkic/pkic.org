@@ -27,3 +27,12 @@ export function parsedReviewedManifest(localDirectory: string | null = null) {
     }),
   };
 }
+
+export function crossReferenceEvents() {
+  return [1, 2].map((number) => ({
+    event: "cross-referenced",
+    created_at: "2020-01-02T00:00:00Z",
+    actor: { login: "example-reviewer" },
+    source: { type: "issue", issue: { number, html_url: `https://github.com/example/project/issues/${number}` } },
+  }));
+}

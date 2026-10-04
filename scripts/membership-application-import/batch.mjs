@@ -19,17 +19,17 @@ export function summarize(entries) {
   return Object.fromEntries(states.map((state) => [state, entries.filter((entry) => entry.status === state).length]));
 }
 
-function identity(manifest, entry, contracts) {
+function identity(manifest, entry) {
   return {
     sourceIssueNumber: entry.sourceIssueNumber,
-    requestHash: digest(entry.decision === "import" ? requestFor(manifest, entry, contracts) : entry),
+    requestHash: digest(entry.decision === "import" ? requestFor(manifest, entry) : entry),
   };
 }
 
 export function createReport(manifest, contracts, execute) {
   const now = new Date().toISOString();
   const entries = manifest.entries.map((entry) => ({
-    ...identity(manifest, entry, contracts),
+    ...identity(manifest, entry),
     ...(unresolvedReason(entry) ? { reason: unresolvedReason(entry) } : {}),
     status:
       entry.decision === "import"
@@ -90,7 +90,7 @@ export function resumeReport(input, manifest, contracts) {
     throw new Error("Resume requires an execution report for this exact reviewed manifest and destination");
   const report = parsed.data;
   report.entries.forEach((entry, index) => {
-    const expected = identity(manifest, manifest.entries[index], contracts);
+    const expected = identity(manifest, manifest.entries[index]);
     const decision = manifest.entries[index].decision;
     if (
       entry.sourceIssueNumber !== expected.sourceIssueNumber ||

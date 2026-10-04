@@ -4,7 +4,9 @@ export function applicationImportEligibility(source) {
   if (issue.pull_request) return { eligible: false, reason: "pull_request" };
   if (!issue.labels.some((label) => label.id === source.labelId && label.name === "Membership application"))
     return { eligible: false, reason: "missing_label" };
-  const timeline = [...source.timeline].sort((a, b) => a.created_at.localeCompare(b.created_at) || a.id - b.id);
+  const timeline = [...source.timeline].sort(
+    (a, b) => a.created_at.localeCompare(b.created_at) || (a.id ?? 0) - (b.id ?? 0),
+  );
   let duplicate = false;
   for (const event of timeline) {
     if (event.event === "marked_as_duplicate") duplicate = true;

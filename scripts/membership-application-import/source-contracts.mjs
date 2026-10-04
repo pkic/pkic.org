@@ -35,21 +35,26 @@ export const githubApplicationIssueSchema = z.preprocess(
     pull_request: z.unknown().optional(),
   }),
 );
+const eventShape = {
+  event: z.string().optional(),
+  body: z.string().nullable().optional(),
+  created_at: githubTimeSchema,
+  actor: githubActorSchema.optional(),
+  user: githubActorSchema.optional(),
+};
 export const githubApplicationEventSchema = z.preprocess(
   normalizeSourceInstants,
-  z.looseObject({
-    id: z.number().int(),
-    event: z.string().optional(),
-    body: z.string().nullable().optional(),
-    created_at: githubTimeSchema,
-    actor: githubActorSchema.optional(),
-    user: githubActorSchema.optional(),
-  }),
+  z.looseObject({ id: z.number().int(), ...eventShape }),
+);
+/** Timeline rows such as cross-references have no numeric ID. */
+export const githubApplicationTimelineEventSchema = z.preprocess(
+  normalizeSourceInstants,
+  z.looseObject({ id: z.number().int().optional(), ...eventShape }),
 );
 export const githubApplicationEvidenceSchema = z.object({
   repository: z.literal("pkic/members"),
   labelId: z.number().int().positive(),
   issue: githubApplicationIssueSchema,
   comments: z.array(githubApplicationEventSchema),
-  timeline: z.array(githubApplicationEventSchema),
+  timeline: z.array(githubApplicationTimelineEventSchema),
 });

@@ -29,12 +29,14 @@ function sourceNotes(entry) {
       at: event.created_at,
       text: `Original GitHub comment by ${event.user?.login ?? event.actor?.login ?? "unknown author"}\n${issue.html_url}#issuecomment-${event.id}\n\n${event.body ?? ""}`,
     });
-  for (const event of source.timeline.filter((event) => event.event !== "commented"))
+  for (const [index, event] of source.timeline.entries()) {
+    if (event.event === "commented") continue;
     notes.push({
-      key: `event:${event.id}`,
+      key: event.id === undefined ? `event:index:${index}` : `event:${event.id}`,
       at: event.created_at,
       text: `Original GitHub event: ${event.event ?? "unknown"}\nSource: ${issue.html_url}\n${JSON.stringify(event, null, 2)}`,
     });
+  }
   return notes.flatMap((note) => {
     const characters = Array.from(note.text);
     const parts = [];

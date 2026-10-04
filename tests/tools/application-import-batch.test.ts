@@ -4,7 +4,13 @@ import { parseManifest, unresolvedReason } from "../../scripts/membership-applic
 import { importEntry, databaseArguments } from "../../scripts/membership-application-import/database.mjs";
 import { applicationBackfillSql, sourceId } from "../../scripts/membership-application-import/sql.mjs";
 import { readGithubSource } from "../../scripts/membership-application-import/github.mjs";
-import { contracts, databaseId, reviewedManifest, parsedReviewedManifest } from "./helpers/application-import-fixtures";
+import {
+  contracts,
+  databaseId,
+  reviewedManifest,
+  parsedReviewedManifest,
+  crossReferenceEvents,
+} from "./helpers/application-import-fixtures";
 
 const manifest = () => parsedReviewedManifest();
 function execution() {
@@ -41,6 +47,38 @@ describe("backfill-only manifests", () => {
     input.entries[0].reviewedBy = "Reviewer";
     input.entries[1].sourceIssueNumber = 1;
     expect(() => parseManifest(input, contracts, databaseId)).toThrow();
+  });
+  it("accepts timeline cross-references without IDs while requiring comment IDs", () => {
+    const input = manifest();
+    input.entries[0].source.timeline.push(...crossReferenceEvents());
+    const parsed = parseManifest(input, contracts, databaseId);
+    expect(createReport(parsed, contracts, false).summary.ready).toBe(2);
+    const entry = parsed.entries[0];
+    if (entry.decision !== "import") throw new Error("Expected reviewed fixture");
+    expect(entry.source.timeline[1]).toMatchObject({ created_at: "2020-01-02T00:00:00.000Z" });
+    const missingCommentId = {
+      ...input,
+      entries: [{ ...entry, source: { ...entry.source, comments: crossReferenceEvents() } }],
+    };
+    expect(() => parseManifest(missingCommentId, contracts, databaseId)).toThrow("comments");
+  });
+  it("orders equal-time events deterministically when timeline IDs are absent", () => {
+    const entry = manifest().entries[0];
+    const created_at = "2020-01-02T00:00:00.000Z";
+    entry.source.timeline.push({ id: 2, event: "unmarked_as_duplicate", created_at }, ...crossReferenceEvents(), {
+      id: 1,
+      event: "marked_as_duplicate",
+      created_at,
+    });
+    expect(unresolvedReason(entry)).toBeNull();
+    entry.source.timeline = [
+      ...manifest().entries[0].source.timeline,
+      { event: "marked_as_duplicate", created_at },
+      { event: "unmarked_as_duplicate", created_at },
+    ];
+    expect(unresolvedReason(entry)).toBeNull();
+    entry.source.timeline.reverse();
+    expect(unresolvedReason(entry)).toBe("source_duplicate");
   });
   it("requires synthetic isolated local targets and never allows preview", () => {
     expect(() => parseManifest({ ...reviewedManifest(), environment: "preview" }, contracts, databaseId)).toThrow();
@@ -186,6 +224,7 @@ describe("live source revalidation", () => {
   });
   it("reads all comment pages and rereads the issue, without forwarding source access to the portal", async () => {
     const source = manifest().entries[0].source;
+    source.timeline.push(...crossReferenceEvents());
     const command = vi.fn(async (_command: string, args: string[]) => {
       const path = args[1];
       if (path.includes("labels/")) return JSON.stringify({ id: 7, name: "Membership application" });
@@ -198,6 +237,10 @@ describe("live source revalidation", () => {
     });
     const actual = await readGithubSource(1, new AbortController().signal, command);
     expect(actual.comments).toHaveLength(100);
+    expect(actual.timeline).toHaveLength(3);
+    expect(actual.timeline.slice(1)).toEqual(
+      crossReferenceEvents().map((event) => ({ ...event, created_at: "2020-01-02T00:00:00.000Z" })),
+    );
     expect(command.mock.calls.every(([name]) => name === "gh")).toBe(true);
     expect(command).toHaveBeenCalledTimes(6);
   });
