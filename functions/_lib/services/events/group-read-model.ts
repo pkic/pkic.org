@@ -179,7 +179,7 @@ export function buildGroupEventsPageQuery(
       {
         name: "event_name COLLATE NOCASE",
         starts_at: "event_starts_at",
-        next_occurrence_at: "next_occurrence_at",
+        next_occurrence_at: "COALESCE(next_occurrence_at, event_starts_at)",
         created_at: "event_created_at",
       } satisfies Record<(typeof GROUP_EVENTS_SORT_COLUMNS)[number], string>,
       "COALESCE(next_occurrence_at, event_starts_at, '9999') ASC",
