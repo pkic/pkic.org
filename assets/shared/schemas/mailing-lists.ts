@@ -6,6 +6,7 @@ import { databaseIdSchema } from "./identifiers";
 import { membershipCategorySelectionSchema } from "./membership-categories";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { requiresSession } from "./route-contract";
+import { httpOrSameOriginUrlSchema } from "./urls";
 import { userCatalogItemSchema } from "./user-catalog";
 
 export const MAILING_LIST_PURPOSES = ["all_members", "consultation", "group", "custom"] as const;
@@ -263,7 +264,7 @@ export const groupMailingListDeleteRouteSchema = {
  * roster of a single list instead of down one member's lists.
  */
 export const mailingListSubscriberSchema = z.object({
-  user: userCatalogItemSchema,
+  user: userCatalogItemSchema.extend({ headshotUrl: httpOrSameOriginUrlSchema.nullable() }),
   eligible: z.boolean(),
   defaultSubscribed: z.boolean(),
   preference: mailingListPreferenceSchema.nullable(),

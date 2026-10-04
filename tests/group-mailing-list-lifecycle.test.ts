@@ -221,6 +221,56 @@ describe("group mailing-list lifecycle", () => {
 });
 
 describe("group mailing-list subscribers", () => {
+  it("displays active organization relationships instead of profile text or email domains", async () => {
+    const fixture = await seedManagedList("organization-column");
+    const organizationId = await insertOrganization(env.DB, "Example Keyfactor Organization");
+    const representative = await insertOrgRepresentative(env.DB, { organizationId, email: "delegate@example.test" });
+    const secondMember = await seedOrganizationAggregate(
+      env.DB,
+      await insertOrganization(env.DB, "Example Forms Organization"),
+    );
+    const secondIdentity = await addRepresentative(env.DB, secondMember, representative.userId);
+    const individual = await insertIndividualMember(env.DB, "H6", "unaffiliated@keyfactor.example.test");
+    for (const person of [representative, individual]) {
+      await ensureGroupMembershipCapacity(env.DB, fixture.groupId, person.userId);
+    }
+    const read = async () => {
+      const response = await apiCall(fixture, `${listPath(fixture)}/subscribers`);
+      expect(response.status).toBe(200);
+      return mailingListSubscribersResponseSchema.parse(await response.json());
+    };
+    await env.DB.prepare("UPDATE users SET headshot_r2_key = ? WHERE id = ?")
+      .bind("member-photos/example/portrait.png", representative.userId)
+      .run();
+    const first = await read();
+    expect(first.subscribers.find((row) => row.user.id === representative.userId)?.user.headshotUrl).toBe(
+      `/api/v1/users/${representative.userId}/headshots/portrait.png`,
+    );
+    expect(first.subscribers.find((row) => row.user.id === individual.userId)?.user.headshotUrl).toBeNull();
+    expect(first.subscribers.find((row) => row.user.id === representative.userId)?.user.organization_name).toBe(
+      "Example Forms Organization, Example Keyfactor Organization",
+    );
+    await env.DB.prepare("UPDATE users SET organization_name = 'Stale profile label' WHERE id IN (?, ?)")
+      .bind(representative.userId, individual.userId)
+      .run();
+    await env.DB.prepare("UPDATE identities SET blocked_at = ?, ended_at = ? WHERE id = ?")
+      .bind(new Date().toISOString(), new Date().toISOString(), secondIdentity)
+      .run();
+    const blocked = await read();
+    expect(blocked.subscribers.find((row) => row.user.id === representative.userId)?.user.organization_name).toBe(
+      "Example Keyfactor Organization",
+    );
+    expect(blocked.subscribers.find((row) => row.user.id === individual.userId)?.user.organization_name).toBeNull();
+    expect(blocked.representation.organizations.count).toBe(1);
+    await env.DB.prepare("UPDATE identities SET blocked_at = NULL, ended_at = ? WHERE id = ?")
+      .bind(new Date().toISOString(), secondIdentity)
+      .run();
+    const ended = await read();
+    expect(ended.subscribers.find((row) => row.user.id === representative.userId)?.user.organization_name).toBe(
+      "Example Keyfactor Organization",
+    );
+  });
+
   it("counts distinct represented organizations for subscribed people independently of filters and pages", async () => {
     const fixture = await seedManagedList("representation");
     const empty = await apiCall(fixture, `${listPath(fixture)}/subscribers`);

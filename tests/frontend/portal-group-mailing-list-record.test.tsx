@@ -56,6 +56,7 @@ const subscriber = {
     first_name: "Ada",
     last_name: "Lovelace",
     organization_name: "Analytical Engines",
+    headshotUrl: "/api/v1/users/example/headshots/portrait.png",
   },
   eligible: true,
   defaultSubscribed: true,
@@ -227,6 +228,8 @@ describe("group mailing-list record", () => {
     // Without a tab segment the page opens on the people the list reaches.
     expect(container.querySelector('section[aria-label="Architecture discussion subscribers"]')).not.toBeNull();
     expect(container.textContent).toContain("Ada Lovelace");
+    const portrait = container.querySelector<HTMLImageElement>(".pk-person-cell img");
+    expect(portrait?.getAttribute("src")).toBe(subscriber.user.headshotUrl);
     expect(container.textContent).toContain("Subscribed");
     const representation = container.querySelector('[aria-label="Representation"]');
     expect(representation?.textContent).toContain("Subscribed people across the whole list");

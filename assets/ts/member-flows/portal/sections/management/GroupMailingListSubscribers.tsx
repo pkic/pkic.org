@@ -73,6 +73,7 @@ export function GroupMailingListSubscribers({
           cell: (subscriber) => (
             <PersonCell
               name={personName(subscriber)}
+              avatarSrc={subscriber.user.headshotUrl ?? undefined}
               email={personName(subscriber) === subscriber.user.email ? undefined : subscriber.user.email}
               size="sm"
             />

@@ -1,8 +1,12 @@
 /** @covers groups.8.4 */
 import { expect, test, type Locator } from "@playwright/test";
 import { groupCreateSchema, groupResponseSchema } from "../../assets/shared/schemas/groups";
-import { organizationCreateSchema } from "../../assets/shared/schemas/organization-management";
+import {
+  organizationCreateSchema,
+  organizationCreateResponseSchema,
+} from "../../assets/shared/schemas/organization-management";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { TINY_JPEG } from "./helpers/headshot-upload";
 import { openRow } from "./helpers/data-table";
 import { signInToPortal } from "./helpers/portal-auth";
 
@@ -30,6 +34,13 @@ test("members, mailing lists, and analytics show distinct organization represent
     }),
   });
   expect(organization.status(), await organization.text()).toBe(201);
+  const { organization: createdOrganization } = organizationCreateResponseSchema.parse(await organization.json());
+  const picturedUser = createdOrganization.identities.find((identity) => identity.email === emails[0])!;
+  const upload = await page.request.put(`/api/v1/users/${picturedUser.userId}/headshot`, {
+    headers: { "Content-Type": "image/jpeg" },
+    data: TINY_JPEG,
+  });
+  expect(upload.status(), await upload.text()).toBe(200);
   const created = await page.request.post("/api/v1/groups", {
     data: groupCreateSchema.parse({ typeKey: "working_group", name: `Forms and users ${stamp}` }),
   });
@@ -77,6 +88,19 @@ test("members, mailing lists, and analytics show distinct organization represent
   await openRow(page.getByRole("row").filter({ hasText: label }), `Open ${label}`);
   await expectCount(representation, "People", 2);
   await expectCount(representation, "Organizations", 1);
+  const subscribers = page.getByRole("table", { name: "Mailing-list subscribers", exact: true });
+  for (const email of emails) {
+    await expect(subscribers.getByRole("row").filter({ hasText: email })).toContainText(
+      `Representation organization ${stamp}`,
+    );
+  }
+  const portrait = subscribers.getByRole("row").filter({ hasText: emails[0] }).locator("img");
+  await expect(portrait).toBeVisible();
+  await expect.poll(() => portrait.evaluate((image: HTMLImageElement) => image.naturalWidth)).toBeGreaterThan(0);
+  await expect(
+    subscribers.getByRole("row").filter({ hasText: emails[1] }).locator(".pk-avatar__initials"),
+  ).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("subscriber-organizations.png"), fullPage: true });
   await page.getByPlaceholder("Search subscribers…").fill("no matching user");
   await page.getByRole("button", { name: "Search mailing-list subscribers", exact: true }).click();
   await expect(page.getByRole("row").filter({ hasText: "Representation user" })).toHaveCount(0);
