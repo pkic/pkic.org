@@ -254,7 +254,12 @@ describe("portal group mailing lists", () => {
         if (method === "PATCH") return json({ mailingList: list });
         if (method === "DELETE") return json({ success: true });
         if (url.pathname.endsWith("/grants")) return json({ grants: [], page });
-        if (url.pathname.endsWith("/subscribers")) return json({ subscribers: [], page: { ...page, total: 0 } });
+        if (url.pathname.endsWith("/subscribers"))
+          return json({
+            subscribers: [],
+            representation: { people: { count: 0 }, organizations: { count: 0 } },
+            page: { ...page, total: 0 },
+          });
         if (url.pathname.endsWith(`/mailing-lists/${list.id}`)) return json({ mailingList: list });
         if (url.pathname === "/api/v1/groups") {
           return json({ groups: [], page });

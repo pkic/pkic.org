@@ -212,8 +212,23 @@ export function GroupStatistics({ groupId }: { groupId: string }) {
                   : "Participation overlapping the selected window."}
               </p>
               <div class="pk-stat-row">
-                <StatCard label="People" value={String(stats.data.participation.people.count)} note="Distinct people" />
                 <StatCard
+                  role="group"
+                  aria-label="People"
+                  label="People"
+                  value={String(stats.data.participation.people.count)}
+                  note="Distinct people"
+                />
+                <StatCard
+                  role="group"
+                  aria-label="Organizations"
+                  label="Organizations"
+                  value={String(stats.data.participation.organizations.count)}
+                  note="Distinct organizations represented"
+                />
+                <StatCard
+                  role="group"
+                  aria-label="Memberships"
                   label="Memberships"
                   value={String(stats.data.participation.capacities.count)}
                   note="One per Member represented"

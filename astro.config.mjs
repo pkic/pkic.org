@@ -4,7 +4,11 @@ import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
 import { preparePublicationPublicAssets } from "./scripts/publication/prepare-public-assets.mjs";
 import { publishAssessmentScripts } from "./scripts/publication/publish-assessment-scripts.mjs";
-import { publicationStagingDirectory, publicationEnvironment } from "./scripts/publication/build-context.mjs";
+import {
+  publicationStagingDirectory,
+  publicationEnvironment,
+  publicationCacheDirectory,
+} from "./scripts/publication/build-context.mjs";
 import { defineConfig } from "astro/config";
 import preact from "@astrojs/preact";
 import sitemap from "@astrojs/sitemap";
@@ -25,6 +29,7 @@ export default defineConfig({
   srcDir: "./site",
   publicDir: publicAssets,
   outDir: "./dist/astro",
+  cacheDir: publicationCacheDirectory(),
   output: "static",
   compressHTML: true,
   markdown: { processor: siteMarkdownProcessor, syntaxHighlight: false },

@@ -1,3 +1,6 @@
+import { groupStatsResponseSchema } from "../../../../../shared/schemas/group-statistics";
+import { useData } from "../../../../hooks/useData";
+import { RepresentationSummary } from "./RepresentationSummary";
 import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCategoryLabels";
 /**
  * The Members tab. A caller who cannot manage the group (only `participate`)
@@ -79,6 +82,10 @@ function GroupMembersManager({
   const [mutationError, setMutationError] = useState<string | null>(null);
   const [editing, setEditing] = useState<GroupMembership | null>(null);
   const listActions = useRef<ApiTableActions | null>(null);
+  const statistics = useData(
+    () => getJson(`/api/v1/groups/${encodeURIComponent(groupId)}/stats`, groupStatsResponseSchema),
+    [groupId],
+  );
 
   /*
    * The seat being edited is loaded from its own address rather than handed
@@ -112,7 +119,7 @@ function GroupMembersManager({
   }, [seatSegment, groupId, membersPath, navigate]);
 
   async function changed(): Promise<void> {
-    await Promise.all([listActions.current?.reload(), onChanged()]);
+    await Promise.all([listActions.current?.reload(), statistics.reload(), onChanged()]);
   }
 
   async function endMembership(membership: GroupMembership): Promise<void> {
@@ -184,142 +191,154 @@ function GroupMembersManager({
   return (
     <div class="pk pk-stack">
       {mutationError && <ErrorAlert error={mutationError} />}
-      <ApiDataTable
-        caption="Members"
-        endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/memberships`}
-        responseSchema={groupMembershipsManagementListResponseSchema}
-        resolve={(response) => response.memberships}
-        resolvePage={(response) => response.page}
-        paginate
-        initialSort="user_name"
-        actionsRef={listActions}
-        searchPlaceholder="Search name, email, organization, or category…"
-        createAction={{
-          label: "Add person",
-          onSelect: () => navigate(`${membersPath}/${ADD_SEAT_SEGMENT}`),
-        }}
-        // One seat is one person participating on behalf of one Member, and a
-        // seat that ends stays as the group's history: the roster a governing
-        // body publishes is the current seats, so that is what opens.
-        initialFilters={{ active: "true" }}
-        onFiltersChange={(filters) => setView(filters.active === "false" ? "former" : "current")}
-        columns={[
-          {
-            header: "Person",
-            // The person is the row's subject, so a wide screen's slack
-            // lands here.
-            width: "primary",
-            cell: (membership: GroupMembership) => (
-              <PersonCell
-                name={membership.userName}
-                // A person with no name on file is named by the address; it is
-                // not then repeated as a second line (#117).
-                email={membership.userName === membership.email ? undefined : membership.email}
-                avatarSrc={membership.headshotUrl ?? undefined}
-                size="sm"
-              />
-            ),
-            sort: { asc: "user_name", desc: "-user_name", defaultDirection: "asc" },
-          },
-          {
-            // The title is what this seat is called on the published roster;
-            // most seats are simply members and say so.
-            header: "Title",
-            cell: (membership: GroupMembership) =>
-              membership.title ?? <span class="pk-muted">{DEFAULT_SEAT_TITLE}</span>,
-          },
-          {
-            // A person representing several organizations appears once per
-            // organization; this column is what tells those rows apart.
-            header: "Represents",
-            cell: (membership: GroupMembership) => capacityLabel(membership),
-            sort: { asc: "organization_name", desc: "-organization_name", defaultDirection: "asc" },
-          },
-          {
-            header: "Category",
-            cell: (membership: GroupMembership) => (
-              <TableCodedLabel
-                code={membership.membershipCategory}
-                name={categories.name(membership.membershipCategory) || "—"}
-                title={categories.label(membership.membershipCategory)}
-              />
-            ),
-            width: "compact",
-            sort: { asc: "membership_category", desc: "-membership_category", defaultDirection: "asc" },
-          },
-          {
-            header: "Joined through",
-            cell: (membership: GroupMembership) => SOURCE_LABELS[membership.source] ?? membership.source,
-            hideable: true,
-            defaultHidden: true,
-          },
-          {
-            header: "Membership dates",
-            width: "fit",
-            cell: (membership: GroupMembership) =>
-              membership.leftAt
-                ? `${fmtCalendarDate(membership.joinedAt)} – ${fmtCalendarDate(membership.leftAt)}`
-                : fmtCalendarDate(membership.joinedAt),
-            sort: { asc: "joined_at", desc: "-joined_at", defaultDirection: "desc" },
-            // Current or former is a property of the seat, so the choice
-            // between the two rosters sits in this column's own menu.
-            filter: {
-              param: "active",
-              options: [
-                { value: "true", label: "Current members" },
-                { value: "false", label: "Former members" },
-              ],
+      <div class="pk-record">
+        <ApiDataTable
+          caption="Members"
+          endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/memberships`}
+          responseSchema={groupMembershipsManagementListResponseSchema}
+          resolve={(response) => response.memberships}
+          resolvePage={(response) => response.page}
+          paginate
+          initialSort="user_name"
+          actionsRef={listActions}
+          searchPlaceholder="Search name, email, organization, or category…"
+          createAction={{
+            label: "Add person",
+            onSelect: () => navigate(`${membersPath}/${ADD_SEAT_SEGMENT}`),
+          }}
+          // One seat is one person participating on behalf of one Member, and a
+          // seat that ends stays as the group's history: the roster a governing
+          // body publishes is the current seats, so that is what opens.
+          initialFilters={{ active: "true" }}
+          onFiltersChange={(filters) => setView(filters.active === "false" ? "former" : "current")}
+          columns={[
+            {
+              header: "Person",
+              // The person is the row's subject, so a wide screen's slack
+              // lands here.
+              width: "primary",
+              cell: (membership: GroupMembership) => (
+                <PersonCell
+                  name={membership.userName}
+                  // A person with no name on file is named by the address; it is
+                  // not then repeated as a second line (#117).
+                  email={membership.userName === membership.email ? undefined : membership.email}
+                  avatarSrc={membership.headshotUrl ?? undefined}
+                  size="sm"
+                />
+              ),
+              sort: { asc: "user_name", desc: "-user_name", defaultDirection: "asc" },
             },
-          },
-          {
-            // An empty header is the row's actions: named for assistive
-            // technology, unlabelled on screen, and at the end of the row.
-            header: "",
-            cell: (membership: GroupMembership) => (
-              <RowActions
-                subject={membership.userName}
-                actions={[
-                  {
-                    id: "edit",
-                    label: "Edit seat",
-                    onSelect: () => navigate(`${membersPath}/${encodeURIComponent(membership.id)}`),
-                    disabled: busyId !== null,
-                  },
-                  ...(membership.leftAt
-                    ? []
-                    : [
-                        {
-                          id: "end",
-                          label: busyId === membership.id ? "Ending…" : "End participation",
-                          onSelect: () => void endMembership(membership),
-                          disabled: busyId !== null,
-                        },
-                      ]),
-                ]}
+            {
+              // The title is what this seat is called on the published roster;
+              // most seats are simply members and say so.
+              header: "Title",
+              cell: (membership: GroupMembership) =>
+                membership.title ?? <span class="pk-muted">{DEFAULT_SEAT_TITLE}</span>,
+            },
+            {
+              // A person representing several organizations appears once per
+              // organization; this column is what tells those rows apart.
+              header: "Represents",
+              cell: (membership: GroupMembership) => capacityLabel(membership),
+              sort: { asc: "organization_name", desc: "-organization_name", defaultDirection: "asc" },
+            },
+            {
+              header: "Category",
+              cell: (membership: GroupMembership) => (
+                <TableCodedLabel
+                  code={membership.membershipCategory}
+                  name={categories.name(membership.membershipCategory) || "—"}
+                  title={categories.label(membership.membershipCategory)}
+                />
+              ),
+              width: "compact",
+              sort: { asc: "membership_category", desc: "-membership_category", defaultDirection: "asc" },
+            },
+            {
+              header: "Joined through",
+              cell: (membership: GroupMembership) => SOURCE_LABELS[membership.source] ?? membership.source,
+              hideable: true,
+              defaultHidden: true,
+            },
+            {
+              header: "Membership dates",
+              width: "fit",
+              cell: (membership: GroupMembership) =>
+                membership.leftAt
+                  ? `${fmtCalendarDate(membership.joinedAt)} – ${fmtCalendarDate(membership.leftAt)}`
+                  : fmtCalendarDate(membership.joinedAt),
+              sort: { asc: "joined_at", desc: "-joined_at", defaultDirection: "desc" },
+              // Current or former is a property of the seat, so the choice
+              // between the two rosters sits in this column's own menu.
+              filter: {
+                param: "active",
+                options: [
+                  { value: "true", label: "Current members" },
+                  { value: "false", label: "Former members" },
+                ],
+              },
+            },
+            {
+              // An empty header is the row's actions: named for assistive
+              // technology, unlabelled on screen, and at the end of the row.
+              header: "",
+              cell: (membership: GroupMembership) => (
+                <RowActions
+                  subject={membership.userName}
+                  actions={[
+                    {
+                      id: "edit",
+                      label: "Edit seat",
+                      onSelect: () => navigate(`${membersPath}/${encodeURIComponent(membership.id)}`),
+                      disabled: busyId !== null,
+                    },
+                    ...(membership.leftAt
+                      ? []
+                      : [
+                          {
+                            id: "end",
+                            label: busyId === membership.id ? "Ending…" : "End participation",
+                            onSelect: () => void endMembership(membership),
+                            disabled: busyId !== null,
+                          },
+                        ]),
+                  ]}
+                />
+              ),
+            },
+          ]}
+          // The row is the person, so the row opens their record (#90); the
+          // seat's own commands stay in its menu.
+          rowAction={(membership: GroupMembership) => ({
+            label: `Open ${membership.userName}`,
+            href: usePortalHashLocation.hrefs(`/users/${encodeURIComponent(membership.userId)}`),
+          })}
+          empty={
+            view === "current" ? (
+              <EmptyState
+                title="No members to show"
+                body="Try a different search or filter, or add a person to this group."
               />
-            ),
-          },
-        ]}
-        // The row is the person, so the row opens their record (#90); the
-        // seat's own commands stay in its menu.
-        rowAction={(membership: GroupMembership) => ({
-          label: `Open ${membership.userName}`,
-          href: usePortalHashLocation.hrefs(`/users/${encodeURIComponent(membership.userId)}`),
-        })}
-        empty={
-          view === "current" ? (
-            <EmptyState
-              title="No members yet"
-              body="Add the people who take part in this group, or record who served before."
-            />
+            ) : (
+              <EmptyState
+                title="No former members to show"
+                body="Try a different search or filter. People whose participation ended remain in the group’s history."
+              />
+            )
+          }
+        />
+        <aside class="pk-stack">
+          {statistics.error ? (
+            <ErrorAlert error={statistics.error} />
           ) : (
-            <EmptyState
-              title="No former members"
-              body="People whose participation ended remain in the group’s history."
+            <RepresentationSummary
+              representation={statistics.data?.participation ?? null}
+              description="Current members across the whole group. Each organization is counted once, regardless of how many people represent it."
             />
-          )
-        }
-      />
+          )}
+        </aside>
+      </div>
     </div>
   );
 }
