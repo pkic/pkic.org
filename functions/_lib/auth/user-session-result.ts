@@ -42,7 +42,7 @@ export async function createStaffSessionActor(
   return createUserBackedAuthAdmin({
     id: staff.id,
     email: staff.email,
-    role: "user",
+    role: staff.role,
     scopes: [],
     grants: await computeGrantsForUser(db, staff.id, memberId),
     memberId,

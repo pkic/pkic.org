@@ -94,12 +94,15 @@ function insertStatements(emails) {
   for (let start = 0; start < emails.length; start += ROWS_PER_STATEMENT) {
     const values = emails
       .slice(start, start + ROWS_PER_STATEMENT)
-      .map((email) => `('${randomUUID()}', '${email}', '${email}', 'user', 1, datetime('now'), datetime('now'))`)
+      .map(
+        (email) =>
+          `('${randomUUID()}', '${email}', '${email}', 'user', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
+      )
       .join(",\n       ");
     statements.push(
       "INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at) " +
         `VALUES ${values} ` +
-        "ON CONFLICT(email) DO UPDATE SET normalized_email = excluded.normalized_email, active = 1, updated_at = datetime('now');",
+        "ON CONFLICT(email) DO UPDATE SET normalized_email = excluded.normalized_email, active = 1, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now');",
     );
   }
   for (const email of emails) {

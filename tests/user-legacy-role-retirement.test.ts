@@ -1,5 +1,6 @@
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
+import { createStaffSessionActor } from "../functions/_lib/auth/user-session-result";
 import { hasPermission } from "../functions/_lib/auth/permissions";
 import { findEligibleStaffUserById } from "../functions/_lib/auth/identity-capacities";
 import { userUpdateSchema } from "../assets/shared/schemas/user-management";
@@ -23,6 +24,21 @@ describe("access-control authority", () => {
       ),
     ).toBe(false);
     expect(userUpdateSchema.safeParse({ firstName: "Ada", role: "admin" }).success).toBe(false);
+  });
+
+  it("preserves stored legacy metadata without restoring its permission bypass", async () => {
+    const id = await insertUser(env.DB, "legacy-metadata@example.test");
+    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(id).run();
+    await env.DB.prepare("INSERT INTO permission_grants (id, user_id, permission, created_at) VALUES (?, ?, ?, ?)")
+      .bind(crypto.randomUUID(), id, "users:read", new Date().toISOString())
+      .run();
+    const staff = await findEligibleStaffUserById(env.DB, id);
+    expect(staff).not.toBeNull();
+    const actor = await createStaffSessionActor(env.DB, staff!, "session", "2027-01-01T00:00:00.000Z", null);
+    expect(actor.role).toBe("admin");
+    expect(hasPermission(actor, "users:read")).toBe(true);
+    expect(hasPermission(actor, "users:write")).toBe(false);
+    expect(await env.DB.prepare("SELECT role FROM users WHERE id = ?").bind(id).first("role")).toBe("admin");
   });
 
   it("grants and revokes access to forms, organizations, and users through assignments", async () => {

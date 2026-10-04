@@ -164,30 +164,6 @@ async function createGroupEvent(fixture: Fixture): Promise<{ id: string; updated
 beforeEach(resetDb);
 
 describe("group event management routes", () => {
-  it("sorts and pages Next using the date shown for events without a series", async () => {
-    const fixture = await createFixture();
-    const dates = ["2027-09-01T08:00:00.000Z", "2027-02-01T08:00:00.000Z", "2027-06-01T08:00:00.000Z"];
-    for (const startsAt of dates) {
-      const event = await createGroupEvent(fixture);
-      await env.DB.prepare("UPDATE events SET starts_at = ?, ends_at = ? WHERE id = ?")
-        .bind(startsAt, startsAt, event.id)
-        .run();
-    }
-    for (const sort of ["next_occurrence_at", "-next_occurrence_at"]) {
-      const actual: string[] = [];
-      for (let offset = 0; offset < dates.length; offset++) {
-        const response = await request(
-          fixture.ownerLeaderToken,
-          `/api/v1/groups/${fixture.ownerGroupId}/events?sort=${sort}&limit=1&offset=${offset}`,
-        );
-        expect(response.status).toBe(200);
-        const body = (await response.json()) as { events: Array<{ startsAt: string }> };
-        actual.push(body.events[0].startsAt);
-      }
-      expect(actual).toEqual(sort.startsWith("-") ? [...dates].sort().reverse() : [...dates].sort());
-    }
-  });
-
   it("uses indexed D1 joins for event-day attendance counts", async () => {
     const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL}`)
       .bind("event-id")

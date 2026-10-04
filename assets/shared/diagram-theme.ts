@@ -3,7 +3,7 @@ export const diagramTheme = {
   securityLevel: "strict",
   theme: "base",
   themeCSS:
-    '.edgeLabel, .edgeLabel p, .edgeLabel span { color: #000; background-color: transparent; } .edgeLabel rect, .labelBkg { fill: none; background-color: transparent; } .edge[class*="section-edge-"] { stroke: #6b7280; }',
+    '.edgeLabel, .edgeLabel p { color: #000; background-color: transparent; } .edge[class*="section-edge-"] { stroke: #6b7280; }',
   themeVariables: {
     background: "transparent",
     mainBkg: "#1e3f7a",

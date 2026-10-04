@@ -25,6 +25,7 @@ export const STAFF_ACCESS_CONDITION = `(
 export interface EligibleStaffUser {
   id: string;
   email: string;
+  role: string;
   active: number;
 }
 
@@ -51,7 +52,7 @@ export function staffSignInAuthorizationEvidence(userId: string, normalizedEmail
 export async function findEligibleStaffUserById(db: DatabaseLike, userId: string): Promise<EligibleStaffUser | null> {
   return first<EligibleStaffUser>(
     db,
-    `SELECT id, email, active FROM users u WHERE u.id = ? AND u.active = 1 AND ${STAFF_ACCESS_CONDITION}`,
+    `SELECT id, email, role, active FROM users u WHERE u.id = ? AND u.active = 1 AND ${STAFF_ACCESS_CONDITION}`,
     [userId],
   );
 }
@@ -59,7 +60,7 @@ export async function findEligibleStaffUserById(db: DatabaseLike, userId: string
 export async function findEligibleStaffUserByEmail(db: DatabaseLike, email: string): Promise<EligibleStaffUser | null> {
   return first<EligibleStaffUser>(
     db,
-    `SELECT id, email, active FROM users u WHERE normalized_email = ? AND active = 1 AND ${STAFF_ACCESS_CONDITION}`,
+    `SELECT id, email, role, active FROM users u WHERE normalized_email = ? AND active = 1 AND ${STAFF_ACCESS_CONDITION}`,
     [normalizeEmail(email)],
   );
 }
