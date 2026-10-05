@@ -1,18 +1,21 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
-import { seedEventAndAdmin, queryAll } from "./helpers/context";
-import { hashBadgeCredential, recordScan } from "../functions/_lib/services/event-participation/scanning";
-import { getAgenda } from "../functions/_lib/services/event-agenda/read";
+import { queryAll } from "./helpers/context";
+import { createScannerLoadFixture, scannerLoadProtectedState } from "./helpers/scanner-load-fixture";
+import { recordScan } from "../functions/_lib/services/event-participation/scanning";
 import {
   enrolledEventScanRequestSchema,
   eventScanResponseSchema,
   type EventScanRequest,
   type EventScanResponse,
 } from "../assets/shared/schemas/event-participation-scanning";
-import { scannerDeviceSessionEnrollmentResponseSchema } from "../assets/shared/schemas/event-scanner-devices";
 import { callApi } from "./helpers/app";
-import { createAdminSession } from "./helpers/auth";
+import { scannerLoadControls, measureScannerLoad } from "./helpers/scanner-load-measurement";
+import {
+  enrolledOfflineEligibilityQuerySchema,
+  enrolledOfflineEligibilityResponseSchema,
+} from "../assets/shared/schemas/event-offline-eligibility";
 
 const mode: unknown = Reflect.get(env, "PKIC_SCANNER_BENCHMARK_MODE") ?? "service";
 if (mode !== "service" && mode !== "mounted") throw new Error("Choose service or mounted scanner benchmark mode");
@@ -22,6 +25,7 @@ if (
   (typeof selectedPopulation !== "string" || !["2000", "5000"].includes(selectedPopulation))
 )
   throw new Error("Choose a 2000 or 5000 attendee scanner benchmark population");
+const controls = scannerLoadControls(env);
 const populations = mode === "mounted" ? [Number(selectedPopulation ?? "2000")] : [2000, 5000];
 
 /** Synthetic local D1 benchmark. Opt-in mounted mode adds real Worker routing/auth; TCP, camera and phones remain excluded. */
@@ -29,94 +33,11 @@ describe("high-volume event scanner", () => {
   beforeEach(async () => {
     await resetDb();
   });
-  it.each(populations)(
+  it.runIf(controls.workload === "legacy").each(populations)(
     "records %i arrivals, session warnings, and recognized denials at 16/32 concurrency with retry-safe evidence",
     async (population) => {
-      const { eventId } = await seedEventAndAdmin(env.DB);
-      const [operator] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email='admin@pkic.org'");
-      const observedAt = new Date().toISOString();
-      const dayId = crypto.randomUUID();
-      const day = observedAt.slice(0, 10);
-      const expiresAt = new Date(Date.parse(observedAt) + 24 * 60 * 60 * 1000).toISOString();
-      // Provision the actual dated entrance before filling its confirmed capacity.
-      // The generic workflow fixture deliberately has only one physical place.
-      await env.DB.prepare("UPDATE events SET timezone='UTC',starts_at=?,ends_at=?,capacity_in_person=? WHERE id=?")
-        .bind(`${day}T00:00:00.000Z`, expiresAt, population, eventId)
-        .run();
-      await env.DB.prepare(
-        "INSERT INTO event_days(id,event_id,day_date,label,in_person_capacity,sort_order,created_at,updated_at) VALUES(?,?,?,'Arrival day',?,0,?,?)",
-      )
-        .bind(dayId, eventId, day, population, observedAt, observedAt)
-        .run();
-      const occurrenceId = crypto.randomUUID();
-      await env.DB.prepare(
-        "INSERT INTO event_agenda_occurrences(id,event_id,title,start_at,end_at,admission_policy,capacity) VALUES(?,?,'Published reservation session',?,?,'reservation',1)",
-      )
-        .bind(occurrenceId, eventId, observedAt, expiresAt)
-        .run();
-      await env.DB.prepare(
-        "INSERT INTO event_agenda_state(event_id,revision,published_revision,updated_at) VALUES(?,0,0,?)",
-      )
-        .bind(eventId, observedAt)
-        .run();
-      const snapshot = await getAgenda(env.DB, eventId, "pqc-2026");
-      expect(snapshot.occurrences).toEqual(
-        expect.arrayContaining([
-          expect.objectContaining({ id: occurrenceId, admissionPolicy: "reservation", capacity: 1 }),
-        ]),
-      );
-      await env.DB.prepare(
-        "INSERT INTO event_agenda_publications(id,event_id,revision,snapshot_json,created_by,created_at) VALUES(?,?,0,?,?,?)",
-      )
-        .bind(crypto.randomUUID(), eventId, JSON.stringify(snapshot), operator.id, observedAt)
-        .run();
-      const attendees = await Promise.all(
-        Array.from({ length: population }, async () => {
-          const userId = crypto.randomUUID();
-          const credential = crypto.randomUUID();
-          return {
-            userId,
-            credential,
-            hash: await hashBadgeCredential(credential),
-            badgeId: crypto.randomUUID(),
-            registrationId: crypto.randomUUID(),
-            operationId: crypto.randomUUID(),
-          };
-        }),
-      );
-      for (let offset = 0; offset < attendees.length; offset += 100) {
-        const json = JSON.stringify(attendees.slice(offset, offset + 100));
-        await env.DB.batch([
-          env.DB.prepare(
-            "INSERT INTO users(id,email,normalized_email,active,created_at,updated_at) SELECT json_extract(value,'$.userId'),json_extract(value,'$.userId')||'@example.test',json_extract(value,'$.userId')||'@example.test',1,?,? FROM json_each(?)",
-          ).bind(observedAt, observedAt, json),
-          env.DB.prepare(
-            "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) SELECT json_extract(value,'$.registrationId'),?,json_extract(value,'$.userId'),'registered','in_person','synthetic',json_extract(value,'$.registrationId'),?,? FROM json_each(?)",
-          ).bind(eventId, observedAt, observedAt, json),
-          env.DB.prepare(
-            "INSERT INTO registration_day_attendance(id,registration_id,event_day_id,attendance_type,created_at,updated_at) SELECT lower(hex(randomblob(16))),json_extract(value,'$.registrationId'),?,'in_person',?,? FROM json_each(?)",
-          ).bind(dayId, observedAt, observedAt, json),
-          env.DB.prepare(
-            "INSERT INTO event_badge_credentials(id,event_id,user_id,credential_hash,created_at,expires_at) SELECT json_extract(value,'$.badgeId'),?,json_extract(value,'$.userId'),json_extract(value,'$.hash'),?,? FROM json_each(?)",
-          ).bind(eventId, observedAt, expiresAt, json),
-        ]);
-      }
-      const devices = Array.from({ length: 32 }, () => crypto.randomUUID());
-      const token = mode === "mounted" ? await createAdminSession(env.DB, operator.id, crypto.randomUUID()) : null;
-      const epochs = new Map<string, { epochId: string; sequence: number }>();
-      if (token) {
-        for (const deviceId of devices) {
-          const response = await callApi(env, "/api/v1/events/pqc-2026/scanner/devices/sessions", {
-            method: "POST",
-            headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
-            body: JSON.stringify({ operationId: crypto.randomUUID(), deviceId }),
-          });
-          expect(response.status).toBe(200);
-          const enrolled = scannerDeviceSessionEnrollmentResponseSchema.parse(await response.json());
-          expect(enrolled).toMatchObject({ eventId, operatorUserId: operator.id, deviceId });
-          epochs.set(deviceId, { epochId: enrolled.epochId, sequence: 0 });
-        }
-      }
+      const { eventId, operator, observedAt, occurrenceId, attendees, devices, token, epochs } =
+        await createScannerLoadFixture(population, mode);
       const originalUploads = new Map<string, EventScanRequest>();
       const scans: EventScanRequest[] = attendees.map((attendee, index) => ({
         operatorUserId: operator.id,
@@ -353,6 +274,248 @@ describe("high-volume event scanner", () => {
           counts,
         }),
       );
+    },
+    120000,
+  );
+  it.runIf(controls.workload !== "legacy")(
+    "measures controlled mounted arrivals with durable outcomes and no allocation side effects",
+    async () => {
+      const population = Number(selectedPopulation ?? "2000");
+      if (controls.rate === null) throw new Error("Controlled workloads require an offered rate");
+      const pacing = { rate: controls.rate, concurrency: controls.concurrency };
+      if ((population + 256) / pacing.rate > 60)
+        throw new Error("Choose an offered rate fitting this population and replay within 60 scheduled seconds");
+      const fixture = await createScannerLoadFixture(population, "mounted", pacing.concurrency);
+      const { eventId, operator, observedAt, occurrenceId, attendees, devices, token, epochs } = fixture;
+      if (!token) throw new Error("Mounted workloads require the canonical session");
+      const headers = { "content-type": "application/json", authorization: `Bearer ${token}` };
+      const base = "/api/v1/events/pqc-2026";
+      const protectedBefore = await scannerLoadProtectedState();
+      const queries: ReturnType<typeof enrolledOfflineEligibilityQuerySchema.parse>[] = [];
+      const manifestBadgeIds: string[] = [];
+      let afterBadgeId: string | undefined;
+      do {
+        const query = enrolledOfflineEligibilityQuerySchema.parse({
+          deviceId: devices[0],
+          epochId: epochs.get(devices[0])!.epochId,
+          publishedRevision: 0,
+          ...(afterBadgeId ? { afterBadgeId } : {}),
+        });
+        queries.push(query);
+        const search = new URLSearchParams(Object.entries(query).map(([key, value]) => [key, String(value)]));
+        const response = await callApi(env, `${base}/offline-eligibility?${search}`, { headers });
+        expect(response.status).toBe(200);
+        const page = enrolledOfflineEligibilityResponseSchema.parse(await response.json());
+        expect(page).toMatchObject({ eventId, operatorUserId: operator.id, publishedRevision: 0 });
+        expect(page.entries.every((entry) => entry.eventRegistered && entry.physicalDayEligible)).toBe(true);
+        manifestBadgeIds.push(...page.entries.map((entry) => entry.badgeId));
+        afterBadgeId = page.nextBadgeId ?? undefined;
+        expect(queries.length).toBeLessThanOrEqual(Math.ceil(population / 250) + 1);
+      } while (afterBadgeId);
+      expect(manifestBadgeIds.sort()).toEqual(attendees.map((attendee) => attendee.badgeId).sort());
+
+      type Kind =
+        "eligibility" | "attendance" | "admission" | "warning" | "denied" | "denied_admission" | "unknown" | "invalid";
+      type Job = {
+        kind: Kind;
+        scan?: ReturnType<typeof enrolledEventScanRequestSchema.parse>;
+        query?: (typeof queries)[number];
+      };
+      const kinds: Kind[] = ["attendance", "admission", "warning", "denied", "denied_admission", "unknown", "invalid"];
+      const jobs: Job[] = attendees.map((attendee, index) => {
+        const kind: Kind =
+          controls.workload === "mixed"
+            ? kinds[index % kinds.length]
+            : controls.workload === "eligibility"
+              ? "eligibility"
+              : controls.workload === "admission"
+                ? index % 2 === 0
+                  ? "admission"
+                  : "denied_admission"
+                : "attendance";
+        if (kind === "eligibility") return { kind, query: queries[index % queries.length] };
+        const deviceId = devices[index % devices.length];
+        const epoch = epochs.get(deviceId)!;
+        return {
+          kind,
+          scan: enrolledEventScanRequestSchema.parse({
+            operatorUserId: operator.id,
+            operationId: crypto.randomUUID(),
+            deviceId,
+            // Invalid requests do not consume a legitimate issued upload sequence.
+            scannerSession: {
+              epochId: epoch.epochId,
+              sequence: kind === "invalid" ? Math.max(1, epoch.sequence) : ++epoch.sequence,
+            },
+            badgeId: kind === "unknown" ? crypto.randomUUID() : attendee.credential,
+            occurrenceId: kind === "warning" ? occurrenceId : null,
+            action: kind === "admission" || kind === "denied_admission" ? "admission" : "attendance",
+            capturePublicationRevision: 0,
+            observedAt,
+          }),
+        };
+      });
+      if (jobs.some((job) => job.kind === "denied" || job.kind === "denied_admission")) {
+        const revokedIds = attendees
+          .filter((_, index) => jobs[index].kind === "denied" || jobs[index].kind === "denied_admission")
+          .map((attendee) => attendee.badgeId);
+        await env.DB.prepare(
+          "UPDATE event_badge_credentials SET revoked_at=? WHERE event_id=? AND id IN (SELECT value FROM json_each(?))",
+        )
+          .bind(observedAt, eventId, JSON.stringify(revokedIds))
+          .run();
+      }
+      const receipts = new Map<string, EventScanResponse>();
+      async function execute(job: Job) {
+        if (job.query) {
+          const search = new URLSearchParams(Object.entries(job.query).map(([key, value]) => [key, String(value)]));
+          const response = await callApi(env, `${base}/offline-eligibility?${search}`, { headers });
+          expect(response.status).toBe(200);
+          const text = await response.text();
+          const page = enrolledOfflineEligibilityResponseSchema.parse(JSON.parse(text));
+          expect(page).toMatchObject({
+            eventId,
+            operatorUserId: operator.id,
+            publishedRevision: 0,
+            deviceId: job.query.deviceId,
+            epochId: job.query.epochId,
+          });
+          expect(page.entries.length).toBeGreaterThan(0);
+          return {
+            operation: job.kind,
+            outcome: "page",
+            status: response.status,
+            bytes: new TextEncoder().encode(text).length,
+          };
+        }
+        if (!job.scan) throw new Error("A scan workload needs a canonical request");
+        const body = job.kind === "invalid" ? { ...job.scan, freeText: "synthetic invalid field" } : job.scan;
+        const response = await callApi(env, `${base}/scans`, { method: "POST", headers, body: JSON.stringify(body) });
+        const text = await response.text();
+        if (job.kind === "invalid") {
+          expect(response.status).toBe(400);
+          return {
+            operation: job.kind,
+            outcome: "contract_refusal",
+            status: response.status,
+            bytes: new TextEncoder().encode(text).length,
+          };
+        }
+        expect(response.status).toBe(200);
+        const receipt = eventScanResponseSchema.parse(JSON.parse(text));
+        const expected =
+          job.kind === "warning"
+            ? { outcome: "warning", reason: "missing_registration", recorded: true, attendanceRecorded: true }
+            : job.kind === "denied" || job.kind === "denied_admission"
+              ? { outcome: "denied", reason: "revoked_badge", recorded: true, attendanceRecorded: false }
+              : job.kind === "unknown"
+                ? { outcome: "unknown", reason: "unknown_credential", recorded: false, attendanceRecorded: false }
+                : {
+                    outcome: "eligible",
+                    reason: "eligible",
+                    recorded: true,
+                    attendanceRecorded: job.kind === "attendance",
+                  };
+        expect(receipt).toMatchObject({
+          operationId: job.scan.operationId,
+          ...expected,
+          admissionRecorded: job.kind === "admission" || job.kind === "denied_admission",
+          admissionDecision: job.kind === "admission" ? "allowed" : job.kind === "denied_admission" ? "refused" : null,
+        });
+        expect(receipt.scannerReceipt).toMatchObject({ operationId: job.scan.operationId, ...job.scan.scannerSession });
+        const previous = receipts.get(job.scan.operationId);
+        if (previous) expect(receipt).toEqual(previous);
+        else receipts.set(job.scan.operationId, receipt);
+        return {
+          operation: previous ? `${job.kind}_replay` : job.kind,
+          outcome: receipt.outcome,
+          status: response.status,
+          bytes: new TextEncoder().encode(text).length,
+        };
+      }
+      const measured = await measureScannerLoad(jobs, pacing, execute, (job) => job.kind);
+      const replayJobs = jobs.filter((job) => job.scan && job.kind !== "invalid").slice(0, 256);
+      const replay = await measureScannerLoad(replayJobs, pacing, execute, (job) => `${job.kind}_replay`);
+      const countKind = (...selected: Kind[]) => jobs.filter((job) => selected.includes(job.kind)).length;
+      const [counts] = await queryAll<{
+        attempts: number;
+        observations: number;
+        allowedDecisions: number;
+        refusedDecisions: number;
+        deniedAttendance: number;
+        unknownAttempts: number;
+        invalidAttempts: number;
+        mismatched: number;
+      }>(
+        env.DB,
+        `SELECT COUNT(*) AS attempts,
+        (SELECT COUNT(*) FROM event_attendance_observations WHERE event_id=?) AS observations,
+        SUM(CASE WHEN a.admission_decision='allowed' THEN 1 ELSE 0 END) AS allowedDecisions,
+        SUM(CASE WHEN a.admission_decision='refused' THEN 1 ELSE 0 END) AS refusedDecisions,
+        SUM(CASE WHEN a.outcome='denied' AND o.id IS NOT NULL THEN 1 ELSE 0 END) AS deniedAttendance,
+        SUM(CASE WHEN a.outcome='unknown' THEN 1 ELSE 0 END) AS unknownAttempts,
+        (SELECT COUNT(*) FROM event_scan_attempts WHERE operation_id IN (SELECT value FROM json_each(?))) AS invalidAttempts,
+        SUM(CASE WHEN b.id IS NULL OR a.user_id<>b.user_id OR a.observed_at<>? OR
+          (o.id IS NOT NULL AND (o.user_id<>a.user_id OR o.observed_at<>a.observed_at)) THEN 1 ELSE 0 END) AS mismatched
+        FROM event_scan_attempts a LEFT JOIN event_badge_credentials b ON b.id=a.badge_id AND b.event_id=a.event_id
+        LEFT JOIN event_attendance_observations o ON o.attempt_id=a.id WHERE a.event_id=?`,
+        eventId,
+        JSON.stringify(jobs.filter((job) => job.kind === "invalid").map((job) => job.scan!.operationId)),
+        observedAt,
+        eventId,
+      );
+      const normalizedCounts = Object.fromEntries(Object.entries(counts).map(([key, value]) => [key, value ?? 0]));
+      console.info(
+        "[scanner-local-controlled-mounted-benchmark]",
+        JSON.stringify({
+          workload: controls.workload,
+          population,
+          measuredAt: new Date().toISOString(),
+          environment: {
+            runtime: "local workerd",
+            database: "real migrated local D1",
+            config: "vitest.config.ts / wrangler.jsonc",
+            processVersion: process.version,
+            platform: process.platform,
+            architecture: process.arch,
+          },
+          excludes: [
+            "TCP/network latency",
+            "camera decoding",
+            "physical phones",
+            "browser IndexedDB backlog",
+            "provider quotas",
+          ],
+          targets:
+            "No approved performance thresholds supplied; offered rate and concurrency are exploratory workload controls.",
+          sampleUnit: controls.workload === "eligibility" ? "manifest_page_request" : "scan_request",
+          mixedOperationKinds: controls.workload === "mixed" ? kinds : undefined,
+          manifest: {
+            completeBadgeCount: manifestBadgeIds.length,
+            pages: queries.length,
+            warmup: "Complete manifest read before timed requests; warm local D1, no TCP/CDN measurement.",
+          },
+          measured,
+          replay,
+          counts: normalizedCounts,
+        }),
+      );
+      expect(measured.unexpectedErrors).toBe(0);
+      expect(replay.unexpectedErrors).toBe(0);
+      expect(measured.completed).toBe(population);
+      expect(measured.backlog.finalPending).toBe(0);
+      expect(replay.backlog.finalPending).toBe(0);
+      expect(normalizedCounts).toEqual({
+        attempts: countKind("attendance", "admission", "warning", "denied", "denied_admission"),
+        observations: countKind("attendance", "warning"),
+        allowedDecisions: countKind("admission"),
+        refusedDecisions: countKind("denied_admission"),
+        deniedAttendance: 0,
+        unknownAttempts: 0,
+        invalidAttempts: 0,
+        mismatched: 0,
+      });
+      expect(await scannerLoadProtectedState()).toEqual(protectedBefore);
     },
     120000,
   );

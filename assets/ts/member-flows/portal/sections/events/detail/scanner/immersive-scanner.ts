@@ -38,14 +38,10 @@ export function scannerImmersiveLifecycle(
   const escape = (event: KeyboardEvent) => {
     if (event.key === "Escape") onExit();
   };
-  let enteredNativeFullscreen = document.fullscreenElement === element;
-  const fullscreen = () => {
-    if (document.fullscreenElement === element) enteredNativeFullscreen = true;
-    else if (enteredNativeFullscreen) onExit();
-  };
+  // Permission prompts can end native fullscreen. The fixed immersive viewport
+  // remains active until an explicit exit or the document becomes hidden.
   document.addEventListener("visibilitychange", visibility);
   document.addEventListener("keydown", escape);
-  document.addEventListener("fullscreenchange", fullscreen);
   void acquire();
   return () => {
     disposed = true;
@@ -53,7 +49,6 @@ export function scannerImmersiveLifecycle(
     document.body.classList.remove("pk-scanner-immersive");
     document.removeEventListener("visibilitychange", visibility);
     document.removeEventListener("keydown", escape);
-    document.removeEventListener("fullscreenchange", fullscreen);
     void wakeLock?.release().catch(() => {});
     if (document.fullscreenElement === element) void document.exitFullscreen?.().catch(() => {});
   };

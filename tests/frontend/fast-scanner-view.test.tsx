@@ -244,6 +244,50 @@ describe("continuous scanner presentation", () => {
     expect(lock.release).toHaveBeenCalledOnce();
     release();
   });
+  it.each(["Escape", "hidden"] as const)(
+    "keeps the immersive viewport after native fullscreen loss until %s, then cleans up",
+    async (stop) => {
+      const element = document.createElement("div");
+      let fullscreen: Element | null = element;
+      const previousFullscreen = Object.getOwnPropertyDescriptor(document, "fullscreenElement");
+      Object.defineProperty(document, "fullscreenElement", { configurable: true, get: () => fullscreen });
+      const lock = Object.assign(new EventTarget(), { released: false, release: vi.fn(async () => {}) });
+      vi.stubGlobal("navigator", { wakeLock: { request: async () => lock } });
+      const exit = vi.fn(),
+        awake = vi.fn();
+      let cleanup = scannerImmersiveLifecycle(element, exit, awake);
+      try {
+        await Promise.resolve();
+        document.dispatchEvent(new Event("fullscreenchange"));
+        fullscreen = null;
+        document.dispatchEvent(new Event("fullscreenchange"));
+        expect(document.visibilityState).toBe("visible");
+        expect(exit).not.toHaveBeenCalled();
+        expect(lock.release).not.toHaveBeenCalled();
+        expect(awake).toHaveBeenLastCalledWith(true);
+        expect(document.body.classList.contains("pk-scanner-immersive")).toBe(true);
+        if (stop === "Escape") document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+        else {
+          vi.spyOn(document, "visibilityState", "get").mockReturnValue("hidden");
+          document.dispatchEvent(new Event("visibilitychange"));
+          expect(lock.release).toHaveBeenCalledOnce();
+        }
+        expect(exit).toHaveBeenCalledOnce();
+        cleanup();
+        cleanup = () => {};
+        expect(awake).toHaveBeenLastCalledWith(false);
+        expect(lock.release).toHaveBeenCalled();
+        expect(document.body.classList.contains("pk-scanner-immersive")).toBe(false);
+        document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape" }));
+        document.dispatchEvent(new Event("visibilitychange"));
+        expect(exit).toHaveBeenCalledOnce();
+      } finally {
+        cleanup();
+        if (previousFullscreen) Object.defineProperty(document, "fullscreenElement", previousFullscreen);
+        else Reflect.deleteProperty(document, "fullscreenElement");
+      }
+    },
+  );
   it("uses shared SVG status icons and exposes a next-badge countdown with a skip control", () => {
     const html = render(
       <FastScannerView
