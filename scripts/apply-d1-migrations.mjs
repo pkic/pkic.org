@@ -54,7 +54,9 @@ function importMigration(environment, name) {
   if (recorded.length !== 1) throw new Error(`D1 import finished without recording ${name}`);
 }
 
-function apply(environment) {
+export function apply(environment) {
+  // Wrangler creates an empty migration ledger when listing a fresh database.
+  wrangler(["migrations", "list", "DB", "--env", environment, "--remote"]);
   const appliedNames = readRemoteRows(environment, "SELECT name FROM d1_migrations").map((row) => row.name);
   const localNames = readdirSync(migrationDir)
     .filter((name) => name.endsWith(".sql"))
@@ -62,8 +64,9 @@ function apply(environment) {
   const pending = pendingMigrationNames(appliedNames, localNames);
 
   if (pending.includes(migrationName)) {
-    if (pending[0] !== migrationName) {
-      throw new Error(`Apply earlier pending migrations before ${migrationName}: ${pending.join(", ")}`);
+    // Bootstrap must establish every prerequisite before the trigger-heavy import.
+    for (const name of pending.filter((name) => name < migrationName)) {
+      importMigration(environment, name);
     }
     const existing = readRemoteRows(
       environment,
@@ -81,7 +84,7 @@ function apply(environment) {
   if (pending.includes(retirementMigrationName)) {
     // The retirement trigger needs the same remote trigger-parser workaround.
     // Import intervening migrations in order so 0037 never skips its prerequisites.
-    for (const name of pending.filter((name) => name !== migrationName && name <= retirementMigrationName)) {
+    for (const name of pending.filter((name) => name > migrationName && name <= retirementMigrationName)) {
       importMigration(environment, name);
     }
   }

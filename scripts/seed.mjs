@@ -1,5 +1,8 @@
 /**
  * Unified seed orchestrator.
+ * Production is one-time bootstrap: refuse any existing application or migration
+ * records before running migrations, D1 seeds, or R2 writes. Retain local/E2E
+ * setup; remove production bootstrap once the production cutover is accepted.
  *
  * Usage:
  *   node scripts/seed.mjs --local                  # local D1 / local R2
@@ -13,6 +16,7 @@
 
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
+import { requireEmptyProductionSeedDatabase } from "./lib/production-seed-guard.mjs";
 
 // ── Environment definitions ────────────────────────────────────────────────
 
@@ -106,6 +110,10 @@ function script(file) {
 // ── Steps ───────────────────────────────────────────────────────────────────
 
 function applyMigrations(cfg) {
+  if (cfg.wranglerFlag === "--remote") {
+    run("node", [script("apply-d1-migrations.mjs"), cfg.wranglerEnv]);
+    return;
+  }
   run("pnpm", ["exec", "wrangler", "d1", "migrations", "apply", cfg.database, ...envFlag(cfg), cfg.wranglerFlag]);
 }
 
@@ -152,6 +160,10 @@ const cfg = ENVS[env];
 const runAll = only.size === 0;
 
 console.log(`\nSeeding ${cfg.label} …`);
+
+if (env === "production") {
+  requireEmptyProductionSeedDatabase({ database: cfg.database, wranglerEnv: cfg.wranglerEnv, mode: "remote" });
+}
 
 if (!skipMigrations) applyMigrations(cfg);
 

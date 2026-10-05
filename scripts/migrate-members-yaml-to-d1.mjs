@@ -1,4 +1,8 @@
 /**
+ * One-time member cutover tool. Remove this entrypoint, its import-only modules,
+ * and migrate:members after preview and production imports are reconciled and
+ * accepted. Ongoing member onboarding and edits belong in the portal.
+ *
  * Step 2/3/3b — Import member organizations & representatives to D1.
  *
  * Reads `data/members/*.yaml` (the Hugo-era member directory) and the
