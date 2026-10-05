@@ -58,6 +58,76 @@ test("permitted staff create, preview, activate, and reopen an email template th
   await expect(subject).toHaveValue("Hello {{organizationName}}");
   await expect(subject).toBeFocused();
   await page.screenshot({ path: test.info().outputPath("subject-variable-control.png"), fullPage: true });
+  // Astro must load the token palette, and HTML source must keep its
+  // decorative backdrop inside the body control rather than over the field.
+  const subjectToken = page.locator(".pk-template-subject .adm-template-token-var");
+  await expect(subjectToken).toHaveCSS("background-color", "rgba(8, 145, 178, 0.15)");
+  await page.getByLabel("Content type", { exact: true }).selectOption("html");
+  const htmlBody = page.getByRole("textbox", { name: "Body", exact: true });
+  const htmlSource =
+    "{{#if organizationName}}<h2>{{organizationName}}</h2>\n" +
+    "<p>Hello {{firstName}}, your form is ready.</p>\n".repeat(30) +
+    "{{else}}Hello user{{/if}}";
+  await htmlBody.fill(htmlSource);
+  const bodyOverlay = page.locator(".pk-overlay-editor").filter({ has: htmlBody });
+  const backdrop = bodyOverlay.locator("pre");
+  await expect(bodyOverlay).toHaveCount(1);
+  await expect(bodyOverlay.locator(".adm-template-token").first()).toHaveCSS(
+    "background-color",
+    "rgba(13, 110, 253, 0.15)",
+  );
+  await expect(htmlBody).toHaveCSS("background-color", "rgba(0, 0, 0, 0)");
+  const overlayBoxes = await bodyOverlay.locator("pre, textarea").evaluateAll((elements) =>
+    elements.map((element) => {
+      const box = element.getBoundingClientRect();
+      const css = getComputedStyle(element);
+      return {
+        x: box.x,
+        y: box.y,
+        width: box.width,
+        height: box.height,
+        clientWidth: element.clientWidth,
+        font: css.font,
+        padding: css.padding,
+        lineHeight: css.lineHeight,
+      };
+    }),
+  );
+  expect(overlayBoxes[0]).toEqual(overlayBoxes[1]);
+  await htmlBody.evaluate((element: HTMLTextAreaElement) => {
+    element.scrollTop = element.scrollHeight;
+    element.dispatchEvent(new Event("scroll"));
+  });
+  const scrollTop = await htmlBody.evaluate((element) => element.scrollTop);
+  expect(scrollTop).toBeGreaterThan(0);
+  await expect.poll(() => backdrop.evaluate((element) => element.scrollTop)).toBe(scrollTop);
+  await page.getByRole("button", { name: "Render Preview" }).click();
+  await expect(page.getByText("Preview rendered.", { exact: true })).toBeVisible();
+  await expect(page.frameLocator("iframe[title='Rendered email HTML preview']").locator("body")).toContainText(
+    "your form is ready",
+  );
+  await htmlBody.screenshot({ path: test.info().outputPath("html-template-highlighting.png") });
+  await page.screenshot({ path: test.info().outputPath("html-template-desktop.png"), fullPage: true });
+  await page.setViewportSize({ width: 390, height: 844 });
+  expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBe(
+    0,
+  );
+  await page.emulateMedia({ colorScheme: "dark" });
+  await expect(bodyOverlay.locator(".adm-template-token-var").first()).toHaveCSS(
+    "background-color",
+    "rgba(8, 145, 178, 0.15)",
+  );
+  const htmlPreview = page.locator("iframe[title='Rendered email HTML preview']");
+  await htmlPreview.scrollIntoViewIfNeeded();
+  await expect(htmlPreview).toHaveCSS("background-color", "rgb(255, 255, 255)");
+  await expect(htmlPreview).toHaveCSS("color-scheme", "light");
+  await expect(
+    page.frameLocator("iframe[title='Rendered email HTML preview']").getByRole("heading", { name: "Example Corp" }),
+  ).toBeVisible();
+  await page.screenshot({ path: test.info().outputPath("html-template-mobile-dark.png"), fullPage: true });
+  await page.emulateMedia({ colorScheme: "light" });
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.getByLabel("Content type", { exact: true }).selectOption("markdown");
   await page.getByRole("button", { name: "Markdown source", exact: true }).click();
   const source = page.getByRole("textbox", { name: "Body Markdown source", exact: true });
   const editor = page.locator(".pk-markdown-editor").filter({ has: source });
@@ -77,6 +147,10 @@ test("permitted staff create, preview, activate, and reopen an email template th
   await page.getByRole("menuitemradio", { name: "Heading 3", exact: true }).click();
   await expect(visual.locator("h3")).toBeVisible();
   await expect(visual.locator(".adm-template-token-var")).toHaveCount(2);
+  await expect(visual.locator(".adm-template-token-var").first()).toHaveCSS(
+    "background-color",
+    "rgba(8, 145, 178, 0.15)",
+  );
   await visual.screenshot({ path: test.info().outputPath("template-visual-highlighting.png") });
   await page.getByRole("button", { name: "Insert reusable templates", exact: true }).click();
   await expect(page.getByRole("menuitem").first()).toBeVisible();

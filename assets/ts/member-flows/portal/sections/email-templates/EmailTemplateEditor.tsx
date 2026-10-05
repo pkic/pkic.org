@@ -39,6 +39,7 @@ import { EmailTemplateVersionHistory } from "./EmailTemplateVersionHistory";
 // stylesheet, because only the two template editors use it.
 import "../../../../ui/OverlayEditor.css";
 import "../../../../ui/Content.css";
+import "./EmailTemplateEditor.css";
 const EMAIL_LAYOUT_TEMPLATE_KEY = "email_layout";
 const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
 
@@ -415,7 +416,7 @@ export function TemplateEditor({
                       }}
                     />
                   ) : (
-                    <>
+                    <div class="pk-overlay-editor">
                       <pre
                         ref={bodyPreRef}
                         aria-hidden="true"
@@ -436,7 +437,7 @@ export function TemplateEditor({
                         }}
                         onScroll={handleBodyScroll}
                       />
-                    </>
+                    </div>
                   )
                 }
               </Field>
@@ -529,7 +530,7 @@ export function TemplateEditor({
                       ref={iframeRef}
                       title="Rendered email HTML preview"
                       sandbox=""
-                      class="pk-framed"
+                      class="pk-framed pk-email-template-preview"
                       height={360}
                     />
                   ) : (
