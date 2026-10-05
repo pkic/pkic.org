@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { expect, type Page, type TestInfo } from "@playwright/test";
+import { expect, type Page, type TestInfo, type ConsoleMessage } from "@playwright/test";
+import type { AgendaOccurrence } from "../../../assets/shared/schemas/event-agenda";
 import { e2eAdminEmail } from "../../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./staff-auth";
 import { createMember } from "./member-provisioning";
@@ -33,7 +34,13 @@ import {
   enrolledEventScanRequestSchema,
   eventScanResponseSchema,
 } from "../../../assets/shared/schemas/event-participation-scanning";
-import { scannerStorage, scrollScannerToTop } from "./scanner-recovery-storage";
+import { enrolledOfflineEligibilityResponseSchema } from "../../../assets/shared/schemas/event-offline-eligibility";
+import {
+  scannerStorage,
+  scrollScannerToTop,
+  reconnectScannerBrowser,
+  openScannerDiagnostics,
+} from "./scanner-recovery-storage";
 
 export const sponsorEventSlug = "pqc-conference-amsterdam-nl";
 const eventApi = `/api/v1/events/${sponsorEventSlug}`;
@@ -203,6 +210,69 @@ export async function captureSponsorBadge(page: Page, badgeId: string, sponsorId
   return { request, receipt };
 }
 
+/** Retain and inspect one actual offline lead before its immutable server acknowledgment. */
+export async function captureOfflineSponsorBadge(
+  page: Page,
+  badgeId: string,
+  sponsorId: string,
+  operatorUserId: string,
+  forbidden: readonly string[],
+  readConsole: ReturnType<typeof captureDeviceConsole>,
+) {
+  const diagnostics = await openScannerDiagnostics(page);
+  await expect(
+    diagnostics.getByText("Scanner session: open. Offline preparation uses the last saved authorization.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await diagnostics.getByText("Recovery and diagnostics", { exact: true }).click();
+  await page.context().setOffline(true);
+  let pendingLead: ReturnType<typeof enrolledEventScanRequestSchema.parse> | undefined;
+  let pendingPrivacy: Awaited<ReturnType<typeof expectNoStoredSponsorContacts>> | undefined;
+  try {
+    await page.getByLabel("Badge code", { exact: true }).fill(badgeId);
+    await page
+      .getByRole("checkbox", {
+        name: "The attendee agrees to share their contact details with this sponsor.",
+        exact: true,
+      })
+      .check();
+    await page.getByRole("button", { name: "Capture lead", exact: true }).click();
+    await expect(page.getByText("1 scans awaiting upload", { exact: true })).toBeVisible();
+    const pending = await scannerStorage(page);
+    expect(pending.pending).toHaveLength(1);
+    pendingLead = enrolledEventScanRequestSchema.parse(pending.pending[0]!.scan);
+    expect(pendingLead).toMatchObject({
+      action: "lead",
+      badgeId,
+      sponsorId,
+      operatorUserId,
+      consentConfirmed: true,
+      occurrenceId: null,
+    });
+    expect(pendingLead.offlineRight).toBeUndefined();
+    for (const marker of forbidden) await expect(page.getByText(marker, { exact: true })).toHaveCount(0);
+    pendingPrivacy = await expectNoStoredSponsorContacts(page, forbidden, await readConsole());
+  } finally {
+    await reconnectScannerBrowser(page.context(), page);
+  }
+  if (!pendingLead || !pendingPrivacy) throw new Error("The inspected offline lead must survive to reconciliation");
+  const request = pendingLead;
+  await page.getByRole("button", { name: "Sync now", exact: true }).click();
+  await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(0);
+  const archived = (await scannerStorage(page)).history.find((row) => row.scan.operationId === request.operationId);
+  expect(archived?.scan).toEqual(request);
+  const receipt = eventScanResponseSchema.parse(archived?.receipt);
+  expect(receipt).toMatchObject({
+    operationId: request.operationId,
+    outcome: "eligible",
+    recorded: true,
+    attendanceRecorded: false,
+    admissionRecorded: false,
+  });
+  return { request, receipt, pendingPrivacy };
+}
+
 export async function captureSponsorViews(page: Page, info: TestInfo, checkpoint: string) {
   for (const [name, width, height] of [
     ["desktop", 1280, 900],
@@ -229,11 +299,166 @@ export async function captureSponsorViews(page: Page, info: TestInfo, checkpoint
   }
 }
 
+/** Capture actual device console arguments before scanning, and await every pending serialization. */
+export function captureDeviceConsole(page: Page) {
+  const messages: unknown[] = [];
+  const pending: Promise<void>[] = [];
+  const serializationErrors: string[] = [];
+  const onConsole = (message: ConsoleMessage) => {
+    pending.push(
+      Promise.all(message.args().map((argument) => argument.jsonValue())).then(
+        (args) => {
+          messages.push({
+            source: message.worker() ? "worker" : "page",
+            type: message.type(),
+            text: message.text(),
+            args,
+          });
+        },
+        (error: unknown) => {
+          serializationErrors.push(String(error));
+        },
+      ),
+    );
+  };
+  const onPageError = (error: Error) => {
+    messages.push({ source: "pageerror", type: "pageerror", message: error.message });
+  };
+  page.context().on("console", onConsole);
+  page.on("pageerror", onPageError);
+  return async (stop = false) => {
+    if (stop) {
+      page.context().off("console", onConsole);
+      page.off("pageerror", onPageError);
+    }
+    let completed = 0;
+    while (completed < pending.length) {
+      const batch = pending.slice(completed);
+      completed += batch.length;
+      await Promise.all(batch);
+    }
+    expect(serializationErrors, "Every observed browser console argument must be inspectable").toEqual([]);
+    return [...messages];
+  };
+}
+
+/** Observe preparation caused by the actual epoch restart, preserving the selected session. */
+export async function startNextDoorScannerContext(
+  page: Page,
+  occurrence: Pick<AgendaOccurrence, "id" | "roomId">,
+  previous: ReturnType<typeof enrolledOfflineEligibilityResponseSchema.parse>,
+) {
+  await page.getByLabel("Scan mode", { exact: true }).selectOption("attendance");
+  const preparing = page
+    .waitForResponse((response) => {
+      const url = new URL(response.url());
+      return (
+        response.ok() &&
+        url.pathname === `${eventApi}/offline-eligibility` &&
+        url.searchParams.get("occurrenceId") === occurrence.id &&
+        url.searchParams.get("roomId") === occurrence.roomId &&
+        Boolean(url.searchParams.get("epochId")) &&
+        url.searchParams.get("epochId") !== previous.epochId
+      );
+    })
+    .then(async (response) => enrolledOfflineEligibilityResponseSchema.parse(await response.json()));
+  const diagnostics = await openScannerDiagnostics(page);
+  await diagnostics.getByRole("button", { name: "Start next scanner session", exact: true }).click();
+  const manifest = await preparing;
+  expect(manifest).toMatchObject({
+    eventId: previous.eventId,
+    deviceId: previous.deviceId,
+    operatorUserId: previous.operatorUserId,
+    occurrenceId: occurrence.id,
+    roomId: occurrence.roomId,
+    publishedRevision: previous.publishedRevision,
+  });
+  expect(manifest.epochId).not.toBe(previous.epochId);
+  await expect(page.getByText("New scanner session prepared. Ready to scan.", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Eligibility data ready. Checks run locally; attendance uploads in the background.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
+  return manifest;
+}
+
+/** Reject contact-bearing input through the real form without submitting or changing retained scans. */
+export async function expectContactBadgeRejected(page: Page, email: string, freeText: string) {
+  const before = await scannerStorage(page);
+  const submissions: string[] = [];
+  const observe = (request: import("@playwright/test").Request) => {
+    if (new URL(request.url()).pathname === `${eventApi}/scans` && request.method() === "POST")
+      submissions.push(request.postData() ?? "");
+  };
+  page.on("request", observe);
+  try {
+    await page.getByLabel("Badge code", { exact: true }).fill(JSON.stringify({ email, biography: freeText }));
+    await page.getByRole("button", { name: "Check registration", exact: true }).click();
+    await expect(page.getByLabel("Badge code", { exact: true })).toHaveAttribute("aria-invalid", "true");
+    expect(submissions).toEqual([]);
+    expect(await scannerStorage(page)).toEqual(before);
+  } finally {
+    page.off("request", observe);
+  }
+}
+
+/** Prepare the exact approved scanner context through its real browser controls. */
+export async function prepareDoorScannerContext(
+  page: Page,
+  occurrence: Pick<AgendaOccurrence, "id" | "title" | "roomId">,
+  publishedRevision: number,
+) {
+  const path = `${eventApi}/offline-eligibility`;
+  const preparing = page.waitForResponse((response) => new URL(response.url()).pathname === path && response.ok());
+  await page.goto(`/portal/#/events/${sponsorEventSlug}/scanner`);
+  const manifest = enrolledOfflineEligibilityResponseSchema.parse(await (await preparing).json());
+  expect(manifest.publishedRevision).toBe(publishedRevision);
+  await expect(
+    page.getByText("Eligibility data ready. Checks run locally; attendance uploads in the background.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? "")).not.toBe("");
+  const selected = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return (
+      response.ok() &&
+      url.pathname === path &&
+      url.searchParams.get("occurrenceId") === occurrence.id &&
+      url.searchParams.get("roomId") === occurrence.roomId &&
+      url.searchParams.get("epochId") === manifest.epochId
+    );
+  });
+  await page.getByRole("combobox", { name: "Check-in location", exact: true }).fill(occurrence.title);
+  await page.getByRole("option", { name: occurrence.title, exact: true }).click();
+  await expect(page.getByRole("combobox", { name: "Check-in location", exact: true })).toHaveValue(occurrence.title);
+  await expect(page.getByRole("combobox", { name: "Physical room", exact: true })).toHaveValue(occurrence.roomId!);
+  const prepared = enrolledOfflineEligibilityResponseSchema.parse(await (await selected).json());
+  expect(prepared).toMatchObject({
+    epochId: manifest.epochId,
+    deviceId: manifest.deviceId,
+    operatorUserId: manifest.operatorUserId,
+    occurrenceId: occurrence.id,
+    roomId: occurrence.roomId,
+    publishedRevision,
+  });
+  await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
+  return prepared;
+}
+
 /** Inspect existing browser storage read-only; canonical badge UUIDs are permitted scan identifiers. */
-export async function expectNoStoredSponsorContacts(page: Page, forbidden: readonly string[]) {
-  const violations = await page.evaluate(
+export async function expectNoStoredSponsorContacts(
+  page: Page,
+  forbidden: readonly string[],
+  consoleMessages: readonly unknown[] = [],
+) {
+  const inspected = await page.evaluate(
     async (forbiddenValues) => {
       const values: unknown[] = [Object.entries(localStorage), Object.entries(sessionStorage)];
+      const inventory: Array<{ database: string; store: string; count: number }> = [];
+      const cacheKeys: Array<{ cache: string; url: string }> = [];
       for (const { name } of await indexedDB.databases()) {
         if (!name) continue;
         const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -251,7 +476,15 @@ export async function expectNoStoredSponsorContacts(page: Page, forbidden: reado
                 (store) =>
                   new Promise<unknown[]>((resolve, reject) => {
                     const request = tx.objectStore(store).getAll();
-                    request.onsuccess = () => resolve(request.result);
+                    const keys = tx.objectStore(store).getAllKeys();
+                    const keysRead = new Promise<IDBValidKey[]>((resolveKeys, rejectKeys) => {
+                      keys.onsuccess = () => resolveKeys(keys.result);
+                      keys.onerror = () => rejectKeys(new Error(keys.error?.message ?? "Could not read storage keys"));
+                    });
+                    request.onsuccess = () => {
+                      inventory.push({ database: name, store, count: request.result.length });
+                      keysRead.then((keys) => resolve([keys, request.result]), reject);
+                    };
                     request.onerror = () =>
                       reject(new Error(request.error?.message ?? "Could not read browser storage"));
                   }),
@@ -265,14 +498,37 @@ export async function expectNoStoredSponsorContacts(page: Page, forbidden: reado
       for (const name of await caches.keys()) {
         const cache = await caches.open(name);
         for (const request of await cache.keys()) {
+          cacheKeys.push({ cache: name, url: request.url });
           const response = await cache.match(request);
           if (response) values.push(await response.text());
         }
       }
-      const serialized = JSON.stringify(values);
-      return forbiddenValues.filter((value) => serialized.includes(value));
+      const serialized = JSON.stringify({ values, inventory, cacheKeys });
+      return { violations: forbiddenValues.filter((value) => serialized.includes(value)), inventory, cacheKeys };
     },
-    [...forbidden],
+    forbidden.flatMap((value) => [value, encodeURIComponent(value)]),
   );
-  expect(violations, "Browser storage must not retain attendee contact fields").toEqual([]);
+  expect(
+    inspected.violations,
+    "Browser stores, cache URLs and bodies must not retain attendee contact or free-text markers",
+  ).toEqual([]);
+  expect(
+    forbidden
+      .flatMap((value) => [value, encodeURIComponent(value)])
+      .filter((value) => JSON.stringify(consoleMessages).includes(value)),
+    "Device console text and arguments must not retain contact or free-text markers",
+  ).toEqual([]);
+  for (const key of inspected.cacheKeys) expect(new URL(key.url).pathname).not.toMatch(/^\/api\//);
+  return {
+    inventory: inspected.inventory,
+    cacheKeys: inspected.cacheKeys,
+    consoleMessageCount: consoleMessages.length,
+    consoleSources: ["page", "worker", "pageerror"].map((source) => ({
+      source,
+      count: consoleMessages.filter(
+        (message) =>
+          typeof message === "object" && message !== null && "source" in message && message.source === source,
+      ).length,
+    })),
+  };
 }

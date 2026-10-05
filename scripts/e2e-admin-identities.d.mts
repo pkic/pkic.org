@@ -4,6 +4,7 @@ export const E2E_ADMIN_SCOPES: readonly [
   "scanner-recovery-other",
   "portal-agenda-accepted-placement",
   "portal-agenda-preview",
+  "portal-agenda-list-readonly",
   "portal-agenda-publication-layout",
   "portal-agenda-staffing-roster",
   "portal-meeting-calendar",

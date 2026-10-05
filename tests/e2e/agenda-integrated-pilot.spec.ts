@@ -25,8 +25,6 @@ import {
   eventScanResponseSchema,
 } from "../../assets/shared/schemas/event-participation-scanning";
 import {
-  scannerDeviceSessionEnrollmentSchema,
-  scannerDeviceSessionEnrollmentResponseSchema,
   scannerDeviceSessionClosingSchema,
   scannerDeviceSessionStatusSchema,
 } from "../../assets/shared/schemas/event-scanner-devices";
@@ -36,7 +34,6 @@ import {
   eventAttendancePeopleResponseSchema,
 } from "../../assets/shared/schemas/event-attendance-reporting";
 import { sponsorLeadSponsorsSchema, sponsorLeadListSchema } from "../../assets/shared/schemas/event-sponsor-lead-list";
-import { enrolledOfflineEligibilityResponseSchema } from "../../assets/shared/schemas/event-offline-eligibility";
 import { speakerSelfProfilePatchSchema } from "../../assets/shared/schemas/proposal-management";
 import {
   speakerSelfServiceReadResponseSchema,
@@ -50,7 +47,11 @@ import { correctPilotAttendance } from "./helpers/attendance-correction";
 import { scannerStorage, reconnectScannerBrowser, openScannerDiagnostics } from "./helpers/scanner-recovery-storage";
 import {
   prepareSponsorLiveFixture,
-  captureSponsorBadge,
+  captureDeviceConsole,
+  expectContactBadgeRejected,
+  captureOfflineSponsorBadge,
+  prepareDoorScannerContext,
+  startNextDoorScannerContext,
   expectNoStoredSponsorContacts,
   sponsorEventSlug,
 } from "./helpers/sponsor-live-fixture";
@@ -127,9 +128,17 @@ test("one recurring meeting and conference retain the same actors through organi
     speakerPage = await speakerContext.newPage(),
     door = await doorContext.newPage(),
     sponsor = await sponsorContext.newPage();
+  const doorConsole = captureDeviceConsole(door),
+    sponsorConsole = captureDeviceConsole(sponsor);
   try {
     // Existing fixture establishes its own registrations, live sponsor and authority through actual mailbox/API flows.
     const fixture = await prepareSponsorLiveFixture(staff, attendee);
+    const freeTextMarker = `Device-free-text-${randomUUID()}`;
+    const forbidden = [fixture.email, fixture.deniedEmail, fixture.firstName, fixture.organization, freeTextMarker];
+    const devicePrivacy: Array<Awaited<ReturnType<typeof expectNoStoredSponsorContacts>> & { stage: string }> = [];
+    const inspectDevice = async (page: Page, logs: typeof doorConsole, stage: string, stop = false) => {
+      devicePrivacy.push({ stage, ...(await expectNoStoredSponsorContacts(page, forbidden, await logs(stop))) });
+    };
     const eventResponse = await staff.request.get(`/api/v1/events/${sponsorEventSlug}`);
     expect(eventResponse.status()).toBe(200);
     const event = eventDetailResponseSchema.parse(await eventResponse.json()).event;
@@ -278,31 +287,31 @@ test("one recurring meeting and conference retain the same actors through organi
 
     const doorGrantIds = await grantPilotDoor(staff, meeting.member.userId, event.id);
     await signInToPortal(door, meeting.member.email);
-    const enrollmentBody = scannerDeviceSessionEnrollmentSchema.parse({
-      operationId: randomUUID(),
-      deviceId: randomUUID(),
+    const scansPath = `/api/v1/events/${sponsorEventSlug}/scans`;
+    const manifest = await prepareDoorScannerContext(door, source, approved.publishedRevision!);
+    expect(manifest.entries.find((entry) => entry.userId === fixture.consenting.userId)).toMatchObject({
+      eventRegistered: true,
+      physicalDayEligible: true,
     });
-    const enrollmentResponse = await door.request.post(`/api/v1/events/${sponsorEventSlug}/scanner/devices/sessions`, {
-      data: enrollmentBody,
-    });
-    expect(enrollmentResponse.status()).toBe(200);
-    const enrollment = scannerDeviceSessionEnrollmentResponseSchema.parse(await enrollmentResponse.json());
-    expect(enrollment).toMatchObject({ eventId: event.id, operatorUserId: meeting.member.userId });
-    const admission = enrolledEventScanRequestSchema.parse({
+    await door.getByLabel("Scan mode", { exact: true }).selectOption("admission");
+    const receivingAdmission = door.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === scansPath &&
+        response.request().method() === "POST" &&
+        response.request().postDataJSON()?.badgeId === fixture.consenting.badgeId,
+    );
+    await door.getByLabel("Badge code", { exact: true }).fill(fixture.consenting.badgeId);
+    await door.getByRole("button", { name: "Check registration", exact: true }).click();
+    const admitted = await receivingAdmission;
+    expect(admitted.status()).toBe(200);
+    const admission = enrolledEventScanRequestSchema.parse(admitted.request().postDataJSON());
+    expect(admission).toMatchObject({
+      action: "admission",
       operatorUserId: meeting.member.userId,
-      scannerSession: { epochId: enrollment.epochId, sequence: 1 },
-      operationId: randomUUID(),
-      deviceId: enrollment.deviceId,
-      badgeId: fixture.consenting.badgeId,
       occurrenceId: source.id,
       roomId: source.roomId,
-      action: "admission",
-      observedAt: new Date().toISOString(),
       capturePublicationRevision: approved.publishedRevision,
     });
-    const scansPath = `/api/v1/events/${sponsorEventSlug}/scans`;
-    const admitted = await door.request.post(scansPath, { data: admission });
-    expect(admitted.status()).toBe(200);
     const admissionReceipt = eventScanResponseSchema.parse(await admitted.json());
     expect(admissionReceipt).toMatchObject({
       operationId: admission.operationId,
@@ -311,63 +320,17 @@ test("one recurring meeting and conference retain the same actors through organi
       admissionDecision: "allowed",
       attendanceRecorded: false,
     });
+    await expect
+      .poll(async () =>
+        (await scannerStorage(door)).history.some((row) => row.scan.operationId === admission.operationId),
+      )
+      .toBe(true);
     const replay = await door.request.post(scansPath, { data: admission });
     expect(eventScanResponseSchema.parse(await replay.json())).toEqual(admissionReceipt);
-    const closing = await door.request.post(
-      `/api/v1/events/${sponsorEventSlug}/scanner/devices/sessions/${enrollment.epochId}/closing`,
-      {
-        data: scannerDeviceSessionClosingSchema.parse({
-          operationId: randomUUID(),
-          highWaterSequence: 1,
-          pendingCount: 0,
-          recoveryCount: 0,
-        }),
-      },
-    );
-    expect(closing.status()).toBe(200);
-    const manualClosed = scannerDeviceSessionStatusSchema.parse(await closing.json());
-    expect(manualClosed.closedAt).not.toBeNull();
-
-    const prepared = door.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname === `/api/v1/events/${sponsorEventSlug}/offline-eligibility` && response.ok(),
-    );
-    await door.goto(`/portal/#/events/${sponsorEventSlug}/scanner`);
-    const manifest = enrolledOfflineEligibilityResponseSchema.parse(await (await prepared).json());
-    expect(manifest.publishedRevision).toBe(approved.publishedRevision);
-    expect(manifest.entries.find((entry) => entry.userId === fixture.consenting.userId)).toMatchObject({
-      eventRegistered: true,
-      physicalDayEligible: true,
-    });
-    const eligibilityReady = door.getByText(
-      "Eligibility data ready. Checks run locally; attendance uploads in the background.",
-      { exact: true },
-    );
-    await expect(eligibilityReady).toBeVisible();
-    await expect.poll(() => door.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? "")).not.toBe("");
-    const selectedPreparation = door.waitForResponse((response) => {
-      const url = new URL(response.url());
-      return (
-        response.ok() &&
-        url.pathname === `/api/v1/events/${sponsorEventSlug}/offline-eligibility` &&
-        url.searchParams.get("occurrenceId") === source.id &&
-        url.searchParams.get("roomId") === source.roomId &&
-        url.searchParams.get("epochId") === manifest.epochId
-      );
-    });
-    await door.getByRole("combobox", { name: "Check-in location", exact: true }).fill(source.title);
-    await door.getByRole("option", { name: source.title, exact: true }).click();
-    await expect(door.getByRole("combobox", { name: "Check-in location", exact: true })).toHaveValue(source.title);
-    await expect(door.getByRole("combobox", { name: "Physical room", exact: true })).toHaveValue(source.roomId!);
-    expect(enrolledOfflineEligibilityResponseSchema.parse(await (await selectedPreparation).json())).toMatchObject({
-      epochId: manifest.epochId,
-      deviceId: manifest.deviceId,
-      operatorUserId: meeting.member.userId,
-      occurrenceId: source.id,
-      roomId: source.roomId,
-      publishedRevision: approved.publishedRevision,
-    });
-    await expect(door.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
+    await expectContactBadgeRejected(door, fixture.email, freeTextMarker);
+    await inspectDevice(door, doorConsole, "admission-acknowledged-and-contact-payload-refused");
+    const manualClosed = await closePilotScanner(door, admission);
+    await startNextDoorScannerContext(door, source, manifest);
     await doorContext.setOffline(true);
     let stored: Awaited<ReturnType<typeof scannerStorage>> | undefined;
     try {
@@ -386,6 +349,7 @@ test("one recurring meeting and conference retain the same actors through organi
         roomId: source.roomId,
       });
       expect(Object.keys(scan)).not.toEqual(expect.arrayContaining(["email", "name", "contacts"]));
+      await inspectDevice(door, doorConsole, "attendance-offline-pending");
       await capturePilot(door, info, "pilot-offline-original-capture");
     } finally {
       await reconnectScannerBrowser(doorContext, door);
@@ -400,6 +364,7 @@ test("one recurring meeting and conference retain the same actors through organi
     expect(acknowledgment?.receipt).toMatchObject({ outcome: "eligible", attendanceRecorded: true });
     const originalReplay = await door.request.post(scansPath, { data: originalScan });
     expect(eventScanResponseSchema.parse(await originalReplay.json())).toEqual(acknowledgment?.receipt);
+    await inspectDevice(door, doorConsole, "attendance-acknowledged");
     const doorClosed = await closePilotScanner(door, originalScan);
     await capturePilot(door, info, "pilot-reconciled-attendance");
 
@@ -422,29 +387,35 @@ test("one recurring meeting and conference retain the same actors through organi
     await sponsor.goto(fixture.workspace);
     await sponsor.getByRole("button", { name: `Open leads for ${scope.name}`, exact: true }).click();
     await sponsor.getByRole("button", { name: "Scan leads", exact: true }).click();
-    const captured = await captureSponsorBadge(
+    const captured = await captureOfflineSponsorBadge(
       sponsor,
       fixture.consenting.badgeId,
       fixture.sponsorId,
       fixture.operator.userId,
+      forbidden,
+      sponsorConsole,
     );
-    expect(captured.receipt).toMatchObject({ outcome: "eligible", attendanceRecorded: false });
+    devicePrivacy.push({ stage: "sponsor-lead-offline-pending", ...captured.pendingPrivacy });
+    await inspectDevice(sponsor, sponsorConsole, "sponsor-lead-acknowledged");
     const leadReplay = await sponsor.request.post(scansPath, { data: captured.request });
     expect(leadReplay.status()).toBe(200);
     expect(eventScanResponseSchema.parse(await leadReplay.json())).toEqual(captured.receipt);
     const sponsorClosed = await closePilotScanner(sponsor, captured.request);
     const leadsPath = `${sponsorsPath}/${fixture.sponsorId}/leads`;
-    const listed = sponsorLeadListSchema.parse(await (await sponsor.request.get(leadsPath)).json());
+    const liveLeads = await sponsor.request.get(leadsPath);
+    expect(liveLeads.headers()["cache-control"]).toContain("no-store");
+    const listed = sponsorLeadListSchema.parse(await liveLeads.json());
     expect(listed.leads).toHaveLength(1);
     expect(listed.leads[0]?.email).toBe(fixture.email);
     const exported = await sponsor.request.get(`${leadsPath}.csv`);
     expect(exported.status()).toBe(200);
+    expect(exported.headers()["cache-control"]).toContain("no-store");
     expect(await exported.text()).toContain(fixture.email);
     expect((await sponsor.request.get(summaryPath)).status()).toBe(403);
     expect(attendanceSummarySchema.parse(await (await staff.request.get(summaryPath)).json()).observed).toEqual(
       reportBeforeLead.observed,
     );
-    await expectNoStoredSponsorContacts(sponsor, [fixture.email, fixture.firstName, fixture.organization]);
+    await inspectDevice(sponsor, sponsorConsole, "sponsor-authorized-live-view-and-export");
     await capturePilot(sponsor, info, "pilot-same-attendee-sponsor-capture");
     const withdrawn = await attendee.request.patch(managePath, {
       data: registrationManageSchema.parse({ action: "withdraw_sponsor_sharing" }),
@@ -570,6 +541,8 @@ test("one recurring meeting and conference retain the same actors through organi
     expect((await readPilotAgenda(staff)).occurrences.map((row) => row.id).sort()).toEqual(
       approved.occurrences.map((row) => row.id).sort(),
     );
+    await inspectDevice(door, doorConsole, "door-final", true);
+    await inspectDevice(sponsor, sponsorConsole, "sponsor-final-after-withdrawal", true);
     await writeFile(
       info.outputPath("integrated-pilot-receipt.json"),
       JSON.stringify(
@@ -593,6 +566,7 @@ test("one recurring meeting and conference retain the same actors through organi
           scannerReconciliation: finalSummary.sync.scannerReconciliation,
           attendanceCompleteness: finalSummary.sync.completeness,
           correctedAttendance,
+          devicePrivacy,
           archiveRoute,
         },
         null,
