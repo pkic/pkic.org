@@ -11,78 +11,15 @@ import { agendaContent } from "../../assets/shared/public-agenda-content";
 import { agendaSnapshotSchema } from "../../assets/shared/schemas/event-agenda";
 import { sitePublicationSnapshotSchema } from "../../assets/shared/schemas/site-publication";
 import { ContentAgenda } from "../../assets/ts/site/ContentAgenda";
-import { renderContentAgenda } from "../../functions/_lib/services/site-agenda";
 import { sessionHistoryStructuredData } from "../../functions/_lib/services/site-history-structured-data";
 import { publishedSessionHistory, publishedSpeakerHistory } from "../../functions/_lib/services/site-session-history";
 import fixture from "../fixtures/site-publication.json";
 import { sessionPresentationPublicUrl } from "../../assets/shared/session-presentation-public-url";
-
-const instant = "2026-12-01T09:00:00.000Z";
-const snapshot = agendaSnapshotSchema.parse({
-  eventSlug: "approved-event",
-  timeZone: "Europe/Amsterdam",
-  revision: 3,
-  publishedRevision: 3,
-  approvedAt: instant,
-  rooms: [{ id: "hall", name: "Main hall", capacity: 100 }],
-  blocks: [],
-  assignments: [],
-  roleMembers: [],
-  occurrences: [
-    {
-      id: "session",
-      title: "Approved session",
-      description: "A sufficiently detailed approved description for the public session archive.",
-      startAt: instant,
-      endAt: "2026-12-01T10:00:00.000Z",
-      roomId: "hall",
-      speakers: [{ userId: "person", displayName: "Current profile name", role: "moderator" }],
-      history: {
-        appearances: [
-          {
-            userId: "person",
-            actingIdentityId: null,
-            displayName: "Historical speaker",
-            jobTitle: "Engineer",
-            organizationName: "Historical organization",
-            biography: "**Approved biography** <script>unsafe()</script>",
-            photoUrl: "/approved-photo.jpg",
-            approvedAt: instant,
-          },
-        ],
-        materials: [
-          {
-            id: "slides",
-            kind: "presentation",
-            title: "Approved slides",
-            url: "/approved-slides.pdf",
-            presentationVersionId: null,
-            version: 1,
-            rightsConfirmed: true,
-            consentConfirmed: true,
-            validated: true,
-            status: "approved",
-            approvedAt: instant,
-          },
-          {
-            id: "private",
-            kind: "recording",
-            title: "Unreleased recording",
-            url: "https://example.test/private",
-            presentationVersionId: null,
-            version: 1,
-            rightsConfirmed: false,
-            consentConfirmed: true,
-            validated: true,
-            status: "draft",
-            approvedAt: null,
-          },
-        ],
-      },
-    },
-  ],
-});
-const publication = sitePublicationSnapshotSchema.parse({ ...fixture, eventAgendas: { "approved-event": snapshot } });
+import {
+  approvedAgendaInstant as instant,
+  approvedAgendaSnapshot as snapshot,
+  approvedAgendaPublication as publication,
+} from "../fixtures/approved-agenda";
 
 describe("shared public agenda content", () => {
   it.each(["missing", "draft", "withdrawn", "failed", "rights", "consent", "validation", "approval"])(
@@ -263,46 +200,6 @@ describe("shared public agenda content", () => {
     expect(session.sessionUrl).toBe(publishedSessionHistory(publication)[0]!.route);
     expect(session.presentationUrl).toBe("/approved-slides.pdf");
     expect(session.recordingUrl).toBeUndefined();
-  });
-
-  it("renders identical static and portal content without authored profile fallback or unsafe biography HTML", async () => {
-    const content = agendaContent(snapshot);
-    const portal = await renderToStringAsync(
-      <ContentAgenda days={content.days} speakers={content.speakers} timeZone={snapshot.timeZone} />,
-    );
-    const built = await renderContentAgenda(
-      {
-        assetUrl: () => undefined,
-        assetUrls: () => [],
-        data: {},
-        eventSlug: snapshot.eventSlug,
-        eventData: { agenda: {}, speakers: [{ name: "Current profile name", bio: "Unapproved authored biography" }] },
-        listing: () => {
-          throw new Error("Unexpected listing lookup");
-        },
-        publication,
-        route: "/events/approved-event/agenda/",
-        sourcePath: "synthetic-event.md",
-      },
-      async () => {
-        throw new Error("Approved content must use shared safe Markdown");
-      },
-    );
-    const publicDocument = document.createElement("div");
-    const previewDocument = document.createElement("div");
-    publicDocument.innerHTML = built;
-    previewDocument.innerHTML = portal;
-    expect(publicDocument.querySelector(".pk-content-agenda")!.hasAttribute("data-agenda-public-fragments")).toBe(true);
-    expect(previewDocument.querySelector(".pk-content-agenda")!.hasAttribute("data-agenda-public-fragments")).toBe(
-      false,
-    );
-    publicDocument.querySelector(".pk-content-agenda")!.removeAttribute("data-agenda-public-fragments");
-    expect(publicDocument.innerHTML).toBe(previewDocument.innerHTML);
-    expect(built).toContain("Historical speaker");
-    expect(built).toContain("Historical organization");
-    expect(built).not.toContain("Current profile name");
-    expect(built).not.toContain("Unapproved authored biography");
-    expect(built).not.toContain("<script>");
   });
 
   it("keeps private scheduled cards in organizer mode but excludes them from public cards and gallery", () => {
