@@ -1,3 +1,5 @@
+import { administratorGrants } from "./helpers/administrator";
+import { grantAdministrator } from "./helpers/administrator";
 /**
  * A mailing list's own record: its lifecycle, and who stands on it.
  *
@@ -42,8 +44,8 @@ interface Fixture {
 async function staffActor(label: string): Promise<UserBackedAuthAdmin> {
   const email = `mailing-list-${label}-${crypto.randomUUID()}@example.test`;
   const id = await insertUser(env.DB, email);
-  await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(id).run();
-  return { identityType: "user", id, email, role: "admin" };
+  await grantAdministrator(env.DB, id);
+  return { identityType: "user", id, email, grants: administratorGrants };
 }
 
 /** One staff-managed group with one list on it: the smallest thing a lifecycle command can act on. */

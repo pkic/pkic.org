@@ -1,3 +1,4 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL, grantAdministrator } from "./helpers/administrator";
 /**
  * api-security.test.ts
  *
@@ -111,7 +112,6 @@ async function insertSession(
       sub: userId,
       sid: sessionId,
       email: "admin@example.test",
-      role: "admin",
       scopes: opts.scopes,
       exp: Math.floor(new Date(expiresAt).getTime() / 1000),
     });
@@ -418,7 +418,7 @@ describe("session-token validation", () => {
   beforeEach(async () => {
     ({ eventId } = await seedEventAndAdmin(env.DB));
     // Retrieve the admin user id that seedEventAndAdmin created
-    const row = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const row = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     adminId = row.id;
   });
 
@@ -471,9 +471,8 @@ describe("session-token validation", () => {
     const regularUserId = crypto.randomUUID();
     await env.DB.prepare(
       `
-      INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-      VALUES ('${regularUserId}', 'regular@example.test', 'regular@example.test',
-              'user', 1, datetime('now'), datetime('now'));
+      INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+      VALUES ('${regularUserId}', 'regular@example.test', 'regular@example.test', 1, datetime('now'), datetime('now'));
     `,
     ).run();
     const token = await insertSession(env.DB, regularUserId, "user-token");
@@ -487,11 +486,11 @@ describe("session-token validation", () => {
     const inactiveAdminId = crypto.randomUUID();
     await env.DB.prepare(
       `
-      INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-      VALUES ('${inactiveAdminId}', 'inactive@example.test', 'inactive@example.test',
-              'admin', 0, datetime('now'), datetime('now'));
+      INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+      VALUES ('${inactiveAdminId}', 'inactive@example.test', 'inactive@example.test', 0, datetime('now'), datetime('now'));
     `,
     ).run();
+    await grantAdministrator(env.DB, inactiveAdminId);
     const token = await insertSession(env.DB, inactiveAdminId, "inactive-admin-token");
     const response = await callUsers(token);
     expect(response.status).toBe(401);
@@ -528,8 +527,8 @@ describe("session-token validation", () => {
   it("requires proposal access in addition to event access for presentation archives", async () => {
     const readerId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES (?, 'archive-reader@example.test', 'archive-reader@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+       VALUES (?, 'archive-reader@example.test', 'archive-reader@example.test', 1, datetime('now'), datetime('now'))`,
     )
       .bind(readerId)
       .run();
@@ -578,7 +577,7 @@ describe("HTTP method enforcement", () => {
 
   beforeEach(async () => {
     await seedEventAndAdmin(env.DB);
-    const row = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const row = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     adminId = row.id;
   });
 

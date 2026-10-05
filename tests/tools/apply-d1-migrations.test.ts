@@ -8,6 +8,12 @@ describe("remote D1 migration import", () => {
     );
   });
 
+  it("records retirement migration 0037 alongside its trigger and column cutover", () => {
+    expect(buildImportSql("ALTER TABLE users DROP COLUMN role;", "0037_retire_legacy_account_role.sql")).toBe(
+      "ALTER TABLE users DROP COLUMN role;\nINSERT INTO d1_migrations (name) VALUES ('0037_retire_legacy_account_role.sql');\n",
+    );
+  });
+
   it("requires earlier migrations before the exceptional import", () => {
     expect(
       pendingMigrationNames(["0034_previous.sql"], ["0034_previous.sql", "0035_membership_portal_governance.sql"]),

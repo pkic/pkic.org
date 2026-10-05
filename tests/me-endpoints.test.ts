@@ -49,8 +49,8 @@ const INDIVIDUAL_CATEGORIES = new Set(["H5", "H6", "H7"]);
 async function insertActiveMember(email: string, category: string): Promise<string> {
   const userId = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at)
-     VALUES (?, ?, ?, 'Test', 'user', 1, datetime('now'), datetime('now'))`,
+    `INSERT INTO users (id, email, normalized_email, first_name, active, created_at, updated_at)
+     VALUES (?, ?, ?, 'Test', 1, datetime('now'), datetime('now'))`,
   )
     .bind(userId, email, email)
     .run();
@@ -232,8 +232,8 @@ describe("Current-user and application self-service", () => {
     const token = await createMemberSession(env.DB, userId, "applicant-detail-token");
     const staffUserId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES (?, 'staff-actor@example.test', 'staff-actor@example.test', 'admin', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+       VALUES (?, 'staff-actor@example.test', 'staff-actor@example.test', 1, datetime('now'), datetime('now'))`,
     )
       .bind(staffUserId)
       .run();

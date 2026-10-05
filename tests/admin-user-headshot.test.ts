@@ -1,3 +1,4 @@
+import { administratorGrants } from "./helpers/administrator";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
@@ -125,8 +126,8 @@ async function setup(): Promise<{ adminId: string; targetUserId: string }> {
 
   const targetUserId = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO users (id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at)
-     VALUES (?, ?, ?, 'Upload', 'Target', 'user', 1, datetime('now'), datetime('now'))`,
+    `INSERT INTO users (id, email, normalized_email, first_name, last_name, active, created_at, updated_at)
+     VALUES (?, ?, ?, 'Upload', 'Target', 1, datetime('now'), datetime('now'))`,
   )
     .bind(targetUserId, "upload-target@example.test", "upload-target@example.test")
     .run();
@@ -463,7 +464,12 @@ describe("admin user headshot upload", () => {
     const bucket = new FakeUploadsBucket();
     const target = await getUserHeadshotRecord(env.DB, targetUserId);
     const gate = gateNextBatch(env.DB);
-    const actor = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" } as const;
+    const actor = {
+      identityType: "user",
+      id: adminId,
+      email: "admin@pkic.org",
+      grants: administratorGrants,
+    } as const;
     const mutation = replaceUserHeadshot({
       db: authorizedUserMutationDb(gate.db, actor, ["users:write"]),
       bucket: bucket as unknown as R2Bucket,

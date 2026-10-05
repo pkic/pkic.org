@@ -1,6 +1,7 @@
+import { eventRegistrationNotificationsCreateRouteSchema } from "./route-contracts-event-registration-management";
 import { z } from "zod";
 import { jsonErrorResponse } from "./api-common";
-import { groupEventParamsSchema } from "./group-events";
+import { groupEventParamsSchema, groupEventRegistrationParamsSchema } from "./group-events";
 import { requiresSession } from "./route-contract";
 import { eventRegistrationPromotionsResponseSchema } from "./event-registrations";
 
@@ -36,5 +37,16 @@ export const groupEventRegistrationExportRouteSchema = {
     "404": jsonErrorResponse("The event is not available through this group."),
     "409": jsonErrorResponse("Export authorization changed."),
     "413": jsonErrorResponse("Configured export size limit exceeded."),
+  },
+};
+
+export const groupEventRegistrationNotificationsCreateRouteSchema = {
+  ...eventRegistrationNotificationsCreateRouteSchema,
+  ...requiresSession(),
+  tags: ["Groups"],
+  summary: "Resend a group event registration email",
+  request: {
+    params: groupEventRegistrationParamsSchema,
+    body: eventRegistrationNotificationsCreateRouteSchema.request.body,
   },
 };

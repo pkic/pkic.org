@@ -1,3 +1,4 @@
+import { administratorGrants, grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { buildOffsetPageSql } from "../functions/_lib/db/pagination";
@@ -16,12 +17,12 @@ beforeEach(resetDb);
 async function setupProgram(): Promise<{ actor: AuthAdmin; eventId: string; groupId: string; token: string }> {
   const administratorEmail = `proposal-program-admin-${crypto.randomUUID()}@example.test`;
   const administratorId = await insertUser(env.DB, administratorEmail);
-  await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(administratorId).run();
+  await grantAdministrator(env.DB, administratorId);
   const administrator: AuthAdmin = {
     identityType: "user",
     id: administratorId,
     email: administratorEmail,
-    role: "admin",
+    grants: administratorGrants,
   };
   const group = await createGroup(env.DB, administrator, {
     typeKey: "working_group",
@@ -56,7 +57,6 @@ async function setupProgram(): Promise<{ actor: AuthAdmin; eventId: string; grou
       identityType: "user",
       id: userId,
       email: userEmail,
-      role: "user",
       grants: [{ permission: "proposals:read", contextType: "event", contextId: event.eventId }],
     },
   };

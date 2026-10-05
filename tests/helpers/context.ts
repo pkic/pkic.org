@@ -1,4 +1,5 @@
-import type { DatabaseLike, Env, PagesContext } from "../../functions/_lib/types";
+import { grantAdministrator } from "./administrator";
+import type { DatabaseLike, Env, PagesContext, UserBackedAuthAdmin } from "../../functions/_lib/types";
 import type { AdminContext } from "../../functions/_lib/db/context";
 import type { RateLimitBinding } from "../../functions/_lib/rate-limit";
 import { materializeQueuedCapabilityLinks } from "../../functions/_lib/services/capability-links";
@@ -97,7 +98,7 @@ export function createTestRateLimiter(limit: number): RateLimitBinding {
   };
 }
 
-export async function seedEventAndAdmin(db: DatabaseLike): Promise<{ eventId: string }> {
+export async function seedEventAndAdmin(db: DatabaseLike): Promise<{ eventId: string; admin: UserBackedAuthAdmin }> {
   const eventId = crypto.randomUUID();
   const adminId = crypto.randomUUID();
 
@@ -110,8 +111,8 @@ export async function seedEventAndAdmin(db: DatabaseLike): Promise<{ eventId: st
        'invite_or_open', 5, '{}', datetime('now'), datetime('now'))`,
     ),
     db.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES ('${adminId}', 'admin@pkic.org', 'admin@pkic.org', 'admin', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+       VALUES ('${adminId}', 'admin@pkic.org', 'admin@pkic.org', 1, datetime('now'), datetime('now'))`,
     ),
     db.prepare(
       `INSERT INTO event_terms (id, event_id, audience_type, term_key, version, required, content_ref, active, created_at) VALUES
@@ -120,6 +121,6 @@ export async function seedEventAndAdmin(db: DatabaseLike): Promise<{ eventId: st
        ('${crypto.randomUUID()}', '${eventId}', 'speaker', 'speaker-terms', 'v1', 1, '/speaker-terms', 1, datetime('now'))`,
     ),
   ]);
-
-  return { eventId };
+  const grants = await grantAdministrator(db, adminId);
+  return { eventId, admin: { identityType: "user", id: adminId, email: "admin@pkic.org", grants } };
 }

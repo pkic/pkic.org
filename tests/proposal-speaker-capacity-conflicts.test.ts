@@ -1,3 +1,5 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
+import { administratorGrants } from "./helpers/administrator";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
@@ -323,10 +325,7 @@ describe("proposal speaker capacity conflicts", () => {
 
   it("rolls back acceptance when a concurrent speaker removal changes the enumerated roster", async () => {
     const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
-    const [admin] = await queryAll<{ id: string; email: string }>(
-      env.DB,
-      "SELECT id, email FROM users WHERE role = 'admin' ORDER BY id LIMIT 1",
-    );
+    const [admin] = await queryAll<{ id: string; email: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
     const racingDb = raceBeforeFirstBatch(async () => {
       await env.DB.prepare("DELETE FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?")
         .bind(proposalId, coSpeakerUserId)
@@ -336,7 +335,7 @@ describe("proposal speaker capacity conflicts", () => {
     await expect(
       finalizeProposalDecision(racingDb, {
         proposalId,
-        actor: { identityType: "user", id: admin.id, email: admin.email, role: "admin" },
+        actor: { identityType: "user", id: admin.id, email: admin.email, grants: administratorGrants },
         finalStatus: "accepted",
         minReviewsRequired: 0,
       }),
@@ -351,10 +350,7 @@ describe("proposal speaker capacity conflicts", () => {
 
   it("rolls back acceptance when a concurrent speaker addition changes the enumerated roster", async () => {
     const { proposalId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
-    const [admin] = await queryAll<{ id: string; email: string }>(
-      env.DB,
-      "SELECT id, email FROM users WHERE role = 'admin' ORDER BY id LIMIT 1",
-    );
+    const [admin] = await queryAll<{ id: string; email: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
     const racingDb = raceBeforeFirstBatch(async () => {
       const lateSpeaker = await findOrCreateUser(env.DB, {
         email: "late-roster-speaker@example.test",
@@ -367,7 +363,7 @@ describe("proposal speaker capacity conflicts", () => {
     await expect(
       finalizeProposalDecision(racingDb, {
         proposalId,
-        actor: { identityType: "user", id: admin.id, email: admin.email, role: "admin" },
+        actor: { identityType: "user", id: admin.id, email: admin.email, grants: administratorGrants },
         finalStatus: "accepted",
         minReviewsRequired: 0,
       }),
@@ -396,10 +392,7 @@ describe("proposal speaker capacity conflicts", () => {
       proposalId,
       speakerUserId: coSpeakerUserId,
     });
-    const [admin] = await queryAll<{ id: string; email: string }>(
-      env.DB,
-      "SELECT id, email FROM users WHERE role = 'admin' ORDER BY id LIMIT 1",
-    );
+    const [admin] = await queryAll<{ id: string; email: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
     const { proposal: secondProposal } = await createProposal(env.DB, {
       eventId,
       proposerUserId: admin.id,
@@ -416,7 +409,7 @@ describe("proposal speaker capacity conflicts", () => {
     });
     await finalizeProposalDecision(env.DB, {
       proposalId: secondProposal.id,
-      actor: { identityType: "user", id: admin.id, email: admin.email, role: "admin" },
+      actor: { identityType: "user", id: admin.id, email: admin.email, grants: administratorGrants },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });

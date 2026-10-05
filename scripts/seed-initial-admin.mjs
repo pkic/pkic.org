@@ -1,3 +1,9 @@
+/**
+ * Local/E2E administrator setup and one-time remote bootstrap.
+ * On an existing production database, --recover explicitly restores the existing
+ * admin@pkic.org account; it never runs event, template, or member import seeds.
+ * Retain local/E2E and recovery use after removing production bootstrap.
+ */
 import { execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import fs from "node:fs";
@@ -5,6 +11,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { E2E_WORKER_COUNT, e2eAdminEmailsForWorkerCount } from "./e2e-admin-identities.mjs";
+import { readSeedDatabaseRows } from "./lib/production-seed-guard.mjs";
 
 function parseArgs(argv) {
   let mode = "local";
@@ -12,6 +19,7 @@ function parseArgs(argv) {
   let wranglerEnv = null;
   let persistTo = null;
   let e2eWorkerPool = false;
+  let recover = false;
 
   for (let index = 0; index < argv.length; index += 1) {
     const arg = argv[index];
@@ -46,9 +54,10 @@ function parseArgs(argv) {
     if (arg === "--e2e-worker-pool") {
       e2eWorkerPool = true;
     }
+    if (arg === "--recover") recover = true;
   }
 
-  return { mode, database, wranglerEnv, persistTo, e2eWorkerPool };
+  return { mode, database, wranglerEnv, persistTo, e2eWorkerPool, recover };
 }
 
 // Only under --e2e-worker-pool (passed by scripts/e2e-start.sh, never by
@@ -89,28 +98,72 @@ const D1_MAX_STATEMENT_BYTES = 100_000;
  */
 const ROWS_PER_STATEMENT = 50;
 
-function insertStatements(emails) {
+function insertStatements(emails, { recover = false } = {}) {
   const statements = [];
-  for (let start = 0; start < emails.length; start += ROWS_PER_STATEMENT) {
+  for (let start = 0; !recover && start < emails.length; start += ROWS_PER_STATEMENT) {
     const values = emails
       .slice(start, start + ROWS_PER_STATEMENT)
-      .map((email) => `('${randomUUID()}', '${email}', '${email}', 'admin', 1, datetime('now'), datetime('now'))`)
+      .map(
+        (email) =>
+          `('${randomUUID()}', '${email}', '${email}', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now'))`,
+      )
       .join(",\n       ");
     statements.push(
-      "INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at) " +
+      "INSERT INTO users (id, email, normalized_email, active, created_at, updated_at) " +
         `VALUES ${values} ` +
-        "ON CONFLICT(email) DO UPDATE SET normalized_email = excluded.normalized_email, role = 'admin', active = 1, updated_at = datetime('now');",
+        "ON CONFLICT(email) DO UPDATE SET normalized_email = excluded.normalized_email, active = 1, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now');",
+    );
+  }
+  for (const email of emails) {
+    statements.push(
+      `UPDATE user_roles SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        WHERE user_id = (SELECT id FROM users WHERE normalized_email = '${email}')
+          AND role_id = 'role-admin' AND context_type IS NULL AND context_id IS NULL
+          AND revoked_at IS NULL AND expires_at <= strftime('%Y-%m-%dT%H:%M:%fZ', 'now');`,
+    );
+    if (recover)
+      statements.push(
+        `UPDATE users SET active = 1, updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+        WHERE normalized_email = '${email}';`,
+      );
+    statements.push(
+      `INSERT INTO user_roles (id, user_id, role_id, created_at)
+       SELECT '${randomUUID()}', u.id, 'role-admin', strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+         FROM users u WHERE u.normalized_email = '${email}'
+          AND NOT EXISTS (SELECT 1 FROM user_roles ur WHERE ur.user_id = u.id
+            AND ur.role_id = 'role-admin' AND ur.context_type IS NULL AND ur.context_id IS NULL
+            AND ur.revoked_at IS NULL);`,
     );
   }
   return statements;
 }
 
-function runSeed(mode, database, wranglerEnv, persistTo, e2eWorkerPool) {
+function runSeed(mode, database, wranglerEnv, persistTo, e2eWorkerPool, recover) {
+  if (mode === "remote" && !["preview", "production"].includes(wranglerEnv)) {
+    throw new Error("Remote administrator setup requires an explicit preview or production environment.");
+  }
+  if (e2eWorkerPool && (mode !== "local" || recover)) {
+    throw new Error("The E2E administrator pool requires local bootstrap.");
+  }
   const emails = e2eWorkerPool ? workerAdminEmails() : ["admin@pkic.org"];
+  const options = { mode, database, wranglerEnv, persistTo };
+  if (recover || (mode === "remote" && wranglerEnv === "production")) {
+    const users = readSeedDatabaseRows(
+      options,
+      "SELECT EXISTS (SELECT 1 FROM users) AS has_users, EXISTS (SELECT 1 FROM users WHERE normalized_email = 'admin@pkic.org') AS administrator_exists",
+    );
+    if (recover ? users[0]?.administrator_exists !== 1 : users[0]?.has_users !== 0) {
+      throw new Error(
+        recover
+          ? "Administrator recovery requires the existing admin@pkic.org account."
+          : "Production administrator bootstrap requires no users. Use --recover explicitly for an existing account.",
+      );
+    }
+  }
   // A file rather than `--command`: several statements, and none of them on a
   // command line whose length is another limit to grow into.
   const sqlPath = path.join(tmpdir(), `pkic-seed-initial-admin-${String(process.pid)}.sql`);
-  fs.writeFileSync(sqlPath, `${insertStatements(emails).join("\n")}\n`, "utf8");
+  fs.writeFileSync(sqlPath, `${insertStatements(emails, { recover }).join("\n")}\n`, "utf8");
 
   const args = [
     "wrangler",
@@ -134,13 +187,13 @@ function runSeed(mode, database, wranglerEnv, persistTo, e2eWorkerPool) {
   }
 }
 
-export { insertStatements, ROWS_PER_STATEMENT, D1_MAX_STATEMENT_BYTES, workerAdminEmails };
+export { insertStatements, runSeed, ROWS_PER_STATEMENT, D1_MAX_STATEMENT_BYTES, workerAdminEmails };
 
 /*
  * Only when run as a command. Without the guard, importing this module to test
  * how it builds its SQL would seed a database as a side effect of the import.
  */
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const { mode, database, wranglerEnv, persistTo, e2eWorkerPool } = parseArgs(process.argv.slice(2));
-  runSeed(mode, database, wranglerEnv, persistTo, e2eWorkerPool);
+  const { mode, database, wranglerEnv, persistTo, e2eWorkerPool, recover } = parseArgs(process.argv.slice(2));
+  runSeed(mode, database, wranglerEnv, persistTo, e2eWorkerPool, recover);
 }

@@ -13,7 +13,6 @@ describe("admin identity boundaries", () => {
     const actor = createUserBackedAuthAdmin({
       id: "user-admin",
       email: "admin@example.test",
-      role: "admin",
       scopes: ["admin:read"],
       grants: [{ permission: "admin:read", contextType: null, contextId: null }],
       sessionId: "private-session-id",
@@ -27,7 +26,6 @@ describe("admin identity boundaries", () => {
     expect(publicStaffCapacity(actor)).toEqual({
       id: "user-admin",
       email: "admin@example.test",
-      role: "admin",
       scopes: ["admin:read"],
       grants: [{ permission: "admin:read", contextType: null, contextId: null }],
       expiresAt: "2099-01-01T00:00:00.000Z",
@@ -58,7 +56,6 @@ describe("admin identity boundaries", () => {
     expect(publicStaffCapacity(actor)).toEqual({
       id: "api-key",
       email: "api-key",
-      role: "admin",
       scopes: ["admin:read"],
       grants: [],
       expiresAt: null,

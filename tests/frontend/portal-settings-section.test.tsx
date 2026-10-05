@@ -56,7 +56,7 @@ async function settle(): Promise<void> {
 function staffWith(...permissions: string[]) {
   return portalSessionFixture({
     staff: true,
-    staffRole: "staff",
+    administrator: false,
     grants: permissions.map((permission) => ({ permission, contextType: null, contextId: null })),
   });
 }

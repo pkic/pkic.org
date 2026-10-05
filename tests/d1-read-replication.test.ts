@@ -36,6 +36,9 @@ function emptyStatement(query: string, queries: string[], options: StatementOpti
       return { success: true, meta: { changes: 0 } };
     },
     async all<T>() {
+      if (query.includes("SELECT rp.permission AS permission")) {
+        return { results: [{ permission: "users:read", context_type: null, context_id: null }] as T[] };
+      }
       options.onQuery?.();
       await options.waitForQuery?.();
       return { results: [] as T[] };
@@ -50,7 +53,7 @@ function emptyStatement(query: string, queries: string[], options: StatementOpti
           revoked_at: null,
         } as T;
       }
-      if (query.includes("SELECT id, email, role, active FROM users u WHERE u.id")) {
+      if (query.includes("FROM users u WHERE u.id = ? AND u.active = 1")) {
         return {
           id: "admin-user",
           email: "admin@example.test",
@@ -307,7 +310,6 @@ describe("D1 read replication", () => {
     const admin: AuthAdmin = createUserBackedAuthAdmin({
       id: "admin-user",
       email: "admin@example.test",
-      role: "admin",
     });
     const throwingDb: DatabaseLike = {
       prepare() {

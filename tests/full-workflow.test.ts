@@ -1,3 +1,4 @@
+import { administratorGrants, grantAdministrator } from "./helpers/administrator";
 import { describe, it, expect, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { createContext, deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
@@ -111,7 +112,7 @@ describe("full workflow", () => {
     )[0];
     const ownerGroup = await createGroup(
       env.DB,
-      { identityType: "user", id: adminUser.id, email: adminUser.email, role: "admin" },
+      { identityType: "user", id: adminUser.id, email: adminUser.email, grants: administratorGrants },
       {
         typeKey: "working_group",
         name: `Full workflow ${crypto.randomUUID()}`,
@@ -162,10 +163,11 @@ describe("full workflow", () => {
       const reviewerUserId = crypto.randomUUID();
       await env.DB.prepare(
         `
-      INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-      VALUES ('${reviewerUserId}', 'reviewer2@pkic.org', 'reviewer2@pkic.org', 'admin', 1, datetime('now'), datetime('now'));
+      INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+      VALUES ('${reviewerUserId}', 'reviewer2@pkic.org', 'reviewer2@pkic.org', 1, datetime('now'), datetime('now'));
     `,
       ).run();
+      await grantAdministrator(env.DB, reviewerUserId);
       const reviewerToken = await createAdminSession(env.DB, reviewerUserId, "reviewer-2-token");
 
       const speakerInvites = [

@@ -1,3 +1,4 @@
+import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { scopedAuditLogListQuerySchema } from "../assets/shared/schemas/audit-log";
@@ -14,8 +15,8 @@ import { resetDb } from "./helpers/reset-db";
 async function userActor(label: string, role = "user"): Promise<UserBackedAuthAdmin> {
   const email = `${label}-${crypto.randomUUID()}@example.test`;
   const id = await insertUser(env.DB, email);
-  await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
-  return { identityType: "user", id, email, role };
+  const grants = role === "admin" ? await grantAdministrator(env.DB, id) : [];
+  return { identityType: "user", id, email, grants };
 }
 
 function authenticatedRequest(token: string, path: string): Promise<Response> {

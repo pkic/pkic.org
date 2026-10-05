@@ -1,3 +1,4 @@
+import { administratorGrants, grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { parseEventFlowPath } from "../assets/shared/event-flow-paths";
@@ -80,10 +81,10 @@ function workerEnv(assets: AssetRecorder, db: DatabaseLike = env.DB): Env {
 async function createPortalEvent(): Promise<string> {
   const email = `public-shell-admin-${crypto.randomUUID()}@example.test`;
   const adminId = await insertUser(env.DB, email);
-  await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(adminId).run();
+  await grantAdministrator(env.DB, adminId);
   const created = await createGroupManagedEvent(
     env.DB,
-    { identityType: "user", id: adminId, email, role: "admin" },
+    { identityType: "user", id: adminId, email, grants: administratorGrants },
     OWNER_GROUP_ID,
     {
       slug: EVENT_SLUG,

@@ -30,8 +30,8 @@ export async function insertUser(db: DatabaseLike, email?: string): Promise<stri
   const normalized = email ?? `member-fixture-${userCounter}@example.test`;
   await db
     .prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at)
-       VALUES (?, ?, ?, 'Test', 'user', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, first_name, active, created_at, updated_at)
+       VALUES (?, ?, ?, 'Test', 1, datetime('now'), datetime('now'))`,
     )
     .bind(id, normalized, normalized)
     .run();

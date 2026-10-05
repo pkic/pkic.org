@@ -1,3 +1,5 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
+import { administratorGrants } from "./helpers/administrator";
 /**
  * presentation-versions.test.ts
  *
@@ -176,7 +178,7 @@ function presentationRequest(name = "slides.pdf") {
 
 async function seed() {
   const { eventId } = await seedEventAndAdmin(env.DB);
-  const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+  const adminRow = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
   await seedWorkflowEmailTemplates(env.DB, adminRow.id);
   const adminToken = await createAdminSession(env.DB, adminRow.id, "presentation-test-admin-token");
 
@@ -206,7 +208,12 @@ async function seed() {
   // Accept the proposal so uploads are allowed.
   await finalizeProposalDecision(env.DB, {
     proposalId: proposal.id,
-    actor: { identityType: "user", id: adminRow.id, email: "admin@pkic.org", role: "admin" },
+    actor: {
+      identityType: "user",
+      id: adminRow.id,
+      email: "admin@pkic.org",
+      grants: administratorGrants,
+    },
     finalStatus: "accepted",
     minReviewsRequired: 0,
   });
@@ -229,8 +236,8 @@ async function scopedPresentationActor(
   const userId = crypto.randomUUID();
   const email = `presentation-manager-${userId}@example.test`;
   await env.DB.prepare(
-    `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-     VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+    `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+     VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
   )
     .bind(userId, email, email)
     .run();
@@ -767,7 +774,12 @@ describe("presentation versioning", () => {
     });
     await finalizeProposalDecision(env.DB, {
       proposalId: secondProposal.id,
-      actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
+      actor: {
+        identityType: "user",
+        id: adminUserId,
+        email: "admin@pkic.org",
+        grants: administratorGrants,
+      },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });

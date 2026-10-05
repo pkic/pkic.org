@@ -37,7 +37,7 @@ function permittedProposalPermissions(actor: AuthAdmin): readonly (typeof PROPOS
 
 function permissionEvidence(permission: (typeof PROPOSAL_PERMISSIONS)[number], permitted: readonly string[]): string {
   if (!permitted.includes(permission)) return "0";
-  return `(actor.role = 'admin' OR EXISTS (
+  return `(EXISTS (
     SELECT 1 FROM active_permissions permission_row
      WHERE permission_row.permission = '${permission}'
        AND (permission_row.context_type IS NULL OR (permission_row.context_type = 'event' AND permission_row.context_id = event.id))
@@ -110,7 +110,7 @@ export function buildProposalProgramsPageQuery(
   // The page needs the complete capability projection. The count repeats the
   // same authority CTE, joins, filters, and bindings, but deliberately omits
   // page-only capability CASE expressions and JSON aggregation.
-  const sourcePrefixSql = `WITH actor AS MATERIALIZED (SELECT id, role FROM users WHERE id = ? AND active = 1),
+  const sourcePrefixSql = `WITH actor AS MATERIALIZED (SELECT id FROM users WHERE id = ? AND active = 1),
     ${activePermissionsCte}
     `;
   const sourceFromSql = `FROM actor

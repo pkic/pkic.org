@@ -1,3 +1,4 @@
+import { grantAdministrator } from "./helpers/administrator";
 import { prepareMembershipCategoryRename } from "../functions/_lib/services/membership/category-renaming";
 import { membershipWorkflowProgress } from "../functions/_lib/services/membership/workflows/progress";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -137,11 +138,12 @@ it("reconciles a paid membership checkout manually without a webhook secret", as
     .first<{ id: string }>();
   const adminId = crypto.randomUUID();
   await env.DB.prepare(
-    "INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at) " +
-      "VALUES (?, 'sync@example.test', 'sync@example.test', 'Sync', 'admin', 1, datetime('now'), datetime('now'))",
+    "INSERT INTO users (id, email, normalized_email, first_name, active, created_at, updated_at) " +
+      "VALUES (?, 'sync@example.test', 'sync@example.test', 'Sync', 1, datetime('now'), datetime('now'))",
   )
     .bind(adminId)
     .run();
+  await grantAdministrator(env.DB, adminId);
   const token = await createAdminSession(env.DB, adminId, "membership-fee-sync");
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(Response.json(prepared.session)));
 
@@ -200,11 +202,12 @@ it("records an idempotent offline membership settlement and advances the same wo
   const { id, metadata, session } = await prepareFeeApplication();
   const adminId = crypto.randomUUID();
   await env.DB.prepare(
-    "INSERT INTO users (id, email, normalized_email, first_name, role, active, created_at, updated_at) " +
-      "VALUES (?, 'payments@example.test', 'payments@example.test', 'Payments', 'admin', 1, datetime('now'), datetime('now'))",
+    "INSERT INTO users (id, email, normalized_email, first_name, active, created_at, updated_at) " +
+      "VALUES (?, 'payments@example.test', 'payments@example.test', 'Payments', 1, datetime('now'), datetime('now'))",
   )
     .bind(adminId)
     .run();
+  await grantAdministrator(env.DB, adminId);
   const token = await createAdminSession(env.DB, adminId, "offline-membership-settlement");
   const body = {
     idempotencyKey: crypto.randomUUID(),

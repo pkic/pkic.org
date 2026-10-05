@@ -181,8 +181,42 @@ describe("analytics", () => {
     // The representative acts in a capacity; the bare contact does not.
     expect(users.withIdentities).toBeGreaterThanOrEqual(1);
     expect(users.withoutIdentities).toBeGreaterThanOrEqual(1);
-    expect(Object.values(users.byRole).reduce((sum, count) => sum + count, 0)).toBe(users.total);
+    expect(users.byRole).not.toHaveProperty("user");
+    expect(users.byRole).toHaveProperty("admin", 1);
     expect(userId).not.toBe(contactOnly);
+  });
+
+  it("counts only live role holders, excluding revoked, expired, and inactive accounts", async () => {
+    const token = await adminToken();
+    const holder = await insertUser(env.DB, "role-holder@example.test");
+    const inactive = await insertUser(env.DB, "inactive-role-holder@example.test");
+    const now = new Date().toISOString();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO roles (id, name, created_at, updated_at) VALUES ('analytics-role', 'Analytics role', ?, ?)",
+      ).bind(now, now),
+      env.DB.prepare(
+        "INSERT INTO user_roles (id, user_id, role_id, created_at) VALUES (?, ?, 'analytics-role', ?)",
+      ).bind(crypto.randomUUID(), holder, now),
+      env.DB.prepare(
+        "INSERT INTO user_roles (id, user_id, role_id, created_at) VALUES (?, ?, 'analytics-role', ?)",
+      ).bind(crypto.randomUUID(), inactive, now),
+      env.DB.prepare("UPDATE users SET active = 0 WHERE id = ?").bind(inactive),
+    ]);
+    const counts = async () => {
+      const response = await call("/api/v1/analytics/users", token);
+      expect(response.status).toBe(200);
+      return userAnalyticsResponseSchema.parse(await response.json()).users.byRole;
+    };
+    expect(await counts()).toHaveProperty("Analytics role", 1);
+    await env.DB.prepare("UPDATE user_roles SET expires_at = '2000-01-01T00:00:00.000Z' WHERE user_id = ?")
+      .bind(holder)
+      .run();
+    expect(await counts()).not.toHaveProperty("Analytics role");
+    await env.DB.prepare("UPDATE user_roles SET expires_at = NULL, revoked_at = ? WHERE user_id = ?")
+      .bind(now, holder)
+      .run();
+    expect(await counts()).not.toHaveProperty("Analytics role");
   });
 
   it("refuses the subject analytics pages without the analytics permission", async () => {

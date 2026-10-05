@@ -154,7 +154,7 @@ export function UserAnalytics() {
         },
       ]}
       splits={[
-        { title: "By role", counts: labelled(users?.byRole ?? {}) },
+        { title: "Active role holders", counts: labelled(users?.byRole ?? {}) },
         {
           title: "By standing",
           counts: { Active: users?.active ?? 0, Deactivated: users?.inactive ?? 0 },

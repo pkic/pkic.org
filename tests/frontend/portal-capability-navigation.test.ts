@@ -16,6 +16,17 @@ import {
 import { portalSessionFixture } from "../helpers/portal-session";
 
 describe("portal capability-derived navigation", () => {
+  it("does not expose permissioned screens from a stale legacy administrator label", () => {
+    const session = portalSessionFixture({ staff: true, grants: [] });
+    Object.assign(session.staff!, { role: "admin" });
+    for (const permission of ["forms:read", "organizations:read", "users:read"]) {
+      expect(portalHasGlobalPermission(session, permission)).toBe(false);
+      expect(portalHasPermissionAtAnyScope(session, permission)).toBe(false);
+    }
+    const labels = portalNavigationItems(session).map((item) => item.label);
+    for (const label of ["Forms", "Organizations", "Users", "Settings"]) expect(labels).not.toContain(label);
+  });
+
   it("reads magic-link credentials only from the URL fragment", () => {
     expect(portalMagicLinkToken("#/verify?token=secret-token")).toBe("secret-token");
     expect(portalMagicLinkToken("#/verify")).toBeNull();
@@ -36,12 +47,12 @@ describe("portal capability-derived navigation", () => {
   it("shows Settings only for the matching global permission", () => {
     const globalAudit = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "audit:read", contextType: null, contextId: null }],
     });
     const contextualAudit = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "audit:read", contextType: "group", contextId: "group-1" }],
     });
     expect(portalHasGlobalPermission(globalAudit, "audit:read")).toBe(true);
@@ -54,7 +65,7 @@ describe("portal capability-derived navigation", () => {
   it("lists only the settings pages granted to a staff identity, under a Settings entry that opens Settings", () => {
     const contentReviewer = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "organizations:content-review", contextType: null, contextId: null }],
     });
     expect(portalHasSettingsAccess(contentReviewer)).toBe(true);
@@ -80,7 +91,7 @@ describe("portal capability-derived navigation", () => {
   it("lists the three membership pages that used to share one settings tab", () => {
     const reader = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "membership:read", contextType: null, contextId: null }],
     });
 
@@ -107,7 +118,7 @@ describe("portal capability-derived navigation", () => {
      */
     const reader = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "analytics:read", contextType: null, contextId: null }],
     });
 
@@ -117,17 +128,17 @@ describe("portal capability-derived navigation", () => {
   it("exposes Forms only to global form readers", () => {
     const reader = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "forms:read", contextType: null, contextId: null }],
     });
     const writerOnly = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "forms:write", contextType: null, contextId: null }],
     });
     const contextualReader = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "forms:read", contextType: "group", contextId: "group-1" }],
     });
 
@@ -141,17 +152,17 @@ describe("portal capability-derived navigation", () => {
   it("exposes Events to global and event-scoped readers, but not unrelated staff", () => {
     const globalReader = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "events:read", contextType: null, contextId: null }],
     });
     const eventReader = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "events:read", contextType: "event", contextId: "event-1" }],
     });
     const proposalOnly = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "proposals:read", contextType: "event", contextId: "event-1" }],
     });
 
@@ -168,17 +179,17 @@ describe("portal capability-derived navigation", () => {
   it("exposes Donations to global readers or synchronizers", () => {
     const reader = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "donations:read", contextType: null, contextId: null }],
     });
     const synchronizer = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "donations:sync", contextType: null, contextId: null }],
     });
     const contextualReader = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "donations:read", contextType: "group", contextId: "group-1" }],
     });
 
@@ -202,12 +213,12 @@ describe("portal capability-derived navigation", () => {
   it("exposes Sponsors as a resource workspace to global readers or writers", () => {
     const reader = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "sponsorships:read", contextType: null, contextId: null }],
     });
     const writer = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [
         { permission: "sponsorships:read", contextType: null, contextId: null },
         { permission: "sponsorships:write", contextType: null, contextId: null },
@@ -215,12 +226,12 @@ describe("portal capability-derived navigation", () => {
     });
     const writeOnly = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "sponsorships:write", contextType: null, contextId: null }],
     });
     const contextualReader = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "sponsorships:read", contextType: "group", contextId: "group-1" }],
     });
 
@@ -242,17 +253,17 @@ describe("portal capability-derived navigation", () => {
   it("exposes Organizations to global readers or membership writers", () => {
     const reader = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "organizations:read", contextType: null, contextId: null }],
     });
     const membershipWriter = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "membership:write", contextType: null, contextId: null }],
     });
     const contextualReader = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "organizations:read", contextType: "group", contextId: "group-1" }],
     });
 
@@ -274,7 +285,7 @@ describe("portal capability-derived navigation", () => {
   it("exposes Users only to a global reader, while retaining action permissions after entry", () => {
     const actionOnly = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [
         { permission: "users:write", contextType: null, contextId: null },
         { permission: "users:anonymize", contextType: null, contextId: null },
@@ -283,7 +294,7 @@ describe("portal capability-derived navigation", () => {
     });
     const readerAndWriter = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [
         { permission: "users:read", contextType: null, contextId: null },
         { permission: "users:write", contextType: null, contextId: null },
@@ -302,12 +313,12 @@ describe("portal capability-derived navigation", () => {
   it("exposes the members roll and the applications queue only to a global membership reader", () => {
     const reader = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "membership:read", contextType: null, contextId: null }],
     });
     const contextualReader = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "membership:read", contextType: "group", contextId: "group-1" }],
     });
 
@@ -333,12 +344,12 @@ describe("portal capability-derived navigation", () => {
   it("exposes email templates to a global reader or writer", () => {
     const reader = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "email-templates:read", contextType: null, contextId: null }],
     });
     const writer = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [
         { permission: "email-templates:read", contextType: null, contextId: null },
         { permission: "email-templates:write", contextType: null, contextId: null },
@@ -346,12 +357,12 @@ describe("portal capability-derived navigation", () => {
     });
     const writeOnly = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "email-templates:write", contextType: null, contextId: null }],
     });
     const contextualReader = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "email-templates:read", contextType: "group", contextId: "group-1" }],
     });
 
@@ -375,27 +386,27 @@ describe("portal capability-derived navigation", () => {
      */
     const emailReader = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "email:read", contextType: null, contextId: null }],
     });
     const retentionReader = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "retention:read", contextType: null, contextId: null }],
     });
     const schedulerReader = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "scheduler:read", contextType: null, contextId: null }],
     });
     const writeOnly = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "email:manage", contextType: null, contextId: null }],
     });
     const contextual = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "retention:read", contextType: "group", contextId: "group-1" }],
     });
 
@@ -413,17 +424,17 @@ describe("portal capability-derived navigation", () => {
   it("exposes Access Control for either global grant or revoke authority, never contextual authority", () => {
     const grantOnly = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "access:grant", contextType: null, contextId: null }],
     });
     const revokeOnly = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "access:revoke", contextType: null, contextId: null }],
     });
     const contextual = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "access:grant", contextType: "group", contextId: "group-1" }],
     });
 
@@ -515,7 +526,7 @@ describe("portal capability-derived navigation", () => {
   it("lists a donations page only for the permission that page needs (#43)", () => {
     const both = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [
         { permission: "donations:read", contextType: null, contextId: null },
         { permission: "analytics:read", contextType: null, contextId: null },
@@ -530,7 +541,7 @@ describe("portal capability-derived navigation", () => {
     // only `donations:sync` reaches the section, but neither page under it.
     const synchronizer = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "donations:sync", contextType: null, contextId: null }],
     });
     expect(portalSectionEnabled(synchronizer, "donations")).toBe(true);

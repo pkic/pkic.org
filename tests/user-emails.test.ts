@@ -1,3 +1,4 @@
+import { administratorGrants } from "./helpers/administrator";
 /**
  * user-emails.test.ts
  *
@@ -37,8 +38,8 @@ async function call(token: string, path: string, init: RequestInit = {}): Promis
 async function insertUser(email: string): Promise<string> {
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-     VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+    `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+     VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
   )
     .bind(id, email, email)
     .run();
@@ -133,7 +134,12 @@ describe("secondary user emails", () => {
 
   it("rolls back secondary-email mutations when their audit cannot commit", async () => {
     const userId = await insertUser("atomic-email@example.test");
-    const actor = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" } as const;
+    const actor = {
+      identityType: "user",
+      id: adminId,
+      email: "admin@pkic.org",
+      grants: administratorGrants,
+    } as const;
     await env.DB.prepare(
       `CREATE TRIGGER reject_user_email_audit
        BEFORE INSERT ON audit_log
@@ -267,7 +273,7 @@ describe("secondary user emails", () => {
       .run();
     const alias = await addUserEmail(
       env.DB,
-      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
+      { identityType: "user", id: adminId, email: "admin@pkic.org", grants: administratorGrants },
       targetId,
       "permission-race-alias@example.test",
     );
@@ -275,7 +281,6 @@ describe("secondary user emails", () => {
       identityType: "user",
       id: staffId,
       email: "email-manager@example.test",
-      role: "user",
       grants: [{ permission: "users:write", contextType: null, contextId: null }],
     };
     const gate = gateNextBatch(env.DB);
@@ -292,7 +297,12 @@ describe("secondary user emails", () => {
 
   it("does not attach a secondary email after the target is anonymized during the commit race", async () => {
     const userId = await insertUser("email-target-race@example.test");
-    const actor = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" } as const;
+    const actor = {
+      identityType: "user",
+      id: adminId,
+      email: "admin@pkic.org",
+      grants: administratorGrants,
+    } as const;
     const gate = gateNextBatch(env.DB);
     const mutation = addUserEmail(gate.db, actor, userId, "must-not-attach@example.test");
     await gate.reached;
@@ -333,13 +343,13 @@ describe("secondary user emails", () => {
     const userB = await insertUser("primary-b@example.test");
     await addUserEmail(
       env.DB,
-      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
+      { identityType: "user", id: adminId, email: "admin@pkic.org", grants: administratorGrants },
       userA,
       "alias-a@example.test",
     );
     await addUserEmail(
       env.DB,
-      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
+      { identityType: "user", id: adminId, email: "admin@pkic.org", grants: administratorGrants },
       userB,
       "alias-b@example.test",
     );
@@ -418,8 +428,8 @@ describe("secondary user emails", () => {
     const sourceId = crypto.randomUUID();
     await env.DB.prepare(
       `INSERT INTO users (
-         id, email, normalized_email, role, active, merged_into_user_id, created_at, updated_at
-       ) VALUES (?, ?, ?, 'user', 0, ?, datetime('now'), datetime('now'))`,
+         id, email, normalized_email, active, merged_into_user_id, created_at, updated_at
+       ) VALUES (?, ?, ?, 0, ?, datetime('now'), datetime('now'))`,
     )
       .bind(sourceId, "legacy-source@deleted.invalid", "legacy-source@deleted.invalid", survivorId)
       .run();
@@ -557,7 +567,7 @@ describe("secondary user emails", () => {
 
     await removeUserEmail(
       env.DB,
-      { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" },
+      { identityType: "user", id: adminId, email: "admin@pkic.org", grants: administratorGrants },
       userId,
       emailId,
     );

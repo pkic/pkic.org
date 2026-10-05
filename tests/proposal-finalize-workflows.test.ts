@@ -1,3 +1,4 @@
+import { grantAdministrator, administratorGrants } from "./helpers/administrator";
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
@@ -10,7 +11,7 @@ import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { proposalFlagResponseSchema } from "../assets/shared/schemas/proposal-status";
 
 function decisionActor(id: string) {
-  return { identityType: "user" as const, id, email: "admin@pkic.org", role: "admin" };
+  return { identityType: "user" as const, id, email: "admin@pkic.org", role: "user", grants: administratorGrants };
 }
 
 async function postProposalReview(proposalId: string, token: string, body: unknown): Promise<Response> {
@@ -66,10 +67,11 @@ async function addReviews(eventId: string, proposalId: string, adminId: string, 
     const id = crypto.randomUUID();
     await env.DB.prepare(
       `
-      INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-      VALUES ('${id}', 'reviewer${i}@wf.test', 'reviewer${i}@wf.test', 'admin', 1, datetime('now'), datetime('now'))
+      INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+      VALUES ('${id}', 'reviewer${i}@wf.test', 'reviewer${i}@wf.test', 1, datetime('now'), datetime('now'))
     `,
     ).run();
+    await grantAdministrator(env.DB, id);
     const token = await createAdminSession(env.DB, id, `reviewer-token-${i}`);
     await postProposalReview(proposalId, token, { recommendation: "accept", score: 8 });
     extraAdminIds.push(id);
@@ -756,8 +758,8 @@ describe("proposal subtree access gate (full router stack)", () => {
   async function insertStaffUser(email: string): Promise<string> {
     const id = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+       VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
     )
       .bind(id, email, email)
       .run();

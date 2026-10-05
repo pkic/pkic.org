@@ -278,7 +278,6 @@ interface AuthAdminBase {
   /** Stable identity used in audit records and authorization decisions. */
   id: string;
   email: string;
-  role: string;
   scopes?: string[];
   /** True only for an OAuth/MCP access token whose delegated scopes must cap runtime permissions. */
   scopeRestricted?: boolean;
@@ -303,6 +302,7 @@ export interface UserBackedAuthAdmin extends AuthAdminBase {
 
 /** An authenticated non-user actor, such as the shared administrative API key. */
 export interface ServiceAuthAdmin extends AuthAdminBase {
+  role: string;
   identityType: "service";
 }
 

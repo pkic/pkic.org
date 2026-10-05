@@ -267,12 +267,12 @@ describe("registration workflows", () => {
     expect(confirmed.manageToken).toBeTruthy();
     expect(new URL(confirmed.manageUrl).searchParams.get("token")).toBe(confirmed.manageToken);
     await expect(
-      queryAll<{ normalized_email: string; role: string }>(
+      queryAll<{ normalized_email: string }>(
         env.DB,
-        "SELECT normalized_email, role FROM users WHERE normalized_email = ?",
+        "SELECT normalized_email FROM users WHERE normalized_email = ?",
         "admin@pkic.org",
       ),
-    ).resolves.toEqual([{ normalized_email: "admin@pkic.org", role: "admin" }]);
+    ).resolves.toEqual([{ normalized_email: "admin@pkic.org" }]);
   });
 
   it("lets the authenticated account owner initiate a new-address confirmation without old-mailbox approval", async () => {

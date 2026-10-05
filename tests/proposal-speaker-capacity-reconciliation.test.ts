@@ -1,3 +1,4 @@
+import { administratorGrants } from "./helpers/administrator";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
@@ -363,7 +364,12 @@ describe("proposal speaker capacity reconciliation", () => {
     await addProposalSpeaker(env.DB, { proposalId: secondProposal.id, userId: coSpeakerUserId, role: "co_speaker" });
     await finalizeProposalDecision(env.DB, {
       proposalId: secondProposal.id,
-      actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
+      actor: {
+        identityType: "user",
+        id: adminUserId,
+        email: "admin@pkic.org",
+        grants: administratorGrants,
+      },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });
@@ -395,7 +401,12 @@ describe("proposal speaker capacity reconciliation", () => {
 
     await finalizeProposalDecision(env.DB, {
       proposalId,
-      actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
+      actor: {
+        identityType: "user",
+        id: adminUserId,
+        email: "admin@pkic.org",
+        grants: administratorGrants,
+      },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });
@@ -415,7 +426,12 @@ describe("proposal speaker capacity reconciliation", () => {
     const registrationId = await seedPendingSpeakerRegistration({ eventId, speakerUserId: coSpeakerUserId });
     await finalizeProposalDecision(env.DB, {
       proposalId,
-      actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
+      actor: {
+        identityType: "user",
+        id: adminUserId,
+        email: "admin@pkic.org",
+        grants: administratorGrants,
+      },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });
@@ -425,7 +441,12 @@ describe("proposal speaker capacity reconciliation", () => {
     // rejected proposal keeps no speaker's exemption from the day's capacity.
     await finalizeProposalDecision(env.DB, {
       proposalId,
-      actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
+      actor: {
+        identityType: "user",
+        id: adminUserId,
+        email: "admin@pkic.org",
+        grants: administratorGrants,
+      },
       finalStatus: "rejected",
       minReviewsRequired: 0,
     });
@@ -438,7 +459,12 @@ describe("proposal speaker capacity reconciliation", () => {
     const registrationId = await seedPendingSpeakerRegistration({ eventId, speakerUserId: coSpeakerUserId });
     await finalizeProposalDecision(env.DB, {
       proposalId,
-      actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
+      actor: {
+        identityType: "user",
+        id: adminUserId,
+        email: "admin@pkic.org",
+        grants: administratorGrants,
+      },
       finalStatus: "needs-work",
       decisionNote: "Please revise the proposal.",
       minReviewsRequired: 0,
@@ -446,7 +472,12 @@ describe("proposal speaker capacity reconciliation", () => {
 
     await finalizeProposalDecision(env.DB, {
       proposalId,
-      actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
+      actor: {
+        identityType: "user",
+        id: adminUserId,
+        email: "admin@pkic.org",
+        grants: administratorGrants,
+      },
       finalStatus: "rejected",
       minReviewsRequired: 0,
     });

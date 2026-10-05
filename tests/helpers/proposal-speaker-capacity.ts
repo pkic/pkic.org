@@ -1,3 +1,5 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./administrator";
+import { administratorGrants } from "./administrator";
 import { env } from "cloudflare:workers";
 import { queryAll, seedEventAndAdmin } from "./context";
 import app from "../../functions/router";
@@ -19,12 +21,10 @@ export async function setupProposalSpeakerCapacityWorkflow(): Promise<{
   adminSessionToken: string;
 }> {
   const { eventId } = await seedEventAndAdmin(env.DB);
-  const adminUser = (
-    await queryAll<{ id: string; email: string }>(env.DB, "SELECT id, email FROM users WHERE role = 'admin' LIMIT 1")
-  )[0];
+  const adminUser = (await queryAll<{ id: string; email: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
   const group = await createGroup(
     env.DB,
-    { identityType: "user", id: adminUser.id, email: adminUser.email, role: "admin" },
+    { identityType: "user", id: adminUser.id, email: adminUser.email, grants: administratorGrants },
     {
       typeKey: "working_group",
       name: `Proposal speaker fixture ${crypto.randomUUID()}`,

@@ -1,3 +1,4 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:test";
 import { materializeQueuedCapabilityLinks } from "../functions/_lib/services/capability-links";
@@ -30,7 +31,7 @@ describe("invite resend-link endpoint", () => {
 
   it("queues a fresh pending invitation and invalidates the earlier link generation", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
     const created = await createInvite(env.DB, {
       eventId,

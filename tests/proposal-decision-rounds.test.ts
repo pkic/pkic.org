@@ -1,3 +1,4 @@
+import { grantAdministrator, administratorGrants } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
@@ -16,7 +17,7 @@ import { resetDb } from "./helpers/reset-db";
 import { proposalReviewsListResponseSchema } from "../assets/shared/schemas/proposal-reviews";
 
 function decisionActor(id: string) {
-  return { identityType: "user" as const, id, email: "admin@pkic.org", role: "admin" };
+  return { identityType: "user" as const, id, email: "admin@pkic.org", role: "user", grants: administratorGrants };
 }
 
 interface SeededDecisionWorkflow {
@@ -53,16 +54,17 @@ async function seedDecisionWorkflow(): Promise<SeededDecisionWorkflow> {
   const reviewerIds = [crypto.randomUUID(), crypto.randomUUID()];
   await env.DB.batch([
     env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-         VALUES (?, 'round-proposer@pkic.org', 'round-proposer@pkic.org', 'user', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+         VALUES (?, 'round-proposer@pkic.org', 'round-proposer@pkic.org', 1, datetime('now'), datetime('now'))`,
     ).bind(proposerId),
     ...reviewerIds.map((reviewerId, index) =>
       env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-           VALUES (?, ?, ?, 'admin', 1, datetime('now'), datetime('now'))`,
+        `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+           VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
       ).bind(reviewerId, `round-reviewer-${index}@pkic.org`, `round-reviewer-${index}@pkic.org`),
     ),
   ]);
+  for (const reviewerId of reviewerIds) await grantAdministrator(env.DB, reviewerId);
   const { proposal, manageToken } = await createProposal(env.DB, {
     eventId,
     proposerUserId: proposerId,
@@ -131,7 +133,6 @@ describe("proposal decision review rounds", () => {
           identityType: "user",
           id: seeded.adminId,
           email: "admin@pkic.org",
-          role: "user",
           grants: [],
         },
         finalStatus: "accepted",

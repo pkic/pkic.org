@@ -17,11 +17,12 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { activeEffectiveInviteExpirySql, effectiveInviteExpirySql } from "../../invite-validity";
 import { AppError } from "../../errors";
+import { permissionsAuthorizationEvidence } from "../../auth/permissions";
 import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
 import { normalizeEventRegistrationPolicy } from "./detail";
-import { buildEventAudiencePredicate, type EventAudienceViewer } from "./visibility";
+import { buildEventAudiencePredicate, guardEventReadDatabase, type EventAudienceViewer } from "./visibility";
 import { fetchViewerEventState, fetchViewerEventStates } from "./viewer-state";
 
 interface EventAudienceRow {
@@ -72,13 +73,15 @@ function mapEventAudience(row: EventAudienceRow, viewer: EventViewerState | null
 }
 
 /**
- * Build the shared WHERE for both event list scopes. Visibility, filters, and
- * search are resolved here so the caller's audience is applied in D1 before
- * any projection, count, or pagination — management and audience callers
- * differ only in the columns they may read, never in the rows.
+ * Apply each projection's authority alongside shared filters and search in D1,
+ * before counting or paginating. Management uses global event-read evidence;
+ * reduced projections may also use ordinary audience access.
  */
-function buildEventsListPredicate(viewer: EventAudienceViewer, query: EventsListQuery) {
-  const audience = buildEventAudiencePredicate("event", viewer);
+function buildEventsListPredicate(
+  viewer: EventAudienceViewer,
+  query: EventsListQuery,
+  audience = buildEventAudiencePredicate("event", viewer),
+) {
   const conditions = [audience.sql];
   const bindings: unknown[] = [...audience.bindings];
   if (query.visibility) {
@@ -184,12 +187,16 @@ interface EventManagementRow {
 }
 
 /**
- * Management page query. It reuses the same audience predicate as the reduced
- * projection, so a management caller never sees rows their live permissions do
- * not already grant.
+ * Management requires global live event-read authority, including for public
+ * rows. Ordinary audience access never authorizes management fields.
  */
 export function buildManagedEventsPageQuery(viewer: EventAudienceViewer, query: EventsListQuery) {
-  const { whereSql, bindings } = buildEventsListPredicate(viewer, query);
+  if (!viewer.admin) throw new AppError(403, "PERMISSION_REQUIRED", "Event read permission is required");
+  const evidence = permissionsAuthorizationEvidence(viewer.admin, [{ permission: "events:read" }]);
+  const { whereSql, bindings } = buildEventsListPredicate(viewer, query, {
+    sql: `EXISTS (${evidence.sql})`,
+    bindings: [...evidence.bindings],
+  });
   return {
     sql: `${EVENT_MANAGEMENT_SELECT}
       FROM events event
@@ -267,6 +274,8 @@ interface EventStatsRow {
 }
 
 export async function listManagedEvents(db: DatabaseLike, viewer: EventAudienceViewer, query: EventsListQuery) {
+  if (!viewer.admin) throw new AppError(403, "PERMISSION_REQUIRED", "Event read permission is required");
+  db = guardEventReadDatabase(db, viewer.admin);
   const page = await queryPage<EventManagementRow>(db, buildManagedEventsPageQuery(viewer, query));
   const participation = await fetchEventParticipation(
     db,

@@ -28,7 +28,6 @@ const AUTH_SCOPE_SET = new Set<string>(AUTH_SCOPES);
 const mcpOAuthPropsBaseSchema = {
   id: z.string().min(1),
   email: z.string().min(1),
-  role: z.string().min(1),
   scopes: z.array(permissionSchema),
 };
 
@@ -46,6 +45,7 @@ export const mcpOAuthPropsSchema = z.discriminatedUnion("identityType", [
   z
     .object({
       identityType: z.literal("service"),
+      role: z.string().min(1),
       ...mcpOAuthPropsBaseSchema,
       authTransport: z.literal("api-key"),
     })
@@ -62,7 +62,7 @@ export function parseMcpOauthProps(value: unknown): McpOAuthProps | undefined {
   if (value === undefined) return undefined;
   const parsed = mcpOAuthPropsSchema.safeParse(value);
   if (!parsed.success) {
-    throw new AppError(500, "MCP_AUTH_PROPS_INVALID", "The MCP authorization context is invalid");
+    throw new AppError(401, "MCP_AUTH_PROPS_INVALID", "Authorize the MCP client again");
   }
   return parsed.data;
 }
@@ -97,13 +97,13 @@ export function buildMcpOauthProps(
   scopes: readonly AuthScope[],
   authTransport: McpOAuthTransport,
 ): McpOAuthProps {
-  const shared = { id: admin.id, email: admin.email, role: admin.role, scopes: [...scopes] };
+  const shared = { id: admin.id, email: admin.email, scopes: [...scopes] };
 
   if (admin.identityType === "service") {
     if (authTransport !== "api-key") {
       throw new AppError(500, "MCP_AUTH_TRANSPORT_INVALID", "A service actor must use the API-key transport");
     }
-    return { identityType: "service", ...shared, authTransport };
+    return { identityType: "service", role: admin.role, ...shared, authTransport };
   }
 
   if (authTransport === "api-key" || !admin.sessionId || !admin.expiresAt) {

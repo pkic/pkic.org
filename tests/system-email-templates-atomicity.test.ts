@@ -30,7 +30,6 @@ describe("system email template atomicity", () => {
     const actor = createUserBackedAuthAdmin({
       id: staffId,
       email: "email-template-toctou@example.test",
-      role: "user",
       scopes: [],
       grants: [{ permission: "email-templates:write", contextType: null, contextId: null }],
     });
@@ -63,7 +62,6 @@ describe("system email template atomicity", () => {
     const actor = createUserBackedAuthAdmin({
       id: staffId,
       email: "email-template-activation-toctou@example.test",
-      role: "user",
       scopes: [],
       grants: [{ permission: "email-templates:write", contextType: null, contextId: null }],
     });
@@ -104,7 +102,7 @@ describe("system email template atomicity", () => {
       env.DB,
       "SELECT id, email FROM users WHERE email = 'admin@pkic.org' LIMIT 1",
     );
-    const actor = createUserBackedAuthAdmin({ id: adminId, email, role: "admin", scopes: [] });
+    const actor = createUserBackedAuthAdmin({ id: adminId, email, scopes: [] });
     const racedDb = gateBatchGroup(env.DB, 2);
     const results = await Promise.allSettled([
       createEmailTemplateVersion(racedDb, actor, {
@@ -134,7 +132,7 @@ describe("system email template atomicity", () => {
       env.DB,
       "SELECT id, email FROM users WHERE email = 'admin@pkic.org' LIMIT 1",
     );
-    const actor = createUserBackedAuthAdmin({ id: adminId, email, role: "admin", scopes: [] });
+    const actor = createUserBackedAuthAdmin({ id: adminId, email, scopes: [] });
     await createEmailTemplateVersion(env.DB, actor, {
       templateKey: "registration_confirm_email",
       content: "First racing activation version",

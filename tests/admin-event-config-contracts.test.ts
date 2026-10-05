@@ -1,3 +1,4 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
@@ -183,7 +184,7 @@ describe("admin event configuration OpenAPI boundaries", () => {
     expect((await call(apiKey, "/api/v1/events/pqc-2026/sponsors/tiers")).status).toBe(403);
     expect((await call(apiKey, "/api/v1/events/pqc-2026/sponsors/tiers", { method: "PUT", body })).status).toBe(403);
 
-    const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+    const [admin] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
     const adminToken = await createAdminSession(env.DB, admin.id, `legacy-event-tier-${crypto.randomUUID()}`);
     expect((await call(adminToken, "/api/v1/events/pqc-2026/sponsor-tiers")).status).toBe(404);
     expect(

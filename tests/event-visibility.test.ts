@@ -1,3 +1,4 @@
+import { grantAdministrator } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
@@ -136,8 +137,8 @@ describe("event audience visibility", () => {
   it("filters rows in D1 and projects fields according to the caller's live audience", async () => {
     const adminUserId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES (?, 'event-visibility-admin@example.test', 'event-visibility-admin@example.test', 'admin', 1,
+      `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+       VALUES (?, 'event-visibility-admin@example.test', 'event-visibility-admin@example.test', 1,
                datetime('now'), datetime('now'))`,
     )
       .bind(adminUserId)
@@ -146,7 +147,7 @@ describe("event audience visibility", () => {
       identityType: "user",
       id: adminUserId,
       email: "event-visibility-admin@example.test",
-      role: "admin",
+      grants: await grantAdministrator(env.DB, adminUserId),
     };
     const group = await createGroup(env.DB, admin, {
       typeKey: "working_group",
@@ -270,10 +271,7 @@ describe("event audience visibility", () => {
   });
 
   it("uses the visibility schedule index for anonymous page and count queries", async () => {
-    const query = buildEventsPageQuery(
-      { userId: null, canReadAll: false },
-      eventsListQuerySchema.parse({ limit: 25, offset: 0 }),
-    );
+    const query = buildEventsPageQuery({ userId: null }, eventsListQuerySchema.parse({ limit: 25, offset: 0 }));
     const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(query);
     const [pagePlan, countPlan] = await Promise.all([
       env.DB.prepare(`EXPLAIN QUERY PLAN ${pageSql}`)

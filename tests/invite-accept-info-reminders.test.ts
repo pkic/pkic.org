@@ -1,3 +1,4 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 /**
  * invite-accept-info-reminders.test.ts
  *
@@ -145,8 +146,8 @@ describe("invite info endpoint", () => {
     // Create a user to be the inviter
     const inviterUserId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, role, active, created_at, updated_at)
-       VALUES (?, 'inviter@example.test', 'inviter@example.test', 'Jane', 'Smith', 'Acme Corp', 'user', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, active, created_at, updated_at)
+       VALUES (?, 'inviter@example.test', 'inviter@example.test', 'Jane', 'Smith', 'Acme Corp', 1, datetime('now'), datetime('now'))`,
     )
       .bind(inviterUserId)
       .run();
@@ -164,8 +165,8 @@ describe("invite info endpoint", () => {
       const extraUserId = crypto.randomUUID();
       await env.DB.batch([
         env.DB.prepare(
-          `INSERT INTO users (id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at)
-           VALUES (?, ?, ?, ?, 'Inviter', 'user', 1, datetime('now'), datetime('now'))`,
+          `INSERT INTO users (id, email, normalized_email, first_name, last_name, active, created_at, updated_at)
+           VALUES (?, ?, ?, ?, 'Inviter', 1, datetime('now'), datetime('now'))`,
         ).bind(extraUserId, `inviter-${index}@example.test`, `inviter-${index}@example.test`, `Extra ${index}`),
         env.DB.prepare(
           `INSERT INTO invite_inviters
@@ -273,7 +274,7 @@ describe("invite accept endpoint", () => {
 
   it("accepts an attendee invite with valid consents", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const adminUser = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const adminUser = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, adminUser.id);
 
     const { token } = await createInvite(env.DB, {
