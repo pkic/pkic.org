@@ -26,7 +26,9 @@ export function publishedConferenceProgram(raw: unknown, assetUrls: (pattern: st
           ...timing,
           endTime: slots[index + 1]?.time,
           sessions: slot.sessions.map((session) => {
-            const durationMinutes = session.durationMinutes ?? timing.durationMinutes;
+            const durationMinutes = session.endNotRecorded
+              ? undefined
+              : (session.durationMinutes ?? timing.durationMinutes);
             const endsAt =
               durationMinutes !== undefined
                 ? new Date(Date.parse(timing.startsAt) + durationMinutes * 60_000).toISOString()

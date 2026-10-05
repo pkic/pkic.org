@@ -153,45 +153,88 @@
     white-space: normal;
   }
 
+  .pk-table--keep-columns .pk-table__col--primary {
+    width: auto;
+  }
+
+  .pk-table--keep-columns .pk-table__value,
+  .pk-table--keep-columns .pk-table__clamp {
+    white-space: normal;
+    overflow: visible;
+  }
+
   @container (max-width: 52rem) {
     /* A block-level table otherwise leaves its table-caption in a tiny
        anonymous table box, wrapping a visible title letter by letter. */
-    .pk-table--data .pk-table__caption:not(.pk-table__caption--hidden) {
+    .pk-table--records .pk-table__caption:not(.pk-table__caption--hidden) {
       display: block;
       box-sizing: border-box;
       width: 100%;
     }
     /* Static headings repeat the labels already present in every mobile
        record. Interactive headings remain available for filters and sorting. */
-    .pk-table--data thead:not(:has(button, input, select, a)) {
-      display: none;
+    .pk-table--records thead:not(:has(button, input, select, a)) {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      margin: -1px;
+      overflow: hidden;
+      clip-path: inset(50%);
     }
-    .pk-table--data .pk-person-cell__name,
-    .pk-table--data .pk-person-cell__email {
+    .pk-table--records .pk-person-cell__name,
+    .pk-table--records .pk-person-cell__email {
       white-space: normal;
       overflow-wrap: anywhere;
     }
-    .pk-table--data,
-    .pk-table--data thead,
-    .pk-table--data tbody {
+    .pk-table--records,
+    .pk-table--records thead,
+    .pk-table--records tbody {
       display: block;
     }
-    .pk-table--data thead tr {
-      display: flex;
-      flex-wrap: wrap;
+    /* Record cards carry their own labels. Keep sorting, filtering, column
+       choices, and selection in one compact strip instead of wrapping the
+       desktop headings into several rows above those same labels. */
+    .pk-table--records thead {
+      max-width: 100%;
+      overflow-x: auto;
     }
-    .pk-table--data th {
-      flex: 1 1 auto;
+    .pk-table--records thead tr {
+      display: flex;
+      flex-wrap: nowrap;
+      width: max-content;
+      min-width: 100%;
+    }
+    .pk-table--records th {
+      flex: 0 0 auto;
       min-width: 0;
       width: auto;
-      white-space: normal;
+      white-space: nowrap;
     }
-    .pk-table--data tbody tr {
+    /* Keep static table headers available to assistive technology; their
+       visible names are already repeated beside each record value. */
+    .pk-table--records th:not(:has(button, input, select, a)) {
+      position: absolute;
+      width: 1px;
+      height: 1px;
+      padding: 0;
+      margin: -1px;
+      overflow: hidden;
+      clip-path: inset(50%);
+      border: 0;
+    }
+    .pk-table--records .pk-table__head-menu {
+      opacity: 1;
+    }
+    .pk-table--records .pk-table__head-menu .pk-menu__trigger {
+      width: var(--pk-7);
+      height: var(--pk-7);
+    }
+    .pk-table--records tbody tr {
       display: block;
       padding-block: var(--pk-2);
       border-bottom: 1px solid var(--pk-line);
     }
-    .pk-table--data tbody td {
+    .pk-table--records tbody td {
       display: grid;
       grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
       gap: var(--pk-3);
@@ -201,24 +244,24 @@
       text-align: start;
       border: 0;
     }
-    .pk-table--data .pk-table__col--compact,
-    .pk-table--data .pk-table__col--compact .pk-table__value {
+    .pk-table--records .pk-table__col--compact,
+    .pk-table--records .pk-table__col--compact .pk-table__value {
       max-width: none;
     }
-    .pk-table__mobile-label {
+    .pk-table--records .pk-table__mobile-label {
       display: block;
       color: var(--pk-ink-muted);
       font-size: var(--pk-text-xs);
     }
-    .pk-table--data .pk-nowrap,
-    .pk-table--data .pk-cluster--nowrap {
+    .pk-table--records .pk-nowrap,
+    .pk-table--records .pk-cluster--nowrap {
       white-space: normal;
       flex-wrap: wrap;
     }
-    .pk-table--data .pk-table__detail td {
+    .pk-table--records .pk-table__detail td {
       display: block;
     }
-    .pk-table--data .pk-table__select {
+    .pk-table--records .pk-table__select {
       display: block;
     }
   }
@@ -452,6 +495,14 @@
     min-width: 100%;
   }
 
+  .pk-table th.pk-end .pk-table__head-content {
+    justify-content: flex-end;
+  }
+
+  .pk-table th.pk-center .pk-table__head-content {
+    justify-content: center;
+  }
+
   .pk-table__head-end {
     display: flex;
     margin-inline-start: auto;
@@ -615,6 +666,18 @@
 
   .pk-table__row-link:focus-visible {
     outline: none;
+  }
+
+  /* Expanded details read within the visible table viewport, even when
+     ordinary columns deliberately extend its horizontal scroll area. */
+  .pk-table__detail-content {
+    position: sticky;
+    inset-inline-start: 0;
+    box-sizing: border-box;
+    inline-size: min(100%, 100cqw);
+    min-inline-size: 0;
+    white-space: normal;
+    overflow-wrap: anywhere;
   }
 
   /* An expanded region belonging to the row above it. */

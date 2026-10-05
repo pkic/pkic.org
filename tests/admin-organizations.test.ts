@@ -9,8 +9,8 @@
  *   - PATCH org membershipCategory updates the aggregate's single category
  *     assignment (no "cascade to every identity" — there's only ever
  *     one category per aggregate now).
- *   - POST .../organizations/:organizationId/identities inherits the
- *     org's category and rejects when the org has none set yet.
+ *   - POST .../organizations/:organizationId/identities derives category
+ *     from an actual Member aggregate; nonmember affiliations have none.
  *   - PATCH .../members/:id rejects membershipCategory/status for a
  *     organization identity id (those live on the aggregate now) but still allows
  *     showOnOrgProfile, and still allows membershipCategory for an org-less
@@ -27,6 +27,7 @@ import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { organizationsListResponseSchema } from "../assets/shared/schemas/organization-management";
 import { userDetailResponseSchema, usersListResponseSchema } from "../assets/shared/schemas/user-management";
+import { identitiesListResponseSchema } from "../assets/shared/schemas/identity";
 
 function request(token: string, path: string, init: RequestInit = {}): Request {
   const headers = new Headers(init.headers);
@@ -387,9 +388,8 @@ describe("Organization management — membership category on the aggregate (Phas
     );
   });
 
-  it("rejects adding an identity when the organization has no category set yet", async () => {
-    // A bare organization row created outside the membership provisioning flow —
-    // no members aggregate, and therefore no category, exists for it yet.
+  it("allows authorized staff to add a nonmember organization identity without granting membership", async () => {
+    // Canonical affiliation exists independently of a Member aggregate/category.
     const organizationId = crypto.randomUUID();
     await env.DB.prepare(
       "INSERT INTO organizations (id, name, normalized_name, created_at, updated_at) VALUES (?, ?, ?, datetime('now'), datetime('now'))",
@@ -407,9 +407,38 @@ describe("Organization management — membership category on the aggregate (Phas
         activation: { mode: "immediate", reason: "Verified staff test fixture" },
       }),
     });
-    expect(response.status).toBe(422);
-    const body = (await response.json()) as { error: { code: string } };
-    expect(body.error.code).toBe("ORG_CATEGORY_NOT_SET");
+    expect(response.status, await response.clone().text()).toBe(201);
+    const body = (await response.json()) as { identityId: string; state: string };
+    expect(body.state).toBe("active");
+    const [identity] = await queryAll<{ user_id: string; organization_id: string }>(
+      env.DB,
+      "SELECT user_id,organization_id FROM identities WHERE id=?",
+      [body.identityId],
+    );
+    expect(identity.organization_id).toBe(organizationId);
+    const [person] = await queryAll<{ normalized_email: string }>(
+      env.DB,
+      "SELECT normalized_email FROM users WHERE id=?",
+      [identity.user_id],
+    );
+    expect(person.normalized_email).toBe("nocategory@acme.test");
+    const listed = await call(adminToken, `/api/v1/organizations/${organizationId}/identities`);
+    expect(listed.status).toBe(200);
+    expect(identitiesListResponseSchema.parse(await listed.json()).identities).toEqual([
+      expect.objectContaining({
+        id: body.identityId,
+        userId: identity.user_id,
+        memberId: null,
+        membershipCategory: null,
+      }),
+    ]);
+    expect(await queryAll(env.DB, "SELECT id FROM members WHERE organization_id=?", [organizationId])).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT member_id FROM identity_member_capacities WHERE identity_id=?", [body.identityId]),
+    ).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id=?", [identity.user_id])).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM permission_grants WHERE user_id=?", [identity.user_id])).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM group_memberships WHERE user_id=?", [identity.user_id])).toEqual([]);
   });
 
   it("rejects membershipCategory and status on an organization identity — those live on the aggregate", async () => {

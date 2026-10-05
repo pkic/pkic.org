@@ -24,6 +24,8 @@ export default defineConfig(async () => {
       bindings: {
         TEST_MIGRATIONS: migrations,
         APP_BASE_URL: "https://app.test",
+        PKIC_SCANNER_BENCHMARK_MODE: process.env.PKIC_SCANNER_BENCHMARK_MODE ?? "service",
+        PKIC_SCANNER_BENCHMARK_POPULATION: process.env.PKIC_SCANNER_BENCHMARK_POPULATION ?? "2000",
         INTERNAL_SIGNING_SECRET: "test-signing-secret",
         SENDGRID_API_KEY: "test-key",
         FEEDBACK_IDENTITY_SECRET_V1: "feedback-secret",

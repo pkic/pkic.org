@@ -9,7 +9,6 @@ import { getJson, postJson, ApiClientError } from "../../shared/api-client";
 import {
   authStatus,
   clearUserSession,
-  expirePortalSession,
   finishAuthCheck,
   isAuthed,
   portalSession,
@@ -19,6 +18,7 @@ import {
   clearMemberProfile,
   clearAuth,
   signedInWithLink,
+  logoutNotice,
 } from "./state";
 import { Login } from "./shell/Login";
 import { Alert } from "../../ui/Alert";
@@ -27,7 +27,13 @@ import { PortalShell } from "./shell/PortalShell";
 import { VerifyingOverlay } from "../../components/VerifyingOverlay";
 import { myProfileSchema } from "../../../shared/schemas/me";
 import { userAuthEstablishedResponseSchema, userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth";
-import { successResponseSchema } from "../../../shared/schemas/api-common";
+import {
+  recordCanonicalSession,
+  readActiveUserSession,
+  readPendingUserLogout,
+  subscribeUserSessionState,
+} from "../../shared/pending-user-logout";
+import { resumePendingUserLogout, signOutPortalSession } from "./logout-session";
 import { SponsorAccess } from "./sections/sponsors/Access";
 import { portalHashPath, portalMagicLinkReturnPath, portalMagicLinkToken } from "./hash-route";
 import { IdentityInvitationAcceptance } from "./shell/IdentityInvitationAcceptance";
@@ -42,6 +48,8 @@ import { useSessionActivity } from "./use-session-activity";
 
 async function verifyMagicLink(token: string): Promise<PortalSession> {
   const session = await postJson("/api/v1/auth/verify-link", { token }, userAuthEstablishedResponseSchema);
+  if (!(await recordCanonicalSession({ sessionId: session.sessionId, operatorUserId: session.identity.id })))
+    throw new Error("This session was signed out on this device.");
   savePortalSession(session);
   return session;
 }
@@ -57,8 +65,14 @@ export function App() {
 
   async function loadPortalSession(): Promise<boolean> {
     setSessionError(null);
+    const checkedSessionId = portalSession.value?.sessionId;
     try {
       const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
+      if (!(await recordCanonicalSession({ sessionId: session.sessionId, operatorUserId: session.identity.id }))) {
+        if (portalSession.value?.sessionId === session.sessionId) clearAuth();
+        finishAuthCheck();
+        return portalSession.value !== null;
+      }
       if (portalSession.value?.identity.id !== session.identity.id) clearMemberProfile();
       savePortalSession(session);
       if (session.member) {
@@ -68,8 +82,10 @@ export function App() {
         clearMemberProfile();
       }
     } catch (error) {
-      if (error instanceof ApiClientError && [401, 403].includes(error.status)) clearUserSession();
-      else setSessionError("We could not refresh your sign-in information. Keep this page open and try again shortly.");
+      if (error instanceof ApiClientError && [401, 403].includes(error.status)) {
+        if (portalSession.value?.sessionId === checkedSessionId) clearUserSession();
+      } else
+        setSessionError("We could not refresh your sign-in information. Keep this page open and try again shortly.");
     }
 
     finishAuthCheck();
@@ -83,11 +99,10 @@ export function App() {
     setSessionError(null);
     setReauthenticating(true);
     try {
-      await postJson("/api/v1/auth/logout", {}, successResponseSchema);
-      expirePortalSession();
-    } catch (error) {
-      if (error instanceof ApiClientError && error.status === 401) expirePortalSession();
-      else setSessionError("We could not end your current session. Try again before signing in.");
+      const session = portalSession.value;
+      if (session) await signOutPortalSession(session);
+    } catch {
+      setSessionError("Local sign-out could not be saved. Keep this page open and try again.");
     } finally {
       setReauthenticating(false);
     }
@@ -103,6 +118,11 @@ export function App() {
         return;
       }
       setAuthChecking();
+      if (await resumePendingUserLogout()) {
+        clearAuth();
+        setVerifying(false);
+        return;
+      }
       const userToken = portalMagicLinkToken(window.location.hash);
       if (userToken) {
         try {
@@ -134,11 +154,43 @@ export function App() {
       if (!cancelled) await loadPortalSession();
     }
 
-    void run();
+    void run().catch(() => {
+      if (!cancelled) {
+        clearAuth();
+        setVerifying(false);
+        setSessionError("Local sign-out information could not be checked. Keep this page open and try again.");
+      }
+    });
     return () => {
       cancelled = true;
     };
   }, [isMcpAuthorization, isIdentityInvitation]);
+
+  useEffect(() => {
+    async function changed() {
+      const current = portalSession.value;
+      if (!current) return;
+      try {
+        const pending = await readPendingUserLogout();
+        const active = await readActiveUserSession();
+        if (portalSession.value?.sessionId !== current.sessionId) return;
+        if (pending?.sessionId === current.sessionId || active?.sessionId !== current.sessionId) clearAuth();
+      } catch {
+        if (portalSession.value?.sessionId === current.sessionId) clearAuth();
+      }
+    }
+    async function reconnect() {
+      if (!(await resumePendingUserLogout()) && !portalSession.value) await loadPortalSession();
+    }
+    const unsubscribe = subscribeUserSessionState(() => {
+      void changed();
+    });
+    window.addEventListener("online", reconnect);
+    return () => {
+      unsubscribe();
+      window.removeEventListener("online", reconnect);
+    };
+  }, []);
 
   if (isMcpAuthorization) {
     return <McpAuthorization />;
@@ -152,6 +204,12 @@ export function App() {
     return <VerifyingOverlay />;
   }
 
+  const pendingNotice =
+    !isAuthed.value && logoutNotice.value ? (
+      <Alert tone="info" title="Sign-out status">
+        {logoutNotice.value}
+      </Alert>
+    ) : null;
   const sessionNotice = sessionError ? (
     <Alert tone="warn" title="Could not check sign-in">
       <p>{sessionError}</p>
@@ -167,6 +225,7 @@ export function App() {
     if (meetingDestination) return <MeetingEntryReturn destination={meetingDestination} />;
     return (
       <>
+        {pendingNotice}
         {sessionNotice}
         {portalSession.value?.staffReauthenticationRequired && (
           <Alert tone="warn" title="Administrator access expired">
@@ -198,6 +257,7 @@ export function App() {
             </div>
           </div>
         )}
+        {pendingNotice}
         <SponsorAccess />
       </>
     );
@@ -214,6 +274,7 @@ export function App() {
           </div>
         </div>
       )}
+      {pendingNotice}
       <Login
         onSignedIn={async () => {
           await loadPortalSession();

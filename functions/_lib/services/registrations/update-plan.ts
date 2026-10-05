@@ -1,3 +1,4 @@
+import { prepareParticipationReconciliation } from "../event-participation/reconciliation";
 import { assertRegistrationRestorationAllowed } from "./restoration";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -131,6 +132,7 @@ export async function buildRegistrationUpdate(
       }),
       prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now),
     ];
+    statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
     const audit = prepareRegistrationUpdateAudit(db, registration, cancelled, payload);
     if (audit) statements.push(audit);
     return {
@@ -182,6 +184,8 @@ export async function buildRegistrationUpdate(
       }),
       prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now),
     ];
+    statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
+    statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
     const audit = prepareRegistrationUpdateAudit(db, registration, updated, payload);
     if (audit) statements.push(audit);
     return {
@@ -380,6 +384,7 @@ export async function buildRegistrationUpdate(
     statements.push(prepareUserProfileStatement(db, updated.user_id, payload.profilePatch));
   }
   const notificationChanged = scalarChanged || dayAttendanceChanged || waitlistChanged || profileChanged;
+  statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
   const audit = prepareRegistrationUpdateAudit(db, registration, updated, payload);
   if (audit && notificationChanged) statements.push(audit);
   return {

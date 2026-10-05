@@ -2,15 +2,14 @@ import type { ComponentChildren } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import { Link } from "wouter";
 import { usePortalHashLocation } from "../hash-location";
-import { successResponseSchema } from "../../../../shared/schemas/api-common";
 import { userOrganizationsListResponseSchema } from "../../../../shared/schemas/user-organizations";
 import { Alert } from "../../../ui/Alert";
 import { ButtonLink } from "../../../ui/Button";
 import { Menu } from "../../../ui/Menu";
 import { MenuIcon } from "../../../components/MenuIcon";
 import { useData } from "../../../hooks/useData";
-import { getJson, postJson } from "../../../shared/api-client";
-import { clearAuth } from "../state";
+import { getJson } from "../../../shared/api-client";
+import { signOutPortalSession } from "../logout-session";
 import type { PortalSession } from "../types";
 import {
   portalActiveSection,
@@ -120,11 +119,10 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
   async function signOut(): Promise<void> {
     setSignOutError(null);
     try {
-      if (session) await postJson("/api/v1/auth/logout", {}, successResponseSchema);
-      clearAuth();
-      window.location.assign("/portal/");
+      if (session) await signOutPortalSession(session);
+      closeNavigation();
     } catch {
-      setSignOutError("Sign out failed. Your session is still active; please try again.");
+      setSignOutError("Local sign-out could not be saved. Keep this page open and try again.");
     }
   }
 

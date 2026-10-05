@@ -80,9 +80,9 @@ export const usersListResponseSchema = paginatedResponseSchema("users", userList
 
 export const userIdentityDetailSchema = z.object({
   identityId: z.string(),
-  memberId: z.string(),
-  membershipCategory: membershipCategorySchema,
-  status: memberStatusSchema,
+  memberId: z.string().nullable(),
+  membershipCategory: membershipCategorySchema.nullable(),
+  status: memberStatusSchema.nullable(),
   showOnOrgProfile: z.boolean(),
   /** The identity this person's record speaks from when it has to choose one. */
   isDefault: z.boolean(),

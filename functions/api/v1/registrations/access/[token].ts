@@ -15,10 +15,11 @@ import {
 import { getClientIp, requireInternalSecret } from "../../../../_lib/request";
 import { buildRegistrationManageView } from "../../../../_lib/services/registrations/manage-view";
 import { openApiRoute } from "../../../../_lib/openapi/route";
-import { hasAuthenticatedSessionCookie } from "../../../../_lib/auth/session-cookies";
+import { hasAuthenticatedSessionCookie, hasAuthenticationCredential } from "../../../../_lib/auth/session-cookies";
 import { requireAnyActorFromRequest } from "../../../../_lib/auth/actor";
 import { AppError } from "../../../../_lib/errors";
 import { enforceEmailTriggerRateLimits } from "../../../../_lib/rate-limit";
+import { readRegistrationSponsorSharing } from "../../../../_lib/services/event-participation/sponsor-consent";
 
 async function handleRegistrationManagePatch(
   c: any,
@@ -33,7 +34,11 @@ async function handleRegistrationManagePatch(
     if (resolved instanceof Response) return resolved;
     const { registration: current, isJwt, actorUserId } = resolved;
     let authenticatedActor: { kind: "user"; id: string } | null = null;
-    if (!isJwt && hasAuthenticatedSessionCookie(c.req.raw)) {
+    if (
+      !isJwt &&
+      (hasAuthenticatedSessionCookie(c.req.raw) ||
+        (body.action === "withdraw_sponsor_sharing" && hasAuthenticationCredential(c.req.raw)))
+    ) {
       try {
         const actor = await requireAnyActorFromRequest(c.env.DB, c.req.raw, c.env);
         authenticatedActor = { kind: actor.kind, id: actor.id };
@@ -68,7 +73,13 @@ async function handleRegistrationManagePatch(
       c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, outboxId));
     }
 
-    return json(registrationManageUpdateResponseSchema.parse({ success: true, emailChanged: result.emailChanged }));
+    return json(
+      registrationManageUpdateResponseSchema.parse({
+        success: true,
+        emailChanged: result.emailChanged,
+        sponsorSharing: await readRegistrationSponsorSharing(c.env.DB, result.registration),
+      }),
+    );
   } catch (error) {
     return handleError(error);
   }

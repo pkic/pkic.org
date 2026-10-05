@@ -26,7 +26,9 @@ export function prepareEventConfigurationRevision(
     updatedAt,
     statements: [
       db
-        .prepare("UPDATE events SET updated_at = ? WHERE id = ? AND updated_at = ?")
+        .prepare(
+          "UPDATE events SET updated_at = ? WHERE id = ? AND strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) = strftime('%Y-%m-%dT%H:%M:%fZ', ?)",
+        )
         .bind(updatedAt, eventId, context.expectedUpdatedAt),
       prepareScopedAuditLogAfterOneChange(
         db,

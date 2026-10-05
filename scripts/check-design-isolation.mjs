@@ -335,7 +335,10 @@ function inspect(file) {
   // The generated stylesheet is the one place literals are correct: it is the
   // rendered output of the token module, which is where they are defined.
   const isGeneratedTokens =
-    rel === "assets/design/tokens.generated.css" || rel === "assets/design/tokens.public.generated.css";
+    rel === "assets/design/tokens.generated.css" ||
+    rel === "assets/design/tokens.public.generated.css" ||
+    rel === "assets/design/tokens.agenda.generated.css" ||
+    rel === "assets/design/tokens.scanner.generated.css";
   const isTokenSource = rel.startsWith("assets/design/") && /\.ts$/.test(rel);
 
   readFileSync(file, "utf8")

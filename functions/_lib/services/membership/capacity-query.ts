@@ -1,8 +1,25 @@
 /**
  * Canonical SQL projection of the Member capacities a user may act through.
- * An active organization representation suppresses individual capacity so
+ * An active organization Member representation suppresses individual capacity so
  * participation always has unambiguous IPR attribution.
  */
+/** Trusted internal user SQL only; a nonmember affiliation grants no Member capacity. */
+export function activeOrganizationMemberRepresentationPredicate(userIdSql: string): string {
+  return `EXISTS (
+    SELECT 1 FROM identities represented
+    JOIN members represented_member
+      ON represented_member.organization_id = represented.organization_id
+     AND represented_member.member_type = 'organization'
+     AND represented_member.status = 'active'
+    JOIN member_category_assignments represented_category ON represented_category.member_id = represented_member.id
+    WHERE represented.user_id = ${userIdSql}
+      AND represented.organization_id IS NOT NULL
+      AND represented.started_at IS NOT NULL
+      AND represented.ended_at IS NULL
+      AND represented.blocked_at IS NULL
+  )`;
+}
+
 const ACTIVE_USER_CAPACITIES_BODY = `
   SELECT input.user_id, identity.id AS identity_id, member.id AS member_id, member.member_type,
          NULL AS organization_name, category.category_code AS membership_category
@@ -16,14 +33,7 @@ const ACTIVE_USER_CAPACITIES_BODY = `
      AND identity.ended_at IS NULL
      AND identity.blocked_at IS NULL
     JOIN member_category_assignments category ON category.member_id = member.id
-   WHERE NOT EXISTS (
-     SELECT 1 FROM identities represented
-      WHERE represented.user_id = input.user_id
-        AND represented.organization_id IS NOT NULL
-        AND represented.started_at IS NOT NULL
-        AND represented.ended_at IS NULL
-        AND represented.blocked_at IS NULL
-   )
+   WHERE NOT ${activeOrganizationMemberRepresentationPredicate("input.user_id")}
   UNION ALL
   SELECT input.user_id, represented.id, member.id, member.member_type, organization.name,
          category.category_code

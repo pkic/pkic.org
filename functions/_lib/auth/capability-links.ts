@@ -206,6 +206,8 @@ function capabilitySecretQuery(purpose: CapabilityPurpose, allowInactiveInvite =
     }
     case "member_join_verify":
     case "member_join_apply":
+    case "event_proposal_verify":
+    case "event_proposal_continue":
     case "user_sign_in":
     case "sponsor_sign_in":
     case "identity_invitation":

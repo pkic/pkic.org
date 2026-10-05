@@ -48,16 +48,41 @@ function eventWhen(event: EventRow): string {
   return formatEventWhen(event.startsAt, event.timezone, location, attendanceType);
 }
 
-/**
- * Only a management-shaped row carries an owning group, and only when one
- * is set. Everyone else — every audience row, and a management row with no
- * owning group — gets no menu at all.
- */
+/** Audience actions use server-granted scanner/contact access; management rows open their owning workspace. */
 function workspaceActions(event: EventRow, navigate: (path: string) => void): MenuItem[] {
-  if (isAudienceEvent(event) || !event.ownerGroupId) return [];
+  const audienceActions: MenuItem[] = isAudienceEvent(event)
+    ? [
+        ...(event.sponsorLeadAccess
+          ? [
+              {
+                id: "sponsor-leads",
+                label: "Open sponsor leads",
+                onSelect: () => navigate(`/events/${encodeURIComponent(event.slug)}/leads`),
+              },
+            ]
+          : []),
+        ...(event.scannerAccess?.canScan
+          ? [
+              {
+                id: "event-scanner",
+                label: "Open event scanner",
+                onSelect: () => navigate(`/events/${encodeURIComponent(event.slug)}/scanner`),
+              },
+            ]
+          : []),
+        ...(event.scannerAccess?.sponsors.map((sponsor) => ({
+          id: `sponsor-scanner-${sponsor.id}`,
+          label: `Scan leads for ${sponsor.name}`,
+          onSelect: () =>
+            navigate(`/events/${encodeURIComponent(event.slug)}/sponsors/${encodeURIComponent(sponsor.id)}/scanner`),
+        })) ?? []),
+      ]
+    : [];
+  if (isAudienceEvent(event) || !event.ownerGroupId) return audienceActions;
   const groupId = event.ownerGroupId;
   const groupLabel = event.ownerGroupName ?? "group";
   return [
+    ...audienceActions,
     {
       id: "open-workspace",
       label: `Open in ${groupLabel} workspace`,

@@ -36,13 +36,13 @@ export async function requestUserSignInLink(
 
   const email = prepareQueueEmailStatement(db, {
     templateKey: "user_magic_link",
-    recipientEmail: magic.identity.email,
+    recipientEmail: magic.recipientEmail,
     recipientUserId: magic.identity.id,
     eventId: null,
     messageType: "transactional",
     subject: "Your PKI Consortium sign-in link",
     data: {
-      email: magic.identity.email,
+      email: magic.recipientEmail,
       magicLinkUrl: magicLinkUrl(payload.magicLinkBaseUrl, magic.queuedToken),
       expiresInMinutes: payload.ttlMinutes,
     },
@@ -53,7 +53,7 @@ export async function requestUserSignInLink(
     email.statement,
     prepareAuditLog(db, "user", magic.identity.id, "user_magic_link_requested", "user_identity", magic.identity.id, {
       capacities: magic.capacities,
-      email: magic.identity.email,
+      email: magic.recipientEmail,
     }),
   ]);
   return { outboxId: email.id, identityFound: true };

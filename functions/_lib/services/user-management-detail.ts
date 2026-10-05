@@ -22,9 +22,9 @@ interface UserDetailRow {
 
 interface MembershipRow {
   id: string;
-  capacity_member_id: string;
-  category_code: string;
-  status: string;
+  capacity_member_id: string | null;
+  category_code: string | null;
+  status: string | null;
   show_on_org_profile: number;
   is_default: number;
   organization_id: string | null;
@@ -72,22 +72,22 @@ export async function getUserDetail(db: DatabaseLike, userId: string) {
         `SELECT identity.id, m.id AS capacity_member_id, mca.category_code, m.status,
                 identity.show_on_organization_profile AS show_on_org_profile,
                 identity.is_default,
-                m.organization_id, o.name AS organization_name,
+                identity.organization_id, o.name AS organization_name,
                 identity.email_id, COALESCE(selected_email.email, u.email) AS capacity_email,
                 CASE WHEN identity.organization_id IS NULL THEN category.label ELSE identity.job_title END AS job_title,
                 identity.biography, identity.links_json, identity.created_at,
-                CASE WHEN m.organization_id IS NULL THEN '0_' ELSE '1_' END || identity.started_at AS sort_key
+                CASE WHEN identity.organization_id IS NULL THEN '0_' ELSE '1_' END || identity.started_at AS sort_key
          FROM identities identity
-         JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
-         JOIN members m ON m.id = capacity.member_id
-         LEFT JOIN organizations o ON o.id = m.organization_id
+         LEFT JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+         LEFT JOIN members m ON m.id = capacity.member_id
+         LEFT JOIN organizations o ON o.id = identity.organization_id
          JOIN users u ON u.id = identity.user_id
          LEFT JOIN user_emails selected_email
            ON selected_email.id = identity.email_id
           AND selected_email.user_id = identity.user_id
           AND selected_email.verified_at IS NOT NULL
-         JOIN member_category_assignments mca ON mca.member_id = m.id
-         JOIN membership_categories category ON category.code = mca.category_code
+         LEFT JOIN member_category_assignments mca ON mca.member_id = m.id
+         LEFT JOIN membership_categories category ON category.code = mca.category_code
          WHERE identity.user_id = ?
            AND identity.started_at IS NOT NULL
            AND identity.ended_at IS NULL

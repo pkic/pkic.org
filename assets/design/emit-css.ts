@@ -11,7 +11,7 @@
  */
 
 import { accentNeighbour, palette, type AccentHue } from "./palette.ts";
-import { constants, cssVar, density, layers, radiusModes, themes } from "./tokens.ts";
+import { constants, cssVar, density, featureTokenGroups, layers, radiusModes, themes } from "./tokens.ts";
 
 /**
  * Tokens the public site alone reads.
@@ -23,6 +23,10 @@ import { constants, cssVar, density, layers, radiusModes, themes } from "./token
  */
 function isPublicToken(name: string): boolean {
   return name.startsWith("public-") || name.startsWith("wg-");
+}
+
+function isFeatureToken(name: string): boolean {
+  return Object.values(featureTokenGroups).some((names) => (names as readonly string[]).includes(name));
 }
 
 function partition(entries: Record<string, string>, wanted: (name: string) => boolean): Record<string, string> {
@@ -66,7 +70,7 @@ ${block(paletteEntries, "    ")}
 ${block(accentPair(defaultAccent), "    ")}
 
 ${block(
-  partition(constants, (name) => !isPublicToken(name)),
+  partition(constants, (name) => !isPublicToken(name) && !isFeatureToken(name)),
   "    ",
 )}
 
@@ -140,6 +144,22 @@ ${block(dark, "      ")}
 
   :root[data-theme="dark"] {
 ${block(dark, "    ")}
+  }
+}
+`;
+}
+
+/** Same canonical token values, scoped to a component stylesheet entry. */
+export function emitFeatureTokenCss(feature: keyof typeof featureTokenGroups): string {
+  const names = featureTokenGroups[feature] as readonly string[];
+  return `/* GENERATED FILE — source: assets/design/tokens.ts. */
+@layer ${layers.join(", ")};
+@layer tokens {
+  :root {
+${block(
+  partition(constants, (name) => names.includes(name)),
+  "    ",
+)}
   }
 }
 `;

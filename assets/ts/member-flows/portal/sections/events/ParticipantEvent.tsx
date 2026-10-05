@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "preact/compat";
 import type { ComponentChildren } from "preact";
 import { eventParticipantRecordPath } from "./event-participant-paths";
 import { useData } from "../../../../hooks/useData";
@@ -22,6 +23,13 @@ import { DescriptionList } from "../../../../ui/DescriptionList";
 import { formatDateRange } from "../../ui";
 import { usePortalHashLocation } from "../../hash-location";
 
+const MyAgenda = lazy(() => import("./detail/participation/MyAgenda").then((module) => ({ default: module.MyAgenda })));
+const MyPromotionKits = lazy(() =>
+  import("./detail/agenda/MyPromotionKits").then((module) => ({ default: module.MyPromotionKits })),
+);
+const MySessionManagement = lazy(() =>
+  import("./detail/participation/MySessionManagement").then((module) => ({ default: module.MySessionManagement })),
+);
 type EventDetail = z.infer<typeof eventDetailResponseSchema>["event"];
 type Selection = { kind?: "registration" | "proposal"; resourceId?: string; tab?: string };
 const href = usePortalHashLocation.hrefs;
@@ -41,9 +49,20 @@ export function ParticipantEvent({ event, kind, resourceId, tab }: Selection & {
   const registrationId = event.participation?.registrationId;
   const hasProposals = Boolean(event.participation?.proposals || event.participation?.speakerProposals);
   const active =
-    kind === "registration" ? "registration" : kind === "proposal" || tab === "submissions" ? "proposals" : "overview";
+    kind === "registration"
+      ? "registration"
+      : kind === "proposal" || tab === "submissions"
+        ? "proposals"
+        : tab === "agenda"
+          ? "agenda"
+          : tab === "promotion"
+            ? "promotion"
+            : tab === "session-management"
+              ? "session-management"
+              : "overview";
   const tabs = [
     { id: "overview", label: "Overview", href: href(base) },
+    { id: "agenda", label: "My agenda", href: href(base + "/agenda") },
     ...(registrationId
       ? [
           {
@@ -53,7 +72,17 @@ export function ParticipantEvent({ event, kind, resourceId, tab }: Selection & {
           },
         ]
       : []),
-    ...(hasProposals ? [{ id: "proposals", label: "Proposals", href: href(base + "/submissions") }] : []),
+    ...(hasProposals
+      ? [
+          {
+            id: "proposals",
+            label: "Proposals",
+            href: href(base + "/submissions"),
+          },
+          { id: "promotion", label: "Promotion kits", href: href(base + "/promotion") },
+          { id: "session-management", label: "My sessions", href: href(base + "/session-management") },
+        ]
+      : []),
   ];
   const header = (recordTitle?: string) => (
     <>
@@ -65,7 +94,16 @@ export function ParticipantEvent({ event, kind, resourceId, tab }: Selection & {
           ...(active !== "overview"
             ? [
                 {
-                  label: active === "registration" ? "Registration" : "Proposals",
+                  label:
+                    active === "registration"
+                      ? "Registration"
+                      : active === "agenda"
+                        ? "My agenda"
+                        : active === "promotion"
+                          ? "Promotion kits"
+                          : active === "session-management"
+                            ? "My sessions"
+                            : "Proposals",
                   ...(kind === "proposal" ? { href: href(base + "/submissions") } : {}),
                 },
               ]
@@ -83,6 +121,18 @@ export function ParticipantEvent({ event, kind, resourceId, tab }: Selection & {
         <ParticipantRegistration registrationId={resourceId} eventId={event.id} slug={event.slug} />
       ) : kind === "proposal" && resourceId ? (
         <ParticipantProposal event={event} proposalId={resourceId} facet={tab} header={header} />
+      ) : tab === "agenda" ? (
+        <Suspense fallback={<Spinner />}>
+          <MyAgenda slug={event.slug} />
+        </Suspense>
+      ) : tab === "session-management" ? (
+        <Suspense fallback={<Spinner />}>
+          <MySessionManagement slug={event.slug} />
+        </Suspense>
+      ) : tab === "promotion" ? (
+        <Suspense fallback={<Spinner />}>
+          <MyPromotionKits slug={event.slug} />
+        </Suspense>
       ) : tab === "submissions" ? (
         <ParticipantProposals event={event} />
       ) : (

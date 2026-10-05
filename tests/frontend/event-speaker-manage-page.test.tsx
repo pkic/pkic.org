@@ -14,171 +14,33 @@
  */
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { act } from "preact/test-utils";
-
-const READ = "/api/v1/proposals/speakers/access/speaker-token-1234567890";
-const TERMS = "/api/v1/events/pqc-2026/terms";
-
-interface Captured {
-  path: string;
-  method: string;
-}
-
-function json(value: unknown, status = 200): Response {
-  return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
-}
-
-function speakerPage(overrides: { status?: string; proposalStatus?: string } = {}): Record<string, unknown> {
-  return {
-    speaker: {
-      role: "speaker",
-      status: overrides.status ?? "invited",
-      confirmedAt: null,
-      declinedAt: null,
-      termsAcceptedAt: null,
-    },
-    proposal: {
-      id: "30000000-0000-4000-8000-000000000001",
-      title: "Post-quantum migration in practice",
-      proposalType: "talk",
-      status: overrides.proposalStatus ?? "submitted",
-      presentationDeadline: null,
-      presentationUploaded: false,
-      presentationUploadedAt: null,
-      presentationUploader: null,
-      coSpeakers: [],
-      presentationUrl: null,
-    },
-    presentationTerms: [],
-    profile: {
-      firstName: "Ada",
-      lastName: "Lovelace",
-      email: "ada@example.test",
-      organizationName: null,
-      jobTitle: null,
-      biography: null,
-      links: [],
-      headshotUploaded: false,
-      headshotUpdatedAt: null,
-      headshotUrl: null,
-    },
-  };
-}
-
-/** The shape `eventTermsResponseSchema` demands, with no terms configured. */
-function speakerTerms(): Record<string, unknown> {
-  return {
-    event: { id: "20000000-0000-4000-8000-000000000001", slug: "pqc-2026", name: "PQC Conference 2026" },
-    audience: "speaker",
-    terms: [],
-  };
-}
-
-function installApi(routes: Record<string, () => Response>): Captured[] {
-  const requests: Captured[] = [];
-  vi.stubGlobal(
-    "fetch",
-    vi.fn((input: RequestInfo | URL, init: RequestInit = {}) => {
-      const url = new URL(String(input), location.origin);
-      requests.push({ path: url.pathname, method: (init.method ?? "GET").toUpperCase() });
-      const route = routes[url.pathname];
-      return Promise.resolve(route ? route() : json({}));
-    }),
-  );
-  return requests;
-}
-
-/** The shortcode's markup, reduced to the parts this module reaches for. */
-function mountShell(): HTMLElement {
-  document.body.innerHTML = `
-    <div class="event-flow pk"
-      data-event-speaker-manage
-      data-event-slug="pqc-2026"
-      data-api-base="/api/v1">
-      <div data-resend-speaker-manage-section hidden>
-        <input data-resend-speaker-manage-email>
-        <button type="button" data-resend-speaker-manage-btn>Send my speaker link</button>
-        <p data-resend-speaker-manage-status></p>
-      </div>
-      <p data-speaker-loading>Loading your speaker details…</p>
-      <div data-speaker-content hidden>
-        <div data-proposal-summary>
-          <h3 data-proposal-title></h3>
-          <p><span data-proposal-type></span><span class="pk-badge" data-proposal-status-badge></span></p>
-          <p data-presentation-deadline-row></p>
-        </div>
-        <p><span class="pk-badge" data-speaker-status-badge></span></p>
-        <div data-confirm-panel hidden>
-          <form data-confirm-form novalidate>
-            <div data-speaker-consents></div>
-            <button type="submit">Confirm participation</button>
-            <button type="button" data-decline-open>Decline</button>
-          </form>
-        </div>
-        <div data-decline-panel hidden>
-          <textarea id="decline-reason"></textarea>
-          <button type="button" data-decline-confirm>Confirm — I cannot participate</button>
-          <button type="button" data-decline-cancel>Go back</button>
-        </div>
-        <p data-confirmed-msg hidden>You have confirmed your participation. Thank you!</p>
-        <p data-declined-msg hidden>You have declined participation in this session.</p>
-        <div data-headshot-section hidden>
-          <div data-headshot-preview></div>
-          <p data-headshot-status></p>
-          <input type="file" id="speaker-headshot-file" data-headshot-file>
-          <button type="button" data-headshot-delete hidden>Remove photo</button>
-        </div>
-        <div data-profile-section hidden>
-          <div data-profile-saved-state hidden>
-            <button type="button" data-profile-edit>Edit profile</button>
-          </div>
-          <div data-profile-form-wrap>
-            <form data-profile-form novalidate>
-              <input id="speaker-first-name" name="firstName">
-              <input id="speaker-last-name" name="lastName">
-              <input id="speaker-organization" name="organizationName">
-              <input id="speaker-job-title" name="jobTitle">
-              <textarea id="speaker-bio" name="biography"></textarea>
-              <div data-profile-links-container></div>
-              <button type="submit">Save profile</button>
-            </form>
-          </div>
-        </div>
-        <div data-presentation-link hidden><a href="presentation/">Go to presentation upload</a></div>
-        <p data-flow-status class="pk-alert pk-sr-only" role="status" aria-live="polite" hidden></p>
-      </div>
-    </div>
-  `;
-  const root = document.querySelector<HTMLElement>("[data-event-speaker-manage]");
-  if (!root) throw new Error("shell did not mount");
-  return root;
-}
-
-async function boot(): Promise<void> {
-  await act(async () => {
-    await import("../../assets/ts/event-flows/speaker-manage-page");
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-  // The first visit loads the shared editor chunk before revealing the form.
-  await vi.waitFor(
-    async () => {
-      await act(async () => {
-        await new Promise((resolve) => setTimeout(resolve, 0));
-      });
-      expect(document.querySelector<HTMLElement>("[data-speaker-loading]")?.hidden).toBe(true);
-    },
-    { timeout: 5_000 },
-  );
-}
-
-function panel(root: ParentNode, name: string): HTMLElement {
-  const element = root.querySelector<HTMLElement>(`[${name}]`);
-  if (!element) throw new Error(`no element carries [${name}]`);
-  return element;
-}
+import {
+  speakerSelfProfilePatchSchema,
+  speakerParticipationPatchSchema,
+} from "../../assets/shared/schemas/proposal-management";
+import { typeMarkdown } from "./helpers/labelled-control";
+import { eventProposalProofVerifySchema } from "../../assets/shared/schemas/event-proposal-proof";
+import {
+  AUTH,
+  READ,
+  SPEAKER_USER_ID,
+  TERMS,
+  boot,
+  chooseIndividual,
+  installApi,
+  json,
+  mountShell,
+  panel,
+  personDetail,
+  profileReceipt,
+  signedInSession,
+  speakerPage,
+  speakerTerms,
+} from "./helpers/speaker-manage-page-fixture";
 
 beforeEach(() => {
   vi.resetModules();
-  window.history.replaceState({}, "", "/events/2026/pqc-2026/speaker/?token=speaker-token-1234567890");
+  window.history.replaceState({}, "", "/events/2026/pqc-2026/speaker/?token=speaker-token-12345678901234567890");
 });
 
 afterEach(() => {
@@ -198,11 +60,14 @@ describe("speaker self-service page", () => {
     // so a page that swapped one side without the other could never be shown.
     expect(panel(root, "data-speaker-loading").hidden).toBe(true);
     expect(panel(root, "data-speaker-content").hidden).toBe(false);
+    expect(panel(root, "data-speaker-content").classList.contains("pk-container--narrow")).toBe(false);
+    expect(panel(root, "data-speaker-content").classList.contains("pk-container--start")).toBe(true);
     // None of the panels this module switches carries a visibility class any
     // more; the attribute is the only switch.
     for (const name of [
       "data-speaker-content",
       "data-confirm-panel",
+      "data-participation-actions",
       "data-decline-panel",
       "data-confirmed-msg",
       "data-declined-msg",
@@ -236,6 +101,7 @@ describe("speaker self-service page", () => {
     await boot();
 
     expect(panel(root, "data-confirm-panel").hidden).toBe(false);
+    expect(panel(root, "data-participation-actions").hidden).toBe(false);
     expect(panel(root, "data-confirmed-msg").hidden).toBe(true);
     expect(panel(root, "data-declined-msg").hidden).toBe(true);
     // The editors are open for anyone who has not declined: the status branch
@@ -246,6 +112,16 @@ describe("speaker self-service page", () => {
     // reads as.
     expect(panel(root, "data-headshot-section").hidden).toBe(false);
     expect(panel(root, "data-profile-section").hidden).toBe(false);
+    const steps = ["data-confirm-form", "data-profile-section", "data-headshot-section", "data-participation-actions"];
+    for (let index = 1; index < steps.length; index++)
+      expect(panel(root, steps[index - 1]).compareDocumentPosition(panel(root, steps[index]))).toBe(
+        Node.DOCUMENT_POSITION_FOLLOWING,
+      );
+    const confirmation = root.querySelector<HTMLButtonElement>("[data-confirm-participation]")!;
+    expect(confirmation.form).toBe(panel(root, "data-confirm-form"));
+    expect(confirmation.closest("form")).toBeNull();
+    expect(root.querySelector("form form")).toBeNull();
+    expect(root.querySelector<HTMLButtonElement>("[data-decline-open]")!.disabled).toBe(false);
   });
 
   it("opens the editors for a confirmed speaker and the presentation link once accepted", async () => {
@@ -258,6 +134,7 @@ describe("speaker self-service page", () => {
     await boot();
 
     expect(panel(root, "data-confirmed-msg").hidden).toBe(false);
+    expect(panel(root, "data-participation-actions").hidden).toBe(true);
     expect(panel(root, "data-headshot-section").hidden).toBe(false);
     expect(panel(root, "data-profile-section").hidden).toBe(false);
     expect(panel(root, "data-presentation-link").hidden).toBe(false);
@@ -270,6 +147,7 @@ describe("speaker self-service page", () => {
     await boot();
 
     expect(panel(root, "data-declined-msg").hidden).toBe(false);
+    expect(panel(root, "data-participation-actions").hidden).toBe(true);
     expect(panel(root, "data-headshot-section").hidden).toBe(true);
     expect(panel(root, "data-profile-section").hidden).toBe(true);
   });
@@ -303,6 +181,261 @@ describe("speaker self-service page", () => {
     expect(requests.some(({ path }) => path.startsWith("/api/v1/proposals/speakers/access/"))).toBe(false);
     expect(panel(root, "data-resend-speaker-manage-section").hidden).toBe(false);
     expect(panel(root, "data-speaker-content").hidden).toBe(true);
+  });
+
+  it("requires choosing and saving representation before confirming participation", async () => {
+    const root = mountShell();
+    const requests = installApi({
+      [READ]: () => json(speakerPage()),
+      [TERMS]: () => json(speakerTerms()),
+      [AUTH]: () => signedInSession(),
+      [`/api/v1/users/${SPEAKER_USER_ID}`]: () => personDetail(),
+      [`${READ}/profile`]: () => profileReceipt(),
+    });
+    await boot();
+    const confirmation = root.querySelector<HTMLButtonElement>("[data-confirm-participation]")!;
+    expect(confirmation.disabled).toBe(true);
+    expect(root.textContent).toContain("Confirm and save your speaker identity");
+    await chooseIndividual(root);
+    expect(confirmation.disabled).toBe(true);
+    await act(async () => {
+      root
+        .querySelector("[data-profile-form]")!
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const saved = speakerSelfProfilePatchSchema.parse(requests.find(({ method }) => method === "PATCH")?.body);
+    expect(saved.actingIdentityId).toBeNull();
+    expect(saved.unaffiliatedAttestation).toBe(true);
+    expect(saved.organizationName).toBeUndefined();
+    expect(saved.jobTitle).toBeUndefined();
+    expect(confirmation.disabled).toBe(false);
+    expect(requests.some(({ path }) => path === AUTH)).toBe(true);
+    expect(requests.some(({ path }) => path === `/api/v1/users/${SPEAKER_USER_ID}`)).toBe(true);
+    await act(async () => {
+      root.querySelector<HTMLButtonElement>("[data-profile-edit]")!.click();
+    });
+    await typeMarkdown(root, "Biography", "An updated professional speaker biography for the conference program.");
+    await act(async () => {
+      root
+        .querySelector("[data-profile-form]")!
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const biographySave = speakerSelfProfilePatchSchema.parse(
+      requests.filter(({ method }) => method === "PATCH")[1].body,
+    );
+    expect(biographySave.actingIdentityId).toBeUndefined();
+    expect(biographySave.biography).toContain("updated professional speaker biography");
+  });
+
+  it("submits the final external confirmation button through its terms form and restores it after refusal", async () => {
+    const root = mountShell();
+    const data = speakerPage();
+    data.profile = {
+      ...(data.profile as Record<string, unknown>),
+      actingIdentitySelection: "individual",
+      actingIdentitySelectedAt: "2026-01-01T00:00:00.000Z",
+    };
+    let resolveParticipation!: (response: Response) => void;
+    const term = {
+      termKey: "speaker-agreement",
+      version: "1",
+      required: true,
+      contentRef: null,
+      displayText: "I accept the speaker agreement.",
+    };
+    const requests = installApi({
+      [READ]: () => json(data),
+      [TERMS]: () => json({ ...speakerTerms(), terms: [term] }),
+      [`${READ}/participation`]: () => new Promise<Response>((resolve) => (resolveParticipation = resolve)),
+    });
+    await boot();
+    const confirmation = root.querySelector<HTMLButtonElement>("[data-confirm-participation]")!;
+    expect(confirmation.disabled).toBe(false);
+    await act(async () => {
+      root.querySelector<HTMLInputElement>('input[name="consents"]')!.click();
+      confirmation.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const submitted = requests.find(({ path }) => path === `${READ}/participation`)!;
+    expect(submitted.method).toBe("PATCH");
+    expect(speakerParticipationPatchSchema.parse(submitted.body)).toEqual({
+      status: "confirmed",
+      consents: [{ termKey: term.termKey, version: term.version }],
+    });
+    expect(confirmation.disabled).toBe(true);
+    await act(async () => {
+      resolveParticipation(json({ error: { code: "TEST_REFUSAL", message: "Please try confirming again." } }, 409));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(confirmation.disabled).toBe(false);
+    expect(panel(root, "data-flow-status").textContent).toContain("Please try confirming again.");
+  });
+
+  it("retains a failed identity selection for retry and preserves a newer choice made during a save", async () => {
+    const root = mountShell();
+    let profileAttempt = 0;
+    let resolveProfile!: (response: Response) => void;
+    const pendingProfile = new Promise<Response>((resolve) => {
+      resolveProfile = resolve;
+    });
+    const requests = installApi({
+      [READ]: () => json(speakerPage()),
+      [TERMS]: () => json(speakerTerms()),
+      [AUTH]: () => signedInSession(),
+      [`/api/v1/users/${SPEAKER_USER_ID}`]: () => personDetail(),
+      [`${READ}/profile`]: () => {
+        profileAttempt += 1;
+        if (profileAttempt === 1) return json({ error: "Try again" }, 409);
+        return profileAttempt === 2 ? pendingProfile : profileReceipt();
+      },
+    });
+    await boot();
+    const submit = () =>
+      root
+        .querySelector("[data-profile-form]")!
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    await chooseIndividual(root);
+    await act(async () => {
+      submit();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(
+      speakerSelfProfilePatchSchema.parse(requests.filter(({ method }) => method === "PATCH")[0].body).actingIdentityId,
+    ).toBeNull();
+    await act(() => {
+      submit();
+    });
+    expect(
+      speakerSelfProfilePatchSchema.parse(requests.filter(({ method }) => method === "PATCH")[1].body).actingIdentityId,
+    ).toBeNull();
+    // Even selecting the same value again is a newer deliberate choice.
+    await chooseIndividual(root);
+    await act(async () => {
+      resolveProfile(profileReceipt());
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(root.querySelector<HTMLButtonElement>("[data-confirm-participation]")!.disabled).toBe(true);
+    expect(panel(root, "data-profile-form-wrap").hidden).toBe(false);
+    await act(async () => {
+      submit();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(
+      speakerSelfProfilePatchSchema.parse(requests.filter(({ method }) => method === "PATCH")[2].body).actingIdentityId,
+    ).toBeNull();
+    expect(root.querySelector<HTMLButtonElement>("[data-confirm-participation]")!.disabled).toBe(false);
+  });
+
+  it("never enumerates identities when the speaker capability is expired", async () => {
+    const root = mountShell();
+    const requests = installApi({ [READ]: () => json({ error: "Expired", code: "TOKEN_EXPIRED" }, 410) });
+    await boot();
+    expect(root.querySelector('[role="combobox"]')).toBeNull();
+    expect(requests.some(({ path }) => path.endsWith("/identities"))).toBe(false);
+    expect(requests.some(({ path }) => path === AUTH)).toBe(false);
+  });
+
+  it.each(["guest", "different account"])(
+    "keeps invitation editing available for a %s without enumerating identities or changing representation",
+    async (actor) => {
+      const root = mountShell();
+      const data = speakerPage();
+      data.profile = {
+        ...(data.profile as Record<string, unknown>),
+        actingIdentityId: "00000000-0000-4000-8000-000000000042",
+        actingIdentitySelectedAt: "2026-01-01T00:00:00.000Z",
+        actingIdentitySelection: "identity",
+        organizationName: "Recorded Example Labs",
+      };
+      const requests = installApi({
+        [READ]: () => json(data),
+        [TERMS]: () => json(speakerTerms()),
+        [AUTH]: () =>
+          actor === "guest"
+            ? json({ error: "Unauthorized" }, 401)
+            : signedInSession("00000000-0000-4000-8000-000000000099"),
+        [`${READ}/profile`]: () => profileReceipt(data),
+      });
+      await boot();
+      expect(root.querySelector('[role="combobox"]')).toBeNull();
+      expect(panel(root, "data-speaker-identity").hidden).toBe(false);
+      expect(root.textContent).not.toContain("Representation needs review");
+      expect(root.querySelector<HTMLButtonElement>("[data-confirm-participation]")!.disabled).toBe(false);
+      expect(root.querySelector('input[name="organizationName"]')).toBeNull();
+      await typeMarkdown(root, "Biography", "A biography for this session only, retaining the recorded affiliation.");
+      await act(async () => {
+        root
+          .querySelector("[data-profile-form]")!
+          .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+        await new Promise((resolve) => setTimeout(resolve, 0));
+      });
+      const request = requests.find(({ method }) => method === "PATCH")!;
+      const saved = speakerSelfProfilePatchSchema.parse(request.body);
+      expect(saved.organizationName).toBeUndefined();
+      expect(saved.firstName).toBeUndefined();
+      expect(saved.biography).toContain("retaining the recorded affiliation");
+      expect(Object.hasOwn(request.body as object, "actingIdentityId")).toBe(false);
+      expect(requests.some(({ path }) => path.endsWith("/identities"))).toBe(false);
+    },
+  );
+
+  it("requires verified representation for an unrecorded guest while retaining invitation access", async () => {
+    const root = mountShell();
+    const requests = installApi({ [READ]: () => json(speakerPage()), [TERMS]: () => json(speakerTerms()) });
+    await boot();
+    expect(root.querySelector<HTMLButtonElement>("[data-confirm-participation]")!.disabled).toBe(true);
+    expect(root.querySelector('[role="combobox"]')).toBeNull();
+    expect(root.textContent).not.toContain("Representation needs review");
+    expect(requests.some(({ path }) => path.endsWith("/identities"))).toBe(false);
+  });
+
+  it("resumes guest individual proof on the exact speaker capability and saves selection before confirmation", async () => {
+    history.replaceState({}, "", location.pathname + location.search + "#verify=" + "v".repeat(40));
+    const root = mountShell();
+    const proof = "/api/v1/events/pqc-2026/proposals/proof/verify";
+    const requests = installApi({
+      [READ]: () => json(speakerPage()),
+      [TERMS]: () => json(speakerTerms()),
+      [proof]: () =>
+        json({
+          status: "ready",
+          continuationToken: "c".repeat(40),
+          applicantKind: "individual",
+          email: "ada@example.test",
+          organization: null,
+          person: {
+            email: "ada@example.test",
+            firstName: "Ada",
+            lastName: "Lovelace",
+            organizationName: null,
+            jobTitle: null,
+            bio: null,
+            links: [],
+          },
+        }),
+      [`${READ}/profile`]: () => profileReceipt(),
+    });
+    await boot();
+    await vi.waitFor(() => expect(panel(root, "data-speaker-identity").textContent).toContain("Ada Lovelace"));
+    const verified = eventProposalProofVerifySchema.parse(requests.find(({ path }) => path === proof)?.body);
+    expect(verified.speakerManagementToken).toBe("speaker-token-12345678901234567890");
+    expect(location.hash).toContain("verify");
+    await act(async () => {
+      root
+        .querySelector("[data-profile-form]")!
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const saved = speakerSelfProfilePatchSchema.parse(requests.find(({ method }) => method === "PATCH")?.body);
+    expect(saved.continuationToken).toBe("c".repeat(40));
+    expect(saved.actingIdentityId).toBeNull();
+    expect(saved.unaffiliatedAttestation).toBe(true);
+    expect(saved.firstName).toBeUndefined();
+    expect(location.hash).toBe("");
+    expect(root.querySelector<HTMLButtonElement>("[data-confirm-participation]")!.disabled).toBe(false);
+    expect(requests.some(({ path }) => path === AUTH)).toBe(false);
   });
 
   it("toggles the decline panel through the attribute, both ways", async () => {

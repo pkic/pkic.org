@@ -1,40 +1,15 @@
 /**
- * Canonical organization/individual membership provisioning use case
- * (Phase 1 §1.5). Creates (or reuses) an organization, its shared
- * membership aggregate, N representative rows (or N individual aggregates
- * for an individual-only category), primary/secondary contact role grants,
- * and group membership.
+ * Canonical organization and individual membership provisioning.
  *
- * Called identically by membership provisioning and application-approval
- * provisioning
- * (applications/approve.ts's `approveApplication`) — these were
- * previously two independent implementations of the same orchestration
- * (PR #1 review finding: duplicate `INSERT INTO members` logic with
- * slightly different column lists). Both now call this one function and
- * map its result onto their own existing response shape.
+ * Application approval, staff provisioning, and imports use the same prepared
+ * atomic command: organization, membership, identity, contact roles, and group
+ * relationships commit together. Existing approved organization affiliations
+ * are reused unchanged; membership is projected through their canonical link.
  *
- * Atomicity: every write for the organization-tied path — organization,
- * domain, membership aggregate, category assignment, `member_since`,
- * representative rows, contact-role grants, and group memberships
- * — is built as statements (never executed) and committed exactly once in
- * a single `db.batch()` at the end of `provisionOrganizationTiedMemberships`.
- * Everything that decides *what* to build (does the organization/aggregate
- * already exist, is a contact role vacant, does a rejected-membership
- * conflict exist) is a plain read that runs before any statement is built
- * — never a branch on the result of an earlier write in the same request
- * — so a failure anywhere in the batch can never leave a
- * partially-provisioned organization (PR #1 review blocker 4: "the use
- * case should build one command set and commit once"). Role grants use
- * `buildAssignRepresentativeRoleStatementsForNewRepresentative` (skips the
- * active-representative DB check) rather than
- * `buildAssignRepresentativeRoleStatements`, because the representative row
- * being granted a role is itself being inserted earlier in this same
- * batch — a DB read couldn't see it yet, and the invariant holds by
- * construction. See buildResolveOrCreateAggregateStatements's own comment
- * for the one residual race this design accepts (a rare concurrent
- * request racing to create the aggregate for a *pre-existing*
- * organization fails its whole batch cleanly via a foreign-key check,
- * rather than writing anything against the wrong aggregate).
+ * All build decisions use pre-batch reads. Guarded identity reuse, unique
+ * constraints, and the caller's approval/permission evidence reject stale
+ * decisions inside the final batch. Ended affiliations retain their history;
+ * a reviewed later period creates a successor rather than overwriting them.
  */
 import { all, first } from "../../db/queries";
 import { buildD1JsonMembershipFilter } from "../../db/json-membership";
@@ -42,7 +17,7 @@ import { normalizeEmail } from "../../validation";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { AppError } from "../../errors";
-import { buildFindOrCreateUserStatement, splitPersonName, type UserRecord } from "../users";
+import { buildFindOrCreateUserStatement, findUserByEmail, splitPersonName, type UserRecord } from "../users";
 import { normalizeOrgName } from "../../../../assets/shared/organization-name";
 import { buildGroupCapacityJoinStatements } from "../groups/membership";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
@@ -63,6 +38,7 @@ import { requireProvisioningCategory } from "./provisioning-policy";
 import { prepareClaimDomainForOrganization, prepareTransferApplicationDomainClaim } from "./organization-domain-claims";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { firstFreeSlug, slugifyOr } from "../../../../assets/shared/slug";
+import { prepareExistingOrganizationAffiliation } from "./affiliation-reuse";
 
 export interface ProvisionIdentityInput {
   name: string;
@@ -460,9 +436,7 @@ async function buildProvisionOrganizationTiedMemberships(
 
   if (rejectExisting) {
     for (const rep of input.identities) {
-      const existingUser = await first<{ id: string }>(db, "SELECT id FROM users WHERE normalized_email = ?", [
-        normalizeEmail(rep.email),
-      ]);
+      const existingUser = await findUserByEmail(db, rep.email);
       if (existingUser) {
         const alreadyRepresenting = await isActiveIdentityForMember(db, aggregateId, existingUser.id);
         if (alreadyRepresenting) {
@@ -476,23 +450,30 @@ async function buildProvisionOrganizationTiedMemberships(
     ? await resolveRepresentativeRoleHolders(db, aggregateId)
     : { primaryContactUserId: null, secondaryContactUserId: null };
 
-  const pending: { rep: ProvisionIdentityInput; user: UserRecord; identityId: string }[] = [];
+  const pending: { rep: ProvisionIdentityInput; user: UserRecord; identityId: string; identityCreatedAt: string }[] =
+    [];
 
   for (const rep of input.identities) {
     const { user, statement: userStatement } = await buildIdentityUserStatement(db, rep);
     if (userStatement) statements.push(userStatement);
 
-    const { identityId, statement: repStatement } = await buildCreateIdentityStatement(db, {
-      userId: user.id,
-      organizationId,
-      jobTitle: rep.jobTitle ?? null,
-      biography: rep.biography ?? null,
-      linksJson: rep.links ? serializeLinks(rep.links) : null,
-      source: input.identitySource,
-      startImmediately: input.activateIdentities,
-      now,
-    });
-    statements.push(repStatement);
+    const existingAffiliation = input.activateIdentities
+      ? await prepareExistingOrganizationAffiliation(db, user, organizationId, rep.email)
+      : null;
+    const prepared =
+      existingAffiliation ??
+      (await buildCreateIdentityStatement(db, {
+        userId: user.id,
+        organizationId,
+        jobTitle: rep.jobTitle ?? null,
+        biography: rep.biography ?? null,
+        linksJson: rep.links ? serializeLinks(rep.links) : null,
+        source: input.identitySource,
+        startImmediately: input.activateIdentities,
+        now,
+      }));
+    const identityId = prepared.identityId;
+    statements.push(prepared.statement);
 
     if (input.activateIdentities) {
       for (const group of groups) {
@@ -512,7 +493,7 @@ async function buildProvisionOrganizationTiedMemberships(
       statements.push(...prepareAutomaticGroupEnrollmentForUserStatements(db, user.id, now));
     }
 
-    pending.push({ rep, user, identityId });
+    pending.push({ rep, user, identityId, identityCreatedAt: existingAffiliation?.createdAt ?? now });
   }
 
   const assignedContactRoles: ("primary" | "secondary" | null)[] = pending.map(() => null);
@@ -549,7 +530,7 @@ async function buildProvisionOrganizationTiedMemberships(
       organizationId,
       organizationWasCreated,
       groups: [...groups],
-      identities: pending.map(({ rep, user, identityId }, index) => ({
+      identities: pending.map(({ rep, user, identityId, identityCreatedAt }, index) => ({
         userId: user.id,
         email: user.email,
         name: rep.name,
@@ -557,7 +538,7 @@ async function buildProvisionOrganizationTiedMemberships(
         membershipId: aggregateId,
         identityId,
         assignedContactRole: assignedContactRoles[index],
-        createdAt: now,
+        createdAt: identityCreatedAt,
       })),
     }),
   };

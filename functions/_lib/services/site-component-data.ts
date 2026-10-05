@@ -1,6 +1,7 @@
 import type { SiteListing, SiteListingItem } from "../../../assets/shared/site-content";
 import type { ContentCollectionKind } from "./site-components";
 import { normalizedContentPath, type FrontMatter } from "./site-markdown";
+import { contentMediaUrl } from "../../../assets/shared/content-media-url";
 
 export interface ComponentContentDocument {
   data: FrontMatter;
@@ -23,9 +24,7 @@ export function matchingContentAssetUrls(
       .replaceAll("*", "[^/]*")
       .replaceAll("::DOUBLE_STAR::", ".*")}$`,
   );
-  return contentMediaPaths
-    .filter((path) => expression.test(path))
-    .map((path) => `/${["content-media", ...path.split("/")].map(encodeURIComponent).join("/")}`);
+  return contentMediaPaths.filter((path) => expression.test(path)).map(contentMediaUrl);
 }
 
 export function inheritedEventDocument<TDocument extends ComponentContentDocument>(

@@ -1,13 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env as workerEnv } from "cloudflare:workers";
-import { seedEventAndAdmin, queryAll, createContext } from "./helpers/context";
+import { seedEventAndAdmin, queryAll } from "./helpers/context";
+import { callApi } from "./helpers/app";
 import {
   createReferralCode,
   recordReferralClick,
   recordReferralConversion,
 } from "../functions/_lib/services/referrals";
-import { onRequestGet as referralRedirect } from "../functions/r/[code]";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
 import { buildBadgeAttachment } from "../functions/_lib/email/attachments";
 import { queueEmail, processOutboxById } from "../functions/_lib/email/outbox";
@@ -31,7 +31,7 @@ describe("referral, waitlist, and calendar flows", () => {
 
     expect(code.length).toBe(7);
 
-    const response = await referralRedirect(createContext(env, new Request(`https://app.test/r/${code}`), { code }));
+    const response = await callApi(env, `/r/${code}`);
 
     expect(response.status).toBe(200);
     expect(response.headers.get("content-type")).toContain("text/html");

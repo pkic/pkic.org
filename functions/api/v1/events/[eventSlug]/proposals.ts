@@ -17,6 +17,8 @@ import { getProposalAccessForEvent } from "../../../../_lib/auth/proposal-access
 import { listEventProposals } from "../../../../_lib/services/event-proposals-list";
 import type { AdminContext } from "../../../../_lib/db/context";
 import { requireEventPermission } from "./authorization";
+import { getUserSessionToken } from "../../../../_lib/auth/user-session-token";
+import { requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
 
 async function handleProposalCreate(
   c: any,
@@ -54,6 +56,7 @@ async function handleProposalCreate(
   const proposalDetails = validatedForm.answers;
 
   const submitted = await submitProposal(c.env.DB, {
+    actor: getUserSessionToken(c.req.raw) ? await requireIdentityFromRequest(c.env.DB, c.req.raw, c.env) : undefined,
     event,
     body,
     appBaseUrl,

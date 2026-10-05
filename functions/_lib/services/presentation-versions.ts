@@ -1,3 +1,4 @@
+import { prepareSitePublicationRequest } from "./site-publication-requests";
 import { first, all } from "../db/queries";
 import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
@@ -435,6 +436,7 @@ export async function reviewPresentationVersion(
     throw new AppError(404, "VERSION_NOT_FOUND", "Presentation version not found");
   }
   const now = nowIso();
+  const reviewId = uuid();
   try {
     await db.batch([
       ...presentationAuthorizationGuards(
@@ -449,7 +451,14 @@ export async function reviewPresentationVersion(
           `INSERT INTO presentation_version_reviews (id, version_id, reviewed_by_user_id, reviewed_at, status, note)
          VALUES (?, ?, ?, ?, ?, ?)`,
         )
-        .bind(uuid(), versionId, reviewerUserId, now, review.status, review.note?.trim() || null),
+        .bind(reviewId, versionId, reviewerUserId, now, review.status, review.note?.trim() || null),
+      prepareSitePublicationRequest(db, {
+        resourceType: "presentation_version",
+        resourceId: versionId,
+        revision: version.versionNumber,
+        reasonCode: "version_review_changed",
+        deduplicationKey: `version-review:${reviewId}`,
+      }),
       prepareAuditLog(db, "admin", actor.id, "presentation_version_reviewed", "presentation_version", versionId, {
         proposalId,
         status: review.status,
@@ -521,6 +530,13 @@ export async function deletePresentationVersion(
         { proposalId, r2Key: version.r2Key },
         now,
       ),
+      prepareSitePublicationRequest(db, {
+        resourceType: "presentation_version",
+        resourceId: versionId,
+        revision: version.versionNumber,
+        reasonCode: "version_deleted",
+        deduplicationKey: `version-delete:${versionId}`,
+      }),
       ...(storageDeletion ? [storageDeletion] : []),
       db
         .prepare(

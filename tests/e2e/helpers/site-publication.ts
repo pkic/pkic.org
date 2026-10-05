@@ -3,9 +3,13 @@ import { promisify } from "node:util";
 import { cp, readFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { expect, type Page } from "@playwright/test";
+import type { SitePublicationRelease } from "../../../assets/shared/schemas/site-publication-release";
 
 /** Explicitly publish synthetic D1 changes through the actual Astro release pipeline. */
-export async function publishE2eSite(page: Page, route: string): Promise<void> {
+export async function publishE2eSite(
+  page: Page,
+  route: string,
+): Promise<{ directory: string; snapshotId: SitePublicationRelease["snapshotId"] }> {
   const state = process.env.E2E_PREPARED_STATE_DIR ?? (await readFile("test-results/e2e-state-dir", "utf8")).trim();
   await readFile(resolve(state, ".prepared"));
   const directory = resolve(state, `site-release-${crypto.randomUUID()}`);
@@ -47,4 +51,5 @@ export async function publishE2eSite(page: Page, route: string): Promise<void> {
       { timeout: 30_000 },
     )
     .toBe(`static; snapshot=${release.snapshotId}`);
+  return { directory, snapshotId: release.snapshotId };
 }

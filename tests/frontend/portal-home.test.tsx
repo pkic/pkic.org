@@ -84,6 +84,7 @@ function audienceEventRow(overrides: Record<string, unknown> = {}): Record<strin
     registrationPolicy: "public",
     visibility: "public",
     accessLevel: "public",
+    sponsorLeadAccess: false,
     location: "Amsterdam",
     links: [],
     basePath: "/events/pqc-2026",

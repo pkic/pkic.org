@@ -4,6 +4,7 @@ import { Team } from "./Team";
 import { GeneralTab } from "./settings/GeneralTab";
 import { SeriesManagedNotice } from "./settings/SeriesManagedNotice";
 import { LazySponsorTiersTab } from "./settings/LazySponsorTiersTab";
+import { RawEvidenceRetentionPolicy } from "./settings/RawEvidenceRetentionPolicy";
 
 type SettingsTab = "general" | "sponsor-tiers" | "team";
 
@@ -41,6 +42,7 @@ export function Settings({
 
       {tab === "general" &&
         (event.seriesId ? <SeriesManagedNotice event={event} /> : <GeneralTab event={event} onUpdated={onUpdated} />)}
+      {tab === "general" && <RawEvidenceRetentionPolicy event={event} />}
       {tab === "sponsor-tiers" && (
         <LazySponsorTiersTab slug={event.slug} canWrite={event.capabilities.includes("write")} />
       )}

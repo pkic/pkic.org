@@ -1,4 +1,5 @@
 import type { DatabaseLike, StatementLike } from "../../types";
+import { sponsorConsentSql } from "../event-participation/sponsor-consent";
 import {
   prepareAttendanceChangeStatisticsStatements,
   prepareAttendanceStatusByTypeStatement,
@@ -49,9 +50,8 @@ export function prepareEventAnalyticsStatements(
     db.prepare(`SELECT COUNT(*) AS count FROM registrations WHERE event_id = ?`).bind(eventId),
     db
       .prepare(
-        `SELECT COUNT(DISTINCT registration_id) AS count
-         FROM consent_acceptances
-         WHERE event_id = ? AND term_key = 'sponsor-data-sharing'`,
+        `SELECT COUNT(*) AS count FROM registrations r
+         WHERE r.event_id = ? AND ${sponsorConsentSql("r")}`,
       )
       .bind(eventId),
     db

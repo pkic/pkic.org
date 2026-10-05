@@ -1,10 +1,11 @@
+import { prepareProposalProof } from "./helpers/proposal-proof";
 import { administratorGrants, grantAdministrator } from "./helpers/administrator";
 import { describe, it, expect, vi } from "vitest";
 import { env } from "cloudflare:workers";
-import { createContext, deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
+import { deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
-import { onRequestGet as referralRedirect } from "../functions/r/[code]";
+import { callApi } from "./helpers/app";
 import { queueEmail } from "../functions/_lib/email/outbox";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
 import app from "../functions/router";
@@ -221,18 +222,25 @@ describe("full workflow", () => {
         resourceId: speakerInvite.id,
       });
 
+      const proof = await prepareProposalProof({
+        environment: env,
+        eventSlug: "pqc-2026",
+        email: "speaker@example.test",
+        consents: [{ termKey: "speaker-terms", version: "v1" }],
+        unaffiliatedAttestation: true,
+      });
       const proposalResponse = await callMountedApp(
         new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
             inviteToken: speakerInviteToken,
+            ...proof,
             proposer: {
               firstName: "Speaker",
               lastName: "One",
               email: "speaker@example.test",
-              organizationName: "Government Agency",
-              jobTitle: "Engineer",
+              actingIdentityId: null,
               bio: "Experienced speaker focused on practical post-quantum migration and governance.",
             },
             proposal: {
@@ -404,9 +412,7 @@ describe("full workflow", () => {
       expect(cancelRegistrationResponse.status).toBe(200);
 
       const referralCode = registrationOnePayload.shareUrl.split("/").pop() as string;
-      const referralResponse = await referralRedirect(
-        createContext(env, new Request(`https://app.test/r/${referralCode}`), { code: referralCode }),
-      );
+      const referralResponse = await callApi(env, `/r/${referralCode}`);
       expect(referralResponse.status).toBe(200);
       expect(await referralResponse.text()).toContain('http-equiv="refresh"');
 

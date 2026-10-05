@@ -11,6 +11,7 @@ import { publicUserHeadshotUrl } from "../user-headshot";
 import { eventDayReadModels } from "../event-read-models";
 import { AppError } from "../../errors";
 import { registrationManageReadResponseSchema } from "../../../../assets/shared/schemas/registration";
+import { readRegistrationSponsorSharing } from "../event-participation/sponsor-consent";
 
 interface ManageUserRow {
   id: string;
@@ -28,7 +29,7 @@ export async function buildRegistrationManageView(
   appBaseUrl: string,
 ) {
   const event = await getEventById(db, registration.event_id);
-  const [identityResults, eventDays, dayAttendance, dayWaitlist, registeredCounts] = await Promise.all([
+  const [identityResults, eventDays, dayAttendance, dayWaitlist, registeredCounts, sponsorSharing] = await Promise.all([
     db.batch([
       db
         .prepare(
@@ -44,6 +45,7 @@ export async function buildRegistrationManageView(
     getRegistrationDayAttendance(db, registration.id),
     listDayWaitlistForRegistration(db, registration.id),
     countRegisteredByEventDay(db, event.id),
+    readRegistrationSponsorSharing(db, registration),
   ]);
   const user = batchFirst<ManageUserRow>(identityResults[0]);
   if (!user) {
@@ -54,6 +56,7 @@ export async function buildRegistrationManageView(
 
   return registrationManageReadResponseSchema.parse({
     success: true,
+    sponsorSharing,
     identityId: registration.registration_identity_id ?? null,
     badgeVersion: registration.updated_at,
     registration: {

@@ -23,6 +23,7 @@ export function installStepNavigation(
   form: HTMLFormElement,
   statusEl: HTMLElement,
   onBeforeNext?: (currentStep: number) => boolean | void,
+  onStepChange?: (currentStep: number) => void,
 ): void {
   const stepEls = Array.from(root.querySelectorAll<HTMLElement>("[data-step]")).sort(
     (a, b) => Number(a.dataset.step) - Number(b.dataset.step),
@@ -68,6 +69,7 @@ export function installStepNavigation(
     if (backBtn) backBtn.hidden = current === 1;
     if (nextBtn) nextBtn.hidden = current === total;
     if (submitBtn) submitBtn.hidden = current !== total;
+    onStepChange?.(current);
   }
 
   function validateCurrentStep(): boolean {

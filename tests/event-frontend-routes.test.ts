@@ -2,10 +2,10 @@ import { eventFormsResponseSchema } from "../assets/shared/schemas/forms";
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
-import { createContext, seedEventAndAdmin } from "./helpers/context";
+import { seedEventAndAdmin } from "./helpers/context";
+import { callApi } from "./helpers/app";
 import { createReferralCode } from "../functions/_lib/services/referrals";
 import { resolveEventFrontendRoutes } from "../functions/_lib/services/events";
-import { onRequestGet as referralRedirect } from "../functions/r/[code]";
 import app from "../functions/router";
 
 describe("event frontend routes and hydration contracts", () => {
@@ -137,7 +137,7 @@ describe("event frontend routes and hydration contracts", () => {
       length: 7,
     });
 
-    const response = await referralRedirect(createContext(env, new Request(`https://app.test/r/${code}`), { code }));
+    const response = await callApi(env, `/r/${code}`);
     const html = await response.text();
 
     expect(response.status).toBe(200);

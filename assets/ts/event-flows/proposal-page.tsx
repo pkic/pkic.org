@@ -11,8 +11,15 @@ import { eventFormsResponseSchema } from "../../shared/schemas/forms";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { withLoadingButton } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
-import { proposalCreateSchema, proposalCreateResponseSchema } from "../../shared/schemas/proposal-management";
+import {
+  authenticatedProposalCreateSchema,
+  proposalCreateSchema,
+  proposalCreateResponseSchema,
+} from "../../shared/schemas/proposal-management";
 import { readField, findSubmitButton } from "../shared/form/helpers";
+import { EventProposalIdentityStep } from "../components/EventProposalIdentityStep";
+import type { ProposalEntrySelection } from "../components/useProposalEntryIdentity";
+import { ParticipationIdentitySummary } from "../components/ParticipationIdentitySummary";
 import { SpeakerFormCard } from "../components/SpeakerFormCard";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { ButtonLink } from "../ui/Button";
@@ -20,6 +27,7 @@ import { Radio } from "../ui/Checkbox";
 import type { ProfileLinksHandle } from "../components/ProfileLinksInput";
 import { handleFormInviteSubmitError } from "../shared/widgets/invite-recovery";
 import { proposalSessionTypeLabel } from "../../shared/proposal-session-types";
+import { proposalEntryContextSchema } from "../../shared/schemas/proposal-entry";
 
 // ── Session type labels ───────────────────────────────────────────────────────
 
@@ -68,19 +76,21 @@ function readRadio(container: HTMLElement, name: string): string {
 
 /**
  * Builds the proposer's speaker card (shown only when "I am also presenting" is checked).
- * Bio and profile links are collected here; the proposer's name/email/org/title
- * are pre-filled from step 1 and editable in-place.
- * The backend always records the proposer with role "proposer".
+ * Known person details stay in a summary; only session bio, links and role are collected here.
  */
-function createProposerCard(defaultRole: string): {
+function createProposerCard(
+  defaultRole: string,
+  entry: ProposalEntrySelection,
+  container: HTMLElement = document.createElement("div"),
+  linksRef = createRef<ProfileLinksHandle>(),
+): {
   el: HTMLElement;
   linksRef: ReturnType<typeof createRef<ProfileLinksHandle>>;
 } {
-  const container = document.createElement("div");
-  const linksRef = createRef<ProfileLinksHandle>();
   render(
     <SpeakerFormCard
       title="You — as a speaker"
+      personSummary={<ParticipationIdentitySummary person={entry.person} />}
       idPrefix="pspk"
       fields={{
         firstName: "proposerSpeakerFirstName",
@@ -239,6 +249,13 @@ async function main(): Promise<void> {
 
   const { form, statusEl, eventSlug, eventPagePath, apiBase, query } = boot;
   const eventPathHeaders = eventPagePath ? { "x-event-base-path": eventPagePath } : undefined;
+  const originalEntryContext = proposalEntryContextSchema.parse({
+    inviteToken: query.inviteToken ?? undefined,
+    inviteId: query.inviteId ?? undefined,
+    sourceType: query.sourceType ?? "direct",
+    sourceRef: query.sourceType ?? undefined,
+    referralCode: query.referralCode ?? undefined,
+  });
 
   const abstractEditor = await mountMarkdownField(
     form.querySelector<HTMLTextAreaElement>("#proposal-abstract"),
@@ -254,22 +271,45 @@ async function main(): Promise<void> {
   const isPresentingCheckbox = form.querySelector<HTMLInputElement>("#proposal-is-presenting");
 
   let eventName = eventSlug;
+  let formsLoaded = false;
 
   // ── Proposer speaker card management ─────────────────────────────────────
 
   let proposerCardEl: HTMLElement | null = null;
+  let entry: ProposalEntrySelection | null = null;
+  let identityActivated = false;
+  const identityContainer = boot.root.querySelector<HTMLElement>("[data-proposer-identity]");
+  const updateEntry = (selection: ProposalEntrySelection | null): void => {
+    entry = selection;
+    if (selection && proposerCardEl && proposerLinksRef)
+      createProposerCard(defaultProposerRole(), selection, proposerCardEl, proposerLinksRef);
+  };
+  function activateIdentity(): void {
+    if (!identityContainer || identityActivated) return;
+    identityActivated = true;
+    render(
+      <EventProposalIdentityStep
+        enabled
+        eventSlug={eventSlug}
+        consents={() => readConsentValues(form)}
+        onChange={updateEntry}
+        entryContext={originalEntryContext}
+      />,
+      identityContainer,
+    );
+  }
 
   function defaultProposerRole(): string {
     return readField(form, "proposalType") === "panel" ? "moderator" : "speaker";
   }
 
   function ensureProposerCard(): void {
-    if (proposerCardEl || !speakersContainer) return;
-    const { el, linksRef } = createProposerCard(defaultProposerRole());
+    if (proposerCardEl || !speakersContainer || !entry) return;
+    const { el, linksRef } = createProposerCard(defaultProposerRole(), entry);
     proposerCardEl = el;
     proposerLinksRef = linksRef;
     speakersContainer.prepend(el);
-    prefillProposerCard();
+    linksRef.current?.setLinks(entry.person.links);
     syncProposerRoleDefault();
   }
 
@@ -279,19 +319,6 @@ async function main(): Promise<void> {
     proposerCardEl.remove();
     proposerCardEl = null;
     proposerLinksRef = null;
-  }
-
-  function prefillProposerCard(): void {
-    if (!proposerCardEl) return;
-    const setIfEmpty = (name: string, value: string) => {
-      const el = form.querySelector<HTMLInputElement | HTMLTextAreaElement>(`[name="${name}"]`);
-      if (el && !el.value) el.value = value;
-    };
-    setIfEmpty("proposerSpeakerFirstName", readField(form, "firstName"));
-    setIfEmpty("proposerSpeakerLastName", readField(form, "lastName"));
-    setIfEmpty("proposerSpeakerEmail", readField(form, "email"));
-    setIfEmpty("proposerSpeakerOrg", readField(form, "organizationName"));
-    setIfEmpty("proposerSpeakerTitle", readField(form, "jobTitle"));
   }
 
   function syncProposerRoleDefault(): void {
@@ -313,13 +340,26 @@ async function main(): Promise<void> {
 
   // ── Step navigation — pre-fill proposer card when entering step 3 ─────────
 
-  installStepNavigation(boot.root, form, statusEl, (currentStep) => {
-    if (currentStep === 3 && abstractEditor && !abstractEditor.validate()) return false;
-    if (currentStep === 3 && isPresentingCheckbox?.checked) {
-      ensureProposerCard();
-      prefillProposerCard();
-    }
-  });
+  installStepNavigation(
+    boot.root,
+    form,
+    statusEl,
+    (currentStep) => {
+      if (currentStep === 1 && !formsLoaded) {
+        setStatus(statusEl, "Please wait until the proposal terms are available.", true);
+        return false;
+      }
+      if (currentStep === 2 && !entry) {
+        setStatus(statusEl, "Confirm your participation details and email before continuing.", true);
+        return false;
+      }
+      if (currentStep === 3 && abstractEditor && !abstractEditor.validate()) return false;
+      if (currentStep === 3 && isPresentingCheckbox?.checked) ensureProposerCard();
+    },
+    (step) => {
+      if (step >= 2) activateIdentity();
+    },
+  );
 
   // ── Add speaker button ────────────────────────────────────────────────────
 
@@ -344,6 +384,7 @@ async function main(): Promise<void> {
       eventFormsResponseSchema,
     );
     eventName = forms.event.name;
+    formsLoaded = true;
     if (consentsContainer) renderConsentInputs(consentsContainer, forms.requiredTerms);
     // Whatever the event allows, and only that. The fallback that used to
     // stand here named three session types of its own — a second copy of the
@@ -369,39 +410,41 @@ async function main(): Promise<void> {
     syncConsentValidation(form);
     if (!validateBeforeSubmit(form, statusEl) || (abstractEditor && !abstractEditor.validate())) return;
 
+    if (!entry) {
+      setStatus(statusEl, "Confirm your participation details and email before submitting.", true);
+      return;
+    }
+    const submittedEntry = entry;
     await withLoadingButton(findSubmitButton(form), async () => {
       try {
         const isPresenting = isPresentingCheckbox?.checked ?? false;
-        const firstName = readField(form, "firstName");
+        const firstName = submittedEntry.person.firstName ?? "";
 
-        const payload = proposalCreateSchema.parse({
-          inviteToken: query.inviteToken ?? undefined,
-          inviteId: query.inviteId ?? undefined,
-          sourceType: query.sourceType ?? "direct",
-          sourceRef: query.sourceType ?? undefined,
-          referralCode: query.referralCode ?? undefined,
+        const payload = (submittedEntry.authenticated ? authenticatedProposalCreateSchema : proposalCreateSchema).parse(
+          {
+            continuationToken: submittedEntry.continuationToken,
+            unaffiliatedAttestation: submittedEntry.unaffiliatedAttestation,
+            ...(submittedEntry.entryContext ?? originalEntryContext),
 
-          proposer: {
-            firstName,
-            lastName: readField(form, "lastName"),
-            email: readField(form, "email"),
-            organizationName: readField(form, "organizationName") || undefined,
-            jobTitle: readField(form, "jobTitle") || undefined,
-            bio: isPresenting ? readField(form, "proposerBio") || undefined : undefined,
-            links: isPresenting && proposerLinksRef?.current ? proposerLinksRef.current.getLinks() : [],
-            role: isPresenting ? readRadio(form, "proposerSpeakerRole") || defaultProposerRole() : "proposer",
+            proposer: {
+              ...submittedEntry.missingDetails,
+              actingIdentityId: submittedEntry.actingIdentityId,
+              bio: isPresenting ? readField(form, "proposerBio") || undefined : undefined,
+              links: isPresenting && proposerLinksRef?.current ? proposerLinksRef.current.getLinks() : [],
+              role: isPresenting ? readRadio(form, "proposerSpeakerRole") || defaultProposerRole() : "proposer",
+            },
+
+            proposal: {
+              type: readField(form, "proposalType") || "talk",
+              title: readField(form, "title"),
+              abstract: readField(form, "abstract"),
+              details: readCustomFieldValues(form),
+            },
+
+            speakers: readAdditionalSpeakers(form),
+            consents: readConsentValues(form),
           },
-
-          proposal: {
-            type: readField(form, "proposalType") || "talk",
-            title: readField(form, "title"),
-            abstract: readField(form, "abstract"),
-            details: readCustomFieldValues(form),
-          },
-
-          speakers: readAdditionalSpeakers(form),
-          consents: readConsentValues(form),
-        });
+        );
 
         const result = await postJson(
           `${apiBase}/events/${eventSlug}/proposals`,

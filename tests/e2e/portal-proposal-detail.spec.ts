@@ -677,8 +677,9 @@ test("renders the portal proposal detail workflow with submission answers and op
   expect(auditOffsets).toEqual([0, 50]);
 
   await tab(page, "Presentation").click();
-  const fileChooserPromise = page.waitForEvent("filechooser");
   await page.getByRole("button", { name: /Upload on behalf of speaker/ }).click();
+  const fileChooserPromise = page.waitForEvent("filechooser");
+  await page.getByRole("button", { name: "Choose presentation file", exact: true }).click();
   const fileChooser = await fileChooserPromise;
   const pdfBody = Buffer.from("%PDF-1.7 admin upload");
   await fileChooser.setFiles({ name: "admin-upload.pdf", mimeType: "application/pdf", buffer: pdfBody });

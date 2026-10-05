@@ -1,6 +1,6 @@
 import { z } from "zod";
-import { databaseIdSchema } from "./identifiers";
-import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { databaseIdSchema } from "./identifiers.ts";
+import { listQuerySchema, paginatedResponseSchema } from "./pagination.ts";
 
 export const PRESENTATION_VERSION_SORT_COLUMNS = ["versionNumber", "fileName", "uploadedAt"] as const;
 export const presentationVersionsListQuerySchema = listQuerySchema(PRESENTATION_VERSION_SORT_COLUMNS, { limit: 25 });

@@ -472,10 +472,12 @@ export function SiteFooter({
   navigation,
   privatePage,
   memberWall,
+  copyrightYear = new Date().getUTCFullYear(),
 }: {
   navigation: SiteNavigation;
   privatePage?: boolean;
   memberWall?: MemberWallEntry[];
+  copyrightYear?: number;
 }) {
   return (
     <>
@@ -563,8 +565,8 @@ export function SiteFooter({
             </div>
             <div>
               <small class="footer-copy">
-                © {new Date().getUTCFullYear()} PKI Consortium, Inc. · 501(c)(6) non-profit business league registered
-                in Utah (#10462204-0140)
+                © {copyrightYear} PKI Consortium, Inc. · 501(c)(6) non-profit business league registered in Utah
+                (#10462204-0140)
               </small>
             </div>
           </div>

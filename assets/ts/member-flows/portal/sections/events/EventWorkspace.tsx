@@ -1,5 +1,9 @@
+import { scannerPermission, availableScannerActions } from "../../../../../shared/event-scanner-permissions";
 import { lazy, Suspense } from "preact/compat";
 import { useEffect } from "preact/hooks";
+import { Field } from "../../../../ui/Field";
+import { Select } from "../../../../ui/TextControl";
+import { hasEventAgendaPermission } from "./event-agenda-access";
 import { EventAudienceView } from "./EventAudienceView";
 import { eventDetailResponseSchema } from "../../../../../shared/schemas/event-management";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
@@ -12,6 +16,12 @@ import { portalSession } from "../../state";
 import { portalHasPermissionAtAnyScope } from "../../shell/portal-navigation";
 import type { PortalSession } from "../../types";
 
+const EventScanner = lazy(() =>
+  import("./detail/scanner/EventScanner").then((module) => ({ default: module.EventScanner })),
+);
+const SponsorLeads = lazy(() =>
+  import("./detail/agenda/SponsorLeads").then((module) => ({ default: module.SponsorLeads })),
+);
 const ParticipantEvent = lazy(() =>
   import("./ParticipantEvent").then((module) => ({ default: module.ParticipantEvent })),
 );
@@ -29,6 +39,106 @@ type EventWorkspaceProps =
   | { view: "detail"; slug: string; tab?: string; subTab?: string; detailSegment?: string }
   | { view: "proposal"; slug: string; resourceId: string; tab?: string; segment?: string }
   | { view: "registration"; slug: string; resourceId: string };
+
+function ScopedSponsorLeadsRoute({ slug }: { slug: string }) {
+  const event = useData(() => getJson(`/api/v1/events/${encodeURIComponent(slug)}`, eventDetailResponseSchema), [slug]);
+  if (event.loading) return <Spinner label="Loading sponsor leads…" />;
+  if (event.error || !event.data) return <ErrorAlert error={event.error ?? "Event unavailable"} />;
+  const detail = event.data.event;
+  if (!("sponsorLeadAccess" in detail) || !detail.sponsorLeadAccess) {
+    return (
+      <ErrorAlert error="Your current identity does not have permission to view or export sponsor leads for this event." />
+    );
+  }
+  return (
+    <div class="pk pk-stack portal-section">
+      <PageHeader
+        title={detail.name}
+        trail={[{ label: "Events", href: usePortalHashLocation.hrefs("/events") }, { label: "Sponsor leads" }]}
+      />
+      <Suspense fallback={<Spinner label="Loading sponsor leads…" />}>
+        <SponsorLeads slug={slug} timeZone={detail.timezone} />
+      </Suspense>
+    </div>
+  );
+}
+
+function ScopedScannerRoute({ slug, sponsorId }: { slug: string; sponsorId?: string }) {
+  const [, navigate] = usePortalHashLocation();
+  const event = useData(() => getJson(`/api/v1/events/${encodeURIComponent(slug)}`, eventDetailResponseSchema), [slug]);
+  if (event.loading) return <Spinner label="Loading event scanner…" />;
+  if (event.error || !event.data) return <ErrorAlert error={event.error ?? "Event unavailable"} />;
+  const scannerAccess = "scannerAccess" in event.data.event ? event.data.event.scannerAccess : undefined;
+  const permission = sponsorId ? "agenda:leads_capture" : "agenda:scan";
+  const can = (value: import("../../../../../shared/schemas/permissions").Permission) =>
+    hasEventAgendaPermission(event.data!.event.id, value, sponsorId);
+  const allowedActions = availableScannerActions(can);
+  if (sponsorId ? !can(permission as "agenda:leads_capture") : !allowedActions.length)
+    return <ErrorAlert error="Your current identity does not have permission to scan for this event." />;
+  return (
+    <div class="pk pk-stack portal-section">
+      <PageHeader
+        title={event.data.event.name}
+        trail={[
+          { label: "Events", href: usePortalHashLocation.hrefs("/events") },
+          { label: sponsorId ? "Lead scanner" : "Scanner" },
+        ]}
+      />
+      {scannerAccess && scannerAccess.sponsors.length + Number(scannerAccess.canScan) > 1 && (
+        <Field label="Scanning context">
+          {(control) => (
+            <Select
+              {...control}
+              value={sponsorId ?? "event"}
+              onChange={(change) =>
+                navigate(
+                  change.currentTarget.value === "event"
+                    ? `/events/${encodeURIComponent(slug)}/scanner`
+                    : `/events/${encodeURIComponent(slug)}/sponsors/${encodeURIComponent(change.currentTarget.value)}/scanner`,
+                )
+              }
+            >
+              {scannerAccess.canScan && <option value="event">Event admission and attendance</option>}
+              {scannerAccess.sponsors.map((sponsor) => (
+                <option value={sponsor.id}>Lead capture · {sponsor.name}</option>
+              ))}
+            </Select>
+          )}
+        </Field>
+      )}
+      <Suspense fallback={<Spinner />}>
+        <EventScanner
+          key={`${slug}:${sponsorId ?? "event"}:${portalSession.value?.identity.id ?? ""}`}
+          slug={slug}
+          allowedActions={
+            sponsorId
+              ? ["lead"]
+              : [
+                  ...allowedActions,
+                  ...(can("agenda:admit_exceptions") && scannerPermission(can, "agenda:admit")
+                    ? ["exception" as const]
+                    : []),
+                ]
+          }
+          sponsorId={sponsorId}
+          canExportLeads={Boolean(
+            sponsorId &&
+            portalSession.value?.staff?.grants.some(
+              (grant) =>
+                grant.permission === "agenda:leads_export" &&
+                grant.contextType === "event_sponsor" &&
+                grant.contextId === sponsorId,
+            ),
+          )}
+          operatorUserId={portalSession.value?.identity.id ?? ""}
+          canAdmitExceptions={
+            !sponsorId && can("agenda:admit_exceptions") && Boolean(scannerPermission(can, "agenda:admit"))
+          }
+        />
+      </Suspense>
+    </div>
+  );
+}
 
 /**
  * Canonical event management lives in groups. These legacy routes only
@@ -92,6 +202,12 @@ export function eventListShowsProposalPrograms(session: PortalSession | null): b
 }
 
 export function EventWorkspace(props: EventWorkspaceProps) {
+  if (props.view === "detail" && props.tab === "leads") return <ScopedSponsorLeadsRoute slug={props.slug} />;
+  if (
+    props.view === "detail" &&
+    (props.tab === "scanner" || (props.tab === "sponsors" && props.subTab && props.detailSegment === "scanner"))
+  )
+    return <ScopedScannerRoute slug={props.slug} sponsorId={props.tab === "sponsors" ? props.subTab : undefined} />;
   if (props.view === "participant")
     return (
       <div class="pk pk-stack portal-section">
@@ -141,7 +257,14 @@ export function EventWorkspace(props: EventWorkspaceProps) {
     content = (
       <LegacyEventRoute
         slug={props.slug}
-        audienceFallback={!tab || tab === "overview" || tab === "submissions"}
+        audienceFallback={
+          !tab ||
+          tab === "overview" ||
+          tab === "submissions" ||
+          tab === "agenda" ||
+          tab === "promotion" ||
+          tab === "session-management"
+        }
         audienceTab={props.tab}
         mapPath={(base) => {
           if (!tab || tab === "overview") return base;

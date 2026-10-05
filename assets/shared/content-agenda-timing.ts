@@ -1,4 +1,4 @@
-import { dateTimeLocalToIso } from "./timezone";
+import { dateTimeLocalToIso } from "./timezone.ts";
 
 export interface ContentAgendaTimingSource {
   time: string;

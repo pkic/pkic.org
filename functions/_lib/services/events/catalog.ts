@@ -1,3 +1,4 @@
+import { readEventAudienceAccess } from "./scanner-access";
 import { fetchEventParticipation } from "./participation";
 import { resolveEventFrontendRoutes } from "../event-presentation";
 import {
@@ -49,7 +50,11 @@ function eventLocation(settingsJson: string): string | null {
   return typeof value === "string" ? value : null;
 }
 
-function mapEventAudience(row: EventAudienceRow, viewer: EventViewerState | null): EventAudienceDetail {
+function mapEventAudience(
+  row: EventAudienceRow,
+  viewer: EventViewerState | null,
+  access?: Pick<EventAudienceDetail, "scannerAccess" | "sponsorLeadAccess">,
+): EventAudienceDetail {
   return eventAudienceDetailSchema.parse({
     id: row.id,
     slug: row.slug,
@@ -64,6 +69,8 @@ function mapEventAudience(row: EventAudienceRow, viewer: EventViewerState | null
     location: eventLocation(row.settings_json),
     links: parseLinksJson(row.links_json),
     basePath: row.base_path,
+    scannerAccess: access?.scannerAccess,
+    sponsorLeadAccess: access?.sponsorLeadAccess ?? false,
     viewer,
     registrationPath:
       row.base_path && ["open", "invite_or_open", "public", "optional"].includes(row.registration_mode)
@@ -152,9 +159,14 @@ export async function listVisibleEvents(db: DatabaseLike, viewer: EventAudienceV
     viewer.userId,
     page.rows.map((row) => row.id),
   );
+  const audienceAccess = await readEventAudienceAccess(
+    db,
+    viewer,
+    page.rows.map((row) => row.id),
+  );
   return {
     events: page.rows.map((row) => ({
-      ...mapEventAudience(row, viewerStates.get(row.id) ?? null),
+      ...mapEventAudience(row, viewerStates.get(row.id) ?? null, audienceAccess.get(row.id)),
       participation: participation.get(row.id),
     })),
     total: page.total,
@@ -334,5 +346,6 @@ export async function getVisibleEventAudienceDetail(
   );
   if (!row) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found or not visible to this caller");
   const viewerState = await fetchViewerEventState(db, viewer.userId, row.id);
-  return mapEventAudience(row, viewerState);
+  const audienceAccess = await readEventAudienceAccess(db, viewer, [row.id]);
+  return mapEventAudience(row, viewerState, audienceAccess.get(row.id));
 }

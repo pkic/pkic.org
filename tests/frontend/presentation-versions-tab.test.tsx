@@ -5,6 +5,7 @@ import { act } from "preact/test-utils";
 import { PresentationVersionsTab } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/PresentationVersionsTab";
 import type { PresentationVersion } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/model";
 import { presentationVersionReviewRequestSchema } from "../../assets/shared/schemas/presentation-versions";
+import { runRowAction, rowMenuTrigger } from "./helpers/row-actions";
 import { markdownControl, typeMarkdown, controlFor } from "./helpers/labelled-control";
 
 // Identifiers are the shape `databaseIdSchema` accepts, because the saved
@@ -51,7 +52,7 @@ function buttonNamed(root: HTMLElement, label: string): HTMLButtonElement {
 }
 
 async function openReviewForm(root: HTMLElement) {
-  await act(() => buttonNamed(root, "Review").click());
+  await runRowAction(root, "Version 1, pqc-migration-talk.pdf", "Review");
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -128,10 +129,9 @@ describe("presentation versions tab", () => {
     expect(download?.classList.contains("pk-btn")).toBe(true);
     expect(download?.hasAttribute("download")).toBe(true);
 
-    // The disclosure says, in markup, what it controls and whether it is open.
-    const reviewButton = buttonNamed(root, "Review");
-    expect(reviewButton.getAttribute("aria-expanded")).toBe("false");
-    expect(reviewButton.getAttribute("aria-controls")).toBe(REVIEW_FORM_ID);
+    expect(rowMenuTrigger(root, "Version 1, pqc-migration-talk.pdf")).not.toBeNull();
+    expect([...row.querySelectorAll("button")].some((button) => button.textContent?.trim() === "Review")).toBe(false);
+    expect(root.querySelector("form")).toBeNull();
   });
 
   it("labels every review control and points each label at its own field", async () => {
@@ -139,7 +139,8 @@ describe("presentation versions tab", () => {
     await openReviewForm(root);
 
     expect(root.querySelector(`#${REVIEW_FORM_ID}`)).not.toBeNull();
-    expect(buttonNamed(root, "Review").getAttribute("aria-expanded")).toBe("true");
+    expect(root.querySelector("table")).toBeNull();
+    expect(buttonNamed(root, "Back to presentation versions")).toBeTruthy();
 
     // The note is the shared Markdown editor, a lazy chunk; its label points
     // at nothing until it is on the page.
@@ -258,10 +259,12 @@ describe("presentation versions tab", () => {
     expect(alert.textContent).toContain("You cannot review this version.");
   });
 
-  it("states an upload failure in a live region above the list", async () => {
+  it("states an upload failure in its dedicated upload view", async () => {
     stubFetch(() => jsonResponse({ error: { code: "TOO_LARGE", message: "That file is too large." } }, 413));
     const root = await mount();
 
+    await act(() => buttonNamed(root, "Upload on behalf of speaker").click());
+    expect(root.querySelector("table")).toBeNull();
     const fileInput = root.querySelector('input[type="file"]') as HTMLInputElement;
     // The input is taken out of the page with the platform's own attribute,
     // not a utility class a stylesheet has to be present to honour.

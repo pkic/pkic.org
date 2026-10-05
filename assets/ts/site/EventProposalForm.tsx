@@ -25,35 +25,7 @@ export function EventProposalForm() {
             Who should we contact about this proposal? Your details are used only for organizer communication and are
             kept confidential from the public.
           </p>
-          <div class="pk-grid">
-            <Field id="proposal-first-name" label="First name" errorSlot="proposer.firstName" required>
-              {(control) => <TextInput {...control} name="firstName" autoComplete="given-name" required />}
-            </Field>
-            <Field id="proposal-last-name" label="Last name" errorSlot="proposer.lastName" required>
-              {(control) => <TextInput {...control} name="lastName" autoComplete="family-name" required />}
-            </Field>
-          </div>
-          <Field
-            id="proposal-email"
-            label="Work email"
-            errorSlot="proposer.email"
-            help="We'll send your proposal management link here — use it to track status, edit details, and add speakers after submission."
-            required
-          >
-            {(control) => <TextInput {...control} name="email" type="email" autoComplete="email" required />}
-          </Field>
-          <p data-email-warning class="pk-warning-note" hidden>
-            This looks like a personal email address. Consider using your professional email so we can verify your
-            affiliation.
-          </p>
-          <div class="pk-grid">
-            <Field id="proposal-organization" label="Organization (optional)" errorSlot="proposer.organizationName">
-              {(control) => <TextInput {...control} name="organizationName" autoComplete="organization" />}
-            </Field>
-            <Field id="proposal-job-title" label="Job title (optional)" errorSlot="proposer.jobTitle">
-              {(control) => <TextInput {...control} name="jobTitle" autoComplete="organization-title" />}
-            </Field>
-          </div>
+          <div data-proposer-identity />
           <Checkbox
             id="proposal-is-presenting"
             name="isPresenting"

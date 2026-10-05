@@ -1,3 +1,4 @@
+import { prepareMeetingAgendaSchedule, rethrowMeetingAgendaScheduleFailure } from "./agenda-intervals";
 import { expandStarts } from "./recurrence-expansion";
 import { prepareCalendarRevision } from "./calendar-schedule";
 import type { z } from "zod";
@@ -34,10 +35,12 @@ export async function materializeSeriesOccurrences(
     startsAt: start,
     endsAt: new Date(Date.parse(start) + series.durationMinutes * 60_000).toISOString(),
   }));
-  const results = await commitEventResourceManagementBatch(db, actor, context, "manage", [
-    db
-      .prepare(
-        `INSERT OR IGNORE INTO event_occurrences
+  let results;
+  try {
+    results = await commitEventResourceManagementBatch(db, actor, context, "manage", [
+      db
+        .prepare(
+          `INSERT OR IGNORE INTO event_occurrences
            (id, series_id, starts_at, recurrence_id, ends_at, status, location_override,
             provider_join_url_ciphertext, created_at, updated_at)
          SELECT json_extract(requested.value, '$.id'), ?,
@@ -47,31 +50,41 @@ export async function materializeSeriesOccurrences(
            FROM json_each(?) requested
           WHERE NOT EXISTS (SELECT 1 FROM event_occurrences old
             WHERE old.series_id = ? AND COALESCE(old.recurrence_id, old.starts_at) = json_extract(requested.value, '$.startsAt'))`,
-      )
-      .bind(seriesId, now, now, JSON.stringify(requested), seriesId),
-    db
-      .prepare(
-        `UPDATE events SET
+        )
+        .bind(seriesId, now, now, JSON.stringify(requested), seriesId),
+      db
+        .prepare(
+          `UPDATE events SET
            starts_at = (SELECT MIN(starts_at) FROM event_occurrences WHERE series_id = ? AND status != 'cancelled'),
            ends_at = (SELECT MAX(ends_at) FROM event_occurrences WHERE series_id = ? AND status != 'cancelled'),
            updated_at = ? WHERE id = ?`,
-      )
-      .bind(seriesId, seriesId, now, series.eventId),
-    ...prepareCalendarRevision(db, seriesId),
-    prepareScopedAuditLog(
-      db,
-      { type: "group", id: context.groupId },
-      "admin",
-      actor.id,
-      "event_series_materialized",
-      "event_series",
-      seriesId,
-      {
-        through: input.through,
-        requested: starts.length,
-      },
-    ),
-  ]);
+        )
+        .bind(seriesId, seriesId, now, series.eventId),
+      ...prepareCalendarRevision(db, seriesId),
+      prepareScopedAuditLog(
+        db,
+        { type: "group", id: context.groupId },
+        "admin",
+        actor.id,
+        "event_series_materialized",
+        "event_series",
+        seriesId,
+        {
+          through: input.through,
+          requested: starts.length,
+        },
+      ),
+      ...prepareMeetingAgendaSchedule(
+        db,
+        series.eventId,
+        seriesId,
+        requested.map((occurrence) => occurrence.id),
+      ),
+    ]);
+  } catch (error) {
+    rethrowMeetingAgendaScheduleFailure(error);
+    throw error;
+  }
   const created = Number(results[1]?.meta?.changes ?? 0);
   return { created, existing: starts.length - created, through: input.through };
 }

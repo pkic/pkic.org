@@ -51,6 +51,7 @@ export interface Column<T> {
   cell: (row: T, index: number) => ComponentChildren;
   className?: string;
   sort?: ColumnSort;
+  align?: DataTableColumn<T>["align"];
   /**
    * How wide the column may be — see `DataTableColumnWidth`.
    *
@@ -372,7 +373,8 @@ export function DataTable<T>({
       headerHidden: isActions || undefined,
       cell: (row) => column.cell(row, indexOf.get(row) ?? 0),
       sortable: Boolean(column.sort),
-      align: alignOf(headClass(column.header), column.className ?? "") ?? (isActions ? "end" : undefined),
+      align:
+        column.align ?? alignOf(headClass(column.header), column.className ?? "") ?? (isActions ? "end" : undefined),
       width: widthFor(column, index, slackIndex),
       cellClass: utilitiesOf(column.className),
       menu: isActions ? undefined : menuFor(column, index),

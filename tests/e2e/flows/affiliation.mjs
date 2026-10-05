@@ -39,7 +39,7 @@ export const AFFILIATION_FLOW = {
       id: "14.3",
       title: "Membership is re-derived at the new employer, never carried from the old",
       status: "unit",
-      note: "Membership belongs to the organization, not to the person who represented it, and the capacity is taken from the new employer's own membership rather than moved across. Writing this turned up the harder half: an organization identity cannot exist at all where the organization has no member aggregate — a trigger refuses it — so leaving for a company the consortium does not know as a Member is an ending with nothing to arrive at. The person holds no organization identity until that company becomes one, which is a product decision worth making deliberately rather than meeting as a constraint.",
+      note: "Membership belongs to the organization, and capacity derives from the new employer's actual membership rather than moving across. Canonical affiliation also supports nonmember organizations without granting Member capacity. If that organization becomes a Member, its already-linked active users derive membership through the same affiliation.",
     },
     {
       id: "14.0",

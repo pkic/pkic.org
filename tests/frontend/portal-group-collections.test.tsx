@@ -356,8 +356,11 @@ describe("portal selected-group collections", () => {
 
     // Arriving on that URL loads the event and renders its workspace.
     const record = mount(<GroupEvents groupId={GROUP_ID} initialEventId={event.id} />);
-    await settle();
-    await settle();
+    // Wait for the real record after its lazy workspace module and registration data load.
+    await vi.waitFor(async () => {
+      await settle();
+      expect(record.textContent).toContain("Register for this event");
+    });
     expect(requests.some(({ url }) => url.pathname.endsWith(`/events/${event.id}`))).toBe(true);
 
     // The default tab is the overview, which shows the registration panel — not the settings form.

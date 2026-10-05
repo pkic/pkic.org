@@ -1,3 +1,4 @@
+import { prepareParticipationReconciliation } from "./event-participation/reconciliation";
 import { all } from "../db/queries";
 import { AppError } from "../errors";
 import { uuid } from "../utils/ids";
@@ -328,5 +329,6 @@ export async function prepareReplaceRegistrationDayAttendanceStatements(
     }
   }
 
+  statements.push(...prepareParticipationReconciliation(db, payload.eventId));
   return statements;
 }

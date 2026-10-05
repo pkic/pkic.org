@@ -77,6 +77,7 @@ export const eventProposalSummarySchema = eventProposalCoreSchema
     recommendation_needs_work_count: z.number(),
     recommendation_reject_count: z.number(),
     has_presentation: z.boolean(),
+    agendaImported: z.boolean().default(false),
   });
 
 export const eventProposalDetailSchema = eventProposalCoreSchema

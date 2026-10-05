@@ -127,6 +127,14 @@ export const DEFAULT_LAYOUT_HTML = `<!doctype html>
 // Keep these in sync with the editor labels and the partial loader.
 export const DEFAULT_TEMPLATES = [
   {
+    key: "agenda_changed",
+    subjectTemplate: "Your schedule has changed — {{eventName}}",
+    content:
+      "The organizers have approved changes to **{{eventName}}** that affect a session in your personal agenda. Open the event portal to review your updated schedule before attending. Your existing registration remains in place.",
+    contentType: "markdown",
+    messageType: "transactional",
+  },
+  {
     key: "email_layout",
     subjectTemplate: null,
     contentType: "html",
@@ -593,7 +601,7 @@ Thank you for helping us make room for everyone waiting for a spot.
   // ─────────────────────────────────────────────────────────────────────────
   // 6. Proposal submitted
   // Variables: eventName, firstName, lastName, proposalTitle, proposalAbstract,
-  //            proposalType, speakerLineupText, manageUrl, shareUrl
+  //            proposalType, speakerLineupText, manageUrl, speakerManageUrl, shareUrl
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "proposal_submitted",
@@ -634,11 +642,29 @@ Please review the details above carefully. If anything looks incorrect, use your
 
 [Manage my proposal &rarr;]({{manageUrl}})
 
+{{#if speakerManageUrl}}
+[Review my speaker representation]({{speakerManageUrl}})
+{{/if}}
+
 Encourage colleagues to attend by sharing your referral link: [{{shareUrl}}]({{shareUrl}})
 
 Thank you for contributing to **{{eventName}}** and the broader PKI community!
 
 {{> donation_request}}
+`,
+  },
+  {
+    key: "proposal_representation_review",
+    subjectTemplate: "Review your speaker representation — {{eventName}}",
+    content: `Hello {{firstName}},
+
+Your proposal **{{proposalTitle}}** has been received for **{{eventName}}**.
+
+Choose and save the identity you will speak as, or choose individual presentation. Your representation must be reviewed before the session can be approved for the agenda.
+
+[Review my speaker representation]({{speakerManageUrl}})
+
+This private link manages only your own speaker profile.
 `,
   },
   {

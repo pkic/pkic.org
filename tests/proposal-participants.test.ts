@@ -1,3 +1,4 @@
+import { prepareProposalProof } from "./helpers/proposal-proof";
 import { administratorGrants } from "./helpers/administrator";
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
@@ -16,6 +17,15 @@ import { renderEmail } from "../functions/_lib/email/render";
 function mountedAppFetch(request: Request): Promise<Response> {
   return app.fetch(request, env as any, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
 }
+
+const participantProof = (email: string, unaffiliatedAttestation: boolean) =>
+  prepareProposalProof({
+    environment: env,
+    eventSlug: "pqc-2026",
+    email,
+    consents: [{ termKey: "speaker-terms", version: "v1" }],
+    unaffiliatedAttestation,
+  });
 
 describe("proposal participants", () => {
   beforeEach(async () => {
@@ -39,8 +49,7 @@ describe("proposal participants", () => {
         firstName: "Session",
         lastName: "Speaker",
         email,
-        organizationName: "Example Organization",
-        jobTitle: "Engineer",
+        actingIdentityId: null,
         bio: "Experienced speaker with sufficient biography text for proposal validation.",
       },
       proposal: {
@@ -51,12 +60,12 @@ describe("proposal participants", () => {
       },
       consents: [{ termKey: "speaker-terms", version: "v1" }],
     });
-    const request = (email: string, type: string) =>
+    const request = async (email: string, type: string) =>
       app.fetch(
         new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
           method: "POST",
           headers: { "content-type": "application/json" },
-          body: JSON.stringify(proposalBody(email, type)),
+          body: JSON.stringify({ ...proposalBody(email, type), ...(await participantProof(email, true)) }),
         }),
         env as any,
         { passThroughOnException: () => {}, waitUntil: () => {} } as any,
@@ -78,19 +87,22 @@ describe("proposal participants", () => {
 
   it("delivers an existing proposer's management capability only to their canonical email", async () => {
     await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(
+      "UPDATE users SET first_name = 'Canonical', last_name = 'Proposer' WHERE normalized_email = 'admin@pkic.org'",
+    ).run();
 
     const response = await mountedAppFetch(
       new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          ...(await participantProof("admin@pkic.org", true)),
           sourceType: "direct",
           proposer: {
             firstName: "Claimed",
             lastName: "Admin",
             email: "admin@pkic.org",
-            organizationName: "Untrusted Organization",
-            jobTitle: "Untrusted Title",
+            actingIdentityId: null,
             bio: "A sufficiently detailed biography supplied by an anonymous submitter for validation purposes.",
           },
           proposal: {
@@ -132,7 +144,7 @@ describe("proposal participants", () => {
         "SELECT first_name, organization_name FROM users WHERE normalized_email = ?",
         "admin@pkic.org",
       ),
-    ).resolves.toEqual([{ first_name: null, organization_name: null }]);
+    ).resolves.toEqual([{ first_name: "Canonical", organization_name: null }]);
   });
 
   it("renders public proposal and participant fields literally while retaining trusted management links", async () => {
@@ -143,11 +155,12 @@ describe("proposal participants", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          ...(await participantProof("literal-proposer@literal-security.test", false)),
           sourceType: "direct",
           proposer: {
             firstName: "Lead",
             lastName: "Reviewer",
-            email: "literal-proposer@example.test",
+            email: "literal-proposer@literal-security.test",
             organizationName: "<script>alert(1)</script>",
             jobTitle: "Engineer",
             role: "proposer",
@@ -173,6 +186,18 @@ describe("proposal participants", () => {
       }),
     );
     expect(response.status).toBe(200);
+
+    await expect(
+      queryAll<{ organization_name: string; job_title: string; started_at: string | null }>(
+        env.DB,
+        `SELECT organization.name AS organization_name, identity.job_title, identity.started_at
+       FROM identities identity JOIN organizations organization ON organization.id = identity.organization_id
+       JOIN users person ON person.id = identity.user_id WHERE person.normalized_email = ?`,
+        "literal-proposer@literal-security.test",
+      ),
+    ).resolves.toEqual([
+      { organization_name: "<script>alert(1)</script>", job_title: "Engineer", started_at: expect.any(String) },
+    ]);
 
     const queued = await queryAll<{ template_key: string; payload_json: string }>(
       env.DB,
@@ -200,13 +225,13 @@ describe("proposal participants", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          ...(await participantProof("lead@example.test", true)),
           sourceType: "direct",
           proposer: {
             firstName: "Panel",
             lastName: "Lead",
             email: "lead@example.test",
-            organizationName: "Public University",
-            jobTitle: "Researcher",
+            actingIdentityId: null,
             bio: "Leads cross-industry cryptography migration planning and public policy coordination programs.",
             links: ["https://example.test/lead", "https://linkedin.com/in/lead"],
             role: "moderator",
@@ -313,13 +338,13 @@ describe("proposal participants", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          ...(await participantProof("existing-proposer@example.test", true)),
           sourceType: "direct",
           proposer: {
             firstName: "Existing",
             lastName: "Proposer",
             email: "existing-proposer@example.test",
-            organizationName: "Existing Org",
-            jobTitle: "Existing Role",
+            actingIdentityId: null,
             role: "proposer",
           },
           proposal: {
@@ -359,12 +384,15 @@ describe("proposal participants", () => {
        END`,
     ).run();
 
+    const proof = await participantProof("atomic-proposer@example.test", true);
+    const proofOutbox = await queryAll(env.DB, "SELECT id FROM email_outbox ORDER BY id");
     try {
       const response = await mountedAppFetch(
         new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
           method: "POST",
           headers: { "content-type": "application/json" },
           body: JSON.stringify({
+            ...proof,
             sourceType: "direct",
             proposer: {
               firstName: "Atomic",
@@ -393,7 +421,7 @@ describe("proposal participants", () => {
       expect(await queryAll(env.DB, "SELECT id FROM consent_acceptances")).toHaveLength(0);
       expect(await queryAll(env.DB, "SELECT code FROM referral_codes")).toHaveLength(0);
       expect(await queryAll(env.DB, "SELECT id FROM badge_render_jobs")).toHaveLength(0);
-      expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
+      expect(await queryAll(env.DB, "SELECT id FROM email_outbox ORDER BY id")).toEqual(proofOutbox);
     } finally {
       await env.DB.prepare("DROP TRIGGER IF EXISTS reject_proposal_submission_email").run();
     }
@@ -406,6 +434,7 @@ describe("proposal participants", () => {
         method: "POST",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({
+          ...(await participantProof("duplicate-person@example.test", true)),
           sourceType: "direct",
           proposer: {
             firstName: "Duplicate",

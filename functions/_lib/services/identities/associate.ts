@@ -1,13 +1,16 @@
 import { serializeLinks } from "../../../../assets/shared/schemas/links";
 import { queueEmailAuthCapability } from "../../auth/email-auth-capabilities";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
-import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import {
+  isAuthorizationGuardFailure,
+  prepareAuthorizationGuard,
+  type AuthorizationEvidence,
+} from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
-import { normalizeEmail } from "../../validation";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import { buildCreateIdentityStatement } from "../membership/identities";
@@ -16,6 +19,7 @@ import {
   prepareOrganizationIdentityManagementGuard,
   requireOrganizationIdentityManagement,
   resolveOrganizationMemberId,
+  organizationIdentityAuditScope,
 } from "./authorization";
 import { isConcurrentIdentityConflict } from "./conflicts";
 import {
@@ -25,6 +29,7 @@ import {
   type IdentityNotificationContext,
 } from "./notifications";
 import type { IdentityManagerActor } from "./types";
+import { ownedIdentityEmailEvidence, resolveOwnedIdentityEmail } from "./owned-email";
 
 type Activation = { mode: "invitation" } | { mode: "immediate"; reason: string };
 
@@ -44,7 +49,7 @@ async function commitIdentityCreation(
   db: DatabaseLike,
   actor: IdentityManagerActor,
   input: {
-    memberId: string;
+    memberId: string | null;
     organizationId: string;
     userId: string;
     emailId?: string | null;
@@ -56,18 +61,22 @@ async function commitIdentityCreation(
     signingSecret?: string;
     userStatement?: StatementLike | null;
     notificationContext?: IdentityNotificationContext;
+    emailEvidence?: AuthorizationEvidence;
   },
 ): Promise<{ identityId: string; state: "pending" | "active"; outboxId: string }> {
   await requireOrganizationIdentityManagement(db, {
     memberId: input.memberId,
+    organizationId: input.organizationId,
     actorUserId: actor.userId,
     databaseUserId: actor.databaseUserId,
+    sessionId: actor.sessionId,
+    sessionExpiresAt: actor.sessionExpiresAt,
     staffAuthorized: actor.staffAuthorized,
   });
   const permissionActor = requireImmediateActivation(actor, input.activation);
   const at = nowIso();
   const context =
-    input.notificationContext ?? (await loadIdentityNotificationContext(db, input.memberId, input.userId, false));
+    input.notificationContext ?? (await loadIdentityNotificationContext(db, input.organizationId, input.userId, false));
   const prepared = await buildCreateIdentityStatement(db, {
     organizationId: input.organizationId,
     userId: input.userId,
@@ -99,18 +108,22 @@ async function commitIdentityCreation(
   const statements = [
     prepareOrganizationIdentityManagementGuard(db, {
       memberId: input.memberId,
+      organizationId: input.organizationId,
       actorUserId: actor.userId,
       databaseUserId: actor.databaseUserId,
+      sessionId: actor.sessionId,
+      sessionExpiresAt: actor.sessionExpiresAt,
       staffAuthorized: actor.staffAuthorized,
     }),
     ...(permissionActor
       ? [preparePermissionsAuthorizationGuard(db, permissionActor, [{ permission: "identities:activate" }])]
       : []),
     ...(input.userStatement ? [input.userStatement] : []),
+    ...(input.emailEvidence ? [prepareAuthorizationGuard(db, input.emailEvidence)] : []),
     prepared.statement,
     prepareScopedAuditLogAfterOneChange(
       db,
-      { type: "organization", id: input.memberId },
+      organizationIdentityAuditScope(input.memberId, input.userId),
       actor.actorType,
       actor.userId,
       input.activation.mode === "immediate" ? "organization_identity_activated" : "organization_identity_invited",
@@ -201,25 +214,7 @@ export async function createOrganizationIdentityByEmail(
     firstName: firstName ?? undefined,
     lastName: lastName ?? undefined,
   });
-  const normalizedInputEmail = normalizeEmail(input.email);
-  const emailId =
-    normalizeEmail(user.email) === normalizedInputEmail
-      ? null
-      : (
-          await first<{ id: string }>(
-            db,
-            `SELECT id FROM user_emails
-              WHERE user_id = ? AND normalized_email = ? AND verified_at IS NOT NULL`,
-            [user.id, normalizedInputEmail],
-          )
-        )?.id;
-  if (emailId === undefined) {
-    throw new AppError(
-      422,
-      "IDENTITY_EMAIL_UNVERIFIED",
-      "A selected secondary email must be verified before it can identify an organization identity",
-    );
-  }
+  const { emailId, normalizedEmail } = await resolveOwnedIdentityEmail(db, { user, email: input.email });
   const organization = await first<{ name: string }>(db, "SELECT name FROM organizations WHERE id = ?", [
     input.organizationId,
   ]);
@@ -236,6 +231,7 @@ export async function createOrganizationIdentityByEmail(
     activation: input.activation,
     signingSecret: input.signingSecret,
     userStatement,
+    emailEvidence: ownedIdentityEmailEvidence({ userId: user.id, emailId, normalizedEmail }),
     notificationContext: {
       email: user.email,
       recipient_name: [user.first_name, user.last_name].filter(Boolean).join(" ") || input.name,

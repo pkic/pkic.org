@@ -1,3 +1,4 @@
+import { mountSponsorContactSharing } from "../components/SponsorContactSharing";
 import { applyConfirmedRegistrationIdentity } from "./registration-manage-identity";
 import { Fragment, render } from "preact";
 import { getJson, patchJson } from "../shared/api-client";
@@ -191,6 +192,11 @@ async function main(): Promise<void> {
     return;
   }
 
+  mountSponsorContactSharing(
+    root,
+    `${apiBase}/registrations/access/${encodeURIComponent(token)}`,
+    manageData.sponsorSharing,
+  );
   const { registration, event, user, eventDays, dayAttendance, dayWaitlist } = manageData;
   const isCancelled = registration.status === "cancelled";
   const eventName = event?.name ?? eventSlug;

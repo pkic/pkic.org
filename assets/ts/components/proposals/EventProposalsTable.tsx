@@ -84,6 +84,7 @@ export function EventProposalsTable({
   urlState,
   rowHref,
   toolbarPrefix,
+  initialFilters = { status: "active" },
   empty = "No proposals found",
 }: {
   endpoint: string;
@@ -97,6 +98,7 @@ export function EventProposalsTable({
     selectedProposalIds: ReadonlySet<string>,
   ) => ComponentChildren;
   empty?: string;
+  initialFilters?: Record<string, string>;
 }) {
   const [stats, setStats] = useState<ProposalStats | null>(null);
   const [access, setAccess] = useState<ProposalAccess | null>(null);
@@ -128,7 +130,7 @@ export function EventProposalsTable({
         initialSort="-submittedAt"
         // The list opens on what is still in play; the archive and every
         // other status are one choice away in the Status column's menu.
-        initialFilters={{ status: "active" }}
+        initialFilters={initialFilters}
         searchPlaceholder="title, proposer or review"
         actionsRef={tableRef}
         toolbar={

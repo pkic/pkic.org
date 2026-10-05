@@ -1,0 +1,74 @@
+---
+import { publicationRouteCacheKey, PUBLICATION_SITE_ORIGIN } from "../publication-cache";
+import { publicationPageInputs } from "../publication-page-inputs";
+import { publicSessionCalendarPath } from "../../functions/_lib/services/site-public-agenda-calendar";
+import { publicSessionCreditRole } from "../../assets/shared/session-public-credits";
+import { statusLabel } from "../../assets/shared/status-display";
+import { publicSessionTiming } from "../../assets/shared/session-public-timing";
+import { sessionHistoryStructuredData } from "../../functions/_lib/services/site-history-structured-data";
+import PublicPage from "../layouts/PublicPage.astro";
+import { Markdown } from "../../assets/ts/ui/Markdown";
+import { publication } from "../publication";
+import { publishedSessionHistory } from "../../functions/_lib/services/site-session-history";
+import { agendaOccurrenceRoomIds } from "../../assets/shared/event-agenda-rooms";
+import { formatDateRange, formatTimeRangeInZone } from "../../assets/shared/format-date";
+import { markdownImageSources } from "../publication-markdown-images";
+
+export async function getStaticPaths() {
+  return Promise.all(publishedSessionHistory(publication).map(async (item) => {
+    const { agenda, session } = item;
+    const timing = publicSessionTiming(session);
+    const agendaPath = agenda.publicAgendaPath ?? `/events/${agenda.eventSlug}/agenda/`;
+    const calendars = publication.eventAgendaCalendars;
+    const calendar = calendars && Object.hasOwn(calendars, agenda.eventSlug) ? calendars[agenda.eventSlug] : undefined;
+    const view = {
+      eventName: agenda.eventName, eventSlug: agenda.eventSlug, agendaPath,
+      title: session.title, description: session.description, timeZone: agenda.timeZone,
+      timing, date: formatDateRange(timing?.startAt, timing?.endAt, agenda.timeZone),
+      times: timing ? formatTimeRangeInZone(timing.startAt, timing.endAt, agenda.timeZone) : "",
+      rooms: agendaOccurrenceRoomIds(session).map((id) => agenda.rooms.find((room) => room.id === id)?.name).filter(Boolean),
+      prerequisites: session.history?.prerequisites,
+      credits: item.credits.map((credit) => {
+        const role = publicSessionCreditRole(session, credit);
+        return {
+          displayName: credit.displayName,
+          personPath: "userId" in credit ? `/people/${encodeURIComponent(credit.userId)}/` : undefined,
+          roleLabel: role !== "speaker" ? statusLabel(role) : undefined,
+          organizationName: "organizationName" in credit ? credit.organizationName : undefined,
+          jobTitle: "jobTitle" in credit ? credit.jobTitle : undefined,
+          biography: "biography" in credit ? credit.biography : undefined,
+        };
+      }),
+      materials: item.materials.map(({ title, url, kind, version }) => ({ title, url, kind, version })),
+      admissionText: session.admissionPolicy === "preference" ? "Saving this session expresses a preference. In-person admission remains first come, first served." : session.admissionPolicy === "approval" ? "Attendance requires approval. Request a place in your personal agenda." : "Reserve a place in your personal agenda. Admission depends on your confirmed reservation.",
+      sessionCalendar: calendar?.entries.some((entry) => entry.occurrenceId === session.id && entry.status === "confirmed")
+        ? publicSessionCalendarPath(agendaPath, session.id) : undefined,
+    };
+    const pageInputs = await publicationPageInputs({ route: item.route,
+      title: `${session.title} · ${agenda.eventName ?? "PKI Consortium"}`, description: session.description.slice(0, 180),
+      structuredData: sessionHistoryStructuredData(item, PUBLICATION_SITE_ORIGIN),
+      imageRefs: markdownImageSources([view.description, view.prerequisites, ...view.credits.map((credit) => credit.biography)])
+        .map((source) => ({ source, portrait: false })),
+    });
+    return {
+      params: { sessionHistory: item.route.replace(/^\/|\/$/g, "") }, props: { view, pageInputs },
+      ...(pageInputs.imageInputs.cacheable ? { cacheKey: publicationRouteCacheKey(item.route, { view, pageInputs }) } : {}),
+    };
+  }));
+}
+const { view, pageInputs } = Astro.props;
+---
+<PublicPage title={pageInputs.title} pageInputs={pageInputs}>
+  <article class="pk-section pk-container" data-pagefind-body>
+    <nav aria-label="Breadcrumb"><a href={view.agendaPath}>{view.eventName ?? "Event"} agenda</a> / Session</nav>
+    <h1>{view.title}</h1>
+    <p><time datetime={view.timing?.startAt}>{view.date}</time> · {view.times}{view.timing?.endNotRecorded && " · End not recorded"} · {view.timeZone}{view.rooms.length > 0 && ` · ${view.rooms.join(" / ")}`}</p>
+    <Markdown className="pk-session-abstract" markdown={view.description} />
+    {view.prerequisites && <section><h2>Before attending</h2><Markdown markdown={view.prerequisites} /></section>}
+    <section><h2>Speakers</h2><ul>{view.credits.map((credit) => <li>{credit.personPath ? <a href={credit.personPath}>{credit.displayName}</a> : <span>{credit.displayName}</span>}{credit.roleLabel && ` · ${credit.roleLabel}`}{credit.organizationName && ` · ${credit.organizationName}`}{credit.jobTitle && ` · ${credit.jobTitle}`}{credit.biography && <Markdown markdown={credit.biography} />}</li>)}</ul></section>
+    {!view.timing?.endNotRecorded && <section><h2>Attendance</h2><p>{view.admissionText}</p><a href={`/portal/events/${encodeURIComponent(view.eventSlug)}`}>Open my agenda</a></section>}
+    {view.materials.length > 0 && <section><h2>Session materials</h2><ul>{view.materials.map((material) => <li><a href={material.url} rel="noopener noreferrer">{material.title}</a> · {material.kind} · version {material.version}</li>)}</ul></section>}
+    <p><a href={`${view.agendaPath}calendar.ics`}>Event calendar</a>{view.sessionCalendar && <> · <a href={view.sessionCalendar} download>Download session calendar</a></>} · <a href={view.agendaPath}>Full agenda</a></p>
+  </article>
+</PublicPage>
+<style>article section { margin-block: var(--pk-space-6); }</style>

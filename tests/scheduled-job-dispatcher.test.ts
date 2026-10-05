@@ -183,7 +183,11 @@ describe("scheduled job dispatcher", () => {
         run: async () => ({ nextRunAt: "2999-06-01T00:00:00.000Z" }),
       },
     ];
-    await env.DB.prepare("UPDATE scheduled_jobs SET next_run_at = '2000-01-01T00:00:00.000Z'").run();
+    // Exercise these two definitions within the bounded pass, independently of registry growth.
+    await env.DB.prepare("UPDATE scheduled_jobs SET next_run_at = '2999-01-01T00:00:00.000Z'").run();
+    await env.DB.prepare(
+      "UPDATE scheduled_jobs SET next_run_at = '2000-01-01T00:00:00.000Z',paused_at=NULL WHERE job_key IN ('retention','due_work')",
+    ).run();
 
     const outcome = await dispatchScheduledJobs(env as never, definitions, {
       maxJobsPerPass: 10,

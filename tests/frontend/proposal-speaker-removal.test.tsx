@@ -45,6 +45,9 @@ function managedSpeaker(
   overrides: Partial<ProposalAccessResponse["speakers"][number]> = {},
 ): ProposalAccessResponse["speakers"][number] {
   return {
+    actingIdentityId: null,
+    actingIdentitySelectedAt: null,
+    actingIdentitySelection: "unrecorded",
     userId: "speaker-1",
     role: "co_speaker",
     status: "confirmed",
@@ -66,6 +69,9 @@ function managedSpeaker(
 
 function proposalSpeaker(overrides: Partial<ProposalSpeaker> = {}): ProposalSpeaker {
   return {
+    actingIdentityId: null,
+    actingIdentitySelectedAt: null,
+    actingIdentitySelection: "unrecorded",
     userId: "speaker-1",
     role: "co_speaker",
     status: "confirmed",

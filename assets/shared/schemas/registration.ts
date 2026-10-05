@@ -15,6 +15,7 @@ import {
   termKeyPattern,
   tokenSchema,
   trimmedString,
+  utcInstantSchema,
   versionPattern,
 } from "./api-common";
 import { linksSchema } from "./links";
@@ -326,19 +327,32 @@ export const registrationResendConfirmationSchema = z
 
 export const okResponseSchema = z.object({ ok: z.boolean() });
 
-export const registrationManageSchema = z.object({
-  action: z.enum(["update", "cancel", "report_unauthorized"]),
-  attendanceType: attendanceTypeSchema.optional(),
-  dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
-  claimDayWaitlistOffers: z.array(dayDateSchema).max(31).optional(),
-  customAnswers: formAnswersSchema.optional(),
-  sourceRef: trimmedString(2, 200).optional(),
-  email: normalizedEmailSchema.optional(),
-  firstName: firstNameSchema.optional(),
-  lastName: lastNameSchema.optional(),
-  organizationName: organizationNameSchema.optional(),
-  jobTitle: jobTitleSchema.optional(),
+export const registrationManageSchema = z
+  .object({
+    action: z.enum(["update", "cancel", "report_unauthorized", "withdraw_sponsor_sharing"]),
+    attendanceType: attendanceTypeSchema.optional(),
+    dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
+    claimDayWaitlistOffers: z.array(dayDateSchema).max(31).optional(),
+    customAnswers: formAnswersSchema.optional(),
+    sourceRef: trimmedString(2, 200).optional(),
+    email: normalizedEmailSchema.optional(),
+    firstName: firstNameSchema.optional(),
+    lastName: lastNameSchema.optional(),
+    organizationName: organizationNameSchema.optional(),
+    jobTitle: jobTitleSchema.optional(),
+  })
+  .refine(
+    (value) =>
+      value.action !== "withdraw_sponsor_sharing" ||
+      Object.entries(value).every(([key, field]) => key === "action" || field === undefined),
+    { message: "Withdraw sponsor sharing separately from registration changes" },
+  );
+
+export const registrationSponsorSharingSchema = z.object({
+  allowed: z.boolean(),
+  withdrawnAt: utcInstantSchema.nullable(),
 });
+export type RegistrationSponsorSharing = z.infer<typeof registrationSponsorSharingSchema>;
 
 /** Explicit capability-safe registration projection; never spread a D1 row into this response. */
 export const registrationManageRegistrationSchema = z.object({
@@ -360,6 +374,7 @@ export const registrationManageUserSchema = z.object({
 });
 
 export const registrationManageReadResponseSchema = successResponseSchema.extend({
+  sponsorSharing: registrationSponsorSharingSchema,
   registration: registrationManageRegistrationSchema,
   identityId: databaseIdSchema.nullable().optional(),
   badgeVersion: z.string().optional(),
@@ -374,6 +389,7 @@ export const registrationManageReadResponseSchema = successResponseSchema.extend
 
 export const registrationManageUpdateResponseSchema = successResponseSchema.extend({
   emailChanged: z.boolean(),
+  sponsorSharing: registrationSponsorSharingSchema,
 });
 
 export type RegistrationManageReadResponse = z.infer<typeof registrationManageReadResponseSchema>;

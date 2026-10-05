@@ -157,15 +157,22 @@ export function formatTimeOfDay(value: string | null | undefined): string {
     .replace(",", "");
 }
 
+const EVENT_CLOCK_OPTIONS = { hour: "numeric", minute: "2-digit", hour12: false } as const;
+
+/** A clock with its zone named by the surrounding agenda label. */
+export function formatClockInZone(value: string, timeZone: string): string {
+  const date = toDate(value);
+  if (!date) return EMPTY;
+  return new Intl.DateTimeFormat(undefined, { ...EVENT_CLOCK_OPTIONS, timeZone }).format(date);
+}
+
 /** An event's clock range in its configured zone, independent of the viewer's clock. */
 export function formatTimeRangeInZone(startsAt: string, endsAt: string | undefined, timeZone: string): string {
   const start = toDate(startsAt);
   if (!start) return EMPTY;
   const end = endsAt ? toDate(endsAt) : null;
   const formatter = new Intl.DateTimeFormat(undefined, {
-    hour: "numeric",
-    minute: "2-digit",
-    hour12: false,
+    ...EVENT_CLOCK_OPTIONS,
     timeZone,
     timeZoneName: "short",
   });

@@ -1,3 +1,4 @@
+import { prepareParticipationReconciliation } from "../event-participation/reconciliation";
 import { prepareQueueEmailStatement } from "../../email/outbox";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
@@ -112,6 +113,7 @@ export async function buildRsvpDayAction(
       messageType: "transactional",
     }).statement,
   );
+  statements.push(...prepareParticipationReconciliation(db, candidate.event_id, candidate.user_id));
   return { statements, actionTaken, fallback };
 }
 

@@ -38,8 +38,16 @@ export async function waitForCapturedEmail(
 export function extractEmailUrl(email: CapturedEmail, urlSubstring: string): string {
   const content = email.payload.content as Array<{ type: string; value: string }> | undefined;
   const html = content?.find((item) => item.type === "text/html")?.value ?? "";
-  for (const match of html.matchAll(/href="([^"]+)"/g)) {
-    if (match[1].includes(urlSubstring)) return match[1].replaceAll("&amp;", "&");
+  for (const match of html.matchAll(/\bhref\s*=\s*(["'])(.*?)\1/gi)) {
+    const url = match[2].replaceAll("&amp;", "&");
+    if (/^https?:\/\//i.test(url) && url.includes(urlSubstring)) return url;
+  }
+  // Transactional text templates deliver a bare URL instead of an HTML anchor.
+  for (const part of content ?? []) {
+    if (part.type !== "text/plain") continue;
+    for (const match of part.value.matchAll(/https?:\/\/[^\s<>"']+/gi)) {
+      if (match[0].includes(urlSubstring)) return match[0];
+    }
   }
   throw new Error(`No URL containing "${urlSubstring}" was found in email to <${email.to}>`);
 }

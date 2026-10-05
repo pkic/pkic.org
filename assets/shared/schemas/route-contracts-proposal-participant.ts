@@ -44,6 +44,7 @@ export const participantSpeakerPhotoDelete = sessionRoute(
   speakerParams,
 );
 export const participantRead = sessionRoute(publicRoutes.proposalSpeakerSelfServiceReadRouteSchema, proposalParams);
+export const participantIdentities = sessionRoute(publicRoutes.proposalSpeakerIdentitiesRouteSchema, proposalParams);
 export const participantRespond = sessionRoute(publicRoutes.proposalSpeakerParticipationRouteSchema, proposalParams);
 export const participantProfileUpdate = sessionRoute(
   publicRoutes.proposalSpeakerProfileUpdateRouteSchema,

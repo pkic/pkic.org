@@ -35,7 +35,8 @@ export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, 
   searchPlaceholder?: string;
   initialPageSize?: number;
   initialSort?: string;
-  toolbar?: (actions: ApiTableActions) => ComponentChildren;
+  /** Complete active server query; actions such as exports can preserve the displayed scope. */
+  toolbar?: (actions: ApiTableActions, query: Readonly<Record<string, string>>) => ComponentChildren;
   /**
    * The list's create affordance, rendered in the same bar as search and
    * refresh so every collection offers "New …" in one predictable place.
@@ -46,7 +47,7 @@ export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, 
         label: string;
         onSelect: () => void;
         disabled?: boolean;
-        /** For a create control that toggles a disclosure (an inline form above the list), the open state. */
+        /** Disclosure state for a nonediting control; edit forms belong in dedicated views. */
         expanded?: boolean;
         items?: never;
       }
@@ -58,6 +59,8 @@ export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, 
    * per surface, on the page's primary list.
    */
   urlState?: string;
+  /** A mounted workspace owns namespace cleanup while this table switches out. */
+  retainUrlStateOnUnmount?: boolean;
   /** Column filters in force before the reader touches anything, unless the URL says otherwise. */
   initialFilters?: Record<string, string>;
   /** Told each time a column filter changes, for a page whose framing depends on it. */
@@ -69,15 +72,16 @@ export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, 
    * state are the page's; the slot only fixes where the strip appears.
    */
   /**
-   * A form the list's own toolbar opened — link a person, add a new one —
-   * drawn inside the list panel between its head and its rows, so the
-   * command and its consequence share one surface.
+   * Supplemental list status or explanatory content. Editing forms belong
+   * in dedicated views and must not be inserted between the head and rows.
    */
   inset?: ComponentChildren;
   bulkBar?: ComponentChildren;
   actionsRef?: MutableRef<ApiTableActions | null>;
   onData?: (data: Response) => void;
   load?: CollectionLoader;
+  clearDataOnReload?: boolean;
+  retainDataOnError?: boolean;
 }
 
 const loadCollection: CollectionLoader = (url, signal, schema) => getJson(url, schema, { signal });
@@ -104,6 +108,7 @@ export function ApiDataTable<T, Response = unknown>({
   toolbar,
   createAction,
   urlState,
+  retainUrlStateOnUnmount = false,
   initialFilters,
   onFiltersChange,
   inset,
@@ -111,14 +116,20 @@ export function ApiDataTable<T, Response = unknown>({
   actionsRef,
   onData,
   load = loadCollection,
+  clearDataOnReload = false,
+  retainDataOnError = true,
 }: ApiDataTableProps<T, Response>) {
-  const url = useUrlTableState(urlState, {
-    q: "",
-    sort: initialSort,
-    offset: 0,
-    pageSize: initialPageSize ?? ADMIN_LIST_PAGE_SIZE_DEFAULT,
-    filters: initialFilters ?? {},
-  });
+  const url = useUrlTableState(
+    urlState,
+    {
+      q: "",
+      sort: initialSort,
+      offset: 0,
+      pageSize: initialPageSize ?? ADMIN_LIST_PAGE_SIZE_DEFAULT,
+      filters: initialFilters ?? {},
+    },
+    retainUrlStateOnUnmount,
+  );
   const pager = useOffsetPager(url.initial.pageSize, url.initial.offset);
   const resetKey = buildCollectionResetKey(endpoint, params);
   const requestOffset = useCollectionOffset(resetKey, pager.offset, pager.resetPage);
@@ -153,17 +164,20 @@ export function ApiDataTable<T, Response = unknown>({
     pager.resetPage();
   }
 
+  const query = {
+    ...params,
+    ...filters,
+    ...(paginate ? { limit: String(pager.pageSize), offset: String(requestOffset) } : {}),
+    ...(search ? { q: search } : {}),
+    ...(sort ? { sort } : {}),
+  };
   const collection = useServerCollection({
     endpoint,
-    params: {
-      ...params,
-      ...filters,
-      ...(paginate ? { limit: String(pager.pageSize), offset: String(requestOffset) } : {}),
-      ...(search ? { q: search } : {}),
-      ...(sort ? { sort } : {}),
-    },
+    params: query,
     responseSchema,
     load,
+    clearDataOnReload,
+    retainDataOnError,
   });
 
   const actions: ApiTableActions = { reload: collection.reload, resetPage: pager.resetPage };
@@ -209,7 +223,7 @@ export function ApiDataTable<T, Response = unknown>({
               : undefined
           }
         >
-          {toolbar?.(actions)}
+          {toolbar?.(actions, query)}
           {/* Default size, not `sm`: these sit on the same row as the search
               field, which is a full-size control, and a button that is eight
               pixels shorter than the input beside it reads as shrunken rather

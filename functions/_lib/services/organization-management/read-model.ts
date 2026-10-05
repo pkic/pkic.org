@@ -157,7 +157,6 @@ export interface OrgDetailRow extends OrgSummaryRow {
 
 interface IdentityRow {
   identity_id: string;
-  member_id: string;
   user_id: string;
   first_name: string | null;
   last_name: string | null;
@@ -201,14 +200,16 @@ export async function fetchOrgDetailRow(db: DatabaseLike, id: string): Promise<O
 async function fetchIdentities(db: DatabaseLike, organizationId: string): Promise<IdentityRow[]> {
   return all<IdentityRow>(
     db,
-    `SELECT identity.id AS identity_id, capacity.member_id, identity.user_id, u.first_name, u.last_name,
+    `SELECT identity.id AS identity_id, identity.user_id, u.first_name, u.last_name,
             COALESCE(selected_email.email, u.email) AS email, identity.email_id,
             u.headshot_r2_key, identity.job_title, identity.biography, identity.links_json,
             identity.show_on_organization_profile AS show_on_org_profile, identity.created_at
      FROM identities identity
-     JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
      JOIN users u ON u.id = identity.user_id
-     LEFT JOIN user_emails selected_email ON selected_email.id = identity.email_id
+     LEFT JOIN user_emails selected_email
+       ON selected_email.id = identity.email_id
+      AND selected_email.user_id = identity.user_id
+      AND selected_email.verified_at IS NOT NULL
      WHERE identity.organization_id = ?
        AND identity.started_at IS NOT NULL
        AND identity.ended_at IS NULL

@@ -34,6 +34,8 @@ export const userIdentitySchema = z.object({
 });
 
 const userCapacityFields = {
+  /** Exact canonical session instance; a person can establish multiple sessions. */
+  sessionId: databaseIdSchema,
   expiresAt: utcInstantSchema,
   idleExpiresAt: utcInstantSchema,
   identity: userIdentitySchema,
@@ -43,6 +45,8 @@ const userCapacityFields = {
   member: authMemberSchema.optional(),
   sponsors: z.array(sponsorCapacitySchema).default([]),
   eventParticipation: z.boolean().optional(),
+  /** Live owned organization affiliation; conveys no membership or workspace permission. */
+  hasActiveAffiliation: z.boolean().optional(),
   pendingIdentityCount: z.number().int().nonnegative().default(0),
 };
 
@@ -55,9 +59,11 @@ function requireCapacity<T extends z.ZodTypeAny>(schema: T) {
         sponsors?: unknown[];
         pendingIdentityCount?: number;
         eventParticipation?: boolean;
+        hasActiveAffiliation?: boolean;
       };
       return (
         capacities.eventParticipation === true ||
+        capacities.hasActiveAffiliation === true ||
         capacities.staff !== undefined ||
         capacities.member !== undefined ||
         (capacities.sponsors?.length ?? 0) > 0 ||
@@ -70,6 +76,24 @@ function requireCapacity<T extends z.ZodTypeAny>(schema: T) {
 
 export const userAuthSessionResponseSchema = requireCapacity(successResponseSchema.extend(userCapacityFields));
 export const userAuthEstablishedResponseSchema = userAuthSessionResponseSchema;
+
+export const userAuthLogoutRequestSchema = z
+  .object({
+    /** Required by deferred sign-out; omission retains existing online callers. */
+    expectedSessionId: databaseIdSchema.optional(),
+  })
+  .strict();
+export const userAuthLogoutOutcomeSchema = z.enum([
+  "revoked",
+  "already_ended",
+  "session_changed",
+  "no_current_session",
+]);
+export const userAuthLogoutResponseSchema = successResponseSchema.extend({
+  outcome: userAuthLogoutOutcomeSchema,
+});
+export type UserAuthLogoutRequest = z.infer<typeof userAuthLogoutRequestSchema>;
+export type UserAuthLogoutResponse = z.infer<typeof userAuthLogoutResponseSchema>;
 
 export const userAuthRequestRouteSchema = {
   ...protectsPublicAction("login_email", "email:manage"),
@@ -117,13 +141,19 @@ export const userAuthSessionRouteSchema = {
 };
 
 export const userAuthLogoutRouteSchema = {
-  ...requiresSession(),
+  ...publicOperation(),
   tags: ["Authentication"],
-  summary: "Sign out the current user identity",
+  summary: "Sign out a verified user session",
+  request: {
+    body: {
+      content: { "application/json": { schema: userAuthLogoutRequestSchema.optional() } },
+      required: false,
+    },
+  },
   responses: {
     "200": {
-      description: "The user session was revoked and cleared.",
-      content: { "application/json": { schema: successResponseSchema } },
+      description: "Reports the exact-session outcome. Conditional sign-out never changes cookies.",
+      content: { "application/json": { schema: userAuthLogoutResponseSchema } },
     },
   },
 };

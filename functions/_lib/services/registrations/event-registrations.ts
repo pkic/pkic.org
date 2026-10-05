@@ -20,6 +20,7 @@ import {
 import type { DatabaseLike } from "../../types";
 import { aggregateEventRegistrationStats, type EventRegistrationStatsRow } from "./event-registration-stats";
 import { resolveEventRegistrationOrderBy } from "./event-registration-sort";
+import { sponsorConsentSql } from "../event-participation/sponsor-consent";
 
 interface RegistrationRow {
   id: string;
@@ -87,13 +88,9 @@ export function buildEventRegistrationsPageQuery(eventId: string, params: EventR
   else if (params.waitlisted === "false") conditions.push(`NOT ${activeDayWaitlistExistsSql("r")}`);
 
   if (params.consent === "true") {
-    conditions.push(
-      "EXISTS(SELECT 1 FROM consent_acceptances ca WHERE ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing')",
-    );
+    conditions.push(sponsorConsentSql("r"));
   } else if (params.consent === "false") {
-    conditions.push(
-      "NOT EXISTS(SELECT 1 FROM consent_acceptances ca WHERE ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing')",
-    );
+    conditions.push(`NOT ${sponsorConsentSql("r")}`);
   }
 
   const hasAttendanceChange = (transition = "") => `EXISTS (
@@ -151,8 +148,7 @@ export function buildEventRegistrationsPageQuery(eventId: string, params: EventR
               u.organization_name AS organization_name, u.job_title AS job_title,
               ${registrationReferralCodeSql} AS referral_code,
               COALESCE(${latestOutboxStatusForRegistrationSql} = 'bounced', 0) AS has_bounced,
-              EXISTS(SELECT 1 FROM consent_acceptances ca
-                     WHERE ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing') AS sponsor_consent,
+              ${sponsorConsentSql("r")} AS sponsor_consent,
                    r.custom_answers_json,
               (SELECT JSON_GROUP_ARRAY(JSON_OBJECT(
                   'event_day_id', event_day_id,
@@ -279,9 +275,8 @@ export async function listEventRegistrations(
     ),
     first<{ consent_count: number }>(
       db,
-      `SELECT COUNT(DISTINCT registration_id) AS consent_count
-       FROM consent_acceptances
-       WHERE event_id = ? AND term_key = 'sponsor-data-sharing'`,
+      `SELECT COUNT(*) AS consent_count FROM registrations r
+       WHERE r.event_id = ? AND ${sponsorConsentSql("r")}`,
       [eventId],
     ),
     getAttendanceStatusByType(db, eventId),

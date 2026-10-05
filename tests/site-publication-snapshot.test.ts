@@ -2,10 +2,77 @@ import { seedEventAndAdmin } from "./helpers/context";
 import { eventFormsResponseSchema } from "../assets/shared/schemas/forms";
 import { publishedFormResourcesForPath } from "../assets/shared/published-resource-url";
 import { env } from "cloudflare:test";
-import { expect, it } from "vitest";
+import { beforeEach, expect, it } from "vitest";
+import { resetDb } from "./helpers/reset-db";
 import { insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
-import { readSitePublicationSnapshot } from "../functions/_lib/services/site-publication-snapshot";
+import {
+  createSitePublicationSnapshot,
+  readSitePublicationSnapshot,
+} from "../functions/_lib/services/site-publication-snapshot";
+import { prepareSitePublicationRequest } from "../functions/_lib/services/site-publication-requests";
 import { publishedMediaReferences, resolvePublishedMediaKeys } from "../functions/_lib/services/site-publication-media";
+
+beforeEach(async () => resetDb());
+
+it("captures the desired publication highwater separately from immutable public content identity", async () => {
+  const { eventId } = await seedEventAndAdmin(env.DB);
+  const initial = await readSitePublicationSnapshot(env.DB, []);
+  await env.DB.batch([
+    prepareSitePublicationRequest(env.DB, {
+      resourceType: "event_agenda",
+      resourceId: eventId,
+      revision: 0,
+      reasonCode: "repair",
+      deduplicationKey: `snapshot-proof:${crypto.randomUUID()}`,
+    }) as D1PreparedStatement,
+  ]);
+  const captured = await readSitePublicationSnapshot(env.DB, []);
+  expect(captured.sourceSequence).toBeGreaterThan(initial.sourceSequence!);
+  expect(captured.snapshotId).toBe(initial.snapshotId);
+  const fixture = await createSitePublicationSnapshot(captured);
+  expect(fixture.sourceSequence).toBeNull();
+  expect(fixture.snapshotId).toBe(captured.snapshotId);
+});
+
+it("refuses a snapshot when an actual queued publication mutation arrives during extraction", async () => {
+  const { eventId } = await seedEventAndAdmin(env.DB);
+  let advanced = false;
+  const wrap = (statement: D1PreparedStatement): D1PreparedStatement =>
+    new Proxy(statement, {
+      get(target, property) {
+        if (property === "bind") return (...values: unknown[]) => wrap(target.bind(...values));
+        if (property === "first")
+          return async () => {
+            const result = await target.first();
+            if (!advanced) {
+              advanced = true;
+              await env.DB.batch([
+                prepareSitePublicationRequest(env.DB, {
+                  resourceType: "event_agenda",
+                  resourceId: eventId,
+                  revision: 0,
+                  reasonCode: "repair",
+                  deduplicationKey: `mid-extraction:${crypto.randomUUID()}`,
+                }) as D1PreparedStatement,
+              ]);
+            }
+            return result;
+          };
+        const value = Reflect.get(target, property);
+        return typeof value === "function" ? value.bind(target) : value;
+      },
+    });
+  const changing = {
+    prepare(sql: string) {
+      const statement = env.DB.prepare(sql);
+      return sql.includes("SELECT desired_sequence FROM site_publication_delivery_state") ? wrap(statement) : statement;
+    },
+    batch: env.DB.batch.bind(env.DB),
+  };
+  await expect(readSitePublicationSnapshot(changing, [])).rejects.toThrow("source changed during extraction");
+  expect(advanced).toBe(true);
+  expect((await readSitePublicationSnapshot(env.DB, [])).sourceSequence).toBeGreaterThan(0);
+});
 
 it("exports approved public profiles and their media while excluding inactive memberships and private keys", async () => {
   const active = await insertOrganization(env.DB, "Synthetic published organization");
@@ -66,7 +133,7 @@ it("fingerprints public changes without source-write triggers or invalidation fo
   expect(changed.snapshotId).not.toBe(before.snapshotId);
   expect((await readSitePublicationSnapshot(env.DB, [])).snapshotId).toBe(changed.snapshotId);
   const tracking = await env.DB.prepare(
-    "SELECT name FROM sqlite_master WHERE name LIKE 'site_publication_%' AND type IN ('table', 'trigger')",
+    "SELECT name FROM sqlite_master WHERE type='trigger' AND tbl_name NOT LIKE 'site_publication_%' AND sql LIKE '%site_publication_%'",
   ).all();
   expect(tracking.results).toEqual([]);
 });
@@ -106,4 +173,41 @@ it("publishes authored legacy event forms while excluding private portal events 
   expect(published.publicResources).toHaveProperty(key);
   await env.DB.prepare("UPDATE events SET visibility = 'invitation_only' WHERE id = ?").bind(eventId).run();
   expect((await readSitePublicationSnapshot(env.DB, [])).eventFlows).toEqual([]);
+});
+
+it("exports the existing public site when the additive agenda schema is not installed", async () => {
+  const baseline = await readSitePublicationSnapshot(env.DB, []);
+  await env.DB.prepare("ALTER TABLE event_agenda_publications RENAME TO test_saved_agenda_publications").run();
+  await env.DB.prepare("ALTER TABLE event_agenda_state RENAME TO test_saved_agenda_state").run();
+  try {
+    const snapshot = await readSitePublicationSnapshot(env.DB, []);
+    expect(snapshot.eventAgendas).toEqual({});
+    expect(snapshot.members).toEqual(baseline.members);
+    expect(snapshot.publicResources).toEqual(baseline.publicResources);
+    expect(snapshot.eventFlows).toEqual(baseline.eventFlows);
+  } finally {
+    await env.DB.prepare("ALTER TABLE test_saved_agenda_state RENAME TO event_agenda_state").run();
+    await env.DB.prepare("ALTER TABLE test_saved_agenda_publications RENAME TO event_agenda_publications").run();
+  }
+});
+
+it("refuses a partially installed agenda publication schema", async () => {
+  await env.DB.prepare("ALTER TABLE event_agenda_publications RENAME TO test_saved_agenda_publications").run();
+  try {
+    await expect(readSitePublicationSnapshot(env.DB, [])).rejects.toThrow("publication schema is incomplete");
+  } finally {
+    await env.DB.prepare("ALTER TABLE test_saved_agenda_publications RENAME TO event_agenda_publications").run();
+  }
+});
+
+it("propagates agenda extraction failures when the feature tables exist", async () => {
+  const original = env.DB;
+  const broken = {
+    prepare(sql: string) {
+      if (sql.includes("FROM event_agenda_publications p")) throw new Error("Synthetic agenda database failure");
+      return original.prepare(sql);
+    },
+    batch: original.batch.bind(original),
+  };
+  await expect(readSitePublicationSnapshot(broken, [])).rejects.toThrow("Synthetic agenda database failure");
 });

@@ -2,7 +2,25 @@ import { html } from "hono/html";
 import { formatLocalTime } from "../../../../assets/shared/format-date";
 import type { MemberNewsArticle, MemberNewsPage, MemberNewsQuery } from "../../../../assets/shared/schemas/member-news";
 
-function articleCard(article: MemberNewsArticle, headingLevel: 2 | 3 = 2) {
+type MemberNewsCard = Pick<
+  MemberNewsArticle,
+  "url" | "title" | "publishedAt" | "summary" | "organizationName" | "sponsorTier"
+>;
+
+/** Keep page cache inputs and the public card on the same consumed fields. */
+export function memberNewsCardInputs(article: MemberNewsCard): MemberNewsCard {
+  return {
+    url: article.url,
+    title: article.title,
+    publishedAt: article.publishedAt,
+    summary: article.summary.length > 160 ? `${article.summary.slice(0, 157)}…` : article.summary,
+    organizationName: article.organizationName,
+    sponsorTier: article.sponsorTier,
+  };
+}
+
+function articleCard(source: MemberNewsCard, headingLevel: 2 | 3 = 2) {
+  const article = memberNewsCardInputs(source);
   const heading = headingLevel === 3 ? "h3" : "h2";
   const date = formatLocalTime(article.publishedAt, "date");
   const domain = new URL(article.url).hostname;
@@ -23,7 +41,7 @@ function articleCard(article: MemberNewsArticle, headingLevel: 2 | 3 = 2) {
     </div>
     <div class="blog-card-body">
       <p class="blog-card-summary">
-        ${article.summary.length > 160 ? `${article.summary.slice(0, 157)}…` : article.summary}
+        ${article.summary}
       </p>
       <div class="news-card-footer">
         <span class="news-card-member-name">${article.organizationName}</span>
@@ -36,13 +54,13 @@ function articleCard(article: MemberNewsArticle, headingLevel: 2 | 3 = 2) {
 }
 
 /** The same escaped cards are used by runtime pages and static publications. */
-export async function renderMemberNewsArticles(articles: MemberNewsArticle[], headingLevel: 2 | 3 = 2) {
+export async function renderMemberNewsArticles(articles: MemberNewsCard[], headingLevel: 2 | 3 = 2) {
   return String(await html`${articles.map((article) => articleCard(article, headingLevel))}`);
 }
 
 export async function renderMemberNews(
-  page: MemberNewsPage,
-  sponsors: MemberNewsArticle[],
+  page: { articles: MemberNewsCard[]; page: Pick<MemberNewsPage["page"], "hasMore"> },
+  sponsors: MemberNewsCard[],
   query: MemberNewsQuery,
   pageHref?: (offset: number) => string,
 ): Promise<string> {

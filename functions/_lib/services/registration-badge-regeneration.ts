@@ -5,15 +5,13 @@ import type { AuthAdmin, DatabaseLike, Env } from "../types";
 import { nowIso } from "../utils/time";
 import { prepareAuditLog } from "./audit";
 import { resolveAppBaseUrl } from "../config";
-import { createDurableJobLease } from "../jobs/lease";
+import { createDurableJobLease, durableRenderRetry } from "../jobs/lease";
 import type { EventRecord } from "./events";
 import { fetchGravatar } from "./gravatar";
 import { renderAndCacheBadge } from "./og-badge-prerender";
 import { prepareBadgeRenderJob } from "./badge-render-job-statements";
 import { firstReferralCodeQuerySql } from "./referral-code-projection";
 export { prepareBadgeRenderJobsForUser } from "./badge-render-job-statements";
-
-const MAX_ATTEMPTS = 10;
 
 interface BadgeRenderJobRow {
   id: string;
@@ -80,8 +78,7 @@ async function markBadgeRenderFailed(
   error: unknown,
 ): Promise<void> {
   const attempts = job.attempts + 1;
-  const retryDelaySeconds = Math.min(3600, 2 ** Math.min(attempts, 10) * 15);
-  const status = attempts >= MAX_ATTEMPTS ? "failed" : "retrying";
+  const { delaySeconds: retryDelaySeconds, status } = durableRenderRetry(attempts);
   const message = error instanceof Error ? error.message : "Unknown badge render error";
   const currentGenerationQueued = await run(
     db,

@@ -4,6 +4,7 @@ import { defineConfig } from "vitest/config";
 // file list here lets the Node and Workers pools stay disjoint without moving
 // tests away from the domain files they cover.
 export const NODE_UNIT_TEST_FILES = [
+  "tests/site-publication-provider.test.ts",
   "tests/access-control-role-id-contract.test.ts",
   "tests/access-control-schema.test.ts",
   "tests/admin-identity.test.ts",
@@ -20,6 +21,7 @@ export const NODE_UNIT_TEST_FILES = [
   "tests/email-campaign-custom.test.ts",
   "tests/email-markdown-escape.test.ts",
   "tests/email-template-engine.test.ts",
+  "tests/event-attendance-capture.test.ts",
   "tests/event-email-campaign-token.test.ts",
   "tests/event-invite-preview-token.test.ts",
   "tests/event-registration-status-policy.test.ts",

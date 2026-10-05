@@ -270,6 +270,9 @@ describe("PasskeySettings confirmation and row actions", () => {
 describe("ProposalSpeakerCard confirmation", () => {
   function speaker(overrides: Partial<ProposalSpeaker> = {}): ProposalSpeaker {
     return {
+      actingIdentityId: null,
+      actingIdentitySelectedAt: null,
+      actingIdentitySelection: "unrecorded",
       userId: "00000000-0000-4000-8000-000000000021",
       role: "speaker",
       status: "confirmed",

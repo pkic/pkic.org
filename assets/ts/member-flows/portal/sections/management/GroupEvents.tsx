@@ -16,7 +16,10 @@ import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { usePortalHashLocation } from "../../hash-location";
 import { fmt } from "../../ui";
 import { GroupEventEditor } from "./GroupEventEditor";
-import { GroupEventWorkspace } from "./GroupEventWorkspace";
+import { lazy, Suspense } from "preact/compat";
+const GroupEventWorkspace = lazy(() =>
+  import("./GroupEventWorkspace").then((module) => ({ default: module.GroupEventWorkspace })),
+);
 
 /** Reserved event segment that routes to the create page instead of a record. */
 const NEW_EVENT_SEGMENT = "new";
@@ -107,15 +110,17 @@ export function GroupEvents({
         {detail.loading && <Spinner label="Loading event…" />}
         {detail.error && <ErrorAlert error={detail.error} />}
         {!detail.loading && !detail.error && detail.data?.event.id === selectedEventId && (
-          <GroupEventWorkspace
-            event={detail.data.event}
-            groupId={groupId}
-            tab={initialEventTab}
-            detailId={initialEventDetailId}
-            detailTab={initialEventDetailTab}
-            detailSegment={initialEventDetailSegment}
-            onUpdated={detail.reload}
-          />
+          <Suspense fallback={<Spinner label="Loading event workspace…" />}>
+            <GroupEventWorkspace
+              event={detail.data.event}
+              groupId={groupId}
+              tab={initialEventTab}
+              detailId={initialEventDetailId}
+              detailTab={initialEventDetailTab}
+              detailSegment={initialEventDetailSegment}
+              onUpdated={detail.reload}
+            />
+          </Suspense>
         )}
       </div>
     );

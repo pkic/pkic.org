@@ -1,3 +1,4 @@
+import { EventStaffScanner } from "./EventStaffScanner";
 /**
  * URL-addressed record page for one group-managed event.
  *
@@ -9,6 +10,8 @@
 import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { usePortalHashLocation } from "../../hash-location";
+import { hasEventAgendaPermission } from "../events/event-agenda-access";
+import { portalSession } from "../../state";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
 import type { EventFormsPurpose } from "../../../../../shared/schemas/forms";
 import {
@@ -28,6 +31,25 @@ import { Menu } from "../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import { formatEventWhen } from "../../ui";
+import { lazy, Suspense } from "preact/compat";
+import { Spinner } from "../../../../components/Spinner";
+const RawEvidenceRetentionPolicy = lazy(() =>
+  import("../events/detail/settings/RawEvidenceRetentionPolicy").then((module) => ({
+    default: module.RawEvidenceRetentionPolicy,
+  })),
+);
+const BadgeCredentials = lazy(() =>
+  import("../events/detail/badges/BadgeCredentials").then((module) => ({ default: module.BadgeCredentials })),
+);
+const SponsorLeads = lazy(() =>
+  import("../events/detail/agenda/SponsorLeads").then((module) => ({ default: module.SponsorLeads })),
+);
+const AttendanceReport = lazy(() =>
+  import("../events/detail/agenda/AttendanceReport").then((module) => ({ default: module.AttendanceReport })),
+);
+const AgendaEditor = lazy(() =>
+  import("../events/detail/agenda/AgendaEditor").then((module) => ({ default: module.AgendaEditor })),
+);
 import { EventStats } from "../events/detail/EventStats";
 import { Promoters } from "../events/detail/Promoters";
 import { Team } from "../events/detail/Team";
@@ -110,6 +132,33 @@ const EVENT_WORKSPACE_TABS: readonly EventWorkspaceTabDef[] = [
     label: "Registrations",
     visible: (event) => event.capabilities.includes("manage_attendance"),
   },
+  { key: "agenda", label: "Agenda", visible: (event) => hasEventAgendaPermission(event.id, "agenda:read") },
+  {
+    key: "scanner",
+    label: "Scanner",
+    visible: (event) =>
+      ["agenda:scan", "agenda:check", "agenda:admit", "agenda:attendance_record"].some((permission) =>
+        hasEventAgendaPermission(event.id, permission as "agenda:scan"),
+      ),
+  },
+  {
+    key: "attendance",
+    label: "Attendance",
+    visible: (event) =>
+      hasEventAgendaPermission(event.id, "agenda:attendance_read") ||
+      hasEventAgendaPermission(event.id, "agenda:attendance_import"),
+  },
+  {
+    key: "leads",
+    label: "Sponsor leads",
+    visible: () =>
+      portalSession.value?.staff?.grants.some(
+        (grant) =>
+          grant.contextType === "event_sponsor" &&
+          ["agenda:leads_view", "agenda:leads_capture", "agenda:leads_export"].includes(grant.permission),
+      ) ?? false,
+  },
+  { key: "badges", label: "Badges", visible: (event) => event.capabilities.includes("manage") },
   { key: "proposals", label: "Proposals", visible: (event) => event.proposalAccess?.canRead === true },
   {
     key: "invitations",
@@ -204,7 +253,7 @@ export function GroupEventWorkspace({
     detailId !== undefined &&
     !responsesActive &&
     !speakersActive &&
-    (activeTab === "registrations" || activeTab === "proposals");
+    (activeTab === "registrations" || activeTab === "proposals" || activeTab === "badges");
 
   return (
     <BreadcrumbBranch
@@ -392,6 +441,42 @@ export function GroupEventWorkspace({
               />
             )}
 
+            {activeTab === "agenda" && (
+              <Suspense fallback={<Spinner />}>
+                <AgendaEditor
+                  slug={event.slug}
+                  canEdit={hasEventAgendaPermission(event.id, "agenda:write")}
+                  canReviewAppearances={hasEventAgendaPermission(event.id, "agenda:appearance_approve")}
+                />
+              </Suspense>
+            )}
+            {activeTab === "scanner" && <EventStaffScanner eventId={event.id} slug={event.slug} />}
+            {activeTab === "attendance" && (
+              <Suspense fallback={<Spinner />}>
+                <AttendanceReport
+                  slug={event.slug}
+                  timeZone={event.timezone}
+                  canCorrect={hasEventAgendaPermission(event.id, "agenda:attendance_correct")}
+                  canImport={hasEventAgendaPermission(event.id, "agenda:attendance_import")}
+                  canRead={hasEventAgendaPermission(event.id, "agenda:attendance_read")}
+                />
+              </Suspense>
+            )}
+            {activeTab === "leads" && (
+              <Suspense fallback={<Spinner />}>
+                <SponsorLeads slug={event.slug} timeZone={event.timezone} />
+              </Suspense>
+            )}
+            {activeTab === "badges" && (
+              <Suspense fallback={<Spinner />}>
+                <BadgeCredentials
+                  slug={event.slug}
+                  basePath={tabPath("badges")}
+                  credentialId={detailId}
+                  segment={detailTab}
+                />
+              </Suspense>
+            )}
             {activeTab === "team" && <Team slug={event.slug} teamSegment={detailId} teamPath={tabPath("team")} />}
 
             {activeTab === "promoters" && (
@@ -464,6 +549,9 @@ export function GroupEventWorkspace({
                 {!event.seriesId && (
                   <LazyGroupEventConfiguration event={event} groupId={groupId} onUpdated={onUpdated} />
                 )}
+                <Suspense fallback={<Spinner label="Loading evidence retention…" />}>
+                  <RawEvidenceRetentionPolicy event={event} />
+                </Suspense>
 
                 <Panel aria-label="Sponsor tiers">
                   <PanelHeader title="Sponsor tiers" />

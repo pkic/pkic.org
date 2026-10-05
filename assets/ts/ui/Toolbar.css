@@ -81,6 +81,12 @@
     flex-wrap: wrap;
   }
 
+  /* Collection menus occupy one control slot, rather than a full table row. */
+  .pk-toolbar__controls > .pk-row-actions {
+    width: auto;
+    flex: 0 0 auto;
+  }
+
   .pk-toolbar--single-row,
   .pk-toolbar--single-row .pk-toolbar__controls {
     flex-wrap: nowrap;

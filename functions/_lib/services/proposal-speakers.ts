@@ -17,17 +17,17 @@ import {
 } from "./event-participant-source-revision";
 import { formatProposalInvitePerson } from "./proposal-invite-person";
 import {
-  PROPOSAL_PROFILE_FIELDS,
-  proposalProfileFieldNames,
-  type ProposalProfileField,
-} from "./proposal-speaker-profile-overrides";
+  proposalSpeakerEffectiveProfileColumns,
+  proposalSpeakerEffectiveHeadshotColumns,
+} from "./proposal-speaker-profile-projection";
 import type { DatabaseLike, StatementLike } from "../types";
 import type { ProposalAccessSpeakerStatus } from "../../../assets/shared/schemas/proposal-management";
 import type { SpeakerRole } from "../../../assets/shared/schemas/registration";
 import type { ProposalSpeakerRole } from "../../../assets/shared/schemas/participant-roles";
 import { effectiveStoredInviteExpiry, type InviteEventWindow } from "../invite-validity";
+import type { PreparedProposalActingIdentity, ProposalActingIdentityRow } from "./proposal-speaker-identity";
 
-export interface ProposalSpeakerRecord {
+export interface ProposalSpeakerRecord extends ProposalActingIdentityRow {
   id: string;
   proposal_id: string;
   user_id: string;
@@ -101,6 +101,8 @@ export async function buildAddProposalSpeaker(
     inviteExpiresAt?: string | null;
     renewExpiredInvitation?: { event: InviteEventWindow; now: string };
     proposalContext?: { event_id: string; status: string; updated_at?: string };
+    actingIdentity?: PreparedProposalActingIdentity;
+    requireRepresentationReview?: boolean;
   },
 ): Promise<{
   manageToken: string;
@@ -143,11 +145,11 @@ export async function buildAddProposalSpeaker(
       ? newCapabilityLinkSecret()
       : existingSpeaker.manage_link_secret;
   const inviteGeneration = (existingSpeaker?.invite_generation ?? 0) + (renewingInvitation ? 1 : 0);
-  const status = isProposer ? "confirmed" : "invited";
+  const status = isProposer && !payload.requireRepresentationReview ? "confirmed" : "invited";
   const sourceRevisionAdvance: 0 | 1 =
     !existingSpeaker || existingSpeaker.role !== payload.role || reinvitingDeclinedSpeaker ? 1 : 0;
   const now = nowIso();
-  const confirmedAt = isProposer ? now : null;
+  const confirmedAt = status === "confirmed" ? now : null;
   const proposal =
     payload.proposalContext ??
     (await first<{ event_id: string; status: string }>(
@@ -158,11 +160,12 @@ export async function buildAddProposalSpeaker(
   const event = proposal
     ? await first<{ starts_at: string | null }>(db, "SELECT starts_at FROM events WHERE id = ?", [proposal.event_id])
     : null;
-  const inviteExpiresAt = isProposer
-    ? null
-    : !existingSpeaker || renewingInvitation
-      ? (payload.inviteExpiresAt ?? event?.starts_at ?? null)
-      : existingSpeaker.invite_expires_at;
+  const inviteExpiresAt =
+    status === "confirmed"
+      ? null
+      : !existingSpeaker || renewingInvitation
+        ? (payload.inviteExpiresAt ?? event?.starts_at ?? null)
+        : existingSpeaker.invite_expires_at;
 
   const proposalWriteGuard =
     payload.proposalContext?.updated_at === undefined
@@ -207,13 +210,14 @@ export async function buildAddProposalSpeaker(
       });
 
   const speakerStatements: StatementLike[] = [
+    ...(payload.actingIdentity?.guards ?? []),
     speakerStateGuard,
     db
       .prepare(
         `INSERT INTO proposal_speakers
            (id, proposal_id, user_id, role, status, manage_link_secret, confirmed_at, created_at, invite_generation,
-            invite_expires_at)
-         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+            invite_expires_at, acting_identity_id, acting_identity_selected_at, acting_identity_snapshot_json)
+         SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
          ${proposalWriteGuard.sql}
          ON CONFLICT(proposal_id, user_id) DO UPDATE SET
            role = excluded.role,
@@ -275,6 +279,9 @@ export async function buildAddProposalSpeaker(
         now,
         inviteGeneration,
         inviteExpiresAt,
+        payload.actingIdentity?.identityId ?? null,
+        payload.actingIdentity?.selectedAt ?? null,
+        payload.actingIdentity ? JSON.stringify(payload.actingIdentity.snapshot) : null,
         ...proposalWriteGuard.bindings,
       ),
   ];
@@ -494,7 +501,7 @@ export interface ProposalSpeakerUserProfile {
   headshot_updated_at: string | null;
 }
 
-export interface ProposalSpeakerWithUser extends ProposalSpeakerUserProfile {
+export interface ProposalSpeakerWithUser extends ProposalSpeakerUserProfile, ProposalActingIdentityRow {
   speaker_id: string;
   user_id: string;
   role: SpeakerRole;
@@ -508,39 +515,15 @@ export interface ProposalSpeakerWithUser extends ProposalSpeakerUserProfile {
   created_at: string;
 }
 
-/** Effective profile projection: proposal overrides are scoped to this roster row. */
-export function proposalSpeakerEffectiveProfileExpression(
-  userAlias: string,
-  speakerAlias: string,
-  key: string,
-  userColumn: string,
-): string {
-  return `CASE WHEN json_type(COALESCE(${speakerAlias}.profile_overrides_json, '{}'), '$.${key}') IS NULL THEN ${userAlias}.${userColumn} ELSE json_extract(${speakerAlias}.profile_overrides_json, '$.${key}') END`;
-}
-
-export function proposalSpeakerEffectiveHeadshotExpression(userAlias = "u", speakerAlias = "ps"): string {
-  return `CASE WHEN ${speakerAlias}.headshot_override_set = 1 THEN ${speakerAlias}.headshot_r2_key ELSE ${userAlias}.headshot_r2_key END`;
-}
-
-export function proposalSpeakerEffectiveProfileColumns(
-  userAlias = "u",
-  speakerAlias = "ps",
-  prefix = "",
-  fields: readonly ProposalProfileField[] = proposalProfileFieldNames(),
-): string {
-  const effective = (key: string, column: string, alias: string) =>
-    `${proposalSpeakerEffectiveProfileExpression(userAlias, speakerAlias, key, column)} AS ${prefix}${alias}`;
-  return fields.map((key) => effective(key, PROPOSAL_PROFILE_FIELDS[key], PROPOSAL_PROFILE_FIELDS[key])).join(",\n  ");
-}
-
-export function proposalSpeakerEffectiveHeadshotColumns(userAlias = "u", speakerAlias = "ps", prefix = ""): string {
-  return [
-    `${proposalSpeakerEffectiveHeadshotExpression(userAlias, speakerAlias)} AS ${prefix}headshot_r2_key`,
-    `CASE WHEN ${speakerAlias}.headshot_override_set = 1 THEN ${speakerAlias}.headshot_updated_at ELSE ${userAlias}.headshot_updated_at END AS ${prefix}headshot_updated_at`,
-  ].join(",\n  ");
-}
+export {
+  proposalSpeakerEffectiveProfileExpression,
+  proposalSpeakerEffectiveHeadshotExpression,
+  proposalSpeakerEffectiveProfileColumns,
+  proposalSpeakerEffectiveHeadshotColumns,
+} from "./proposal-speaker-profile-projection";
 
 export const PROPOSAL_SPEAKER_WITH_USER_COLUMNS = `ps.id AS speaker_id, ps.user_id, ps.role, ps.status,
+  ps.acting_identity_id, ps.acting_identity_selected_at, ps.acting_identity_snapshot_json,
   ps.manage_link_secret, ps.confirmed_at, ps.declined_at, ps.terms_accepted_at, ps.invite_expires_at,
   ps.decline_reason, ps.created_at,
   u.email,
