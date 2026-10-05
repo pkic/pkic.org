@@ -11,6 +11,7 @@ import { useContractForm } from "../../hooks/useContractForm";
 import { Alert } from "../../ui/Alert";
 import { Badge } from "../../ui/Badge";
 import { Button } from "../../ui/Button";
+import { EmailHtmlPreview } from "../../ui/EmailHtmlPreview";
 import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
@@ -315,11 +316,9 @@ export function ProposalDecisionPanel({
                                 notification will not be sent until the template is activated.
                               </Alert>
                             ) : (
-                              <iframe
+                              <EmailHtmlPreview
                                 title="Decision email preview"
-                                srcdoc={selectedPreview.html}
-                                sandbox=""
-                                class="pk-framed"
+                                html={selectedPreview.html}
                                 height={420}
                               />
                             ))}

@@ -6,6 +6,7 @@ import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { openRow } from "./helpers/data-table";
 import { signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
+import { expectStyledEmailPreview, useEmailPreviewLogoFixture } from "./helpers/email-preview";
 import { tab } from "./helpers/tabs";
 
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
@@ -99,6 +100,7 @@ async function manageInvitation(
   inviteeName: string,
   inviteeEmail: string,
 ): Promise<void> {
+  await useEmailPreviewLogoFixture(page);
   const adminRequests: string[] = [];
   const groupInviteRequests: string[] = [];
   page.on("request", (request) => {
@@ -138,6 +140,10 @@ async function manageInvitation(
   await composer.getByRole("button", { name: "Parse" }).click();
   await composer.getByRole("button", { name: "Preview email" }).click();
   await expect(composer.getByText("Review and confirm below.")).toBeVisible();
+  const preview = composer.getByTitle(`${type} invitation preview`, { exact: true });
+  await expectStyledEmailPreview(preview);
+  await preview.scrollIntoViewIfNeeded();
+  await composer.screenshot({ path: test.info().outputPath(`${type}-email-preview.png`) });
   await composer.getByRole("checkbox").check();
   const created = page.waitForResponse(
     (response) => response.url().endsWith(`/invites/${type}s/bulk`) && response.request().method() === "POST",
