@@ -197,7 +197,14 @@ describe("passkeys (WebAuthn)", () => {
     expect(session.member).toBeUndefined();
     expect(session.staff).toBeUndefined();
     expect(await queryAll(env.DB, "SELECT id FROM members")).toEqual([]);
-    expect(await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id=?", [userId])).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT role_id,context_type,context_id,revoked_at FROM user_roles WHERE user_id=?", [
+        userId,
+      ]),
+    ).toEqual([{ role_id: "role-admin", context_type: null, context_id: null, revoked_at: expect.any(String) }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id=? AND revoked_at IS NULL", [userId]),
+    ).toEqual([]);
     const listed = await call("/api/v1/auth/passkeys", {}, token);
     expect(listed.status).toBe(200);
     expect(await listed.json()).toMatchObject({ passkeys: [{ id: passkeyId }] });

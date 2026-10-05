@@ -104,6 +104,7 @@ export default defineConfig(async () => {
             exclude: [
               ...NODE_UNIT_TEST_FILES,
               ...workerFetchFiles,
+              "tests/event-agenda-scan-load.test.ts",
               "tests/frontend/**",
               "tests/e2e/**",
               "tests/tools/**",
@@ -111,6 +112,25 @@ export default defineConfig(async () => {
             ],
           },
         },
+        ...(process.env.PKIC_SCANNER_BENCHMARK === "1"
+          ? [
+              {
+                ...siteOptions,
+                plugins: [
+                  ...sitePlugins(),
+                  cloudflareTest({ ...workerOptions, main: "./tests/helpers/d1-test-worker.ts" }),
+                ],
+                test: {
+                  ...testOptions,
+                  name: "scanner-load",
+                  include: ["tests/event-agenda-scan-load.test.ts"],
+                  exclude: ["**/._*"],
+                  maxWorkers: 1,
+                  sequence: { groupOrder: 1 },
+                },
+              },
+            ]
+          : []),
         {
           ...siteOptions,
           plugins: [...sitePlugins(), cloudflareTest({ ...workerOptions, main: "./functions/router.ts" })],

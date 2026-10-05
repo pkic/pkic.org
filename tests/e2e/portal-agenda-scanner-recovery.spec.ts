@@ -29,6 +29,8 @@ import {
   scrollScannerToTop,
 } from "./helpers/scanner-recovery-storage";
 
+import { replaceScannerWorker, replayScannerFromTwoTabs } from "./helpers/scanner-worker-replacement";
+
 const slug = "pqc-conference-amsterdam-nl";
 const scannerPath = `/portal/#/events/${slug}/scanner`;
 const scansPath = `/api/v1/events/${slug}/scans`;
@@ -37,10 +39,11 @@ const viewer = Intl.DateTimeFormat().resolvedOptions();
 test.use({ locale: viewer.locale, timezoneId: viewer.timeZone });
 
 test("real pending scanner storage survives reload and logout without crossing accounts", async ({
-  page,
+  page: initialPage,
   context,
   browser,
 }, testInfo) => {
+  let page = initialPage;
   test.setTimeout(240_000);
   const ownerEmail = e2eAdminEmail("scanner-recovery-owner");
   const otherEmail = e2eAdminEmail("scanner-recovery-other");
@@ -220,6 +223,9 @@ test("real pending scanner storage survives reload and logout without crossing a
 
   await scrollScannerToTop(page);
   await signOutThroughPortal(page);
+  const replacement = await replaceScannerWorker(context, page, original);
+  page = replacement.page;
+  await writeFile(testInfo.outputPath("scanner-worker-replacement.json"), JSON.stringify(replacement.receipt, null, 2));
   const uploading = context.waitForEvent(
     "response",
     (response) =>
@@ -248,20 +254,8 @@ test("real pending scanner storage survives reload and logout without crossing a
   const uploadedBackup = uploadedFile.payload;
   expect(uploadedBackup.pending).toHaveLength(0);
   expect(uploadedBackup.records.map(({ scan }) => scan)).toEqual([original]);
-  const replaying = context.waitForEvent(
-    "response",
-    (response) =>
-      new URL(response.url()).pathname === scansPath &&
-      response.request().method() === "POST" &&
-      response.request().postDataJSON()?.operationId === original.operationId &&
-      response.ok(),
-  );
-  await page.getByRole("button", { name: "Restore uploaded scans", exact: true }).click();
-  const replayed = await replaying;
-  expect(enrolledEventScanRequestSchema.parse(replayed.request().postDataJSON())).toEqual(original);
-  expect(eventScanResponseSchema.parse(await replayed.json())).toEqual(receipt);
-  await expect(page.getByText("0 scans awaiting upload", { exact: true })).toBeVisible();
-  expect((await scannerStorage(page)).history).toHaveLength(1);
+  const competition = await replayScannerFromTwoTabs(context, page, scannerPath, scansPath, original, receipt);
+  await writeFile(testInfo.outputPath("scanner-two-tab-replay.json"), JSON.stringify(competition, null, 2));
   await expectScannerSyncTime(page, originalSyncTime);
 
   // A second real deferred logout must also preserve a newer session of the same person.
