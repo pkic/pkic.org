@@ -18,6 +18,7 @@ import {
   type McpOAuthProps,
 } from "./oauth";
 import { createMcpAuthorizeHandler } from "./authorize";
+import { mcpAuthenticationError, mcpTokenLifetime, requireActiveMcpSession } from "./session-authorization";
 
 export const MCP_PATH = "/api/v1/mcp";
 export const MCP_OPENAPI_JSON_PATH = "/api/v1/mcp/openapi.json";
@@ -101,6 +102,8 @@ async function authorizationHeaderForMcp(
     return request.headers.get("authorization");
   }
 
+  await requireActiveMcpSession(env, oauthProps);
+
   if (!env.INTERNAL_SIGNING_SECRET) {
     return null;
   }
@@ -139,11 +142,11 @@ export function createMcpWorkerFetch(
   const mcpResponse = createMcpResponse(options);
 
   class McpApiHandler extends WorkerEntrypoint<McpOAuthEnv> {
-    fetch(request: Request): Promise<Response> {
+    async fetch(request: Request): Promise<Response> {
       try {
-        return mcpResponse(request, this.env, this.ctx, parseMcpOauthProps(this.ctx.props));
+        return await mcpResponse(request, this.env, this.ctx, parseMcpOauthProps(this.ctx.props));
       } catch (error) {
-        return Promise.resolve(toOAuthErrorResponse(error));
+        return mcpAuthenticationError(request, error) ?? toOAuthErrorResponse(error);
       }
     }
   }
@@ -155,6 +158,7 @@ export function createMcpWorkerFetch(
       return await options.app.fetch(request, env, ctx);
     }
 
+    const accessTokenTTL = ttlSeconds(env.MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS, 60 * 60);
     const oauthProvider = new OAuthProvider<McpOAuthEnv>({
       apiRoute: MCP_PATH,
       apiHandler: McpApiHandler,
@@ -163,12 +167,14 @@ export function createMcpWorkerFetch(
       tokenEndpoint: MCP_OAUTH_TOKEN_PATH,
       clientRegistrationEndpoint: MCP_OAUTH_REGISTER_PATH,
       scopesSupported: [...AUTH_SCOPES],
-      accessTokenTTL: ttlSeconds(env.MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS, 60 * 60),
+      accessTokenTTL,
       refreshTokenTTL: ttlSeconds(env.MCP_OAUTH_REFRESH_TOKEN_TTL_SECONDS, 8 * 60 * 60),
       allowPlainPKCE: false,
       clientIdMetadataDocumentEnabled: true,
       resolveExternalToken: resolveMcpExternalToken,
+      tokenExchangeCallback: ({ props }) => mcpTokenLifetime(env, props, accessTokenTTL),
       resourceMetadata: {
+        resource: new URL(MCP_PATH, request.url).toString(),
         scopes_supported: [...AUTH_SCOPES],
         bearer_methods_supported: ["header"],
         resource_name: "PKI Consortium MCP",

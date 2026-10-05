@@ -6,6 +6,7 @@ import {
 } from "@cloudflare/workers-oauth-provider";
 import { z } from "zod";
 import { permissionSchema } from "../../../assets/shared/schemas/permissions";
+import { mcpOauthContextSchema } from "../../../assets/shared/schemas/mcp-oauth";
 import { getCachedAdminAuthTransport, requireAdminFromRequest } from "../auth/admin";
 import { resolveUserSessionFromRequest } from "../auth/user-session";
 import { AUTH_SCOPES, grantableScopesForActor, type AuthScope } from "../auth/scopes";
@@ -196,20 +197,13 @@ export async function describeMcpAuthorization(
   request: Request,
   env: McpOAuthEnv,
   returnTo: string,
-): Promise<{
-  authenticated: boolean;
-  authorized: boolean;
-  returnTo: string;
-  clientId: string;
-  clientName: string;
-  requestedScopes: AuthScope[];
-  grantedScopes: AuthScope[];
-  userEmail: string | null;
-  staffEmail: string | null;
-}> {
+): Promise<z.infer<typeof mcpOauthContextSchema>> {
   const authRequest = await parseOauthRequestFromReturnTo(request, env.OAUTH_PROVIDER, returnTo);
   const clientInfo = await env.OAUTH_PROVIDER.lookupClient(authRequest.clientId);
-  const session = await resolveUserSessionFromRequest(env.DB, request, env).catch(() => null);
+  const session = await resolveUserSessionFromRequest(env.DB, request, env).catch((error: unknown) => {
+    if (error instanceof AppError && (error.status === 401 || error.status === 403)) return null;
+    throw error;
+  });
   const admin = session?.staff ?? null;
   const requestedScopes = normalizeMcpOauthScopes(authRequest.scope);
   const grantedScopes = admin ? grantedMcpOauthScopes(admin, requestedScopes) : [];
@@ -217,6 +211,7 @@ export async function describeMcpAuthorization(
   return {
     authenticated: session !== null,
     authorized: admin !== null,
+    staffReauthenticationRequired: session?.staffReauthenticationRequired ?? false,
     returnTo,
     clientId: authRequest.clientId,
     clientName: clientInfo?.clientName ?? clientInfo?.clientId ?? authRequest.clientId,

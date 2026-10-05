@@ -5,6 +5,7 @@ import { permissionSchema } from "./permissions";
 export const mcpOauthContextSchema = z.object({
   authenticated: z.boolean(),
   authorized: z.boolean(),
+  staffReauthenticationRequired: z.boolean().default(false),
   returnTo: z.string(),
   clientId: z.string(),
   clientName: z.string(),

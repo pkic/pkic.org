@@ -111,13 +111,13 @@ async function handleAuthorizeApproval(
   const authRequest = await parseOauthRequestFromReturnTo(request, env.OAUTH_PROVIDER, returnTo);
   const admin = await requireMcpOauthAdmin(request, env);
   if (!admin) {
-    throw new Error("Your authorization session expired. Request a new sign-in link.");
+    throw new AppError(401, "AUTH_EXPIRED", "Your authorization session expired. Sign in again.");
   }
 
   const requestedScopes = normalizeMcpOauthScopes(authRequest.scope);
   const grantedScopes = grantedMcpOauthScopes(admin, requestedScopes);
   if (grantedScopes.length === 0) {
-    throw new Error("No scopes can be granted for this request.");
+    throw new AppError(403, "PERMISSION_REQUIRED", "No scopes can be granted for this request.");
   }
 
   const { redirectTo } = await env.OAUTH_PROVIDER.completeAuthorization({

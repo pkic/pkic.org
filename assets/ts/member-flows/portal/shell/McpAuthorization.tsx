@@ -17,6 +17,7 @@
  */
 import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { useEffect, useState } from "preact/hooks";
+import { useHashLocation } from "wouter/use-hash-location";
 import type { z } from "zod";
 import {
   mcpOauthAuthorizeActionSchema,
@@ -27,7 +28,7 @@ import {
 import { userAuthEstablishedResponseSchema } from "../../../../shared/schemas/user-auth";
 import { VerifyingOverlay } from "../../../components/VerifyingOverlay";
 import { useContractForm } from "../../../hooks/useContractForm";
-import { requestJson } from "../../../shared/api-client";
+import { ApiClientError, requestJson } from "../../../shared/api-client";
 import { authenticateWithPasskey } from "../../../shared/passkey-authentication";
 import { Alert } from "../../../ui/Alert";
 import { Button } from "../../../ui/Button";
@@ -88,7 +89,8 @@ function authorizationHash(returnTo: string): string {
 }
 
 export function McpAuthorization() {
-  const initial = authorizationParameters(window.location.hash);
+  const [authorizationLocation] = useHashLocation();
+  const initial = authorizationParameters(authorizationLocation);
   const initialReturnTo = initial.get("return_to") ?? "";
   const initialToken = initial.get("token") ?? "";
   const [returnTo, setReturnTo] = useState(initialReturnTo);
@@ -102,41 +104,40 @@ export function McpAuthorization() {
   const passkeysSupported = typeof window !== "undefined" && browserSupportsWebAuthn();
 
   useEffect(() => {
-    if (!initialToken) return;
-
-    verifyUserMagicLink(initialToken)
-      .then(() => {
-        history.replaceState({}, "", `/portal/${authorizationHash(initialReturnTo)}`);
-        setError(null);
-      })
-      .catch((err: unknown) => {
-        setError((err as Error).message);
-      })
-      .finally(() => {
-        setVerifying(false);
-      });
-  }, [initialReturnTo, initialToken]);
-
-  useEffect(() => {
-    if (!returnTo || verifying) {
+    let cancelled = false;
+    setReturnTo(initialReturnTo);
+    setSent(false);
+    if (!initialReturnTo) {
       setLoading(false);
       return;
     }
 
-    setLoading(true);
-    fetchOauthContext(returnTo)
-      .then((data) => {
+    async function loadAuthorization(): Promise<void> {
+      setLoading(true);
+      setVerifying(Boolean(initialToken));
+      try {
+        if (initialToken) await verifyUserMagicLink(initialToken);
+        const data = await fetchOauthContext(initialReturnTo);
+        if (cancelled) return;
+        if (initialToken) history.replaceState({}, "", `/portal/${authorizationHash(initialReturnTo)}`);
         setContext(data);
         setReturnTo(data.returnTo);
         setError(null);
-      })
-      .catch((err: unknown) => {
-        setError((err as Error).message);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [returnTo, verifying]);
+      } catch (err) {
+        if (!cancelled) setError((err as Error).message);
+      } finally {
+        if (!cancelled) {
+          setVerifying(false);
+          setLoading(false);
+        }
+      }
+    }
+
+    void loadAuthorization();
+    return () => {
+      cancelled = true;
+    };
+  }, [initialReturnTo, initialToken]);
 
   async function refreshContext(): Promise<void> {
     setLoading(true);
@@ -202,6 +203,9 @@ export function McpAuthorization() {
     try {
       window.location.assign(await submitOauthDecision(action, returnTo));
     } catch (err) {
+      if (err instanceof ApiClientError && err.status === 401) {
+        await refreshContext();
+      }
       setError((err as Error).message);
       setSubmitting(false);
     }
@@ -222,7 +226,11 @@ export function McpAuthorization() {
               : "Sign in through the portal to review this authorization request."}
           </p>
 
-          {!context?.authenticated ? (
+          {context?.staffReauthenticationRequired && (
+            <Alert tone="warn">Your staff session expired. Sign in again to authorize MCP access.</Alert>
+          )}
+
+          {!context?.authenticated || context.staffReauthenticationRequired ? (
             sent ? (
               <Alert tone="ok">If this address has staff access, you&apos;ll receive a sign-in link shortly.</Alert>
             ) : (

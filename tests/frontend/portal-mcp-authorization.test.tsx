@@ -1,9 +1,24 @@
 import { render } from "preact";
+import { useSyncExternalStore } from "preact/compat";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { McpAuthorization } from "../../assets/ts/member-flows/portal/shell/McpAuthorization";
 import { mcpOauthAuthorizeActionSchema } from "../../assets/shared/schemas/mcp-oauth";
 import { portalSessionFixture } from "../helpers/portal-session";
+
+// The browser test exercises the router subscription; unit tests supply its current location.
+vi.mock("wouter/use-hash-location", () => ({
+  useHashLocation: () => [
+    useSyncExternalStore(
+      (notify) => {
+        window.addEventListener("hashchange", notify);
+        return () => window.removeEventListener("hashchange", notify);
+      },
+      () => window.location.hash,
+    ),
+    vi.fn(),
+  ],
+}));
 
 const OAUTH_AUTHORIZE_PATH = "/api/v1/auth/oauth/authorize";
 const RETURN_TO =
@@ -72,70 +87,80 @@ afterEach(() => {
 });
 
 describe("portal MCP authorization", () => {
-  it("requests a canonical user sign-in link without an admin or OAuth verification endpoint", async () => {
-    window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO })}`;
-    const requests: Array<{ path: string; method: string; body: unknown }> = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
-        const url = requestUrl(input);
-        const method = init?.method ?? "GET";
-        requests.push({ path: url.pathname, method, body: init?.body ? JSON.parse(String(init.body)) : null });
-        if (method === "GET") {
-          return Response.json({
-            authenticated: false,
-            authorized: false,
-            returnTo: RETURN_TO,
-            clientId: "client-1",
-            clientName: "Test client",
-            requestedScopes: ["events:read"],
-            grantedScopes: [],
-            userEmail: null,
-            staffEmail: null,
-          });
-        }
-        return Response.json({ success: true, sentTo: "staff@example.test" });
-      }),
-    );
+  it.each([false, true])(
+    "offers canonical sign-in when staff reauthentication is %s",
+    async (staffReauthenticationRequired) => {
+      window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO })}`;
+      const requests: Array<{ path: string; method: string; body: unknown }> = [];
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = requestUrl(input);
+          const method = init?.method ?? "GET";
+          requests.push({ path: url.pathname, method, body: init?.body ? JSON.parse(String(init.body)) : null });
+          if (method === "GET") {
+            return Response.json({
+              authenticated: staffReauthenticationRequired,
+              authorized: false,
+              staffReauthenticationRequired,
+              returnTo: RETURN_TO,
+              clientId: "client-1",
+              clientName: "Test client",
+              requestedScopes: ["events:read"],
+              grantedScopes: [],
+              userEmail: null,
+              staffEmail: null,
+            });
+          }
+          return Response.json({ success: true, sentTo: "staff@example.test" });
+        }),
+      );
 
-    await act(() => render(<McpAuthorization />, container));
-    await waitFor(() => controlLabeled("Portal email") !== null);
-    const email = controlLabeled("Portal email")!;
-    expect(email.type).toBe("email");
-    expect(email.required).toBe(true);
-    // The control is on the shared contract now, so its value lives in state
-    // rather than being read back out of the DOM at submit time: typing has to
-    // be modelled as an input event, the way a person produces one.
-    await act(() => {
-      email.value = "staff@example.test";
-      email.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(() => {
-      container.querySelector<HTMLFormElement>("form")!.dispatchEvent(new Event("submit"));
-    });
-    await waitFor(() => container.textContent?.includes("you'll receive a sign-in link") ?? false);
+      await act(() => render(<McpAuthorization />, container));
+      await waitFor(() => controlLabeled("Portal email") !== null);
+      const email = controlLabeled("Portal email")!;
+      expect(email.type).toBe("email");
+      expect(email.required).toBe(true);
+      if (staffReauthenticationRequired) {
+        expect(container.querySelector('[role="alert"]')?.textContent).toContain("Your staff session expired");
+      }
+      // The control is on the shared contract now, so its value lives in state
+      // rather than being read back out of the DOM at submit time: typing has to
+      // be modelled as an input event, the way a person produces one.
+      await act(() => {
+        email.value = "staff@example.test";
+        email.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+      await act(() => {
+        container.querySelector<HTMLFormElement>("form")!.dispatchEvent(new Event("submit"));
+      });
+      await waitFor(() => container.textContent?.includes("you'll receive a sign-in link") ?? false);
 
-    // The confirmation is a live region, not just a green box.
-    expect(container.querySelector('[role="status"]')?.textContent).toContain("you'll receive a sign-in link");
-    expect(requests.some(({ path, method }) => path === OAUTH_AUTHORIZE_PATH && method === "GET")).toBe(true);
+      // The confirmation is a live region, not just a green box.
+      expect(container.querySelector('[role="status"]')?.textContent).toContain("you'll receive a sign-in link");
+      expect(requests.some(({ path, method }) => path === OAUTH_AUTHORIZE_PATH && method === "GET")).toBe(true);
 
-    const posted = requests.find(({ method }) => method === "POST");
-    expect(posted?.path).toBe(OAUTH_AUTHORIZE_PATH);
-    // Comparing the literal back would only restate what the component sent.
-    // Parsing it through the shared contract is what proves the server would
-    // accept it — including the discriminator the route switches on.
-    expect(mcpOauthAuthorizeActionSchema.parse(posted?.body)).toEqual({
-      action: "request-link",
-      email: "staff@example.test",
-      return_to: RETURN_TO,
-    });
-    expect(requests.some(({ path }) => path.startsWith("/api/v1/admin") || path === "/api/v1/oauth/verify-link")).toBe(
-      false,
-    );
-  });
+      const posted = requests.find(({ method }) => method === "POST");
+      expect(posted?.path).toBe(OAUTH_AUTHORIZE_PATH);
+      // Comparing the literal back would only restate what the component sent.
+      // Parsing it through the shared contract is what proves the server would
+      // accept it — including the discriminator the route switches on.
+      expect(mcpOauthAuthorizeActionSchema.parse(posted?.body)).toEqual({
+        action: "request-link",
+        email: "staff@example.test",
+        return_to: RETURN_TO,
+      });
+      expect(
+        requests.some(({ path }) => path.startsWith("/api/v1/admin") || path === "/api/v1/oauth/verify-link"),
+      ).toBe(false);
+    },
+  );
 
-  it("redeems the standard user capability and renders the permission decision", async () => {
+  it.each([false, true])("redeems the standard user capability with same-tab navigation %s", async (sameTab) => {
     window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO, token: "user-token" })}`;
+    const tokenHash = window.location.hash;
+    if (sameTab) window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO })}`;
+    let verified = false;
     const requests: Array<{ path: string; method: string }> = [];
     vi.stubGlobal(
       "fetch",
@@ -144,21 +169,22 @@ describe("portal MCP authorization", () => {
         const method = init?.method ?? "GET";
         requests.push({ path: url.pathname, method });
         if (url.pathname === "/api/v1/auth/verify-link") {
+          verified = true;
           return Response.json({
             ...portalSessionFixture({ staff: true }),
             expiresAt: "2026-08-30T00:00:00.000Z",
           });
         }
         return Response.json({
-          authenticated: true,
-          authorized: true,
+          authenticated: verified,
+          authorized: verified,
           returnTo: RETURN_TO,
           clientId: "client-1",
           clientName: "Test client",
           requestedScopes: ["events:read"],
-          grantedScopes: ["events:read"],
-          userEmail: "person@example.test",
-          staffEmail: "person@example.test",
+          grantedScopes: verified ? ["events:read"] : [],
+          userEmail: verified ? "person@example.test" : null,
+          staffEmail: verified ? "person@example.test" : null,
         });
       }),
     );
@@ -166,9 +192,16 @@ describe("portal MCP authorization", () => {
     await act(() => render(<McpAuthorization />, container));
     await flush();
     await flush();
+    if (sameTab) {
+      await waitFor(() => controlLabeled("Portal email") !== null);
+      await act(() => {
+        window.location.hash = tokenHash;
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+      });
+    }
     await waitFor(() => definitionFor("Signed in as") === "person@example.test");
 
-    expect(requests[0]).toEqual({ path: "/api/v1/auth/verify-link", method: "POST" });
+    expect(requests).toContainEqual({ path: "/api/v1/auth/verify-link", method: "POST" });
     // The identity and the client are a name/value list, so each value is
     // reachable through the term that names it rather than as loose bold text.
     expect(definitionFor("Signed in as")).toBe("person@example.test");
