@@ -1,6 +1,10 @@
 import { readFile } from "node:fs/promises";
 import { expect, it } from "vitest";
-import { siteContentSecurityPolicy, siteStaticHeaders } from "../../assets/shared/site-security-policy";
+import {
+  siteContentSecurityPolicy,
+  siteStaticHeaders,
+  siteSecurityHeaders,
+} from "../../assets/shared/site-security-policy";
 
 function directive(policy: string, name: string) {
   return policy.split("; ").find((entry) => entry.startsWith(`${name} `));
@@ -43,4 +47,20 @@ it("keeps native Cloudflare headers identical to the canonical policy and within
   expect(headers.split("\n").every((line) => line.length <= 2000)).toBe(true);
   expect(headers).toContain("Strict-Transport-Security: max-age=31536000");
   expect(headers).toContain("Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()");
+});
+
+it("allows email styling only in the isolated preview document", () => {
+  const portal = siteContentSecurityPolicy("/portal/");
+  expect(directive(portal, "style-src")).toBe("style-src 'self'");
+  expect(directive(portal, "style-src-attr")).toBe("style-src-attr 'none'");
+  expect(directive(portal, "frame-src")).toContain("'self'");
+  const preview = siteSecurityHeaders("/email/preview/");
+  const policy = preview["Content-Security-Policy"];
+  expect(directive(policy, "style-src")).toBe("style-src 'self' 'unsafe-inline'");
+  expect(directive(policy, "script-src")).toBe("script-src 'self'");
+  expect(directive(policy, "script-src-attr")).toBe("script-src-attr 'none'");
+  expect(directive(policy, "connect-src")).toBe("connect-src 'none'");
+  expect(directive(policy, "frame-ancestors")).toBe("frame-ancestors 'self'");
+  expect(preview["X-Frame-Options"]).toBe("SAMEORIGIN");
+  expect(siteContentSecurityPolicy("/email/preview/other")).not.toContain("'unsafe-inline'");
 });

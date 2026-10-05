@@ -1,3 +1,4 @@
+import { EMAIL_PREVIEW_DOCUMENT_PATH } from "./assets/shared/site-security-policy.ts";
 import { siteMarkdownProcessor } from "./site/markdown-processor.ts";
 import { logPublicationBuildCache } from "./scripts/publication/log-build-cache.mjs";
 import { randomUUID } from "node:crypto";
@@ -37,7 +38,10 @@ export default defineConfig({
   build: { assets: "_assets", inlineStylesheets: "never" },
   integrations: [
     preact({ compat: true }),
-    sitemap({ filter: (url) => !url.includes("/portal/") && !url.includes("/search/") }),
+    sitemap({
+      filter: (url) =>
+        !url.includes("/portal/") && !url.includes("/search/") && !url.endsWith(EMAIL_PREVIEW_DOCUMENT_PATH),
+    }),
     {
       name: "pkic-publication-post-processing",
       hooks: {

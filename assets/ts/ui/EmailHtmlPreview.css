@@ -1,7 +1,9 @@
+@import "../../design/tokens.template.generated.css";
+
 @layer components {
   /* Email HTML owns its colors; transparent documents need a light canvas
      even when the surrounding portal uses the dark theme. */
-  .pk-email-template-preview {
+  .pk-email-preview {
     background: var(--pk-template-preview-surface);
     color-scheme: light;
   }

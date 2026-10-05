@@ -1,3 +1,4 @@
+import { EmailHtmlPreview } from "../../../../ui/EmailHtmlPreview";
 import { IconBraces } from "../../../../components/icons";
 import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
 import type { MarkdownEditorHandle } from "../../../../components/markdown-editor/MarkdownEditor";
@@ -39,7 +40,6 @@ import { EmailTemplateVersionHistory } from "./EmailTemplateVersionHistory";
 // stylesheet, because only the two template editors use it.
 import "../../../../ui/OverlayEditor.css";
 import "../../../../ui/Content.css";
-import "./EmailTemplateEditor.css";
 const EMAIL_LAYOUT_TEMPLATE_KEY = "email_layout";
 const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
 
@@ -74,7 +74,6 @@ export function TemplateEditor({
   const bodyPreRef = useRef<HTMLPreElement>(null);
   const bodyEditor = useRef<MarkdownEditorHandle>(null);
   const [bodyRevision, setBodyRevision] = useState(0);
-  const iframeRef = useRef<HTMLIFrameElement>(null);
   const editorFocusRef = useRef<"subject" | "body">("body");
   const historyRef = useRef<ApiTableActions | null>(null);
 
@@ -94,15 +93,6 @@ export function TemplateEditor({
       }
     }
   }, [body]);
-
-  // Sync iframe srcdoc. The tab is a dependency because leaving the HTML tab
-  // unmounts the frame, so a viewer coming back gets a brand-new empty element
-  // that the already-rendered HTML has to be written into again.
-  useEffect(() => {
-    if (iframeRef.current && previewHtml) {
-      iframeRef.current.srcdoc = previewHtml;
-    }
-  }, [previewHtml, previewTab]);
 
   /**
    * The body control. `Textarea` is a function component, and a ref on one
@@ -526,13 +516,7 @@ export function TemplateEditor({
                     onChange={(key) => setPreviewTab(key as EmailPreviewTab)}
                   />
                   {previewTab === "html" ? (
-                    <iframe
-                      ref={iframeRef}
-                      title="Rendered email HTML preview"
-                      sandbox=""
-                      class="pk-framed pk-email-template-preview"
-                      height={360}
-                    />
+                    <EmailHtmlPreview html={previewHtml} />
                   ) : (
                     <pre class="pk-code-block pk-small pk-break">{previewText}</pre>
                   )}

@@ -1,6 +1,7 @@
 /**
  * @covers system.12.6
  */
+import { fileURLToPath } from "node:url";
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
@@ -10,6 +11,13 @@ const EMAIL_TEMPLATES_API = "/api/v1/email/templates";
 const REMOVED_ADMIN_TEMPLATES_API = "/api/v1/admin/email-templates";
 
 test("permitted staff create, preview, activate, and reopen an email template through the portal", async ({ page }) => {
+  // Keep the email logo self-contained rather than relying on public network access.
+  await page.route("https://pkic.org/img/logo-white.png", (route) =>
+    route.fulfill({
+      path: fileURLToPath(new URL("../../static/img/logo-white.png", import.meta.url)),
+      contentType: "image/png",
+    }),
+  );
   const emailTemplateRequests: string[] = [];
   const removedAdminRequests: string[] = [];
   page.on("request", (request) => {
@@ -67,7 +75,7 @@ test("permitted staff create, preview, activate, and reopen an email template th
   const htmlSource =
     "{{#if organizationName}}<h2>{{organizationName}}</h2>\n" +
     "<p>Hello {{firstName}}, your form is ready.</p>\n".repeat(30) +
-    "{{else}}Hello user{{/if}}";
+    "{{else}}Hello user{{/if}}<script>document.body.dataset.emailScriptRan='yes'</script>";
   await htmlBody.fill(htmlSource);
   const bodyOverlay = page.locator(".pk-overlay-editor").filter({ has: htmlBody });
   const backdrop = bodyOverlay.locator("pre");
@@ -103,8 +111,35 @@ test("permitted staff create, preview, activate, and reopen an email template th
   await expect.poll(() => backdrop.evaluate((element) => element.scrollTop)).toBe(scrollTop);
   await page.getByRole("button", { name: "Render Preview" }).click();
   await expect(page.getByText("Preview rendered.", { exact: true })).toBeVisible();
-  await expect(page.frameLocator("iframe[title='Rendered email HTML preview']").locator("body")).toContainText(
-    "your form is ready",
+  await expect(
+    page
+      .frameLocator("iframe[title='Rendered email HTML preview']")
+      .frameLocator("iframe[title='Email HTML']")
+      .locator("body"),
+  ).toContainText("your form is ready");
+  const renderedEmail = page
+    .frameLocator("iframe[title='Rendered email HTML preview']")
+    .frameLocator("iframe[title='Email HTML']");
+  // Actual email CSS includes both style blocks and inline attributes.
+  await expect
+    .poll(() =>
+      renderedEmail
+        .getByRole("img", { name: "PKI Consortium", exact: true })
+        .evaluate((img: HTMLImageElement) => img.naturalWidth),
+    )
+    .toBeGreaterThan(0);
+  await expect(renderedEmail.locator("script")).toHaveCount(1);
+  await expect(renderedEmail.locator("body")).not.toHaveAttribute("data-email-script-ran", "yes");
+  await expect(
+    renderedEmail.getByRole("img", { name: "PKI Consortium", exact: true }).locator("xpath=ancestor::td[1]"),
+  ).toHaveCSS("background-color", "rgb(0, 0, 0)");
+  await expect(renderedEmail.getByText("Hello Jane, your form is ready.", { exact: true }).first()).toHaveCSS(
+    "color",
+    "rgb(55, 65, 81)",
+  );
+  await expect(renderedEmail.getByRole("heading", { name: "Example Corp", exact: true }).locator("..")).toHaveCSS(
+    "background-color",
+    "rgb(255, 255, 255)",
   );
   await htmlBody.screenshot({ path: test.info().outputPath("html-template-highlighting.png") });
   await page.screenshot({ path: test.info().outputPath("html-template-desktop.png"), fullPage: true });
@@ -122,7 +157,10 @@ test("permitted staff create, preview, activate, and reopen an email template th
   await expect(htmlPreview).toHaveCSS("background-color", "rgb(255, 255, 255)");
   await expect(htmlPreview).toHaveCSS("color-scheme", "light");
   await expect(
-    page.frameLocator("iframe[title='Rendered email HTML preview']").getByRole("heading", { name: "Example Corp" }),
+    page
+      .frameLocator("iframe[title='Rendered email HTML preview']")
+      .frameLocator("iframe[title='Email HTML']")
+      .getByRole("heading", { name: "Example Corp" }),
   ).toBeVisible();
   await page.screenshot({ path: test.info().outputPath("html-template-mobile-dark.png"), fullPage: true });
   await page.emulateMedia({ colorScheme: "light" });
@@ -173,16 +211,27 @@ test("permitted staff create, preview, activate, and reopen an email template th
   expect(renderedPreview.status()).toBe(200);
   expect(emailTemplatePreviewSchema.parse(renderedPreview.request().postDataJSON()).content).toBe(revisedBody);
   await expect(page.getByText("Preview rendered.", { exact: true })).toBeVisible();
-  await expect(page.locator("iframe[title='Rendered email HTML preview']")).toHaveAttribute("sandbox", "");
-  await expect(page.frameLocator("iframe[title='Rendered email HTML preview']").locator("body")).toContainText(
-    "ready for immediate activation",
-  );
-  await expect(page.frameLocator("iframe[title='Rendered email HTML preview']").locator("body")).toContainText(
-    "About the PKI Consortium",
-  );
-  await expect(page.frameLocator("iframe[title='Rendered email HTML preview']").locator("body")).not.toContainText(
-    "about_pkic",
-  );
+  await expect(
+    page.frameLocator("iframe[title='Rendered email HTML preview']").locator("iframe[title='Email HTML']"),
+  ).toHaveAttribute("sandbox", "");
+  await expect(
+    page
+      .frameLocator("iframe[title='Rendered email HTML preview']")
+      .frameLocator("iframe[title='Email HTML']")
+      .locator("body"),
+  ).toContainText("ready for immediate activation");
+  await expect(
+    page
+      .frameLocator("iframe[title='Rendered email HTML preview']")
+      .frameLocator("iframe[title='Email HTML']")
+      .locator("body"),
+  ).toContainText("About the PKI Consortium");
+  await expect(
+    page
+      .frameLocator("iframe[title='Rendered email HTML preview']")
+      .frameLocator("iframe[title='Email HTML']")
+      .locator("body"),
+  ).not.toContainText("about_pkic");
 
   // The editor and rendered result share the working width on a wide screen.
   await page.setViewportSize({ width: 1920, height: 1080 });
@@ -197,9 +246,12 @@ test("permitted staff create, preview, activate, and reopen an email template th
   expect(Math.abs(columns[0].width - columns[1].width)).toBeLessThanOrEqual(1);
   expect(Math.abs(columns[0].top - columns[1].top)).toBeLessThanOrEqual(1);
   await page.getByRole("heading", { name: `Edit: ${templateKey}`, exact: true }).scrollIntoViewIfNeeded();
-  await expect(page.frameLocator("iframe[title='Rendered email HTML preview']").locator("body")).toContainText(
-    "ready for immediate activation",
-  );
+  await expect(
+    page
+      .frameLocator("iframe[title='Rendered email HTML preview']")
+      .frameLocator("iframe[title='Email HTML']")
+      .locator("body"),
+  ).toContainText("ready for immediate activation");
   await page.screenshot({ path: test.info().outputPath("email-editor-desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   for (const command of await page.locator("[data-command][hidden]").all()) {

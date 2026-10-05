@@ -1,3 +1,4 @@
+import { emailPreviewDocumentMessageSchema } from "../../assets/shared/email-preview-document";
 import { markdownControl, markdownValue, typeMarkdown } from "./helpers/labelled-control";
 // @vitest-environment jsdom
 import { render } from "preact";
@@ -150,6 +151,17 @@ function previewFrame(): HTMLIFrameElement | null {
   return container!.querySelector<HTMLIFrameElement>("iframe[title='Rendered email HTML preview']");
 }
 
+async function expectRenderedPreview() {
+  const frame = previewFrame()!;
+  expect(frame.getAttribute("src")).toBe("/email/preview/");
+  const send = vi.spyOn(frame.contentWindow!, "postMessage");
+  await act(() => {
+    frame.dispatchEvent(new Event("load"));
+  });
+  expect(emailPreviewDocumentMessageSchema.parse(send.mock.calls.at(-1)?.[0]).html).toBe(RENDERED_HTML);
+  expect(send.mock.calls.at(-1)?.[1]).toBe(location.origin);
+}
+
 beforeEach(() => {
   toastArea = document.createElement("div");
   toastArea.id = "portal-toast-area";
@@ -193,8 +205,8 @@ describe("portal email template editor", () => {
     const source = await markdownControl(container!, "Body");
     expect(source.getAttribute("contenteditable")).toBe("true");
     expect(source.textContent).toContain("firstName");
-    // The preview is untrusted rendered HTML and stays fully sandboxed.
-    expect(previewFrame()!.getAttribute("sandbox")).toBe("");
+    // The trusted bridge receives HTML; its nested email frame owns the sandbox.
+    expect(previewFrame()!.getAttribute("src")).toBe("/email/preview/");
   });
 
   it("offers the content and message types the version contract accepts", async () => {
@@ -230,7 +242,7 @@ describe("portal email template editor", () => {
     expect(previewBody.data).toMatchObject({ firstName: "Jane" });
 
     expect(container!.textContent).toContain("Preview rendered.");
-    expect(previewFrame()!.srcdoc).toBe(RENDERED_HTML);
+    await expectRenderedPreview();
     expect(save().disabled).toBe(false);
 
     // The sender the template names goes with the version (#106).
@@ -260,7 +272,7 @@ describe("portal email template editor", () => {
     await click("HTML");
     // The frame is a brand-new element, so the rendered HTML has to be written
     // into it again; before this was fixed the viewer came back to a blank box.
-    expect(previewFrame()!.srcdoc).toBe(RENDERED_HTML);
+    await expectRenderedPreview();
   });
 
   it("rejects preview data that is not a JSON object without calling the API", async () => {
