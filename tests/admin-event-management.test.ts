@@ -22,6 +22,7 @@ import { grantEventTeamRole, revokeEventTeamRole } from "../functions/_lib/servi
 import { createUserBackedAuthAdmin } from "../functions/_lib/auth/admin-identity";
 import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { insertUser } from "./helpers/membership";
+import type { UserBackedAuthAdmin } from "../functions/_lib/types";
 
 let ADMIN_TOKEN = "event-admin-token";
 
@@ -46,13 +47,13 @@ async function callAdmin(path: string, init: RequestInit = {}): Promise<Response
   );
 }
 
-async function setupAdmin(): Promise<{ baseEventId: string }> {
-  const { eventId } = await seedEventAndAdmin(env.DB);
+async function setupAdmin(): Promise<{ baseEventId: string; admin: UserBackedAuthAdmin }> {
+  const { eventId, admin } = await seedEventAndAdmin(env.DB);
   const adminRow = (
     await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1")
   )[0];
   ADMIN_TOKEN = await createAdminSession(env.DB, adminRow.id, ADMIN_TOKEN);
-  return { baseEventId: eventId };
+  return { baseEventId: eventId, admin };
 }
 
 /**
@@ -191,7 +192,7 @@ describe("admin event management endpoints", () => {
   });
 
   it("aggregates only the returned event page, not unrelated events", async () => {
-    await setupAdmin();
+    const { admin } = await setupAdmin();
     const pageEventId = crypto.randomUUID();
     const unrelatedEventId = crypto.randomUUID();
     const pageUserId = crypto.randomUUID();
@@ -246,11 +247,7 @@ describe("admin event management endpoints", () => {
       ).bind(crypto.randomUUID(), unrelatedEventId, `unrelated-invite-${crypto.randomUUID()}`),
     ]);
 
-    const result = await listManagedEvents(
-      env.DB,
-      { userId: "admin-user", canReadAll: true },
-      { limit: 1, offset: 0, sort: "name" },
-    );
+    const result = await listManagedEvents(env.DB, { userId: admin.id, admin }, { limit: 1, offset: 0, sort: "name" });
     expect(result.events).toHaveLength(1);
     expect(result.events[0]).toMatchObject({
       id: pageEventId,
@@ -262,8 +259,8 @@ describe("admin event management endpoints", () => {
   });
 
   it("keeps the event count plan independent of registration and invite projections", async () => {
-    await setupAdmin();
-    const query = buildManagedEventsPageQuery({ userId: "admin-user", canReadAll: true }, { limit: 1, offset: 0 });
+    const { admin } = await setupAdmin();
+    const query = buildManagedEventsPageQuery({ userId: admin.id, admin }, { limit: 1, offset: 0 });
     const { pageSql, countSql, bindings } = buildOffsetPageSql(query);
     const [pagePlan, countPlan] = await Promise.all([
       env.DB.prepare(`EXPLAIN QUERY PLAN ${pageSql}`)

@@ -42,12 +42,9 @@ describe("admin list D1 query plans", () => {
   });
 
   it("aggregates a maximum-size event page through one JSON binding", async () => {
-    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { eventId, admin } = await seedEventAndAdmin(env.DB);
     const eventIds = [eventId, ...Array.from({ length: MAX_PAGE_LIMIT - 1 }, (_, index) => `event-${index}`)];
-    const pageQuery = buildManagedEventsPageQuery(
-      { userId: "admin-user", canReadAll: true },
-      { limit: MAX_PAGE_LIMIT, offset: 0 },
-    );
+    const pageQuery = buildManagedEventsPageQuery({ userId: admin.id, admin }, { limit: MAX_PAGE_LIMIT, offset: 0 });
     expect(pageQuery.limit).toBe(200);
     await explainOffsetPage(pageQuery);
 

@@ -1,4 +1,4 @@
-import { administratorGrants, grantAdministrator } from "./administrator";
+import { grantAdministrator } from "./administrator";
 import { createAdminSession } from "./auth";
 import { insertUser } from "./membership";
 import { createGroup } from "../../functions/_lib/services/groups";
@@ -26,12 +26,12 @@ export async function createGroupEventInvitationFixture(
   const suffix = crypto.randomUUID();
   const email = `${label}-${suffix}@example.test`;
   const userId = await insertUser(db, email);
-  await grantAdministrator(db, userId);
+  const grants = await grantAdministrator(db, userId);
   const actor: UserBackedAuthAdmin = {
     identityType: "user",
     id: userId,
     email,
-    grants: administratorGrants,
+    grants,
   };
   const group = await createGroup(db, actor, {
     typeKey: "working_group",

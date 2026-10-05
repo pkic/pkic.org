@@ -1,5 +1,5 @@
 import { grantAdministrator } from "./administrator";
-import type { DatabaseLike, Env, PagesContext } from "../../functions/_lib/types";
+import type { DatabaseLike, Env, PagesContext, UserBackedAuthAdmin } from "../../functions/_lib/types";
 import type { AdminContext } from "../../functions/_lib/db/context";
 import type { RateLimitBinding } from "../../functions/_lib/rate-limit";
 import { materializeQueuedCapabilityLinks } from "../../functions/_lib/services/capability-links";
@@ -98,7 +98,7 @@ export function createTestRateLimiter(limit: number): RateLimitBinding {
   };
 }
 
-export async function seedEventAndAdmin(db: DatabaseLike): Promise<{ eventId: string }> {
+export async function seedEventAndAdmin(db: DatabaseLike): Promise<{ eventId: string; admin: UserBackedAuthAdmin }> {
   const eventId = crypto.randomUUID();
   const adminId = crypto.randomUUID();
 
@@ -121,7 +121,6 @@ export async function seedEventAndAdmin(db: DatabaseLike): Promise<{ eventId: st
        ('${crypto.randomUUID()}', '${eventId}', 'speaker', 'speaker-terms', 'v1', 1, '/speaker-terms', 1, datetime('now'))`,
     ),
   ]);
-  await grantAdministrator(db, adminId);
-
-  return { eventId };
+  const grants = await grantAdministrator(db, adminId);
+  return { eventId, admin: { identityType: "user", id: adminId, email: "admin@pkic.org", grants } };
 }

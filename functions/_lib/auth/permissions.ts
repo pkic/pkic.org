@@ -158,8 +158,8 @@ export function requireAnyPermission(
 
 /**
  * Canonical live-D1 evidence for one or more permissions. Request preflight
- * uses `hasPermission`; protected mutation batches use this equivalent SQL so
- * revocation between authentication and commit fails atomically.
+ * uses `hasPermission`; protected reads and mutation batches use this equivalent
+ * SQL so revocation between authentication and database access fails atomically.
  */
 export function permissionsAuthorizationEvidence(
   actor: AuthAdmin,
@@ -173,6 +173,41 @@ export function permissionsAuthorizationEvidence(
       ]),
     ).values(),
   ];
+  return buildPermissionsAuthorizationEvidence(actor, unique, {
+    sql: `SELECT json_extract(value, '$.permission') AS permission,
+                 json_extract(value, '$.contextType') AS context_type,
+                 json_extract(value, '$.contextId') AS context_id
+            FROM json_each(?)`,
+    bindings: [
+      JSON.stringify(
+        unique.map(({ permission, context }) => ({
+          permission,
+          contextType: context?.type ?? null,
+          contextId: context?.id ?? null,
+        })),
+      ),
+    ],
+  });
+}
+
+/** The resource ID expression is a trusted source column, never request input. */
+export function permissionAuthorizationEvidenceForResource(
+  actor: AuthAdmin,
+  permission: string,
+  context: { type: string; idSql: string },
+): AuthorizationEvidence {
+  if (!isUserBackedAuthAdmin(actor)) return permissionsAuthorizationEvidence(actor, [{ permission }]);
+  return buildPermissionsAuthorizationEvidence(actor, [{ permission }], {
+    sql: `SELECT ? AS permission, ? AS context_type, ${context.idSql} AS context_id`,
+    bindings: [permission, context.type],
+  });
+}
+
+function buildPermissionsAuthorizationEvidence(
+  actor: AuthAdmin,
+  unique: readonly PermissionRequirement[],
+  required: AuthorizationEvidence,
+): AuthorizationEvidence {
   if (unique.length === 0) return { sql: "SELECT 1", bindings: [] };
   if (unique.some(({ permission }) => actor.scopeRestricted && actor.scopes?.includes(permission) !== true)) {
     return { sql: "SELECT 1 WHERE 0", bindings: [] };
@@ -184,12 +219,7 @@ export function permissionsAuthorizationEvidence(
   }
 
   return {
-    sql: `WITH required(permission, context_type, context_id) AS (
-            SELECT json_extract(value, '$.permission'),
-                   json_extract(value, '$.contextType'),
-                   json_extract(value, '$.contextId')
-              FROM json_each(?)
-          )
+    sql: `WITH required(permission, context_type, context_id) AS (${required.sql})
           SELECT 1
             FROM users actor
            WHERE actor.id = ? AND actor.active = 1
@@ -243,17 +273,7 @@ export function permissionsAuthorizationEvidence(
                 )
              )
            LIMIT 1`,
-    bindings: [
-      JSON.stringify(
-        unique.map(({ permission, context }) => ({
-          permission,
-          contextType: context?.type ?? null,
-          contextId: context?.id ?? null,
-        })),
-      ),
-      actor.id,
-      actor.memberId ?? null,
-    ],
+    bindings: [...required.bindings, actor.id, actor.memberId ?? null],
   };
 }
 

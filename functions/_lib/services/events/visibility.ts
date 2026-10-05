@@ -1,17 +1,34 @@
-import { hasPermission } from "../../auth/permissions";
+import {
+  guardPermissionDatabase,
+  permissionAuthorizationEvidenceForResource,
+  permissionsAuthorizationEvidence,
+  type PermissionContext,
+} from "../../auth/permissions";
 import type { UserSessionResult } from "../../auth/user-session";
 import { activeEffectiveInviteExpirySql, effectiveInviteExpirySql } from "../../invite-validity";
+import type { AuthAdmin, DatabaseLike } from "../../types";
+import { AppError } from "../../errors";
 
 export interface EventAudienceViewer {
   userId: string | null;
-  canReadAll: boolean;
+  admin?: AuthAdmin;
 }
 
 export function eventAudienceViewer(session: UserSessionResult | null): EventAudienceViewer {
   return {
     userId: session?.identity.id ?? null,
-    canReadAll: Boolean(session?.staff && hasPermission(session.staff, "events:read")),
+    admin: session?.staff,
   };
+}
+
+/** Keep management projections and their enrichment inside live event-read authority. */
+export function guardEventReadDatabase(db: DatabaseLike, actor: AuthAdmin, context?: PermissionContext): DatabaseLike {
+  return guardPermissionDatabase(
+    db,
+    actor,
+    [{ permission: "events:read", context }],
+    () => new AppError(403, "PERMISSION_REQUIRED", "Event read permission is no longer available"),
+  );
 }
 
 /**
@@ -24,12 +41,23 @@ export function buildEventAudiencePredicate(
   eventAlias: string,
   viewer: EventAudienceViewer,
 ): { sql: string; bindings: unknown[] } {
-  if (viewer.canReadAll) return { sql: "1", bindings: [] };
-  if (!viewer.userId) return { sql: `${eventAlias}.visibility = 'public'`, bindings: [] };
+  if (!viewer.userId && !viewer.admin) return { sql: `${eventAlias}.visibility = 'public'`, bindings: [] };
+  const actor: AuthAdmin = viewer.admin ?? { identityType: "user", id: viewer.userId ?? "", email: "" };
+  const globalRead = permissionsAuthorizationEvidence(actor, [{ permission: "events:read" }]);
+  if (!viewer.userId)
+    return {
+      sql: `(EXISTS (${globalRead.sql}) OR ${eventAlias}.visibility = 'public')`,
+      bindings: [...globalRead.bindings],
+    };
+  const eventRead = permissionAuthorizationEvidenceForResource(actor, "events:read", {
+    type: "event",
+    idSql: `${eventAlias}.id`,
+  });
 
   return {
     sql: `(
-      ${eventAlias}.visibility = 'public'
+      EXISTS (${globalRead.sql})
+      OR ${eventAlias}.visibility = 'public'
       OR (
         ${eventAlias}.visibility = 'all_members'
         AND (
@@ -106,33 +134,10 @@ export function buildEventAudiencePredicate(
         WHERE own_proposal.event_id = ${eventAlias}.id AND own_proposal.deleted_at IS NULL
           AND (own_proposal.proposer_user_id = ? OR EXISTS (
             SELECT 1 FROM proposal_speakers own_speaker WHERE own_speaker.proposal_id = own_proposal.id AND own_speaker.user_id = ?)))
-      OR EXISTS (
-        SELECT 1
-          FROM user_roles audience_role
-          JOIN role_permissions audience_role_permission
-            ON audience_role_permission.role_id = audience_role.role_id
-           AND audience_role_permission.permission = 'events:read'
-         WHERE audience_role.user_id = ?
-           AND audience_role.revoked_at IS NULL
-           AND (audience_role.expires_at IS NULL OR audience_role.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-           AND (
-             (audience_role.context_type IS NULL AND audience_role.context_id IS NULL)
-             OR (audience_role.context_type = 'event' AND audience_role.context_id = ${eventAlias}.id)
-           )
-      )
-      OR EXISTS (
-        SELECT 1 FROM permission_grants audience_permission
-         WHERE audience_permission.user_id = ?
-           AND audience_permission.permission = 'events:read'
-           AND audience_permission.revoked_at IS NULL
-           AND (audience_permission.expires_at IS NULL OR audience_permission.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
-           AND (
-             (audience_permission.context_type IS NULL AND audience_permission.context_id IS NULL)
-             OR (audience_permission.context_type = 'event' AND audience_permission.context_id = ${eventAlias}.id)
-           )
-      )
+      OR EXISTS (${eventRead.sql})
     )`,
     bindings: [
+      ...globalRead.bindings,
       viewer.userId,
       viewer.userId,
       viewer.userId,
@@ -142,8 +147,7 @@ export function buildEventAudiencePredicate(
       viewer.userId,
       viewer.userId,
       viewer.userId,
-      viewer.userId,
-      viewer.userId,
+      ...eventRead.bindings,
     ],
   };
 }

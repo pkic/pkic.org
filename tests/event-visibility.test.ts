@@ -1,4 +1,4 @@
-import { administratorGrants, grantAdministrator } from "./helpers/administrator";
+import { grantAdministrator } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
@@ -143,12 +143,11 @@ describe("event audience visibility", () => {
     )
       .bind(adminUserId)
       .run();
-    await grantAdministrator(env.DB, adminUserId);
     const admin: UserBackedAuthAdmin = {
       identityType: "user",
       id: adminUserId,
       email: "event-visibility-admin@example.test",
-      grants: administratorGrants,
+      grants: await grantAdministrator(env.DB, adminUserId),
     };
     const group = await createGroup(env.DB, admin, {
       typeKey: "working_group",
@@ -272,10 +271,7 @@ describe("event audience visibility", () => {
   });
 
   it("uses the visibility schedule index for anonymous page and count queries", async () => {
-    const query = buildEventsPageQuery(
-      { userId: null, canReadAll: false },
-      eventsListQuerySchema.parse({ limit: 25, offset: 0 }),
-    );
+    const query = buildEventsPageQuery({ userId: null }, eventsListQuerySchema.parse({ limit: 25, offset: 0 }));
     const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(query);
     const [pagePlan, countPlan] = await Promise.all([
       env.DB.prepare(`EXPLAIN QUERY PLAN ${pageSql}`)

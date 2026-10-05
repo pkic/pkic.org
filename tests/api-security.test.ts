@@ -1,4 +1,4 @@
-import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
+import { ADMINISTRATOR_FIXTURE_USER_SQL, grantAdministrator } from "./helpers/administrator";
 /**
  * api-security.test.ts
  *
@@ -490,6 +490,7 @@ describe("session-token validation", () => {
       VALUES ('${inactiveAdminId}', 'inactive@example.test', 'inactive@example.test', 0, datetime('now'), datetime('now'));
     `,
     ).run();
+    await grantAdministrator(env.DB, inactiveAdminId);
     const token = await insertSession(env.DB, inactiveAdminId, "inactive-admin-token");
     const response = await callUsers(token);
     expect(response.status).toBe(401);
