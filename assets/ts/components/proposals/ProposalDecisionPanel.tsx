@@ -1,3 +1,4 @@
+import "./ProposalDecisionPanel.css";
 import { useEffect, useLayoutEffect, useState } from "preact/hooks";
 import type { z } from "zod";
 import type { EventProposalDetailResponse } from "../../../shared/schemas/event-proposals";
@@ -282,18 +283,23 @@ export function ProposalDecisionPanel({
                       <div class="pk-stack">
                         <div>
                           <div class="pk-small pk-muted">Outgoing emails</div>
-                          <div class="pk-stack pk-stack--tight">
+                          <div class="pk-stack pk-stack--tight" role="group" aria-label="Outgoing emails">
                             {preview.messages.map((message) => (
-                              <button
+                              <Button
                                 key={message.id}
-                                type="button"
-                                class={`list-group-item list-group-item-action${message.id === selectedPreview.id ? " active" : ""}`}
+                                variant={message.id === selectedPreview.id ? "primary" : "secondary"}
+                                size="sm"
+                                block
+                                class="pk-proposal-email-choice"
+                                aria-pressed={message.id === selectedPreview.id}
                                 onClick={() => setSelectedPreviewId(message.id)}
                               >
-                                <div class="pk-strong pk-small">{decisionEmailLabel(message.templateKey)}</div>
-                                <div class="pk-small">{message.recipientLabel}</div>
-                                <div class="pk-small pk-break">{message.recipientEmail}</div>
-                              </button>
+                                <span class="pk-stack pk-stack--tight pk-start pk-break">
+                                  <span class="pk-strong">{decisionEmailLabel(message.templateKey)}</span>
+                                  <span>{message.recipientLabel}</span>
+                                  <span>{message.recipientEmail}</span>
+                                </span>
+                              </Button>
                             ))}
                           </div>
                         </div>

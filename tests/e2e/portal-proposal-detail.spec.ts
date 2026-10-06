@@ -9,6 +9,7 @@ import { eventProposalsResponseSchema } from "../../assets/shared/schemas/event-
 import { proposalSpeakersResponseSchema } from "../../assets/shared/schemas/proposal-speakers";
 import { proposalDecisionPreviewResponseSchema } from "../../assets/shared/schemas/proposal-decisions";
 import { finalizeProposalSchema } from "../../assets/shared/schemas/proposal-management";
+import { expectButtonTextContrast } from "./helpers/button-contrast";
 import { definitionFor } from "./helpers/definition-list";
 import { tab } from "./helpers/tabs";
 
@@ -728,25 +729,40 @@ test("renders the portal proposal detail workflow with submission answers and op
   const email = renderer.frameLocator("iframe[title='Email HTML']");
   await expect(email.getByRole("heading", { name: "Proposal rejected" })).toHaveCSS("color", "rgb(8, 145, 178)");
   await expect(email.getByRole("heading", { name: "Proposal rejected" })).toHaveCSS("background-color", "rgb(0, 0, 0)");
-  for (const width of [1440, 768, 390]) {
-    await page.setViewportSize({ width, height: 1000 });
-    for (const name of ["Alex", "Jordan", "Taylor"]) {
-      await page
-        .getByRole("button", { name: `Decision email ${name} Example ${name.toLowerCase()}@example.test`, exact: true })
-        .click();
-      await expect(email.getByText(`${name}, your session on accessible forms has been rejected.`)).toBeVisible();
-      await preview.scrollIntoViewIfNeeded();
-      const dimensions = await preview.evaluate((frame) => {
-        const body = frame.closest(".pk-panel__body")!;
-        const style = getComputedStyle(body);
-        return {
-          frame: frame.getBoundingClientRect().width,
-          available: body.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
-        };
-      });
-      expect(Math.abs(dimensions.frame - dimensions.available)).toBeLessThanOrEqual(2);
+  for (const theme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    for (const width of [1440, 768, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      for (const name of ["Alex", "Jordan", "Taylor"]) {
+        const choice = page.getByRole("button", {
+          name: `Decision email ${name} Example ${name.toLowerCase()}@example.test`,
+          exact: true,
+        });
+        await choice.focus();
+        await choice.press("Space");
+        await expect(choice).toHaveAttribute("aria-pressed", "true");
+        for (const button of await page
+          .getByRole("group", { name: "Outgoing emails", exact: true })
+          .getByRole("button")
+          .all()) {
+          await expectButtonTextContrast(button);
+          await button.hover();
+          await expectButtonTextContrast(button);
+        }
+        await expect(email.getByText(`${name}, your session on accessible forms has been rejected.`)).toBeVisible();
+        await preview.scrollIntoViewIfNeeded();
+        const dimensions = await preview.evaluate((frame) => {
+          const body = frame.closest(".pk-panel__body")!;
+          const style = getComputedStyle(body);
+          return {
+            frame: frame.getBoundingClientRect().width,
+            available: body.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+          };
+        });
+        expect(Math.abs(dimensions.frame - dimensions.available)).toBeLessThanOrEqual(2);
+      }
+      await page.screenshot({ path: testInfo.outputPath(`decision-preview-${theme}-${width}.png`) });
     }
-    await page.screenshot({ path: testInfo.outputPath(`decision-preview-${width}.png`) });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
   let recordedDecision: unknown;
