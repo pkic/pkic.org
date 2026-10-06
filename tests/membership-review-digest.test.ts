@@ -1,12 +1,13 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
-import { createExecutionContext } from "cloudflare:test";
+import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import app from "../functions/router";
 import { createAdminSession } from "./helpers/auth";
 import { membershipWorkflowMigrationPreviewResponseSchema } from "../assets/shared/schemas/membership-workflow-migration";
+import { applicationStageTransitionSchema } from "../assets/shared/schemas/membership-application-management";
 import { emailOutboxIdSchema } from "../assets/shared/schemas/email-outbox";
 import { membershipReviewDigestSendAt } from "../assets/shared/membership-review-notifications";
-import { processPendingOutbox } from "../functions/_lib/email/outbox";
+import { processPendingOutbox, processOutboxById } from "../functions/_lib/email/outbox";
 import type { Env } from "../functions/_lib/types";
 import { requireMembershipCategory } from "../functions/_lib/services/membership/categories";
 import {
@@ -116,6 +117,33 @@ async function prepareWorkflowRestart(id: string, changePolicy = false) {
   return () => app.fetch(new Request(base, { method: "POST", headers, body }), env as Env, createExecutionContext());
 }
 
+/** Exercise staff stage changes through the canonical authenticated endpoint. */
+async function prepareStageChange(id: string) {
+  await seedEventAndAdmin(env.DB);
+  const [reviewer] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'");
+  return async (toStage: ReturnType<typeof applicationStageTransitionSchema.parse>["toStage"]) => {
+    const token = await createAdminSession(env.DB, reviewer.id, crypto.randomUUID());
+    const context = createExecutionContext();
+    const response = await app.fetch(
+      new Request(`https://app.test/api/v1/members/applications/${id}/stage`, {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify(
+          applicationStageTransitionSchema.parse({
+            toStage,
+            ...(toStage === "on_hold" ? { onHoldSubtype: "request_information" } : {}),
+            note: "Update the example organization's application after reviewing its form.",
+          }),
+        ),
+      }),
+      env as Env,
+      context,
+    );
+    await waitOnExecutionContext(context);
+    return response;
+  };
+}
+
 interface DigestRow {
   id: string;
   recipient_email: string;
@@ -128,7 +156,7 @@ interface DigestRow {
 function digests() {
   return queryAll<DigestRow>(
     env.DB,
-    "SELECT id, recipient_email, subject, payload_json, send_after, created_at, status FROM email_outbox ORDER BY recipient_email, id",
+    "SELECT id, recipient_email, subject, payload_json, send_after, created_at, status FROM email_outbox WHERE template_key = 'membership-workflow-review-digest' ORDER BY recipient_email, id",
   );
 }
 
@@ -413,4 +441,121 @@ it("refuses a workflow restart during an active send and preserves a sent notice
   const [sent] = await digests();
   expect(sent.status).toBe("sent");
   expect(sent.payload_json).toBe(digest.payload_json);
+});
+
+it.each([
+  ["declined", false],
+  ["declined", true],
+  ["withdrawn", false],
+  ["withdrawn", true],
+  ["on_hold", false],
+  ["on_hold", true],
+] as const)("removes %s applications from unsent digests (shared: %s)", async (stage, shared) => {
+  const id = await reviewedApplication("Removed Organization");
+  await evaluateMembershipApplication(env.DB, id, "https://app.test");
+  if (shared) {
+    const peer = await reviewedApplication("Remaining Organization");
+    await evaluateMembershipApplication(env.DB, peer, "https://app.test");
+  }
+  if (stage === "withdrawn" && shared) {
+    await env.DB.prepare(
+      "UPDATE email_outbox SET status = 'retrying' WHERE template_key = 'membership-workflow-review-digest'",
+    ).run();
+  }
+  const [original] = await digests();
+  const changeStage = await prepareStageChange(id);
+  expect((await changeStage(stage)).status).toBe(200);
+  const [cleaned] = await digests();
+  expect(cleaned.status).toBe(shared ? original.status : "cancelled");
+  expect(cleaned.payload_json).not.toContain("Removed Organization");
+  const payload = JSON.parse(cleaned.payload_json);
+  expect(payload.reviewApplications[id]).toBeUndefined();
+  expect(payload.applicationSummary).toEqual(shared ? expect.stringContaining("Remaining Organization") : "");
+  expect(payload.applicationDetails).toEqual(shared ? expect.stringContaining("Remaining Organization") : "");
+  const execution = await getMembershipExecution(env.DB, id);
+  expect(execution.application.stage).toBe(stage);
+  if (stage === "on_hold") expect(execution.steps[1]).toMatchObject({ state: "waiting", notice_outbox_id: null });
+  await seedDigestTemplates();
+  const send = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
+  vi.stubGlobal("fetch", send);
+  vi.setSystemTime(new Date(original.send_after));
+  await processOutboxById(env.DB, env as Env, original.id);
+  expect(send).toHaveBeenCalledTimes(shared ? 1 : 0);
+  if (shared) {
+    expect(String(send.mock.calls[0][1].body)).toContain("Remaining Organization");
+    expect(String(send.mock.calls[0][1].body)).not.toContain("Removed Organization");
+  }
+});
+
+it("queues a fresh daily notice and full review window when an unsent held review resumes", async () => {
+  const id = await reviewedApplication("Resumed Organization");
+  await evaluateMembershipApplication(env.DB, id, "https://app.test");
+  const [original] = await digests();
+  const changeStage = await prepareStageChange(id);
+  expect((await changeStage("on_hold")).status).toBe(200);
+  vi.setSystemTime(new Date(original.send_after));
+  expect((await changeStage("processing")).status).toBe(200);
+  await evaluateMembershipApplication(env.DB, id, "https://app.test");
+  const replacement = (await digests()).find((row) => row.id !== original.id)!;
+  expect(replacement.status).toBe("queued");
+  expect(replacement.payload_json).toContain("Resumed Organization");
+  expect((await getMembershipExecution(env.DB, id)).steps[1]).toMatchObject({
+    state: "active",
+    notice_outbox_id: replacement.id,
+    opened_at: null,
+    deadline_at: null,
+  });
+  await seedDigestTemplates();
+  vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 202 })));
+  vi.setSystemTime(new Date(replacement.send_after));
+  await processOutboxById(env.DB, env as Env, replacement.id);
+  await evaluateMembershipApplication(env.DB, id, "https://app.test");
+  expect((await getMembershipExecution(env.DB, id)).steps[1]).toMatchObject({
+    opened_at: replacement.send_after,
+    deadline_at: new Date(Date.parse(replacement.send_after) + 7 * 86400_000).toISOString(),
+  });
+});
+
+it("rolls stage changes and digest cleanup back together if their audit fails", async () => {
+  const id = await reviewedApplication("Unchanged Organization");
+  await evaluateMembershipApplication(env.DB, id, "https://app.test");
+  const [original] = await digests();
+  const before = await getMembershipExecution(env.DB, id);
+  const changeStage = await prepareStageChange(id);
+  await env.DB.prepare(
+    `CREATE TRIGGER reject_digest_stage_audit BEFORE INSERT ON audit_log
+    WHEN NEW.action = 'application_stage_transitioned' BEGIN SELECT RAISE(ABORT, 'forced stage failure'); END`,
+  ).run();
+  try {
+    expect((await changeStage("on_hold")).status).toBe(500);
+    expect((await digests())[0]).toEqual(original);
+    const after = await getMembershipExecution(env.DB, id);
+    expect(after.application.stage).toBe(before.application.stage);
+    expect(after.revision).toBe(before.revision);
+    expect(after.steps[1]).toEqual(before.steps[1]);
+  } finally {
+    await env.DB.prepare("DROP TRIGGER reject_digest_stage_audit").run();
+  }
+});
+
+it("refuses stage changes while a digest is sending and preserves sent review evidence", async () => {
+  const id = await reviewedApplication("Sending Organization");
+  await evaluateMembershipApplication(env.DB, id, "https://app.test");
+  const [original] = await digests();
+  const changeStage = await prepareStageChange(id);
+  await env.DB.prepare("UPDATE email_outbox SET status = 'sending' WHERE id = ?").bind(original.id).run();
+  for (const stage of ["declined", "withdrawn", "on_hold"] as const) {
+    expect((await changeStage(stage)).status).toBe(409);
+    expect((await getMembershipExecution(env.DB, id)).application.stage).toBe("processing");
+  }
+  await env.DB.prepare("UPDATE email_outbox SET status = 'sent', sent_at = ? WHERE id = ?")
+    .bind(today, original.id)
+    .run();
+  await evaluateMembershipApplication(env.DB, id, "https://app.test");
+  const before = (await getMembershipExecution(env.DB, id)).steps[1];
+  expect((await changeStage("on_hold")).status).toBe(200);
+  expect((await changeStage("processing")).status).toBe(200);
+  await evaluateMembershipApplication(env.DB, id, "https://app.test");
+  expect((await getMembershipExecution(env.DB, id)).steps[1]).toEqual(before);
+  expect((await digests())[0].payload_json).toBe(original.payload_json);
 });

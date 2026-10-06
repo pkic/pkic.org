@@ -6,7 +6,7 @@ export const MEMBERSHIP_REVIEW_DIGEST_CONTENT_SQL = `json_set(updated.payload_js
   '$.applicationSummary', COALESCE((SELECT group_concat(json_extract(entry.value, '$.summary'), '') FROM json_each(updated.payload_json, '$.reviewApplications') entry), ''),
   '$.applicationDetails', COALESCE((SELECT group_concat(json_extract(entry.value, '$.details'), '') FROM json_each(updated.payload_json, '$.reviewApplications') entry), ''))`;
 
-/** Remove every unsent snapshot inside the workflow restart's command boundary. */
+/** Remove every unsent snapshot inside the application's state-change command boundary. */
 export function prepareRemoveMembershipReviewSnapshots(
   db: DatabaseLike,
   applicationId: string,
@@ -16,8 +16,8 @@ export function prepareRemoveMembershipReviewSnapshots(
   const notices = `SELECT step.notice_outbox_id FROM membership_application_steps step
     WHERE step.application_id = ? AND step.notice_outbox_id IS NOT NULL`;
   return [
-    // Once delivery owns a notice it cannot be recalled. Retry the restart after
-    // that attempt finishes instead of superseding policy during an active send.
+    // Once delivery owns a notice it cannot be recalled. Retry the state change after
+    // that attempt finishes instead of changing review eligibility during an active send.
     prepareAuthorizationGuard(db, {
       sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM email_outbox
         WHERE id IN (${notices}) AND status = 'sending' AND json_type(payload_json, ?) IS NOT NULL)`,
