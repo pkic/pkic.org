@@ -5,19 +5,19 @@ import {
   type ResolveExternalTokenInput,
 } from "@cloudflare/workers-oauth-provider";
 import { z } from "zod";
-import { permissionSchema } from "../../../assets/shared/schemas/permissions";
-import { mcpOauthContextSchema } from "../../../assets/shared/schemas/mcp-oauth";
-import { getCachedAdminAuthTransport, requireAdminFromRequest } from "../auth/admin";
-import { resolveUserSessionFromRequest } from "../auth/user-session";
-import { AUTH_SCOPES, grantableScopesForActor, type AuthScope } from "../auth/scopes";
-import { getConfig, resolveAppBaseUrl } from "../config";
-import { processOutboxByIdBackground } from "../email/outbox";
-import { AppError } from "../errors";
-import { getClientIp, getUserAgent, hashOptional, requireInternalSecret } from "../request";
-import { enforceRateLimit } from "../rate-limit";
-import { buildManagementLink } from "../services/management-links";
-import { requestUserSignInLink } from "../services/user-auth-flow";
-import type { AuthAdmin, Env, UserBackedAuthAdmin } from "../types";
+import { permissionSchema } from "../../../../assets/shared/schemas/permissions";
+import { mcpOauthContextSchema } from "../../../../assets/shared/schemas/mcp-oauth";
+import { getCachedAdminAuthTransport, requireAdminFromRequest } from "../admin";
+import { resolveUserSessionFromRequest } from "../user-session";
+import { AUTH_SCOPES, grantableScopesForActor, type AuthScope } from "../scopes";
+import { getConfig, resolveAppBaseUrl } from "../../config";
+import { processOutboxByIdBackground } from "../../email/outbox";
+import { AppError } from "../../errors";
+import { getClientIp, getUserAgent, hashOptional, requireInternalSecret } from "../../request";
+import { enforceRateLimit } from "../../rate-limit";
+import { buildManagementLink } from "../../services/management-links";
+import { requestUserSignInLink } from "../../services/user-auth-flow";
+import type { AuthAdmin, Env, UserBackedAuthAdmin } from "../../types";
 
 export const MCP_OAUTH_AUTHORIZE_PATH = "/api/v1/auth/oauth/authorize";
 export const MCP_OAUTH_TOKEN_PATH = "/api/v1/auth/oauth/token";

@@ -8,7 +8,11 @@ import {
   MCP_EXTENSION,
 } from "../functions/_lib/openapi/mcp";
 import type { AuthAdmin } from "../functions/_lib/types";
-import { buildMcpOauthProps, normalizeMcpOauthScopes, parseMcpOauthProps } from "../functions/_lib/mcp/oauth";
+import {
+  buildMcpOauthProps,
+  normalizeMcpOauthScopes,
+  parseMcpOauthProps,
+} from "../functions/_lib/auth/oauth/authorization";
 
 const mcpWriteMetadata = {
   expose: true,

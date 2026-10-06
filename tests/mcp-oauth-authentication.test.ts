@@ -8,12 +8,12 @@ import {
   describeMcpAuthorization,
   sendMcpAuthorizeMagicLink,
   type McpOAuthEnv,
-} from "../functions/_lib/mcp/oauth";
+} from "../functions/_lib/auth/oauth/authorization";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { insertIndividualMember } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
-import { createMcpAuthorizeHandler } from "../functions/_lib/mcp/authorize";
+import { createMcpAuthorizeHandler } from "../functions/_lib/auth/oauth/consent";
 import { Hono } from "hono";
 import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 

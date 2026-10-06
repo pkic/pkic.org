@@ -2,8 +2,12 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { Hono } from "hono";
-import { createMcpWorkerFetch, MCP_PATH } from "../functions/_lib/mcp/worker";
-import { MCP_OAUTH_AUTHORIZE_PATH, MCP_OAUTH_REGISTER_PATH, MCP_OAUTH_TOKEN_PATH } from "../functions/_lib/mcp/oauth";
+import { createMcpWorkerFetch, MCP_PATH } from "../functions/_lib/api-tools/mcp-worker";
+import {
+  MCP_OAUTH_AUTHORIZE_PATH,
+  MCP_OAUTH_REGISTER_PATH,
+  MCP_OAUTH_TOKEN_PATH,
+} from "../functions/_lib/auth/oauth/authorization";
 import type { Env } from "../functions/_lib/types";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";

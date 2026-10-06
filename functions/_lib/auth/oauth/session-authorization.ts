@@ -1,8 +1,9 @@
 import { OAuthError } from "@cloudflare/workers-oauth-provider";
-import { getCurrentUserBackedAdmin } from "../auth/admin";
-import { AppError } from "../errors";
-import type { Env } from "../types";
-import { parseMcpOauthProps, type McpOAuthProps } from "./oauth";
+import { getCurrentUserBackedAdmin } from "../admin";
+import { signMcpSessionToken } from "../mcp-session";
+import { AppError } from "../../errors";
+import type { Env } from "../../types";
+import { parseMcpOauthProps, type McpOAuthProps } from "./authorization";
 
 /** OAuth refresh never extends the staff session that authorized the grant. */
 export async function requireActiveMcpSession(env: Env, props: McpOAuthProps): Promise<number | null> {
@@ -50,4 +51,35 @@ export function mcpAuthenticationError(request: Request, error: unknown): Respon
       },
     },
   );
+}
+
+export async function authorizationHeaderForMcp(
+  request: Request,
+  env: Env,
+  oauthProps?: McpOAuthProps,
+): Promise<string | null> {
+  if (!oauthProps) {
+    return request.headers.get("authorization");
+  }
+
+  if (oauthProps.identityType === "service") {
+    return request.headers.get("authorization");
+  }
+
+  await requireActiveMcpSession(env, oauthProps);
+
+  if (!env.INTERNAL_SIGNING_SECRET) {
+    return null;
+  }
+
+  const token = await signMcpSessionToken(env.INTERNAL_SIGNING_SECRET, {
+    sub: oauthProps.id,
+    sid: oauthProps.sessionId,
+    exp: Math.floor(new Date(oauthProps.sessionExpiresAt).getTime() / 1000),
+    email: oauthProps.email,
+    state: oauthProps.state ?? undefined,
+    scopes: oauthProps.scopes,
+  });
+
+  return `Bearer ${token}`;
 }

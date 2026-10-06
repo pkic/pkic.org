@@ -1,7 +1,7 @@
 import type { Hono } from "hono";
-import type { Env } from "../types";
-import { MCP_AUTHORIZE_MAX_BYTES, readBoundedFormData, readBoundedJsonBody } from "../http-body";
-import { AppError, isAppError } from "../errors";
+import type { Env } from "../../types";
+import { MCP_AUTHORIZE_MAX_BYTES, readBoundedFormData, readBoundedJsonBody } from "../../http-body";
+import { AppError, isAppError } from "../../errors";
 import {
   MCP_OAUTH_AUTHORIZE_PATH,
   buildMcpOauthProps,
@@ -18,13 +18,13 @@ import {
   toOAuthErrorResponse,
   type McpOAuthEnv,
   wantsJsonResponse,
-} from "./oauth";
+} from "./authorization";
 import {
   mcpOauthAuthorizeActionSchema,
   mcpOauthContextSchema,
   mcpOauthMagicLinkResponseSchema,
   mcpOauthRedirectResponseSchema,
-} from "../../../assets/shared/schemas/mcp-oauth";
+} from "../../../../assets/shared/schemas/mcp-oauth";
 
 interface McpAuthorizeHandlerOptions {
   app: Hono<{ Bindings: Env }>;

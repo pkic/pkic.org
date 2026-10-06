@@ -4,7 +4,6 @@ import OAuthProvider from "@cloudflare/workers-oauth-provider";
 import { createMcpHandler } from "agents/mcp";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import type { Hono } from "hono";
-import { signMcpSessionToken } from "../auth/mcp-session";
 import { AUTH_SCOPES } from "../auth/scopes";
 import type { Env } from "../types";
 import {
@@ -16,9 +15,13 @@ import {
   toOAuthErrorResponse,
   type McpOAuthEnv,
   type McpOAuthProps,
-} from "./oauth";
-import { createMcpAuthorizeHandler } from "./authorize";
-import { mcpAuthenticationError, mcpTokenLifetime, requireActiveMcpSession } from "./session-authorization";
+} from "../auth/oauth/authorization";
+import { createMcpAuthorizeHandler } from "../auth/oauth/consent";
+import {
+  authorizationHeaderForMcp,
+  mcpAuthenticationError,
+  mcpTokenLifetime,
+} from "../auth/oauth/session-authorization";
 
 export const MCP_PATH = "/api/v1/mcp";
 export const MCP_OPENAPI_JSON_PATH = "/api/v1/mcp/openapi.json";
@@ -87,37 +90,6 @@ function apiRequestFromMcp(
       body: await response.text(),
     };
   };
-}
-
-async function authorizationHeaderForMcp(
-  request: Request,
-  env: Env,
-  oauthProps?: McpOAuthProps,
-): Promise<string | null> {
-  if (!oauthProps) {
-    return request.headers.get("authorization");
-  }
-
-  if (oauthProps.identityType === "service") {
-    return request.headers.get("authorization");
-  }
-
-  await requireActiveMcpSession(env, oauthProps);
-
-  if (!env.INTERNAL_SIGNING_SECRET) {
-    return null;
-  }
-
-  const token = await signMcpSessionToken(env.INTERNAL_SIGNING_SECRET, {
-    sub: oauthProps.id,
-    sid: oauthProps.sessionId,
-    exp: Math.floor(new Date(oauthProps.sessionExpiresAt).getTime() / 1000),
-    email: oauthProps.email,
-    state: oauthProps.state ?? undefined,
-    scopes: oauthProps.scopes,
-  });
-
-  return `Bearer ${token}`;
 }
 
 function createMcpResponse(options: McpWorkerOptions) {
