@@ -1,10 +1,6 @@
 import type { MembershipWorkflowStep } from "../../../../../assets/shared/schemas/membership-workflows";
-import {
-  MEMBERSHIP_REVIEW_DIGEST_BODY,
-  membershipReviewDigestSendAt,
-} from "../../../../../assets/shared/membership-review-notifications";
+import { membershipReviewDigestSendAt } from "../../../../../assets/shared/membership-review-notifications";
 import { prepareAuthorizationGuard } from "../../../db/authorization-guard";
-import { directEmailBodyPayload } from "../../../email/direct-body";
 import { escapeMarkdownText } from "../../../email/markdown";
 import { prepareQueueEmailStatement } from "../../../email/outbox";
 import { emailPlainText } from "../../../email/plain-text";
@@ -54,13 +50,13 @@ export async function prepareMembershipReviewDigest(
     {
       outboxId: id,
       idempotencyKey: `membership-review-digest:${hash}`,
-      templateKey: "membership-workflow-review",
+      templateKey: "membership-workflow-review-digest",
       recipientEmail,
       subject: `${step.label}: membership applications — ${now.slice(0, 10)} UTC`,
       messageType: "transactional",
       sendAt,
       data: {
-        ...directEmailBodyPayload(MEMBERSHIP_REVIEW_DIGEST_BODY),
+        reviewDate: now.slice(0, 10),
         stepLabel: emailPlainText(step.label),
         instructions: emailPlainText(step.instructions),
         durationDays: step.durationDays,

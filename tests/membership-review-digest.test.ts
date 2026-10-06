@@ -15,7 +15,7 @@ import {
 } from "../functions/_lib/services/membership/workflows/pinning";
 import { evaluateMembershipApplication } from "../functions/_lib/services/membership/workflows/evaluate";
 import { getMembershipExecution } from "../functions/_lib/services/membership/workflows/execution";
-import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
+import { createTemplateVersion, activateTemplateVersion, resolveTemplate } from "../functions/_lib/email/templates";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { seedMemberApplication } from "./helpers/member-applications";
@@ -57,7 +57,9 @@ async function reviewedApplication(name: string, council = false) {
   return id;
 }
 
-async function seedDigestLayout() {
+async function seedDigestTemplates() {
+  const migration = env.TEST_MIGRATIONS.find((item) => item.name === "0038_membership_review_digest_template.sql")!;
+  for (const query of migration.queries) await env.DB.prepare(query).run();
   const layout = await createTemplateVersion(env.DB, {
     templateKey: "email_layout",
     content: "{{{body_html}}}",
@@ -147,6 +149,7 @@ it("combines concurrent organization reviews and starts both full windows only a
   });
   expect(emailOutboxIdSchema.safeParse(digest.id).success).toBe(true);
   expect(digest.subject).toContain(today.slice(0, 10));
+  expect(JSON.parse(digest.payload_json)).not.toHaveProperty("__directBodyContent");
   for (const id of ids) {
     const execution = await getMembershipExecution(env.DB, id);
     expect(execution.steps[1]).toMatchObject({ notice_outbox_id: digest.id, opened_at: null, deadline_at: null });
@@ -157,7 +160,22 @@ it("combines concurrent organization reviews and starts both full windows only a
     .mockResolvedValueOnce(new Response("Try again", { status: 500 }))
     .mockResolvedValue(new Response(null, { status: 202, headers: { "x-message-id": "digest-message" } }));
   vi.stubGlobal("fetch", send);
-  await seedDigestLayout();
+  await seedDigestTemplates();
+  const baseline = await resolveTemplate(env.DB, "membership-workflow-review-digest");
+  const customized = await createTemplateVersion(env.DB, {
+    templateKey: "membership-workflow-review-digest",
+    content: `${baseline.content}\n\nQuestions? Contact the membership team.`,
+    subjectTemplate: "Review forms: {{stepLabel}} — {{reviewDate}} UTC",
+    fromEmail: "membership@example.test",
+    fromName: "Membership Team",
+    createdByUserId: null,
+  });
+  await activateTemplateVersion(env.DB, {
+    templateKey: "membership-workflow-review-digest",
+    version: customized.version,
+  });
+  // Reapplying the seed must preserve the administrator's active version.
+  await seedDigestTemplates();
   expect(await processPendingOutbox(env.DB, env as Env)).toEqual({ processed: 0, failed: 0 });
   expect(send).not.toHaveBeenCalled();
   vi.setSystemTime(new Date(digest.send_after));
@@ -177,6 +195,14 @@ it("combines concurrent organization reviews and starts both full windows only a
   expect(html).toContain("Example Organization");
   expect(html).toContain("Second Organization");
   expect(html).toContain("Application details");
+  expect(html).toContain("Questions? Contact the membership team.");
+  expect(message.subject).toContain(`Review forms: Member consultation — ${today.slice(0, 10)} UTC`);
+  expect(message.from).toEqual({ email: "membership@example.test", name: "Membership Team" });
+  expect(
+    await env.DB.prepare("SELECT template_version FROM email_outbox WHERE id = ?")
+      .bind(digest.id)
+      .first("template_version"),
+  ).toBe(customized.version);
   expect(html).toContain("Example User");
   for (const id of ids) {
     expect(html).toContain(`/membership/applications/${id}/review`);
@@ -330,7 +356,7 @@ it("uses the cleaned payload when delivery selected a shared digest before the r
   const peer = await reviewedApplication("Remaining Organization");
   for (const id of [moved, peer]) await evaluateMembershipApplication(env.DB, id, "https://app.test");
   const [digest] = await digests();
-  await seedDigestLayout();
+  await seedDigestTemplates();
   const send = vi
     .fn()
     .mockResolvedValue(new Response(null, { status: 202, headers: { "x-message-id": "cleaned-digest" } }));
@@ -356,7 +382,7 @@ it("refuses a workflow restart during an active send and preserves a sent notice
   const id = await reviewedApplication("Sending Organization");
   await evaluateMembershipApplication(env.DB, id, "https://app.test");
   const [digest] = await digests();
-  await seedDigestLayout();
+  await seedDigestTemplates();
   vi.setSystemTime(new Date(digest.send_after));
   let reached!: () => void;
   let accept!: (response: Response) => void;
