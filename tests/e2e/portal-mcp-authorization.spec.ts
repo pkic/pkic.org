@@ -47,7 +47,25 @@ test("MCP discovery and consent recover from an expired cookie through email sig
   await page.getByRole("button", { name: "Send sign-in link" }).click();
   await expect(page.getByText("you'll receive a sign-in link shortly", { exact: false })).toBeVisible();
   const message = await waitForCapturedEmail(email, "sign-in link", { since });
+  let consentUnavailable = true;
+  await page.route("**/api/v1/auth/oauth/authorize?return_to=*", async (route) => {
+    if (consentUnavailable) {
+      await route.fulfill({
+        status: 503,
+        contentType: "application/json",
+        body: JSON.stringify({ error: { code: "UPSTREAM_UNAVAILABLE", message: "Temporary consent failure." } }),
+      });
+    } else {
+      await route.continue();
+    }
+  });
   await page.goto(extractEmailUrl(message, "/portal/"));
+  await expect(page.getByRole("alert")).toContainText("Temporary consent failure.");
+  await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
+  expect(new URLSearchParams(new URL(page.url()).hash.split("?", 2)[1]).has("token")).toBe(false);
+  await page.screenshot({ path: "test-results/mcp-consent-retry.png", fullPage: true });
+  consentUnavailable = false;
+  await page.reload();
   await expect(page.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
   await expect(page.getByText(email, { exact: true })).toBeVisible();
   await page.screenshot({ path: "test-results/mcp-consent.png", fullPage: true });

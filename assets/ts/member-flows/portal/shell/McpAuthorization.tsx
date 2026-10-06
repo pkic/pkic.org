@@ -107,6 +107,7 @@ export function McpAuthorization() {
     let cancelled = false;
     setReturnTo(initialReturnTo);
     setSent(false);
+    setContext(null);
     if (!initialReturnTo) {
       setLoading(false);
       return;
@@ -116,10 +117,13 @@ export function McpAuthorization() {
       setLoading(true);
       setVerifying(Boolean(initialToken));
       try {
-        if (initialToken) await verifyUserMagicLink(initialToken);
+        if (initialToken) {
+          await verifyUserMagicLink(initialToken);
+          if (cancelled) return;
+          history.replaceState({}, "", `/portal/${authorizationHash(initialReturnTo)}`);
+        }
         const data = await fetchOauthContext(initialReturnTo);
         if (cancelled) return;
-        if (initialToken) history.replaceState({}, "", `/portal/${authorizationHash(initialReturnTo)}`);
         setContext(data);
         setReturnTo(data.returnTo);
         setError(null);

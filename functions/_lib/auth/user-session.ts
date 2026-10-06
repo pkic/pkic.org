@@ -273,7 +273,7 @@ export async function refreshUserSessionFromRequest(
     identityId: resolved.claims.iid,
     state: resolved.claims.state,
     lastActivityAt: activityAt,
-    staffLastActivityAt: activityAt,
+    staffLastActivityAt: session.staff ? activityAt : (resolved.claims.staffLastActivityAt ?? 0),
   });
   return {
     session: {

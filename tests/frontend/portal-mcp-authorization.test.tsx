@@ -23,6 +23,17 @@ vi.mock("wouter/use-hash-location", () => ({
 const OAUTH_AUTHORIZE_PATH = "/api/v1/auth/oauth/authorize";
 const RETURN_TO =
   "/api/v1/auth/oauth/authorize?client_id=client-1&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback";
+const AUTHORIZED_CONTEXT = {
+  authenticated: true,
+  authorized: true,
+  returnTo: RETURN_TO,
+  clientId: "client-1",
+  clientName: "Example forms, organizations, and users client",
+  requestedScopes: ["forms:read", "organizations:read", "users:read"],
+  grantedScopes: ["forms:read", "organizations:read", "users:read"],
+  userEmail: "staff@example.test",
+  staffEmail: "staff@example.test",
+};
 let container: HTMLDivElement;
 
 function requestUrl(input: RequestInfo | URL): URL {
@@ -204,6 +215,68 @@ describe("portal MCP authorization", () => {
     expect(buttonLabeled("Deny")).toBeTruthy();
     expect(window.location.pathname).toBe("/portal/");
     expect(window.location.hash).not.toContain("token=");
+  });
+
+  it.each(["context", "verification", "missing"])(
+    "clears previous consent when a new authorization has a %s failure",
+    async (failure) => {
+      window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO })}`;
+      const fetchMock = vi.fn(async () => Response.json(AUTHORIZED_CONTEXT));
+      vi.stubGlobal("fetch", fetchMock);
+      await act(() => render(<McpAuthorization />, container));
+      await waitFor(() => buttonLabeled("Approve") !== undefined);
+      expect(definitionFor("Client")).toBe(AUTHORIZED_CONTEXT.clientName);
+
+      fetchMock.mockImplementation(async () =>
+        Response.json(
+          { error: { code: "UPSTREAM_UNAVAILABLE", message: "New consent unavailable." } },
+          { status: 503 },
+        ),
+      );
+      const query = new URLSearchParams({ return_to: RETURN_TO.replace("client-1", "client-2") });
+      if (failure === "verification") query.set("token", "new-email-token");
+      await act(() => {
+        window.location.hash = failure === "missing" ? "#/auth/oauth" : `#/auth/oauth?${query}`;
+        window.dispatchEvent(new HashChangeEvent("hashchange"));
+      });
+      if (failure !== "missing")
+        await waitFor(() => container.textContent?.includes("New consent unavailable.") ?? false);
+      else await flush();
+
+      expect(buttonLabeled("Approve")).toBeUndefined();
+      expect(buttonLabeled("Deny")).toBeUndefined();
+      expect(container.querySelector("dl")).toBeNull();
+      expect(container.textContent).not.toContain(AUTHORIZED_CONTEXT.clientName);
+    },
+  );
+
+  it("removes a redeemed email token before a failed consent lookup and retries without replaying it", async () => {
+    window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO, token: "email-token" })}`;
+    let verifications = 0;
+    let consentUnavailable = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        if (requestUrl(input).pathname === "/api/v1/auth/verify-link") {
+          verifications += 1;
+          return Response.json(portalSessionFixture({ staff: true }));
+        }
+        return consentUnavailable
+          ? Response.json({ error: { code: "UPSTREAM_UNAVAILABLE", message: "Consent unavailable." } }, { status: 503 })
+          : Response.json(AUTHORIZED_CONTEXT);
+      }),
+    );
+    await act(() => render(<McpAuthorization />, container));
+    await waitFor(() => container.textContent?.includes("Consent unavailable.") ?? false);
+    expect(new URLSearchParams(window.location.hash.split("?", 2)[1]).has("token")).toBe(false);
+    expect(buttonLabeled("Approve")).toBeUndefined();
+
+    consentUnavailable = false;
+    await act(() => render(null, container));
+    await act(() => render(<McpAuthorization />, container));
+    await waitFor(() => buttonLabeled("Approve") !== undefined);
+    expect(verifications).toBe(1);
+    expect(definitionFor("Client")).toBe(AUTHORIZED_CONTEXT.clientName);
   });
 
   it("returns to sign-in if the session expires while consent is open", async () => {
