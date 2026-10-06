@@ -144,6 +144,7 @@ export function McpAuthorization() {
   }, [initialReturnTo, initialToken]);
 
   async function refreshContext(): Promise<void> {
+    setContext(null);
     setLoading(true);
     try {
       const data = await fetchOauthContext(returnTo);

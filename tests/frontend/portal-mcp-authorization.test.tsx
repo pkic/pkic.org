@@ -279,7 +279,7 @@ describe("portal MCP authorization", () => {
     expect(definitionFor("Client")).toBe(AUTHORIZED_CONTEXT.clientName);
   });
 
-  it("returns to sign-in if the session expires while consent is open", async () => {
+  it.each([false, true])("returns to sign-in after expiry when context recovery fails: %s", async (recoveryFails) => {
     window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO })}`;
     let expired = false;
     let decision: unknown;
@@ -292,6 +292,12 @@ describe("portal MCP authorization", () => {
           return Response.json(
             { error: { code: "AUTH_EXPIRED", message: "Your authorization session expired. Sign in again." } },
             { status: 401 },
+          );
+        }
+        if (expired && recoveryFails) {
+          return Response.json(
+            { error: { code: "UPSTREAM_UNAVAILABLE", message: "Temporary consent failure." } },
+            { status: 503 },
           );
         }
         return Response.json({
@@ -315,6 +321,11 @@ describe("portal MCP authorization", () => {
 
     expect(mcpOauthAuthorizeActionSchema.parse(decision)).toEqual({ action: "approve", return_to: RETURN_TO });
     expect(buttonLabeled("Approve")).toBeUndefined();
+    expect(buttonLabeled("Deny")).toBeUndefined();
+    expect(container.querySelector("dl")).toBeNull();
+    if (recoveryFails) expect(container.textContent).not.toContain(AUTHORIZED_CONTEXT.clientName);
+    expect(container.textContent).not.toContain("forms:read");
+    expect(container.textContent).not.toContain("staff@example.test");
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Sign in again.");
     expect(window.location.hash).toContain(encodeURIComponent(RETURN_TO));
   });

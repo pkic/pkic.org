@@ -68,6 +68,32 @@ test("MCP discovery and consent recover from an expired cookie through email sig
   await page.reload();
   await expect(page.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
   await expect(page.getByText(email, { exact: true })).toBeVisible();
+  let approvalExpired = true;
+  await page.route("**/api/v1/auth/oauth/authorize", async (route) => {
+    if (approvalExpired && route.request().method() === "POST") {
+      approvalExpired = false;
+      await route.fulfill({
+        status: 401,
+        contentType: "application/json",
+        body: JSON.stringify({ error: { code: "AUTH_EXPIRED", message: "Sign in again." } }),
+      });
+    } else {
+      await route.continue();
+    }
+  });
+  consentUnavailable = true;
+  await page.getByRole("button", { name: "Approve", exact: true }).click();
+  await expect(page.getByRole("alert")).toContainText("Sign in again.");
+  await expect(page.getByLabel("Portal email")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Deny", exact: true })).toHaveCount(0);
+  await expect(page.getByText(email, { exact: true })).toHaveCount(0);
+  await expect(page.getByText("forms:read", { exact: true })).toHaveCount(0);
+  await expect(page.getByText("Example forms, organizations, and users client", { exact: true })).toHaveCount(0);
+  await page.screenshot({ path: "test-results/mcp-consent-expired-recovery.png", fullPage: true });
+  consentUnavailable = false;
+  await page.reload();
+  await expect(page.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
   await page.screenshot({ path: "test-results/mcp-consent.png", fullPage: true });
   await page.route("**/oauth-test-callback?**", (route) =>
     route.fulfill({ body: "Authorization returned to client." }),
