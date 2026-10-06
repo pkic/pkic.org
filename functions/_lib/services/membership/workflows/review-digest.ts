@@ -12,6 +12,7 @@ import type { DatabaseLike } from "../../../types";
 import { sha256Hex } from "../../../utils/crypto";
 import { stringifyJson } from "../../../utils/json";
 import type { MembershipExecution } from "./execution";
+import { MEMBERSHIP_REVIEW_DIGEST_CONTENT_SQL } from "./review-digest-content";
 
 /** Append inside the same atomic command that opens the application requirement. */
 export async function prepareMembershipReviewDigest(
@@ -74,6 +75,15 @@ export async function prepareMembershipReviewDigest(
     id,
     statements: [
       queued.statement,
+      // An empty digest cancelled by a restart can collect new reviews again.
+      db
+        .prepare(
+          `UPDATE email_outbox SET status = 'queued', updated_at = ? WHERE id = ? AND status = 'cancelled'
+          AND send_after > strftime('%Y-%m-%dT%H:%M:%fZ','now')
+          AND json_type(payload_json, '$.reviewApplications') = 'object'
+          AND NOT EXISTS (SELECT 1 FROM json_each(payload_json, '$.reviewApplications'))`,
+        )
+        .bind(now, id),
       // A delayed command crossing midnight must retry in the new day's digest.
       // It cannot modify mail already selected by the delivery runner.
       prepareAuthorizationGuard(db, {
@@ -86,9 +96,7 @@ export async function prepareMembershipReviewDigest(
             SELECT json_set(payload_json, ?, json(?)) AS payload_json FROM email_outbox WHERE id = ?
           )
           UPDATE email_outbox SET payload_json = (
-            SELECT json_set(updated.payload_json,
-              '$.applicationSummary', (SELECT group_concat(json_extract(entry.value, '$.summary'), '') FROM json_each(updated.payload_json, '$.reviewApplications') entry),
-              '$.applicationDetails', (SELECT group_concat(json_extract(entry.value, '$.details'), '') FROM json_each(updated.payload_json, '$.reviewApplications') entry))
+            SELECT ${MEMBERSHIP_REVIEW_DIGEST_CONTENT_SQL}
             FROM updated
           ), updated_at = ? WHERE id = ?`,
         )

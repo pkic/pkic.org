@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
+import { createExecutionContext } from "cloudflare:test";
+import app from "../functions/router";
+import { createAdminSession } from "./helpers/auth";
+import { membershipWorkflowMigrationPreviewResponseSchema } from "../assets/shared/schemas/membership-workflow-migration";
 import { emailOutboxIdSchema } from "../assets/shared/schemas/email-outbox";
 import { membershipReviewDigestSendAt } from "../assets/shared/membership-review-notifications";
 import { processPendingOutbox } from "../functions/_lib/email/outbox";
@@ -12,10 +16,10 @@ import {
 import { evaluateMembershipApplication } from "../functions/_lib/services/membership/workflows/evaluate";
 import { getMembershipExecution } from "../functions/_lib/services/membership/workflows/execution";
 import { createTemplateVersion, activateTemplateVersion } from "../functions/_lib/email/templates";
-import { queryAll } from "./helpers/context";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { seedMemberApplication } from "./helpers/member-applications";
-import { gateBatchGroup } from "./helpers/d1-batch-gate";
+import { gateBatchGroup, gateNextFirst } from "./helpers/d1-batch-gate";
 
 let today: string;
 beforeEach(async () => {
@@ -51,6 +55,63 @@ async function reviewedApplication(name: string, council = false) {
     .bind(today, id, council ? 2 : 1)
     .run();
   return id;
+}
+
+async function seedDigestLayout() {
+  const layout = await createTemplateVersion(env.DB, {
+    templateKey: "email_layout",
+    content: "{{{body_html}}}",
+    createdByUserId: null,
+  });
+  await activateTemplateVersion(env.DB, { templateKey: "email_layout", version: layout.version });
+}
+
+async function prepareWorkflowRestart(id: string, changePolicy = false) {
+  await seedEventAndAdmin(env.DB);
+  const [reviewer] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'");
+  const token = await createAdminSession(env.DB, reviewer.id, "digest-workflow-reviewer");
+  const execution = await getMembershipExecution(env.DB, id);
+  let versionId = execution.version.id;
+  if (changePolicy) {
+    const workflowId = crypto.randomUUID();
+    versionId = crypto.randomUUID();
+    const definition = {
+      ...execution.version.definition,
+      steps: execution.version.definition.steps.map((step) =>
+        step.kind === "consensus"
+          ? {
+              ...step,
+              destination: { kind: "external", email: "new-reviewers@example.test" },
+              durationDays: 3,
+              instructions: "Review the corrected application form under the new policy.",
+            }
+          : step,
+      ),
+    };
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO membership_workflows (id, created_at) VALUES (?, ?)").bind(workflowId, today),
+      env.DB.prepare(
+        `INSERT INTO membership_workflow_versions (id, workflow_id, version, name, status, definition_json, created_at, published_at)
+        VALUES (?, ?, 1, ?, 'published', ?, ?, ?)`,
+      ).bind(versionId, workflowId, definition.name, JSON.stringify(definition), today, today),
+    ]);
+  }
+  const base = `https://app.test/api/v1/members/applications/${id}/workflow/migration`;
+  const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
+  const previewResponse = await app.fetch(
+    new Request(`${base}?versionId=${versionId}`, { headers }),
+    env as Env,
+    createExecutionContext(),
+  );
+  expect(previewResponse.status).toBe(200);
+  const preview = membershipWorkflowMigrationPreviewResponseSchema.parse(await previewResponse.json());
+  const body = JSON.stringify({
+    versionId,
+    previewFingerprint: preview.fingerprint,
+    acknowledgeRestart: true,
+    reason: "Restart the example organization's application under the selected review policy.",
+  });
+  return () => app.fetch(new Request(base, { method: "POST", headers, body }), env as Env, createExecutionContext());
 }
 
 interface DigestRow {
@@ -96,12 +157,7 @@ it("combines concurrent organization reviews and starts both full windows only a
     .mockResolvedValueOnce(new Response("Try again", { status: 500 }))
     .mockResolvedValue(new Response(null, { status: 202, headers: { "x-message-id": "digest-message" } }));
   vi.stubGlobal("fetch", send);
-  const layout = await createTemplateVersion(env.DB, {
-    templateKey: "email_layout",
-    content: "{{{body_html}}}",
-    createdByUserId: null,
-  });
-  await activateTemplateVersion(env.DB, { templateKey: "email_layout", version: layout.version });
+  await seedDigestLayout();
   expect(await processPendingOutbox(env.DB, env as Env)).toEqual({ processed: 0, failed: 0 });
   expect(send).not.toHaveBeenCalled();
   vi.setSystemTime(new Date(digest.send_after));
@@ -200,12 +256,10 @@ it("replaces an application's earlier snapshot when its workflow restarts before
   const id = await reviewedApplication("Original Organization");
   await evaluateMembershipApplication(env.DB, id, "https://app.test");
   const [original] = await digests();
-  const category = await requireMembershipCategory(env.DB, "F");
+  const restart = await prepareWorkflowRestart(id);
+  expect((await restart()).status).toBe(200);
+  expect((await digests())[0].status).toBe("cancelled");
   await env.DB.batch([
-    env.DB.prepare(
-      "UPDATE membership_application_workflows SET superseded_at = ? WHERE application_id = ? AND superseded_at IS NULL",
-    ).bind(today, id),
-    ...prepareMembershipWorkflowPin(env.DB, id, category, await requireCategoryWorkflow(env.DB, category), 2, today),
     env.DB.prepare("UPDATE member_applications SET organization_name = 'Corrected Organization' WHERE id = ?").bind(id),
     env.DB.prepare(
       "UPDATE membership_application_steps SET state = 'complete', completed_at = ? WHERE application_id = ? AND generation = 2 AND position = 0",
@@ -215,7 +269,122 @@ it("replaces an application's earlier snapshot when its workflow restarts before
   const [updated] = await digests();
   expect(await digests()).toHaveLength(1);
   expect(updated.id).toBe(original.id);
+  expect(updated.status).toBe("queued");
   expect(updated.payload_json).toContain("Corrected Organization");
   expect(updated.payload_json).not.toContain("Original Organization");
   expect(Object.keys(JSON.parse(updated.payload_json).reviewApplications)).toEqual([id]);
+});
+
+it.each([false, true])(
+  "removes the old policy snapshot atomically while preserving a shared digest: %s",
+  async (shared) => {
+    const id = await reviewedApplication("Moving Organization");
+    await evaluateMembershipApplication(env.DB, id, "https://app.test");
+    if (shared) {
+      const peer = await reviewedApplication("Remaining Organization");
+      await evaluateMembershipApplication(env.DB, peer, "https://app.test");
+    }
+    const [old] = await digests();
+    const restart = await prepareWorkflowRestart(id, true);
+    expect((await restart()).status).toBe(200);
+    const [cleaned] = await digests();
+    expect(cleaned.status).toBe(shared ? "queued" : "cancelled");
+    expect(cleaned.payload_json).not.toContain("Moving Organization");
+    const payload = JSON.parse(cleaned.payload_json);
+    expect(payload.reviewApplications[id]).toBeUndefined();
+    expect(payload.applicationSummary).toEqual(shared ? expect.stringContaining("Remaining Organization") : "");
+    expect(payload.applicationDetails).toEqual(shared ? expect.stringContaining("Remaining Organization") : "");
+    await env.DB.prepare(
+      "UPDATE membership_application_steps SET state = 'complete', completed_at = ? WHERE application_id = ? AND generation = 2 AND position = 0",
+    )
+      .bind(today, id)
+      .run();
+    await evaluateMembershipApplication(env.DB, id, "https://app.test");
+    const rows = await digests();
+    const replacement = rows.find((row) => row.id !== old.id)!;
+    expect(replacement.recipient_email).toBe("new-reviewers@example.test");
+    expect(replacement.payload_json).toContain("Moving Organization");
+    expect(rows.find((row) => row.id === old.id)!.payload_json).not.toContain("Moving Organization");
+  },
+);
+
+it("rolls digest cleanup and the workflow restart back together when the audit fails", async () => {
+  const id = await reviewedApplication("Example Organization");
+  await evaluateMembershipApplication(env.DB, id, "https://app.test");
+  const [old] = await digests();
+  const restart = await prepareWorkflowRestart(id, true);
+  await env.DB.prepare(
+    `CREATE TRIGGER reject_workflow_restart_audit BEFORE INSERT ON audit_log WHEN NEW.action = 'membership_workflow_migrated' BEGIN SELECT RAISE(ABORT, 'forced restart failure'); END`,
+  ).run();
+  try {
+    expect((await restart()).status).toBe(500);
+    expect((await getMembershipExecution(env.DB, id)).generation).toBe(1);
+    expect((await digests())[0]).toEqual(old);
+  } finally {
+    await env.DB.prepare("DROP TRIGGER reject_workflow_restart_audit").run();
+  }
+});
+
+it("uses the cleaned payload when delivery selected a shared digest before the restart", async () => {
+  const moved = await reviewedApplication("Moving Organization");
+  const peer = await reviewedApplication("Remaining Organization");
+  for (const id of [moved, peer]) await evaluateMembershipApplication(env.DB, id, "https://app.test");
+  const [digest] = await digests();
+  await seedDigestLayout();
+  const send = vi
+    .fn()
+    .mockResolvedValue(new Response(null, { status: 202, headers: { "x-message-id": "cleaned-digest" } }));
+  vi.stubGlobal("fetch", send);
+  vi.setSystemTime(new Date(digest.send_after));
+  const gate = gateNextFirst(env.DB, "RETURNING payload_json");
+  const delivery = processPendingOutbox(gate.db, env as Env);
+  await gate.reached;
+  try {
+    const restart = await prepareWorkflowRestart(moved, true);
+    expect((await restart()).status).toBe(200);
+  } finally {
+    gate.release();
+  }
+  expect(await delivery).toEqual({ processed: 1, failed: 0 });
+  expect(send).toHaveBeenCalledTimes(1);
+  const sentBody = String(send.mock.calls[0][1].body);
+  expect(sentBody).toContain("Remaining Organization");
+  expect(sentBody).not.toContain("Moving Organization");
+});
+
+it("refuses a workflow restart during an active send and preserves a sent notice", async () => {
+  const id = await reviewedApplication("Sending Organization");
+  await evaluateMembershipApplication(env.DB, id, "https://app.test");
+  const [digest] = await digests();
+  await seedDigestLayout();
+  vi.setSystemTime(new Date(digest.send_after));
+  let reached!: () => void;
+  let accept!: (response: Response) => void;
+  const sending = new Promise<void>((resolve) => {
+    reached = resolve;
+  });
+  const accepted = new Promise<Response>((resolve) => {
+    accept = resolve;
+  });
+  vi.stubGlobal(
+    "fetch",
+    vi.fn().mockImplementation(() => {
+      reached();
+      return accepted;
+    }),
+  );
+  const delivery = processPendingOutbox(env.DB, env as Env);
+  await sending;
+  const restart = await prepareWorkflowRestart(id, true);
+  try {
+    expect((await restart()).status).toBe(409);
+    expect((await getMembershipExecution(env.DB, id)).generation).toBe(1);
+  } finally {
+    accept(new Response(null, { status: 202, headers: { "x-message-id": "sent-notice" } }));
+  }
+  expect(await delivery).toEqual({ processed: 1, failed: 0 });
+  expect((await restart()).status).toBe(200);
+  const [sent] = await digests();
+  expect(sent.status).toBe("sent");
+  expect(sent.payload_json).toBe(digest.payload_json);
 });
