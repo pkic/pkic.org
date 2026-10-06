@@ -1,13 +1,13 @@
 import type { MembershipWorkflowStep } from "../../../../../assets/shared/schemas/membership-workflows";
 import { membershipReviewDigestSendAt } from "../../../../../assets/shared/membership-review-notifications";
 import { prepareAuthorizationGuard } from "../../../db/authorization-guard";
-import { escapeMarkdownText } from "../../../email/markdown";
 import { prepareQueueEmailStatement } from "../../../email/outbox";
 import { emailPlainText } from "../../../email/plain-text";
 import type { DatabaseLike } from "../../../types";
 import { sha256Hex } from "../../../utils/crypto";
 import { stringifyJson } from "../../../utils/json";
 import type { MembershipExecution } from "./execution";
+import { membershipReviewDigestSnapshot } from "./review-digest-snapshot";
 import { MEMBERSHIP_REVIEW_DIGEST_CONTENT_SQL } from "./review-digest-content";
 
 /** Append inside the same atomic command that opens the application requirement. */
@@ -27,24 +27,8 @@ export async function prepareMembershipReviewDigest(
   const hash = await sha256Hex(JSON.stringify({ policy, recipientEmail, appBaseUrl, sendAt }));
   const id = hash.slice(0, 32);
   const application = execution.application;
-  const name = escapeMarkdownText(application.organization_name ?? application.applicant_name);
   const reviewUrl = `${appBaseUrl}/portal/#/membership/applications/${encodeURIComponent(application.id)}/review`;
-  const summary = `- [${name}](${reviewUrl})\n`;
-  const objectionDetails = objections.map((objection) => {
-    const body =
-      objection.body.length > 500
-        ? `${objection.body.slice(0, 500)}… Read the full objection on the review page.`
-        : objection.body;
-    return `> **${escapeMarkdownText(objection.author ?? "Recorded reviewer")}:** ${escapeMarkdownText(body).replace(/\r?\n/g, "\n> ")}`;
-  });
-  const details = [
-    `### ${name}`,
-    `Submitted by ${escapeMarkdownText(application.applicant_name)}. Membership category: ${escapeMarkdownText(application.membership_category)}.`,
-    ...objectionDetails,
-    `[Read the application form and respond](${reviewUrl})`,
-    "---",
-    "",
-  ].join("\n\n");
+  const snapshot = await membershipReviewDigestSnapshot(db, application, reviewUrl, objections);
   const queued = prepareQueueEmailStatement(
     db,
     {
@@ -55,8 +39,11 @@ export async function prepareMembershipReviewDigest(
       subject: `${step.label}: membership applications — ${now.slice(0, 10)} UTC`,
       messageType: "transactional",
       sendAt,
+      deliveryWindowDays: step.durationDays,
       data: {
         reviewDate: now.slice(0, 10),
+        isMemberConsultation: step.audience.kind === "active_voting_members",
+        isExecutiveCouncil: step.audience.kind === "executive_council",
         stepLabel: emailPlainText(step.label),
         instructions: emailPlainText(step.instructions),
         durationDays: step.durationDays,
@@ -97,7 +84,7 @@ export async function prepareMembershipReviewDigest(
           ), updated_at = ? WHERE id = ?`,
         )
         // A restart before dispatch replaces this application's old snapshot.
-        .bind(`$.reviewApplications."${application.id}"`, stringifyJson({ summary, details }), id, now, id),
+        .bind(`$.reviewApplications."${application.id}"`, stringifyJson(snapshot), id, now, id),
     ],
   };
 }

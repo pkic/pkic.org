@@ -19,12 +19,13 @@ import { getMembershipExecution } from "../functions/_lib/services/membership/wo
 import { createTemplateVersion, activateTemplateVersion, resolveTemplate } from "../functions/_lib/email/templates";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
-import { seedMemberApplication } from "./helpers/member-applications";
+import { seedMemberApplication, createApplicationFormSubmission } from "./helpers/member-applications";
 import { gateBatchGroup, gateNextFirst } from "./helpers/d1-batch-gate";
 
 let today: string;
 beforeEach(async () => {
   await resetDb();
+  await seedDigestTemplates();
   const future = new Date();
   future.setUTCDate(future.getUTCDate() + 1);
   future.setUTCHours(12, 0, 0, 0);
@@ -59,8 +60,10 @@ async function reviewedApplication(name: string, council = false) {
 }
 
 async function seedDigestTemplates() {
-  const migration = env.TEST_MIGRATIONS.find((item) => item.name === "0038_membership_review_digest_template.sql")!;
-  for (const query of migration.queries) await env.DB.prepare(query).run();
+  for (const name of ["0038_membership_review_digest_template.sql", "0039_membership_review_email_format.sql"]) {
+    const migration = env.TEST_MIGRATIONS.find((item) => item.name === name)!;
+    for (const query of migration.queries) await env.DB.prepare(query).run();
+  }
   const layout = await createTemplateVersion(env.DB, {
     templateKey: "email_layout",
     content: "{{{body_html}}}",
@@ -214,7 +217,8 @@ it("combines concurrent organization reviews and starts both full windows only a
   }
   const [retry] = await digests();
   expect(retry.status).toBe("retrying");
-  vi.setSystemTime(new Date(retry.send_after));
+  const deliveredAt = new Date(Date.parse(retry.send_after) + 86400_000).toISOString();
+  vi.setSystemTime(new Date(deliveredAt));
   expect(await processPendingOutbox(env.DB, env as Env)).toEqual({ processed: 1, failed: 0 });
   expect(await processPendingOutbox(env.DB, env as Env)).toEqual({ processed: 0, failed: 0 });
   expect(send).toHaveBeenCalledTimes(2);
@@ -222,8 +226,17 @@ it("combines concurrent organization reviews and starts both full windows only a
   const html = message.content.find((part: { type: string }) => part.type === "text/html").value;
   expect(html).toContain("Example Organization");
   expect(html).toContain("Second Organization");
-  expect(html).toContain("Application details");
+  expect(html).toContain("Below you will find the complete application details:");
+  expect(html).toContain("Dear Members,");
   expect(html).toContain("Questions? Contact the membership team.");
+  const closesOn = new Intl.DateTimeFormat("en-US", {
+    timeZone: "UTC",
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }).format(new Date(Date.parse(deliveredAt) + 7 * 86400_000));
+  expect(html).toContain(`will close on ${closesOn} (UTC)`);
   expect(message.subject).toContain(`Review forms: Member consultation — ${today.slice(0, 10)} UTC`);
   expect(message.from).toEqual({ email: "membership@example.test", name: "Membership Team" });
   expect(
@@ -236,8 +249,8 @@ it("combines concurrent organization reviews and starts both full windows only a
     expect(html).toContain(`/membership/applications/${id}/review`);
     await evaluateMembershipApplication(env.DB, id, "https://app.test");
     expect((await getMembershipExecution(env.DB, id)).steps[1]).toMatchObject({
-      opened_at: retry.send_after,
-      deadline_at: new Date(Date.parse(retry.send_after) + 7 * 86400_000).toISOString(),
+      opened_at: deliveredAt,
+      deadline_at: new Date(Date.parse(deliveredAt) + 7 * 86400_000).toISOString(),
     });
   }
 });
@@ -558,4 +571,56 @@ it("refuses stage changes while a digest is sending and preserves sent review ev
   await evaluateMembershipApplication(env.DB, id, "https://app.test");
   expect((await getMembershipExecution(env.DB, id)).steps[1]).toEqual(before);
   expect((await digests())[0].payload_json).toBe(original.payload_json);
+});
+
+it("renders three complete application forms with current labels and literal applicant text", async () => {
+  const ids = await Promise.all(
+    ["Example Trust Software", "Example Key Systems", "Example Identity Tools"].map((name) =>
+      reviewedApplication(name),
+    ),
+  );
+  const formSubmissionId = await createApplicationFormSubmission({
+    job_title: "PKI Engineer",
+    about_yourself: "I build accessible forms.\nI help users manage certificate lifecycles.",
+    organization_website: "https://example.test/",
+    reason: "Collaborate on PKI standards.",
+    contribution_type: "active",
+    wants_to_present: true,
+    interested_in_sponsoring: false,
+    about_organization: '<script>alert("example")</script> [Untrusted link](https://hostile.test/) {{instructions}}',
+  });
+  await env.DB.prepare("UPDATE member_applications SET form_submission_id = ? WHERE id = ?")
+    .bind(formSubmissionId, ids[0])
+    .run();
+  for (const id of ids) await evaluateMembershipApplication(env.DB, id, "https://app.test");
+  const [digest] = await digests();
+  const send = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
+  vi.stubGlobal("fetch", send);
+  vi.setSystemTime(new Date(digest.send_after));
+  await processOutboxById(env.DB, env as Env, digest.id);
+  const message = JSON.parse(String(send.mock.calls[0][1].body));
+  const html = message.content.find((part: { type: string }) => part.type === "text/html").value;
+  expect(html).toContain("Dear Members,");
+  expect(html).toContain("Applications must be approved by the Executive Council after feedback from the Members.");
+  expect(html).toContain("not on selling products or services");
+  for (const name of ["Example Trust Software", "Example Key Systems", "Example Identity Tools"]) {
+    expect(html.match(new RegExp(`Membership application from ${name}`, "g"))).toHaveLength(2);
+  }
+  expect(html).toContain("PKI or cryptographic software and device providers");
+  expect(html).toContain("Role / Job Title: PKI Engineer");
+  expect(html).toContain("I build accessible forms.");
+  expect(html).toContain("I help users manage certificate lifecycles.");
+  expect(html).toContain("Actively contribute to the consortium and its mission");
+  expect(html).toContain("I would like to introduce myself: Yes");
+  expect(html).toContain("I would like to discuss sponsoring: No");
+  expect(html).toContain("I agree to follow the Bylaws: Yes");
+  expect(html).toContain("Best regards,");
+  const text = message.content.find((part: { type: string }) => part.type === "text/plain").value;
+  expect(text).toContain("each application's review page");
+  expect(text).toContain('alert("example")');
+  expect(text).not.toContain("&#39;");
+  expect(text).not.toContain("&quot;");
+  expect(html).not.toContain("<script>");
+  expect(html).not.toContain('href="https://hostile.test/"');
+  expect(html).toContain("{{instructions}}");
 });

@@ -514,6 +514,8 @@ function stripHtmlToText(input: string): string {
     .replace(/<\/(p|div|li|h[1-6]|blockquote|section|article|table|tr)>/gi, "\n")
     .replace(/<li[^>]*>/gi, "- ")
     .replace(/<[^>]+>/g, " ")
+    .replace(/&#39;|&#x27;/gi, "'")
+    .replace(/&quot;|&#34;|&#x22;/gi, '"')
     .replace(/&nbsp;/gi, " ")
     .replace(/&amp;/gi, "&")
     .replace(/&lt;/gi, "<")
