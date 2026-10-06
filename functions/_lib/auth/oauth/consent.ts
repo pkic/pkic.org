@@ -11,7 +11,7 @@ import {
   parseOauthRequestFromReturnTo,
   redirectToMcpOauthUi,
   redirectAuthorizationDenied,
-  requireMcpOauthAdmin,
+  resolveMcpOauthSession,
   resolveAuthorizeReturnTo,
   sanitizeAuthorizeReturnTo,
   sendMcpAuthorizeMagicLink,
@@ -109,7 +109,8 @@ async function handleAuthorizeApproval(
   returnTo: string,
 ): Promise<{ redirectTo: string }> {
   const authRequest = await parseOauthRequestFromReturnTo(request, env.OAUTH_PROVIDER, returnTo);
-  const admin = await requireMcpOauthAdmin(request, env);
+  const session = await resolveMcpOauthSession(request, env);
+  const admin = session?.staff;
   if (!admin) {
     throw new AppError(401, "AUTH_EXPIRED", "Your authorization session expired. Sign in again.");
   }
@@ -135,6 +136,7 @@ async function handleAuthorizeApproval(
       },
       grantedScopes,
       "oauth",
+      session?.staffIdleExpiresAt,
     ),
   });
 

@@ -1,6 +1,7 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
+import app from "../functions/router";
 import { Hono } from "hono";
 import { createMcpWorkerFetch, MCP_PATH } from "../functions/_lib/api-tools/mcp-worker";
 import {
@@ -9,6 +10,8 @@ import {
   MCP_OAUTH_TOKEN_PATH,
 } from "../functions/_lib/auth/oauth/authorization";
 import type { Env } from "../functions/_lib/types";
+import { resolveMcpExternalToken } from "../functions/_lib/auth/oauth/authorization";
+import { requireActiveMcpSession } from "../functions/_lib/auth/oauth/session-authorization";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
@@ -72,6 +75,7 @@ async function authorize() {
   expect(tokens.status).toBe(200);
   return {
     clientId,
+    userToken: session,
     userId: user.id,
     ...((await tokens.json()) as { access_token: string; refresh_token: string; expires_in: number }),
   };
@@ -103,6 +107,8 @@ function initialize(token: string) {
 }
 
 describe("MCP OAuth session interoperability", () => {
+  afterEach(() => vi.useRealTimers());
+
   beforeEach(async () => {
     await resetDb();
     await seedEventAndAdmin(env.DB);
@@ -163,6 +169,66 @@ describe("MCP OAuth session interoperability", () => {
       expect((await initialize(nextGrant.access_token)).status).toBe(200);
     },
   );
+
+  it.each(["request", "refresh"])(
+    "expires an idle staff grant through %s and requires a new session",
+    async (firstPath) => {
+      const grant = await authorize();
+      expect(grant.expires_in).toBeLessThanOrEqual(60 * 60);
+      const [session] = await queryAll<{ id: string; expires_at: string; revoked_at: string | null }>(
+        env.DB,
+        "SELECT id, expires_at, revoked_at FROM sessions WHERE user_id = ?",
+        [grant.userId],
+      );
+      expect(session.revoked_at).toBeNull();
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(Date.now() + 61 * 60 * 1000);
+      expect(Date.parse(session.expires_at)).toBeGreaterThan(Date.now());
+
+      if (firstPath === "request") {
+        const expired = await initialize(grant.access_token);
+        expect(expired.status).toBe(401);
+        expect(expired.headers.get("www-authenticate")).toContain("resource_metadata=");
+      }
+      const refresh = await exchange({
+        grant_type: "refresh_token",
+        client_id: grant.clientId,
+        refresh_token: grant.refresh_token,
+      });
+      expect(refresh.status).toBe(400);
+      expect(await refresh.json()).toMatchObject({ error: "invalid_grant" });
+      const [revoked] = await queryAll<{ revoked_at: string }>(env.DB, "SELECT revoked_at FROM sessions WHERE id = ?", [
+        session.id,
+      ]);
+      expect(revoked.revoked_at).toBe(new Date().toISOString());
+      const context = createExecutionContext();
+      const portal = await app.fetch(
+        new Request(`${origin}/api/v1/auth/session`, { headers: { cookie: `pkic_session=${grant.userToken}` } }),
+        env,
+        context,
+      );
+      await waitOnExecutionContext(context);
+      expect(portal.status).toBe(401);
+      expect(await portal.json()).toMatchObject({ error: { code: "AUTH_REVOKED" } });
+      expect((await initialize(grant.access_token)).status).toBe(401);
+
+      const newGrant = await authorize();
+      expect((await initialize(newGrant.access_token)).status).toBe(200);
+    },
+  );
+
+  it("keeps API-key service access independent of human inactivity deadlines", async () => {
+    const grant = await resolveMcpExternalToken({
+      token: env.ADMIN_API_KEY!,
+      request: new Request(`${origin}${MCP_PATH}`),
+      env,
+    });
+    expect(grant?.props.identityType).toBe("service");
+    expect(await requireActiveMcpSession(env, grant!.props)).toBeNull();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(Date.now() + 2 * 60 * 60 * 1000);
+    expect(await requireActiveMcpSession(env, grant!.props)).toBeNull();
+  });
 
   it("caps refreshed access tokens at the live session deadline", async () => {
     const grant = await authorize();

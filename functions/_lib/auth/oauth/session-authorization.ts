@@ -1,5 +1,6 @@
 import { OAuthError } from "@cloudflare/workers-oauth-provider";
 import { getCurrentUserBackedAdmin } from "../admin";
+import { revokeSessionRow } from "../session-engine";
 import { signMcpSessionToken } from "../mcp-session";
 import { AppError } from "../../errors";
 import type { Env } from "../../types";
@@ -8,8 +9,13 @@ import { parseMcpOauthProps, type McpOAuthProps } from "./authorization";
 /** OAuth refresh never extends the staff session that authorized the grant. */
 export async function requireActiveMcpSession(env: Env, props: McpOAuthProps): Promise<number | null> {
   if (props.identityType === "service") return null;
+  const idleExpiresAt = Date.parse(props.sessionIdleExpiresAt);
+  if (!Number.isFinite(idleExpiresAt) || idleExpiresAt <= Date.now()) {
+    await revokeSessionRow(env.DB, "sessions", props.sessionId);
+    throw new AppError(401, "AUTH_EXPIRED", "Your MCP authorization session expired. Sign in again.");
+  }
   const admin = await getCurrentUserBackedAdmin(env.DB, props.id, props.sessionId);
-  const expiresAt = Math.min(new Date(props.sessionExpiresAt).getTime(), new Date(admin?.expiresAt ?? "").getTime());
+  const expiresAt = Math.min(Date.parse(props.sessionExpiresAt), idleExpiresAt, Date.parse(admin?.expiresAt ?? ""));
   const remainingSeconds = Math.floor(expiresAt / 1000) - Math.floor(Date.now() / 1000);
   if (!admin || !Number.isFinite(remainingSeconds) || remainingSeconds <= 0) {
     throw new AppError(401, "AUTH_EXPIRED", "Your MCP authorization session expired. Sign in again.");
@@ -66,7 +72,7 @@ export async function authorizationHeaderForMcp(
     return request.headers.get("authorization");
   }
 
-  await requireActiveMcpSession(env, oauthProps);
+  const remainingSeconds = await requireActiveMcpSession(env, oauthProps);
 
   if (!env.INTERNAL_SIGNING_SECRET) {
     return null;
@@ -75,7 +81,7 @@ export async function authorizationHeaderForMcp(
   const token = await signMcpSessionToken(env.INTERNAL_SIGNING_SECRET, {
     sub: oauthProps.id,
     sid: oauthProps.sessionId,
-    exp: Math.floor(new Date(oauthProps.sessionExpiresAt).getTime() / 1000),
+    exp: Math.floor(Date.now() / 1000) + remainingSeconds!,
     email: oauthProps.email,
     state: oauthProps.state ?? undefined,
     scopes: oauthProps.scopes,
