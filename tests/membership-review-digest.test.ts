@@ -60,10 +60,8 @@ async function reviewedApplication(name: string, council = false) {
 }
 
 async function seedDigestTemplates() {
-  for (const name of ["0038_membership_review_digest_template.sql", "0039_membership_review_email_format.sql"]) {
-    const migration = env.TEST_MIGRATIONS.find((item) => item.name === name)!;
-    for (const query of migration.queries) await env.DB.prepare(query).run();
-  }
+  const migration = env.TEST_MIGRATIONS.find((item) => item.name === "0038_membership_review_digest_template.sql")!;
+  for (const query of migration.queries) await env.DB.prepare(query).run();
   const layout = await createTemplateVersion(env.DB, {
     templateKey: "email_layout",
     content: "{{{body_html}}}",
