@@ -1,3 +1,5 @@
+@import "../../design/tokens.template.generated.css";
+
 /*
  * OverlayEditor — a syntax-highlighted text control.
  *
@@ -71,9 +73,66 @@
     overflow-wrap: break-word;
   }
 
-  .pk-overlay-editor__input {
+  /* Reserve the same scrollbar space so wrapped highlights stay aligned. */
+  .pk-overlay-editor__backdrop--wrap,
+  .pk-overlay-editor > textarea.pk-overlay-editor__input {
+    scrollbar-gutter: stable;
+  }
+
+  .pk-overlay-editor > .pk-overlay-editor__input {
     position: relative;
     display: block;
     background: transparent;
+  }
+
+  /* Shared source and visual token colors, restored from the pre-Astro editor. */
+  .adm-template-token-mark {
+    background-color: var(--pk-template-insertion-highlight);
+    border-radius: var(--pk-radius-sm);
+    padding: 0 1px;
+  }
+
+  .adm-template-token {
+    border-radius: var(--pk-radius-sm);
+    padding: 0 2px;
+    margin: 0 -2px;
+  }
+
+  .adm-template-token-var {
+    background: var(--pk-template-variable-highlight);
+    padding: 0;
+    margin: 0;
+  }
+
+  .adm-template-token-depth-0 {
+    background: var(--pk-template-block-highlight-0);
+  }
+
+  .adm-template-token-depth-1 {
+    background: var(--pk-template-block-highlight-1);
+  }
+
+  .adm-template-token-depth-2 {
+    background: var(--pk-template-block-highlight-2);
+  }
+
+  .adm-template-token-depth-3 {
+    background: var(--pk-template-block-highlight-3);
+  }
+
+  .adm-template-token-depth-4 {
+    background: var(--pk-template-block-highlight-4);
+  }
+
+  .adm-template-token-depth-5 {
+    background: var(--pk-template-block-highlight-5);
+  }
+
+  .adm-template-token-depth-6 {
+    background: var(--pk-template-block-highlight-6);
+  }
+
+  .adm-template-token-depth-7 {
+    background: var(--pk-template-block-highlight-7);
   }
 }

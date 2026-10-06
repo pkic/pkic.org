@@ -148,6 +148,19 @@ const shadowDark: Record<keyof typeof shadowLight, string> = {
 
 /** Values that do not change with the theme. */
 export const constants = {
+  // Decorative Handlebars backgrounds keep the editor's ordinary ink readable.
+  "template-preview-surface": neutral.white,
+  "template-insertion-highlight": "rgba(255, 165, 0, 0.2)",
+  "template-variable-highlight": "rgba(8, 145, 178, 0.15)",
+  "template-block-highlight-0": "rgba(13, 110, 253, 0.15)",
+  "template-block-highlight-1": "rgba(25, 135, 84, 0.15)",
+  "template-block-highlight-2": "rgba(253, 126, 20, 0.15)",
+  "template-block-highlight-3": "rgba(111, 66, 193, 0.15)",
+  "template-block-highlight-4": "rgba(214, 51, 132, 0.15)",
+  "template-block-highlight-5": "rgba(32, 201, 151, 0.15)",
+  "template-block-highlight-6": "rgba(220, 53, 69, 0.15)",
+  "template-block-highlight-7": "rgba(13, 202, 240, 0.15)",
+
   font: '"Roboto", system-ui, -apple-system, sans-serif',
   "font-mono": '"Roboto Mono", ui-monospace, monospace',
 

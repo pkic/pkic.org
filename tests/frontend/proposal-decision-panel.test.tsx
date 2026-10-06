@@ -243,6 +243,9 @@ describe("proposal decision panel", () => {
     expect(requests).toHaveLength(1);
     expect(requests[0]).toMatchObject({ url: "/api/v1/proposals/proposal-1/decisions/previews", method: "POST" });
     expect(root.textContent).toContain("Email preview");
+    const selectedMessage = root.querySelector('[role="group"][aria-label="Outgoing emails"] button')!;
+    expect(selectedMessage.getAttribute("aria-pressed")).toBe("true");
+    expect(root.querySelector('iframe[title="Decision email preview"]')?.getAttribute("src")).toBe("/email/preview/");
     const recordButton = root.querySelector('button[type="submit"]') as HTMLButtonElement;
     expect(recordButton.disabled).toBe(true);
 

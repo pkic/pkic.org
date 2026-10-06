@@ -191,13 +191,9 @@ describe("event email campaign UI", () => {
     const container = mount(<EventEmailCampaign campaignsPath={CAMPAIGN_PATH} daysPath={`${EVENT_PATH}/days`} />);
     await composeAndPreview(container);
 
-    // The rendered email is author-supplied HTML. It must stay in a fully
-    // sandboxed srcdoc frame — no scripts, no forms, no same-origin access,
-    // and no network fetch of its own.
     const frame = container.querySelector("iframe")!;
-    expect(frame.getAttribute("sandbox")).toBe("");
-    expect(frame.getAttribute("srcdoc")).toBe("<p>Hello</p>");
-    expect(frame.hasAttribute("src")).toBe(false);
+    expect(frame.getAttribute("src")).toBe("/email/preview/");
+    expect(frame.hasAttribute("srcdoc")).toBe(false);
     expect(frame.getAttribute("title")).toBe("Rendered campaign email preview");
 
     // The send outcome is announced rather than only shown.

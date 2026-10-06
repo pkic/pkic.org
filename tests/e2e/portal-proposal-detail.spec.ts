@@ -9,6 +9,7 @@ import { eventProposalsResponseSchema } from "../../assets/shared/schemas/event-
 import { proposalSpeakersResponseSchema } from "../../assets/shared/schemas/proposal-speakers";
 import { proposalDecisionPreviewResponseSchema } from "../../assets/shared/schemas/proposal-decisions";
 import { finalizeProposalSchema } from "../../assets/shared/schemas/proposal-management";
+import { expectButtonTextContrast } from "./helpers/button-contrast";
 import { definitionFor } from "./helpers/definition-list";
 import { tab } from "./helpers/tabs";
 
@@ -587,7 +588,7 @@ test("renders the portal proposal detail workflow with submission answers and op
     });
   });
 
-  await page.goto(`/portal/#/events/pqc-2026/proposals/detail/${proposalId}`);
+  await page.goto(`/portal/#/groups/${GROUP_ID}/events/${groupEvent.event.id}/proposals/${proposalId}`);
 
   await expect(page.getByRole("heading", { name: "Operational PKI at Internet Scale" })).toBeVisible();
 
@@ -712,7 +713,7 @@ test("renders the portal proposal detail workflow with submission answers and op
           recipientEmail: `${name.toLowerCase()}@example.test`,
           recipientLabel: `${name} Example`,
           subject: "Your proposal about accessible forms was rejected",
-          html: "<h1>Proposal rejected</h1><p>Alex, your session on accessible forms has been rejected.</p>",
+          html: `<style>h1 { color: #0891b2; }</style><h1 style="background: #000">Proposal rejected</h1><p>${name}, your session on accessible forms has been rejected.</p>`,
           text: "Alex, your session on accessible forms has been rejected.",
           templateMissing: false,
         })),
@@ -723,25 +724,45 @@ test("renders the portal proposal detail workflow with submission answers and op
   const preview = page.getByTitle("Decision email preview", { exact: true });
   await expect(preview).toHaveCount(1);
   await expect(preview.first()).toBeVisible();
-  await expect(preview.first()).toHaveAttribute("sandbox", "");
-  for (const width of [1440, 768, 390]) {
-    await page.setViewportSize({ width, height: 1000 });
-    for (const name of ["Alex", "Jordan", "Taylor"]) {
-      await page
-        .getByRole("button", { name: `Decision email ${name} Example ${name.toLowerCase()}@example.test`, exact: true })
-        .click();
-      await preview.scrollIntoViewIfNeeded();
-      const dimensions = await preview.evaluate((frame) => {
-        const body = frame.closest(".pk-panel__body")!;
-        const style = getComputedStyle(body);
-        return {
-          frame: frame.getBoundingClientRect().width,
-          available: body.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
-        };
-      });
-      expect(Math.abs(dimensions.frame - dimensions.available)).toBeLessThanOrEqual(2);
+  const renderer = page.frameLocator("iframe[title='Decision email preview']");
+  await expect(renderer.locator("iframe[title='Email HTML']")).toHaveAttribute("sandbox", "");
+  const email = renderer.frameLocator("iframe[title='Email HTML']");
+  await expect(email.getByRole("heading", { name: "Proposal rejected" })).toHaveCSS("color", "rgb(8, 145, 178)");
+  await expect(email.getByRole("heading", { name: "Proposal rejected" })).toHaveCSS("background-color", "rgb(0, 0, 0)");
+  for (const theme of ["light", "dark"] as const) {
+    await page.emulateMedia({ colorScheme: theme });
+    for (const width of [1440, 768, 390]) {
+      await page.setViewportSize({ width, height: 1000 });
+      for (const name of ["Alex", "Jordan", "Taylor"]) {
+        const choice = page.getByRole("button", {
+          name: `Decision email ${name} Example ${name.toLowerCase()}@example.test`,
+          exact: true,
+        });
+        await choice.focus();
+        await choice.press("Space");
+        await expect(choice).toHaveAttribute("aria-pressed", "true");
+        for (const button of await page
+          .getByRole("group", { name: "Outgoing emails", exact: true })
+          .getByRole("button")
+          .all()) {
+          await expectButtonTextContrast(button);
+          await button.hover();
+          await expectButtonTextContrast(button);
+        }
+        await expect(email.getByText(`${name}, your session on accessible forms has been rejected.`)).toBeVisible();
+        await preview.scrollIntoViewIfNeeded();
+        const dimensions = await preview.evaluate((frame) => {
+          const body = frame.closest(".pk-panel__body")!;
+          const style = getComputedStyle(body);
+          return {
+            frame: frame.getBoundingClientRect().width,
+            available: body.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+          };
+        });
+        expect(Math.abs(dimensions.frame - dimensions.available)).toBeLessThanOrEqual(2);
+      }
+      await page.screenshot({ path: testInfo.outputPath(`decision-preview-${theme}-${width}.png`) });
     }
-    await page.screenshot({ path: testInfo.outputPath(`decision-preview-${width}.png`) });
   }
   await page.setViewportSize({ width: 1440, height: 1000 });
   let recordedDecision: unknown;
@@ -782,11 +803,14 @@ test("renders the portal proposal detail workflow with submission answers and op
   await expect(page.getByText("Session canceled", { exact: true })).toBeVisible();
   await expect(page.getByText("The speaker is unavailable for the scheduled session.")).toBeVisible();
 
-  // Chromium reports the script restriction when loading the sandboxed srcdoc.
-  // Assert that exact diagnostic; any unrelated console error still fails.
-  expect(consoleErrors).toEqual([
-    "Blocked script execution in 'about:srcdoc' because the document's frame is sandboxed and the 'allow-scripts' permission is not set.",
-  ]);
+  // Chromium blocks the test's initialization script in each sandboxed document,
+  // including recipient updates. Any unrelated console error still fails.
+  expect(consoleErrors.length).toBeGreaterThan(0);
+  for (const error of consoleErrors) {
+    expect(error).toMatch(
+      /^Blocked script execution in 'about:(blank|srcdoc)' because the document's frame is sandboxed and the 'allow-scripts' permission is not set\.$/,
+    );
+  }
 });
 
 test("offers event presentation archives only with proposal read access", async ({ page }) => {
