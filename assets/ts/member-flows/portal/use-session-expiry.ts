@@ -1,5 +1,5 @@
 import { useEffect } from "preact/hooks";
-import { expirePortalSession, expireStaffCapacity, portalSession } from "./state";
+import { expirePortalSession, portalSession } from "./state";
 
 /** Remove expired authority without waiting for another request, including after browser suspension. */
 export function useSessionExpiry(): void {
@@ -19,14 +19,8 @@ export function useSessionExpiry(): void {
       clearTimeout(timer);
       if (portalSession.value !== session) return;
       const remaining = deadline - Date.now();
-      if (!Number.isFinite(remaining)) {
+      if (!Number.isFinite(remaining) || remaining <= 0) {
         expirePortalSession();
-      } else if (remaining <= 0) {
-        if (staffDeadline < sessionDeadline) {
-          expireStaffCapacity();
-        } else {
-          expirePortalSession();
-        }
       } else {
         timer = setTimeout(check, Math.min(remaining, 60_000));
       }

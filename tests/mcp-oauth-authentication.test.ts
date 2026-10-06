@@ -111,10 +111,10 @@ describe("MCP authorization through canonical portal authentication", () => {
       RETURN_TO,
     );
     expect(context).toMatchObject({
-      authenticated: true,
+      authenticated: false,
       authorized: false,
-      staffReauthenticationRequired: true,
-      userEmail: "admin@pkic.org",
+      userEmail: null,
+      staffEmail: null,
       grantedScopes: [],
     });
   });

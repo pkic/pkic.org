@@ -226,11 +226,7 @@ export function McpAuthorization() {
               : "Sign in through the portal to review this authorization request."}
           </p>
 
-          {context?.staffReauthenticationRequired && (
-            <Alert tone="warn">Your staff session expired. Sign in again to authorize MCP access.</Alert>
-          )}
-
-          {!context?.authenticated || context.staffReauthenticationRequired ? (
+          {!context?.authenticated ? (
             sent ? (
               <Alert tone="ok">If this address has staff access, you&apos;ll receive a sign-in link shortly.</Alert>
             ) : (

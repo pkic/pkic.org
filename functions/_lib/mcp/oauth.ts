@@ -211,7 +211,6 @@ export async function describeMcpAuthorization(
   return {
     authenticated: session !== null,
     authorized: admin !== null,
-    staffReauthenticationRequired: session?.staffReauthenticationRequired ?? false,
     returnTo,
     clientId: authRequest.clientId,
     clientName: clientInfo?.clientName ?? clientInfo?.clientId ?? authRequest.clientId,
