@@ -2,16 +2,15 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import app from "../functions/router";
-import { Hono } from "hono";
-import { createMcpWorkerFetch, MCP_PATH } from "../functions/_lib/api-tools/mcp-worker";
+import { MCP_PATH } from "../functions/_lib/api-tools/mcp-worker";
 import {
   MCP_OAUTH_AUTHORIZE_PATH,
   MCP_OAUTH_REGISTER_PATH,
   MCP_OAUTH_TOKEN_PATH,
+  resolveMcpExternalToken,
 } from "../functions/_lib/auth/oauth/authorization";
-import type { Env } from "../functions/_lib/types";
-import { resolveMcpExternalToken } from "../functions/_lib/auth/oauth/authorization";
 import { requireActiveMcpSession } from "../functions/_lib/auth/oauth/session-authorization";
+import { AppError } from "../functions/_lib/errors";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
@@ -19,19 +18,14 @@ import { resetDb } from "./helpers/reset-db";
 const origin = "https://app.test";
 const redirectUri = "http://127.0.0.1:1455/callback";
 const verifier = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-const fetchMcp = createMcpWorkerFetch({
-  app: new Hono<{ Bindings: Env }>(),
-  getMcpOpenApiSchema: async () => ({ openapi: "3.1.0", info: { title: "Test API", version: "v1" }, paths: {} }),
-});
-
 async function call(path: string, init?: RequestInit): Promise<Response> {
   const context = createExecutionContext();
-  const response = await fetchMcp(new Request(`${origin}${path}`, init), env, context);
+  const response = await app.fetch(new Request(`${origin}${path}`, init), env, context);
   await waitOnExecutionContext(context);
   return response;
 }
 
-async function authorize() {
+async function createAuthorization() {
   const [user] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE normalized_email = ?", [
     "admin@pkic.org",
   ]);
@@ -64,19 +58,26 @@ async function authorize() {
   const { redirectTo } = (await approval.json()) as { redirectTo: string };
   const callback = new URL(redirectTo);
   expect(callback.searchParams.get("state")).toBe("test-state");
-  const tokens = await exchange({
+  return { clientId, userToken: session, userId: user.id, code: callback.searchParams.get("code")! };
+}
+
+function redeemCode(grant: Awaited<ReturnType<typeof createAuthorization>>) {
+  return exchange({
     grant_type: "authorization_code",
-    client_id: clientId,
+    client_id: grant.clientId,
     redirect_uri: redirectUri,
-    code: callback.searchParams.get("code")!,
+    code: grant.code,
     code_verifier: verifier,
     resource: `${origin}${MCP_PATH}`,
   });
+}
+
+async function authorize() {
+  const grant = await createAuthorization();
+  const tokens = await redeemCode(grant);
   expect(tokens.status).toBe(200);
   return {
-    clientId,
-    userToken: session,
-    userId: user.id,
+    ...grant,
     ...((await tokens.json()) as { access_token: string; refresh_token: string; expires_in: number }),
   };
 }
@@ -107,7 +108,10 @@ function initialize(token: string) {
 }
 
 describe("MCP OAuth session interoperability", () => {
-  afterEach(() => vi.useRealTimers());
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.restoreAllMocks();
+  });
 
   beforeEach(async () => {
     await resetDb();
@@ -228,6 +232,64 @@ describe("MCP OAuth session interoperability", () => {
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(Date.now() + 2 * 60 * 60 * 1000);
     expect(await requireActiveMcpSession(env, grant!.props)).toBeNull();
+  });
+
+  it.each(["authorization_code", "refresh_token"] as const)(
+    "handles the KV lifetime boundary during %s exchange",
+    async (flow) => {
+      vi.useFakeTimers({ toFake: ["Date"] });
+      vi.setSystemTime(Math.floor(Date.now() / 1000) * 1000);
+      for (const remainingSeconds of [59, 60]) {
+        const grant = flow === "authorization_code" ? await createAuthorization() : await authorize();
+        await env.DB.prepare("UPDATE sessions SET expires_at = ? WHERE user_id = ? AND revoked_at IS NULL")
+          .bind(new Date(Date.now() + remainingSeconds * 1000).toISOString(), grant.userId)
+          .run();
+        const tokens =
+          "refresh_token" in grant && typeof grant.refresh_token === "string"
+            ? await exchange({
+                grant_type: "refresh_token",
+                client_id: grant.clientId,
+                refresh_token: grant.refresh_token,
+              })
+            : await redeemCode(grant);
+        if (remainingSeconds < 60) {
+          expect(tokens.status).toBe(400);
+          expect(await tokens.json()).toMatchObject({ error: "invalid_grant" });
+        } else {
+          expect(tokens.status).toBe(200);
+          expect(await tokens.json()).toMatchObject({ expires_in: 60 });
+        }
+      }
+      expect((await initialize((await authorize()).access_token)).status).toBe(200);
+    },
+  );
+
+  it.each([401, 403, 503, null])("handles a %s failure in the second human session lookup", async (status) => {
+    const grant = await authorize();
+    const failure =
+      status === null
+        ? new Error("Session storage is unavailable")
+        : new AppError(status, "SESSION_LOOKUP_FAILED", "Session lookup failed");
+    const prepare = env.DB.prepare.bind(env.DB);
+    let sessionReads = 0;
+    vi.spyOn(env.DB, "prepare").mockImplementation((sql) => {
+      if (/FROM sessions\b/.test(sql) && ++sessionReads === 2) throw failure;
+      return prepare(sql);
+    });
+    const lookup = resolveMcpExternalToken({
+      token: grant.userToken,
+      request: new Request(`${origin}${MCP_PATH}`),
+      env,
+    });
+    if (status === 401 || status === 403) await expect(lookup).resolves.toBeNull();
+    else await expect(lookup).rejects.toBe(failure);
+    expect(sessionReads).toBe(2);
+  });
+
+  it("rejects invalid external credentials without turning them into server failures", async () => {
+    expect(
+      await resolveMcpExternalToken({ token: "invalid-credential", request: new Request(`${origin}${MCP_PATH}`), env }),
+    ).toBeNull();
   });
 
   it("caps refreshed access tokens at the live session deadline", async () => {

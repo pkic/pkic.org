@@ -235,6 +235,7 @@ export async function resolveMcpExternalToken({
     const admin = await requireAdminFromRequest(env.DB as Env["DB"], authRequest, env as Env);
     const transport = getCachedAdminAuthTransport(authRequest) ?? "bearer";
     const session = admin.identityType === "user" ? await resolveMcpOauthSession(authRequest, env as Env) : null;
+    if (admin.identityType === "user" && !session?.staff) return null;
     return {
       props: buildMcpOauthProps(
         admin,
@@ -243,8 +244,9 @@ export async function resolveMcpExternalToken({
         session?.staffIdleExpiresAt,
       ),
     };
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof AppError && (error.status === 401 || error.status === 403)) return null;
+    throw error;
   }
 }
 

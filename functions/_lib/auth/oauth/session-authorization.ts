@@ -32,7 +32,13 @@ export async function mcpTokenLifetime(
     const props = parseMcpOauthProps(value);
     if (!props) throw new AppError(401, "AUTH_INVALID", "Missing MCP authorization");
     const remainingSeconds = await requireActiveMcpSession(env, props);
-    return { accessTokenTTL: remainingSeconds === null ? accessTokenTTL : Math.min(accessTokenTTL, remainingSeconds) };
+    const ttl = remainingSeconds === null ? accessTokenTTL : Math.min(accessTokenTTL, remainingSeconds);
+    // Cloudflare KV rejects expirationTtl below 60 seconds. Never round up
+    // beyond the signed session deadline to satisfy that storage minimum.
+    if (ttl < 60) {
+      throw new AppError(401, "AUTH_EXPIRED", "Your MCP authorization session expired. Sign in again.");
+    }
+    return { accessTokenTTL: ttl };
   } catch (error) {
     if (error instanceof AppError && error.status === 401) {
       throw new OAuthError("invalid_grant", { description: "Your MCP authorization session expired. Sign in again." });
