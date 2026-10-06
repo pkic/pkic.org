@@ -1,17 +1,17 @@
 import { OAuthError } from "@cloudflare/workers-oauth-provider";
 import { getCurrentUserBackedAdmin } from "../admin";
-import { revokeSessionRow } from "../session-engine";
 import { signMcpSessionToken } from "../mcp-session";
 import { AppError } from "../../errors";
 import type { Env } from "../../types";
 import { parseMcpOauthProps, type McpOAuthProps } from "./authorization";
 
-/** OAuth refresh never extends the staff session that authorized the grant. */
+/** OAuth refresh never extends the grant's signed authorization deadline. */
 export async function requireActiveMcpSession(env: Env, props: McpOAuthProps): Promise<number | null> {
   if (props.identityType === "service") return null;
   const idleExpiresAt = Date.parse(props.sessionIdleExpiresAt);
   if (!Number.isFinite(idleExpiresAt) || idleExpiresAt <= Date.now()) {
-    await revokeSessionRow(env.DB, "sessions", props.sessionId);
+    // This snapshot bounds the grant. Portal activity can extend its own
+    // signed idle deadline, so grant expiry must not revoke the shared session.
     throw new AppError(401, "AUTH_EXPIRED", "Your MCP authorization session expired. Sign in again.");
   }
   const admin = await getCurrentUserBackedAdmin(env.DB, props.id, props.sessionId);

@@ -25,11 +25,11 @@ async function call(path: string, init?: RequestInit): Promise<Response> {
   return response;
 }
 
-async function createAuthorization() {
+async function createAuthorization(userToken?: string) {
   const [user] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE normalized_email = ?", [
     "admin@pkic.org",
   ]);
-  const session = await createAdminSession(env.DB, user.id, crypto.randomUUID());
+  const session = userToken ?? (await createAdminSession(env.DB, user.id, crypto.randomUUID()));
   const registration = await call(MCP_OAUTH_REGISTER_PATH, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -72,8 +72,8 @@ function redeemCode(grant: Awaited<ReturnType<typeof createAuthorization>>) {
   });
 }
 
-async function authorize() {
-  const grant = await createAuthorization();
+async function authorize(userToken?: string) {
+  const grant = await createAuthorization(userToken);
   const tokens = await redeemCode(grant);
   expect(tokens.status).toBe(200);
   return {
@@ -201,10 +201,12 @@ describe("MCP OAuth session interoperability", () => {
       });
       expect(refresh.status).toBe(400);
       expect(await refresh.json()).toMatchObject({ error: "invalid_grant" });
-      const [revoked] = await queryAll<{ revoked_at: string }>(env.DB, "SELECT revoked_at FROM sessions WHERE id = ?", [
-        session.id,
-      ]);
-      expect(revoked.revoked_at).toBe(new Date().toISOString());
+      const [revoked] = await queryAll<{ revoked_at: string | null }>(
+        env.DB,
+        "SELECT revoked_at FROM sessions WHERE id = ?",
+        [session.id],
+      );
+      expect(revoked.revoked_at).toBeNull();
       const context = createExecutionContext();
       const portal = await app.fetch(
         new Request(`${origin}/api/v1/auth/session`, { headers: { cookie: `pkic_session=${grant.userToken}` } }),
@@ -213,13 +215,57 @@ describe("MCP OAuth session interoperability", () => {
       );
       await waitOnExecutionContext(context);
       expect(portal.status).toBe(401);
-      expect(await portal.json()).toMatchObject({ error: { code: "AUTH_REVOKED" } });
+      expect(await portal.json()).toMatchObject({ error: { code: "AUTH_EXPIRED" } });
       expect((await initialize(grant.access_token)).status).toBe(401);
 
       const newGrant = await authorize();
       expect((await initialize(newGrant.access_token)).status).toBe(200);
     },
   );
+
+  it.each(["request", "refresh"])("keeps an active portal session after grant expiry through %s", async (path) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const authorizedAt = Date.now();
+    const grant = await authorize();
+    const external = await resolveMcpExternalToken({
+      token: grant.userToken,
+      request: new Request(`${origin}${MCP_PATH}`),
+      env,
+    });
+    expect(external?.props.identityType).toBe("user");
+    vi.setSystemTime(authorizedAt + 30 * 60 * 1000);
+    const activePortal = await call("/api/v1/auth/session", { headers: { "x-user-token": grant.userToken } });
+    expect(activePortal.status).toBe(200);
+    const activeToken = activePortal.headers.get("x-user-token")!;
+    expect(activeToken).toBeTruthy();
+
+    vi.setSystemTime(authorizedAt + 61 * 60 * 1000);
+    if (path === "request") {
+      // Access-token expiry can reject before the handler; also exercise its
+      // session gate so this case proves that neither path revokes the portal.
+      await expect(requireActiveMcpSession(env, external!.props)).rejects.toMatchObject({ code: "AUTH_EXPIRED" });
+      expect((await initialize(grant.access_token)).status).toBe(401);
+    }
+    const refresh = await exchange({
+      grant_type: "refresh_token",
+      client_id: grant.clientId,
+      refresh_token: grant.refresh_token,
+    });
+    expect(refresh.status).toBe(400);
+    expect(await refresh.json()).toMatchObject({ error: "invalid_grant" });
+
+    const portal = await call("/api/v1/auth/session", { headers: { "x-user-token": activeToken } });
+    expect(portal.status).toBe(200);
+    const sessions = await queryAll<{ revoked_at: string | null }>(
+      env.DB,
+      "SELECT revoked_at FROM sessions WHERE user_id = ?",
+      [grant.userId],
+    );
+    expect(sessions).toEqual([{ revoked_at: null }]);
+    const renewedGrant = await authorize(portal.headers.get("x-user-token")!);
+    expect((await initialize(renewedGrant.access_token)).status).toBe(200);
+    expect((await initialize(grant.access_token)).status).toBe(401);
+  });
 
   it("keeps API-key service access independent of human inactivity deadlines", async () => {
     const grant = await resolveMcpExternalToken({
