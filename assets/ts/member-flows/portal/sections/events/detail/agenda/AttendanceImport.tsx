@@ -9,23 +9,31 @@ import {
 import { formatDateTimeInZone } from "../../../../../../../shared/format-date";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { ApiClientError, postJson } from "../../../../../../shared/api-client";
-import { Button } from "../../../../../../ui/Button";
+import { Button, ButtonLink } from "../../../../../../ui/Button";
 import { DescriptionList } from "../../../../../../ui/DescriptionList";
 import { Field } from "../../../../../../ui/Field";
 import { Textarea } from "../../../../../../ui/TextControl";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { ApiDataTable } from "../../../../../../components/ApiDataTable";
 import type { z } from "zod";
+import { formatNumber } from "../../../../../../../shared/format-number";
+import { attendancePath } from "./attendance-navigation";
 export function AttendanceImport({
   slug,
   timeZone,
   onChanged,
   canRead = true,
+  canImport = true,
+  creating = true,
+  basePath = `/events/${slug}/attendance`,
 }: {
   slug: string;
   timeZone: string;
   onChanged: () => void;
   canRead?: boolean;
+  canImport?: boolean;
+  creating?: boolean;
+  basePath?: string;
 }) {
   const [text, setText] = useState(""),
     [error, setError] = useState(""),
@@ -77,6 +85,7 @@ export function AttendanceImport({
       setOperationId(crypto.randomUUID());
       setEpoch((value) => value + 1);
       onChanged();
+      if (basePath) window.location.hash = attendancePath(basePath, "imports");
     } catch (error) {
       if (error instanceof ApiClientError && error.code === "ATTENDANCE_IMPORT_REVIEW_CHANGED") {
         setReview(null);
@@ -87,8 +96,43 @@ export function AttendanceImport({
       setBusy(false);
     }
   }
+  if (!creating)
+    return canRead ? (
+      <ApiDataTable
+        key={epoch}
+        searchPlaceholder="Search imports…"
+        createAction={
+          canImport
+            ? {
+                label: "Import attendance",
+                onSelect: () => {
+                  window.location.hash = attendancePath(basePath, "imports", "new");
+                },
+              }
+            : undefined
+        }
+        endpoint={`/api/v1/events/${encodeURIComponent(slug)}/attendance/imports`}
+        responseSchema={attendanceImportsResponseSchema}
+        resolve={(value) => value.imports}
+        resolvePage={(value) => value.page}
+        caption="Attendance imports"
+        paginate
+        rowKey={(row) => row.id}
+        columns={[
+          { header: "Source", cell: (row) => row.source.replaceAll("_", " ") },
+          { header: "Reference", cell: (row) => row.sourceReference },
+          { header: "Observations", align: "end", width: "fit", cell: (row) => formatNumber(row.rowCount) },
+          { header: "Imported by", cell: (row) => row.actorUserId },
+          { header: "Received", cell: (row) => formatDateTimeInZone(row.receivedAt, timeZone) },
+        ]}
+      />
+    ) : (
+      <ButtonLink href={attendancePath(basePath, "imports", "new")}>Import attendance</ButtonLink>
+    );
+  if (!canImport) return <p>You do not have permission to import attendance.</p>;
   return (
     <section class="pk-stack" aria-label="Import attendance evidence">
+      <ButtonLink href={attendancePath(basePath, "imports")}>Back to imports</ButtonLink>
       <h3>Import attendance evidence</h3>
       <p>
         Review up to 100 records with canonical user/session IDs and original UTC observation timestamps. Imported
@@ -144,8 +188,9 @@ export function AttendanceImport({
       {review && (
         <div class="pk-stack">
           <p>
-            Reviewed {review.rowCount} records. Review expires {formatDateTimeInZone(review.expiresAt, timeZone)}.
-            Confirm that these original source records establish presence, rather than registration or a join click.
+            Reviewed {formatNumber(review.rowCount)} records. Review expires{" "}
+            {formatDateTimeInZone(review.expiresAt, timeZone)}. Confirm that these original source records establish
+            presence, rather than registration or a join click.
           </p>
           <DescriptionList
             items={[
@@ -170,30 +215,11 @@ export function AttendanceImport({
           )}
           <p>Changing the event timezone or published schedule requires a new review before importing.</p>
           <Button onClick={apply} loading={busy}>
-            Confirm import of {review.rowCount} observations
+            Confirm import of {formatNumber(review.rowCount)} observations
           </Button>
         </div>
       )}
       {error && <ErrorAlert error={error} />}
-      {canRead && (
-        <ApiDataTable
-          key={epoch}
-          endpoint={`/api/v1/events/${encodeURIComponent(slug)}/attendance/imports`}
-          responseSchema={attendanceImportsResponseSchema}
-          resolve={(value) => value.imports}
-          resolvePage={(value) => value.page}
-          caption="Attendance imports"
-          paginate
-          rowKey={(row) => row.id}
-          columns={[
-            { header: "Source", cell: (row) => row.source.replaceAll("_", " ") },
-            { header: "Reference", cell: (row) => row.sourceReference },
-            { header: "Observations", cell: (row) => row.rowCount },
-            { header: "Imported by", cell: (row) => row.actorUserId },
-            { header: "Received", cell: (row) => formatDateTimeInZone(row.receivedAt, timeZone) },
-          ]}
-        />
-      )}
     </section>
   );
 }

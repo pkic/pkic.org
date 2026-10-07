@@ -15,6 +15,10 @@ export async function openBadgeCamera(
   try {
     const { default: QrScanner } = await import("qr-scanner");
     if (stopped) return;
+    // Remove hiding left by a previous decoder. The video remains laid out via
+    // its concealed class so Safari playback and a later preview both work.
+    for (const property of ["opacity", "width", "height", "display", "visibility"])
+      video.style.removeProperty(property);
     reader = new QrScanner(
       video,
       (code) => {

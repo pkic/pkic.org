@@ -6,11 +6,11 @@ import {
   badgeIssueRequestSchema,
   badgeIssueResponseSchema,
   badgeAttendeesResponseSchema,
-  type badgeCredentialMetadataSchema,
+  badgeCredentialMetadataSchema,
   type BadgeIssueResponse,
 } from "../../../../../../../shared/schemas/route-contracts-event-badges";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
-import { postJson } from "../../../../../../shared/api-client";
+import { getJson, postJson } from "../../../../../../shared/api-client";
 import { UserPicker, type PickedUser } from "../../../../../../components/UserPicker";
 import { instantFromLocal } from "../../../../../../components/forms/SubmissionWindowFields";
 import { browserTimeZone } from "../../../../ui";
@@ -21,7 +21,8 @@ import { PageHeader } from "../../../../../../ui/PageHeader";
 import { DescriptionList } from "../../../../../../ui/DescriptionList";
 import { Menu } from "../../../../../../ui/Menu";
 import { Alert } from "../../../../../../ui/Alert";
-import "./BadgeIssuance.css";
+import { BadgePrintPreview } from "../../../../../../components/event-badges/BadgePrintPreview";
+import type { FreshBadgePrint } from "../../../../../../components/event-badges/badge-print-artifacts";
 
 type CredentialMetadata = z.infer<typeof badgeCredentialMetadataSchema>;
 
@@ -29,28 +30,47 @@ type CredentialMetadata = z.infer<typeof badgeCredentialMetadataSchema>;
 export function BadgeIssuance({
   slug,
   replacement,
+  userId,
   onBack,
   onRecord,
 }: {
   slug: string;
   replacement?: CredentialMetadata;
+  userId?: string;
   onBack: () => void;
   onRecord: (id: string) => void;
 }) {
   const [user, setUser] = useState<PickedUser | null>(null);
   const [operationId, setOperationId] = useState(() => crypto.randomUUID());
   const [result, setResult] = useState<BadgeIssueResponse | null>(null);
-  const [image, setImage] = useState("");
+  const [printable, setPrintable] = useState<FreshBadgePrint | null>(null);
   const [expiry, setExpiry] = useState("");
   const [timeZone] = useState(browserTimeZone);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const form = useContractForm(badgeIssueRequestSchema, {
     operationId,
-    userId: replacement?.userId ?? user?.id ?? "",
+    userId: replacement?.userId ?? userId ?? user?.id ?? "",
     expiresAt: instantFromLocal(expiry, timeZone) ?? undefined,
     ...(replacement ? { replaceBadgeId: replacement.id } : {}),
   });
+  async function preparePrint(issued: Extract<BadgeIssueResponse, { result: "issued" }>) {
+    const { default: QR } = await import("qrcode");
+    const svg = await QR.toString(issued.credential, { type: "svg", errorCorrectionLevel: "M", margin: 4 });
+    const displayName =
+      replacement?.displayName ?? ([user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Attendee");
+    setPrintable({ id: issued.id, credential: issued.credential, displayName, svg });
+    const metadata = await getJson(
+      `/api/v1/events/${encodeURIComponent(slug)}/badges/${encodeURIComponent(issued.id)}`,
+      badgeCredentialMetadataSchema,
+    );
+    setPrintable({
+      id: issued.id,
+      credential: issued.credential,
+      displayName: metadata.displayName ?? "Attendee",
+      svg,
+    });
+  }
   async function issue(event: Event) {
     event.preventDefault();
     const checked = form.submit();
@@ -68,8 +88,7 @@ export function BadgeIssuance({
       );
       setResult(issued);
       if (issued.result === "issued") {
-        const { default: QR } = await import("qrcode");
-        setImage(await QR.toDataURL(issued.credential, { width: 512, errorCorrectionLevel: "M", margin: 4 }));
+        await preparePrint(issued);
       }
     } catch (cause) {
       setError(form.refuse(cause));
@@ -86,11 +105,8 @@ export function BadgeIssuance({
             <Menu
               label="Badge actions"
               items={[
-                ...(result.result === "issued"
-                  ? [{ id: "print", label: "Print QR", disabled: !image || busy, onSelect: () => window.print() }]
-                  : []),
-                { id: "record", label: "View credential", onSelect: () => onRecord(result.id) },
-                { id: "back", label: "Back to badges", onSelect: onBack },
+                { id: "record", label: "View credential", disabled: busy, onSelect: () => onRecord(result.id) },
+                { id: "back", label: "Back to badges", disabled: busy, onSelect: onBack },
               ]}
             />
           }
@@ -100,11 +116,22 @@ export function BadgeIssuance({
             This request was already completed. The printable code is available only when a badge is first issued. Open
             its record and explicitly replace it if you need a new printable code.
           </Alert>
+        ) : printable ? (
+          <BadgePrintPreview badges={[printable]} />
         ) : (
-          <div class="pk-badge-credential">
-            {image && <img src={image} alt="Attendee badge QR code" />}
-            <p>{result.credential}</p>
-            <p>Print this code now. It cannot be retrieved after leaving this page.</p>
+          <div class="pk-stack">
+            <Alert tone="info">The credential was issued. Keep this page open while preparing its print file.</Alert>
+            <Button
+              loading={busy}
+              onClick={() => {
+                setBusy(true);
+                void preparePrint(result)
+                  .catch((cause) => setError(cause instanceof Error ? cause.message : "Could not prepare print file."))
+                  .finally(() => setBusy(false));
+              }}
+            >
+              Prepare print file
+            </Button>
           </div>
         )}
         <DescriptionList
@@ -133,8 +160,13 @@ export function BadgeIssuance({
           ]}
         />
       )}
+      {userId && !replacement && (
+        <p>
+          This creates an additional badge for the selected registration attendee. It does not replace an existing code.
+        </p>
+      )}
       <form noValidate {...form.handlers} onSubmit={issue}>
-        {!replacement && (
+        {!replacement && !userId && (
           <Field label="Attendee" required {...form.of("userId")}>
             {(control) => (
               <UserPicker

@@ -1,3 +1,4 @@
+import { usePortalHashLocation } from "../../../../hash-location";
 import { RowActions } from "../../../../../../ui/RowActions";
 import { StaffingOverview } from "./StaffingOverview";
 import { StaffingAssignmentEditor } from "./StaffingAssignmentEditor";
@@ -26,11 +27,14 @@ export function StaffingEditor({
   snapshot,
   canEdit,
   onSaved,
+  teamEligibilityPath,
 }: {
   snapshot: AgendaSnapshot;
   canEdit: boolean;
   onSaved: (value: AgendaSnapshot) => void;
+  teamEligibilityPath?: string;
 }) {
+  const [, navigate] = usePortalHashLocation();
   const [assignment, setAssignment] = useState<string | null>(null);
   const [catalog, setCatalog] = useState(false);
   const [rotation, setRotation] = useState(false);
@@ -109,7 +113,7 @@ export function StaffingEditor({
     return (
       <StaffingRequirements snapshot={snapshot} blockId={needs} onSaved={onSaved} onClose={() => setNeeds(null)} />
     );
-  if (setup)
+  if (setup && (setup.kind === "block" || !teamEligibilityPath))
     return (
       <StaffingSetup
         key={`${setup.kind}:${setup.editId ?? "new"}`}
@@ -217,27 +221,40 @@ export function StaffingEditor({
                 },
               },
               { id: "catalog", label: "Roles and posts", onSelect: () => setCatalog(true) },
-              { id: "block", label: "New block", onSelect: () => setSetup({ kind: "block" }) },
-              { id: "person", label: "Add eligible person", onSelect: () => setSetup({ kind: "person" }) },
             ]}
           />
         )}
       </PanelHeader>
-      <PanelBody>
-        <p>
-          Allocate configured duties and posts across the event. Pinned assignments stay fixed when generating a new
-          rotation.
-        </p>
-        {error && <ErrorAlert error={error} />}
-        {message && <p role="status">{message}</p>}
-        {allocationDiagnostics}
+      <PanelBody flush>
+        {(error || message || diagnostics) && (
+          <div class="pk-table-list__inset">
+            {error && <ErrorAlert error={error} />}
+            {message && <p role="status">{message}</p>}
+            {allocationDiagnostics}
+          </div>
+        )}
         <StaffingOverview
           snapshot={snapshot}
           canEdit={canEdit}
           editBlock={(editId) => setSetup({ kind: "block", editId })}
-          editPerson={(editId) => setSetup({ kind: "person", editId })}
+          editPerson={(editId) =>
+            teamEligibilityPath
+              ? navigate(`${teamEligibilityPath}/${encodeURIComponent(editId)}`)
+              : setSetup({ kind: "person", editId })
+          }
           editNeeds={setNeeds}
           editAssignment={setAssignment}
+          createBlock={() => setSetup({ kind: "block" })}
+          createPerson={() =>
+            teamEligibilityPath ? navigate(`${teamEligibilityPath}/new`) : setSetup({ kind: "person" })
+          }
+          configureRotation={(ids) => {
+            setSelectedBlocks(ids);
+            setRotation(true);
+            setError("");
+            setDiagnostics(null);
+            setMessage("");
+          }}
         />
       </PanelBody>
     </Panel>

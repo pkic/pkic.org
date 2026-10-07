@@ -1,3 +1,6 @@
+.pk-login__backdrop.pk-fast-scanner {
+  margin: 0;
+}
 .pk-fast-scanner {
   position: fixed;
   inset: 0;
@@ -72,13 +75,32 @@
   display: grid;
   place-items: center;
   width: 100%;
+  align-content: center;
+  gap: var(--pk-3);
 }
 .pk-fast-scanner__mark {
   display: grid;
   place-items: center;
-  width: clamp(calc(var(--pk-8) * 2), 55vw, calc(var(--pk-8) * 5));
+  width: clamp(var(--pk-8), 30vw, calc(var(--pk-8) * 3));
   aspect-ratio: 1;
   animation: pk-scanner-result var(--pk-dur-slow) var(--pk-ease);
+}
+.pk-fast-scanner__context,
+.pk-fast-scanner__message {
+  max-width: 36rem;
+  margin: var(--pk-2) 0;
+  text-align: center;
+}
+.pk-fast-scanner__label {
+  font-size: var(--pk-text-xl);
+  text-align: center;
+}
+.pk-fast-scanner__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: var(--pk-2);
+  margin-block: var(--pk-3);
 }
 .pk-fast-scanner__mark svg {
   width: 100%;

@@ -22,7 +22,7 @@ import { registerInBrowser } from "./registration";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
 import { signInAsE2eStaff } from "./staff-auth";
 import { e2eAdminEmail } from "../../helpers/e2e-admin";
-import { scannerStorage, openScannerDiagnostics } from "./scanner-recovery-storage";
+import { scannerStorage, openScannerDiagnostics, closeScannerDiagnostics } from "./scanner-recovery-storage";
 
 export const measurementSlug = "pqc-conference-amsterdam-nl";
 export const measurementApi = `/api/v1/events/${measurementSlug}`;
@@ -115,6 +115,7 @@ export async function openMeasurementScanner(page: Page, publishedRevision: numb
   await page.goto(measurementScanner);
   const manifest = enrolledOfflineEligibilityResponseSchema.parse(await (await preparing).json());
   expect(manifest.publishedRevision).toBe(publishedRevision);
+  await openScannerDiagnostics(page);
   await expect(
     page.getByText("Eligibility data ready. Checks run locally; attendance uploads in the background.", {
       exact: true,
@@ -133,6 +134,7 @@ export async function openMeasurementScanner(page: Page, publishedRevision: numb
   expect(capabilities.syncManager).toBe(false);
   expect(capabilities.registrationSync).toBe(false);
   await page.getByLabel("Feedback pause", { exact: true }).selectOption("1000");
+  await closeScannerDiagnostics(page);
   await resumeMeasurementScanner(page);
   return { manifest, capabilities };
 }

@@ -30,17 +30,15 @@ export function ScannerLocationSelect({
 }) {
   return (
     <>
-      <Field
-        label="Check-in location"
-        {...targetField}
-        help="Leave empty for event admission. Select a session for session check-in."
-      >
+      <Field label="Session" {...targetField} help="Choose a session to record session attendance.">
         {(control) => (
           <ServerSearchSelect<ScannerTarget, ScannerTargetsResponse>
             {...control}
             searchLabel="Session"
             value={targetId}
             selectedLabel={label}
+            placeholder="Event entrance"
+            searchPlaceholder="Event entrance"
             allowEmpty
             onChange={onTarget}
             catalog={{

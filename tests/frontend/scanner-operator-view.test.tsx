@@ -26,8 +26,8 @@ describe("attendee-facing scanner and operator drawer", () => {
     await act(async () => render(<FastScannerView {...props} />, host));
     const drawer = host.querySelector<HTMLElement>('[aria-label="Scanner operator controls"]')!;
     expect(drawer.hidden).toBe(true);
-    expect(host.querySelector('[role="status"] .pk-sr-only')?.textContent).toContain("Verification pending");
-    expect(host.querySelector(".pk-fast-scanner__stage")?.textContent).not.toContain(props.context);
+    expect(host.querySelector('[role="status"]')?.textContent).toContain("Verification pending");
+    expect(host.querySelector(".pk-fast-scanner__stage")?.textContent).toContain(props.context);
     expect(host.querySelector(".pk-fast-scanner__stage")?.textContent).not.toContain("3 pending");
   });
   it("opens on the operator button, traps focus and closes with Escape without exiting scanning", async () => {
@@ -90,11 +90,22 @@ describe("attendee-facing scanner and operator drawer", () => {
     await act(async () => render(<FastScannerView {...props} />, host));
     const trigger = host.querySelector<HTMLButtonElement>('[aria-label="Operator controls"]')!;
     expect(document.activeElement).toBe(trigger);
-    for (const shiftKey of [false, true]) {
+    const stage = host.querySelector<HTMLElement>(".pk-fast-scanner__stage")!;
+    const controls = [...stage.querySelectorAll<HTMLButtonElement>("button:not([disabled])")];
+    const first = controls[0]!,
+      last = controls.at(-1)!;
+    expect(first.textContent).toBe("Show preview");
+    expect(last).toBe(trigger);
+    for (const [start, target, shiftKey] of [
+      [last, first, false],
+      [first, last, true],
+    ] as const) {
+      start.focus();
       const event = new KeyboardEvent("keydown", { key: "Tab", shiftKey, bubbles: true, cancelable: true });
-      trigger.dispatchEvent(event);
+      start.dispatchEvent(event);
       expect(event.defaultPrevented).toBe(true);
-      expect(document.activeElement).toBe(trigger);
+      expect(document.activeElement).toBe(target);
+      expect(stage.contains(document.activeElement)).toBe(true);
     }
     await act(async () => render(null, host));
     expect(document.activeElement).toBe(previous);

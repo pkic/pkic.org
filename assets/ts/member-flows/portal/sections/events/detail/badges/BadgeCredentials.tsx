@@ -4,6 +4,7 @@ import {
   badgeCredentialsResponseSchema,
   badgeCredentialStatusSchema,
 } from "../../../../../../../shared/schemas/route-contracts-event-badges";
+import { databaseIdSchema } from "../../../../../../../shared/schemas/identifiers";
 import { successResponseSchema } from "../../../../../../../shared/schemas/api-common";
 import { formatDateTime } from "../../../../../../../shared/format-date";
 import { ApiDataTable } from "../../../../../../components/ApiDataTable";
@@ -35,13 +36,19 @@ export function BadgeCredentials({
   userId?: string;
 }) {
   const [, navigate] = usePortalHashLocation();
+  const requestedUser = databaseIdSchema.safeParse(
+    new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("userId"),
+  );
+  const scopedUserId = userId ?? (requestedUser.success ? requestedUser.data : undefined);
+  const scopeQuery = scopedUserId ? `?userId=${encodeURIComponent(scopedUserId)}` : "";
   const recordPath = (id: string) => `${basePath}/${encodeURIComponent(id)}`;
   if (credentialId === "new")
     return (
       <BadgeIssuance
-        key="new"
+        key={`new:${scopedUserId ?? "any"}`}
         slug={slug}
-        onBack={() => navigate(basePath)}
+        userId={scopedUserId}
+        onBack={() => navigate(`${basePath}${scopeQuery}`)}
         onRecord={(id) => navigate(recordPath(id))}
       />
     );
@@ -62,12 +69,12 @@ export function BadgeCredentials({
       responseSchema={badgeCredentialsResponseSchema}
       resolve={(data) => data.badges}
       resolvePage={(data) => data.page}
-      params={userId ? { userId } : undefined}
+      params={scopedUserId ? { userId: scopedUserId } : undefined}
       urlState="badges"
       paginate
       initialSort="-createdAt"
       searchPlaceholder="name or credential reference"
-      createAction={{ label: "Create badge", onSelect: () => navigate(`${basePath}/new`) }}
+      createAction={{ label: "Create badge", onSelect: () => navigate(`${basePath}/new${scopeQuery}`) }}
       rowKey={(badge) => badge.id}
       columns={[
         {
@@ -202,7 +209,10 @@ function BadgeCredentialRecord({
           { term: "Revoked", value: formatDateTime(badge.revokedAt) },
         ]}
       />
-      <p>Printable codes are shown only when issued. Replace this selected credential if you need a new code.</p>
+      <p>
+        This record stores a credential reference, not its QR code. Reprint a saved HTML or SVG file from issuance, or
+        explicitly replace this selected credential to create a new code. Replacement revokes only this code.
+      </p>
       {(error || record.error) && <ErrorAlert error={error || record.error} />}
     </div>
   );

@@ -27,6 +27,16 @@ import {
 import { pruneScanHistory } from "./scan-history";
 import { archivedScanSchema, type ArchivedScan } from "../../../../../../../shared/schemas/event-scan-recovery";
 
+/** Ask the browser to retry pending scans; foreground sync remains available without this capability. */
+export async function requestScanOutboxBackgroundSync() {
+  if (!("serviceWorker" in navigator)) return;
+  const registration = await navigator.serviceWorker.getRegistration("/portal/");
+  if (registration && "sync" in registration)
+    void (registration as ServiceWorkerRegistration & { sync: { register(tag: string): Promise<void> } }).sync
+      .register("pkic-scanner-upload")
+      .catch(() => {});
+}
+
 export async function queueScan(record: OfflineScanRecord, sessionId?: string): Promise<OfflineScanRecord["scan"]> {
   const parsed = offlineScanRecordSchema.parse(record);
   if (await scannerUploadSuspended(parsed.scan.operatorUserId, sessionId))

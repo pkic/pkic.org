@@ -1,8 +1,9 @@
 import { ScannerPreparationStatus } from "./ScannerPreparationStatus";
-import type { ComponentProps } from "preact";
+import type { ComponentProps, ComponentChildren } from "preact";
 import { scanFeedbackLabel, scanFeedbackOutcome, scanEligibilityLabel } from "./scan-stream";
 import "../../../../../../../design/tokens.scanner.generated.css";
 import { ScannerExceptionReview } from "./ScannerExceptionReview";
+import { scannerActionLabel } from "./ScannerModeSelect";
 import { useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
 import type {
   EventScanResponse,
@@ -29,6 +30,11 @@ export function FastScannerView({
   pending,
   message,
   cameraActive,
+  cameraStarting = false,
+  cameraError = "",
+  onCameraRetry,
+  onManual,
+  recentScans,
   preview,
   onPreview,
   onExit,
@@ -47,6 +53,11 @@ export function FastScannerView({
   pending: number;
   message: string;
   cameraActive: boolean;
+  cameraStarting?: boolean;
+  cameraError?: string;
+  onCameraRetry?: () => void;
+  onManual?: () => void;
+  recentScans?: (visible: boolean) => ComponentChildren;
   preview: boolean;
   onPreview: () => void;
   onExit: () => void;
@@ -127,6 +138,9 @@ export function FastScannerView({
       <span class="pk-fast-scanner__tone pk-fast-scanner__tone--attention" aria-hidden="true" />
       <div class="pk-fast-scanner__stage" aria-hidden={operatorOpen ? true : undefined}>
         <img class="pk-fast-scanner__brand" src="/img/logo.svg" alt="PKI Consortium" width="1256" height="324" />
+        <p class="pk-fast-scanner__context">
+          {context} · {scannerActionLabel(mode)}
+        </p>
         <div class="pk-fast-scanner__feedback" role="status" aria-live="polite" aria-atomic="true">
           <span class="pk-fast-scanner__mark" aria-hidden="true" key={result?.operationId ?? "ready"}>
             {outcome === "eligible" ? (
@@ -139,9 +153,46 @@ export function FastScannerView({
               <IconClock />
             )}
           </span>
-          <span class="pk-sr-only">
-            {label}. {message}
-          </span>
+          <strong class="pk-fast-scanner__label">
+            {result
+              ? label
+              : cameraStarting
+                ? "Starting camera…"
+                : cameraActive
+                  ? "Ready to scan"
+                  : "Use a reader or paste a code"}
+          </strong>
+          {message && <p class="pk-fast-scanner__message">{message}</p>}
+        </div>
+        {cameraError && (
+          <p class="pk-fast-scanner__message" role="status">
+            {cameraError}
+          </p>
+        )}
+        <div class="pk-fast-scanner__actions">
+          {cameraActive && (
+            <Button variant="secondary" onClick={onPreview}>
+              {preview ? "Hide preview" : "Show preview"}
+            </Button>
+          )}
+          {!cameraActive && onCameraRetry && (
+            <Button variant="secondary" loading={cameraStarting} onClick={onCameraRetry}>
+              Retry camera
+            </Button>
+          )}
+          {onManual && (
+            <Button variant="secondary" onClick={onManual}>
+              Enter or paste code
+            </Button>
+          )}
+          {recentScans && (
+            <Button variant="secondary" onClick={() => setOperatorOpen(true)}>
+              Recent scans
+            </Button>
+          )}
+          <Button variant="secondary" onClick={onExit}>
+            Exit
+          </Button>
         </div>
         <div class="pk-fast-scanner__next">
           <span class="pk-sr-only">{readiness}</span>
@@ -241,7 +292,13 @@ export function FastScannerView({
             <dd>{readiness}</dd>
           </div>
         </dl>
-        {preparation && <ScannerPreparationStatus {...preparation} />}
+        {recentScans?.(operatorOpen)}
+        {preparation && (
+          <details>
+            <summary>Preparation details</summary>
+            <ScannerPreparationStatus {...preparation} />
+          </details>
+        )}
         <p>
           {cameraActive
             ? "Camera scanning continuously."

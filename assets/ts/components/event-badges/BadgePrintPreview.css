@@ -1,0 +1,11 @@
+.pk-badge-print-preview {
+  width: 100%;
+  min-height: 40rem;
+  border: 1px solid var(--pk-line);
+  border-radius: var(--pk-radius-lg);
+}
+
+.pk-badge-qr-preview {
+  width: min(100%, 18rem);
+  height: auto;
+}

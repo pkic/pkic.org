@@ -1,7 +1,13 @@
+import { ApiDataTable } from "../../../../../../components/ApiDataTable";
+import { agendaBlocksListSchema } from "../../../../../../../shared/schemas/event-agenda-block-list";
 import { useState } from "preact/hooks";
 import type { AgendaSnapshot } from "../../../../../../../shared/schemas/event-agenda";
 import { formatNumber } from "../../../../../../../shared/format-number";
 import { formatTimeRangeInZone } from "../../../../../../../shared/format-date";
+import { TableList } from "../../../../../../components/TableList";
+import { CollectionToolbar } from "../../../../../../components/CollectionToolbar";
+import { useCollectionSelection } from "../../../../../../hooks/useCollectionSelection";
+import { BulkBar } from "../../../../../../ui/BulkBar";
 import { DataTable } from "../../../../../../components/Table";
 import { RowActions } from "../../../../../../ui/RowActions";
 import { TabList } from "../../../../../../ui/TabList";
@@ -17,6 +23,9 @@ export function StaffingOverview({
   editPerson,
   editNeeds,
   editAssignment,
+  createBlock,
+  createPerson,
+  configureRotation,
 }: {
   snapshot: AgendaSnapshot;
   canEdit: boolean;
@@ -24,11 +33,21 @@ export function StaffingOverview({
   editPerson: (id: string) => void;
   editNeeds: (id: string) => void;
   editAssignment: (id: string) => void;
+  createBlock?: () => void;
+  createPerson?: () => void;
+  configureRotation?: (blockIds: string[]) => void;
 }) {
   const [tab, setTab] = useState("blocks");
   const [blockId, setBlock] = useState<string | null>(null);
   const [requirementId, setRequirement] = useState<string | null>(null);
+  const blockSelection = useCollectionSelection<AgendaSnapshot["blocks"][number]>({
+    rowKey: (row) => row.id,
+    rowLabel: (row) => `Select ${row.name}`,
+  });
   const coverage = snapshot.staffingReport?.coverage ?? [];
+  const unfilledByBlock = new Map<string, number>();
+  for (const position of snapshot.staffingReport?.uncovered ?? [])
+    unfilledByBlock.set(position.blockId, (unfilledByBlock.get(position.blockId) ?? 0) + 1);
   const block = snapshot.blocks.find((row) => row.id === blockId);
   const requirement = snapshot.staffingRequirements.find((row) => row.id === requirementId);
   const roleName = (id: string) => snapshot.staffingRoles.find((row) => row.id === id)?.name ?? id;
@@ -147,7 +166,7 @@ export function StaffingOverview({
       </section>
     );
   return (
-    <section class="pk-stack">
+    <>
       <TabList
         label="Staffing views"
         activeId={tab}
@@ -155,71 +174,113 @@ export function StaffingOverview({
         idPrefix="staffing-view"
         items={[
           { id: "blocks", label: "Blocks", panelId: "staffing-blocks" },
-          { id: "people", label: "People", panelId: "staffing-people" },
+          { id: "people", label: "Workload", panelId: "staffing-people" },
         ]}
       />
       <div role="tabpanel" id={`staffing-${tab}`} aria-labelledby={`staffing-view-${tab}`}>
         {tab === "blocks" ? (
-          <>
-            <p>
-              {formatNumber(snapshot.staffingReport?.uncovered.length ?? 0)} uncovered duties. Open a block to review
-              positions and eligible people.
-            </p>
-            <DataTable
-              caption="Staffing blocks"
-              data={snapshot.blocks}
-              empty="No staffing blocks yet. Configure blocks and eligible people before allocation."
-              rowKey={(row) => row.id}
-              rowAction={(row) => ({ label: `Review ${row.name}`, onSelect: () => setBlock(row.id) })}
-              columns={[
-                { header: "Block", cell: (row) => row.name, width: "primary" },
-                { header: "Time", cell: (row) => formatTimeRangeInZone(row.startAt, row.endAt, snapshot.timeZone) },
-                {
-                  header: "Location",
-                  cell: (row) => snapshot.rooms.find((room) => room.id === row.roomId)?.name ?? "Event",
-                  width: "fit",
+          <ApiDataTable
+            caption="Staffing blocks"
+            endpoint={`/api/v1/events/${encodeURIComponent(snapshot.eventSlug)}/agenda/blocks`}
+            responseSchema={agendaBlocksListSchema}
+            resolve={(response) => response.blocks}
+            resolvePage={(response) => response.page}
+            paginate
+            initialSort="startAt"
+            urlState="staffing-blocks"
+            searchPlaceholder="Block name, location or track"
+            createAction={canEdit && createBlock ? { label: "New block", onSelect: createBlock } : undefined}
+            onData={(response) => blockSelection.onRows(response.blocks)}
+            onQueryChange={blockSelection.onQueryChange}
+            bulkBar={
+              canEdit &&
+              configureRotation && (
+                <BulkBar
+                  count={blockSelection.selected.size}
+                  total={blockSelection.total}
+                  onClear={blockSelection.clear}
+                >
+                  <Button size="sm" onClick={() => configureRotation([...blockSelection.selected])}>
+                    Configure rotation for selected blocks
+                  </Button>
+                </BulkBar>
+              )
+            }
+            selection={canEdit && configureRotation ? blockSelection.selection : undefined}
+            empty={
+              canEdit && createBlock
+                ? "No staffing blocks match. Use New block to configure a staffing period."
+                : "No staffing blocks match."
+            }
+            rowKey={(row) => row.id}
+            rowAction={(row) => ({ label: `Review ${row.name}`, onSelect: () => setBlock(row.id) })}
+            columns={[
+              { header: "Block", cell: (row) => row.name, width: "primary", sort: { asc: "name", desc: "-name" } },
+              {
+                header: "Time",
+                cell: (row) => formatTimeRangeInZone(row.startAt, row.endAt, snapshot.timeZone),
+                sort: { asc: "startAt", desc: "-startAt" },
+              },
+              {
+                header: "Location",
+                cell: (row) => snapshot.rooms.find((room) => room.id === row.roomId)?.name ?? "Event",
+                width: "fit",
+              },
+              {
+                header: "Unfilled",
+                cell: (row) => {
+                  const count = unfilledByBlock.get(row.id) ?? 0;
+                  return count > 0 ? <Badge tone="warn">{formatNumber(count)} unfilled</Badge> : "—";
                 },
-                {
-                  header: "Boundary",
-                  cell: (row) => (
-                    <Badge
-                      tone={
-                        snapshot.staffingReport?.boundaryChanges.some((change) => change.blockId === row.id)
-                          ? "warn"
-                          : "neutral"
-                      }
-                    >
-                      {snapshot.staffingReport?.boundaryChanges.some((change) => change.blockId === row.id)
-                        ? "Review times"
-                        : "Scheduled"}
-                    </Badge>
-                  ),
-                  width: "fit",
-                },
-                {
-                  header: "Actions",
-                  cell: (row) => (
-                    <RowActions
-                      subject={row.name}
-                      actions={[
-                        { id: "review", label: "Review staffing", onSelect: () => setBlock(row.id) },
-                        ...(canEdit
-                          ? [
-                              { id: "edit", label: "Edit block", onSelect: () => editBlock(row.id) },
-                              { id: "needs", label: "Staffing needs", onSelect: () => editNeeds(row.id) },
-                            ]
-                          : []),
-                      ]}
-                    />
-                  ),
-                  width: "fit",
-                },
-              ]}
-            />
-          </>
+                align: "end",
+                width: "fit",
+              },
+              {
+                header: "Boundary",
+                cell: (row) => (
+                  <Badge
+                    tone={
+                      snapshot.staffingReport?.boundaryChanges.some((change) => change.blockId === row.id)
+                        ? "warn"
+                        : "neutral"
+                    }
+                  >
+                    {snapshot.staffingReport?.boundaryChanges.some((change) => change.blockId === row.id)
+                      ? "Review times"
+                      : "Scheduled"}
+                  </Badge>
+                ),
+                width: "fit",
+              },
+              {
+                header: "Actions",
+                cell: (row) => (
+                  <RowActions
+                    subject={row.name}
+                    actions={[
+                      { id: "review", label: "Review staffing", onSelect: () => setBlock(row.id) },
+                      ...(canEdit
+                        ? [
+                            { id: "edit", label: "Edit block", onSelect: () => editBlock(row.id) },
+                            { id: "needs", label: "Staffing needs", onSelect: () => editNeeds(row.id) },
+                          ]
+                        : []),
+                    ]}
+                  />
+                ),
+                width: "fit",
+              },
+            ]}
+          />
         ) : (
-          <section aria-label="Staffing workload roster" class="pk-stack">
-            <p>Minutes count each assigned role. Balance applies within eligible pools.</p>
+          <TableList caption="Staffing workload roster">
+            <CollectionToolbar
+              label="Duty workload controls"
+              createAction={
+                canEdit && createPerson ? { label: "Add eligible person", onSelect: createPerson } : undefined
+              }
+            />
+
             <DataTable
               caption="Duty workload"
               data={snapshot.staffingReport?.people ?? []}
@@ -244,9 +305,9 @@ export function StaffingOverview({
                 },
               ]}
             />
-          </section>
+          </TableList>
         )}
       </div>
-    </section>
+    </>
   );
 }

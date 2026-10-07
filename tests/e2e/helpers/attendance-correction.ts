@@ -16,7 +16,7 @@ export async function correctPilotAttendance(
   staff: Page,
   door: Page,
   slug: string,
-  title: string,
+  _title: string,
   scan: ReturnType<typeof enrolledEventScanRequestSchema.parse>,
   info: TestInfo,
 ) {
@@ -62,14 +62,24 @@ export async function correctPilotAttendance(
   expect(await history()).toHaveLength(0);
   expect(await readEvidence()).toEqual(originals);
 
-  await staff.getByRole("button", { name: `View attendees for ${title}`, exact: true }).click();
+  const reportUrl = new URL(staff.url());
+  reportUrl.hash = `${reportUrl.hash.replace(/\/attendance(?:\/.*)?$/, "/attendance")}/sessions/${encodeURIComponent(scan.occurrenceId)}/evidence`;
+  await staff.goto(reportUrl.toString());
+  await expect(
+    staff
+      .getByRole("navigation", { name: "Session attendance sections", exact: true })
+      .getByRole("link", { name: "Observations", exact: true }),
+  ).toHaveAttribute("aria-current", "page");
   const evidence = staff.getByRole("table", { name: "Original attendance evidence", exact: true });
   const corrections: ReturnType<typeof attendanceCorrectionSchema.parse>[] = [];
   for (const [kind, revision, reasonCode, button, status] of [
     ["void", 1, "operator_error", "Exclude observation from attendance", "Excluded by correction"],
     ["restore", 2, "verified_evidence_review", "Restore observation", "Included"],
   ] as const) {
-    await evidence.getByRole("button", { name: "Review observation", exact: true }).click();
+    await evidence
+      .getByRole("button", { name: `Actions for ${original.displayName ?? "Attendance observation"}`, exact: true })
+      .click();
+    await staff.getByRole("menuitem", { name: "Review observation", exact: true }).click();
     await staff.getByRole("combobox", { name: "Correction reason", exact: true }).selectOption(reasonCode);
     const changed = staff.waitForResponse(
       (response) => new URL(response.url()).pathname === path && response.request().method() === "POST",

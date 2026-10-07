@@ -84,6 +84,22 @@ export const portalAvatarInitials = personInitials;
 export function PortalNavigationShell({ children, displayName, headshotUrl, session }: PortalNavigationShellProps) {
   const [location, navigate] = usePortalHashLocation();
   const [navigationOpen, setNavigationOpen] = useState(false);
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem("portal-sidebar-collapsed") === "true";
+    } catch {
+      return false;
+    }
+  });
+  function toggleSidebar() {
+    const next = !sidebarCollapsed;
+    setSidebarCollapsed(next);
+    try {
+      localStorage.setItem("portal-sidebar-collapsed", String(next));
+    } catch {
+      /* The current view still works without preference storage. */
+    }
+  }
   // The identity's organizations live in the account menu, not the sidebar:
   // each one deep-links into its organization workspace.
   const organizations = useData(
@@ -130,7 +146,7 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
   const pendingIdentityCount = session?.pendingIdentityCount ?? 0;
 
   return (
-    <div id="portal-root">
+    <div id="portal-root" class={sidebarCollapsed ? "portal-sidebar-collapsed" : undefined}>
       <div id="portal-topbar">
         <button
           id="portal-sidebar-toggle"
@@ -152,8 +168,21 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
         onClick={closeNavigation}
       />
       <aside id="portal-sidebar" class={navigationOpen ? "open" : undefined} aria-label="Portal navigation">
-        <div class="portal-sidebar-brand">
-          <div class="portal-brand">PKI Consortium Portal</div>
+        <div class="portal-sidebar-heading">
+          <button
+            class="portal-sidebar-collapse"
+            type="button"
+            aria-label={sidebarCollapsed ? "Expand main menu" : "Collapse main menu"}
+            title={sidebarCollapsed ? "Expand main menu" : "Collapse main menu"}
+            aria-expanded={!sidebarCollapsed}
+            aria-controls="portal-sidebar"
+            onClick={toggleSidebar}
+          >
+            <MenuIcon />
+          </button>
+          <div class="portal-sidebar-brand">
+            <div class="portal-brand">PKI Consortium Portal</div>
+          </div>
         </div>
         {portalNavigationItems(session).map((item) => {
           /*

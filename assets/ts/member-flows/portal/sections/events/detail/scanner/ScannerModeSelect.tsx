@@ -6,6 +6,20 @@ import type { FieldPresentation } from "../../../../../../hooks/useContractForm"
 import { Field } from "../../../../../../ui/Field";
 import { Select } from "../../../../../../ui/TextControl";
 
+export function scannerActionLabel(action: EventScanRequest["action"]) {
+  return action === "attendance"
+    ? "Record attendance"
+    : action === "checkout"
+      ? "Record checkout"
+      : action === "lead"
+        ? "Capture sponsor lead"
+        : action === "admission"
+          ? "Admission decision"
+          : action === "exception"
+            ? "Admission exception"
+            : "Check registration only";
+}
+
 export function ScannerModeSelect({
   action,
   allowedActions = scanActionSchema.options,
@@ -35,17 +49,7 @@ export function ScannerModeSelect({
                 : value === "attendance" || value === "checkout" || value === "check" || value === "admission",
             )
             .map((value) => (
-              <option value={value}>
-                {value === "attendance"
-                  ? "Record attendance"
-                  : value === "checkout"
-                    ? "Record checkout"
-                    : value === "lead"
-                      ? "Capture sponsor lead"
-                      : value === "admission"
-                        ? "Admission decision"
-                        : "Check registration only"}
-              </option>
+              <option value={value}>{scannerActionLabel(value)}</option>
             ))}
         </Select>
       )}

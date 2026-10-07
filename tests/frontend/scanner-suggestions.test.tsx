@@ -172,7 +172,7 @@ describe("assigned scanner setup", () => {
     vi.stubGlobal("fetch", fetcher);
     await showLocation(true);
     expect(fetcher).not.toHaveBeenCalled();
-    expect(host.textContent).not.toContain("Check-in location");
+    expect(host.textContent).not.toContain("Session");
     expect(host.textContent).not.toContain("Physical room");
     expect(host.textContent).not.toContain("Missing required permission");
     expect(host.textContent).not.toContain("agenda:check");
@@ -194,7 +194,7 @@ describe("assigned scanner setup", () => {
     });
     vi.stubGlobal("fetch", fetcher);
     await showLocation(false);
-    expect(host.textContent).toContain("Check-in location");
+    expect(host.textContent).toContain("Session");
     expect(fetcher.mock.calls.some(([url]) => String(url).includes("/scans/targets"))).toBe(true);
     await showLocation(true);
     expect(metadataSignal?.aborted).toBe(true);
@@ -202,7 +202,7 @@ describe("assigned scanner setup", () => {
     resolveMetadata(targetResponse());
     await settle();
     expect(fetcher).toHaveBeenCalledTimes(countAtLead);
-    expect(host.textContent).not.toContain("Check-in location");
+    expect(host.textContent).not.toContain("Session");
     expect(locationState()).toEqual({ target: null, room: null, rooms: [] });
     expect(choose).not.toHaveBeenCalled();
     await showLocation(false);
@@ -214,7 +214,7 @@ describe("assigned scanner setup", () => {
         rooms: [{ id: room, name: "Main hall" }],
       }),
     );
-    expect(host.textContent).toContain("Check-in location");
+    expect(host.textContent).toContain("Session");
     expect(host.textContent).toContain("Physical room");
     await showLocation(true);
     expect(locationState()).toEqual({ target: null, room: null, rooms: [] });

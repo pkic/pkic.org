@@ -13,6 +13,11 @@ import {
 } from "../../assets/shared/schemas/route-contracts-event-badges";
 import { registerInBrowser } from "./helpers/registration";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
+import {
+  openScannerDiagnostics,
+  closeScannerDiagnostics,
+  openScannerManualEntry,
+} from "./helpers/scanner-recovery-storage";
 
 test("phone scanner opens an immersive view and safely exits without camera permission", async ({
   page,
@@ -23,7 +28,9 @@ test("phone scanner opens an immersive view and safely exits without camera perm
   await signInAsE2eStaff(page, e2eAdminEmail("default"));
   await page.goto("/portal/#/events/pqc-conference-amsterdam-nl/scanner");
   await page.getByLabel("Scan mode", { exact: true }).selectOption("check");
+  await openScannerDiagnostics(page);
   await page.getByLabel("Feedback pause", { exact: true }).selectOption("1000");
+  await closeScannerDiagnostics(page);
   await page.getByRole("button", { name: "Start scanning", exact: true }).click();
   const scanner = page.getByRole("dialog", { name: "Continuous badge scanner" });
   await expect(scanner).toBeVisible();
@@ -40,6 +47,8 @@ test("phone scanner opens an immersive view and safely exits without camera perm
   await page.screenshot({ animations: "disabled", path: testInfo.outputPath("scanner-idle-operator-phone.png") });
   await controls.getByRole("button", { name: "Exit", exact: true }).click();
   await expect(scanner).toHaveCount(0);
+  await expect(page.getByLabel("Badge code", { exact: true })).toBeHidden();
+  await openScannerManualEntry(page);
   await expect(page.getByLabel("Badge code", { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.fullscreenElement === null)).toBe(true);
 });
@@ -100,11 +109,14 @@ test("continuous local eligibility checks queue a burst while attempt uploads ar
   });
   await page.goto("/portal/#/events/pqc-conference-amsterdam-nl/scanner");
   await expect(page.getByLabel("Scan mode", { exact: true })).toHaveValue("attendance");
+  await openScannerDiagnostics(page);
   await page.getByLabel("Feedback pause", { exact: true }).selectOption("1000");
+  await closeScannerDiagnostics(page);
   await page.getByRole("button", { name: "Start scanning", exact: true }).click();
   const scanner = page.getByRole("dialog", { name: "Continuous badge scanner" });
   const ready = scanner.getByRole("progressbar", { name: "Next badge readiness", exact: true });
-  const feedback = scanner.getByRole("status");
+  const feedback = scanner.getByRole("status").and(scanner.locator(".pk-fast-scanner__feedback"));
+  await expect(feedback).toHaveCount(1);
   for (const credential of credentials.slice(0, 3)) {
     await expect(ready).toHaveJSProperty("value", 1000);
     await page.keyboard.type(credential);

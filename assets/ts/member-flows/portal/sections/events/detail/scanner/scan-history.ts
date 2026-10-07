@@ -59,7 +59,9 @@ export async function listScanHistory(
   operatorUserId: string,
   eventId: string,
   after?: HistoryCursor,
+  limit = 2000,
 ): Promise<HistoryPage> {
+  if (!Number.isInteger(limit) || limit < 1 || limit > 2000) throw new Error("Invalid history page size");
   const db = await openScanStorage();
   try {
     await pruneScanHistory(db);
@@ -74,7 +76,7 @@ export async function listScanHistory(
       cursor.onerror = () => reject(cursor.error ?? new Error("History read failed"));
       cursor.onsuccess = () => {
         const item = cursor.result;
-        if (!item || records.length >= 2001) {
+        if (!item || records.length >= limit + 1) {
           resolve();
           return;
         }
@@ -89,8 +91,8 @@ export async function listScanHistory(
       };
     });
     await done;
-    const more = records.length > 2000;
-    const page = records.slice(0, 2000);
+    const more = records.length > limit;
+    const page = records.slice(0, limit);
     const last = page.at(-1);
     return {
       records: page,

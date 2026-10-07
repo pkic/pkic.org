@@ -14,17 +14,17 @@ import { BadgeIssuance } from "../../assets/ts/member-flows/portal/sections/even
 import { confirmAction } from "../../assets/ts/components/ConfirmDialog";
 
 const navigate = vi.fn();
-const qr = vi.fn(async (..._args: unknown[]) => "data:image/png;base64,cXI=");
+const qr = vi.fn(async (..._args: unknown[]) => '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>');
 const viewer = vi.hoisted(() => ({ timeZone: "UTC" }));
 vi.mock("../../assets/ts/member-flows/portal/ui", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../assets/ts/member-flows/portal/ui")>()),
   browserTimeZone: () => viewer.timeZone,
 }));
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", navigate] }));
-vi.mock("qrcode", () => ({ default: { toDataURL: (...args: unknown[]) => qr(...args) } }));
+vi.mock("qrcode", () => ({ default: { toString: (...args: unknown[]) => qr(...args) } }));
 vi.mock("../../assets/ts/components/ConfirmDialog", () => ({ confirmAction: vi.fn(async () => true) }));
 
-const BASE = "/groups/example/events/workshop/badges";
+const BASE = "/groups/example/events/workshop/registrations/badges";
 const ID = "10000000-0000-4000-8000-000000000001";
 const USER = "10000000-0000-4000-8000-000000000002";
 const NEXT = "10000000-0000-4000-8000-000000000003";
@@ -159,7 +159,7 @@ describe("badge credentials", () => {
     expect(host.querySelector('input[name="userId"]')).toBeNull();
     expect(host.querySelector("img")).toBeNull();
     await click(host, "Create badge");
-    expect(navigate).toHaveBeenCalledWith(`${BASE}/new`);
+    expect(navigate).toHaveBeenCalledWith(`${BASE}/new?userId=${USER}`);
   });
 
   it("reloads a selected metadata record without exposing a printable credential", async () => {
@@ -194,7 +194,8 @@ describe("badge credentials", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-        bodies.push(JSON.parse(String(init?.body)));
+        if (!init?.body) return json({ ...metadata, id: NEXT });
+        bodies.push(JSON.parse(String(init.body)));
         return json({
           result: "issued",
           id: NEXT,
@@ -211,9 +212,13 @@ describe("badge credentials", () => {
     const request = badgeIssueRequestSchema.parse(bodies[0]);
     expect(request.userId).toBe(USER);
     expect(request.replaceBadgeId).toBe(ID);
-    expect(host.textContent).toContain(BEARER);
+    expect(host.textContent).not.toContain(BEARER);
+    expect(host.textContent).toContain(NEXT);
     expect(host.querySelector('img[alt="Attendee badge QR code"]')).not.toBeNull();
-    expect(qr).toHaveBeenCalledWith(BEARER, expect.objectContaining({ width: 512 }));
+    expect(qr).toHaveBeenCalledWith(
+      BEARER,
+      expect.objectContaining({ type: "svg", errorCorrectionLevel: "M", margin: 4 }),
+    );
     await click(host, "Badge actions");
     await click(host, "View credential");
     expect(navigate).toHaveBeenCalledWith(NEXT);

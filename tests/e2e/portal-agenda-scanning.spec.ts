@@ -23,7 +23,11 @@ import { registrationCreateSchema } from "../../assets/shared/schemas/registrati
 import { agendaRevisionSchema, agendaSnapshotSchema } from "../../assets/shared/schemas/event-agenda";
 import { enrolledOfflineEligibilityResponseSchema } from "../../assets/shared/schemas/event-offline-eligibility";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
-import { openScannerDiagnostics } from "./helpers/scanner-recovery-storage";
+import {
+  openScannerDiagnostics,
+  closeScannerDiagnostics,
+  openScannerManualEntry,
+} from "./helpers/scanner-recovery-storage";
 
 const slug = "pqc-conference-amsterdam-nl";
 const scannerPath = `/portal/#/events/${slug}/scanner`;
@@ -56,25 +60,31 @@ async function issueRenderedBadge(page: Page, decoderUrl: string, email?: string
   if (badge.result !== "issued") throw new Error("A new operation must return a fresh printable credential");
   const qr = page.getByRole("img", { name: "Attendee badge QR code", exact: true });
   await expect(qr).toBeVisible();
-  await expect.poll(() => qr.evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBe(512);
+  await expect.poll(() => qr.evaluate((image) => (image as HTMLImageElement).naturalWidth)).toBeGreaterThan(0);
   // Decode the displayed image's actual pixels with the shipped camera fallback, without supplying the expected code.
   const decoded = await qr.evaluate(async (element, moduleUrl) => {
     Reflect.deleteProperty(globalThis, "BarcodeDetector");
     const image = element as HTMLImageElement;
     const canvas = document.createElement("canvas");
-    canvas.width = image.naturalWidth;
-    canvas.height = image.naturalHeight;
+    canvas.width = 512;
+    canvas.height = 512;
     const context = canvas.getContext("2d");
     if (!context) throw new Error("Could not read rendered badge pixels");
-    context.drawImage(image, 0, 0);
+    context.drawImage(image, 0, 0, canvas.width, canvas.height);
     const { default: scanner } = await import(moduleUrl);
     const result = await scanner.scanImage(canvas, { returnDetailedScanResult: true });
     return result.data as string;
   }, decoderUrl);
   expect(decoded).toBe(badge.credential);
   expect(badge.credential).not.toBe(badge.id);
-  await expect(page.locator(".pk-badge-credential")).toContainText(decoded);
-  if (email) await expect(page.locator(".pk-badge-credential")).not.toContainText(email);
+  const preview = page.frameLocator('iframe[title="Attendee badge print preview"]');
+  await expect(preview.getByRole("img", { name: "Attendee badge QR code", exact: true })).toHaveAttribute(
+    "src",
+    (await qr.getAttribute("src"))!,
+  );
+  await expect(preview.getByText(badge.id, { exact: true })).toBeVisible();
+  await expect(preview.locator("body")).not.toContainText(decoded);
+  if (email) await expect(preview.locator("body")).not.toContainText(email);
   const persistentIssuerStorage = await page.evaluate(() =>
     JSON.stringify({ local: { ...localStorage }, session: { ...sessionStorage } }),
   );
@@ -163,17 +173,20 @@ async function selectReloadedBadge(
   );
   await expect(page.getByText(id, { exact: true })).toBeVisible();
   await expect(page.getByRole("img", { name: "Attendee badge QR code", exact: true })).toHaveCount(0);
-  await expect(page.locator(".pk-badge-credential")).toHaveCount(0);
+  await expect(page.getByTitle("Attendee badge print preview", { exact: true })).toHaveCount(0);
   for (const credential of credentials) await expect(page.getByText(credential, { exact: true })).toHaveCount(0);
   return metadata;
 }
 
 async function scanAttendance(page: Page, credential: string, publishedRevision: number) {
+  await openScannerDiagnostics(page);
   await expect(
     page.getByText("Eligibility data ready. Checks run locally; attendance uploads in the background.", {
       exact: true,
     }),
   ).toBeVisible();
+  await closeScannerDiagnostics(page);
+  await openScannerManualEntry(page);
   await page.getByLabel("Badge code", { exact: true }).fill(credential);
   const uploaded = page.waitForResponse(
     (response) =>
@@ -225,6 +238,11 @@ test("phone scanner retains an IDs-only offline scan and acknowledges it after r
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(scannerPath);
   await expect(page.getByRole("heading", { name: "Badge scanner", exact: true })).toBeVisible();
+  const recovery = page
+    .locator("details.pk-panel")
+    .filter({ has: page.getByText("Recovery and diagnostics", { exact: true }) });
+  await expect(recovery).toHaveJSProperty("open", false);
+  await openScannerDiagnostics(page);
   await expect(
     page.getByText("Eligibility data ready. Checks run locally; attendance uploads in the background.", {
       exact: true,
@@ -240,16 +258,15 @@ test("phone scanner retains an IDs-only offline scan and acknowledges it after r
     )
     .toBe("activated");
   await expect(page.getByLabel("Scan mode", { exact: true })).toHaveValue("attendance");
-  const recovery = page
-    .locator("details.pk-panel")
-    .filter({ has: page.getByText("Recovery and diagnostics", { exact: true }) });
-  await expect(recovery).not.toHaveAttribute("open", "");
+  await closeScannerDiagnostics(page);
+  await expect(recovery).toHaveJSProperty("open", false);
   await expect(
     page.getByRole("button", { name: /Prepare offline admission|Allocate for one hour|Review admission exception/ }),
   ).toHaveCount(0);
   await page.screenshot({ animations: "disabled", path: testInfo.outputPath("scanner-simple-operator-phone.png") });
   await context.setOffline(true);
   const badgeId = randomUUID();
+  await openScannerManualEntry(page);
   await page.getByLabel("Badge code", { exact: true }).fill(badgeId);
   await page.getByRole("button", { name: "Record attendance", exact: true }).click();
   await expect(page.getByText("1 scans awaiting upload", { exact: true })).toBeVisible();
@@ -354,19 +371,23 @@ test("organizer reloads two independent QR credentials, replaces only one and re
   await page.getByRole("button", { name: /Confirm my registration/i }).click();
   await waitForCapturedEmail(email, "registration is confirmed", { since });
   await signInAsE2eStaff(page, e2eAdminEmail("default"));
-  // The seed event has no approved agenda. Establish its real capture context before preparing any scanner data.
+  // Reuse earlier scenarios' approved capture context without publishing their current draft.
   const draftResponse = await page.request.get(`/api/v1/events/${slug}/agenda`);
   expect(draftResponse.status(), await draftResponse.text()).toBe(200);
   const draft = agendaSnapshotSchema.parse(await draftResponse.json());
-  expect(draft.publishedRevision).toBeNull();
-  expect(draft.occurrences).toHaveLength(0);
-  const approvalResponse = await page.request.post(`/api/v1/events/${slug}/agenda/publications`, {
-    data: agendaRevisionSchema.parse({ expectedRevision: draft.revision }),
-  });
-  expect(approvalResponse.status(), await approvalResponse.text()).toBe(200);
-  const approved = agendaSnapshotSchema.parse(await approvalResponse.json());
-  expect(approved.revision).toBe(draft.revision + 1);
-  expect(approved.publishedRevision).toBe(approved.revision);
+  let basis = draft;
+  if (draft.publishedRevision === null) {
+    expect(draft.occurrences).toHaveLength(0);
+    const approvalResponse = await page.request.post(`/api/v1/events/${slug}/agenda/publications`, {
+      data: agendaRevisionSchema.parse({ expectedRevision: draft.revision }),
+    });
+    expect(approvalResponse.status(), await approvalResponse.text()).toBe(200);
+    basis = agendaSnapshotSchema.parse(await approvalResponse.json());
+    expect(basis.revision).toBe(draft.revision + 1);
+    expect(basis.publishedRevision).toBe(basis.revision);
+  }
+  const publishedRevision = basis.publishedRevision;
+  if (publishedRevision === null) throw new Error("The scanner fixture requires an actual approved capture context");
   const preparedResponse = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === `/api/v1/events/${slug}/offline-eligibility` &&
@@ -376,7 +397,7 @@ test("organizer reloads two independent QR credentials, replaces only one and re
   const prepared = await preparedResponse;
   expect(prepared.status(), await prepared.text()).toBe(200);
   expect(enrolledOfflineEligibilityResponseSchema.parse(await prepared.json())).toMatchObject({
-    publishedRevision: approved.revision,
+    publishedRevision,
     occurrenceId: null,
   });
   const diagnostics = await openScannerDiagnostics(page);
@@ -438,7 +459,7 @@ test("organizer reloads two independent QR credentials, replaces only one and re
 
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(scannerPath);
-  expect(await scanAttendance(page, first.badge.credential, approved.revision)).toMatchObject({
+  expect(await scanAttendance(page, first.badge.credential, publishedRevision)).toMatchObject({
     outcome: "denied",
     reason: "revoked_badge",
     recorded: true,
@@ -446,7 +467,7 @@ test("organizer reloads two independent QR credentials, replaces only one and re
   });
   await expect(page.getByText("Badge not valid", { exact: true })).toBeVisible();
   for (const credential of [replacement.badge.credential, second.badge.credential]) {
-    expect(await scanAttendance(page, credential, approved.revision)).toMatchObject({
+    expect(await scanAttendance(page, credential, publishedRevision)).toMatchObject({
       outcome: "eligible",
       reason: "eligible",
       recorded: true,
@@ -483,16 +504,22 @@ test("organizer reloads two independent QR credentials, replaces only one and re
   );
   await expect(page.getByRole("img", { name: "Attendee badge QR code", exact: true })).toHaveCount(0);
   await page.goto(scannerPath);
-  expect(await scanAttendance(page, replacement.badge.credential, approved.revision)).toMatchObject({
+  expect(await scanAttendance(page, replacement.badge.credential, publishedRevision)).toMatchObject({
     outcome: "denied",
     reason: "revoked_badge",
     recorded: true,
     attendanceRecorded: false,
   });
-  expect(await scanAttendance(page, second.badge.credential, approved.revision)).toMatchObject({
+  expect(await scanAttendance(page, second.badge.credential, publishedRevision)).toMatchObject({
     outcome: "eligible",
     reason: "eligible",
     recorded: true,
     attendanceRecorded: true,
+  });
+  const afterResponse = await page.request.get(`/api/v1/events/${slug}/agenda`);
+  expect(afterResponse.status(), await afterResponse.text()).toBe(200);
+  expect(agendaSnapshotSchema.parse(await afterResponse.json())).toMatchObject({
+    revision: basis.revision,
+    publishedRevision,
   });
 });

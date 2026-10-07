@@ -1,6 +1,6 @@
 import { scannerPermission, availableScannerActions } from "../../../../../shared/event-scanner-permissions";
 import { lazy, Suspense } from "preact/compat";
-import { useEffect } from "preact/hooks";
+import { useEffect, useMemo } from "preact/hooks";
 import { Field } from "../../../../ui/Field";
 import { Select } from "../../../../ui/TextControl";
 import { hasEventAgendaPermission } from "./event-agenda-access";
@@ -15,6 +15,9 @@ import { usePortalHashLocation } from "../../hash-location";
 import { portalSession } from "../../state";
 import { portalHasPermissionAtAnyScope } from "../../shell/portal-navigation";
 import type { PortalSession } from "../../types";
+import { createScannerEventBootstrap } from "./detail/scanner/scanner-event-bootstrap";
+
+const scannerEventBootstrap = createScannerEventBootstrap(() => portalSession.value);
 
 const EventScanner = lazy(() =>
   import("./detail/scanner/EventScanner").then((module) => ({ default: module.EventScanner })),
@@ -65,7 +68,10 @@ function ScopedSponsorLeadsRoute({ slug }: { slug: string }) {
 
 function ScopedScannerRoute({ slug, sponsorId }: { slug: string; sponsorId?: string }) {
   const [, navigate] = usePortalHashLocation();
-  const event = useData(() => getJson(`/api/v1/events/${encodeURIComponent(slug)}`, eventDetailResponseSchema), [slug]);
+  const session = portalSession.value;
+  const request = useMemo(() => new AbortController(), [slug, sponsorId, session?.sessionId, session?.identity.id]);
+  useEffect(() => () => request.abort(), [request]);
+  const event = useData(() => scannerEventBootstrap.load(slug, sponsorId, request.signal), [request]);
   if (event.loading) return <Spinner label="Loading event scanner…" />;
   if (event.error || !event.data) return <ErrorAlert error={event.error ?? "Event unavailable"} />;
   const scannerAccess = "scannerAccess" in event.data.event ? event.data.event.scannerAccess : undefined;
@@ -202,6 +208,8 @@ export function eventListShowsProposalPrograms(session: PortalSession | null): b
 }
 
 export function EventWorkspace(props: EventWorkspaceProps) {
+  const session = portalSession.value;
+  useEffect(() => scannerEventBootstrap.sessionChanged(), [session?.sessionId, session?.identity.id]);
   if (props.view === "detail" && props.tab === "leads") return <ScopedSponsorLeadsRoute slug={props.slug} />;
   if (
     props.view === "detail" &&
@@ -268,16 +276,15 @@ export function EventWorkspace(props: EventWorkspaceProps) {
         audienceTab={props.tab}
         mapPath={(base) => {
           if (!tab || tab === "overview") return base;
-          // The group workspace flattened Team out of Settings, while the
-          // other event sections kept their second URL segment. Preserve the
-          // complete destination so bookmarked legacy URLs still open the
-          // exact workflow they name instead of silently landing one level
-          // too high.
-          if (tab === "settings" && subTab === "team") {
-            return `${base}/team${props.detailSegment ? `/${encodeURIComponent(props.detailSegment)}` : ""}`;
-          }
-          if (tab === "settings") return `${base}/settings`;
-          return `${base}/${encodeURIComponent(tab)}${subTab ? `/${encodeURIComponent(subTab)}` : ""}`;
+          const section =
+            tab === "team"
+              ? "settings/team"
+              : tab === "promoters"
+                ? "stats/promoters"
+                : tab === "badges"
+                  ? "registrations/badges"
+                  : encodeURIComponent(tab);
+          return `${base}/${section}${subTab ? `/${encodeURIComponent(subTab)}` : ""}${props.detailSegment ? `/${encodeURIComponent(props.detailSegment)}` : ""}`;
         }}
       />
     );

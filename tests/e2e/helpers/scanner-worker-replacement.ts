@@ -84,7 +84,28 @@ export async function replaceScannerWorker(context: BrowserContext, page: Page, 
   const viewport = page.viewportSize();
   const resumed = await context.newPage();
   if (viewport) await resumed.setViewportSize(viewport);
+  // Keep a same-origin observer outside the worker scope until activation completes.
+  // Immediately reopening /portal/ can give the old worker another controlled client.
+  const observerUrl = new URL("/", previous.scope).href;
+  const observerResponse = await resumed.goto(observerUrl);
+  expect(observerResponse?.status()).toBe(200);
+  await expect(resumed).toHaveURL(observerUrl);
+  await expect(resumed.locator('[data-module="member-flows/portal-page"]')).toHaveCount(0);
+  expect(await resumed.evaluate(() => navigator.serviceWorker.controller)).toBeNull();
   for (const client of context.pages()) if (client !== resumed) await client.close();
+  await expect
+    .poll(() =>
+      resumed.evaluate(async () => {
+        const registration = await navigator.serviceWorker.getRegistration("/portal/");
+        return {
+          active: registration?.active?.scriptURL,
+          state: registration?.active?.state,
+          waiting: registration?.waiting?.scriptURL ?? null,
+          controller: navigator.serviceWorker.controller?.scriptURL ?? null,
+        };
+      }),
+    )
+    .toEqual({ active: revision.href, state: "activated", waiting: null, controller: null });
   await resumed.goto(new URL("/portal/", previous.scope).href);
   await expect
     .poll(() =>
@@ -112,6 +133,7 @@ export async function replaceScannerWorker(context: BrowserContext, page: Page, 
       sourceHash,
       observedWaiting: true,
       observedActivated: true,
+      activationObserverPath: new URL(observerUrl).pathname,
       epochsBefore,
       cachedPaths,
     },
@@ -286,8 +308,16 @@ export async function replayScannerFromTwoTabs(
     const response = await uploading;
     expect(enrolledEventScanRequestSchema.parse(response.request().postDataJSON())).toEqual(original);
     expect(eventScanResponseSchema.parse(await response.json())).toEqual(receipt);
-    await expect(page.getByText("0 scans awaiting upload", { exact: true })).toBeVisible();
     await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(0);
+    // A losing tab read the queue while the winning receipt was held. Refresh both
+    // mounted scanners through their real control after the durable acknowledgment.
+    await Promise.all(
+      [page, other].map(async (scanner) => {
+        await scanner.getByRole("button", { name: "Sync now", exact: true }).click();
+        await expect(scanner.getByRole("heading", { name: "Badge scanner", exact: true })).toBeVisible();
+        await expect(scanner.locator(".pk-event-scanner")).toHaveCount(0);
+      }),
+    );
     const stored = await scannerStorage(page);
     expect(stored.history).toHaveLength(1);
     expect(stored.history[0].scan).toEqual(original);

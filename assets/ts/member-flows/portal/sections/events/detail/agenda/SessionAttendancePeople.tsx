@@ -1,6 +1,7 @@
 import { attendancePeopleResponseSchema } from "../../../../../../../shared/schemas/event-participation-reporting";
 import { formatDateTimeInZone } from "../../../../../../../shared/format-date";
 import { ApiDataTable } from "../../../../../../components/ApiDataTable";
+import { formatNumber } from "../../../../../../../shared/format-number";
 export function SessionAttendancePeople({
   slug,
   occurrenceId,
@@ -36,7 +37,12 @@ export function SessionAttendancePeople({
           sort: { asc: "firstObservedAt", desc: "-firstObservedAt" },
         },
         { header: "Last observed", cell: (row) => formatDateTimeInZone(row.lastObservedAt, timeZone) },
-        { header: "Attendance observations", cell: (row) => row.observationCount },
+        {
+          header: "Attendance observations",
+          align: "end",
+          width: "fit",
+          cell: (row) => formatNumber(row.observationCount),
+        },
       ]}
     />
   );

@@ -8,6 +8,8 @@ import { ScannerModeSelect } from "./ScannerModeSelect";
 import { useScannerLocation } from "./useScannerLocation";
 import { ScannerSetup } from "./ScannerSetup";
 import { ScannerCamera } from "./ScannerCamera";
+import { ScannerManualEntry } from "./ScannerManualEntry";
+import { ScannerRecentScans } from "./ScannerRecentScans";
 import { useOfflineAdmission } from "./useOfflineAdmission";
 import type { LocalEligibility } from "./eligibility-manifest";
 import { useEffect, useRef, useState } from "preact/hooks";
@@ -21,13 +23,12 @@ import {
 import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { Checkbox } from "../../../../../../ui/Checkbox";
 import { Field } from "../../../../../../ui/Field";
-import { TextInput } from "../../../../../../ui/TextControl";
 import { Button } from "../../../../../../ui/Button";
 import { CollapsiblePanel } from "../../../../../../ui/CollapsiblePanel";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { openBadgeCamera } from "./camera-driver";
 import { ScanFrameGate, receiptMatchesOperation, unknownScanResponse, localScanResponse } from "./scan-stream";
-import { drainScanOutbox, pendingScanCount } from "./scan-outbox";
+import { drainScanOutbox, pendingScanCount, requestScanOutboxBackgroundSync } from "./scan-outbox";
 import "./EventScanner.css";
 import { FastScannerView } from "./FastScannerView";
 import { enterScannerFullscreen, scannerImmersiveLifecycle } from "./immersive-scanner";
@@ -60,8 +61,9 @@ export function EventScanner({
       ? "lead"
       : allowedActions.includes("attendance")
         ? "attendance"
-        : (allowedActions.find((value) => value === "check" || value === "checkout") ?? "check"),
+        : (allowedActions.find((value) => value !== "lead" && value !== "exception") ?? "check"),
   );
+  const [manualEntry, setManualEntry] = useState(false);
   const [consentConfirmed, setConsent] = useState(false);
   const [pending, setPending] = useState(0);
   const [pendingReadyScope, setPendingReadyScope] = useState<string | null>(null);
@@ -88,6 +90,8 @@ export function EventScanner({
   const [busy, setBusy] = useState(false);
   const video = useRef<HTMLVideoElement>(null);
   const [cameraActive, setCameraActive] = useState(false);
+  const [cameraStarting, setCameraStarting] = useState(false);
+  const [cameraError, setCameraError] = useState("");
   const [screenAwake, setScreenAwake] = useState(false);
   const [feedbackPause, setFeedbackPause] = useState(600);
   const cooldown = useScanCooldown(feedbackPause);
@@ -202,15 +206,7 @@ export function EventScanner({
       const remaining = await pendingScanCount(operatorUserId);
       setPending(remaining);
       setPendingReadyScope(`${slug}:${operatorUserId}`);
-      if (remaining > 0 && drained.state !== "authentication_required") {
-        if ("serviceWorker" in navigator) {
-          const registration = await navigator.serviceWorker.getRegistration("/portal/");
-          if (registration && "sync" in registration)
-            void (registration as ServiceWorkerRegistration & { sync: { register(tag: string): Promise<void> } }).sync
-              .register("pkic-scanner-upload")
-              .catch(() => {});
-        }
-      }
+      if (remaining > 0 && drained.state !== "authentication_required") await requestScanOutboxBackgroundSync();
       if (drained.state === "retry" && navigator.onLine)
         retryTimer.current = window.setTimeout(() => {
           void sync();
@@ -312,11 +308,14 @@ export function EventScanner({
     }
   }
   const cameraFrames = useRef(new ScanFrameGate());
+  const cameraCapture = useRef(scanCredential);
+  cameraCapture.current = scanCredential;
   async function scanCredential(raw: string, fromCamera = false) {
     if (!scannerDevice.ready || authorityPaused.current || operatorPaused.current) return;
     const current = scannerContext.current;
     if (current.action === "lead" || current.action === "exception") {
       setBadge(raw);
+      setManualEntry(true);
       lastBadge.current = raw;
       stopCamera.current();
       setFastMode(false);
@@ -371,7 +370,7 @@ export function EventScanner({
     }
   }
   async function camera() {
-    if (!scannerDevice.ready) return;
+    if (!scannerDevice.ready || cameraStarting) return;
     if (authorityPaused.current) {
       setMessage("Sign in again to upload pending scans.");
       return;
@@ -379,12 +378,12 @@ export function EventScanner({
     try {
       if (!video.current) return;
       stopCamera.current();
+      setCameraStarting(true);
+      setCameraError("");
       cameraFrames.current.clear();
       await openBadgeCamera(
         video.current,
-        (raw) => {
-          void scanCredential(raw, true);
-        },
+        (raw) => void cameraCapture.current(raw, true),
         setCameraActive,
         (stop) => {
           stopCamera.current = stop;
@@ -393,8 +392,20 @@ export function EventScanner({
     } catch {
       stopCamera.current();
       setCameraActive(false);
-      setMessage("Camera access is unavailable. Use a connected scanner or manual entry.");
+      setCameraError("Camera access is unavailable. Retry the camera, use a connected reader, or paste a badge code.");
+    } finally {
+      setCameraStarting(false);
     }
+  }
+  function startScanning() {
+    if (!allowedActions.includes(action) || !scannerDevice.ready) return;
+    if (scannerShell.current) enterScannerFullscreen(scannerShell.current);
+    lastOperation.current = null;
+    setResult(null);
+    setMessage(manifestReady ? "Ready to scan" : "Unverified scanning. Admission requires verification.");
+    setPreview(false);
+    setFastMode(true);
+    void camera();
   }
   const preparation = {
     lastSync: syncHistory.lastSync,
@@ -428,11 +439,19 @@ export function EventScanner({
                     operatorPaused.current = paused;
                   }}
                 />
+                <ScannerPacing value={feedbackPause} onChange={setFeedbackPause} />
+                <ScannerPreparationStatus {...preparation} />
+                {action !== "lead" && !manifestReady && !manifestPreparing && (
+                  <Button type="button" variant="secondary" onClick={startScanning}>
+                    Start with unverified feedback
+                  </Button>
+                )}
               </PanelBody>
             </CollapsiblePanel>
-            <ScannerFeedback result={result} action={action} message={message} pending={pending} />
+            {(result || pending > 0 || message !== "Ready to scan") && (
+              <ScannerFeedback result={result} action={action} message={message} pending={pending} />
+            )}
             <form noValidate {...form.handlers} onSubmit={submit}>
-              <ScannerPacing value={feedbackPause} onChange={setFeedbackPause} />
               <ScannerSetup
                 operatorUserId={operatorUserId}
                 sponsorOnly={action === "lead"}
@@ -482,77 +501,28 @@ export function EventScanner({
                   )}
                 </Field>
               )}
-              <Field label="Badge code" {...form.of("badgeId")}>
-                {(control) => (
-                  <TextInput
-                    {...control}
-                    name="badgeId"
-                    value={badgeId}
-                    onInput={(event) => setBadge(event.currentTarget.value)}
-                    autoComplete="off"
-                  />
-                )}
-              </Field>
-              <Button type="submit" loading={busy}>
-                {action === "lead"
-                  ? "Capture lead"
-                  : action === "checkout"
-                    ? "Record checkout"
-                    : action === "attendance"
-                      ? "Record attendance"
-                      : "Check registration"}
-              </Button>{" "}
-              {(action === "attendance" || action === "check" || action === "checkout") && (
+              {allowedActions.includes(action) && (
                 <>
                   <Button
                     type="button"
-                    disabled={!scannerDevice.ready || !manifestReady || manifestPreparing}
-                    onClick={() => {
-                      if (scannerShell.current) enterScannerFullscreen(scannerShell.current);
-                      setResult(null);
-                      lastOperation.current = null;
-                      setMessage("Ready to scan");
-                      setPreview(false);
-                      setFastMode(true);
-                      void camera();
-                    }}
+                    disabled={!scannerDevice.ready || (action !== "lead" && (!manifestReady || manifestPreparing))}
+                    onClick={startScanning}
                   >
                     Start scanning
                   </Button>
-                  <ScannerPreparationStatus {...preparation} />
-                  {!manifestReady && !manifestPreparing && (
-                    <Button
-                      type="button"
-                      variant="secondary"
-                      onClick={() => {
-                        if (scannerShell.current) enterScannerFullscreen(scannerShell.current);
-                        lastOperation.current = null;
-                        setResult(null);
-                        setMessage(
-                          action === "checkout"
-                            ? "Unverified checkout. Badge verification pending."
-                            : "Unverified scanning. Admission requires verification.",
-                        );
-                        setPreview(false);
-                        setFastMode(true);
-                        void camera();
-                      }}
-                    >
-                      Start with unverified feedback
-                    </Button>
-                  )}
                 </>
               )}{" "}
-              <Button
-                type="button"
-                variant="secondary"
-                onClick={() => {
-                  if (cameraActive) stopCamera.current();
-                  else void camera();
-                }}
-              >
-                {cameraActive ? "Stop camera" : "Use camera"}
-              </Button>{" "}
+              {manifestPreparing && <p role="status">Preparing scanner for this session…</p>}
+              {cameraError && <p role="status">{cameraError}</p>}
+              <ScannerManualEntry
+                open={manualEntry}
+                onOpen={setManualEntry}
+                badgeId={badgeId}
+                onBadge={setBadge}
+                field={form.of("badgeId")}
+                action={action}
+                busy={busy}
+              />
               <Button
                 type="button"
                 variant="ghost"
@@ -563,6 +533,14 @@ export function EventScanner({
                 Sync now
               </Button>
             </form>
+            {!fastMode && (
+              <ScannerRecentScans
+                slug={slug}
+                operatorUserId={operatorUserId}
+                pending={pending}
+                lastSync={syncHistory.lastSync}
+              />
+            )}
           </PanelBody>
         </Panel>
       </div>
@@ -582,6 +560,22 @@ export function EventScanner({
             operatorPaused.current = paused;
           }}
           cameraActive={cameraActive}
+          cameraStarting={cameraStarting}
+          cameraError={cameraError}
+          onCameraRetry={() => void camera()}
+          onManual={() => {
+            setManualEntry(true);
+            setFastMode(false);
+          }}
+          recentScans={(visible) => (
+            <ScannerRecentScans
+              expanded={visible}
+              slug={slug}
+              operatorUserId={operatorUserId}
+              pending={pending}
+              lastSync={syncHistory.lastSync}
+            />
+          )}
           preview={preview}
           onPreview={() => setPreview(!preview)}
           onExit={() => {

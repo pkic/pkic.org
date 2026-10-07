@@ -91,7 +91,7 @@ describe("real attendance evidence collection transport", () => {
     await vi.waitFor(() => expect(host!.textContent).toContain("Original attendee"));
     expect(queries[0]).toMatchObject({ occurrenceId, offset: 0, sort: "-observedAt" });
     expect(queries[0]!.limit).toBeGreaterThan(0);
-    expect(button("Review observation")).toBeDefined();
+    expect(host!.querySelector('[aria-label="Actions for Original attendee"]')).not.toBeNull();
     await mount(nextOccurrenceId);
     await vi.waitFor(() => expect(host!.textContent).toContain("Next attendee"));
     expect(queries.at(-1)).toMatchObject({ occurrenceId: nextOccurrenceId, offset: 0, sort: "-observedAt" });
@@ -146,7 +146,11 @@ describe("real attendance evidence collection transport", () => {
     );
     await mount(occurrenceId, changed);
     await vi.waitFor(() => expect(host!.textContent).toContain("Original attendee"));
-    await act(() => button("Review observation").click());
+    await act(() => host!.querySelector<HTMLButtonElement>('[aria-label="Actions for Original attendee"]')!.click());
+    const review = [...host!.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (item) => item.textContent?.trim() === "Review observation",
+    )!;
+    await act(() => review.click());
     await vi.waitFor(() => expect(button("Exclude observation from attendance")).toBeDefined());
     const correctionForm = button("Exclude observation from attendance").closest("form");
     expect(correctionForm?.noValidate).toBe(true);

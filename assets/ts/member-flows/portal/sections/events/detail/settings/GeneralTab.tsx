@@ -122,6 +122,9 @@ export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated
   };
   if (retentionDays.trim()) body.userRetentionDays = Number(retentionDays);
 
+  // Blank draft rows are omitted from the request; validation names follow the sent array.
+  const sessionTypeDurationPath = (index: number) =>
+    `sessionTypes.${sessionTypes.slice(0, index).filter((type) => type.label.trim()).length}.durationMinutes`;
   const form = useContractForm(eventSettingsUpdateSchema, body);
   async function handleSubmit(submitEvent: Event): Promise<void> {
     submitEvent.preventDefault();
@@ -327,6 +330,32 @@ export function GeneralTab({ event, onUpdated }: { event: EventDetail; onUpdated
                           updated[index] = {
                             ...updated[index],
                             label: (inputEvent.target as HTMLInputElement).value,
+                          };
+                          setSessionTypes(updated);
+                        }}
+                      />
+                    )}
+                  </Field>
+                  <Field
+                    label={`Duration for session type ${String(index + 1)} (minutes)`}
+                    help="Optional. Used when scheduling this session type."
+                    {...form.of(sessionTypeDurationPath(index))}
+                  >
+                    {(control) => (
+                      <TextInput
+                        {...control}
+                        name={sessionTypeDurationPath(index)}
+                        type="number"
+                        min={1}
+                        max={1440}
+                        step={1}
+                        value={sessionType.durationMinutes ?? ""}
+                        onInput={(inputEvent) => {
+                          const value = inputEvent.currentTarget.value;
+                          const updated = [...sessionTypes];
+                          updated[index] = {
+                            ...updated[index],
+                            durationMinutes: value === "" ? undefined : Number(value),
                           };
                           setSessionTypes(updated);
                         }}

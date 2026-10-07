@@ -24,6 +24,7 @@ import {
   scannerEligibilityCount,
   signOutThroughPortal,
   openScannerDiagnostics,
+  openScannerManualEntry,
   openScannerRecovery,
   scannerStorage,
   scrollScannerToTop,
@@ -63,6 +64,7 @@ test("real pending scanner storage survives reload and logout without crossing a
   const snapshot = enrolledOfflineEligibilityResponseSchema.parse(await (await preparing).json());
   expect(snapshot.operatorUserId).toBe(owner.identity.id);
   await expect(page.getByLabel("Scan mode", { exact: true })).toHaveValue("attendance");
+  const diagnostics = await openScannerDiagnostics(page);
   await expectScannerSyncTime(page, "No retained acknowledgment");
   await expect(page.getByText("Last eligibility check", { exact: true })).toBeVisible();
   await expect(page.getByText("Snapshot expires", { exact: true })).toBeVisible();
@@ -74,7 +76,6 @@ test("real pending scanner storage survives reload and logout without crossing a
     await expect(term.locator("xpath=following-sibling::dd[1]")).toHaveText(formatDateTime(timestamp));
   }
   await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? "")).not.toBe("");
-  const diagnostics = await openScannerDiagnostics(page);
   await expect(diagnostics.getByRole("button", { name: "Close scanner session", exact: true })).toBeEnabled();
   await expect(
     diagnostics.getByText("Scanner session: open. Offline preparation uses the last saved authorization.", {
@@ -98,6 +99,7 @@ test("real pending scanner storage survives reload and logout without crossing a
 
   await context.setOffline(true);
   const badgeId = randomUUID();
+  await openScannerManualEntry(page);
   await page.getByLabel("Badge code", { exact: true }).fill(badgeId);
   await page.getByRole("button", { name: "Record attendance", exact: true }).click();
   await expect(page.getByText("1 scans awaiting upload", { exact: true })).toBeVisible();
@@ -187,8 +189,9 @@ test("real pending scanner storage survives reload and logout without crossing a
   const checkedOther = userAuthSessionResponseSchema.parse(await checkingOtherResponse.json());
   expect(checkedOther.sessionId).toBe(other.sessionId);
   expect(checkedOther.identity.id).toBe(other.identity.id);
-  await expect(page.getByText("0 scans awaiting upload", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Badge scanner", exact: true })).toBeVisible();
   await openScannerDiagnostics(page);
+  await expect(page.locator(".pk-event-scanner")).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Close scanner session", exact: true })).toBeEnabled();
   await openScannerRecovery(page);
   await expect(
@@ -241,13 +244,16 @@ test("real pending scanner storage survives reload and logout without crossing a
   expect(enrolledEventScanRequestSchema.parse(uploaded.request().postDataJSON())).toEqual(original);
   const receipt = eventScanResponseSchema.parse(await uploaded.json());
   expect(receipt).toMatchObject({ operationId: original.operationId, outcome: "unknown", attendanceRecorded: false });
-  await expect(page.getByText("0 scans awaiting upload", { exact: true })).toBeVisible();
+  await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(0);
+  await expect(page.getByRole("heading", { name: "Badge scanner", exact: true })).toBeVisible();
+  await expect(page.locator(".pk-event-scanner")).toHaveCount(0);
   const recovered = await scannerStorage(page);
   expect(recovered.pending).toHaveLength(0);
   expect(recovered.history).toHaveLength(1);
   expect(recovered.history[0].scan).toEqual(original);
   expect(recovered.history[0].receipt).toEqual(receipt);
   const originalSyncTime = formatDateTime(new Date(recovered.history[0].acknowledgedAt).toISOString());
+  await openScannerDiagnostics(page);
   await expectScannerSyncTime(page, originalSyncTime);
   await openScannerRecovery(page);
   const uploadedFile = await downloadScannerRecoveryFile(page);
@@ -329,10 +335,13 @@ test("real pending scanner storage survives reload and logout without crossing a
     const importedResponse = await importingUpload;
     expect(enrolledEventScanRequestSchema.parse(importedResponse.request().postDataJSON())).toEqual(original);
     expect(eventScanResponseSchema.parse(await importedResponse.json())).toEqual(receipt);
-    await expect(recoveredPage.getByText("0 scans awaiting upload", { exact: true })).toBeVisible();
+    await expect.poll(async () => (await scannerStorage(recoveredPage)).pending.length).toBe(0);
+    await expect(recoveredPage.getByRole("heading", { name: "Badge scanner", exact: true })).toBeVisible();
+    await expect(recoveredPage.locator(".pk-event-scanner")).toHaveCount(0);
     const imported = await scannerStorage(recoveredPage);
     expect(imported.pending).toHaveLength(0);
     expect(imported.history).toEqual(uploadedBackup.records);
+    await openScannerDiagnostics(recoveredPage);
     await expectScannerSyncTime(recoveredPage, originalSyncTime);
     await importScannerRecoveryFile(recoveredPage, uploadedFile.path);
     await expect(

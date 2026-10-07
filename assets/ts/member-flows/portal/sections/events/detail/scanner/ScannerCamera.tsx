@@ -13,10 +13,10 @@ export function ScannerCamera({
   return (
     <video
       ref={video}
-      hidden={!cameraActive || (fastMode && !preview)}
+      aria-hidden={!cameraActive || (fastMode && !preview)}
       muted
       playsInline
-      className={`pk-event-scanner__camera${fastMode ? " pk-event-scanner__camera--fast" : ""}`}
+      className={`pk-event-scanner__camera${fastMode ? " pk-event-scanner__camera--fast" : ""}${!cameraActive || (fastMode && !preview) ? " pk-event-scanner__camera--concealed" : ""}`}
       aria-label="Badge camera preview"
     />
   );

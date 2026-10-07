@@ -16,12 +16,17 @@ import {
   eventAttendanceRegistrationsListResponseSchema,
   eventRegistrationStatusLabel,
   type EventAttendanceRegistrationsStats,
+  type EventAttendanceRegistrationSummary,
 } from "../../../../../shared/schemas/event-registrations";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
 import { RegistrationDayStates } from "../../../../components/event-registrations/RegistrationDayStates";
 import { RegistrationTotals } from "../../../../components/event-registrations/RegistrationTotals";
 import { RegistrationRosterActions } from "../../../../components/event-registrations/RegistrationRosterActions";
+import { Button } from "../../../../ui/Button";
+import { BulkBar } from "../../../../ui/BulkBar";
+import { useCollectionSelection } from "../../../../hooks/useCollectionSelection";
+import { RegistrationBadgePrinting } from "../../../../components/event-badges/RegistrationBadgePrinting";
 import { usePortalHashLocation } from "../../hash-location";
 import { fmtDate, toast } from "../../ui";
 
@@ -34,15 +39,35 @@ export function GroupEventRegistrations({
   groupId,
   eventId,
   canManage = false,
+  eventSlug,
+  badgesPath,
 }: {
   groupId: string;
   eventId: string;
   canManage?: boolean;
+  eventSlug?: string;
+  badgesPath?: string;
 }) {
+  const [printing, setPrinting] = useState<readonly EventAttendanceRegistrationSummary[] | null>(null);
+  const selection = useCollectionSelection<EventAttendanceRegistrationSummary>({
+    rowKey: (row) => row.id,
+    rowLabel: (row) => row.display_name ?? "Attendee",
+  });
   const [stats, setStats] = useState<EventAttendanceRegistrationsStats | null>(null);
   const tableRef = useRef<ApiTableActions | null>(null);
   const registrationEndpoint = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/registrations`;
 
+  if (printing && eventSlug)
+    return (
+      <RegistrationBadgePrinting
+        slug={eventSlug}
+        rows={printing}
+        onBack={() => {
+          setPrinting(null);
+          selection.clear();
+        }}
+      />
+    );
   return (
     <div class="pk-stack pk-stack--snug">
       {stats && <RegistrationTotals stats={stats} />}
@@ -53,7 +78,24 @@ export function GroupEventRegistrations({
         responseSchema={eventAttendanceRegistrationsListResponseSchema}
         resolve={(response) => response.registrations}
         resolvePage={(response) => response.page}
-        onData={(response) => setStats(response.stats)}
+        onData={(response) => {
+          setStats(response.stats);
+          selection.onRows(response.registrations);
+        }}
+        onQueryChange={selection.onQueryChange}
+        selection={canManage && eventSlug ? selection.selection : undefined}
+        bulkBar={
+          canManage && eventSlug ? (
+            <BulkBar count={selection.selected.size} total={selection.total} onClear={selection.clear}>
+              <Button
+                onClick={() => setPrinting(selection.selectedRows)}
+                disabled={selection.selectedRows.some((row) => row.status !== "registered")}
+              >
+                Create / print selected badges
+              </Button>
+            </BulkBar>
+          ) : undefined
+        }
         actionsRef={tableRef}
         toolbar={
           canManage
@@ -84,6 +126,26 @@ export function GroupEventRegistrations({
             width: "primary",
             sort: { asc: "display_name", desc: "-display_name" },
           },
+          ...(canManage && badgesPath
+            ? [
+                {
+                  header: "Badge",
+                  width: "fit" as const,
+                  cell: (registration: EventAttendanceRegistrationSummary) => (
+                    <a
+                      href={usePortalHashLocation.hrefs(
+                        `${badgesPath}?userId=${encodeURIComponent(registration.user_id)}`,
+                      )}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                      }}
+                    >
+                      Manage badges
+                    </a>
+                  ),
+                },
+              ]
+            : []),
           { header: "Organization", cell: (r) => r.organization_name ?? "—", className: "pk-small" },
           { header: "Job title", cell: (r) => r.job_title ?? "—", className: "pk-small", defaultHidden: true },
           {

@@ -4,6 +4,7 @@ import {
   EVENT_REGISTRATION_POLICY_LABELS,
   EVENT_VISIBILITY_LABELS,
 } from "../../../../../../../shared/schemas/event-series";
+import { formatNumber } from "../../../../../../../shared/format-number";
 import { formatDateTimeInZone } from "../../../../../../../shared/format-date";
 import { Alert } from "../../../../../../ui/Alert";
 import { DescriptionList } from "../../../../../../ui/DescriptionList";
@@ -60,7 +61,7 @@ export function EventSettingsSummary({
           <DescriptionList
             items={(event.sessionTypes ?? []).map((type) => ({
               term: type.label,
-              value: type.requiresPresentation ? "Presentation required" : "Presentation optional",
+              value: `${type.durationMinutes === undefined ? "Duration not configured" : `${formatNumber(type.durationMinutes)} minutes`} · ${type.requiresPresentation ? "Presentation required" : "Presentation optional"}`,
             }))}
           />
           {!event.sessionTypes?.length && <p>No session types configured.</p>}

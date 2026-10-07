@@ -14,6 +14,11 @@ import { archivedScanSchema } from "../../assets/shared/schemas/event-scan-recov
 import { SCAN_STORAGE_VERSION } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/outbox-storage";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
+import {
+  openScannerDiagnostics,
+  closeScannerDiagnostics,
+  openScannerManualEntry,
+} from "./helpers/scanner-recovery-storage";
 
 const slug = "pqc-conference-amsterdam-nl";
 const storedScanSchema = offlineScanRecordSchema.extend({
@@ -50,7 +55,7 @@ test("offline supporting scanner captures registered and unregistered attendance
   context,
 }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await signInAsE2eStaff(page, e2eAdminEmail("default"));
+  await signInAsE2eStaff(page, e2eAdminEmail("portal-offline-attendance"));
   const badges = [randomUUID(), randomUUID()];
   const users = [randomUUID(), randomUUID()];
   const eventId = randomUUID();
@@ -111,18 +116,21 @@ test("offline supporting scanner captures registered and unregistered attendance
   });
   await page.goto(`/portal/#/events/${slug}/scanner`);
   await expect(page.getByLabel("Scan mode", { exact: true })).toHaveValue("attendance");
+  await openScannerDiagnostics(page);
   await expect(
     page.getByText("Eligibility data ready. Checks run locally; attendance uploads in the background.", {
       exact: true,
     }),
   ).toBeVisible();
   expect(rosterDownloads).toBeGreaterThan(0);
+  await closeScannerDiagnostics(page);
   await expect(
     page.getByRole("button", { name: /Prepare offline admission|Allocate for one hour|Review admission exception/ }),
   ).toHaveCount(0);
   offline = true;
   await context.setOffline(true);
   for (const [index, badge] of badges.entries()) {
+    await openScannerManualEntry(page);
     await page.getByLabel("Badge code", { exact: true }).fill(badge);
     await page.getByRole("button", { name: "Record attendance", exact: true }).click();
     await expect(
@@ -160,7 +168,11 @@ test("offline supporting scanner captures registered and unregistered attendance
   offline = false;
   await context.setOffline(false);
   await page.getByRole("button", { name: "Sync now", exact: true }).click();
-  await expect(page.getByText("0 scans awaiting upload", { exact: true })).toBeVisible();
+  await expect
+    .poll(async () => (await stored(page, "scans")).map((record) => storedScanSchema.parse(record)).length)
+    .toBe(0);
+  await expect(page.getByRole("heading", { name: "Badge scanner", exact: true })).toBeVisible();
+  await expect(page.locator(".pk-event-scanner")).toHaveCount(0);
   expect(await stored(page, "scans")).toHaveLength(0);
   expect(uploaded.map((scan) => scan.operationId)).toEqual(
     expect.arrayContaining(captured.map(({ scan }) => scan.operationId)),

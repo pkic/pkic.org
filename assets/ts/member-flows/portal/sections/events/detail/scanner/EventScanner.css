@@ -27,3 +27,10 @@
   max-height: 20rem;
   border-radius: var(--pk-radius);
 }
+.pk-event-scanner__camera.pk-event-scanner__camera--concealed {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}

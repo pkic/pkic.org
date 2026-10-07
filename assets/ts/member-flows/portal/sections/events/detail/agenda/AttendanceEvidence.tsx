@@ -15,6 +15,8 @@ import { Button } from "../../../../../../ui/Button";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { postJson } from "../../../../../../shared/api-client";
+import { RowActions } from "../../../../../../ui/RowActions";
+import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
 type Evidence = z.infer<typeof attendanceEvidenceSchema>;
 export function AttendanceCorrectionReview({
   slug,
@@ -33,6 +35,7 @@ export function AttendanceCorrectionReview({
     useState<(typeof attendanceCorrectionRequestSchema.shape.reasonCode.options)[number]>("operator_error");
   const [busy, setBusy] = useState(false),
     [error, setError] = useState("");
+  const [history, setHistory] = useState(false);
   const [operationId] = useState(() => crypto.randomUUID());
   const form = useContractForm(attendanceCorrectionRequestSchema, {
     operationId,
@@ -62,8 +65,34 @@ export function AttendanceCorrectionReview({
       setBusy(false);
     }
   }
+  if (history)
+    return (
+      <>
+        <PanelBody>
+          <Button onClick={() => setHistory(false)}>Back to observation</Button>
+        </PanelBody>
+        <PanelBody flush>
+          <ApiDataTable
+            endpoint={`/api/v1/events/${encodeURIComponent(slug)}/attendance/observations/${observation.id}/corrections`}
+            responseSchema={attendanceCorrectionHistoryResponseSchema}
+            resolve={(value) => value.corrections}
+            resolvePage={(value) => value.page}
+            caption="Attendance correction history"
+            rowKey={(row) => row.id}
+            paginate
+            columns={[
+              { header: "Action", cell: (row) => row.kind },
+              { header: "Reason", cell: (row) => row.reasonCode.replaceAll("_", " ") },
+              { header: "Corrected by", cell: (row) => row.actorUserId },
+              { header: "Recorded", cell: (row) => formatDateTimeInZone(row.createdAt, timeZone) },
+            ]}
+          />
+        </PanelBody>
+      </>
+    );
   return (
-    <div class="pk-stack">
+    <PanelBody class="pk-stack">
+      <Button onClick={() => setHistory(true)}>View correction history</Button>
       <p>
         Original observation:{" "}
         {formatDateTimeInZone(
@@ -85,25 +114,10 @@ export function AttendanceCorrectionReview({
         </p>
       )}
       <p>
-        Corrections change reported attendance only. Original attempts, observations, admission decisions and capacity
-        remain intact. IDs-only history is retained with the original evidence; identity details follow the event
-        retention policy.
+        Corrections change reported attendance only. Original attempts, observations and admission decisions remain
+        intact. IDs-only history is retained with the original evidence; identity details follow the event retention
+        policy.
       </p>
-      <ApiDataTable
-        endpoint={`/api/v1/events/${encodeURIComponent(slug)}/attendance/observations/${observation.id}/corrections`}
-        responseSchema={attendanceCorrectionHistoryResponseSchema}
-        resolve={(value) => value.corrections}
-        resolvePage={(value) => value.page}
-        caption="Attendance correction history"
-        rowKey={(row) => row.id}
-        paginate
-        columns={[
-          { header: "Action", cell: (row) => row.kind },
-          { header: "Reason", cell: (row) => row.reasonCode.replaceAll("_", " ") },
-          { header: "Corrected by", cell: (row) => row.actorUserId },
-          { header: "Recorded", cell: (row) => formatDateTimeInZone(row.createdAt, timeZone) },
-        ]}
-      />
       {canCorrect && (
         <form noValidate {...form.handlers} onSubmit={submit} class="pk-stack">
           <Field label="Correction reason" {...form.of("reasonCode")}>
@@ -126,7 +140,7 @@ export function AttendanceCorrectionReview({
           </Button>
         </form>
       )}
-    </div>
+    </PanelBody>
   );
 }
 export function AttendanceEvidence({
@@ -144,6 +158,27 @@ export function AttendanceEvidence({
 }) {
   const [selected, setSelected] = useState<Evidence | null>(null),
     [epoch, setEpoch] = useState(0);
+  if (selected)
+    return (
+      <Panel>
+        <PanelHeader title="Review attendance observation" />
+        <PanelBody>
+          <Button onClick={() => setSelected(null)}>Back to observations</Button>
+        </PanelBody>
+        <AttendanceCorrectionReview
+          key={`${selected.id}:${selected.revision}`}
+          slug={slug}
+          observation={selected}
+          timeZone={timeZone}
+          canCorrect={canCorrect}
+          onChanged={() => {
+            setSelected(null);
+            setEpoch((value) => value + 1);
+            onChanged();
+          }}
+        />
+      </Panel>
+    );
   return (
     <div class="pk-stack">
       <ApiDataTable
@@ -179,27 +214,14 @@ export function AttendanceEvidence({
           {
             header: "Review",
             cell: (row) => (
-              <Button size="sm" onClick={() => setSelected(row)}>
-                Review observation
-              </Button>
+              <RowActions
+                subject={row.displayName ?? "Attendance observation"}
+                actions={[{ id: "review", label: "Review observation", onSelect: () => setSelected(row) }]}
+              />
             ),
           },
         ]}
       />
-      {selected && (
-        <AttendanceCorrectionReview
-          key={`${selected.id}:${selected.revision}`}
-          slug={slug}
-          observation={selected}
-          timeZone={timeZone}
-          canCorrect={canCorrect}
-          onChanged={() => {
-            setSelected(null);
-            setEpoch((value) => value + 1);
-            onChanged();
-          }}
-        />
-      )}
     </div>
   );
 }

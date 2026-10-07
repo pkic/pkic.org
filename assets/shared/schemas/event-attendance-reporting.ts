@@ -4,7 +4,7 @@ import { eventContactRetentionSchema } from "./event-contact-retention";
 import { z } from "zod";
 import { scannerDeviceBacklogSchema, scannerReconciliationSchema } from "./event-scanner-reconciliation";
 import { databaseIdSchema } from "./identifiers";
-import { utcInstantSchema } from "./api-common";
+import { booleanQueryFlagSchema, utcInstantSchema } from "./api-common";
 import { eventDayDateSchema } from "./event-read-models";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 const count = z.number().int().nonnegative();
@@ -93,6 +93,7 @@ export const attendanceAttemptQuerySchema = listQuerySchema(["observedAt", "rece
     userId: databaseIdSchema.optional(),
     action: z.string().min(1).max(40).optional(),
     reason: z.string().min(1).max(80).optional(),
+    unsuccessful: booleanQueryFlagSchema.optional(),
   });
 export const attendanceAttemptSchema = z.object({
   id: databaseIdSchema,

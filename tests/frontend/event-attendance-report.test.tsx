@@ -2,6 +2,7 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { attendanceActionLabel } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/attendance-navigation";
 import { EventAttendanceReport } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/EventAttendanceReport";
 import { AttendanceReport } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/AttendanceReport";
 import {
@@ -112,11 +113,18 @@ async function settle() {
 }
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
-async function mount() {
+async function mount(view: "summary" | "attendees" | "scan-log" | "diagnostics" = "summary", reasons = false) {
   document.adoptedStyleSheets = [];
-  host = document.createElement("div");
-  document.body.append(host);
-  await act(() => render(<EventAttendanceReport slug="event" timeZone="Europe/Amsterdam" epoch={0} />, host));
+  if (!host?.isConnected) {
+    host = document.createElement("div");
+    document.body.append(host);
+  }
+  await act(() =>
+    render(
+      <EventAttendanceReport slug="event" timeZone="Europe/Amsterdam" epoch={0} view={view} reasons={reasons} />,
+      host,
+    ),
+  );
   await settle();
 }
 function fixture(url: string) {
@@ -212,11 +220,9 @@ describe("event and day attendance report", () => {
         "fetch",
         vi.fn(async (input: string) => json(String(input).includes("/summary") ? current : fixture(String(input)))),
       );
-      await mount();
-      expect(host.textContent).toContain(
-        deviceBacklog === "pending" ? "Scanner synchronization is pending" : "uploads accounted for",
-      );
-      expect(host.textContent).toContain("Report completeness and presence duration are not established");
+      await mount("diagnostics");
+      expect(host.textContent).toContain(deviceBacklog === "pending" ? "Uploads pending" : "Uploads accounted for");
+      expect(host.textContent).toContain("do not establish complete reporting or presence duration");
       expect(host.textContent).toContain("covers the entire event");
       expect(host.textContent).toContain("Enrolled scanner sessions");
       expect(host.textContent).not.toContain("Device backlog is unknown");
@@ -236,13 +242,16 @@ describe("event and day attendance report", () => {
       }),
     );
     await mount();
-    expect(host.textContent).toContain("Device backlog is unknown");
-    expect(host.textContent).toContain("Device clocks are unverified");
-    expect(host.textContent).toContain("Revoked grants, still unclosed");
-    expect(host.textContent).toContain("Expired grants, still unclosed");
+    expect(host.textContent).toContain("Some uploads may still be outstanding");
+    expect(host.textContent).toContain("Eligibility checks do not establish attendance or presence duration");
     expect(host.textContent).toContain("Physical attendance");
     expect(host.textContent).toContain("Virtual attendance");
-    expect(host.textContent).toContain("Saved sessions and reservations express intent");
+    await mount("diagnostics");
+    expect(host.textContent).toContain("Upload coverage unknown");
+    expect(host.textContent).toContain("Device times are unverified");
+    expect(host.textContent).toContain("Revoked historical grants still unclosed");
+    expect(host.textContent).toContain("Expired historical grants still unclosed");
+    expect(host.textContent).not.toContain("Private attendee");
     await act(() => {
       const input = host.querySelector<HTMLInputElement>('input[type="date"]')!;
       input.value = "2026-12-01";
@@ -261,10 +270,15 @@ describe("event and day attendance report", () => {
       ),
     ).toBe(true);
     for (const label of ["Scan attempts", "Reasons and exceptions"]) {
-      await act(() =>
-        [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === label)!.click(),
-      );
-      await settle();
+      await mount(label === "Scan attempts" ? "scan-log" : "diagnostics", label === "Reasons and exceptions");
+      if (label === "Scan attempts") {
+        await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Choose columns"]')!.click());
+        await act(() =>
+          [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')]
+            .find((item) => item.textContent?.includes("Exception explanation"))!
+            .click(),
+        );
+      }
       expect(host.textContent).toContain("Organizer approved");
     }
     expect(requests.some((url) => url.pathname.endsWith("/attempts"))).toBe(true);
@@ -293,11 +307,11 @@ describe("event and day attendance report", () => {
         return json(value);
       }),
     );
-    await mount();
-    expect(host.textContent).toContain("12 observations and 4 attempts");
-    expect(host.textContent).toContain("their day is unknown");
-    expect(host.textContent).toContain("no single UTC day window");
-    expect(host.textContent).toContain("Current reservations and preferences use Europe/Amsterdam");
+    await mount("diagnostics");
+    expect(host.textContent).toContain("12 observations and 4 scan attempts");
+    expect(host.textContent).toContain("their date has not been inferred");
+    expect(host.textContent).toContain("Captures span multiple recorded time zones");
+    expect(host.textContent).toContain("Current schedule time zoneEurope/Amsterdam");
     expect(host.textContent).not.toContain("Day boundaries use");
   });
   it("uses bounded server session selection and sends the selected session to every evidence view", async () => {
@@ -327,6 +341,7 @@ describe("event and day attendance report", () => {
       ["Export observed people", attendancePeopleExportQuerySchema],
       ["Export attendance summary", attendanceSummaryExportQuerySchema],
     ] as const) {
+      await mount(label === "Export observed people" ? "attendees" : "summary");
       const link = [...host.querySelectorAll<HTMLAnchorElement>("a")].find((item) => item.textContent === label)!;
       const url = new URL(link.href);
       const parsed = schema.parse(Object.fromEntries(url.searchParams));
@@ -338,10 +353,7 @@ describe("event and day attendance report", () => {
       requests.some((url) => url.pathname.endsWith("/summary") && url.searchParams.get("occurrenceId") === id),
     ).toBe(true);
     for (const label of ["Scan attempts", "Reasons and exceptions"]) {
-      await act(() =>
-        [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === label)!.click(),
-      );
-      await settle();
+      await mount(label === "Scan attempts" ? "scan-log" : "diagnostics", label === "Reasons and exceptions");
     }
     expect(
       requests
@@ -351,7 +363,9 @@ describe("event and day attendance report", () => {
     const catalog = requests.find((url) => url.pathname.endsWith("/attendance"))!;
     expect(catalog.searchParams.get("limit")).toBe("25");
     expect(catalog.searchParams.get("sort")).toBe("title");
-    await act(() => picker.click());
+    await mount("summary");
+    const currentPicker = host.querySelector<HTMLInputElement>('input[role="combobox"]')!;
+    await act(() => currentPicker.click());
     await act(() =>
       [...host.querySelectorAll<HTMLElement>('[role="option"]')]
         .find((option) => option.textContent === "All sessions")!
@@ -366,11 +380,7 @@ describe("event and day attendance report", () => {
       vi.fn(async (input: string) => json(fixture(String(input)))),
     );
     await mount();
-    await act(() =>
-      [...host.querySelectorAll<HTMLButtonElement>("button")]
-        .find((button) => button.textContent === "Scan attempts")!
-        .click(),
-    );
+    await mount("scan-log");
     await settle();
     await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Action column options"]')!.click());
     await act(() =>
@@ -380,11 +390,11 @@ describe("event and day attendance report", () => {
     );
     const choices = [...document.querySelectorAll<HTMLElement>('[role="menuitemradio"]')];
     for (const action of scanActionSchema.options)
-      expect(choices.some((item) => item.textContent?.trim() === action)).toBe(true);
-    await act(() => choices.find((item) => item.textContent?.trim() === "checkout")!.click());
+      expect(choices.some((item) => item.textContent?.trim() === attendanceActionLabel(action))).toBe(true);
+    await act(() => choices.find((item) => item.textContent?.trim() === attendanceActionLabel("checkout"))!.click());
     await settle();
     const link = [...host.querySelectorAll<HTMLAnchorElement>("a")].find(
-      (item) => item.textContent === "Export scan attempts",
+      (item) => item.textContent === "Export scan log",
     )!;
     const url = new URL(link.href);
     const query = attendanceAttemptsExportQuerySchema.parse(Object.fromEntries(url.searchParams));
@@ -396,7 +406,7 @@ describe("event and day attendance report", () => {
   it("clears people while offline or hidden and after a failed refresh", async () => {
     const fetcher = vi.fn(async (input: string) => json(fixture(String(input))));
     vi.stubGlobal("fetch", fetcher);
-    await mount();
+    await mount("attendees");
     expect(host.textContent).toContain("Private attendee");
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(false);
     await act(() => {
@@ -449,11 +459,16 @@ describe("event and day attendance report", () => {
     );
     await mount();
     await settle();
-    expect(host.textContent).toContain("Attendee and sponsor contact access has closed");
+    expect(host.textContent).toContain("Attendee contact access has ended");
     expect(host.textContent).not.toContain("Private attendee");
     expect(host.textContent).not.toContain("Export observed people");
     expect(host.textContent).not.toContain("Export scan attempts");
     expect(host.textContent).toContain("Export attendance summary");
+    await mount("attendees");
+    expect(host.textContent).toContain("Contact access has expired");
+    expect(host.textContent).not.toContain("Private attendee");
+    expect(host.textContent).not.toContain("Export observed people");
+    await mount("diagnostics", true);
     expect(host.textContent).toContain("Scan reason breakdown");
   });
   it("makes no reporting request for an import-only operator", async () => {
@@ -492,12 +507,8 @@ describe("event and day attendance report", () => {
         ),
       );
       await mount();
-      const evidence = [...host.querySelectorAll("details")].find((element) =>
-        element.textContent?.includes("Observation and scan evidence"),
-      )!;
-      await act(() => {
-        evidence.querySelector("summary")!.click();
-      });
+      await mount("diagnostics");
+      const evidence = host.querySelector('[aria-label="Attendance diagnostics"]')!;
       for (const [label, count] of [
         ["Allowed admission decisions", 1],
         ["Refused admission decisions", 0],
@@ -529,14 +540,15 @@ describe("event and day attendance report", () => {
         }),
       );
       await mount();
-      await act(() => {
-        [...host.querySelectorAll<HTMLButtonElement>("button")]
-          .find((button) => button.textContent === "Scan attempts")!
-          .click();
-      });
+      await mount("scan-log");
       await settle();
+      await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Choose columns"]')!.click());
+      const decisionColumn = [...host.querySelectorAll<HTMLElement>('[role="menuitemradio"]')].find(
+        (item) => item.textContent?.trim() === "Admission decision",
+      )!;
+      await act(() => decisionColumn.click());
       const table = [...host.querySelectorAll("table")].find(
-        (element) => element.querySelector("caption")?.textContent === "Recognized scan attempts",
+        (element) => element.querySelector("caption")?.textContent === "Scan log",
       )!;
       expect([...table.querySelectorAll("thead th")].map((header) => header.textContent?.trim())).toContain(
         "Admission decision",
@@ -546,7 +558,7 @@ describe("event and day attendance report", () => {
           ? "Not recorded"
           : `${admissionDecision[0]!.toUpperCase()}${admissionDecision.slice(1)}`,
       );
-      expect(table.textContent).toContain("eligible");
+      expect(table.textContent).toContain("Successful");
     },
   );
 });

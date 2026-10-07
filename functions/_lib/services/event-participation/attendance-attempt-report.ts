@@ -20,7 +20,7 @@ export async function attendanceAttemptsQuery(db: DatabaseLike, eventId: string,
   const query = attendanceAttemptQuerySchema.parse(raw),
     context = await attendanceReportContext(db, eventId, query);
   await assertEventContactAccess(db, eventId);
-  const from = `FROM event_scan_attempts a JOIN users person ON person.id=a.user_id WHERE ${eventContactAccessSql("a.event_id")} AND ${attendanceScopeSql("a", context)} AND a.action<>'lead' AND (? IS NULL OR ?='physical') AND (? IS NULL OR a.user_id=?) AND (? IS NULL OR a.action=?) AND (? IS NULL OR a.reason=?) AND INSTR(LOWER(COALESCE(person.preferred_name,'')||' '||COALESCE(person.first_name,'')||' '||COALESCE(person.last_name,'')),LOWER(?))>0`;
+  const from = `FROM event_scan_attempts a JOIN users person ON person.id=a.user_id WHERE ${eventContactAccessSql("a.event_id")} AND ${attendanceScopeSql("a", context)} AND a.action<>'lead' AND (? IS NULL OR ?='physical') AND (? IS NULL OR a.user_id=?) AND (? IS NULL OR a.action=?) AND (? IS NULL OR a.reason=?) AND (? IS NULL OR (a.outcome<>'eligible')=?) AND INSTR(LOWER(COALESCE(person.preferred_name,'')||' '||COALESCE(person.first_name,'')||' '||COALESCE(person.last_name,'')),LOWER(?))>0`;
   const values = [
     ...attendanceScopeBindings(context),
     context.attendanceMode,
@@ -31,6 +31,8 @@ export async function attendanceAttemptsQuery(db: DatabaseLike, eventId: string,
     query.action ?? null,
     query.reason ?? null,
     query.reason ?? null,
+    query.unsuccessful === undefined ? null : Number(query.unsuccessful),
+    query.unsuccessful === undefined ? null : Number(query.unsuccessful),
     query.q ?? "",
   ];
   const column = query.sort?.replace("-", "") === "receivedAt" ? "a.created_at" : "a.observed_at",
