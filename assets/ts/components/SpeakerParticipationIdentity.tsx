@@ -19,6 +19,7 @@ export function SpeakerParticipationIdentity({
   data,
   eventSlug,
   token,
+  speakerProposalId,
   terms,
   termsAccepted,
   termsReady,
@@ -30,7 +31,8 @@ export function SpeakerParticipationIdentity({
 }: {
   data: SpeakerData;
   eventSlug: string;
-  token: string;
+  token?: string;
+  speakerProposalId?: string;
   terms: RequiredTerm[];
   termsAccepted: boolean;
   termsReady: boolean;
@@ -77,7 +79,9 @@ export function SpeakerParticipationIdentity({
   const [adding, setAdding] = useState(false);
   const invited = data.speaker.status === "invited";
   const [changing, setChanging] = useState(
-    data.profile.actingIdentitySelection === "unrecorded" || new URLSearchParams(location.hash.slice(1)).has("verify"),
+    data.profile.actingIdentitySelection === "unrecorded" ||
+      new URLSearchParams(location.hash.slice(1)).has("verify") ||
+      new URL(location.hash.slice(1), location.origin).searchParams.has("verify"),
   );
   const [localTermsAccepted, setLocalTermsAccepted] = useState(terms.every((term) => !term.required));
   useLayoutEffect(() => {
@@ -113,6 +117,7 @@ export function SpeakerParticipationIdentity({
               enabled
               eventSlug={eventSlug}
               speakerManagementToken={token}
+              speakerProposalId={speakerProposalId}
               expectedSpeakerUserId={data.speaker.userId}
               consents={consents}
               onChange={onChange}

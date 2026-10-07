@@ -23,13 +23,16 @@ function renderAgendaClocks(root) {
   root.querySelector("[data-agenda-time-choice]").hidden = !distinct;
   root.dataset.agendaTimeDisplay = distinct && choice.value === "browser" ? "browser" : "venue";
   choice.querySelector('[value="browser"]').textContent = `Your time · ${browserZone}`;
+  for (const label of root.querySelectorAll("[data-agenda-browser-zone]")) {
+    label.textContent = `Your time · ${browserZone}`;
+    label.hidden = !distinct;
+  }
   for (const clock of root.querySelectorAll('[data-agenda-clock="browser"]')) {
     const element = clock.querySelector("time[data-local-time]");
     const value = element?.dataset.localTime;
     if (!value) continue;
     const local = agendaLocalClock(value, eventZone, browserZone);
     element.textContent = local.time;
-    clock.querySelector("[data-agenda-browser-zone]").textContent = `Your time · ${browserZone}`;
     const date = clock.querySelector("[data-agenda-local-date]");
     date.textContent = local.date ?? "";
     date.hidden = !local.date;

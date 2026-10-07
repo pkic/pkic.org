@@ -64,10 +64,19 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
       await page.reload();
       await page.getByRole("button", { name: `Open leads for ${sponsor.name}`, exact: true }).click();
     };
+    const configureFeedbackPause = async () => {
+      const diagnostics = page.locator("details").filter({
+        has: page.locator(":scope > summary").filter({ hasText: "Recovery and diagnostics" }),
+      });
+      await expect(diagnostics).toHaveCount(1);
+      await diagnostics.locator(":scope > summary").click();
+      await diagnostics.getByLabel("Feedback pause", { exact: true }).selectOption("0");
+      await diagnostics.locator(":scope > summary").click();
+    };
     await openSponsor();
     await page.getByRole("button", { name: "Scan leads", exact: true }).click();
     await expect(page.getByLabel("Scan mode", { exact: true })).toHaveValue("lead");
-    await page.getByLabel("Feedback pause", { exact: true }).selectOption("0");
+    await configureFeedbackPause();
     const first = await captureSponsorBadge(
       page,
       fixture.consenting.badgeId,
@@ -102,7 +111,7 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
             exact: true,
           })
           .check();
-        await page.getByRole("button", { name: "Capture lead", exact: true }).click();
+        await page.getByRole("button", { name: "Capture sponsor lead", exact: true }).click();
         await expect(page.getByLabel("Badge code", { exact: true })).toHaveValue("");
         await expect(page.getByText(`${expectedCount} scans awaiting upload`, { exact: true })).toBeVisible();
         await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(expectedCount);
@@ -303,7 +312,7 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     expect((await page.request.get(capturesPath)).status()).toBe(404);
     await captureSponsorViews(page, info, "withdrawn-live");
     await page.getByRole("button", { name: "Scan leads", exact: true }).click();
-    await page.getByLabel("Feedback pause", { exact: true }).selectOption("0");
+    await configureFeedbackPause();
     const noConsent = await captureSponsorBadge(
       page,
       fixture.consenting.badgeId,

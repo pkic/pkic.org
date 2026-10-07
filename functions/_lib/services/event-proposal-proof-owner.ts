@@ -3,7 +3,7 @@ import { prepareAuthorizationGuard } from "../db/authorization-guard";
 import { AppError } from "../errors";
 import type { DatabaseLike, StatementLike } from "../types";
 import { prepareCurrentEventProposalProof } from "./event-proposal-proof-current";
-import { prepareEventProposalProofContext } from "./event-proposal-proof-context";
+import { eventProposalSpeakerAuthority, prepareEventProposalProofContext } from "./event-proposal-proof-context";
 import { prepareEventProposalEntry } from "./event-proposal-proof-entry";
 import { prepareProposalProofPerson } from "./event-proposal-proof-person";
 import { verifyEventProposalCapability } from "./event-proposal-proof-capabilities";
@@ -19,6 +19,7 @@ export async function prepareEventProposalPersonOwner(
     at: string;
     continuationToken?: string;
     speakerManagementToken?: string;
+    speakerProposalId?: string;
     actor?: Pick<AuthenticatedIdentity, "userId" | "sessionId">;
   },
 ) {
@@ -26,14 +27,15 @@ export async function prepareEventProposalPersonOwner(
   let userId = input.actor?.userId;
   let proofEmail: string | undefined;
   let speakerId: string | undefined;
-  if (input.speakerManagementToken) {
-    const { speaker, proposal } = await getSpeakerByManageToken(db, input.speakerManagementToken, input.signingSecret);
+  const authority = eventProposalSpeakerAuthority(input);
+  if (authority) {
+    const { speaker, proposal } = await getSpeakerByManageToken(db, authority, input.signingSecret);
     if (proposal.event_id !== input.eventId || (userId && userId !== speaker.user_id))
       throw new AppError(403, "PROPOSAL_PERSON_MISMATCH", "Use your own speaker invitation.");
     userId = speaker.user_id;
     speakerId = speaker.id;
     guards.push(
-      prepareSpeakerSelfAuthorityGuard(db, input.speakerManagementToken, {
+      prepareSpeakerSelfAuthorityGuard(db, authority, {
         proposalSpeakerId: speaker.id,
         proposalId: proposal.id,
         userId: speaker.user_id,
@@ -57,9 +59,9 @@ export async function prepareEventProposalPersonOwner(
         payload,
         signingSecret: input.signingSecret,
         actor: input.actor,
-        operation: input.speakerManagementToken ? "speaker_profile" : "proposal_submission",
+        operation: authority ? "speaker_profile" : "proposal_submission",
         speakerId,
-        speakerAuthority: input.speakerManagementToken,
+        speakerAuthority: authority,
       })),
       ...(await prepareEventProposalEntry(db, input.eventId, payload.entryContext)).statements,
     );

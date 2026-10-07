@@ -5,8 +5,8 @@ import { agendaTimeSteps } from "./schedule-time-controls";
 export function AgendaTimeStep({ value, onChange }: { value: number; onChange: (minutes: number) => void }) {
   return (
     <Field
-      label="Scheduling time step"
-      help="Board targets snap to this grid. Move and resize actions use this step; precisely typed times remain exact until you explicitly snap them."
+      label="Calendar grid spacing"
+      help="Sets the visible grid and snapping for moves and resizing. Existing session times stay unchanged."
     >
       {(control) => (
         <Select

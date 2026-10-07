@@ -36,6 +36,7 @@ export function EventProposalIdentityStep({
   consents,
   onChange,
   speakerManagementToken,
+  speakerProposalId,
   expectedSpeakerUserId,
   entryContext,
   onSavePersonalDetails,
@@ -49,6 +50,7 @@ export function EventProposalIdentityStep({
   consents: () => { termKey: RequiredTerm["termKey"]; version: RequiredTerm["version"] }[];
   onChange: (selection: ProposalEntrySelection | null) => void;
   speakerManagementToken?: string;
+  speakerProposalId?: string;
   expectedSpeakerUserId?: string | null;
   entryContext?: ProposalEntryContext;
   onSavePersonalDetails?: (names: z.infer<typeof eventProposalPersonNamePatchSchema>) => Promise<ParticipationPerson>;
@@ -61,6 +63,7 @@ export function EventProposalIdentityStep({
     expectedSpeakerUserId,
     onSavePersonalDetails,
     startWithEmailProof,
+    speakerProposalId,
   );
   const [sent, setSent] = useState(false);
   const [sending, setSending] = useState(false);
@@ -71,8 +74,11 @@ export function EventProposalIdentityStep({
     consents: consents(),
     speakerManagementToken: identity.proofOwnerToken ? undefined : speakerManagementToken,
     continuationToken: identity.proofOwnerToken,
+    speakerProposalId,
     entryContext:
-      identity.proofOwnerToken || speakerManagementToken ? undefined : (identity.entryContext ?? entryContext),
+      identity.proofOwnerToken || speakerManagementToken || speakerProposalId
+        ? undefined
+        : (identity.entryContext ?? entryContext),
   });
   useEffect(() => {
     onChange(identity.selection);
@@ -88,11 +94,12 @@ export function EventProposalIdentityStep({
                 eventProposalProofIdentitiesSchema.parse({
                   continuationToken: identity.continuationToken,
                   speakerManagementToken,
+                  speakerProposalId,
                 }),
               ),
             })
         : undefined,
-    [identity.continuationToken, speakerManagementToken],
+    [identity.continuationToken, speakerManagementToken, speakerProposalId],
   );
   if (!enabled) return null;
   async function sendProof(): Promise<void> {

@@ -42,15 +42,13 @@ test("session without a proposal uploads, reviews and explicitly binds a private
   await page.goto(`/portal/#/events/${slug}/agenda`);
   await page
     .getByRole("tablist", { name: "Agenda views", exact: true })
-    .getByRole("tab", { name: "All sessions", exact: true })
+    .getByRole("tab", { name: "Schedule", exact: true })
     .click();
-  await page.getByPlaceholder("Search sessions…", { exact: true }).fill(title);
+  const sessions = page.getByRole("region", { name: "Event sessions", exact: true });
+  await sessions.getByRole("searchbox", { name: "Search event sessions", exact: true }).fill(title);
   await runRowAction(
     page,
-    page
-      .getByRole("table", { name: "Sessions across all days", exact: true })
-      .getByRole("row")
-      .filter({ hasText: title }),
+    sessions.getByRole("table", { name: "Event sessions", exact: true }).getByRole("row").filter({ hasText: title }),
     "Session archive / materials",
   );
   await page.getByRole("button", { name: "Session archive actions", exact: true }).click();

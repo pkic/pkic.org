@@ -54,6 +54,7 @@ export const EventProposalProofVerifyPost = openApiRoute(eventProposalProofVerif
           ? await requireIdentityFromRequest(c.env.DB, c.req.raw, c.env)
           : undefined,
         speakerManagementToken: data.body.speakerManagementToken,
+        speakerProposalId: data.body.speakerProposalId,
       }),
     ),
   );
@@ -74,6 +75,7 @@ export const EventProposalProofIdentitiesPost = openApiRoute(
             ? await requireIdentityFromRequest(c.env.DB, c.req.raw, c.env)
             : undefined,
           speakerManagementToken: data.body.speakerManagementToken,
+          speakerProposalId: data.body.speakerProposalId,
         }),
       ),
     );

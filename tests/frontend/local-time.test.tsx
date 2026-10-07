@@ -148,7 +148,10 @@ describe("progressive public agenda clocks", () => {
     expect(root.dataset.agendaTimeDisplay).toBe("browser");
     expect(eventClock.hidden).toBe(false);
     expect(eventClock.querySelector("time")!.getAttribute("datetime")).toBe("2026-12-01T23:30:00.000Z");
-    expect(eventClock.textContent).toContain("Event · Amsterdam");
+    expect(root.querySelector('.pk-content-agenda__time-heading small[title="Europe/Amsterdam"]')?.textContent).toBe(
+      "Event · Amsterdam",
+    );
+    expect(eventClock.textContent).not.toContain("Amsterdam");
     expect(root.querySelector("[data-agenda-panel]")?.getAttribute("data-agenda-panel")).toBe("2026-12-02");
     select.value = "venue";
     select.dispatchEvent(new Event("change", { bubbles: true }));

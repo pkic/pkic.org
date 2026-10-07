@@ -1,3 +1,6 @@
+import { AgendaRoomsOrderPost } from "./agenda/rooms";
+import { AgendaBreaksPost } from "./agenda/breaks";
+import { AgendaSponsorChoicesGet } from "./agenda/sponsors";
 import { registerAgendaReadRoutes } from "./agenda/register-read-routes";
 import sessionPresentationsRouter from "./agenda/session-presentations-router";
 import {
@@ -89,6 +92,7 @@ import {
 import {
   SessionParticipationPut,
   PersonalAgendaGet,
+  SessionVirtualRoomGet,
   SessionParticipationReviewPut,
   SessionBookingsGet,
   SessionHoldPost,
@@ -177,8 +181,11 @@ registerAgendaReadRoutes(openapi);
 openapi.post("/agenda/settings", AgendaSettingsPost);
 openapi.get("/agenda/occurrences/:occurrenceId/room-recommendations", SessionRoomRecommendationsGet);
 openapi.post("/agenda/rooms", AgendaRoomCreate);
+openapi.post("/agenda/rooms/order", AgendaRoomsOrderPost);
 openapi.put("/agenda/rooms/:roomId", AgendaRoomUpdate);
 openapi.post("/agenda/occurrences", AgendaOccurrenceCreate);
+openapi.post("/agenda/breaks", AgendaBreaksPost);
+openapi.get("/agenda/sponsors", AgendaSponsorChoicesGet);
 openapi.patch("/agenda/occurrences/:occurrenceId", AgendaOccurrencePatch);
 openapi.post("/agenda/occurrences/:occurrenceId/history", AgendaSessionHistory);
 openapi.get("/agenda/occurrences/:occurrenceId/appearance-overrides", AppearanceOverridesGet);
@@ -238,6 +245,7 @@ openapi.get("/agenda/:occurrenceId/attendance", SessionAttendancePeopleGet);
 openapi.put("/agenda/:occurrenceId/participation", SessionParticipationPut);
 openapi.put("/agenda/:occurrenceId/participation/:userId", SessionParticipationReviewPut);
 openapi.get("/agenda/participation", PersonalAgendaGet);
+openapi.get("/agenda/occurrences/:occurrenceId/virtual-room", SessionVirtualRoomGet);
 openapi.get("/agenda/managed-sessions", ManagedSessionsGet);
 openapi.put("/agenda/:occurrenceId/invitations", SessionInvitationPut);
 openapi.put("/agenda/:occurrenceId/delegation", SessionDelegationPut);

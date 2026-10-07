@@ -1,3 +1,4 @@
+import { acceptedProposalIds, importAcceptedProposalBatches } from "./accepted-proposal-batches";
 import { AgendaImportReview } from "./AgendaImportReview";
 import { EventProposalsTable } from "../../../../../../components/proposals/EventProposalsTable";
 import { formatNumber } from "../../../../../../../shared/format-number";
@@ -35,7 +36,12 @@ export function AgendaImport({
   const focus = useEditorFocus();
   const [source, setSource] = useState<ImportBody["source"]>("accepted_proposals");
   const [occurrences, setOccurrences] = useState<ImportBody["occurrences"]>([]);
-  const [preview, setPreview] = useState<{ imported: number; skipped: number; revision: number } | null>(null);
+  const [preview, setPreview] = useState<{
+    imported: number;
+    skipped: number;
+    revision: number;
+    proposalIds?: string[];
+  } | null>(null);
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const form = useContractForm(agendaImportSchema, {
@@ -43,7 +49,7 @@ export function AgendaImport({
     source,
     dryRun: true,
     occurrences,
-    proposalIds: source === "accepted_proposals" ? proposalIds : undefined,
+    proposalIds: source === "accepted_proposals" ? proposalIds?.slice(0, 100) : undefined,
   });
   async function load(file: File | undefined) {
     setPreview(null);
@@ -63,19 +69,28 @@ export function AgendaImport({
     }
     setBusy(true);
     try {
-      const result = await postJson(
-        `/api/v1/events/${encodeURIComponent(snapshot.eventSlug)}/agenda/imports`,
-        { ...checked.data, dryRun: !apply },
-        agendaImportResponseSchema,
-      );
+      const ids =
+        source === "accepted_proposals"
+          ? apply
+            ? preview?.proposalIds
+            : (proposalIds ?? (await acceptedProposalIds(snapshot.eventSlug)))
+          : undefined;
+      const result = ids
+        ? await importAcceptedProposalBatches(snapshot, ids, !apply, onSaved)
+        : await postJson(
+            `/api/v1/events/${encodeURIComponent(snapshot.eventSlug)}/agenda/imports`,
+            { ...checked.data, dryRun: !apply },
+            agendaImportResponseSchema,
+          );
       if (apply) {
         onSaved(result.agenda);
         onClose();
       } else {
-        setPreview({ ...result, revision: snapshot.revision });
+        setPreview({ ...result, revision: snapshot.revision, proposalIds: ids });
       }
       setError("");
     } catch (e) {
+      setPreview(null);
       setError(form.refuse(e));
     } finally {
       setBusy(false);
@@ -87,7 +102,7 @@ export function AgendaImport({
       <Panel>
         <PanelHeader title="Choose proposals to import" />
         <PanelBody>
-          <p>Select up to 100 accepted proposals for this batch. Review the import before applying it.</p>
+          <p>Select accepted proposals. Large selections are added in guarded batches; review before applying.</p>
           <EventProposalsTable
             endpoint={`/api/v1/events/${encodeURIComponent(snapshot.eventSlug)}/proposals`}
             initialFilters={{ status: "accepted" }}
@@ -96,7 +111,7 @@ export function AgendaImport({
             }
             toolbarPrefix={(_, access, selected) => (
               <Button
-                disabled={busy || access?.canRead !== true || selected.size === 0 || selected.size > 100}
+                disabled={busy || access?.canRead !== true || selected.size === 0}
                 onClick={() => {
                   setProposalIds([...selected]);
                   setPreview(null);
@@ -154,8 +169,8 @@ export function AgendaImport({
             <div class="pk-stack">
               <p>
                 {proposalIds
-                  ? `${formatNumber(proposalIds.length)} proposals selected for this batch.`
-                  : "Imports all accepted proposals when there are 100 or fewer. Choose a batch for larger programs."}
+                  ? `${formatNumber(proposalIds.length)} proposals selected.`
+                  : "Adds every accepted proposal not already in the agenda, across all pages."}
               </p>
               <Button onClick={() => setChoosing(true)}>Choose accepted proposals</Button>
               {proposalIds && (

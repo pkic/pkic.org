@@ -35,7 +35,7 @@ function proposal(index: number) {
     recommendation_needs_work_count: 0,
     recommendation_reject_count: 0,
     has_presentation: false,
-    agendaImported: index === 0,
+    agendaImported: false,
   };
 }
 function response(
@@ -66,13 +66,13 @@ async function settle() {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
 }
-async function mount(onReview = vi.fn()) {
+async function mount(onAdd = vi.fn()) {
   host = document.createElement("div");
   document.body.append(host);
-  await act(() => render(<AcceptedProposalBacklog eventSlug="synthetic" onReview={onReview} />, host));
+  await act(() => render(<AcceptedProposalBacklog eventSlug="synthetic" onReview={vi.fn()} onAdd={onAdd} />, host));
   await settle();
   await settle();
-  return onReview;
+  return onAdd;
 }
 afterEach(() => {
   render(null, host);
@@ -81,7 +81,7 @@ afterEach(() => {
   history.replaceState(null, "", location.pathname);
 });
 describe("Accepted proposal agenda backlog", () => {
-  it("uses accepted-only canonical server search/pagination and opens import review without writing", async () => {
+  it("uses accepted-only canonical server search/pagination and requests adding an unimported proposal without writing", async () => {
     const requests: URL[] = [];
     location.hash = "/events/synthetic/agenda?accepted-backlog.f.status=rejected";
     vi.stubGlobal(
@@ -92,23 +92,17 @@ describe("Accepted proposal agenda backlog", () => {
         requests.push(url);
         const query = eventProposalsListQuerySchema.parse(Object.fromEntries(url.searchParams));
         expect(query.status).toBe("accepted");
-        return Response.json(
-          response(
-            query.offset ? [proposal(1)] : [proposal(0), proposal(1)],
-            query.limit,
-            query.offset,
-            query.limit + 1,
-          ),
-        );
+        expect(query.agenda).toBe("unimported");
+        return Response.json(response([proposal(1)], query.limit, query.offset, query.limit + 1));
       }),
     );
-    const onReview = await mount(vi.fn());
+    const onAdd = await mount(vi.fn());
     expect(host.querySelector("form")).toBeNull();
     expect(host.textContent).toContain("Accepted proposal");
-    expect(host.textContent).toContain("In agenda");
-    expect(host.querySelector(`[aria-label="Import without scheduling, Accepted session 1"]`)).toBeNull();
-    await runRowAction(host, "Accepted session 2", "Import without scheduling");
-    expect(onReview).toHaveBeenCalledWith(ids[1]);
+    expect(host.textContent).not.toContain("Accepted session 1");
+    expect(host.querySelector(`[aria-label="Add, Accepted session 1"]`)).toBeNull();
+    await runRowAction(host, "Accepted session 2", "Add");
+    expect(onAdd).toHaveBeenCalledWith([ids[1]]);
     const search = host.querySelector<HTMLInputElement>('input[type="search"]')!;
     await act(() => {
       search.value = "Synthetic presenter";
@@ -129,14 +123,14 @@ describe("Accepted proposal agenda backlog", () => {
     expect(query.q).toBe("Synthetic presenter");
     expect(query.status).toBe("accepted");
   });
-  it("does not enable the import action when the source catalogue denies read access", async () => {
+  it("does not enable the add action when the source catalogue denies read access", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => Response.json(response([proposal(1)], 25, 0, 1, false))),
     );
-    const onReview = await mount();
-    expect(await rowActionIsDisabled(host, "Accepted session 2", "Import without scheduling")).toBe(true);
-    expect(onReview).not.toHaveBeenCalled();
+    const onAdd = await mount();
+    expect(await rowActionIsDisabled(host, "Accepted session 2", "Add")).toBe(true);
+    expect(onAdd).not.toHaveBeenCalled();
     expect(host.querySelector("form")).toBeNull();
   });
   it("shows the canonical empty state without exposing an edit form", async () => {
@@ -147,8 +141,6 @@ describe("Accepted proposal agenda backlog", () => {
     await mount();
     expect(host.textContent).toContain("No accepted proposals match this search.");
     expect(host.querySelector("form")).toBeNull();
-    expect(
-      [...host.querySelectorAll("button")].some((button) => button.textContent === "Import without scheduling"),
-    ).toBe(false);
+    expect([...host.querySelectorAll("button")].some((button) => button.textContent === "Add")).toBe(false);
   });
 });

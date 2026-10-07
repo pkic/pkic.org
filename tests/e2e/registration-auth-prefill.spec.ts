@@ -10,6 +10,7 @@ test("a signed-in nonmember can use saved contact details without an empty ident
     route.fulfill({
       json: userAuthSessionResponseSchema.parse({
         success: true,
+        sessionId: "00000000-0000-4000-8000-000000000042",
         expiresAt: "2099-12-31T23:59:59.000Z",
         idleExpiresAt: "2099-12-31T23:59:59.000Z",
         identity: { id: USER_ID, email: "ada@example.test" },

@@ -301,7 +301,7 @@ test("one recurring meeting and conference retain the same actors through organi
         response.request().postDataJSON()?.badgeId === fixture.consenting.badgeId,
     );
     await door.getByLabel("Badge code", { exact: true }).fill(fixture.consenting.badgeId);
-    await door.getByRole("button", { name: "Check registration", exact: true }).click();
+    await door.getByRole("button", { name: "Admission decision", exact: true }).click();
     const admitted = await receivingAdmission;
     expect(admitted.status()).toBe(200);
     const admission = enrolledEventScanRequestSchema.parse(admitted.request().postDataJSON());
@@ -474,7 +474,7 @@ test("one recurring meeting and conference retain the same actors through organi
     expect(reportCsv.status()).toBe(200);
     expect(await reportCsv.text()).toContain(fixture.consenting.userId);
     await staff.goto(`/portal/#/groups/${event.ownerGroupId}/events/${event.id}/attendance`);
-    await expect(staff.getByRole("heading", { name: "Observed attendance", exact: true })).toBeVisible();
+    await expect(staff.getByRole("heading", { name: "Attendance summary", exact: true })).toBeVisible();
     const correctedAttendance = await correctPilotAttendance(
       staff,
       door,
@@ -484,12 +484,13 @@ test("one recurring meeting and conference retain the same actors through organi
       info,
     );
     expect(correctedAttendance.original.userId).toBe(fixture.consenting.userId);
-    const synchronization = staff.getByRole("region", { name: "Scanner synchronization", exact: true });
+    await staff.goto(`/portal/#/groups/${event.ownerGroupId}/events/${event.id}/attendance/diagnostics`);
+    const synchronization = staff.getByRole("region", { name: "Attendance diagnostics", exact: true });
     await expect(synchronization.getByText("Uploads accounted for", { exact: true })).toBeVisible();
+    await expect(synchronization).toContainText("Reconciliation covers the entire event.");
     await expect(synchronization).toContainText(
-      "All enrolled scanner sessions and offline admission grants have closed with their uploads accounted for.",
+      "These records do not establish complete reporting or presence duration.",
     );
-    await expect(synchronization).toContainText("Report completeness and presence duration are not established.");
     await capturePilot(staff, info, "pilot-attributable-attendance-report");
     const profileSaving = speakerPage.waitForResponse(
       (response) =>

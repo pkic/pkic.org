@@ -1,3 +1,5 @@
+import { AgendaCalendarLinks } from "../../../assets/ts/site/AgendaCalendarLinks";
+import { approvedEventAgendaForRoute, publishedAgendaCalendarLinks } from "./site-published-event-agendas";
 import { agendaContent } from "../../../assets/shared/public-agenda-content";
 import { eventParticipationLink } from "../../../assets/shared/event-participation-link";
 import { agendaDisplayRoles } from "../../../assets/shared/event-agenda-display-roles";
@@ -31,25 +33,25 @@ export async function renderContentAgenda(
   context: ContentComponentContext,
   markdownHtml: (value: unknown) => Promise<string>,
 ): Promise<string> {
-  const approved = context.publication?.eventAgendas?.[context.eventSlug ?? ""];
-  if (approved) {
+  const approved = approvedEventAgendaForRoute(context.publication, context.route, context.eventRoute);
+  if (approved && context.publication) {
     const content = agendaContent(approved);
     return await render(
-      <ContentAgenda
-        days={content.days}
-        speakers={content.speakers}
-        timeZone={approved.timeZone}
-        legacySpeakerFragments={content.legacySpeakerFragments}
-        fragmentNavigation
-      />,
+      <>
+        <AgendaCalendarLinks links={publishedAgendaCalendarLinks(context.publication, approved)} />
+        <ContentAgenda
+          days={content.days}
+          speakers={content.speakers}
+          timeZone={approved.timeZone}
+          legacySpeakerFragments={content.legacySpeakerFragments}
+          fragmentNavigation
+        />
+      </>,
     );
   }
   if (!context.eventData?.agenda) return "";
   const eventAssets = context.eventAssetUrls ?? context.assetUrls;
-  const program = applyApprovedAgenda(
-    publishedConferenceProgram(context.eventData, eventAssets),
-    context.publication?.eventAgendas?.[context.eventSlug ?? ""],
-  );
+  const program = applyApprovedAgenda(publishedConferenceProgram(context.eventData, eventAssets), approved);
   const archives: Map<string, ReturnType<typeof publishedSessionHistory>[number]> = context.publication
     ? new Map(
         publishedSessionHistory(context.publication).map((item) => [
@@ -64,12 +66,8 @@ export async function renderContentAgenda(
     Array<{ time: string; sessions?: Array<{ title?: string | null }> }>
   >;
   const legacySpeakerFragments = Object.keys(rawAgenda).length > 1 ? authoredAgendaSpeakerFragments : [];
-  const approvedIds = new Set(
-    context.publication?.eventAgendas?.[context.eventSlug ?? ""]?.occurrences.map((item) => item.id) ?? [],
-  );
-  const approvedSessions = new Map(
-    context.publication?.eventAgendas?.[context.eventSlug ?? ""]?.occurrences.map((item) => [item.id, item]) ?? [],
-  );
+  const approvedIds = new Set(approved?.occurrences.map((item) => item.id) ?? []);
+  const approvedSessions = new Map(approved?.occurrences.map((item) => [item.id, item]) ?? []);
   const timeZone = program.timezone;
   const rawLocations = program.locations;
   const locationOrder = Array.isArray(rawLocations.order) ? rawLocations.order.map(String) : [];
@@ -104,9 +102,7 @@ export async function renderContentAgenda(
           legacyFragments: authoredAgendaDayFragments(date).filter(
             (fragment) => fragment.kind === "day" || Object.keys(rawAgenda).length > 1,
           ),
-          staffing: context.publication?.eventAgendas?.[context.eventSlug ?? ""]
-            ? agendaDisplayRoles(context.publication.eventAgendas[context.eventSlug ?? ""], date, true)
-            : [],
+          staffing: approved ? agendaDisplayRoles(approved, date, true) : [],
           locations: roomIds.map((id) => ({ id, label: conferenceLocation(program, date, id).name })),
           slots: await Promise.all(
             slots.map(async (slot, slotIndex) => {

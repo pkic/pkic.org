@@ -1,7 +1,7 @@
 import { runAgendaAction } from "./helpers/agenda-actions";
 import { runRowAction } from "./helpers/data-table";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { expect, test, type BrowserContext, type Locator } from "@playwright/test";
+import { expect, test, type BrowserContext } from "@playwright/test";
 import ICAL from "ical.js";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { agendaSnapshotSchema } from "../../assets/shared/schemas/event-agenda";
@@ -10,6 +10,7 @@ import { startPublicAgendaOutage } from "./helpers/public-agenda-outage";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { conferenceProgramSchema } from "../../assets/shared/schemas/conference-program";
 import { eventFormsResponseSchema } from "../../assets/shared/schemas/forms";
+import { attendancePeopleExportQuerySchema } from "../../assets/shared/schemas/event-attendance-exports";
 import { agendaOccurrenceRoomIds } from "../../assets/shared/event-agenda-rooms";
 import { publicSessionCredits } from "../../assets/shared/session-public-credits";
 import { publishedSessionRoute } from "../../assets/shared/session-public-route";
@@ -18,34 +19,11 @@ import { dateTimeLocalToIso } from "../../assets/shared/timezone";
 import { eventDetailResponseSchema } from "../../assets/shared/schemas/event-management";
 import { groupEventCreateSchema, groupEventDetailResponseSchema } from "../../assets/shared/schemas/group-events";
 
+import { commitScheduleCommand, expectUnclippedAgendaLink } from "./helpers/agenda-placement-interactions";
+
 const artifacts = process.env.AGENDA_SCREENSHOT_DIR ?? "test-results/agenda-progress";
 
 test.use({ actionTimeout: 20_000 });
-
-async function expectUnclippedLink(link: Locator) {
-  const geometry = await link.evaluate((element) => {
-    const rect = element.getBoundingClientRect();
-    const clipped: string[] = [];
-    for (let parent = element.parentElement; parent; parent = parent.parentElement) {
-      const bounds = parent.getBoundingClientRect(),
-        style = getComputedStyle(parent);
-      const left = bounds.left + parent.clientLeft,
-        top = bounds.top + parent.clientTop;
-      const clipX = parent.matches("article") || style.overflowX !== "visible";
-      const clipY = parent.matches("article") || style.overflowY !== "visible";
-      if (clipX && (rect.left < left - 1 || rect.right > left + parent.clientWidth + 1))
-        clipped.push(`${parent.className}:x`);
-      if (clipY && (rect.top < top - 1 || rect.bottom > top + parent.clientHeight + 1))
-        clipped.push(`${parent.className}:y`);
-    }
-    if (!clipped.length) window.scrollBy({ top: rect.top + rect.height / 2 - innerHeight / 2, behavior: "instant" });
-    const visible = element.getBoundingClientRect(),
-      hit = document.elementFromPoint(visible.left + visible.width / 2, visible.top + visible.height / 2);
-    return { clipped, hit: hit !== null && element.contains(hit) };
-  });
-  expect(geometry.clipped).toEqual([]);
-  expect(geometry.hit).toBe(true);
-}
 
 test("organizers build the shared agenda and browse a compact session table on desktop and phone", async ({
   page,
@@ -53,7 +31,7 @@ test("organizers build the shared agenda and browse a compact session table on d
 }, testInfo) => {
   test.setTimeout(300_000);
   await mkdir(artifacts, { recursive: true });
-  await signInAsE2eStaff(page, e2eAdminEmail("default"));
+  await signInAsE2eStaff(page, e2eAdminEmail("portal-agenda-platform"));
   const ownerResponse = await page.request.get("/api/v1/events/pqc-conference-amsterdam-nl");
   expect(ownerResponse.status(), await ownerResponse.text()).toBe(200);
   const ownerEvent = eventDetailResponseSchema.parse(await ownerResponse.json()).event;
@@ -107,17 +85,19 @@ test("organizers build the shared agenda and browse a compact session table on d
     ["Deploying trust at scale", "2026-12-02T09:00", "2026-12-02T10:00", "Main auditorium", "preference"],
   ];
   for (const [title, start, end, room, policy] of sessions) {
-    await page.getByRole("button", { name: "New session", exact: true }).click();
-    await page.getByRole("textbox", { name: /^Session title/ }).fill(title);
-    await page.getByLabel("Starts", { exact: true }).fill(start);
-    await page.getByLabel("Ends", { exact: true }).fill(end);
-    await page.getByLabel("Location", { exact: true }).selectOption({ label: room });
-    await page.getByLabel("Admission", { exact: true }).selectOption(policy);
-    await page
+    await runAgendaAction(page, "New session");
+    const editor = page.getByRole("dialog", { name: "New session", exact: true });
+    await editor.getByRole("textbox", { name: /^Session title/ }).fill(title);
+    await editor.getByLabel("Starts", { exact: true }).fill(start);
+    await editor.getByLabel("Ends", { exact: true }).fill(end);
+    await editor.getByLabel("Locations", { exact: true }).selectOption({ label: room });
+    await editor.getByRole("tab", { name: "Optional / settings", exact: true }).click();
+    await editor.getByLabel("Admission", { exact: true }).selectOption(policy);
+    await editor
       .getByLabel("Description", { exact: true })
       .fill("Explore practical approaches with the PKI community, with time for discussion and questions.");
-    await page.getByRole("button", { name: "Save session", exact: true }).click();
-    await expect(page.getByRole("textbox", { name: /^Session title/ })).toHaveCount(0);
+    await editor.getByRole("button", { name: "Save session", exact: true }).click();
+    await expect(editor).toBeHidden();
   }
   await expect(page.getByText(sessions[0][0], { exact: true }).first()).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, 0));
@@ -125,18 +105,23 @@ test("organizers build the shared agenda and browse a compact session table on d
   await page.evaluate(() => document.documentElement.setAttribute("data-theme", "dark"));
   await page.screenshot({ path: `${artifacts}/agenda-desktop-dark.png`, fullPage: true });
   await page.evaluate(() => document.documentElement.setAttribute("data-theme", "light"));
-  await page.getByRole("tab", { name: "All sessions", exact: true }).click();
+  await page.getByRole("tab", { name: "Schedule", exact: true }).click();
   await expect(page.getByRole("row").filter({ hasText: sessions[4][0] })).toBeVisible();
   await expect(page.getByText(/Draft revision/)).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Approve for publication", exact: true })).toHaveCount(0);
-  const sessionToolbar = page.getByRole("toolbar", { name: "Sessions across all days controls", exact: true });
+  const sessionToolbar = page.getByRole("toolbar", { name: "Event sessions controls", exact: true });
   await expect(sessionToolbar.getByRole("button", { name: "Actions for Agenda", exact: true })).toHaveCount(0);
   await expect(
     page
-      .getByRole("region", { name: "Agenda workspace", exact: true })
+      .getByRole("region", { name: `Agenda — ${createdEvent.name}`, exact: true })
       .getByRole("button", { name: "Actions for Agenda", exact: true }),
   ).toBeVisible();
   await expect(page.getByRole("button", { name: "Actions for Agenda", exact: true })).toHaveCount(1);
+  await expect(
+    page
+      .getByRole("tabpanel", { name: "Schedule", exact: true })
+      .getByRole("button", { name: "Actions for Agenda", exact: true }),
+  ).toHaveCount(0);
   await expect(sessionToolbar.getByRole("button", { name: "New session", exact: true })).toBeVisible();
   await page.screenshot({ path: `${artifacts}/sessions-native-toolbar-desktop.png`, fullPage: true });
   await runAgendaAction(page, "Review for publication");
@@ -174,17 +159,18 @@ test("organizers build the shared agenda and browse a compact session table on d
   await page.getByRole("button", { name: "Move selected sessions", exact: true }).click();
   await page.locator('[name="bulkMode"]').selectOption("day");
   await page.getByLabel(/^New day/).fill("2026-12-03");
-  await page.getByRole("button", { name: "Review selected sessions", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Apply reviewed schedule", exact: true })).toBeEnabled();
-  const reviewedBulk = agendaSnapshotSchema.parse(
-    await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json(),
-  );
-  expect(reviewedBulk).toEqual(beforeBulk);
-  await page.screenshot({ path: `${artifacts}/sessions-bulk-review-phone.png`, fullPage: true });
-  await page.getByRole("button", { name: "Apply reviewed schedule", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toHaveCount(0);
-  const afterBulk = agendaSnapshotSchema.parse(await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json());
+  const afterBulk = await commitScheduleCommand(page, slug, beforeBulk, async () => {
+    await page.getByRole("button", { name: "Review selected sessions", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Apply reviewed schedule", exact: true })).toBeEnabled();
+    const reviewedBulk = agendaSnapshotSchema.parse(
+      await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json(),
+    );
+    expect(reviewedBulk).toEqual(beforeBulk);
+    await page.screenshot({ path: `${artifacts}/sessions-bulk-review-phone.png`, fullPage: true });
+    await page.getByRole("button", { name: "Apply reviewed schedule", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toHaveCount(0);
+  });
   expect(afterBulk.revision).toBe(beforeBulk.revision + 1);
   for (const title of [sessions[0][0], sessions[2][0]]) {
     const original = beforeBulk.occurrences.find((row) => row.title === title)!;
@@ -195,26 +181,19 @@ test("organizers build the shared agenda and browse a compact session table on d
     );
   }
   await expect(page.getByText("2 of 5 selected", { exact: true })).toHaveCount(0);
-  await runAgendaAction(page, "Undo last session edit");
-  await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Apply reviewed schedule", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toHaveCount(0);
-  const undoneBulk = agendaSnapshotSchema.parse(await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json());
+  const undoneBulk = await commitScheduleCommand(page, slug, afterBulk, () =>
+    runAgendaAction(page, "Undo last session edit"),
+  );
   expect(undoneBulk.revision).toBe(beforeBulk.revision + 2);
   expect(undoneBulk.occurrences).toEqual(beforeBulk.occurrences);
-  await runRowAction(page, page.getByRole("row").filter({ hasText: sessions[0][0] }), "Unschedule session");
-  await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toBeVisible();
-  await expect(page.getByRole("cell", { name: /^Unscheduled Order/ }).first()).toBeVisible();
-  const beforeUnschedule = agendaSnapshotSchema.parse(
-    await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json(),
+  const beforeUnschedule = undoneBulk;
+  const unscheduled = await commitScheduleCommand(page, slug, beforeUnschedule, () =>
+    runRowAction(page, page.getByRole("row").filter({ hasText: sessions[0][0] }), "Unschedule session"),
   );
-  expect(beforeUnschedule).toEqual(undoneBulk);
-  await page.screenshot({ path: `${artifacts}/session-unschedule-review-phone.png`, fullPage: true });
-  await page.getByRole("button", { name: "Apply reviewed schedule", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toHaveCount(0);
-  const unscheduled = agendaSnapshotSchema.parse(
-    await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json(),
-  );
+  await expect(page.getByRole("row").filter({ hasText: sessions[0][0] })).toHaveCount(0);
+  await page.getByRole("button", { name: "Clear the Conflicts filter", exact: true }).click();
+  await expect(page.getByRole("row").filter({ hasText: sessions[0][0] })).toContainText("Unscheduled");
+  await page.screenshot({ path: `${artifacts}/session-unscheduled-phone.png`, fullPage: true });
   const originalOpening = beforeUnschedule.occurrences.find((row) => row.title === sessions[0][0])!;
   expect(unscheduled.occurrences.find((row) => row.id === originalOpening.id)).toEqual({
     ...originalOpening,
@@ -222,24 +201,21 @@ test("organizers build the shared agenda and browse a compact session table on d
     endAt: null,
   });
   expect(unscheduled.revision).toBe(beforeUnschedule.revision + 1);
-  await runAgendaAction(page, "Undo last session edit");
-  await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toBeVisible();
-  await page.getByRole("button", { name: "Apply reviewed schedule", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toHaveCount(0);
-  const restored = agendaSnapshotSchema.parse(await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json());
+  const restored = await commitScheduleCommand(page, slug, unscheduled, () =>
+    runAgendaAction(page, "Undo last session edit"),
+  );
   expect(restored.occurrences).toEqual(beforeUnschedule.occurrences);
   expect(restored.revision).toBe(beforeUnschedule.revision + 2);
   await page.setViewportSize({ width: 1280, height: 900 });
   await runRowAction(page, page.getByRole("row").filter({ hasText: sessions[0][0] }), "Select for move");
   await expect(page.getByRole("button", { name: /Move selected session at/ }).first()).toBeVisible();
-  await page.getByRole("tab", { name: "All sessions", exact: true }).click();
+  await page.getByRole("tab", { name: "Schedule", exact: true }).click();
   await page.getByRole("tab", { name: "Agenda", exact: true }).click();
   await expect(page.getByRole("button", { name: /Move selected session at/ }).first()).toBeVisible();
   await page.getByRole("button", { name: "Cancel selection", exact: true }).click();
   await page.getByRole("tab", { name: "Block roles", exact: true }).click();
   const blockRoles = page.getByRole("tabpanel", { name: "Block roles", exact: true });
-  await blockRoles.getByRole("button", { name: "Actions for Event staffing", exact: true }).click();
-  const newBlock = page.getByRole("menuitem", { name: "New block", exact: true });
+  const newBlock = blockRoles.getByRole("button", { name: "New block", exact: true });
   await expect(newBlock).toBeVisible();
   await expect(newBlock).toBeEnabled();
   await page.keyboard.press("Escape");
@@ -258,24 +234,23 @@ test("organizers build the shared agenda and browse a compact session table on d
     page.getByRole("article").filter({ hasText: sessions[0][0] }).first(),
     "Move to day / location",
   );
-  await page.getByLabel(/^New day and start time/).fill("2026-12-01T12:00");
-  await page.getByRole("button", { name: "Review move", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Apply reviewed schedule", exact: true })).toBeEnabled();
-  await page.screenshot({ path: `${artifacts}/agenda-phone-schedule-review.png`, fullPage: true });
-  const stillUnchangedResponse = await page.request.get(`/api/v1/events/${slug}/agenda`);
-  const stillUnchanged = agendaSnapshotSchema.parse(await stillUnchangedResponse.json());
-  expect(stillUnchanged.revision).toBe(beforeMove.revision);
-  expect(stillUnchanged.occurrences.find((item) => item.id === movedSession.id)?.startAt).toBe(movedSession.startAt);
-  await page.getByRole("button", { name: "Apply reviewed schedule", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toHaveCount(0);
-  const afterMoveResponse = await page.request.get(`/api/v1/events/${slug}/agenda`);
-  const afterMove = agendaSnapshotSchema.parse(await afterMoveResponse.json());
+  const moveDialog = page.getByRole("dialog", { name: `Move ${movedSession.title}`, exact: true });
+  await moveDialog.getByLabel(/^New day and start time/).fill("2026-12-01T12:00");
+  await expect(moveDialog.getByRole("button", { name: "Move session", exact: true })).toBeEnabled();
+  await page.screenshot({ path: `${artifacts}/agenda-phone-move-confirmation.png`, fullPage: true });
+  const stillUnchanged = agendaSnapshotSchema.parse(
+    await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json(),
+  );
+  expect(stillUnchanged).toEqual(beforeMove);
+  const afterMove = await commitScheduleCommand(page, slug, beforeMove, () =>
+    moveDialog.getByRole("button", { name: "Move session", exact: true }).click(),
+  );
+  await expect(moveDialog).toBeHidden();
   expect(afterMove.revision).toBe(beforeMove.revision + 1);
   expect(afterMove.occurrences.find((item) => item.id === movedSession.id)?.startAt).toBe("2026-12-01T11:00:00.000Z");
   await page.screenshot({ path: `${artifacts}/agenda-phone.png`, fullPage: true });
-  const opening = page.getByRole("article").filter({ hasText: sessions[0][0] }).first();
-  await runRowAction(page, opening, "Select for move");
+  await page.getByRole("tab", { name: "Schedule", exact: true }).click();
+  await runRowAction(page, page.getByRole("row").filter({ hasText: sessions[0][0] }), "Select for move");
   await expect(
     page.getByRole("button", { name: /Move selected session at.*Across all locations/ }).first(),
   ).toBeVisible();
@@ -390,9 +365,9 @@ test("organizers build the shared agenda and browse a compact session table on d
         await expect(article.locator(`a[href="${url}"]`).first()).toBeVisible();
       }
       // Timeline cards can clip abstracts; their native link must work without the JS dialog.
-      const sessionLink = article.getByRole("link", { name: "Session page", exact: true });
+      const sessionLink = article.getByRole("link", { name: `Open session details: ${occurrence.title}`, exact: true });
       await expect(sessionLink).toBeVisible();
-      await expectUnclippedLink(sessionLink);
+      await expectUnclippedAgendaLink(sessionLink);
       const sessionPath = publishedSessionRoute(slug, occurrence)!;
       await expect(sessionLink).toHaveAttribute("href", sessionPath);
       const ownedSessionPath = `${sessionPath}index.html`.slice(1);
@@ -528,7 +503,9 @@ test("organizers build the shared agenda and browse a compact session table on d
       const description = article.locator(".pk-content-agenda__description");
       await expect(description).toBeVisible();
       await expect(description).toHaveText(occurrence.description);
-      await expectUnclippedLink(article.getByRole("link", { name: "Session page", exact: true }));
+      await expectUnclippedAgendaLink(
+        article.getByRole("link", { name: `Open session details: ${occurrence.title}`, exact: true }),
+      );
     }
     await publicPage.evaluate(() => window.scrollTo(0, 0));
     await expect.poll(() => publicPage.evaluate(() => window.scrollY)).toBe(0);
@@ -570,8 +547,13 @@ test("organizers build the shared agenda and browse a compact session table on d
   // The fixture activates a new built release; load its current portal entry too.
   await page.reload();
   await page.goto(`/portal/#/events/${slug}/attendance`);
-  await expect(page.getByRole("heading", { name: "Event and day attendance", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Attendance summary", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "View reconciliation diagnostics", exact: true }).click();
   await expect(page.getByText(/Uploads accounted for/)).toBeVisible();
+  await page
+    .getByRole("navigation", { name: "Attendance sections", exact: true })
+    .getByRole("link", { name: "Summary", exact: true })
+    .click();
   const dayReport = page.waitForResponse(
     (result) =>
       result.url().includes("/attendance/summary?") &&
@@ -591,7 +573,15 @@ test("organizers build the shared agenda and browse a compact session table on d
   expect(exported).toContain("2026-12-01");
   expect(exported).toContain("not_established");
   expect(exported).toContain("contactRetention.state");
-  await expect(page.getByRole("link", { name: "Export observed people", exact: true })).toBeVisible();
+  await page.getByRole("link", { name: "Observed people", exact: true }).click();
+  const peopleExport = page.getByRole("link", { name: "Export observed people", exact: true });
+  await expect(peopleExport).toBeVisible();
+  const peopleUrl = new URL((await peopleExport.getAttribute("href"))!, page.url());
+  expect(peopleUrl.pathname).toBe(`/api/v1/events/${slug}/attendance/people/exports`);
+  expect(attendancePeopleExportQuerySchema.parse(Object.fromEntries(peopleUrl.searchParams))).toMatchObject({
+    dayDate: "2026-12-01",
+    occurrenceId: originalOpening.id,
+  });
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: `${artifacts}/attendance-phone.png`, fullPage: true });
   await page.setViewportSize({ width: 1440, height: 1000 });

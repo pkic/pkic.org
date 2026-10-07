@@ -1,10 +1,11 @@
 import { readConsentValues } from "../../shared/widgets/consents";
-import { useRef, useState } from "preact/hooks";
+import { useCallback, useRef, useState } from "preact/hooks";
 import {
-  speakerProfilePatchSchema,
+  speakerSelfProfilePatchSchema,
   speakerParticipationPatchSchema,
 } from "../../../shared/schemas/proposal-management";
 import {
+  speakerProfileUpdateResponseSchema,
   speakerParticipationResponseSchema,
   speakerPresentationUploadResponseSchema,
   type SpeakerSelfServiceReadResponse,
@@ -14,7 +15,7 @@ import { headshotUploadResponseSchema } from "../../../shared/schemas/registrati
 import { isProposalSpeakerRosterEditableStatus } from "../../../shared/schemas/proposal-status";
 import { proposalSpeakerAccessPath } from "../../../shared/proposal-access-paths";
 import { presentationUploadRequest, DEFAULT_PRESENTATION_TERMS } from "../../../shared/presentation-upload";
-import type { EventFormsResponse } from "../../shared/types";
+import type { RequiredTerm } from "../../../shared/schemas/forms";
 import { useContractForm } from "../../hooks/useContractForm";
 import { patchJson, requestJson } from "../../shared/api-client";
 import { formatDateTime } from "../../shared/ui";
@@ -29,23 +30,27 @@ import { Button } from "../../ui/Button";
 import { Field } from "../../ui/Field";
 import { TextInput } from "../../ui/TextControl";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
+import { SpeakerParticipationIdentity } from "../SpeakerParticipationIdentity";
+import type { ProposalEntrySelection } from "../useProposalEntryIdentity";
+import {
+  eventProposalProofIdentityPatchSchema,
+  eventProposalProofIdentityPatchResponseSchema,
+} from "../../../shared/schemas/event-proposal-proof";
 
 export function ParticipantSpeaker({
   data,
-  forms,
+  eventSlug,
+  terms,
   reload,
 }: {
   data: SpeakerSelfServiceReadResponse;
-  forms: EventFormsResponse;
+  eventSlug: string;
+  terms: RequiredTerm[];
   reload: () => Promise<void>;
 }) {
   const access = { resourceId: data.proposal.id };
   const path = (...segments: string[]) => proposalSpeakerAccessPath("/api/v1", access, ...segments);
   const [draft, setDraft] = useState({
-    firstName: data.profile.firstName ?? "",
-    lastName: data.profile.lastName ?? "",
-    organizationName: data.profile.organizationName ?? "",
-    jobTitle: data.profile.jobTitle ?? "",
     biography: data.profile.biography ?? "",
     links: data.profile.links,
   });
@@ -54,7 +59,20 @@ export function ParticipantSpeaker({
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
   const upload = useRef<HTMLInputElement>(null);
-  const form = useContractForm(speakerProfilePatchSchema, draft);
+  const [entry, setEntry] = useState<ProposalEntrySelection | null>(null);
+  const [identityChanged, setIdentityChanged] = useState(data.profile.actingIdentitySelection === "unrecorded");
+  const onEditing = useCallback(() => setIdentityChanged(true), []);
+  const onIdentityChange = useCallback((value: ProposalEntrySelection | null) => {
+    setEntry(value);
+  }, []);
+  const profileRoot = useRef<HTMLFormElement>(null);
+  const acceptedConsents = () =>
+    data.speaker.status === "invited" ? consents : readConsentValues(profileRoot.current!);
+  const termsAccepted = terms.every(
+    (term) =>
+      !term.required || consents.some((value) => value.termKey === term.termKey && value.version === term.version),
+  );
+  const form = useContractForm(speakerSelfProfilePatchSchema, draft);
   const participation = useContractForm(speakerParticipationPatchSchema, { status: "confirmed", consents });
   const editable = data.speaker.status !== "declined" && isProposalSpeakerRosterEditableStatus(data.proposal.status);
   async function perform(action: () => Promise<unknown>, message: string) {
@@ -78,7 +96,7 @@ export function ParticipantSpeaker({
     <div class="pk-stack">
       {error && <Alert tone="danger">{error}</Alert>}
       {message && <Alert tone="ok">{message}</Alert>}
-      <Panel>
+      <Panel key={`${data.proposal.id}:participation`}>
         <PanelHeader title="Speaker participation" />
         <PanelBody>
           <div class="pk-stack">
@@ -111,7 +129,7 @@ export function ParticipantSpeaker({
                 }}
               >
                 <fieldset class="pk-fieldset pk-stack" disabled={busy}>
-                  {forms.requiredTerms.map((term) => (
+                  {terms.map((term) => (
                     <ConsentCard term={term} key={term.termKey} />
                   ))}
                   <Button type="submit" loading={busy}>
@@ -139,7 +157,7 @@ export function ParticipantSpeaker({
           </div>
         </PanelBody>
       </Panel>
-      <Panel>
+      <Panel key={`${data.proposal.id}:profile`}>
         <PanelHeader title="Speaker profile" />
         <PanelBody>
           <div class="pk-stack">
@@ -163,43 +181,78 @@ export function ParticipantSpeaker({
               />
             )}
             <form
+              ref={profileRoot}
               noValidate
               {...form.handlers}
               onSubmit={(event) => {
                 event.preventDefault();
+                if (identityChanged && !entry) {
+                  setError("Confirm your identity and email before saving your profile.");
+                  return;
+                }
                 const checked = form.submit();
                 if (!checked.data) {
                   setError(checked.message);
                   return;
                 }
-                void perform(
-                  () => patchJson(path("profile"), checked.data, successResponseSchema),
-                  "Speaker profile saved.",
-                );
+                void perform(async () => {
+                  await patchJson(
+                    path("profile"),
+                    speakerSelfProfilePatchSchema.parse({
+                      ...checked.data,
+                      ...(identityChanged && entry
+                        ? {
+                            actingIdentityId: entry.actingIdentityId,
+                            continuationToken: entry.continuationToken,
+                            unaffiliatedAttestation: entry.unaffiliatedAttestation,
+                            consents: acceptedConsents(),
+                            ...entry.missingDetails,
+                          }
+                        : {}),
+                    }),
+                    speakerProfileUpdateResponseSchema,
+                  );
+                  const fragment = new URL(location.hash.slice(1), location.origin);
+                  if (fragment.searchParams.has("verify")) {
+                    fragment.searchParams.delete("verify");
+                    history.replaceState(
+                      {},
+                      "",
+                      `${location.pathname}${location.search}#${fragment.pathname}${fragment.search}`,
+                    );
+                  }
+                  setIdentityChanged(false);
+                }, "Speaker profile saved.");
               }}
             >
               <fieldset class="pk-fieldset pk-stack" disabled={busy || !editable}>
-                <div class="pk-grid">
-                  {(
-                    [
-                      ["firstName", "First name"],
-                      ["lastName", "Last name"],
-                      ["organizationName", "Organization"],
-                      ["jobTitle", "Job title"],
-                    ] as const
-                  ).map(([name, label]) => (
-                    <Field key={name} label={label} {...form.of(name)}>
-                      {(control) => (
-                        <TextInput
-                          {...control}
-                          name={name}
-                          value={draft[name]}
-                          onInput={(event) => setDraft({ ...draft, [name]: event.currentTarget.value })}
-                        />
-                      )}
-                    </Field>
-                  ))}
-                </div>
+                <SpeakerParticipationIdentity
+                  key={data.profile.actingIdentitySelectedAt ?? "unrecorded"}
+                  data={data}
+                  eventSlug={eventSlug}
+                  speakerProposalId={data.proposal.id}
+                  terms={terms}
+                  termsAccepted={termsAccepted}
+                  termsReady
+                  consents={acceptedConsents}
+                  onChange={onIdentityChange}
+                  onEditing={onEditing}
+                  savePersonalDetails={async (names) => {
+                    const saved = await patchJson(
+                      path("profile"),
+                      speakerSelfProfilePatchSchema.parse(names),
+                      speakerProfileUpdateResponseSchema,
+                    );
+                    return { ...saved.profile, bio: saved.profile.biography };
+                  }}
+                  saveRepresentation={(identityId, role) =>
+                    patchJson(
+                      `/api/v1/events/${encodeURIComponent(eventSlug)}/proposals/proof/identities/${encodeURIComponent(identityId)}`,
+                      eventProposalProofIdentityPatchSchema.parse({ ...role, speakerProposalId: data.proposal.id }),
+                      eventProposalProofIdentityPatchResponseSchema,
+                    )
+                  }
+                />
                 <Field label="Biography" {...form.of("biography")}>
                   {(control) => (
                     <MarkdownEditor
@@ -229,7 +282,7 @@ export function ParticipantSpeaker({
         </PanelBody>
       </Panel>
       {data.proposal.status === "accepted" && data.speaker.status === "confirmed" && (
-        <Panel>
+        <Panel key={`${data.proposal.id}:presentation`}>
           <PanelHeader title="Presentation" />
           <PanelBody>
             <div class="pk-stack">

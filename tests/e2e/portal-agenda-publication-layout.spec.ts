@@ -27,8 +27,8 @@ test("publication is an ellipsis action opening a dedicated review, with no acti
   });
   expect(created.status(), await created.text()).toBe(200);
   await page.goto("/portal/#/events/pqc-conference-amsterdam-nl/agenda");
-  await page.getByRole("tab", { name: "All sessions", exact: true }).click();
-  const controls = page.getByRole("toolbar", { name: "Sessions across all days controls", exact: true });
+  await page.getByRole("tab", { name: "Schedule", exact: true }).click();
+  const controls = page.getByRole("toolbar", { name: "Event sessions controls", exact: true });
   const menu = page.getByRole("button", { name: "Actions for Agenda", exact: true });
   const create = controls.getByRole("button", { name: "New session", exact: true });
   await expect(page.getByText(title, { exact: true })).toBeVisible();
@@ -37,12 +37,12 @@ test("publication is an ellipsis action opening a dedicated review, with no acti
   await expect(menu).toBeVisible();
   await expect(controls.getByRole("button", { name: "Actions for Agenda", exact: true })).toHaveCount(0);
   await expect(create).toBeVisible();
-  await expect(page.getByRole("tab", { name: "All sessions", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("tab", { name: "Schedule", exact: true })).toHaveAttribute("aria-selected", "true");
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: `${artifacts}/sessions-final-desktop.png`, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(menu).toBeVisible();
-  const sessions = page.getByRole("table", { name: "Sessions across all days", exact: true });
+  const sessions = page.getByRole("table", { name: "Event sessions", exact: true });
   const head = sessions.locator("thead");
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
   const geometry = await head.evaluate((element) => {

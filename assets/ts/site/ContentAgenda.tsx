@@ -12,7 +12,12 @@ import { AgendaSession, AgendaSpeaker, ClockIcon, type AgendaSessionEditor } fro
 import { agendaRows } from "./agenda-layout";
 import { agendaFragmentRegistry } from "./agenda-fragments";
 import { legacyAgendaFragmentMatchesPlacement } from "../../shared/legacy-agenda-fragments";
-import type { ContentAgendaDay, ContentAgendaSpeaker, ContentAgendaSpeakerFragment } from "../../shared/site-agenda";
+import type {
+  ContentAgendaDay,
+  ContentAgendaLocation,
+  ContentAgendaSpeaker,
+  ContentAgendaSpeakerFragment,
+} from "../../shared/site-agenda";
 
 export function ContentAgenda({
   days,
@@ -29,6 +34,10 @@ export function ContentAgenda({
   fragmentNavigation?: boolean;
   legacySpeakerFragments?: readonly ContentAgendaSpeakerFragment[];
   editor?: {
+    toolbarControls?: ComponentChildren;
+    sidebar?: ComponentChildren;
+    roomHeader?: (location: ContentAgendaLocation) => ComponentChildren;
+    addLocation?: ComponentChildren;
     session: (id: string) => AgendaSessionEditor;
     dropTarget: (startsAt: string, roomId: string) => ComponentChildren;
   };
@@ -162,178 +171,231 @@ export function ContentAgenda({
             <path d="M2 6V2h4m4 0h4v4M2 10v4h4m4 0h4v-4" />
           </StrokeIcon>
         </Button>
+        {editor?.toolbarControls}
       </div>
-      {days.map((day) => (
-        <section
-          class="pk-content-agenda__day"
-          id={`agenda-day-${day.date}`}
-          role={editor ? undefined : "tabpanel"}
-          aria-label={editor ? `Agenda for ${day.date}` : undefined}
-          aria-labelledby={editor ? undefined : `agenda-tab-${day.date}`}
-          data-agenda-panel={day.date}
-          key={day.date}
-        >
-          {(day.legacyFragments ?? []).map(
-            (fragment) =>
-              fragments.takeAlias(fragment.anchor) && (
-                <span key={fragment.anchor} id={fragment.anchor} hidden data-agenda-fragment-panel={day.date} />
-              ),
-          )}
-          <div class="pk-content-agenda__filters" aria-label="Filter locations">
-            <button type="button" class="is-active" aria-pressed="true" data-agenda-location="all">
-              All locations
-            </button>
-            {day.locations.map((location, index) => (
-              <button
-                type="button"
-                aria-pressed="true"
-                aria-label={location.label}
-                class={`pk-content-agenda__location pk-content-agenda__location--${index % 7} is-active`}
-                data-agenda-location={location.id}
-                key={location.id}
-              >
-                {location.label}
+      <AgendaCalendarBody editor={Boolean(editor)} sidebar={editor?.sidebar}>
+        {days.map((day) => (
+          <section
+            class="pk-content-agenda__day"
+            id={`agenda-day-${day.date}`}
+            role="tabpanel"
+            aria-label={editor ? `Agenda for ${day.date}` : undefined}
+            aria-labelledby={editor ? undefined : `agenda-tab-${day.date}`}
+            data-agenda-panel={day.date}
+            key={day.date}
+          >
+            {(day.legacyFragments ?? []).map(
+              (fragment) =>
+                fragments.takeAlias(fragment.anchor) && (
+                  <span key={fragment.anchor} id={fragment.anchor} hidden data-agenda-fragment-panel={day.date} />
+                ),
+            )}
+            <div class="pk-content-agenda__filters" aria-label="Filter locations">
+              <button type="button" class="is-active" aria-pressed="true" data-agenda-location="all">
+                All locations
               </button>
-            ))}
-          </div>
-          {Boolean(day.staffing?.length) && (
-            <div class="pk-content-agenda__staffing" aria-label="Block hosts and question support">
-              {day.staffing!.map((block) => (
-                <section class="pk-content-agenda__staffing-block" key={block.id}>
-                  <strong>{block.name}</strong>
-                  <small>
-                    {formatTimeRangeInZone(block.startAt, block.endAt, timeZone)}
-                    {block.locationId
-                      ? ` · ${day.locations.find((room) => room.id === block.locationId)?.label ?? ""}`
-                      : ""}
-                    {block.track ? ` · Track: ${block.track}` : ""}
-                  </small>
-                  <ul>
-                    {block.duties.map((duty) => (
-                      <li key={`${duty.role}:${duty.displayName}`}>
-                        <span>
-                          {duty.role === "mc"
-                            ? "MC"
-                            : duty.role === "room_qa"
-                              ? "Room Q&A"
-                              : duty.role === "remote_qa"
-                                ? "Remote Q&A"
-                                : duty.role.replaceAll("_", " ")}
-                        </span>{" "}
-                        {duty.displayName}
-                      </li>
-                    ))}
-                  </ul>
-                </section>
+              {day.locations.map((location, index) => (
+                <button
+                  type="button"
+                  aria-pressed="true"
+                  aria-label={location.label}
+                  class={`pk-content-agenda__location pk-content-agenda__location--${index % 7} is-active`}
+                  data-agenda-location={location.id}
+                  key={location.id}
+                >
+                  {location.label}
+                </button>
               ))}
             </div>
-          )}
-          <table class="pk-content-agenda__timeline">
-            <caption class="pk-sr-only">
-              Agenda for {day.date}, times in {timeZone}
-            </caption>
-            <thead>
-              <tr>
-                <th scope="col">Time</th>
-                {day.locations.map((location) => (
-                  <th scope="col" key={location.id}>
-                    {location.label}
-                  </th>
+            {Boolean(day.staffing?.length) && (
+              <div class="pk-content-agenda__staffing" aria-label="Block hosts and question support">
+                {day.staffing!.map((block) => (
+                  <section class="pk-content-agenda__staffing-block" key={block.id}>
+                    <strong>{block.name}</strong>
+                    <small>
+                      {formatTimeRangeInZone(block.startAt, block.endAt, timeZone)}
+                      {block.locationId
+                        ? ` · ${day.locations.find((room) => room.id === block.locationId)?.label ?? ""}`
+                        : ""}
+                      {block.track ? ` · Track: ${block.track}` : ""}
+                    </small>
+                    <ul>
+                      {block.duties.map((duty) => (
+                        <li key={`${duty.role}:${duty.displayName}`}>
+                          <span>
+                            {duty.role === "mc"
+                              ? "MC"
+                              : duty.role === "room_qa"
+                                ? "Room Q&A"
+                                : duty.role === "remote_qa"
+                                  ? "Remote Q&A"
+                                  : duty.role.replaceAll("_", " ")}
+                          </span>{" "}
+                          {duty.displayName}
+                        </li>
+                      ))}
+                    </ul>
+                  </section>
                 ))}
-              </tr>
-            </thead>
-            <tbody>
-              {agendaRows(day, editor ? 80 : 0).map(({ slot, cells, height }, slotIndex) => (
-                <tr class="pk-content-agenda__slot" data-agenda-height={height} key={`${slot.time}-${slotIndex}`}>
-                  <th scope="row" class="pk-content-agenda__time">
-                    <div class="pk-content-agenda__clocks">
-                      <div class="pk-content-agenda__clock" aria-label="Event time" data-agenda-clock="venue">
-                        <time dateTime={slot.startsAt}>{slot.time}</time>
-                        <small title={timeZone}>Event · {venueLabel}</small>
-                      </div>
-                      {!editor && (
-                        <div
-                          class="pk-content-agenda__clock"
-                          aria-label="Your time"
-                          data-agenda-clock="browser"
-                          data-local-time-container
-                          data-event-time-zone={timeZone}
-                          hidden
-                        >
-                          <small data-agenda-browser-zone>Your time</small>
-                          <LocalTime value={slot.startsAt} format="time" />
-                          <small data-agenda-local-date hidden />
-                        </div>
-                      )}
-                    </div>
-                    {editor?.dropTarget(slot.startsAt, "")}
+              </div>
+            )}
+            {!editor && (
+              <div class="pk-content-agenda__zone-key">
+                <span title={timeZone}>Event time · {venueLabel}</span>
+                <span data-agenda-browser-zone hidden>
+                  Your time
+                </span>
+              </div>
+            )}
+            <table class="pk-content-agenda__timeline">
+              <caption class="pk-sr-only">
+                Agenda for {day.date}, times in {timeZone}
+              </caption>
+              <thead>
+                <tr>
+                  <th scope="col" class="pk-content-agenda__time-heading">
+                    Time
+                    <small title={timeZone}>Event · {venueLabel}</small>
+                    {!editor && (
+                      <small data-agenda-browser-zone hidden>
+                        Your time
+                      </small>
+                    )}
                   </th>
-                  {slot.sessions.length || editor || cells.some((cell) => cell === null) ? (
-                    cells.map(
-                      (cell, locationIndex) =>
-                        cell && (
-                          <td
-                            class="pk-content-agenda__cell"
-                            rowSpan={cell.rowSpan}
-                            data-agenda-cell={day.locations[locationIndex]?.id}
-                            key={locationIndex}
-                          >
-                            {editor?.dropTarget(slot.startsAt, day.locations[locationIndex]?.id ?? "")}
-                            {cell.sessions.map((session, sessionIndex) => (
-                              <AgendaSession
-                                session={session}
-                                legacyFragments={(session.legacyFragments ?? []).filter(
-                                  (fragment) =>
-                                    legacyAgendaFragmentMatchesPlacement(
-                                      fragment,
-                                      session,
-                                      day.locations[locationIndex]?.id,
-                                      locationIndex,
-                                    ) && fragments.takeAlias(fragment.anchor),
-                                )}
-                                publicAnchor={
-                                  locationIndex ===
-                                  Math.max(
-                                    0,
-                                    day.locations.findIndex((location) => location.id === session.locations[0]),
-                                  )
-                                    ? fragments.takePrimary(session.publicAnchor)
-                                    : undefined
-                                }
-                                editor={editor && session.id ? editor.session(session.id) : undefined}
-                                slot={slot}
-                                locations={day.locations}
-                                timeZone={timeZone}
-                                dialogId={`agenda-session-${day.date}-${slotIndex}-${locationIndex}-${sessionIndex}`}
-                                key={session.id ? `${session.id}:${day.locations[locationIndex]?.id}` : sessionIndex}
-                              />
-                            ))}
-                          </td>
-                        ),
-                    )
-                  ) : (
-                    <td
-                      class={slot.title || slot.durationMinutes ? undefined : "pk-content-agenda__cell"}
-                      colSpan={Math.max(1, day.locations.length)}
+                  {day.locations.map((location, index) => (
+                    <th
+                      scope="col"
+                      key={location.id}
+                      class={`pk-content-agenda__location pk-content-agenda__location--${index % 7}`}
                     >
-                      {slot.title || slot.durationMinutes ? (
-                        <div class="pk-content-agenda__break">
-                          <strong>{slot.title}</strong>
-                          {slot.durationMinutes ? (
-                            <span>
-                              <ClockIcon /> {slot.durationMinutes} min
-                            </span>
-                          ) : null}
-                        </div>
-                      ) : null}
-                    </td>
+                      {editor?.roomHeader ? editor.roomHeader(location) : location.label}
+                    </th>
+                  ))}
+                  {editor?.addLocation && (
+                    <th scope="col" class="pk-agenda-editor__add-room">
+                      {editor.addLocation}
+                    </th>
                   )}
                 </tr>
-              ))}
-            </tbody>
-          </table>
-        </section>
-      ))}
+              </thead>
+              <tbody>
+                {agendaRows(day, 0, Boolean(editor)).map(({ slot, cells, height }, slotIndex) => (
+                  <tr
+                    class="pk-content-agenda__slot"
+                    data-agenda-height={height}
+                    data-agenda-start={editor ? slot.startsAt : undefined}
+                    data-agenda-end={editor ? day.slots[slotIndex + 1]?.startsAt : undefined}
+                    data-agenda-major={
+                      editor &&
+                      (slotIndex === 0 ||
+                        slotIndex === day.slots.length - 1 ||
+                        Number(slot.time.slice(3, 5)) % 30 === 0)
+                        ? ""
+                        : undefined
+                    }
+                    key={`${slot.time}-${slotIndex}`}
+                  >
+                    <th scope="row" class="pk-content-agenda__time" aria-label={editor ? slot.time : undefined}>
+                      <div
+                        class={`pk-content-agenda__clocks${editor && slotIndex > 0 && slotIndex < day.slots.length - 1 && Number(slot.time.slice(3, 5)) % 30 !== 0 ? " pk-sr-only" : ""}`}
+                      >
+                        <div class="pk-content-agenda__clock" aria-label="Event time" data-agenda-clock="venue">
+                          <time dateTime={slot.startsAt}>{slot.time}</time>
+                        </div>
+                        {!editor && (
+                          <div
+                            class="pk-content-agenda__clock"
+                            aria-label="Your time"
+                            data-agenda-clock="browser"
+                            data-local-time-container
+                            data-event-time-zone={timeZone}
+                            hidden
+                          >
+                            <LocalTime value={slot.startsAt} format="time" />
+                            <small data-agenda-local-date hidden />
+                          </div>
+                        )}
+                      </div>
+                      {editor?.dropTarget(slot.startsAt, "")}
+                    </th>
+                    {slot.sessions.length ||
+                    (editor && !slot.title && !slot.durationMinutes) ||
+                    cells.some((cell) => cell === null) ? (
+                      cells.map(
+                        (cell, locationIndex) =>
+                          cell && (
+                            <td
+                              class="pk-content-agenda__cell"
+                              rowSpan={cell.rowSpan}
+                              colSpan={cell.colSpan}
+                              data-agenda-cell={day.locations[locationIndex]?.id}
+                              key={locationIndex}
+                            >
+                              {editor?.dropTarget(slot.startsAt, day.locations[locationIndex]?.id ?? "")}
+                              {cell.sessions.map((session, sessionIndex) => (
+                                <AgendaSession
+                                  session={session}
+                                  legacyFragments={(session.legacyFragments ?? []).filter(
+                                    (fragment) =>
+                                      day.locations
+                                        .slice(locationIndex, locationIndex + cell.colSpan)
+                                        .some((location, offset) =>
+                                          legacyAgendaFragmentMatchesPlacement(
+                                            fragment,
+                                            session,
+                                            location.id,
+                                            locationIndex + offset,
+                                          ),
+                                        ) && fragments.takeAlias(fragment.anchor),
+                                  )}
+                                  publicAnchor={
+                                    day.locations.slice(locationIndex, locationIndex + cell.colSpan).some(
+                                      (_, offset) =>
+                                        locationIndex + offset ===
+                                        Math.max(
+                                          0,
+                                          day.locations.findIndex((location) => location.id === session.locations[0]),
+                                        ),
+                                    )
+                                      ? fragments.takePrimary(session.publicAnchor)
+                                      : undefined
+                                  }
+                                  editor={editor && session.id ? editor.session(session.id) : undefined}
+                                  slot={slot}
+                                  locations={day.locations}
+                                  timeZone={timeZone}
+                                  dialogId={`agenda-session-${day.date}-${slotIndex}-${locationIndex}-${sessionIndex}`}
+                                  key={session.id ? `${session.id}:${day.locations[locationIndex]?.id}` : sessionIndex}
+                                />
+                              ))}
+                            </td>
+                          ),
+                      )
+                    ) : (
+                      <td
+                        class={slot.title || slot.durationMinutes ? undefined : "pk-content-agenda__cell"}
+                        colSpan={Math.max(1, day.locations.length)}
+                      >
+                        {slot.title || slot.durationMinutes ? (
+                          <div class="pk-content-agenda__break">
+                            <strong>{slot.title}</strong>
+                            {slot.durationMinutes ? (
+                              <span>
+                                <ClockIcon /> {slot.durationMinutes} min
+                              </span>
+                            ) : null}
+                          </div>
+                        ) : null}
+                      </td>
+                    )}
+                    {editor?.addLocation && <td class="pk-agenda-editor__add-room" />}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </section>
+        ))}
+      </AgendaCalendarBody>
       {!editor && (
         <section
           class="pk-content-agenda__speakers"
@@ -356,5 +418,25 @@ export function ContentAgenda({
         </section>
       )}
     </section>
+  );
+}
+
+/** Editor sources share the calendar body; public pages retain their original markup. */
+function AgendaCalendarBody({
+  editor,
+  sidebar,
+  children,
+}: {
+  editor: boolean;
+  sidebar?: ComponentChildren;
+  children: ComponentChildren;
+}) {
+  return editor ? (
+    <div class="pk-agenda-editor__canvas">
+      {children}
+      {sidebar}
+    </div>
+  ) : (
+    <>{children}</>
   );
 }

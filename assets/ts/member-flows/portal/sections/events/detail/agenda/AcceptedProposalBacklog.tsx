@@ -1,3 +1,10 @@
+import { AgendaSession } from "../../../../../../site/AgendaSession";
+import { Menu } from "../../../../../../ui/Menu";
+import { proposalAgendaContent } from "../../../../../../../shared/proposal-agenda-content";
+import "../../../../../../site/ContentAgenda.css";
+import "./AgendaSourceCards.css";
+import { acceptedProposalIds } from "./accepted-proposal-batches";
+import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { useState } from "preact/hooks";
 import { ApiDataTable } from "../../../../../../components/ApiDataTable";
 import { RowActions } from "../../../../../../ui/RowActions";
@@ -12,7 +19,11 @@ import {
 /** This catalogue stays accepted-only even when an old URL carries a different status filter. */
 const loadAccepted: CollectionLoader = (url, signal, schema) => {
   const source = new URL(url, "https://pkic.org");
-  const query = eventProposalsListQuerySchema.parse({ ...Object.fromEntries(source.searchParams), status: "accepted" });
+  const query = eventProposalsListQuerySchema.parse({
+    ...Object.fromEntries(source.searchParams),
+    status: "accepted",
+    agenda: "unimported",
+  });
   const params = Object.fromEntries(
     Object.entries(query)
       .filter(([, value]) => value !== undefined)
@@ -26,96 +37,169 @@ export function AcceptedProposalBacklog({
   onReview,
   onSelect,
   onDragEnd,
+  onAdd,
+  adding = false,
+  addError = "",
+  addProgress = "",
+  interactionsDisabled = false,
+  timeZone = "UTC",
 }: {
   eventSlug: string;
   onReview: (proposalId: string) => void;
   onSelect?: (proposal: { id: string; title: string }, native?: boolean) => void;
   onDragEnd?: () => void;
+  onAdd?: (proposalIds?: string[]) => void;
+  adding?: boolean;
+  addError?: string;
+  addProgress?: string;
+  interactionsDisabled?: boolean;
+  timeZone?: string;
 }) {
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
+  const controlsBusy = busy || adding;
   const [canRead, setCanRead] = useState(false);
   return (
-    <Panel>
+    <Panel class="pk-agenda-source-panel">
       <PanelHeader title="Accepted proposals" />
-      <PanelBody>
-        <p>
-          Drag an accepted proposal onto the agenda, or choose Schedule from its menu and select a time and location.
-          Review the exact placement before saving. You can also import a proposal without scheduling it.
-        </p>
+      <PanelBody flush>
         <ApiDataTable
+          inset={
+            addProgress || addError || error ? (
+              <>
+                {addProgress && <p role="status">{addProgress}</p>}
+                {addError && <ErrorAlert error={addError} />}
+                {error && <ErrorAlert error={error} />}
+              </>
+            ) : undefined
+          }
           caption="Accepted proposals"
           endpoint={`/api/v1/events/${encodeURIComponent(eventSlug)}/proposals`}
           urlState="accepted-backlog"
           responseSchema={eventProposalsResponseSchema}
           load={loadAccepted}
-          params={{ status: "accepted" }}
+          params={{ status: "accepted", agenda: "unimported" }}
           resolve={(response) => response.proposals}
           resolvePage={(response) => response.page}
-          onData={(response) => setCanRead(response.access.canRead)}
+          onData={(response) => {
+            setCanRead(response.access.canRead);
+          }}
+          toolbar={(_, query, sorting) => (
+            <Menu
+              label="Accepted proposal actions"
+              items={[
+                ...(sorting
+                  ? [
+                      {
+                        id: "title",
+                        label: "Title A–Z",
+                        checked: sorting.sort === "title",
+                        onSelect: () => sorting.onSort("title"),
+                      },
+                      {
+                        id: "-title",
+                        label: "Title Z–A",
+                        checked: sorting.sort === "-title",
+                        onSelect: () => sorting.onSort("-title"),
+                      },
+                    ]
+                  : []),
+                ...(onAdd
+                  ? [
+                      {
+                        id: "schedule-all",
+                        label: "Schedule all matching proposals",
+                        disabled: controlsBusy || !canRead,
+                        separatorBefore: true,
+                        onSelect: async () => {
+                          setBusy(true);
+                          setError("");
+                          try {
+                            onAdd(await acceptedProposalIds(eventSlug, query));
+                          } catch (error) {
+                            setError(error instanceof Error ? error.message : "Could not read accepted proposals.");
+                          } finally {
+                            setBusy(false);
+                          }
+                        },
+                      },
+                    ]
+                  : []),
+              ]}
+            />
+          )}
           paginate
           initialSort="title"
-          searchPlaceholder="title, proposer or review"
+          searchPlaceholder="Search proposals"
           rowKey={(proposal) => proposal.id}
           empty="No accepted proposals match this search."
-          columns={[
-            {
-              header: "Proposal",
-              width: "primary",
-              cell: (proposal) => (
-                <strong
-                  draggable={Boolean(onSelect && canRead && !proposal.agendaImported)}
-                  onDragStart={(event) => {
-                    if (!onSelect || !canRead || proposal.agendaImported) {
-                      event.preventDefault();
-                      return;
-                    }
-                    event.dataTransfer?.setData("application/x-pkic-accepted-proposal", proposal.id);
-                    onSelect(proposal, true);
-                  }}
-                  onDragEnd={onDragEnd}
-                >
-                  {proposal.title}
-                </strong>
-              ),
-              sort: { asc: "title", desc: "-title", defaultDirection: "asc" },
-            },
-            {
-              header: "Proposer",
-              cell: (proposal) =>
-                [proposal.proposer_first_name, proposal.proposer_last_name].filter(Boolean).join(" ") ||
-                "Unnamed proposer",
-            },
-            { header: "Source", cell: () => "Accepted proposal", width: "fit" },
-            {
-              header: "Agenda",
-              width: "fit",
-              cell: (proposal) =>
-                proposal.agendaImported ? (
-                  <span>In agenda</span>
-                ) : (
-                  <RowActions
-                    subject={proposal.title}
-                    actions={[
-                      ...(onSelect
-                        ? [
-                            {
-                              id: "schedule",
-                              label: "Schedule on agenda",
-                              disabled: !canRead,
-                              onSelect: () => onSelect(proposal),
-                            },
-                          ]
-                        : []),
-                      {
-                        id: "import",
-                        label: "Import without scheduling",
-                        disabled: !canRead,
-                        onSelect: () => onReview(proposal.id),
-                      },
-                    ]}
+          columns={[]}
+          renderItems={(proposals) => (
+            <div class="pk-stack pk-agenda-source-cards" aria-label="Accepted proposal cards">
+              {proposals.map((proposal) => (
+                <div key={proposal.id} class="pk-agenda-source-cards__item" data-agenda-proposal={proposal.id}>
+                  <AgendaSession
+                    session={proposalAgendaContent(proposal)}
+                    locations={[]}
+                    timeZone={timeZone}
+                    dialogId={`accepted-proposal-${proposal.id}`}
+                    editor={{
+                      controls: (
+                        <div class="pk-cluster">
+                          <RowActions
+                            subject={proposal.title}
+                            actions={[
+                              ...(onSelect
+                                ? [
+                                    {
+                                      id: "schedule",
+                                      label: "Schedule on agenda",
+                                      disabled: controlsBusy || interactionsDisabled || !canRead,
+                                      onSelect: () => onSelect(proposal),
+                                    },
+                                  ]
+                                : []),
+                              ...(onAdd
+                                ? [
+                                    {
+                                      id: "import",
+                                      label: "Add",
+                                      disabled: controlsBusy || !canRead,
+                                      onSelect: () => onAdd([proposal.id]),
+                                    },
+                                  ]
+                                : []),
+                              {
+                                id: "review",
+                                label: "Review proposal",
+                                disabled: controlsBusy || !canRead,
+                                onSelect: () => onReview(proposal.id),
+                              },
+                            ]}
+                          />
+                        </div>
+                      ),
+                      onDragStart:
+                        onSelect && canRead && !controlsBusy && !interactionsDisabled && !proposal.agendaImported
+                          ? (event) => {
+                              const card = event.currentTarget;
+                              const bounds = card.getBoundingClientRect();
+                              event.dataTransfer?.setData("application/x-pkic-accepted-proposal", proposal.id);
+                              event.dataTransfer?.setDragImage(
+                                card,
+                                event.clientX - bounds.left,
+                                event.clientY - bounds.top,
+                              );
+                              onSelect(proposal, true);
+                            }
+                          : undefined,
+                      onDragEnd,
+                    }}
                   />
-                ),
-            },
-          ]}
+                </div>
+              ))}
+            </div>
+          )}
         />
       </PanelBody>
     </Panel>

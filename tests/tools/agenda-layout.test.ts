@@ -30,10 +30,13 @@ describe("native agenda table layout", () => {
     const day = schedule();
     day.slots[2]!.startsAt = "2026-12-01T10:30:00.000Z";
     const rows = agendaRows(day);
-    expect(rows[0]!.height).toBe(240);
-    expect(rows[1]!.height).toBe(480);
+    expect(rows[0]!.height).toBe(48);
+    expect(rows[1]!.height).toBe(96);
     day.slots[1]!.sessions = [];
-    expect(agendaRows(day)[1]!.height).toBe(64);
+    day.slots[1]!.title = "Coffee break";
+    day.slots[1]!.durationMinutes = 30;
+    day.slots[2]!.startsAt = "2026-12-01T10:00:00.000Z";
+    expect(agendaRows(day)[1]!.height).toBe(48);
   });
 
   it("reserves readable titles and speakers in a short session", () => {
@@ -83,7 +86,7 @@ describe("native agenda table layout", () => {
     day.slots[1]!.durationMinutes = 30;
     expect(agendaRows(day)[0]!.cells[0]?.rowSpan).toBe(1);
     expect(agendaRows(day, 80)[0]!.cells[0]?.rowSpan).toBe(1);
-    expect(agendaRows(day)[1]!.height).toBe(64);
+    expect(agendaRows(day)[1]!.height).toBe(48);
     day.slots[1]!.sessions = [{ ...day.slots[0]!.sessions[0]!, title: "Replacement" }];
     expect(agendaRows(day)[0]!.cells[0]?.rowSpan).toBe(1);
   });
@@ -144,5 +147,57 @@ describe("native agenda table layout", () => {
     expect(cells).toHaveLength(8);
     expect(cells[7]?.sessions[0]?.title).toBe("Long workshop");
     expect(cells.slice(0, 7).every((cell) => cell?.sessions.length === 0)).toBe(true);
+  });
+
+  it("renders a session or configured break once across adjacent assigned rooms in both views", () => {
+    const day = schedule();
+    day.locations.push({ id: "green", label: "Green hall" });
+    day.slots[0]!.sessions[0]!.locations = ["blue", "red"];
+    day.slots[1]!.sessions = [];
+    for (const kind of ["session", "break"] as const) {
+      day.slots[0]!.sessions[0]!.kind = kind;
+      for (const editor of [false, true]) {
+        const rows = agendaRows(day, 0, editor);
+        expect(rows[0]!.cells[0]).toMatchObject({ colSpan: 2, rowSpan: 2 });
+        expect(rows[0]!.cells[0]?.sessions).toEqual(day.slots[0]!.sessions);
+        expect(rows[0]!.cells[1]).toBeNull();
+        expect(rows[0]!.cells[2]).toMatchObject({ colSpan: 1, sessions: [] });
+        expect(rows[1]!.cells.slice(0, 2)).toEqual([null, null]);
+      }
+    }
+  });
+
+  it("keeps nonadjacent placements separate without swallowing the parallel middle room", () => {
+    const day = schedule();
+    day.locations.push({ id: "green", label: "Green hall" });
+    const shared = day.slots[0]!.sessions[0]!;
+    shared.locations = ["red", "green"];
+    const parallel = { ...shared, title: "Parallel talk", locations: ["blue"] };
+    day.slots[0]!.sessions.push(parallel);
+    const cells = agendaRows(day)[0]!.cells;
+    expect(cells.map((cell) => cell?.colSpan)).toEqual([1, 1, 1]);
+    expect(cells.map((cell) => cell?.sessions)).toEqual([[shared], [parallel], [shared]]);
+  });
+
+  it("does not merge a room that also has a distinct simultaneous session", () => {
+    const day = schedule();
+    const shared = day.slots[0]!.sessions[0]!;
+    shared.locations = ["red", "blue"];
+    const parallel = { ...shared, title: "Conflicting talk", locations: ["blue"] };
+    day.slots[0]!.sessions.push(parallel);
+    const cells = agendaRows(day)[0]!.cells;
+    expect(cells[0]).toMatchObject({ colSpan: 1, sessions: [shared] });
+    expect(cells[1]).toMatchObject({ colSpan: 1, sessions: [shared, parallel] });
+  });
+
+  it("stops a shared-room span before a later session in any covered room", () => {
+    const day = schedule();
+    day.slots[0]!.sessions[0]!.locations = ["red", "blue"];
+    for (const editor of [false, true]) {
+      const rows = agendaRows(day, 0, editor);
+      expect(rows[0]!.cells[0]).toMatchObject({ colSpan: 2, rowSpan: 1 });
+      expect(rows[0]!.cells[1]).toBeNull();
+      expect(rows[1]!.cells[1]?.sessions[0]?.title).toBe("Talk");
+    }
   });
 });

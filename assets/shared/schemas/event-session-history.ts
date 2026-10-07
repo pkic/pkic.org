@@ -23,6 +23,14 @@ export const publicSessionMediaUrlSchema = httpOrSameOriginUrlSchema.refine((val
     )
   );
 }, "Use a stable public media URL without private access or management credentials.");
+/** Public portraits address one stored file; private proposal/headshot management endpoints remain excluded. */
+export const publicSessionPortraitUrlSchema = z.union([
+  publicSessionMediaUrlSchema,
+  sameOriginPathSchema.refine((value) => {
+    const url = new URL(value, "https://pkic.org");
+    return /^\/api\/v1\/users\/[^/]+\/headshots\/[^/]+$/u.test(url.pathname) && !url.search && !url.hash;
+  }, "Use the public file-specific portrait address."),
+]);
 /** Frozen public credit: profile changes must never rewrite an approved appearance. */
 export const sessionAppearanceSchema = z.object({
   userId: z.string().min(1),
@@ -31,7 +39,7 @@ export const sessionAppearanceSchema = z.object({
   jobTitle: z.string().max(200).nullable(),
   organizationName: z.string().max(200).nullable(),
   biography: z.string().max(10000).default(""),
-  photoUrl: publicSessionMediaUrlSchema.nullable(),
+  photoUrl: publicSessionPortraitUrlSchema.nullable(),
   approvedAt: utcInstantSchema,
 });
 /** Preserved public source attribution, never a canonical identity or approval. */
@@ -45,7 +53,7 @@ export const sessionArchivalCreditSchema = z.object({
   jobTitle: z.string().max(200).nullable(),
   organizationName: z.string().max(200).nullable(),
   biography: z.string().max(10000).default(""),
-  photoUrl: publicSessionMediaUrlSchema.nullable(),
+  photoUrl: publicSessionPortraitUrlSchema.nullable(),
 });
 export type SessionArchivalCredit = z.infer<typeof sessionArchivalCreditSchema>;
 /** Source establishes a historical start, but no ending or schedulable interval. */
@@ -236,12 +244,21 @@ export const sessionAppearanceChoiceSchema = z.object({
   organizationName: z.string().nullable(),
   jobTitle: z.string().nullable(),
   biography: z.string(),
+  photoUrl: publicSessionPortraitUrlSchema.nullable().default(null),
 });
 
 export const sessionAppearanceChoicesQuerySchema = listQuerySchema(["name"] as const).extend({
   userId: z.string().optional(),
 });
-export const sessionAppearanceChoicesSchema = paginatedResponseSchema("identities", sessionAppearanceChoiceSchema);
+export const sessionAppearanceChoicesSchema = paginatedResponseSchema(
+  "identities",
+  sessionAppearanceChoiceSchema,
+).extend({
+  portraits: z
+    .array(sessionAppearanceChoiceSchema.pick({ userId: true, photoUrl: true }))
+    .max(30)
+    .default([]),
+});
 export const sessionMaterialVersionsQuerySchema = listQuerySchema(["uploadedAt"] as const);
 export const sessionMaterialVersionChoiceSchema = z.object({
   source: z.enum(["proposal", "session"]).default("proposal"),

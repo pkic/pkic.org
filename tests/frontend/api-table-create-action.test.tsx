@@ -85,7 +85,7 @@ describe("ApiDataTable createAction", () => {
     const buttons = [...(toolbar?.querySelectorAll("button") ?? [])].map(
       (button) => button.getAttribute("aria-label") ?? button.textContent?.trim(),
     );
-    expect(buttons).toEqual(["Search things", "New thing", "Refresh"]);
+    expect(buttons).toEqual(["Search things", "Refresh", "New thing"]);
     expect(toolbar?.querySelector("input[type=search]")).not.toBeNull();
 
     await act(() => {

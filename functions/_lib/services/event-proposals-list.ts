@@ -30,6 +30,9 @@ const SORT_EXPRESSIONS: Readonly<Record<string, string>> = {
   recommendations: "(COALESCE(rv.accept_count, 0) - COALESCE(rv.reject_count, 0))",
 };
 
+const AGENDA_IMPORTED_SQL =
+  "EXISTS(SELECT 1 FROM event_agenda_contents content WHERE content.event_id=sp.event_id AND content.source_key='proposal:'||sp.id)";
+
 const PRESENTATION_EXISTS_SQL =
   "EXISTS (SELECT 1 FROM presentation_versions pv WHERE pv.proposal_id = sp.id AND pv.deleted_at IS NULL)";
 
@@ -83,6 +86,7 @@ export function buildEventProposalsPageQuery(query: EventProposalsServiceQuery):
     );
     predicateBindings.push(query.recommendation);
   }
+  if (query.agenda) conditions.push(`${query.agenda === "unimported" ? "NOT " : ""}${AGENDA_IMPORTED_SQL}`);
   if (query.presentation) {
     conditions.push(`${query.presentation === "missing" ? "NOT " : ""}${PRESENTATION_EXISTS_SQL}`);
   }
@@ -155,7 +159,7 @@ export function buildEventProposalsPageQuery(query: EventProposalsServiceQuery):
                 COALESCE(rv.needs_work_count, 0) AS recommendation_needs_work_count,
                 COALESCE(rv.reject_count, 0) AS recommendation_reject_count,
                 ${PRESENTATION_EXISTS_SQL} AS has_presentation,
-                EXISTS(SELECT 1 FROM event_agenda_contents content WHERE content.event_id=sp.event_id AND content.source_key='proposal:'||sp.id) AS agendaImported,
+                ${AGENDA_IMPORTED_SQL} AS agendaImported,
                 pd.final_status AS decision_status, pd.decision_note, pd.decided_at AS decision_decided_at
       `,
       fromSql: pageFromSql,

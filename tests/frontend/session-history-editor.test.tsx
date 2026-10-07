@@ -14,8 +14,15 @@ import { agendaSnapshotSchema } from "../../assets/shared/schemas/event-agenda";
 import { chooseOption, controlFor, optionValues, submitForm, typeInto } from "./helpers/labelled-control";
 import { legacyAgendaDownloadsSchema } from "../../assets/shared/schemas/event-agenda-legacy-fragments";
 import { menuItemNamed } from "./helpers/row-actions";
+import type { z } from "zod";
 const api = vi.hoisted(() => ({ getJson: vi.fn(), postJson: vi.fn() }));
 vi.mock("../../assets/ts/shared/api-client", () => api);
+/** Match getJson's canonical transport parsing, including additive response defaults. */
+function mockGetJson(payload: unknown | ((path: string) => Promise<unknown>)) {
+  api.getJson.mockImplementation(async (path: string, schema: z.ZodType) =>
+    schema.parse(typeof payload === "function" ? await payload(path) : payload),
+  );
+}
 const host = document.createElement("div");
 document.body.append(host);
 afterEach(() => {
@@ -45,7 +52,7 @@ const snapshot = agendaSnapshotSchema.parse({
 });
 describe("session archive correction", () => {
   it("keeps all archive actions in the shared menu and closes through its existing callback", async () => {
-    api.getJson.mockResolvedValue({
+    mockGetJson({
       identities: [],
       versions: [],
       page: { limit: 200, offset: 0, total: 0, hasMore: false },
@@ -72,7 +79,7 @@ describe("session archive correction", () => {
     expect(close).toHaveBeenCalledOnce();
   });
   it("saves only an explicit historical receipt selection without approving its uploaded material", async () => {
-    api.getJson.mockResolvedValue({
+    mockGetJson({
       identities: [],
       versions: [],
       page: { limit: 200, offset: 0, total: 0, hasMore: false },
@@ -151,7 +158,7 @@ describe("session archive correction", () => {
     expect(unbound.presentationVersionId).toBeNull();
   });
   it("approves one speaker without approving the other pending speaker", async () => {
-    api.getJson.mockResolvedValue({
+    mockGetJson({
       identities: [],
       versions: [],
       page: { limit: 200, offset: 0, total: 0, hasMore: false },
@@ -193,7 +200,7 @@ describe("session archive correction", () => {
   it.each([null, "source-identity"])(
     "preserves the copied %s proposal representation until explicit approval",
     async (identityId) => {
-      api.getJson.mockImplementation(async (path: string) =>
+      mockGetJson(async (path: string) =>
         path.includes("/history/identities")
           ? {
               identities: [
@@ -261,7 +268,7 @@ describe("session archive correction", () => {
     },
   );
   it("leaves unrecorded speakers unapproved until an explicit representation choice", async () => {
-    api.getJson.mockResolvedValue({
+    mockGetJson({
       identities: [],
       versions: [],
       page: { limit: 200, offset: 0, total: 0, hasMore: false },
@@ -306,7 +313,7 @@ describe("session archive correction", () => {
     });
   });
   it("binds a direct version by its source without approving rights or public release", async () => {
-    api.getJson.mockResolvedValue(
+    mockGetJson(
       sessionMaterialVersionsSchema.parse({
         versions: ["proposal", "session"].map((source) => ({
           source,
@@ -363,7 +370,7 @@ describe("session archive correction", () => {
     expect(bound.url).toBe("");
   });
   it("uses a labeled owned acting identity and submits the canonical revision guarded correction", async () => {
-    api.getJson.mockImplementation(async (path: string) =>
+    mockGetJson(async (path: string) =>
       path.includes("presentations")
         ? { versions: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } }
         : path.includes("appearance-overrides")

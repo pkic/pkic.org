@@ -1,3 +1,4 @@
+import { join } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -14,7 +15,8 @@ import { dateTimeLocalToIso } from "../../assets/shared/timezone";
 import { sessionPresentationVersionsSchema } from "../../assets/shared/schemas/session-presentation-versions";
 import { USER_SESSION_COOKIE_NAME } from "../../functions/_lib/auth/session-cookies";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { signInAsE2eStaff } from "./helpers/staff-auth";
+import { expectStaffSessionLanding, signInAsE2eStaff } from "./helpers/staff-auth";
+import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 
 const execute = promisify(execFile);
 const hash = (bytes: Buffer | string) => createHash("sha256").update(bytes).digest("hex");
@@ -70,14 +72,40 @@ const sources = [
   },
 ];
 
-test.use({ actionTimeout: 20_000 });
+const staffEmail = e2eAdminEmail("browser-presentation");
+let staffStatePath: string;
+test.beforeAll(async ({ browser }, info) => {
+  staffStatePath = join(info.project.outputDir, `historical-sources-auth-${process.pid}-${info.workerIndex}.json`);
+  await mkdir(info.project.outputDir, { recursive: true });
+  const context = await browser.newContext({ storageState: undefined });
+  try {
+    const page = await context.newPage();
+    await signInAsE2eStaff(page, staffEmail);
+    await context.storageState({ path: staffStatePath });
+  } finally {
+    await context.close();
+  }
+});
+test.use({
+  actionTimeout: 20_000,
+  storageState: async ({ browser }, use) => {
+    expect(browser.isConnected()).toBe(true);
+    await use(staffStatePath);
+  },
+});
 for (const source of sources) {
   test(`${source.name}: preserve all authored rows and reconcile only eligible private drafts`, async ({
     page,
   }, info) => {
     test.setTimeout(600_000);
     expect(hash(await readFile(source.source))).toBe(source.fileDigest);
-    await signInAsE2eStaff(page, e2eAdminEmail("browser-presentation"));
+    await page.goto("/portal/#/home");
+    await expectStaffSessionLanding(page);
+    const sessionResponse = await page.request.get("/api/v1/auth/session");
+    expect(sessionResponse.status()).toBe(200);
+    const session = userAuthSessionResponseSchema.parse(await sessionResponse.json());
+    expect(session.identity.email).toBe(staffEmail);
+    expect(session.staff).toBeDefined();
     const slug = `historical-${source.key}-${crypto.randomUUID().slice(0, 8)}`;
     const response = await page.request.post("/api/v1/groups/20000000-0000-4000-8000-000000000003/events", {
       data: groupEventCreateSchema.parse({

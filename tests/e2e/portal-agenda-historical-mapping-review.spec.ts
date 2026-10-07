@@ -26,6 +26,7 @@ import { USER_SESSION_COOKIE_NAME } from "../../functions/_lib/auth/session-cook
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { runAgendaAction } from "./helpers/agenda-actions";
+import { runRowAction } from "./helpers/data-table";
 
 const execute = promisify(execFile);
 const authoredSource = "content/events/2025/pqc-conference-austin-us/index.md";
@@ -304,8 +305,9 @@ test("an actual selected source row stages canonical fixture attribution for vis
     expect(await read()).toEqual(beforeRefusal);
     expect((await contents())[0]!.review).toEqual(pending.review);
     await page.goto(`/portal/#/events/${slug}/agenda`);
-    await page.getByRole("tab", { name: "Session library", exact: true }).click();
-    await page.getByRole("button", { name: `Edit ${title}`, exact: true }).click();
+    await runAgendaAction(page, "Reuse a session");
+    const reusableContent = page.getByRole("table", { name: "Reusable session content", exact: true });
+    await runRowAction(page, reusableContent.getByRole("row").filter({ hasText: title }), "Edit content");
     await expect(page.getByRole("button", { name: "Use incoming source content", exact: true })).toBeVisible();
     const acknowledgment = page.getByRole("checkbox", {
       name: "Approve the displayed verified historical mappings and source changes",
@@ -382,6 +384,7 @@ test("an actual selected source row stages canonical fixture attribution for vis
     expect(frozen.occurrences).toEqual(
       accepted.occurrences.map((occurrence) => ({
         ...occurrence,
+        onlineAccessAvailable: false,
         speakers: occurrence.speakers.map(({ userId, displayName, role }) => ({ userId, displayName, role })),
         history: {
           ...occurrence.history,
@@ -391,6 +394,11 @@ test("an actual selected source row stages canonical fixture attribution for vis
         },
       })),
     );
+    for (const occurrence of frozen.occurrences) {
+      expect(occurrence).not.toHaveProperty("virtualRoomUrl");
+      expect(occurrence.onlineAccessAvailable).toBe(false);
+      for (const speaker of occurrence.speakers) expect(speaker).not.toHaveProperty("profileCandidate");
+    }
     await page.getByRole("button", { name: "Back to agenda", exact: true }).click();
     await runAgendaAction(page, "Public preview");
     await page.getByRole("button", { name: "Approved revision", exact: true }).click();

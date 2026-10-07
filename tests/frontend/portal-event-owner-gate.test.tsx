@@ -119,12 +119,12 @@ describe("standalone event views redirect to the owning group", () => {
     {
       label: "event settings",
       props: { tab: "settings", subTab: "sponsor-tiers" },
-      destination: `/groups/${GROUP_ID}/events/${EVENT_ID}/settings`,
+      destination: `/groups/${GROUP_ID}/events/${EVENT_ID}/settings/sponsor-tiers`,
     },
     {
       label: "the add-team-member page",
       props: { tab: "settings", subTab: "team", detailSegment: "new" },
-      destination: `/groups/${GROUP_ID}/events/${EVENT_ID}/team/new`,
+      destination: `/groups/${GROUP_ID}/events/${EVENT_ID}/settings/team/new`,
     },
   ])("preserves $label when redirecting a legacy event URL", async ({ props, destination }) => {
     stubDetail(GROUP_ID);

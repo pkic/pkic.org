@@ -1,4 +1,6 @@
 import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
+import { BulkBar } from "../../../../../../ui/BulkBar";
+import { useCollectionSelection } from "../../../../../../hooks/useCollectionSelection";
 import { RowActions } from "../../../../../../ui/RowActions";
 import { formatNumber } from "../../../../../../../shared/format-number";
 import { useMemo, useRef, useState } from "preact/hooks";
@@ -33,10 +35,12 @@ export function ContentLibrary({
   snapshot,
   canEdit,
   onSaved,
+  onClose,
 }: {
   snapshot: AgendaSnapshot;
   canEdit: boolean;
   onSaved: (next: AgendaSnapshot) => void;
+  onClose?: () => void;
 }) {
   const endpoint = `/api/v1/events/${encodeURIComponent(snapshot.eventSlug)}/agenda`,
     table = useRef<ApiTableActions | null>(null);
@@ -127,23 +131,40 @@ export function ContentLibrary({
       setBusy(false);
     }
   }
-  async function place(item: Content, copyAsNew: boolean) {
+  const batchSelection = useCollectionSelection<Content>({
+    rowKey: (row) => row.id,
+    rowLabel: (row) => `Select ${row.title}`,
+    busy,
+  });
+  async function place(items: readonly Content[], copyAsNew: boolean) {
+    if (busy || !items.length) return;
     setBusy(true);
     setError("");
+    let revision = snapshot.revision;
+    let completed = 0;
     try {
-      await postJson(
-        `${endpoint}/contents/${item.id}/placements`,
-        { expectedRevision: snapshot.revision, copyAsNew },
-        agendaContentPlacementResponseSchema,
-      );
+      for (const item of items) {
+        await postJson(
+          `${endpoint}/contents/${item.id}/placements`,
+          { expectedRevision: revision, copyAsNew },
+          agendaContentPlacementResponseSchema,
+        );
+        completed++;
+        const next = await getJson(endpoint, agendaSnapshotSchema);
+        revision = next.revision;
+        onSaved(next);
+      }
+      batchSelection.clear();
+      await table.current?.reload();
       setMessage(
-        copyAsNew
-          ? "Independent copy created. Schedule and approve it separately."
-          : "Repeated occurrence added. Choose its time, rooms and admission policy in the Sessions view.",
+        `${formatNumber(completed)} ${copyAsNew ? "independent copies" : "repeated occurrences"} added. Choose their times, rooms and admission policies in Sessions; review and approve them separately.`,
       );
-      await refresh();
     } catch (error) {
+      setMessage(
+        `${formatNumber(completed)} of ${formatNumber(items.length)} ${copyAsNew ? "copies" : "repeated occurrences"} confirmed before stopping. The last request may have completed; review Sessions before retrying.`,
+      );
       setError(error instanceof Error ? error.message : "The occurrence could not be created.");
+      if (completed) await table.current?.reload();
     } finally {
       setBusy(false);
     }
@@ -175,7 +196,7 @@ export function ContentLibrary({
       <PanelHeader
         title={
           mode === "list"
-            ? "Session library"
+            ? "Reuse a session"
             : mode === "copy"
               ? "Reuse session content"
               : selected
@@ -183,20 +204,51 @@ export function ContentLibrary({
                 : "New session content"
         }
       >
+        {mode === "list" && onClose && <Button onClick={onClose}>Back to agenda</Button>}
         {mode !== "list" && (
           <Button disabled={busy} onClick={() => setMode("list")}>
-            Back to session library
+            Back to reusable sessions
           </Button>
         )}
       </PanelHeader>
-      <PanelBody>
-        <p>
-          Keep the title, abstract and speakers together. Add separate occurrences for repeats, or make an independent
-          copy. Content can stay unscheduled.
-        </p>
+      <PanelBody flush={mode === "list"}>
+        {mode !== "list" && (
+          <p>
+            Keep the title, abstract and speakers together. Add separate occurrences for repeats, or make an independent
+            copy. Content can stay unscheduled.
+          </p>
+        )}
         {mode === "list" && (
           <ApiDataTable<Content, z.infer<typeof agendaContentsResponseSchema>>
-            key={snapshot.revision}
+            onData={(result) => batchSelection.onRows(result.contents)}
+            onQueryChange={batchSelection.onQueryChange}
+            selection={canEdit ? batchSelection.selection : undefined}
+            inset={
+              <>
+                <p>
+                  Reuse titles, abstracts and speakers from existing sessions. Added sessions appear in this event’s
+                  Session list, where you can schedule them and review them for publication.
+                </p>
+                {message && <p role="status">{message}</p>}
+                {error && <ErrorAlert error={error} />}
+              </>
+            }
+            bulkBar={
+              canEdit && (
+                <BulkBar
+                  count={batchSelection.selected.size}
+                  total={batchSelection.total}
+                  onClear={batchSelection.clear}
+                >
+                  <Button size="sm" disabled={busy} onClick={() => void place(batchSelection.selectedRows, false)}>
+                    Add repeats
+                  </Button>
+                  <Button size="sm" disabled={busy} onClick={() => void place(batchSelection.selectedRows, true)}>
+                    Copy as new
+                  </Button>
+                </BulkBar>
+              )
+            }
             createAction={
               canEdit ? { label: "New session content", onSelect: () => edit(null), disabled: busy } : undefined
             }
@@ -216,7 +268,8 @@ export function ContentLibrary({
             resolvePage={(result) => result.page}
             paginate
             initialSort="title"
-            caption="Session content"
+            caption="Reusable session content"
+            empty="No reusable content matches this search. Create content here, then add an occurrence to Event sessions."
             rowKey={(row) => row.id}
             actionsRef={table}
             searchPlaceholder="Find session content…"
@@ -240,9 +293,14 @@ export function ContentLibrary({
                               id: "repeat",
                               label: "Add repeat",
                               disabled: busy,
-                              onSelect: () => void place(row, false),
+                              onSelect: () => void place([row], false),
                             },
-                            { id: "copy", label: "Copy as new", disabled: busy, onSelect: () => void place(row, true) },
+                            {
+                              id: "copy",
+                              label: "Copy as new",
+                              disabled: busy,
+                              onSelect: () => void place([row], true),
+                            },
                           ]}
                         />
                       ),
@@ -433,8 +491,8 @@ export function ContentLibrary({
             )}
           </>
         )}
-        {message && <p role="status">{message}</p>}
-        {error && <ErrorAlert error={error} />}
+        {mode !== "list" && message && <p role="status">{message}</p>}
+        {mode !== "list" && error && <ErrorAlert error={error} />}
       </PanelBody>
     </Panel>
   );

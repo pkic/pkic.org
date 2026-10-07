@@ -39,6 +39,7 @@ export function useProposalEntryIdentity(
   expectedSpeakerUserId?: string | null,
   saveNames?: (names: z.infer<typeof eventProposalPersonNamePatchSchema>) => Promise<ParticipationPerson>,
   startWithEmailProof = false,
+  speakerProposalId?: string,
 ) {
   const [kind, setKindState] = useState<MemberJoinApplicantKind>();
   const [attested, setAttested] = useState(false);
@@ -55,6 +56,8 @@ export function useProposalEntryIdentity(
   const [error, setError] = useState<string>();
   const [email, setEmailState] = useState("");
   const initialized = useRef(false);
+  const proofScope = [endpoint, speakerManagementToken, speakerProposalId, expectedSpeakerUserId].join("|");
+  const proofAttempt = useRef<{ scope: string; token: string; state: "pending" | "verified" } | null>(null);
   const generation = useRef(0);
 
   function clearResolution(): void {
@@ -81,7 +84,7 @@ export function useProposalEntryIdentity(
     setAuthenticated(false);
   }
   function useDifferentEmail(): void {
-    setProofOwnerToken(storedPerson && !speakerManagementToken ? continuationToken : undefined);
+    setProofOwnerToken(storedPerson && !speakerManagementToken && !speakerProposalId ? continuationToken : undefined);
     clearResolution();
     setEmailState("");
     setPerson(null);
@@ -117,7 +120,12 @@ export function useProposalEntryIdentity(
     const currentGeneration = generation.current;
     const result = await patchJson(
       `${endpoint}/identities/${encodeURIComponent(selected.id)}`,
-      eventProposalProofIdentityPatchSchema.parse({ ...role, continuationToken, speakerManagementToken }),
+      eventProposalProofIdentityPatchSchema.parse({
+        ...role,
+        continuationToken,
+        speakerManagementToken,
+        speakerProposalId,
+      }),
       eventProposalProofIdentityPatchResponseSchema,
     );
     if (currentGeneration !== generation.current || result.identityId !== selected.id) return;
@@ -144,22 +152,37 @@ export function useProposalEntryIdentity(
     setPerson((current) => (current ? { ...current, ...savedNames } : current));
   }
   async function verify(token: string): Promise<void> {
+    if (proofAttempt.current?.scope === proofScope && proofAttempt.current.token === token) return;
+    const attempt = { scope: proofScope, token, state: "pending" as const };
+    proofAttempt.current = attempt;
     const currentGeneration = generation.current;
     setLoading(true);
     setError(undefined);
     try {
       const result = await postJson(
         `${endpoint}/verify`,
-        eventProposalProofVerifySchema.parse({ token, speakerManagementToken }),
+        eventProposalProofVerifySchema.parse({ token, speakerManagementToken, speakerProposalId }),
         eventProposalProofVerifyResponseSchema,
       );
       if (currentGeneration !== generation.current) return;
       if (result.status !== "ready") {
+        proofAttempt.current = null;
         setError("We need to review this email address before you can continue.");
         return;
       }
-      if (result.speakerManageUrl && !speakerManagementToken) {
-        location.assign(`${result.speakerManageUrl}#verify=${encodeURIComponent(token)}`);
+      if (speakerProposalId && result.speakerProposalId !== speakerProposalId) {
+        proofAttempt.current = null;
+        setError("This verification does not belong to this speaker record.");
+        return;
+      }
+      if (result.speakerManageUrl && !speakerManagementToken && !speakerProposalId) {
+        const destination = new URL(result.speakerManageUrl);
+        if (result.speakerProposalId) {
+          const route = new URL(destination.hash.slice(1), destination.origin);
+          route.searchParams.set("verify", token);
+          destination.hash = `${route.pathname}${route.search}`;
+        } else destination.hash = `verify=${encodeURIComponent(token)}`;
+        location.assign(destination.href);
         return;
       }
       const resolved = eventProposalProofPersonSchema.parse(
@@ -174,6 +197,7 @@ export function useProposalEntryIdentity(
         },
       );
       if (result.organization) resolved.organizationName = result.organization.name;
+      proofAttempt.current = { scope: proofScope, token, state: "verified" };
       setKindState(result.applicantKind);
       setAttested(result.applicantKind === "individual");
       setEmailState(result.email);
@@ -185,8 +209,10 @@ export function useProposalEntryIdentity(
       setProofOwnerToken(undefined);
       setEntryContext(result.entryContext);
       setSelected(result.applicantKind === "individual" ? null : undefined);
-      if (!speakerManagementToken) history.replaceState({}, "", `${location.pathname}${location.search}`);
+      if (!speakerManagementToken && !speakerProposalId)
+        history.replaceState({}, "", `${location.pathname}${location.search}`);
     } catch (caught) {
+      if (proofAttempt.current === attempt) proofAttempt.current = null;
       if (currentGeneration === generation.current)
         setError(caught instanceof Error ? caught.message : "We could not verify this email. Please try again.");
     } finally {
@@ -198,8 +224,11 @@ export function useProposalEntryIdentity(
     let active = true;
     let initializingSession = false;
     const consumeProof = (): boolean => {
-      const token = new URLSearchParams(location.hash.slice(1)).get("verify");
+      const token =
+        new URLSearchParams(location.hash.slice(1)).get("verify") ??
+        new URL(location.hash.slice(1), location.origin).searchParams.get("verify");
       if (!token) return false;
+      if (proofAttempt.current?.scope === proofScope && proofAttempt.current.token === token) return true;
       clearResolution();
       setPerson(null);
       setKnownPerson(null);
@@ -220,7 +249,7 @@ export function useProposalEntryIdentity(
           try {
             const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
             if (!active || currentGeneration !== generation.current) return;
-            if (speakerManagementToken && session.identity.id !== expectedSpeakerUserId) return;
+            if ((speakerManagementToken || speakerProposalId) && session.identity.id !== expectedSpeakerUserId) return;
             const detail = await getJson(
               `/api/v1/users/${encodeURIComponent(session.identity.id)}`,
               userDetailResponseSchema,
@@ -256,12 +285,14 @@ export function useProposalEntryIdentity(
     }
     return () => {
       active = false;
+      if (proofAttempt.current?.scope === proofScope && proofAttempt.current.state === "pending")
+        proofAttempt.current = null;
       if (initializingSession) initialized.current = false;
       generation.current += 1;
       window.removeEventListener("hashchange", consumeProof);
       setLoading(false);
     };
-  }, [enabled, endpoint, speakerManagementToken, expectedSpeakerUserId, startWithEmailProof]);
+  }, [enabled, endpoint, speakerManagementToken, speakerProposalId, expectedSpeakerUserId, startWithEmailProof]);
 
   const ready = Boolean(
     person &&

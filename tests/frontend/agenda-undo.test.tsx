@@ -58,7 +58,7 @@ async function edit() {
   document.body.append(host);
   await act(() => render(<AgendaEditor slug="synthetic" canEdit />, host));
   await settle();
-  await runRowAction(host, "Original workshop", "Edit / move session");
+  await runRowAction(host, "Original workshop", "Edit session");
   await vi.waitFor(() => expect(host.querySelector('[name="title"]')).not.toBeNull());
   await act(() => {
     const input = host.querySelector<HTMLInputElement>('[name="title"]')!;

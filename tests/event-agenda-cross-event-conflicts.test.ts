@@ -12,7 +12,11 @@ import { mutateBeforeNextBatch } from "./helpers/database-races";
 import { insertUser } from "./helpers/membership";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import { agendaOccurrenceCreateSchema, agendaSnapshotSchema } from "../assets/shared/schemas/event-agenda";
+import {
+  agendaSettingsSchema,
+  agendaOccurrenceCreateSchema,
+  agendaSnapshotSchema,
+} from "../assets/shared/schemas/event-agenda";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -157,6 +161,63 @@ describe("canonical person availability across event agendas", () => {
     expect(await queryAll(env.DB, "SELECT id FROM event_agenda_occurrences")).toHaveLength(1);
     expect(await queryAll(env.DB, "SELECT id FROM event_agenda_schedule_guards")).toEqual([]);
     expect(await queryAll(env.DB, "SELECT event_id FROM event_agenda_state WHERE revision=1")).toHaveLength(1);
+  });
+
+  it("round-trips event duration rules and rolls back stale or unauthorized settings writes atomically", async () => {
+    const { post, eventId, headers } = await fixture();
+    await env.DB.prepare(
+      "UPDATE events SET settings_json=json_set(settings_json,'$.syntheticOther',json(?),'$.agenda.otherRule',?) WHERE id=?",
+    )
+      .bind(JSON.stringify({ keep: true }), "retained", eventId)
+      .run();
+    const rules = { defaultMinutes: 40, quickMinutes: [20, 40, 80] };
+    const response = await post(
+      "pqc-2026",
+      "settings",
+      agendaSettingsSchema.parse({ expectedRevision: 0, travelMinutes: 5, durationRules: rules }),
+    );
+    expect(response.status).toBe(200);
+    expect(agendaSnapshotSchema.parse(await response.json())).toMatchObject({ revision: 1, durationRules: rules });
+    const read = await callApi(env, "/api/v1/events/pqc-2026/agenda", { headers });
+    expect(read.status).toBe(200);
+    expect(agendaSnapshotSchema.parse(await read.json()).durationRules).toEqual(rules);
+    const [stored] = await queryAll<{ settings_json: string }>(
+      env.DB,
+      "SELECT settings_json FROM events WHERE id=?",
+      eventId,
+    );
+    expect(JSON.parse(stored!.settings_json)).toMatchObject({
+      syntheticOther: { keep: true },
+      agenda: { otherRule: "retained", durationRules: rules },
+    });
+    const state = await queryAll(
+      env.DB,
+      "SELECT revision,travel_minutes FROM event_agenda_state WHERE event_id=?",
+      eventId,
+    );
+    const audits = await queryAll(env.DB, "SELECT id FROM audit_log ORDER BY id");
+    expect(state).toEqual([{ revision: 1, travel_minutes: 5 }]);
+    const refusedBody = agendaSettingsSchema.parse({
+      expectedRevision: 0,
+      travelMinutes: 9,
+      durationRules: { defaultMinutes: 60, quickMinutes: [30, 60] },
+    });
+    const stale = await post("pqc-2026", "settings", refusedBody);
+    expect(stale.status).toBe(409);
+    expect(apiErrorPayloadSchema.parse(await stale.json()).error.code).toBe("AGENDA_AUTHORIZATION_CHANGED");
+    const unauthorized = await callApi(env, "/api/v1/events/pqc-2026/agenda/settings", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ ...refusedBody, expectedRevision: 1 }),
+    });
+    expect(unauthorized.status).toBe(401);
+    expect(await queryAll(env.DB, "SELECT settings_json FROM events WHERE id=?", eventId)).toEqual([
+      { settings_json: stored!.settings_json },
+    ]);
+    expect(
+      await queryAll(env.DB, "SELECT revision,travel_minutes FROM event_agenda_state WHERE event_id=?", eventId),
+    ).toEqual(state);
+    expect(await queryAll(env.DB, "SELECT id FROM audit_log ORDER BY id")).toEqual(audits);
   });
 
   it("allows exact half-open boundaries and enforces the larger cross-event travel buffer", async () => {

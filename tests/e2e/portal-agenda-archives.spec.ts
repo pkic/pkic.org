@@ -87,8 +87,8 @@ test("approved archive corrections and promotion exports remain tied to a frozen
   const privateOccurrence = snapshot.occurrences.find((item) => item.title === privateTitle)!;
   await page.goto(`/portal/#/events/${slug}/agenda`);
   const agendaViews = page.getByRole("tablist", { name: "Agenda views", exact: true });
-  await agendaViews.getByRole("tab", { name: "All sessions", exact: true }).click();
-  const sessions = page.getByRole("table", { name: "Sessions across all days", exact: true });
+  await agendaViews.getByRole("tab", { name: "Schedule", exact: true }).click();
+  const sessions = page.getByRole("table", { name: "Event sessions", exact: true });
   const sessionRow = sessions.getByRole("row").filter({ hasText: title });
   await runRowAction(page, sessionRow, "Session archive / materials");
   await expect(page.getByRole("heading", { name: `Session archive · ${title}`, exact: true })).toBeVisible();
@@ -322,7 +322,7 @@ test("approved archive corrections and promotion exports remain tied to a frozen
   await expect(publicPage.getByRole("link", { name: title, exact: true })).toHaveAttribute("href", sessionPath);
   await expect(publicPage.getByText(privateTitle, { exact: true })).toHaveCount(0);
   expect(publicApiRequests).toEqual([]);
-  await agendaViews.getByRole("tab", { name: "All sessions", exact: true }).click();
+  await agendaViews.getByRole("tab", { name: "Schedule", exact: true }).click();
   await runRowAction(page, sessionRow, "Speaker promotion kit");
   await expect(page.getByRole("heading", { name: `Promotion kit · ${title}`, exact: true })).toBeVisible();
   await page.getByRole("button", { name: "Prepare published kit", exact: true }).click();
@@ -403,7 +403,7 @@ test("approved archive corrections and promotion exports remain tied to a frozen
   expect((await page.request.get((await pdf.getAttribute("href"))!)).status()).toBe(409);
 
   await page.goto(`/portal/#/events/${slug}/agenda`);
-  await agendaViews.getByRole("tab", { name: "All sessions", exact: true }).click();
+  await agendaViews.getByRole("tab", { name: "Schedule", exact: true }).click();
   await runRowAction(
     page,
     sessions.getByRole("row").filter({ hasText: `${title} · correction` }),

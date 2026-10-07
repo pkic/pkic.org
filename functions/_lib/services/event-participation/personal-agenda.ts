@@ -33,7 +33,7 @@ export async function personalAgenda(db: DatabaseLike, eventId: string, userId: 
           : "s.start_at ASC";
   const sessions = await all(
     db,
-    `SELECT s.id,s.published_revision AS publishedRevision,s.title,p.room_id AS roomId,(SELECT json_group_array(json_object('id',location.id,'name',location.name)) FROM (${publishedRoomsSql}) location WHERE location.event_id=s.event_id AND (location.id=s.room_id OR EXISTS(SELECT 1 FROM json_each(s.additional_room_ids_json) selected WHERE selected.value=location.id))) AS rooms_json,s.timezone AS timeZone,s.start_at AS startAt,s.end_at AS endAt,s.admission_policy AS admissionPolicy,s.visibility,p.status,COALESCE(p.saved,0) AS saved,p.attendance_mode AS attendanceMode ${from} WHERE ${where} ORDER BY ${sort},s.id LIMIT ? OFFSET ?`,
+    `SELECT s.id,s.published_revision AS publishedRevision,s.title,EXISTS(SELECT 1 FROM event_agenda_published_occurrences approved JOIN events event ON event.id=approved.event_id WHERE approved.event_id=s.event_id AND approved.revision=s.published_revision AND approved.occurrence_id=s.id AND json_extract(approved.payload_json,'$.virtualRoomUrl') IS NOT NULL AND json_extract(approved.payload_json,'$.virtualRoomUrl') IS json_extract(event.settings_json,'$.agenda.sessionMedia.'||json_quote(approved.occurrence_id)||'.joinUrl')) AS online_access_available,p.room_id AS roomId,(SELECT json_group_array(json_object('id',location.id,'name',location.name)) FROM (${publishedRoomsSql}) location WHERE location.event_id=s.event_id AND (location.id=s.room_id OR EXISTS(SELECT 1 FROM json_each(s.additional_room_ids_json) selected WHERE selected.value=location.id))) AS rooms_json,s.timezone AS timeZone,s.start_at AS startAt,s.end_at AS endAt,s.admission_policy AS admissionPolicy,s.visibility,p.status,COALESCE(p.saved,0) AS saved,p.attendance_mode AS attendanceMode ${from} WHERE ${where} ORDER BY ${sort},s.id LIMIT ? OFFSET ?`,
     [...bindings, query.limit, query.offset],
   );
   const overlapGroups = await personalAgendaOverlaps(
@@ -50,10 +50,11 @@ export async function personalAgenda(db: DatabaseLike, eventId: string, userId: 
   );
   return personalAgendaResponseSchema.parse({
     sessions: sessions.map((row) => {
-      const { rooms_json, ...session } = row as Record<string, unknown>;
+      const { rooms_json, online_access_available, ...session } = row as Record<string, unknown>;
       return {
         ...session,
         saved: Boolean(session.saved),
+        onlineAccessAvailable: Boolean(online_access_available),
         ...overlapGroups.get(String(session.id)),
         availability: availabilityGroups.get(String(session.id)) ?? [],
         rooms: JSON.parse(String(rooms_json ?? "[]")),

@@ -113,5 +113,8 @@ test("public preview shares the public layout, hides private content and preserv
   expect(requestsAfter.requests.map((row) => row.sequence)).toEqual(requestsBefore.requests.map((row) => row.sequence));
   expect(previewWrites).toEqual([]);
   await page.getByRole("button", { name: "Back to agenda", exact: true }).click();
-  await expect(page.getByRole("button", { name: "New session", exact: true })).toBeVisible();
+  await expect(page.getByRole("tab", { name: "Agenda", exact: true })).toHaveAttribute("aria-selected", "true");
+  await page.getByRole("button", { name: "Actions for Agenda", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: "New session", exact: true })).toBeEnabled();
+  await page.keyboard.press("Escape");
 });

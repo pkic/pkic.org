@@ -130,7 +130,12 @@ test("actual 200% browser zoom preserves long-panel reading and keyboard access 
     await activate(panel.getByRole("button", { name: "Close session details", exact: true }));
     await expect(panel).toBeHidden();
     const before = await fixture.read();
-    await activate(page.getByRole("button", { name: `Resize ${matrixTitle} by dragging to an end time`, exact: true }));
+    await activate(
+      page.getByRole("button", {
+        name: `Resize ${matrixTitle} by dragging its bottom edge to an end time`,
+        exact: true,
+      }),
+    );
     for (const room of ["Main auditorium", "Workshop room", "Community discussion room"])
       await expect(
         page.getByRole("button", { name: new RegExp(`^End selected session at .* in ${room}$`) }).first(),

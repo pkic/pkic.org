@@ -1,4 +1,6 @@
 // @vitest-environment jsdom
+import { agendaBlocksQuerySchema, agendaBlocksListSchema } from "../../assets/shared/schemas/event-agenda-block-list";
+import { buildPageInfo } from "../../assets/shared/schemas/pagination";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, it, expect, vi } from "vitest";
@@ -9,6 +11,23 @@ import {
   agendaAllocationSchema,
   agendaStaffingSchema,
 } from "../../assets/shared/schemas/event-agenda";
+// Renderer seam: keep real hash navigation while using the production Preact hook runtime.
+vi.mock("wouter/use-hash-location", async () => {
+  const { useSyncExternalStore } = await import("preact/compat");
+  const read = () => "/" + window.location.hash.replace(/^#?\/?/, "");
+  const subscribe = (changed: () => void) => {
+    window.addEventListener("hashchange", changed);
+    return () => window.removeEventListener("hashchange", changed);
+  };
+  return {
+    useHashLocation: () => [
+      useSyncExternalStore(subscribe, read),
+      (to: string) => {
+        window.location.hash = to;
+      },
+    ],
+  };
+});
 const snapshot = agendaSnapshotSchema.parse({
   eventSlug: "synthetic",
   timeZone: "Europe/Amsterdam",
@@ -60,9 +79,29 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 async function mount(canEdit = true) {
+  const previousFetch = globalThis.fetch;
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
+      const source = new URL(String(url), "https://pkic.org");
+      if (source.pathname === "/api/v1/events/synthetic/agenda/blocks") {
+        const query = agendaBlocksQuerySchema.parse(Object.fromEntries(source.searchParams));
+        return Response.json(
+          agendaBlocksListSchema.parse({
+            blocks: snapshot.blocks,
+            page: buildPageInfo(query.limit, query.offset, snapshot.blocks.length, snapshot.blocks.length),
+          }),
+        );
+      }
+      return previousFetch(url, init);
+    }),
+  );
   host = document.createElement("div");
   document.body.append(host);
-  await act(() => render(<StaffingEditor snapshot={snapshot} canEdit={canEdit} onSaved={() => {}} />, host));
+  await act(async () => {
+    render(<StaffingEditor snapshot={snapshot} canEdit={canEdit} onSaved={() => {}} />, host);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+  });
 }
 async function openRotation() {
   await runRowAction(host, "Event staffing", "Configure rotation");
@@ -203,13 +242,16 @@ describe("staffing canonical actions", () => {
   it("cancels dedicated assignment editing without writing and keeps overview controls compact", async () => {
     const bodies = capture();
     await mount();
-    expect(host.querySelectorAll("select,input")).toHaveLength(0);
+    expect(host.querySelectorAll('select,input:not([type="search"]):not([type="checkbox"])')).toHaveLength(0);
+    expect(host.querySelector('input[type="search"]')).not.toBeNull();
+    expect(host.textContent).not.toContain("0 uncovered duties");
+    expect(host.textContent).not.toContain("Allocate configured duties and posts across the event.");
     await openPositions();
     await runRowAction(host, "Position 1", "Edit assignment");
     expect(host.querySelector("table")).toBeNull();
     await act(() => [...host.querySelectorAll("button")].find((row) => row.textContent === "Cancel")!.click());
     expect(host.querySelector("form")).toBeNull();
-    expect(host.querySelectorAll("select,input")).toHaveLength(0);
+    expect(host.querySelectorAll('select,input:not([type="search"]):not([type="checkbox"])')).toHaveLength(0);
     expect(bodies).toHaveLength(0);
   });
   it("unpins a senior assignment without changing its person or block", async () => {
@@ -281,7 +323,12 @@ describe("staffing canonical actions", () => {
   it("saves an empty planning block before configuring its ideal staffing needs", async () => {
     const bodies = capture();
     await mount();
-    await runRowAction(host, "Event staffing", "New block");
+    const toolbar = host.querySelector('[role="toolbar"][aria-label="Staffing blocks controls"]');
+    expect(toolbar).not.toBeNull();
+    const create = toolbar!.querySelector<HTMLButtonElement>('button[aria-label="New block"]');
+    expect(create).not.toBeNull();
+    expect(create?.disabled).toBe(false);
+    await act(() => create!.click());
     for (const [name, value] of [
       ["blocks.1.name", "Afternoon door coverage"],
       ["startAt", "2026-12-01T14:00"],

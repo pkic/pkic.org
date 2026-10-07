@@ -58,12 +58,16 @@ describe("session table historical display and conflict coverage", () => {
     expect(row.endAt).toBeNull();
   });
   it("does not present incomplete timing or unresolved source checks as a green clear result", () => {
-    expect(cell("Conflicts", archived)).toContain("Not checked");
+    expect(cell("Conflicts", archived)).toContain(
+      'aria-label="Conflict checks require a complete scheduled interval."',
+    );
     expect(cell("Conflicts", archived)).not.toContain("pk-badge--ok");
     const unresolved = { ...archived, conflicts: { hasConflict: false, categories: [], coverage: "incomplete" } };
-    expect(cell("Conflicts", unresolved)).toContain("Needs review");
+    expect(cell("Conflicts", unresolved)).toContain(
+      'aria-label="Conflict checks are incomplete; review unresolved source credits."',
+    );
     expect(cell("Conflicts", unresolved)).toContain("pk-badge--warn");
-    expect(cell("Conflicts", unresolved)).not.toContain(">Clear<");
+    expect(cell("Conflicts", unresolved)).not.toContain('aria-label="No scheduling conflicts"');
   });
   it("prefers the real canonical interval over older authored timing", () => {
     const scheduled = { ...archived, startAt: "2023-11-08T10:00:00.000Z", endAt: "2023-11-08T11:00:00.000Z" };

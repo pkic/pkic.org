@@ -1,10 +1,12 @@
+import type { agendaRoomOrderSchema } from "../../../../assets/shared/schemas/event-agenda-room-order";
+import { prepareAgendaRoomOrder } from "./room-order-settings";
 import type { z } from "zod";
 import type { agendaRoomCreateSchema } from "../../../../assets/shared/schemas/event-agenda";
 import type { DatabaseLike } from "../../types";
 import { AppError } from "../../errors";
 import { getAgenda } from "./read";
 import { commitAgendaRevision, validateAgendaSchedule } from "./mutations";
-import { assertPublicationCapacity, preparePublicationCapacityGuard } from "./publication-capacity";
+import { assertPlanningPublicationCapacity, preparePlanningPublicationCapacityGuard } from "./publication-capacity";
 
 export async function updateAgendaRoom(
   db: DatabaseLike,
@@ -33,7 +35,7 @@ export async function updateAgendaRoom(
     ),
   };
   validateAgendaSchedule(proposed, proposed.occurrences);
-  await assertPublicationCapacity(db, proposed);
+  await assertPlanningPublicationCapacity(db, proposed, snapshot);
   await commitAgendaRevision(
     db,
     eventId,
@@ -52,8 +54,36 @@ export async function updateAgendaRoom(
           roomId,
           eventId,
         ),
-      preparePublicationCapacityGuard(db, proposed),
+      preparePlanningPublicationCapacityGuard(db, proposed, snapshot),
+      ...(await prepareAgendaRoomOrder(
+        db,
+        eventId,
+        snapshot.rooms.map((room) => room.id),
+      )),
     ],
+    actorUserId,
+  );
+  return getAgenda(db, eventId, eventSlug);
+}
+
+export async function reorderAgendaRooms(
+  db: DatabaseLike,
+  eventId: string,
+  eventSlug: string,
+  input: z.infer<typeof agendaRoomOrderSchema>,
+  actorUserId: string,
+) {
+  const snapshot = await getAgenda(db, eventId, eventSlug);
+  if (
+    input.roomIds.length !== snapshot.rooms.length ||
+    input.roomIds.some((id) => !snapshot.rooms.some((room) => room.id === id))
+  )
+    throw new AppError(400, "AGENDA_ROOM_ORDER_INVALID", "Choose every location in this event exactly once.");
+  await commitAgendaRevision(
+    db,
+    eventId,
+    input.expectedRevision,
+    await prepareAgendaRoomOrder(db, eventId, input.roomIds),
     actorUserId,
   );
   return getAgenda(db, eventId, eventSlug);

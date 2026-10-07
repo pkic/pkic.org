@@ -1,5 +1,5 @@
 import { formatCalendarDate } from "../../../../../../../shared/format-date";
-import { Button } from "../../../../../../ui/Button";
+import { TabList } from "../../../../../../ui/TabList";
 export function AgendaDayNavigation({
   days,
   activeDate,
@@ -10,12 +10,13 @@ export function AgendaDayNavigation({
   onSelect: (date: string) => void;
 }) {
   return (
-    <div class="pk-cluster" role="group" aria-label="Agenda days">
-      {days.map(({ date }) => (
-        <Button aria-pressed={activeDate === date} onClick={() => onSelect(date)}>
-          {formatCalendarDate(date)}
-        </Button>
-      ))}
-    </div>
+    <TabList
+      class="pk-content-agenda__tabs"
+      label="Agenda days"
+      idPrefix="agenda-tab"
+      activeId={activeDate ?? days[0]?.date ?? ""}
+      onSelect={onSelect}
+      items={days.map(({ date }) => ({ id: date, label: formatCalendarDate(date), panelId: `agenda-day-${date}` }))}
+    />
   );
 }

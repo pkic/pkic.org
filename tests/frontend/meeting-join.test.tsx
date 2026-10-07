@@ -81,47 +81,69 @@ describe("secure meeting join browser flow", () => {
     expect(replaceState).toHaveBeenCalledWith({}, "", "/meetings/join/?occurrence=occurrence-id");
   });
 
-  it("keeps a personal link reloadable and requires verification on a new browser", async () => {
-    const token = `m2.${"A".repeat(22)}.${"B".repeat(22)}.0.${"C".repeat(22)}`;
-    expect(parsePersonalMeetingLinkFragment(`#token=${token}`)).toBe(token);
-    expect(parsePersonalMeetingLinkFragment(`#p=${token}`)).toBeNull();
-    const requests: string[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        requests.push(url);
-        if (url === "/api/v1/meetings/links/resolve")
-          return jsonResponse({
-            occurrenceId: occurrence.id,
-            seriesId: occurrence.seriesId,
-            eventName: occurrence.eventName,
-            startsAt: occurrence.startsAt,
-            name: "Paul",
-          });
-        if (url === `/api/v1/meetings/occurrences/${occurrence.id}/links/session`)
-          return jsonResponse({
-            status: "verify",
-            verification: "member",
-            occurrenceId: occurrence.id,
-            eventName: occurrence.eventName,
-            name: "Paul",
-          });
-        throw new Error(`Unexpected request: ${url}`);
-      }),
-    );
-    const container = document.createElement("div");
-    document.body.append(container);
-    mounted.push(container);
-    await act(async () => render(<App invitation={null} personalToken={token} />, container));
-    await vi.waitFor(() => expect(container.textContent).toContain("Welcome, Paul"));
-    expect(container.textContent).toContain("Verify and continue");
-    expect(container.textContent).toContain("Not Paul?");
-    expect(requests).toEqual([
-      "/api/v1/meetings/links/resolve",
-      `/api/v1/meetings/occurrences/${occurrence.id}/links/session`,
-    ]);
-  });
+  it.each([true, false])(
+    "keeps a personal link reloadable and requires verification on a new browser (clear succeeds=%s)",
+    async (clearSucceeds) => {
+      const token = `m2.${"A".repeat(22)}.${"B".repeat(22)}.0.${"C".repeat(22)}`;
+      expect(parsePersonalMeetingLinkFragment(`#token=${token}`)).toBe(token);
+      expect(parsePersonalMeetingLinkFragment(`#p=${token}`)).toBeNull();
+      const requests: string[] = [];
+      const assign = vi.fn();
+      vi.stubGlobal("location", { ...window.location, assign });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = String(input);
+          requests.push(url);
+          if (url === "/api/v1/meetings/links/resolve")
+            return jsonResponse({
+              occurrenceId: occurrence.id,
+              seriesId: occurrence.seriesId,
+              eventName: occurrence.eventName,
+              startsAt: occurrence.startsAt,
+              name: "Paul",
+            });
+          if (url === `/api/v1/meetings/occurrences/${occurrence.id}/links/session` && init?.method === "DELETE")
+            return clearSucceeds ? new Response(null, { status: 204 }) : jsonResponse({ error: "refused" }, 403);
+          if (url === "/api/v1/auth/logout") return jsonResponse({ success: true, outcome: "no_current_session" });
+          if (url === `/api/v1/meetings/occurrences/${occurrence.id}/links/session`)
+            return jsonResponse({
+              status: "verify",
+              verification: "member",
+              occurrenceId: occurrence.id,
+              eventName: occurrence.eventName,
+              name: "Paul",
+            });
+          throw new Error(`Unexpected request: ${url}`);
+        }),
+      );
+      const container = document.createElement("div");
+      document.body.append(container);
+      mounted.push(container);
+      await act(async () => render(<App invitation={null} personalToken={token} />, container));
+      await vi.waitFor(() => expect(container.textContent).toContain("Welcome, Paul"));
+      expect(container.textContent).toContain("Verify and continue");
+      expect(container.textContent).toContain("Not Paul?");
+      expect(requests).toEqual([
+        "/api/v1/meetings/links/resolve",
+        `/api/v1/meetings/occurrences/${occurrence.id}/links/session`,
+      ]);
+      await act(async () => buttonLabelled(container, "Verify and continue").click());
+      if (clearSucceeds) {
+        await vi.waitFor(() => expect(assign).toHaveBeenCalledWith(`/portal/#/meeting-link/${token}`));
+        expect(requests.slice(2)).toEqual([
+          `/api/v1/meetings/occurrences/${occurrence.id}/links/session`,
+          "/api/v1/auth/logout",
+        ]);
+      } else {
+        await vi.waitFor(() => expect(container.textContent).toContain("Meeting entry is temporarily unavailable."));
+        expect(assign).not.toHaveBeenCalled();
+        expect(requests.slice(2)).toEqual([`/api/v1/meetings/occurrences/${occurrence.id}/links/session`]);
+        expect(requests).not.toContain("/api/v1/auth/logout");
+        expect(buttonLabelled(container, "Verify and continue").disabled).toBe(false);
+      }
+    },
+  );
 
   it("renders only the server-authored identity and submits checked current terms", () => {
     const onJoin = vi.fn();

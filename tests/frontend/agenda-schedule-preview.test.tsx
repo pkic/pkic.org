@@ -1,4 +1,6 @@
 import { useState } from "preact/hooks";
+import { useUrlTableState } from "../../assets/ts/hooks/useUrlTableState";
+import { AgendaSessionTable } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/AgendaSessionTable";
 import { useAgendaScheduling } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/useAgendaScheduling";
 import { render } from "preact";
 import { act } from "preact/test-utils";
@@ -78,8 +80,9 @@ function SelectionHarness() {
   );
 }
 describe("canonical scheduling preview", () => {
-  it("unschedules through shared row actions only after revision-bound review and explicit apply", async () => {
+  it("unschedules through shared row actions only after canonical revision-bound server review", async () => {
     const applied: unknown[] = [];
+    let current = snapshot;
     const proposals: ReturnType<typeof agendaScheduleProposalSchema.parse>[] = [];
     vi.stubGlobal(
       "fetch",
@@ -87,6 +90,7 @@ describe("canonical scheduling preview", () => {
         if (url.includes("/schedule/reviews")) {
           const proposal = agendaScheduleProposalSchema.parse(JSON.parse(String(init.body)));
           proposals.push(proposal);
+          expect(applied).toHaveLength(0);
           return json({
             expectedRevision: snapshot.revision,
             reviewHash: "b".repeat(64),
@@ -101,32 +105,33 @@ describe("canonical scheduling preview", () => {
         if (url.endsWith("/schedule")) {
           const body = agendaScheduleApplySchema.parse(JSON.parse(String(init.body)));
           applied.push(body);
-          return json({
+          current = {
             ...snapshot,
             revision: 4,
             occurrences: snapshot.occurrences.map((item) =>
               item.id === "talk-11" ? { ...item, startAt: null, endAt: null } : item,
             ),
-          });
+          };
+          return json(current);
         }
         if (url.includes("/occurrences"))
           return json({
             occurrences: [
               {
-                ...snapshot.occurrences[1],
+                ...current.occurrences[1],
                 demand: { physical: emptySessionDemandCounts(), remote: emptySessionDemandCounts() },
                 conflicts: { hasConflict: false, categories: [] },
               },
             ],
             page: { limit: 50, offset: 0, total: 1, hasMore: false },
           });
-        return json(snapshot);
+        return json(current);
       }),
     );
     await mount(<AgendaEditor slug="event" canEdit />);
     await act(() =>
       [...host.querySelectorAll<HTMLButtonElement>("button")]
-        .find((button) => button.textContent === "All sessions")!
+        .find((button) => button.textContent === "Schedule")!
         .click(),
     );
     await settle();
@@ -138,10 +143,9 @@ describe("canonical scheduling preview", () => {
         changes: [{ id: "talk-11", startAt: null, endAt: null, roomId: "room", additionalRoomIds: [] }],
       },
     ]);
-    expect(host.textContent).toContain("Unscheduled");
-    expect(applied).toHaveLength(0);
-    await act(() => host.querySelector<HTMLButtonElement>('button[type="submit"]')!.click());
-    await settle();
+    expect(current.occurrences[1].startAt).toBeNull();
+    expect(current.occurrences[1].endAt).toBeNull();
+    expect(host.querySelector("form")).toBeNull();
     expect(applied).toEqual([{ ...proposals[0], reviewHash: "b".repeat(64) }]);
   });
   it("previews a canonical neighbor hidden by table filters, and writes only on explicit apply", async () => {
@@ -186,12 +190,14 @@ describe("canonical scheduling preview", () => {
   });
   it("uses the full canonical agenda for a table row command, including a filtered-out neighbor", async () => {
     const proposals: unknown[] = [];
+    const applied: unknown[] = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (url: string, init: RequestInit) => {
         if (url.includes("/schedule/reviews")) {
           const proposal = agendaScheduleProposalSchema.parse(JSON.parse(String(init.body)));
           proposals.push(proposal);
+          expect(applied).toHaveLength(0);
           return json({
             expectedRevision: 3,
             reviewHash: "a".repeat(64),
@@ -202,6 +208,10 @@ describe("canonical scheduling preview", () => {
               afterOrder: 2,
             })),
           });
+        }
+        if (url.endsWith("/schedule")) {
+          applied.push(agendaScheduleApplySchema.parse(JSON.parse(String(init.body))));
+          return json({ ...snapshot, revision: 4 });
         }
         if (url.includes("/occurrences"))
           return json({
@@ -220,7 +230,7 @@ describe("canonical scheduling preview", () => {
     await mount(<AgendaEditor slug="event" canEdit />);
     await act(() =>
       [...host.querySelectorAll<HTMLButtonElement>("button")]
-        .find((button) => button.textContent === "All sessions")!
+        .find((button) => button.textContent === "Schedule")!
         .click(),
     );
     await settle();
@@ -229,7 +239,8 @@ describe("canonical scheduling preview", () => {
     await settle();
     const proposal = agendaScheduleProposalSchema.parse(proposals[0]);
     expect(proposal.changes.map((item) => item.id).sort()).toEqual(["talk-10", "talk-11"]);
-    expect(host.textContent).toContain("Before and after · 2 sessions");
+    expect(applied).toEqual([{ ...proposal, reviewHash: "a".repeat(64) }]);
+    expect(host.querySelector("form")).toBeNull();
   });
 
   it("preserves selected IDs when selecting all rows on another server page, and explicitly clears them", async () => {
@@ -293,7 +304,25 @@ describe("canonical scheduling preview", () => {
         return json(many);
       }),
     );
-    await mount(<AgendaEditor slug="event" canEdit />);
+    function BulkTableHarness() {
+      useUrlTableState("agenda");
+      const scheduling = useAgendaScheduling("event", many, false, vi.fn(), vi.fn(), vi.fn());
+      return (
+        scheduling.panel ?? (
+          <AgendaSessionTable
+            retainUrlStateOnUnmount
+            data={many}
+            days={[{ date: "2026-12-01" }, { date: "2026-12-02" }]}
+            canAct
+            actions={scheduling.actions}
+            selection={scheduling.selection}
+            onData={scheduling.onTableData}
+            toolbar={scheduling.bar}
+          />
+        )
+      );
+    }
+    await mount(<BulkTableHarness />);
     const click = async (label: string) => {
       await act(() =>
         [...host.querySelectorAll<HTMLButtonElement>("button")]
@@ -302,7 +331,6 @@ describe("canonical scheduling preview", () => {
       );
       await settle();
     };
-    await click("All sessions");
     await act(() => host.querySelector<HTMLInputElement>('input[aria-label="Paged session 0"]')!.click());
     await settle();
     expect(host.textContent).toContain("1 of 51 selected");
@@ -389,7 +417,7 @@ it("repacks unequal durations and preserves gaps without moving sessions outside
     ...item,
     startAt: ["2026-12-01T09:00:00.000Z", "2026-12-01T09:50:00.000Z", "2026-12-01T10:20:00.000Z"][index],
     endAt: ["2026-12-01T09:45:00.000Z", "2026-12-01T10:20:00.000Z", "2026-12-01T10:50:00.000Z"][index],
-    kind: index === 1 ? ("break" as const) : ("session" as const),
+    kind: "session" as const,
   }));
   const changes = stepAgendaSessions(items, new Set([items[0].id]), snapshot.timeZone, 1);
   expect(changes).toHaveLength(2);
@@ -402,6 +430,16 @@ it("repacks unequal durations and preserves gaps without moving sessions outside
     endAt: "2026-12-01T10:20:00.000Z",
   });
   expect(changes.some((item) => item.id === items[2].id)).toBe(false);
+});
+
+it("keeps a fixed break unchanged instead of displacing it in a bulk step", () => {
+  const fixed = snapshot.occurrences.map((item, index) => ({
+    ...item,
+    kind: index === 1 ? ("break" as const) : ("session" as const),
+  }));
+  const before = structuredClone(fixed);
+  expect(() => stepAgendaSessions(fixed, new Set([fixed[0].id]), snapshot.timeZone, 1)).toThrow("already at the edge");
+  expect(fixed).toEqual(before);
 });
 
 it("undoes a primary-room move through a reviewed reverse proposal with exact speaker placements", async () => {
@@ -449,6 +487,7 @@ it("undoes a primary-room move through a reviewed reverse proposal with exact sp
             afterOrder: 1,
           })),
         });
+      expect(agendaScheduleApplySchema.parse(JSON.parse(String(init.body))).reviewHash).toBe("a".repeat(64));
       current = { ...current, occurrences: next, revision: current.revision + 1 };
       return json(current);
     }),
@@ -456,7 +495,7 @@ it("undoes a primary-room move through a reviewed reverse proposal with exact sp
   await mount(<AgendaEditor slug="event" canEdit />);
   await runRowAction(host, "Session 10", "Move to day / location");
   await act(() => {
-    const room = host.querySelector<HTMLSelectElement>('[name="roomId"]')!;
+    const room = host.querySelector<HTMLSelectElement>('[name="changes.0.roomId"]')!;
     room.value = "other";
     room.dispatchEvent(new Event("change", { bubbles: true }));
   });
@@ -466,13 +505,15 @@ it("undoes a primary-room move through a reviewed reverse proposal with exact sp
     );
     await settle();
   };
-  await click("Review move");
-  await click("Apply reviewed schedule");
+  await click("Move session");
   expect(current.occurrences[0].speakers[0].roomId).toBe("other");
   await runRowAction(host, "Agenda", "Undo last session edit");
   await settle();
-  expect(host.querySelector("[aria-label='Agenda days']")).toBeNull();
-  expect(requests).toHaveLength(3);
+  expect(host.querySelector("dialog[open]")).toBeNull();
+  expect(host.querySelector("[aria-label='Agenda days'] [aria-selected='true']")?.getAttribute("aria-controls")).toBe(
+    "agenda-day-2026-12-01",
+  );
+  expect(requests).toHaveLength(4);
   expect(requests[2].url).toBe("/api/v1/events/event/agenda/schedule/reviews");
   expect(requests[2].body).toMatchObject({
     expectedRevision: 4,
@@ -480,8 +521,8 @@ it("undoes a primary-room move through a reviewed reverse proposal with exact sp
       { id: "talk-10", roomId: "room", speakerPlacements: { speaker: { attendanceMode: "physical", roomId: "room" } } },
     ],
   });
-  expect(current.revision).toBe(4);
-  await click("Apply reviewed schedule");
+  expect(current.revision).toBe(5);
+  expect(host.querySelector("table.pk-content-agenda__timeline")).not.toBeNull();
   expect(current.occurrences[0].speakers).toEqual(original.occurrences[0].speakers);
   expect(requests.every((request) => !request.url.endsWith("/swaps"))).toBe(true);
 });

@@ -1,3 +1,7 @@
+import { prepareAgendaOccurrenceSettings } from "./occurrence-settings";
+import { prepareAgendaSponsorApproval } from "./sponsors";
+import { prepareAgendaOccurrenceInsert } from "./occurrence-insert";
+import { prepareAgendaRoomOrder } from "./room-order-settings";
 import { preparePublicAgendaSnapshot } from "./public-snapshot";
 import { occurrenceRepresentationReferences, prepareRepresentationEligibility } from "./representation-eligibility";
 import { assertPublicationRepresentations } from "./publication-representations";
@@ -20,10 +24,16 @@ import {
   preparePublicationParticipationChanges,
 } from "../event-participation/publication-impact";
 import { physicalOccupiedSql, remoteOccupiedSql } from "../event-participation/capacity-accounting";
-import { assertPublicationCapacity, preparePublicationCapacityGuard } from "./publication-capacity";
+import {
+  assertPublicationCapacity,
+  preparePublicationCapacityGuard,
+  assertPlanningPublicationCapacity,
+  preparePlanningPublicationCapacityGuard,
+} from "./publication-capacity";
 import { prepareAgendaChangeNotifications } from "./notifications";
 import { z } from "zod";
 import {
+  agendaSettingsSchema,
   agendaOccurrenceCreateSchema,
   agendaOccurrencePatchSchema,
   agendaRoomCreateSchema,
@@ -87,6 +97,9 @@ export async function createAgendaRoom(
   input: z.infer<typeof agendaRoomCreateSchema>,
   actorUserId: string | null = null,
 ) {
+  const id = crypto.randomUUID();
+  const snapshot = await getAgenda(db, eventId, eventSlug);
+  const roomOrder = await prepareAgendaRoomOrder(db, eventId, [...snapshot.rooms.map((room) => room.id), id]);
   await commitAgendaRevision(
     db,
     eventId,
@@ -97,7 +110,7 @@ export async function createAgendaRoom(
           "INSERT INTO event_agenda_rooms(id,event_id,name,capacity,setup_minutes,equipment_json,available_periods_json) VALUES (?,?,?,?,?,?,?)",
         )
         .bind(
-          crypto.randomUUID(),
+          id,
           eventId,
           input.name,
           input.capacity,
@@ -105,6 +118,7 @@ export async function createAgendaRoom(
           JSON.stringify(input.equipment ?? []),
           JSON.stringify(input.availablePeriods ?? []),
         ),
+      ...roomOrder,
     ],
     actorUserId,
   );
@@ -139,33 +153,10 @@ export async function createAgendaOccurrence(
     eventId,
     input.expectedRevision,
     [
-      db
-        .prepare(
-          "INSERT INTO event_agenda_occurrences(id,event_id,title,description,start_at,end_at,room_id,admission_policy,capacity,remote_capacity,visibility,kind,track,presentation_url,recording_url,access_policy,booking_opens_at,booking_closes_at,required_equipment_json) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
-        )
-        .bind(
-          id,
-          eventId,
-          input.title,
-          input.description,
-          input.startAt,
-          input.endAt,
-          input.roomId,
-          input.admissionPolicy,
-          input.capacity,
-          input.remoteCapacity,
-          input.visibility,
-          input.kind,
-          input.track ?? null,
-          input.presentationUrl ?? null,
-          input.recordingUrl ?? null,
-          input.accessPolicy ?? "open",
-          input.bookingOpensAt ?? null,
-          input.bookingClosesAt ?? null,
-          JSON.stringify(input.requiredEquipment ?? []),
-        ),
+      prepareAgendaOccurrenceInsert(db, eventId, id, input),
       ...agendaAdditionalRoomStatements(db, id, input.additionalRoomIds ?? []),
       ...agendaSpeakerStatements(db, id, input.speakerUserIds, input.speakerRoles, input.speakerPlacements),
+      ...(await prepareAgendaOccurrenceSettings(db, eventId, [candidate])),
     ],
     actorUserId,
     conflictProposal,
@@ -294,16 +285,14 @@ export async function patchAgendaOccurrence(
     if ((bookings?.total ?? 0) > effectiveCapacity)
       throw new AppError(409, "AGENDA_RESERVED_CAPACITY", "The new capacity would displace confirmed attendees");
   }
-  await assertPublicationCapacity(db, {
+  const proposed = {
     ...snapshot,
     occurrences: snapshot.occurrences.map((current) => (current.id === id ? item : current)),
-  });
+  };
+  await assertPlanningPublicationCapacity(db, proposed, snapshot);
   const statements = [
     ...(await prepareRepresentationEligibility(db, occurrenceRepresentationReferences([item]))),
-    preparePublicationCapacityGuard(db, {
-      ...snapshot,
-      occurrences: snapshot.occurrences.map((current) => (current.id === id ? item : current)),
-    }),
+    preparePlanningPublicationCapacityGuard(db, proposed, snapshot),
     db
       .prepare(
         "UPDATE event_agenda_occurrences SET title=?,description=?,start_at=?,end_at=?,room_id=?,admission_policy=?,capacity=?,remote_capacity=?,visibility=?,kind=?,track=?,presentation_url=?,recording_url=?,access_policy=?,booking_opens_at=?,booking_closes_at=?,required_equipment_json=? WHERE id=? AND event_id=?",
@@ -330,6 +319,16 @@ export async function patchAgendaOccurrence(
         eventId,
       ),
   ];
+  statements.push(
+    ...(await prepareAgendaOccurrenceSettings(db, eventId, [
+      {
+        id,
+        kind: item.kind,
+        virtualRoomUrl: input.virtualRoomUrl,
+        sponsorIds: input.sponsorIds ?? (input.kind !== undefined && input.kind !== "break" ? [] : undefined),
+      },
+    ])),
+  );
   statements.push(...agendaAdditionalRoomStatements(db, id, item.additionalRoomIds ?? []));
   if (effectiveCapacity !== null)
     statements.unshift(
@@ -398,6 +397,7 @@ export async function publishAgenda(
         bindings: [eventId, event.visibility],
       }),
       ...representationGuards,
+      ...(await prepareAgendaSponsorApproval(db, eventId, approvedSnapshot.occurrences)),
       preparePublicationCapacityGuard(db, snapshot),
       prepareOperationalPeople(db, eventId, nextRevision, privatePeople),
       prepareOperationalDays(db, eventId, nextRevision, privateDays),
@@ -432,7 +432,7 @@ export async function saveAgendaSettings(
   db: DatabaseLike,
   eventId: string,
   eventSlug: string,
-  input: { expectedRevision: number; travelMinutes: number },
+  input: z.infer<typeof agendaSettingsSchema>,
   actorUserId: string | null = null,
 ) {
   const snapshot = await getAgenda(db, eventId, eventSlug);
@@ -441,7 +441,18 @@ export async function saveAgendaSettings(
     db,
     eventId,
     input.expectedRevision,
-    [db.prepare("UPDATE event_agenda_state SET travel_minutes=? WHERE event_id=?").bind(input.travelMinutes, eventId)],
+    [
+      db.prepare("UPDATE event_agenda_state SET travel_minutes=? WHERE event_id=?").bind(input.travelMinutes, eventId),
+      ...(input.durationRules
+        ? [
+            db
+              .prepare(
+                "UPDATE events SET settings_json=json_set(COALESCE(settings_json,'{}'),'$.agenda.durationRules',json(?)) WHERE id=?",
+              )
+              .bind(JSON.stringify(input.durationRules), eventId),
+          ]
+        : []),
+    ],
     actorUserId,
   );
   return getAgenda(db, eventId, eventSlug);

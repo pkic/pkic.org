@@ -29,6 +29,7 @@ export const eventProposalsListQuerySchema = listQuerySchema(EVENT_PROPOSALS_SOR
   status: proposalAdminStatusFilterSchema.optional(),
   recommendation: proposalRecommendationSchema.optional(),
   presentation: proposalPresentationFilterSchema.optional(),
+  agenda: z.enum(["imported", "unimported"]).optional(),
 });
 export type EventProposalsListQuery = z.infer<typeof eventProposalsListQuerySchema>;
 

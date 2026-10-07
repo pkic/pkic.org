@@ -10,7 +10,12 @@ export function fieldLabel(label: string): RegExp {
 
 export async function acceptVisibleTerms(page: Page, selector: string): Promise<void> {
   const terms = page.locator(selector).getByRole("checkbox");
-  for (let index = 0; index < (await terms.count()); index += 1) await terms.nth(index).check();
+  await expect(terms.first()).toBeVisible();
+  const count = await terms.count();
+  expect(count).toBeGreaterThan(0);
+  for (let index = 0; index < count; index += 1) await terms.nth(index).check();
+  await expect(terms).toHaveCount(count);
+  for (let index = 0; index < count; index += 1) await expect(terms.nth(index)).toBeChecked();
 }
 
 export async function answerRequiredProposalFields(page: Page): Promise<void> {

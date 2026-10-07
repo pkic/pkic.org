@@ -10,8 +10,12 @@ import {
 import { prepareSponsorLiveFixture, captureSponsorBadge, sponsorEventSlug } from "./helpers/sponsor-live-fixture";
 import { sponsorLeadListSchema } from "../../assets/shared/schemas/event-sponsor-lead-list";
 import { agendaStaffingSchema } from "../../assets/shared/schemas/event-agenda";
-import { agendaScheduleApplySchema } from "../../assets/shared/schemas/event-agenda-schedule";
+import {
+  agendaScheduleApplySchema,
+  agendaScheduleReviewSchema,
+} from "../../assets/shared/schemas/event-agenda-schedule";
 import { formatTimeRangeInZone } from "../../assets/shared/format-date";
+import { runAgendaAction } from "./helpers/agenda-actions";
 import { initialsFrom } from "../../assets/ts/shared/initials";
 
 async function expectReadingBounds(content: Locator) {
@@ -41,7 +45,7 @@ for (const mode of ["keyboard", "touch", "pointer"] as const) {
       hasTouch: mode === "touch",
       isMobile: mode === "touch",
     });
-    test("resize selection refuses invalid targets and commits only after explicit review", async ({ page }, info) => {
+    test("resize selection refuses invalid targets and commits the exact guarded command", async ({ page }, info) => {
       test.setTimeout(180_000);
       await signInAsE2eStaff(
         page,
@@ -66,9 +70,11 @@ for (const mode of ["keyboard", "touch", "pointer"] as const) {
       };
       await expect(page.getByRole("heading", { name: matrixTitle, exact: true })).toBeVisible();
       const roomNames = ["Main auditorium", "Workshop room", "Community discussion room"];
-      if (mode !== "touch")
-        for (const room of roomNames)
-          await expect(page.getByRole("columnheader", { name: room, exact: true })).toBeVisible();
+      const roomColumn = (room: string) =>
+        page.getByRole("columnheader").filter({
+          has: page.getByRole("button", { name: `Rename ${room}`, exact: true }),
+        });
+      if (mode !== "touch") for (const room of roomNames) await expect(roomColumn(room)).toBeVisible();
 
       await activate(page.getByRole("button", { name: `Open session details: ${matrixTitle}`, exact: true }));
       const panel = page.getByRole("dialog", { name: matrixTitle, exact: true });
@@ -102,75 +108,87 @@ for (const mode of ["keyboard", "touch", "pointer"] as const) {
       await page.screenshot({ path: info.outputPath(`named-panel-missing-portraits-${mode}.png`), fullPage: true });
       await activate(panel.getByRole("button", { name: "Close session details", exact: true }));
       await expect(panel).toBeHidden();
-      const step = page.getByLabel("Scheduling time step", { exact: true });
-      await step.selectOption("15");
+      async function setStep(minutes: string) {
+        await runAgendaAction(page, "Scheduling rules");
+        const rules = page.getByRole("dialog", { name: "Scheduling rules", exact: true });
+        await rules.getByLabel("Calendar grid spacing", { exact: true }).selectOption(minutes);
+        await rules.getByRole("button", { name: "Save rules", exact: true }).click();
+        await expect(rules).toBeHidden();
+      }
+      await setStep("15");
       const before = await fixture.read();
-      const edge = page.getByRole("button", { name: `Resize ${matrixTitle} by dragging to an end time`, exact: true });
-      if (mode === "pointer") {
+      const endTarget = (instant: string, roomName: string) => {
+        const room = before.rooms.find((value) => value.name === roomName);
+        if (!room) throw new Error(`Canonical resize location missing: ${roomName}`);
+        return page
+          .locator(`tr[data-agenda-start="${instant}"] > td[data-agenda-cell="${room.id}"]`)
+          .getByRole("button", {
+            name: `End selected session at ${formatTimeRangeInZone(instant, undefined, "UTC")} in ${roomName}`,
+            exact: true,
+          });
+      };
+      const edge = page.getByRole("button", {
+        name: `Resize ${matrixTitle} by dragging its bottom edge to an end time`,
+        exact: true,
+      });
+      async function slideEdge(roomName: string, endAt: string) {
         await edge.scrollIntoViewIfNeeded();
-        const box = await edge.boundingBox();
-        if (!box) throw new Error("Resize edge has no native pointer geometry");
-        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2);
+        const origin = await edge.boundingBox();
+        if (!origin) throw new Error("Resize edge has no actual pointer geometry");
+        const column = await roomColumn(roomName).boundingBox();
+        const line = await page.locator(`tr[data-agenda-start="${endAt}"]`).boundingBox();
+        if (!column || !line) throw new Error("Resize destination is not rendered");
+        await page.mouse.move(origin.x + origin.width / 2, origin.y + origin.height / 2);
         await page.mouse.down();
-        await page.mouse.move(box.x + box.width / 2 + 40, box.y + box.height / 2 + 12, { steps: 8 });
-      } else await activate(edge);
-      await expect(page.getByRole("status").filter({ hasText: "Choose an end time" })).toBeVisible();
-      for (const room of roomNames)
-        await expect(
-          page.getByRole("button", { name: new RegExp(`^End selected session at .* in ${room}$`) }).first(),
-        ).toBeVisible();
-      const invalid = page.getByRole("button", { name: /End selected session at .* in Workshop room$/ }).first();
-      await expect(invalid).toBeDisabled();
+        await page.mouse.move(column.x + column.width / 2, line.y, { steps: 12 });
+      }
+      if (mode === "pointer") {
+        await slideEdge("Workshop room", "2027-09-10T10:00:00.000Z");
+        await expect(page.locator(".pk-agenda-editor__pointer-preview:not([hidden])")).toHaveCount(0);
+        await page.mouse.up();
+      } else {
+        await activate(edge);
+        await expect(page.getByRole("status").filter({ hasText: "Choose an end time" })).toBeVisible();
+        for (const room of roomNames) await expect(endTarget(fixture.occurrence.endAt!, room)).toBeVisible();
+        await expect(endTarget(fixture.occurrence.endAt!, "Workshop room")).toBeDisabled();
+      }
       expect(await fixture.read()).toEqual(before);
       const desiredEnd = new Date(Date.parse(fixture.occurrence.endAt!) + 15 * 60_000).toISOString();
       const candidateName = `End selected session at ${formatTimeRangeInZone(desiredEnd, undefined, "UTC")} in Main auditorium`;
       if (mode !== "pointer") {
-        await step.selectOption("1");
-        await expect(
-          page.getByRole("button", {
-            name: `End selected session at ${formatTimeRangeInZone("2027-09-10T09:57:00.000Z", undefined, "UTC")} in Main auditorium`,
-            exact: true,
-          }),
-        ).toBeEnabled();
-        await step.selectOption("15");
+        await setStep("1");
+        await expect(endTarget("2027-09-10T09:57:00.000Z", "Main auditorium")).toBeEnabled();
+        await setStep("15");
       }
-      const destination = page.getByRole("button", { name: candidateName, exact: true });
-      await expect(destination).toBeEnabled();
       const reviewing = page.waitForResponse(
         (response) =>
           new URL(response.url()).pathname === `${fixture.endpoint}/schedule/reviews` &&
           response.request().method() === "POST",
+        { timeout: 20_000 },
       );
-      if (mode === "pointer") {
-        await destination.scrollIntoViewIfNeeded();
-        const box = await destination.boundingBox();
-        if (!box) throw new Error("Resize destination has no native pointer geometry");
-        await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2, { steps: 10 });
-        const hit = await destination.evaluate((element) => {
-          const rect = element.getBoundingClientRect();
-          const target = document.elementFromPoint(rect.left + rect.width / 2, rect.top + rect.height / 2);
-          return target !== null && element.contains(target);
-        });
-        expect(hit).toBe(true);
-        await page.mouse.up();
-      } else await activate(destination);
-      const reviewResponse = await reviewing;
-      expect(reviewResponse.status(), reviewResponse.status() === 200 ? undefined : await reviewResponse.text()).toBe(
-        200,
-      );
-      await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toBeVisible();
-      expect(await fixture.read()).toEqual(before);
-      const apply = page.getByRole("button", { name: "Apply reviewed schedule", exact: true });
-      await expect(apply).toBeEnabled();
       const applying = page.waitForResponse(
         (response) =>
           new URL(response.url()).pathname === `${fixture.endpoint}/schedule` && response.request().method() === "POST",
+        { timeout: 20_000 },
       );
-      await activate(apply);
+      if (mode === "pointer") {
+        await slideEdge("Main auditorium", desiredEnd);
+        await expect(page.locator(".pk-agenda-editor__pointer-preview:not([hidden])")).toHaveCount(1);
+        expect(await fixture.read()).toEqual(before);
+        await page.mouse.up();
+      } else {
+        const destination = endTarget(desiredEnd, "Main auditorium");
+        await expect(destination).toBeEnabled();
+        await activate(destination);
+      }
+      const reviewResponse = await reviewing;
+      expect(reviewResponse.status()).toBe(200);
       const response = await applying;
       expect(response.status()).toBe(200);
+      const reviewedHash = agendaScheduleReviewSchema.parse(await reviewResponse.json()).reviewHash;
       const command = agendaScheduleApplySchema.parse(response.request().postDataJSON());
       expect(command.expectedRevision).toBe(before.revision);
+      expect(command.reviewHash).toBe(reviewedHash);
       expect(command.changes).toHaveLength(1);
       const change = command.changes[0]!;
       expect(change).toMatchObject({
@@ -188,7 +206,10 @@ for (const mode of ["keyboard", "touch", "pointer"] as const) {
       expect(after.occurrences.find((row) => row.id === fixture.occurrence.id)?.endAt).toBe(change.endAt);
       await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toHaveCount(0);
       await activate(
-        page.getByRole("button", { name: `Resize ${matrixTitle} by dragging to an end time`, exact: true }),
+        page.getByRole("button", {
+          name: `Resize ${matrixTitle} by dragging its bottom edge to an end time`,
+          exact: true,
+        }),
       );
       await activate(page.getByRole("button", { name: "Cancel selection", exact: true }));
       expect(await fixture.read()).toEqual(after);
@@ -285,7 +306,7 @@ for (const mode of ["keyboard", "touch", "pointer"] as const) {
           manualCount: 1,
         });
         await expect(page.getByRole("button", { name: "Save assignment", exact: true })).toHaveCount(0);
-        await activate(page.getByRole("tab", { name: "People", exact: true }));
+        await activate(page.getByRole("tab", { name: "Workload", exact: true }));
         const roster = page.getByRole("region", { name: "Staffing workload roster", exact: true });
         const personReport = after.staffingReport!.people.find((value) => value.userId === fixture.people[0]!.id)!;
         const row = roster.getByRole("row").filter({ hasText: personReport.displayName });
@@ -314,7 +335,13 @@ test("expanded sponsor history prose and inner history fit their visible desktop
     await page.goto(fixture.workspace);
     await page.getByRole("button", { name: /^Open leads for/ }).click();
     await page.getByRole("button", { name: "Scan leads", exact: true }).click();
-    await page.getByLabel("Feedback pause", { exact: true }).selectOption("0");
+    const diagnostics = page.locator("details").filter({
+      has: page.locator(":scope > summary").filter({ hasText: "Recovery and diagnostics" }),
+    });
+    await expect(diagnostics).toHaveCount(1);
+    await diagnostics.locator(":scope > summary").click();
+    await diagnostics.getByLabel("Feedback pause", { exact: true }).selectOption("0");
+    await diagnostics.locator(":scope > summary").click();
     await captureSponsorBadge(page, fixture.consenting.badgeId, fixture.sponsorId, fixture.operator.userId);
     await page.getByRole("button", { name: "Close scanner", exact: true }).click();
     const leads = sponsorLeadListSchema.parse(

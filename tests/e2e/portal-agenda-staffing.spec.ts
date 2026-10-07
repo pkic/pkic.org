@@ -1,19 +1,42 @@
 import { mkdir } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { agendaSnapshotSchema } from "../../assets/shared/schemas/event-agenda";
+import { eventDetailResponseSchema } from "../../assets/shared/schemas/event-management";
+import { groupEventCreateSchema, groupEventDetailResponseSchema } from "../../assets/shared/schemas/group-events";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
+import { runRowAction } from "./helpers/data-table";
 
-const slug = "pqc-conference-amsterdam-nl";
 const artifacts = process.env.AGENDA_SCREENSHOT_DIR ?? "test-results/agenda-progress";
 
 test("organizers configure two doors and generate an advisory staffing plan", async ({ page }) => {
   test.setTimeout(180_000);
   await mkdir(artifacts, { recursive: true });
-  await signInAsE2eStaff(page, e2eAdminEmail("default"));
+  await signInAsE2eStaff(page, e2eAdminEmail("portal-agenda-staffing"));
+  const owner = eventDetailResponseSchema.parse(
+    await (await page.request.get("/api/v1/events/pqc-conference-amsterdam-nl")).json(),
+  ).event;
+  if (!("ownerGroupId" in owner) || !owner.ownerGroupId) throw new Error("Canonical conference owner missing");
+  const slug = `staffing-two-doors-${crypto.randomUUID()}`;
+  const created = await page.request.post(`/api/v1/groups/${owner.ownerGroupId}/events`, {
+    data: groupEventCreateSchema.parse({
+      slug,
+      name: "Synthetic two-door staffing plan",
+      profileKey: "conference",
+      visibility: "invitation_only",
+      registrationPolicy: "no_registration",
+      timezone: "UTC",
+      startsAt: "2026-12-01T08:00:00.000Z",
+      endsAt: "2026-12-03T18:00:00.000Z",
+      links: [],
+    }),
+  });
+  expect(created.status()).toBe(201);
+  groupEventDetailResponseSchema.parse(await created.json());
   await page.goto(`/portal/#/events/${slug}/agenda`);
-  await page.getByRole("button", { name: "Block roles", exact: true }).click();
-  await page.getByRole("button", { name: "Roles and posts", exact: true }).click();
+  await page.getByRole("tab", { name: "Block roles", exact: true }).click();
+  await page.getByRole("button", { name: "Actions for Event staffing", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Roles and posts", exact: true }).click();
   await page.getByRole("button", { name: "Add role", exact: true }).click();
   await page.getByRole("textbox", { name: "Role name", exact: true }).last().fill("Badge scanning");
   await expect(page.getByRole("checkbox", { name: "Show this role on the public agenda" }).last()).not.toBeChecked();
@@ -28,7 +51,11 @@ test("organizers configure two doors and generate an advisory staffing plan", as
   await page.getByLabel(/^Block starts/).fill("2026-12-01T09:00");
   await page.getByLabel(/^Block ends/).fill("2026-12-01T10:00");
   await page.getByRole("button", { name: "Save block", exact: true }).click();
-  await page.getByRole("button", { name: "Staffing needs for Morning arrivals", exact: true }).click();
+  const blockRow = page
+    .getByRole("table", { name: "Staffing blocks", exact: true })
+    .getByRole("row")
+    .filter({ hasText: "Morning arrivals" });
+  await runRowAction(page, blockRow, "Staffing needs");
   for (const door of ["North entrance", "South entrance"]) {
     await page.getByRole("button", { name: "Add duty requirement", exact: true }).click();
     await page.getByLabel("Duty role", { exact: true }).last().selectOption({ label: "Badge scanning" });
@@ -37,8 +64,23 @@ test("organizers configure two doors and generate an advisory staffing plan", as
     await page.getByLabel("Duty attendance mode", { exact: true }).last().selectOption("physical");
   }
   await page.getByRole("button", { name: "Save staffing needs", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Badge scanning · North entrance", exact: true })).toBeVisible();
-  await expect(page.getByText("0 assigned · 2 ideal · 2 unfilled", { exact: true })).toHaveCount(2);
+  async function reviewNeeds() {
+    await expect(blockRow.getByRole("cell", { name: "4 unfilled", exact: true })).toBeVisible();
+    await runRowAction(page, blockRow, "Review staffing");
+    const needs = page.getByRole("table", { name: "Block staffing needs", exact: true });
+    await expect(needs.getByRole("row")).toHaveCount(3);
+    for (const door of ["North entrance", "South entrance"]) {
+      const row = needs.getByRole("row").filter({ hasText: door });
+      await expect(row).toHaveCount(1);
+      await expect(row.getByRole("cell").nth(0)).toContainText("Badge scanning");
+      await expect(row.getByRole("cell").nth(1).locator(":scope > .pk-table__value")).toHaveText(door);
+      await expect(row.getByRole("cell").nth(2).locator(":scope > .pk-table__value")).toHaveText("0");
+      await expect(row.getByRole("cell").nth(3).locator(":scope > .pk-table__value")).toHaveText("2");
+      await expect(row.getByRole("cell").nth(4).locator(":scope > .pk-table__value")).toHaveText("2");
+    }
+  }
+  await reviewNeeds();
+  await page.getByRole("button", { name: "Back to staffing", exact: true }).click();
   const read = async () =>
     agendaSnapshotSchema.parse(await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json());
   const before = await read();
@@ -48,14 +90,16 @@ test("organizers configure two doors and generate an advisory staffing plan", as
   expect(
     before.staffingPositions.filter((row) => requirements.some((need) => need.id === row.requirementId)),
   ).toHaveLength(4);
-  await page.getByRole("button", { name: "Configure rotation", exact: true }).click();
+  await page.getByRole("button", { name: "Actions for Event staffing", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Configure rotation", exact: true }).click();
   await page.getByLabel("Rotation seed", { exact: true }).fill("door-plan-browser");
   await page.getByRole("button", { name: "Generate assignments", exact: true }).click();
   await expect.poll(async () => (await read()).revision).toBe(before.revision + 1);
   const after = await read();
   expect(after.staffingPositions).toEqual(before.staffingPositions);
+  expect(after.roleMembers).toEqual(before.roleMembers);
   expect(after.assignments.filter((row) => row.blockId === block.id)).toHaveLength(0);
-  await expect(page.getByText("0 assigned · 2 ideal · 2 unfilled", { exact: true })).toHaveCount(2);
+  await reviewNeeds();
   await page.screenshot({ path: `${artifacts}/staffing-two-doors-desktop.png`, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);

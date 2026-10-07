@@ -1,3 +1,9 @@
+import {
+  agendaMediaCapabilities,
+  withoutAgendaMediaEquipment,
+  withAgendaMediaCapabilities,
+} from "../../../../../../../shared/event-agenda-media";
+import { Checkbox } from "../../../../../../ui/Checkbox";
 import { dateTimeLocalToIso, instantToDateTimeLocal } from "../../../../../../../shared/timezone";
 import { useEditorFocus } from "./useEditorFocus";
 import { useState } from "preact/hooks";
@@ -28,7 +34,8 @@ export function RoomEditor({
   const [setupMinutes, setSetup] = useState(String(room?.setupMinutes ?? 0));
   const [name, setName] = useState(room?.name ?? "");
   const [capacity, setCapacity] = useState(room?.capacity == null ? "" : String(room.capacity));
-  const [equipment, setEquipment] = useState((room?.equipment ?? []).join(", "));
+  const [equipment, setEquipment] = useState(withoutAgendaMediaEquipment(room?.equipment).join(", "));
+  const [media, setMedia] = useState(() => agendaMediaCapabilities(room?.equipment));
   const [periods, setPeriods] = useState(
     (room?.availablePeriods ?? []).map((period) => ({
       startAt: instantToDateTimeLocal(period.startAt, snapshot.timeZone),
@@ -50,10 +57,13 @@ export function RoomEditor({
     setupMinutes: Number(setupMinutes),
     capacity: capacity ? Number(capacity) : null,
     availablePeriods: periods.map((period) => ({ startAt: instant(period.startAt), endAt: instant(period.endAt) })),
-    equipment: equipment
-      .split(",")
-      .map((item) => item.trim())
-      .filter(Boolean),
+    equipment: withAgendaMediaCapabilities(
+      equipment
+        .split(",")
+        .map((item) => item.trim())
+        .filter(Boolean),
+      media,
+    ),
   });
   async function save(event: Event) {
     event.preventDefault();
@@ -94,11 +104,7 @@ export function RoomEditor({
               />
             )}
           </Field>
-          <Field
-            label="Physical capacity"
-            help="Leave empty when a physical limit does not apply."
-            {...form.of("capacity")}
-          >
+          <Field label="Physical capacity" help="Leave empty for unlimited physical capacity." {...form.of("capacity")}>
             {(control) => (
               <TextInput
                 {...control}
@@ -124,9 +130,27 @@ export function RoomEditor({
               />
             )}
           </Field>
+          <fieldset class="pk-stack">
+            <legend>Planned media</legend>
+            <Checkbox
+              name="recording"
+              label="Recording"
+              checked={media.recording}
+              onChange={(event) => setMedia({ ...media, recording: event.currentTarget.checked })}
+            />
+            <Checkbox
+              name="liveStreaming"
+              label="Live streaming"
+              checked={media.liveStreaming}
+              onChange={(event) => setMedia({ ...media, liveStreaming: event.currentTarget.checked })}
+            />
+            <p class="pk-muted">
+              These plans do not publish a live link or a recording. Add those to the session when they are available.
+            </p>
+          </fieldset>
           <Field
             label="Available equipment"
-            help="Separate items with commas, for example projector, microphones, recording."
+            help="Separate other items with commas, for example projector, microphones."
             {...form.of("equipment")}
           >
             {(control) => (

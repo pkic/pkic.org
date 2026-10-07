@@ -99,7 +99,7 @@ const PUBLIC_SPONSOR_READ_MODEL_CTE = `
        AND event_tier.active = 1
   )`;
 
-export type PublicSponsorEventIdentity = Pick<SponsorsListQuery, "eventSlug" | "eventName">;
+export type PublicSponsorEventIdentity = Pick<SponsorsListQuery, "eventSlug" | "eventName"> & { eventId?: string };
 
 /**
  * Select an event by stable canonical slug whenever available. Name matching is
@@ -111,6 +111,12 @@ export function buildPublicSponsorReadModel(identity: PublicSponsorEventIdentity
   sql: string;
   bindings: unknown[];
 } {
+  if (identity.eventId) {
+    return {
+      sql: PUBLIC_SPONSOR_READ_MODEL_CTE.replace("__SELECTED_EVENT__", "SELECT id FROM events WHERE id = ? LIMIT 1"),
+      bindings: [identity.eventId],
+    };
+  }
   if (identity.eventSlug) {
     return {
       sql: PUBLIC_SPONSOR_READ_MODEL_CTE.replace("__SELECTED_EVENT__", "SELECT id FROM events WHERE slug = ? LIMIT 1"),
@@ -132,7 +138,7 @@ export function buildPublicSponsorReadModel(identity: PublicSponsorEventIdentity
   };
 }
 
-interface SponsorRow {
+export interface SponsorRow {
   id: string;
   name: string;
   website: string | null;
@@ -145,6 +151,23 @@ interface SponsorRow {
 }
 
 export type PublicSponsorListOptions = SponsorsListQuery;
+
+export function publicSponsorFromRow(row: SponsorRow) {
+  return {
+    id: row.id,
+    name: row.name,
+    website: sanitizeLegacyHttpUrl(row.website),
+    logoUrl: row.logo_r2_key
+      ? `/api/v1/members/${row.id}/logo`
+      : row.sponsorship_logo_r2_key
+        ? `/api/v1/sponsors/${row.id}/logo`
+        : null,
+    tier: row.tier,
+    eventTier: row.event_tier,
+    effectiveTier: row.effective_tier,
+    weight: row.effective_weight,
+  };
+}
 
 async function rejectAmbiguousLegacyEventName(db: DatabaseLike, eventName?: string): Promise<void> {
   if (!eventName) return;
@@ -268,20 +291,7 @@ export async function listPublicSponsors(
   );
   const { rows, total } = await querySponsorPage(db, options, filter, orderBy);
 
-  const sponsors = rows.map((row) => ({
-    id: row.id,
-    name: row.name,
-    website: sanitizeLegacyHttpUrl(row.website),
-    logoUrl: row.logo_r2_key
-      ? `/api/v1/members/${row.id}/logo`
-      : row.sponsorship_logo_r2_key
-        ? `/api/v1/sponsors/${row.id}/logo`
-        : null,
-    tier: row.tier,
-    eventTier: row.event_tier,
-    effectiveTier: row.effective_tier,
-    weight: row.effective_weight,
-  }));
+  const sponsors = rows.map(publicSponsorFromRow);
   return { sponsors, page: buildPageInfo(options.limit, options.offset, total, sponsors.length) };
 }
 

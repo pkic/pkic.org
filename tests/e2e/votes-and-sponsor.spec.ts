@@ -1,22 +1,22 @@
 /**
- * E2E coverage for the public votes pages (/votes/, /votes/detail/)
- * and the event sponsorship checkout and inquiry paths.
- *
- * Votes: a real vote is created and made public through the actual admin
- * API (proving the public GET /api/v1/votes(/:slug) endpoints and the new
- * frontend are wired together end-to-end), while the "closed with results"
- * rendering branches are exercised via mocked responses — this environment
- * has no way to fast-forward the 15-minute due-work cron that tallies and
- * closes a vote locally, and votes.test.ts already covers that tallying
- * logic at the service layer.
- *
- * Stripe isn't configured in local dev, so the checkout-session creation
- * call is mocked while the form and redirect run in the browser.
+ * Public votes are generated through the actual local publication pipeline.
+ * The open vote is created through mounted APIs; closed results are explicitly
+ * synthetic canonical publication fixtures, preserving all other public data.
+ * Stripe checkout is mocked because local development has no Stripe account.
  * @covers vote.5.11
  */
+import { createHash } from "node:crypto";
 import { expect, test } from "@playwright/test";
 import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { publishE2eSite } from "./helpers/site-publication";
+import { sitePublicationSnapshotSchema } from "../../assets/shared/schemas/site-publication";
+import { publicVoteGetResponseSchema } from "../../assets/shared/schemas/votes";
+import {
+  sponsorshipCheckoutSchema,
+  sponsorshipCheckoutResponseSchema,
+  type SponsorshipCheckoutInput,
+} from "../../assets/shared/schemas/sponsorship";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 
 async function signInAsAdmin(page: Page): Promise<void> {
@@ -24,7 +24,8 @@ async function signInAsAdmin(page: Page): Promise<void> {
 }
 
 test.describe("public votes pages", () => {
-  test("lists a real open public vote and renders mocked closed motion/election results", async ({ page }) => {
+  test("publishes a real open public vote and synthetic closed motion/election results", async ({ page }) => {
+    test.setTimeout(300_000); // Two actual local static publication builds.
     // Expected 4xx noise: an unauthenticated session probe (401) and the
     // deliberate not-found lookup below (404) — same ignore convention as
     // browser-rendering.spec.ts's monitorErrors.
@@ -81,8 +82,14 @@ test.describe("public votes pages", () => {
     expect(visibilityStatus).toBe(200);
 
     // ── Index page shows the real open vote ─────────────────────────────
+    const publicResponse = await page.request.get(`/api/v1/votes/${slug}`);
+    expect(publicResponse.status()).toBe(200);
+    const publicVote = publicVoteGetResponseSchema.parse(await publicResponse.json()).vote;
+    expect(publicVote.title).toBe(title);
+    expect(publicVote.status).toBe("open");
+    const nativePublication = await publishE2eSite(page, `/votes/${slug}/`);
     await page.goto("/votes/");
-    await expect(page.getByRole("heading", { name: "Open for voting" })).toBeVisible();
+    await expect(page.locator(".member-card").filter({ hasText: title })).toContainText("Open");
     await expect(page.getByText(title)).toBeVisible();
 
     // ── Detail page (real backend) — not yet closed, no result shown ─────
@@ -91,116 +98,113 @@ test.describe("public votes pages", () => {
     // actionability check sees the <a> itself as zero-size, so click the
     // card container instead, mirroring how a real click lands on it.
     await page.locator(".member-card").filter({ hasText: title }).click();
-    await expect(page).toHaveURL(new RegExp(`/votes/detail/\\?slug=${slug}`));
+    await expect(page).toHaveURL(new RegExp(`/votes/${slug}/$`));
     await expect(page.getByRole("heading", { name: title })).toBeVisible();
     await expect(page.getByText(/Results will be published here once voting closes/i)).toBeVisible();
 
-    // ── Not-found (real backend, unknown slug) ───────────────────────────
-    await page.goto("/votes/detail/?slug=does-not-exist-e2e");
-    await expect(page.getByText(/couldn.t find that vote/i)).toBeVisible();
+    // An unknown public vote remains refused by the real backend and static route.
+    expect((await page.request.get("/api/v1/votes/does-not-exist-e2e")).status()).toBe(404);
+    expect((await page.request.get("/votes/does-not-exist-e2e/")).status()).toBe(404);
 
-    // ── Mocked closed motion result ───────────────────────────────────────
-    await page.route("**/api/v1/votes/mocked-closed-motion", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          vote: {
-            id: "00000000-0000-4000-8000-000000000001",
-            slug: "mocked-closed-motion",
-            title: "Mocked Closed Motion",
-            description: "A mocked, already-closed motion vote.",
-            voteType: "motion",
-            ownerGroupId: "20000000-0000-4000-8000-000000000001",
-            ownerGroupName: "All Members",
-            electorateMode: "per_member",
-            thresholdType: "simple_majority",
-            eligibleCategories: null,
-            opensAt: new Date(Date.now() - 172_800_000).toISOString(),
-            closesAt: new Date(Date.now() - 86_400_000).toISOString(),
-            currentRound: 0,
-            status: "closed",
-            visibility: "public",
-            publicDetailLevel: "full_breakdown",
-            createdAt: new Date(Date.now() - 259_200_000).toISOString(),
-            updatedAt: new Date(Date.now() - 86_400_000).toISOString(),
-            candidates: null,
-            result: {
-              thresholdType: "simple_majority",
-              counts: { in_favor: 23, opposed: 4, abstain: 2 },
-              totalBallots: 29,
-              outcome: "passed",
-            },
+    // Synthetic closed results are publication source fixtures, never visitor API responses.
+    const motion = publicVoteGetResponseSchema.parse({
+      vote: {
+        id: "00000000-0000-4000-8000-000000000001",
+        slug: "synthetic-closed-motion",
+        title: "Synthetic Closed Motion",
+        description: "A synthetic, already-closed motion vote.",
+        voteType: "motion",
+        ownerGroupId: "20000000-0000-4000-8000-000000000001",
+        ownerGroupName: "All Members",
+        electorateMode: "per_member",
+        thresholdType: "simple_majority",
+        eligibleCategories: null,
+        opensAt: new Date(Date.now() - 172_800_000).toISOString(),
+        closesAt: new Date(Date.now() - 86_400_000).toISOString(),
+        currentRound: 0,
+        status: "closed",
+        visibility: "public",
+        publicDetailLevel: "full_breakdown",
+        createdAt: new Date(Date.now() - 259_200_000).toISOString(),
+        updatedAt: new Date(Date.now() - 86_400_000).toISOString(),
+        candidates: null,
+        result: {
+          thresholdType: "simple_majority",
+          counts: { in_favor: 23, opposed: 4, abstain: 2 },
+          totalBallots: 29,
+          outcome: "passed",
+        },
+      },
+    }).vote;
+    const election = publicVoteGetResponseSchema.parse({
+      vote: {
+        id: "00000000-0000-4000-8000-000000000002",
+        slug: "synthetic-closed-election",
+        title: "Synthetic WG Chair Election",
+        description: "A synthetic, already-closed election vote.",
+        voteType: "election",
+        ownerGroupId: "20000000-0000-4000-8000-000000000003",
+        ownerGroupName: "Post-Quantum Cryptography Working Group",
+        electorateMode: "per_person",
+        thresholdType: "successive_elimination",
+        eligibleCategories: null,
+        opensAt: new Date(Date.now() - 172_800_000).toISOString(),
+        closesAt: new Date(Date.now() - 86_400_000).toISOString(),
+        currentRound: 1,
+        status: "closed",
+        visibility: "public",
+        publicDetailLevel: "full_breakdown",
+        createdAt: new Date(Date.now() - 259_200_000).toISOString(),
+        updatedAt: new Date(Date.now() - 86_400_000).toISOString(),
+        candidates: [
+          {
+            id: "00000000-0000-4000-8000-000000000004",
+            userId: null,
+            candidateName: "Alice Candidate",
+            candidateBio: null,
+            sortOrder: 0,
+            eliminatedRound: null,
           },
-        }),
-      });
-    });
-    await page.goto("/votes/detail/?slug=mocked-closed-motion");
+          {
+            id: "00000000-0000-4000-8000-000000000005",
+            userId: null,
+            candidateName: "Bob Candidate",
+            candidateBio: null,
+            sortOrder: 1,
+            eliminatedRound: 1,
+          },
+        ],
+        result: {
+          rounds: [
+            {
+              round: 1,
+              counts: {
+                "00000000-0000-4000-8000-000000000004": 12,
+                "00000000-0000-4000-8000-000000000005": 8,
+              },
+              eliminatedCandidateIds: ["00000000-0000-4000-8000-000000000005"],
+              winnerCandidateId: null,
+            },
+          ],
+          winnerCandidateId: "00000000-0000-4000-8000-000000000004",
+        },
+      },
+    }).vote;
+    await publishE2eSite(
+      page,
+      `/votes/${motion.slug}/`,
+      sitePublicationSnapshotSchema.parse({
+        ...nativePublication.snapshot,
+        snapshotId: createHash("sha256")
+          .update(JSON.stringify([nativePublication.snapshot.snapshotId, motion, election]))
+          .digest("hex"),
+        votes: [...nativePublication.snapshot.votes, motion, election],
+      }),
+    );
+    await page.goto(`/votes/${motion.slug}/`);
     await expect(page.getByText("Passed", { exact: true })).toBeVisible();
     await expect(page.getByText(/23 in favor.*4 opposed.*2 abstained.*29 ballots cast/)).toBeVisible();
-
-    // ── Mocked closed election result ────────────────────────────────────
-    await page.route("**/api/v1/votes/mocked-closed-election", async (route) => {
-      await route.fulfill({
-        status: 200,
-        contentType: "application/json",
-        body: JSON.stringify({
-          vote: {
-            id: "00000000-0000-4000-8000-000000000002",
-            slug: "mocked-closed-election",
-            title: "Mocked WG Chair Election",
-            description: "A mocked, already-closed election vote.",
-            voteType: "election",
-            ownerGroupId: "20000000-0000-4000-8000-000000000003",
-            ownerGroupName: "Post-Quantum Cryptography Working Group",
-            electorateMode: "per_person",
-            thresholdType: "successive_elimination",
-            eligibleCategories: null,
-            opensAt: new Date(Date.now() - 172_800_000).toISOString(),
-            closesAt: new Date(Date.now() - 86_400_000).toISOString(),
-            currentRound: 1,
-            status: "closed",
-            visibility: "public",
-            publicDetailLevel: "full_breakdown",
-            createdAt: new Date(Date.now() - 259_200_000).toISOString(),
-            updatedAt: new Date(Date.now() - 86_400_000).toISOString(),
-            candidates: [
-              {
-                id: "00000000-0000-4000-8000-000000000004",
-                userId: null,
-                candidateName: "Alice Candidate",
-                candidateBio: null,
-                sortOrder: 0,
-                eliminatedRound: null,
-              },
-              {
-                id: "00000000-0000-4000-8000-000000000005",
-                userId: null,
-                candidateName: "Bob Candidate",
-                candidateBio: null,
-                sortOrder: 1,
-                eliminatedRound: 1,
-              },
-            ],
-            result: {
-              rounds: [
-                {
-                  round: 1,
-                  counts: {
-                    "00000000-0000-4000-8000-000000000004": 12,
-                    "00000000-0000-4000-8000-000000000005": 8,
-                  },
-                  eliminatedCandidateIds: ["00000000-0000-4000-8000-000000000005"],
-                  winnerCandidateId: null,
-                },
-              ],
-              winnerCandidateId: "00000000-0000-4000-8000-000000000004",
-            },
-          },
-        }),
-      });
-    });
-    await page.goto("/votes/detail/?slug=mocked-closed-election");
+    await page.goto(`/votes/${election.slug}/`);
     await expect(page.getByText("Elected", { exact: true })).toBeVisible();
     await expect(page.getByText("Alice Candidate").first()).toBeVisible();
     await expect(page.getByText(/Bob Candidate: 8/)).toBeVisible();
@@ -221,23 +225,25 @@ test.describe("event sponsorship inquiry", () => {
 
 test.describe("event sponsor self-service checkout", () => {
   test("submits the Sponsor Now form and follows the returned checkout redirect", async ({ page }) => {
-    let capturedBody: Record<string, unknown> | null = null;
+    let capturedBody: SponsorshipCheckoutInput | null = null;
     await page.route("**/api/v1/sponsors/checkouts", async (route) => {
-      capturedBody = route.request().postDataJSON() as Record<string, unknown>;
+      capturedBody = sponsorshipCheckoutSchema.parse(route.request().postDataJSON());
       const checkoutUrl = new URL(
         "/events/2026/pqc-conference-amsterdam-nl/sponsors/complete/?session_id=cs_test_mocked",
         route.request().url(),
       ).toString();
-      await route.fulfill({ status: 200, json: { url: checkoutUrl } });
+      await route.fulfill({ status: 200, json: sponsorshipCheckoutResponseSchema.parse({ url: checkoutUrl }) });
     });
 
     await page.goto("/events/2026/pqc-conference-amsterdam-nl/sponsors/");
     await expect(page.getByRole("heading", { name: "Sponsor Now" })).toBeVisible();
-    await page.locator("label[for='tier-Innovator']").click();
-    await page.locator("#sponsorFirstName").fill("Casey");
-    await page.locator("#sponsorLastName").fill("Sponsor");
-    await page.locator("#sponsorEmail").fill("casey-sponsor@example.test");
-    await page.locator("#sponsorOrganizationName").fill("Example Sponsor Org");
+    const tier = page.getByRole("combobox", { name: "Sponsorship tier (required)", exact: true });
+    await expect(tier).toBeEnabled();
+    await tier.selectOption({ label: "Innovator" });
+    await page.getByRole("textbox", { name: "First Name (required)", exact: true }).fill("Casey");
+    await page.getByRole("textbox", { name: "Last Name (required)", exact: true }).fill("Sponsor");
+    await page.getByRole("textbox", { name: "Email (required)", exact: true }).fill("casey-sponsor@example.test");
+    await page.getByRole("textbox", { name: "Organization Name", exact: true }).fill("Example Sponsor Org");
     await page.getByRole("button", { name: /Sponsor Now/i }).click();
 
     await expect(page).toHaveURL(/sponsors\/complete\/\?session_id=cs_test_mocked/);

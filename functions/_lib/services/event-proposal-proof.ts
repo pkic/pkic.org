@@ -21,9 +21,10 @@ import { prepareQueueEmailStatement } from "../email/outbox-queue";
 import { emailPlainText } from "../email/plain-text";
 import { getRequiredTerms, type EventRecord } from "./events";
 import { prepareActiveTermsSnapshotGuard, validateRequiredConsents } from "./consent";
-import { proposalPageUrl, speakerManagePageUrl } from "./frontend-links";
+import { proposalPageUrl, speakerManagePageUrl, speakerParticipationPageUrl } from "./frontend-links";
 import {
   createEventProposalProofContext,
+  eventProposalSpeakerAuthority,
   prepareEventProposalProofContext,
   resumeEventProposalSpeakerProof,
 } from "./event-proposal-proof-context";
@@ -61,13 +62,14 @@ export async function startEventProposalProof(
     throw new AppError(422, "DISPOSABLE_EMAIL_NOT_ALLOWED", "Disposable email providers are not accepted");
   if (isPersonalEmailDomain(domain) && !input.body.unaffiliatedAttestation)
     return { status: "unaffiliated_attestation_required" as const, outboxId: null };
-  if (input.body.speakerManagementToken && input.body.entryContext)
+  const speakerAuthority = eventProposalSpeakerAuthority({ ...input.body, actor: input.actor });
+  if (speakerAuthority && input.body.entryContext)
     throw new AppError(
       422,
       "PROPOSAL_ENTRY_CONTEXT_INVALID",
       "Proposal entry context belongs to an initial proposal submission.",
     );
-  if (input.body.continuationToken && (input.body.speakerManagementToken || input.body.entryContext))
+  if (input.body.continuationToken && (speakerAuthority || input.body.entryContext))
     throw new AppError(
       422,
       "PROPOSAL_PROOF_CONTEXT_MISMATCH",
@@ -82,6 +84,7 @@ export async function startEventProposalProof(
     signingSecret: input.signingSecret,
     actor: input.actor,
     speakerManagementToken: input.body.speakerManagementToken,
+    speakerProposalId: input.body.speakerProposalId,
   });
   if (source) {
     sourceGuards.push(
@@ -152,7 +155,7 @@ export async function startEventProposalProof(
     applicantKind: input.body.unaffiliatedAttestation ? "individual" : "organization",
     capabilityId: randomToken(18),
     termsDigest: await proposalTermsDigest(terms),
-    operation: input.body.speakerManagementToken ? "speaker_profile" : "proposal_submission",
+    operation: speakerAuthority ? "speaker_profile" : "proposal_submission",
     context,
     ...(entryContext ? { entryContext } : {}),
   };
@@ -163,7 +166,10 @@ export async function startEventProposalProof(
   const proofTtl = entryContext?.invite
     ? Math.min(contextTtl, entryContext.invite.expiresAt - Math.floor(Date.now() / 1000))
     : contextTtl;
-  const verificationUrl = `${proposalPageUrl(input.appBaseUrl, input.event)}#verify=${encodeURIComponent(queuedEventProposalProofToken(payload, proofTtl))}`;
+  const verificationToken = encodeURIComponent(queuedEventProposalProofToken(payload, proofTtl));
+  const verificationUrl = input.body.speakerProposalId
+    ? `${speakerParticipationPageUrl(input.appBaseUrl, input.event, input.body.speakerProposalId)}?verify=${verificationToken}`
+    : `${proposalPageUrl(input.appBaseUrl, input.event)}#verify=${verificationToken}`;
   const email = prepareQueueEmailStatement(db, {
     eventId: input.event.id,
     templateKey: "event_proposal_verify",
@@ -178,6 +184,16 @@ export async function startEventProposalProof(
     await db.batch([
       ...sourceGuards,
       ...entryGuards,
+      ...(speakerAuthority
+        ? await prepareEventProposalProofContext(db, {
+            payload,
+            signingSecret: input.signingSecret,
+            actor: input.actor,
+            speakerAuthority,
+            speakerId: context?.kind === "speaker" ? context.speakerId : undefined,
+            operation: "speaker_profile",
+          })
+        : []),
       prepareActiveTermsSnapshotGuard(db, input.event.id, terms, audience),
       email.statement,
     ]);
@@ -208,14 +224,16 @@ export async function verifyEventProposalProof(
     signingSecret: string;
     actor?: AuthenticatedIdentity;
     speakerManagementToken?: string;
+    speakerProposalId?: string;
     event: EventRecord;
     appBaseUrl: string;
   },
 ) {
   const payload = await verifyEventProposalCapability(input.signingSecret, input.token, input.eventId, false);
   await assertProposalProofCurrent(db, payload);
+  const speakerAuthority = eventProposalSpeakerAuthority(input);
   const speakerManagementToken =
-    payload.context?.kind === "speaker"
+    payload.context?.kind === "speaker" && !payload.context.sessionId && !input.speakerProposalId
       ? await resumeEventProposalSpeakerProof(db, { payload, signingSecret: input.signingSecret })
       : undefined;
   if (!speakerManagementToken)
@@ -223,8 +241,8 @@ export async function verifyEventProposalProof(
       payload,
       signingSecret: input.signingSecret,
       actor: input.actor,
-      operation: payload.operation,
-      speakerAuthority: input.speakerManagementToken,
+      operation: speakerAuthority ? "speaker_profile" : payload.operation,
+      speakerAuthority,
       speakerId: payload.context?.kind === "speaker" ? payload.context.speakerId : undefined,
     });
   const resolved = await resolveProposalProofPerson(db, payload.email, payload.context?.userId);
@@ -283,6 +301,12 @@ export async function verifyEventProposalProof(
       { ...receipt, userId: resolved.user?.id ?? null },
       expiresAt,
     ),
+    ...(payload.context?.kind === "speaker" && payload.context.sessionId && input.speakerProposalId
+      ? {
+          speakerProposalId: input.speakerProposalId,
+          speakerManageUrl: speakerParticipationPageUrl(input.appBaseUrl, input.event, input.speakerProposalId),
+        }
+      : {}),
     person: resolved.user
       ? {
           email: payload.email,
@@ -306,6 +330,7 @@ export async function listEventProposalProofIdentities(
     query: IdentitiesListQuery;
     actor?: AuthenticatedIdentity;
     speakerManagementToken?: string;
+    speakerProposalId?: string;
   },
 ) {
   const payload = await verifyEventProposalCapability(
@@ -315,12 +340,13 @@ export async function listEventProposalProofIdentities(
     true,
   );
   await assertProposalProofCurrent(db, payload);
+  const speakerAuthority = eventProposalSpeakerAuthority(input);
   await prepareEventProposalProofContext(db, {
     payload,
     signingSecret: input.signingSecret,
     actor: input.actor,
-    operation: payload.operation,
-    speakerAuthority: input.speakerManagementToken,
+    operation: speakerAuthority ? "speaker_profile" : payload.operation,
+    speakerAuthority,
     speakerId: payload.context?.kind === "speaker" ? payload.context.speakerId : undefined,
   });
   const resolved = await resolveProposalProofPerson(db, payload.email, payload.context?.userId);

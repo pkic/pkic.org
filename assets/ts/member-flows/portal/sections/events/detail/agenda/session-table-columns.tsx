@@ -1,8 +1,18 @@
 import { publicSessionTiming } from "../../../../../../../shared/session-public-timing";
 import { publicSessionCredits } from "../../../../../../../shared/session-public-credits";
+import { publicSessionMediaUrls } from "../../../../../../../shared/schemas/event-session-history";
 import { formatNumber } from "../../../../../../../shared/format-number";
 import type { z } from "zod";
-import { Badge } from "../../../../../../ui/Badge";
+import { IconBadge } from "../../../../../../ui/Badge";
+import { IconVideo } from "../../../../../../ui/MediaIcons";
+import {
+  IconCheckOutline,
+  IconClock,
+  IconFlag,
+  IconInfoOutline,
+  IconPeople,
+  IconRemote,
+} from "../../../../../../components/icons/indicators";
 import { agendaOccurrenceRoomIds } from "../../../../../../../shared/event-agenda-rooms";
 import type { ColumnFilter, DataTableProps } from "../../../../../../components/Table";
 import { RowActions, type RowActionsProps } from "../../../../../../ui/RowActions";
@@ -142,14 +152,23 @@ export function agendaSessionColumns(
       filter: { param: "track", text: { placeholder: "Track name", hint: "Matches the exact session track." } },
     },
     ...(["confirmed", "pending", "waitlisted"] as const).map((status) => ({
-      header: status === "confirmed" ? "Confirmed" : status === "pending" ? "Pending" : "Waitlisted",
+      header: status === "confirmed" ? "Reserved" : status === "pending" ? "Pending approval" : "Waitlisted",
+      headerIcon: status === "confirmed" ? <IconCheckOutline /> : status === "pending" ? <IconClock /> : <IconPeople />,
       align: "end" as const,
       width: "fit" as const,
       defaultHidden: status !== "confirmed",
       cell: (row: z.infer<typeof agendaOccurrenceListItemSchema>) => (
-        <div>
-          <div>In person: {formatNumber(row.demand.physical[status])}</div>
-          <div>Remote: {formatNumber(row.demand.remote[status])}</div>
+        <div class="pk-cluster pk-cluster--end pk-cluster--nowrap">
+          <IconBadge
+            icon={<IconPeople />}
+            label={`In-person ${status === "confirmed" ? "reservations" : status === "pending" ? "reservations awaiting approval" : "waitlisted participants"}: ${formatNumber(row.demand.physical[status])}`}
+            count={row.demand.physical[status]}
+          />
+          <IconBadge
+            icon={<IconRemote />}
+            label={`Remote ${status === "confirmed" ? "reservations" : status === "pending" ? "reservations awaiting approval" : "waitlisted participants"}: ${formatNumber(row.demand.remote[status])}`}
+            count={row.demand.remote[status]}
+          />
         </div>
       ),
     })),
@@ -189,7 +208,20 @@ export function agendaSessionColumns(
       },
     },
     {
+      header: "Recording",
+      headerIcon: <IconVideo />,
+      width: "fit",
+      defaultHidden: true,
+      cell: (row) =>
+        publicSessionMediaUrls(row.history?.materials ?? []).recordingUrl ? (
+          <IconBadge icon={<IconVideo />} label="Approved recording available" tone="ok" />
+        ) : (
+          <IconBadge icon={<IconInfoOutline />} label="No approved recording available" />
+        ),
+    },
+    {
       header: "Conflicts",
+      headerIcon: <IconFlag />,
       width: "fit",
       cell: (row) => {
         const coverage = row.conflicts.coverage;
@@ -202,18 +234,19 @@ export function agendaSessionColumns(
               ? "Conflict checks require a complete scheduled interval."
               : "No scheduling conflicts";
         return (
-          <Badge
+          <IconBadge
             tone={row.conflicts.hasConflict || coverage === "incomplete" ? "warn" : incomplete ? "neutral" : "ok"}
             label={label}
-          >
-            {row.conflicts.hasConflict
-              ? "Needs attention"
-              : coverage === "incomplete"
-                ? "Needs review"
-                : coverage === "not_scheduled"
-                  ? "Not checked"
-                  : "Clear"}
-          </Badge>
+            icon={
+              row.conflicts.hasConflict || coverage === "incomplete" ? (
+                <IconFlag />
+              ) : incomplete ? (
+                <IconInfoOutline />
+              ) : (
+                <IconCheckOutline />
+              )
+            }
+          />
         );
       },
       filter: {

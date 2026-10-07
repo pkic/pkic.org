@@ -1,16 +1,98 @@
+import { agendaSessionPresentationTiming } from "./event-agenda-transition";
+import { agendaMediaCapabilities } from "./event-agenda-media";
 import { publicSessionTiming } from "./session-public-timing";
 import { statusLabel } from "./status-display";
-import { publicSessionCredits, publicSessionCreditRole } from "./session-public-credits";
+import { sessionDisplayCredits, publicSessionCreditRole } from "./session-public-credits";
 import { publicSessionMaterials, publicSessionMediaUrls } from "./schemas/event-session-history";
 import { publishedSessionRoute } from "./session-public-route";
 import { eventParticipationLink } from "./event-participation-link";
 import { agendaDisplayRoles } from "./event-agenda-display-roles";
 import { agendaOccurrenceRoomIds } from "./event-agenda-rooms";
-import type { AgendaSnapshot } from "./schemas/event-agenda";
+import type { AgendaSnapshot, AgendaOccurrence } from "./schemas/event-agenda";
 import type { ContentAgendaDay, ContentAgendaSpeaker } from "./site-agenda";
 import { instantToDateTimeLocal } from "./timezone";
 import { authoredAgendaDayFragments, authoredAgendaSpeakerFragments } from "./legacy-agenda-fragments";
 import type { ContentAgendaSpeakerFragment } from "./site-agenda";
+
+/** The canonical session card projection, including occurrences whose placement is not yet known. */
+export function agendaSessionContent(
+  snapshot: AgendaSnapshot,
+  occurrence: AgendaOccurrence,
+  organizer = false,
+): ContentAgendaDay["slots"][number]["sessions"][number] {
+  const timing = publicSessionTiming(occurrence);
+  const credits = sessionDisplayCredits(occurrence, organizer).map((credit) => ({
+    key: "userId" in credit ? `user:${credit.userId}` : `source:${credit.sourceRef}`,
+    name: credit.displayName,
+    ...("biography" in credit
+      ? {
+          title: [credit.jobTitle, credit.organizationName].filter(Boolean).join(" at "),
+          bioMarkdown: credit.biography,
+          imageSrc: credit.photoUrl ?? undefined,
+        }
+      : {}),
+    moderator: publicSessionCreditRole(occurrence, credit) === "moderator",
+    ...(publicSessionCreditRole(occurrence, credit) === "panelist" ? { roleLabel: statusLabel("panelist") } : {}),
+  }));
+  const materials = publicSessionMaterials(occurrence.history?.materials ?? []);
+  const currentRoomIds = agendaOccurrenceRoomIds(occurrence);
+  const legacyFragments = organizer
+    ? []
+    : (occurrence.history?.legacyFragments ?? []).map((fragment) => {
+        // The authored receipt stays immutable; its alias follows this occurrence's current placement.
+        const roomId =
+          fragment.roomId && currentRoomIds.includes(fragment.roomId) ? fragment.roomId : occurrence.roomId;
+        return { anchor: fragment.anchor, kind: fragment.kind, roomId };
+      });
+  const presentation = materials.find((material) => material.kind === "presentation");
+  const releasedUrls = publicSessionMediaUrls(materials);
+  const presentationUrl =
+    releasedUrls.presentationUrl || (organizer ? occurrence.presentationUrl : undefined) || undefined;
+  return {
+    id: occurrence.id,
+    kind: occurrence.kind,
+    sponsors: occurrence.kind === "break" ? occurrence.sponsors : undefined,
+    publicAnchor: occurrence.publicAnchor ?? undefined,
+    legacyFragments,
+    participation:
+      timing && !timing.endNotRecorded && occurrence.kind !== "break" && occurrence.visibility === "public"
+        ? eventParticipationLink(snapshot.eventSlug, occurrence.id, occurrence.admissionPolicy, occurrence.accessPolicy)
+        : undefined,
+    presentationUrl,
+    legacyPresentationUrl: organizer
+      ? undefined
+      : occurrence.history?.legacyDownloads.find(
+          (download) =>
+            presentation &&
+            (presentation.presentationSource === "session" && presentation.presentationVersionId
+              ? download.url === presentation.legacyDownloadUrl
+              : !presentation.presentationVersionId && download.targetUrl === presentation.url),
+        )?.url,
+    sessionUrl: publishedSessionRoute(snapshot.eventSlug, occurrence),
+    recordingUrl: releasedUrls.recordingUrl || (organizer ? occurrence.recordingUrl : undefined) || undefined,
+    recordingApproved: Boolean(releasedUrls.recordingUrl),
+    onlineAccessUrl:
+      occurrence.virtualRoomUrl || occurrence.onlineAccessAvailable
+        ? eventParticipationLink(snapshot.eventSlug, occurrence.id, occurrence.admissionPolicy, occurrence.accessPolicy)
+            .url
+        : undefined,
+    plannedMedia: agendaMediaCapabilities(occurrence.requiredEquipment),
+    title: occurrence.title,
+    track: occurrence.track ?? undefined,
+    descriptionHtml: "",
+    descriptionMarkdown: occurrence.description,
+    endsAt: timing?.endAt,
+    endNotRecorded: timing?.endNotRecorded,
+    durationMinutes: timing?.endAt ? (Date.parse(timing.endAt) - Date.parse(timing.startAt)) / 60000 : undefined,
+    ...agendaSessionPresentationTiming(
+      occurrence,
+      snapshot.occurrences.filter((item) => organizer || item.visibility === "public"),
+      snapshot.timeZone,
+    ),
+    locations: agendaOccurrenceRoomIds(occurrence),
+    speakers: credits.map(({ key: _key, ...speaker }) => speaker),
+  };
+}
 
 /** Translate API transport to the same presenter used by build-time public pages. */
 export function agendaContent(
@@ -39,34 +121,13 @@ export function agendaContent(
       slot = { startsAt: timing.startAt, time: wall.slice(11), sessions: [] };
       day.slots.push(slot);
     }
-    const credits = publicSessionCredits(occurrence).map((credit) => ({
-      key: "userId" in credit ? `user:${credit.userId}` : `source:${credit.sourceRef}`,
-      name: credit.displayName,
-      ...("biography" in credit
-        ? {
-            title: [credit.jobTitle, credit.organizationName].filter(Boolean).join(" · "),
-            bioMarkdown: credit.biography,
-            imageSrc: credit.photoUrl ?? undefined,
-          }
-        : {}),
-      moderator: publicSessionCreditRole(occurrence, credit) === "moderator",
-      ...(publicSessionCreditRole(occurrence, credit) === "panelist" ? { roleLabel: statusLabel("panelist") } : {}),
-    }));
-    for (const credit of credits)
-      if (!catalogue.has(credit.key)) {
-        const { key, ...speaker } = credit;
-        catalogue.set(key, speaker);
-      }
-    const materials = publicSessionMaterials(occurrence.history?.materials ?? []);
-    const currentRoomIds = agendaOccurrenceRoomIds(occurrence);
-    const legacyFragments = organizer
-      ? []
-      : (occurrence.history?.legacyFragments ?? []).map((fragment) => {
-          // The authored receipt stays immutable; its alias follows this occurrence's current placement.
-          const roomId =
-            fragment.roomId && currentRoomIds.includes(fragment.roomId) ? fragment.roomId : occurrence.roomId;
-          return { anchor: fragment.anchor, kind: fragment.kind, roomId };
-        });
+    const session = agendaSessionContent(snapshot, occurrence, organizer);
+    sessionDisplayCredits(occurrence, organizer).forEach((credit, index) => {
+      const key = "userId" in credit ? `user:${credit.userId}` : `source:${credit.sourceRef}`;
+      const speaker = session.speakers[index];
+      if (speaker && !catalogue.has(key)) catalogue.set(key, speaker);
+    });
+    const legacyFragments = session.legacyFragments ?? [];
     if (legacyFragments.length) {
       const incoming = (occurrence.history?.legacyFragments ?? []).flatMap((fragment) =>
         authoredAgendaDayFragments(fragment.authoredDate),
@@ -77,45 +138,7 @@ export function agendaContent(
         ).values(),
       ];
     }
-    const presentation = materials.find((material) => material.kind === "presentation");
-    const releasedUrls = publicSessionMediaUrls(materials);
-    const presentationUrl =
-      releasedUrls.presentationUrl || (organizer ? occurrence.presentationUrl : undefined) || undefined;
-    slot.sessions.push({
-      id: occurrence.id,
-      publicAnchor: occurrence.publicAnchor ?? undefined,
-      legacyFragments,
-      participation:
-        !timing.endNotRecorded && occurrence.kind !== "break" && occurrence.visibility === "public"
-          ? eventParticipationLink(
-              snapshot.eventSlug,
-              occurrence.id,
-              occurrence.admissionPolicy,
-              occurrence.accessPolicy,
-            )
-          : undefined,
-      presentationUrl,
-      legacyPresentationUrl: organizer
-        ? undefined
-        : occurrence.history?.legacyDownloads.find(
-            (download) =>
-              presentation &&
-              (presentation.presentationSource === "session" && presentation.presentationVersionId
-                ? download.url === presentation.legacyDownloadUrl
-                : !presentation.presentationVersionId && download.targetUrl === presentation.url),
-          )?.url,
-      sessionUrl: publishedSessionRoute(snapshot.eventSlug, occurrence),
-      recordingUrl: releasedUrls.recordingUrl || (organizer ? occurrence.recordingUrl : undefined) || undefined,
-      title: occurrence.title,
-      track: occurrence.track ?? undefined,
-      descriptionHtml: "",
-      descriptionMarkdown: occurrence.description,
-      endsAt: timing.endAt,
-      endNotRecorded: timing.endNotRecorded,
-      durationMinutes: timing.endAt ? (Date.parse(timing.endAt) - Date.parse(timing.startAt)) / 60000 : undefined,
-      locations: agendaOccurrenceRoomIds(occurrence),
-      speakers: credits.map(({ key: _key, ...speaker }) => speaker),
-    });
+    slot.sessions.push(session);
   }
   for (const day of days.values()) {
     for (const occurrence of occurrences) {

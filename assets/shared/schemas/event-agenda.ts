@@ -1,3 +1,5 @@
+import { agendaDurationRulesSchema } from "./event-agenda-duration";
+import { agendaSponsorIdsSchema, agendaBreakSponsorDisplaySchema } from "./event-agenda-sponsors";
 import { agendaCreditRoleSchema } from "./agenda-credit-role";
 import {
   agendaStaffingRoleSchema,
@@ -8,9 +10,9 @@ import {
   agendaStaffingPositionPlanSchema,
 } from "./event-agenda-staffing-positions";
 import { promotionCopySchema } from "./event-promotion-kit";
-import { sessionHistoryMetadataSchema } from "./event-session-history";
+import { sessionHistoryMetadataSchema, publicSessionPortraitUrlSchema } from "./event-session-history";
 import { sessionDemandSchema } from "./event-session-demand";
-import { httpOrSameOriginUrlSchema, sameOriginPathSchema } from "./urls";
+import { httpOrSameOriginUrlSchema, httpUrlSchema, sameOriginPathSchema } from "./urls";
 import { z } from "zod";
 import { utcInstantSchema } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
@@ -48,17 +50,25 @@ export const agendaSpeakerPlacementSchema = z.object({
   attendanceMode: z.enum(["physical", "remote"]),
   roomId: id.nullable(),
 });
+/** Available intrinsic person information for authorized draft review, never an approved appearance. */
+export const agendaSpeakerProfileCandidateSchema = z.object({
+  biography: z.string().nullable(),
+  photoUrl: publicSessionPortraitUrlSchema.nullable(),
+});
 export const agendaSpeakerSchema = z.object({
   userId: id,
   displayName: z.string(),
   role: agendaCreditRoleSchema.optional(),
   attendanceMode: z.enum(["physical", "remote"]).optional(),
   roomId: id.nullable().optional(),
+  profileCandidate: agendaSpeakerProfileCandidateSchema.optional(),
 });
 export const agendaOccurrenceFieldsSchema = z.object({
   title: z.string().trim().min(1).max(300),
   presentationUrl: httpOrSameOriginUrlSchema.nullable().optional(),
   recordingUrl: httpOrSameOriginUrlSchema.nullable().optional(),
+  virtualRoomUrl: httpUrlSchema.nullable().optional(),
+  sponsorIds: agendaSponsorIdsSchema.optional(),
   description: z.string().max(20000).default(""),
   startAt: utcInstantSchema.nullable(),
   endAt: utcInstantSchema.nullable(),
@@ -81,6 +91,12 @@ export const agendaOccurrenceFieldsSchema = z.object({
 });
 export const agendaPublicAnchorSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/u);
 export const agendaOccurrenceSchema = agendaOccurrenceFieldsSchema.extend({
+  /** Branding captured from the existing public event sponsor records. */
+  sponsors: z.array(agendaBreakSponsorDisplaySchema).max(10).optional(),
+  /** Public availability hint only; the attendee endpoint rechecks entitlement before releasing a destination. */
+  onlineAccessAvailable: z.boolean().optional(),
+  /** Read-only label from the original accepted proposal; independent of agenda kind. */
+  sourceProposalType: z.string().nullable().optional(),
   publicAnchor: agendaPublicAnchorSchema.nullable().optional(),
   id,
   contentId: id.nullable().optional(),
@@ -204,6 +220,7 @@ export const agendaSnapshotSchema = z.object({
   eventEndsAt: utcInstantSchema.nullable().optional(),
   revision: z.number().int().min(0),
   travelMinutes: z.number().int().min(0).max(120).default(0),
+  durationRules: agendaDurationRulesSchema.optional(),
   publishedRevision: z.number().int().nullable(),
   rooms: z.array(agendaRoomSchema),
   occurrences: z.array(agendaOccurrenceSchema),
@@ -403,4 +420,7 @@ export const agendaPersonSchema = z.object({
 });
 export const agendaPeopleListSchema = paginatedResponseSchema("users", agendaPersonSchema);
 
-export const agendaSettingsSchema = agendaRevisionSchema.extend({ travelMinutes: z.number().int().min(0).max(120) });
+export const agendaSettingsSchema = agendaRevisionSchema.extend({
+  travelMinutes: z.number().int().min(0).max(120),
+  durationRules: agendaDurationRulesSchema.optional(),
+});

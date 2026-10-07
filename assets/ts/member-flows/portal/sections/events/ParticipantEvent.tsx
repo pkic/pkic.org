@@ -8,7 +8,7 @@ import type { z } from "zod";
 import { currentUserProposalsListResponseSchema } from "../../../../../shared/schemas/current-user-proposals";
 import { proposalAccessReadResponseSchema } from "../../../../../shared/schemas/proposal-management";
 import { speakerSelfServiceReadResponseSchema } from "../../../../../shared/schemas/speaker-self-service";
-import { eventFormsResponseSchema } from "../../../../../shared/schemas/forms";
+import { eventFormsResponseSchema, eventTermsResponseSchema } from "../../../../../shared/schemas/forms";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
 import { ParticipantRegistration } from "../../../../components/events/ParticipantRegistration";
 import { ParticipantSubmission } from "../../../../components/events/ParticipantSubmission";
@@ -210,13 +210,14 @@ function ParticipantProposal({
 }) {
   const base = `/api/v1/proposals/${encodeURIComponent(proposalId)}`;
   const loaded = useData(async () => {
-    const [submission, speaker, forms] = await Promise.all([
+    const [submission, speaker, forms, speakerTerms] = await Promise.all([
       optionalRecord(getJson(base + "/submission", proposalAccessReadResponseSchema)),
       optionalRecord(getJson(base + "/participation", speakerSelfServiceReadResponseSchema)),
       getJson(
         `/api/v1/events/${encodeURIComponent(event.slug)}/forms/placements/proposal_submission`,
         eventFormsResponseSchema,
       ),
+      getJson(`/api/v1/events/${encodeURIComponent(event.slug)}/terms?audience=speaker`, eventTermsResponseSchema),
     ]);
     if (
       (!submission && !speaker) ||
@@ -224,7 +225,7 @@ function ParticipantProposal({
       (speaker?.proposal.eventId && speaker.proposal.eventId !== event.id)
     )
       throw new Error("Proposal not found for this event.");
-    return { submission, speaker, forms };
+    return { submission, speaker, forms, speakerTerms };
   }, [proposalId, event.id]);
   if (loaded.loading)
     return (
@@ -240,7 +241,7 @@ function ParticipantProposal({
         <Alert tone="danger">{loaded.error}</Alert>
       </>
     );
-  const { submission, speaker, forms } = loaded.data;
+  const { submission, speaker, forms, speakerTerms } = loaded.data;
   const route = eventParticipantRecordPath(event.slug, "proposal", proposalId);
   const active = facet ?? (submission ? "submission" : "participation");
   return (
@@ -261,7 +262,7 @@ function ParticipantProposal({
         ]}
       />
       {active === "participation" && speaker ? (
-        <ParticipantSpeaker data={speaker} forms={forms} reload={loaded.reload} />
+        <ParticipantSpeaker data={speaker} eventSlug={event.slug} terms={speakerTerms.terms} reload={loaded.reload} />
       ) : submission && ["submission", "speakers"].includes(active) ? (
         <ParticipantSubmission data={submission} forms={forms} event={event} facet={active} reload={loaded.reload} />
       ) : (

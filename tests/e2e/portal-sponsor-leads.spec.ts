@@ -19,7 +19,7 @@ test.use({ actionTimeout: 20_000 });
 test("sponsor live lead UI searches current contacts, shows capture provenance and clears offline", async ({
   page,
 }) => {
-  await signInAsE2eStaff(page, e2eAdminEmail("default"));
+  await signInAsE2eStaff(page, e2eAdminEmail("portal-sponsor-leads"));
   const event = eventDetailResponseSchema.parse(await (await page.request.get(`/api/v1/events/${slug}`)).json()).event;
   const ownerGroupId = "ownerGroupId" in event ? event.ownerGroupId : null;
   expect(ownerGroupId, "Seeded event must have its group workspace").toBeTruthy();

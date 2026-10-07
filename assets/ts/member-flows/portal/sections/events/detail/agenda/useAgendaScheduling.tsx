@@ -1,16 +1,23 @@
+import { resolveAgendaDurationRules } from "../../../../../../../shared/event-agenda-duration";
+import { useAgendaTimeStep } from "./useAgendaTimeStep";
 import type { z } from "zod";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
   agendaScheduleProposalSchema,
+  agendaScheduleReviewSchema,
+  agendaScheduleApplySchema,
   AGENDA_SCHEDULE_BATCH_LIMIT,
   type AgendaScheduleProposal,
 } from "../../../../../../../shared/schemas/event-agenda-schedule";
-import { adjacentAgendaSession } from "../../../../../../../shared/event-agenda-order";
+import { instantToDateTimeLocal } from "../../../../../../../shared/timezone";
+import { agendaPresenter } from "./presenter";
 import {
   agendaOccurrenceListSchema,
+  agendaSnapshotSchema,
   type AgendaSnapshot,
   type AgendaOccurrence,
 } from "../../../../../../../shared/schemas/event-agenda";
+import { postJson } from "../../../../../../shared/api-client";
 import { BulkBar } from "../../../../../../ui/BulkBar";
 import { Button } from "../../../../../../ui/Button";
 import { AgendaSchedulePreview } from "./AgendaSchedulePreview";
@@ -24,7 +31,36 @@ export function useAgendaScheduling(
   onCommitted: () => void,
   onError: (message: string) => void,
 ) {
-  const [timeStep, setTimeStep] = useState(5);
+  const { timeStep, setTimeStep } = useAgendaTimeStep(scope);
+  const planningDays = useMemo(() => (snapshot ? agendaPresenter(snapshot, timeStep) : []), [snapshot, timeStep]);
+  const posting = useRef(false);
+  const [applying, setApplying] = useState(false);
+  async function place(proposal: AgendaScheduleProposal) {
+    if (!snapshot || busy || posting.current)
+      return { saved: false, message: "Another scheduling change is still being saved." };
+    posting.current = true;
+    setApplying(true);
+    const endpoint = `/api/v1/events/${encodeURIComponent(snapshot.eventSlug)}/agenda/schedule`;
+    try {
+      const request = agendaScheduleProposalSchema.parse(proposal);
+      const reviewed = await postJson(`${endpoint}/reviews`, request, agendaScheduleReviewSchema);
+      const next = await postJson(
+        endpoint,
+        agendaScheduleApplySchema.parse({ ...request, reviewHash: reviewed.reviewHash }),
+        agendaSnapshotSchema,
+      );
+      onSaved(next);
+      onCommitted();
+      return { saved: true, message: "" };
+    } catch (failure) {
+      const message = failure instanceof Error ? failure.message : "Unable to place this session.";
+      onError(message);
+      return { saved: false, message };
+    } finally {
+      posting.current = false;
+      setApplying(false);
+    }
+  }
   const visibleRows = useRef<ReadonlySet<string>>(new Set());
   const [proposal, setProposal] = useState<AgendaScheduleProposal | null>(null),
     [selected, setSelected] = useState<ReadonlySet<string>>(new Set()),
@@ -50,7 +86,7 @@ export function useAgendaScheduling(
   }
   function move(id: string, startAt: string, roomId: string | null) {
     const session = snapshot?.occurrences.find((item) => item.id === id);
-    if (session && snapshot) setProposal(scheduleMove(snapshot, session, startAt, roomId || null));
+    if (session && snapshot) void place(scheduleMove(snapshot, session, startAt, roomId || null));
   }
   function resize(id: string, endAt: string, roomId: string) {
     const session = snapshot?.occurrences.find((item) => item.id === id);
@@ -64,7 +100,7 @@ export function useAgendaScheduling(
       onError("Choose an end time after the start, in the session's current location.");
       return;
     }
-    setProposal(
+    void place(
       agendaScheduleProposalSchema.parse({
         expectedRevision: snapshot.revision,
         changes: [
@@ -79,20 +115,100 @@ export function useAgendaScheduling(
       }),
     );
   }
+  function resizeStart(id: string, startAt: string, roomId: string) {
+    const session = snapshot?.occurrences.find((item) => item.id === id);
+    if (!session?.endAt || !snapshot || session.roomId !== (roomId || null) || startAt >= session.endAt) return;
+    void place(
+      agendaScheduleProposalSchema.parse({
+        expectedRevision: snapshot.revision,
+        changes: [
+          {
+            id,
+            startAt,
+            endAt: session.endAt,
+            roomId: session.roomId,
+            additionalRoomIds: session.additionalRoomIds ?? [],
+          },
+        ],
+      }),
+    );
+  }
+  function setRooms(id: string, roomIds: readonly string[]) {
+    const session = snapshot?.occurrences.find((item) => item.id === id);
+    if (!session || !snapshot)
+      return Promise.resolve({ saved: false, message: "This session is no longer available." });
+    const roomId = session.roomId && roomIds.includes(session.roomId) ? session.roomId : (roomIds[0] ?? null);
+    return place({
+      expectedRevision: snapshot.revision,
+      changes: [
+        {
+          id,
+          startAt: session.startAt,
+          endAt: session.endAt,
+          roomId,
+          additionalRoomIds: roomIds.filter((id) => id !== roomId),
+        },
+      ],
+    });
+  }
+  function canMoveRoom(id: string, direction: -1 | 1) {
+    const session = snapshot?.occurrences.find((item) => item.id === id);
+    const index = snapshot?.rooms.findIndex((room) => room.id === session?.roomId) ?? -1;
+    return Boolean(session?.startAt && index >= 0 && snapshot?.rooms[index + direction]);
+  }
+  function moveRoom(id: string, direction: -1 | 1) {
+    const session = snapshot?.occurrences.find((item) => item.id === id);
+    if (!session || !snapshot || !session.startAt) return;
+    const index = snapshot.rooms.findIndex((room) => room.id === session.roomId);
+    const destination = snapshot.rooms[index + direction];
+    if (index >= 0 && destination) move(id, session.startAt, destination.id);
+  }
+  function setDuration(id: string, minutes: number) {
+    const session = snapshot?.occurrences.find((item) => item.id === id);
+    if (!session?.startAt || !Number.isFinite(minutes) || minutes <= 0) return;
+    resize(id, new Date(Date.parse(session.startAt) + minutes * 60000).toISOString(), session.roomId ?? "");
+  }
   function step(ids: ReadonlySet<string>, direction: -1 | 1) {
     if (!snapshot) return;
     try {
-      setProposal(scheduleStep(snapshot, ids, direction));
+      void place(scheduleStep(snapshot, ids, direction, stepBounds(ids)));
     } catch (failure) {
       onError(failure instanceof Error ? failure.message : "Unable to prepare the schedule change.");
     }
   }
+  function stepBounds(ids: ReadonlySet<string>) {
+    const session = ids.size === 1 ? snapshot?.occurrences.find((item) => ids.has(item.id)) : undefined;
+    if (!snapshot || !session?.startAt) return undefined;
+    const date = instantToDateTimeLocal(session.startAt, snapshot.timeZone).slice(0, 10);
+    const slots = planningDays.find((day) => day.date === date)?.slots;
+    return slots?.length ? { startAt: slots[0]!.startsAt, endAt: slots[slots.length - 1]!.startsAt } : undefined;
+  }
+  function canMoveAdjacent(id: string, direction: -1 | 1) {
+    const session = snapshot?.occurrences.find((item) => item.id === id);
+    if (!session || !snapshot) return false;
+    try {
+      scheduleStep(snapshot, new Set([id]), direction, stepBounds(new Set([id])));
+      return true;
+    } catch {
+      return false;
+    }
+  }
   return {
+    applying,
     timeStep,
     setTimeStep,
+    durationOptions: resolveAgendaDurationRules(snapshot?.durationRules).quickMinutes,
     move,
     resize,
+    setDuration,
+    resizeStart,
+    setRooms,
+    moveRoom,
+    canMoveRoom,
+    canMoveAdjacent,
+    moveAdjacent: (id: string, direction: -1 | 1) => step(new Set([id]), direction),
     preview: setProposal,
+    apply: place,
     actions: (session: AgendaOccurrence) => [
       {
         id: "unschedule",
@@ -100,19 +216,19 @@ export function useAgendaScheduling(
         disabled: busy || !snapshot || (!session.startAt && !session.endAt),
         onSelect: () => {
           if (busy || !snapshot || (!session.startAt && !session.endAt)) return;
-          setProposal(scheduleUnschedule(snapshot, session));
+          void place(scheduleUnschedule(snapshot, session));
         },
       },
       {
         id: "up",
         label: "Move up in agenda",
-        disabled: busy || !snapshot || !adjacentAgendaSession(snapshot.occurrences, session, snapshot.timeZone, -1),
+        disabled: busy || !canMoveAdjacent(session.id, -1),
         onSelect: () => step(new Set([session.id]), -1),
       },
       {
         id: "down",
         label: "Move down in agenda",
-        disabled: busy || !snapshot || !adjacentAgendaSession(snapshot.occurrences, session, snapshot.timeZone, 1),
+        disabled: busy || !canMoveAdjacent(session.id, 1),
         onSelect: () => step(new Set([session.id]), 1),
       },
       {

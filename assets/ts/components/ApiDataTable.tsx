@@ -13,12 +13,13 @@ import {
 } from "../hooks/useServerCollection";
 import { getJson } from "../shared/api-client";
 import { Button } from "../ui/Button";
-import { Toolbar } from "../ui/Toolbar";
+import { TableList } from "./TableList";
+import { CollectionToolbar, type CollectionCreateAction } from "./CollectionToolbar";
 import { ErrorAlert } from "./ErrorAlert";
+import { Spinner } from "./Spinner";
 import { ADMIN_LIST_PAGE_SIZE_DEFAULT, Pager } from "./Pager";
 import { DataTable, type DataTableProps } from "./Table";
-import { IconPlus, IconRefresh } from "./icons";
-import { SplitButton, type SplitButtonProps } from "../ui/SplitButton";
+import { IconRefresh } from "./icons";
 
 export interface ApiTableActions {
   reload: () => Promise<void>;
@@ -36,22 +37,17 @@ export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, 
   initialPageSize?: number;
   initialSort?: string;
   /** Complete active server query; actions such as exports can preserve the displayed scope. */
-  toolbar?: (actions: ApiTableActions, query: Readonly<Record<string, string>>) => ComponentChildren;
+  toolbar?: (
+    actions: ApiTableActions,
+    query: Readonly<Record<string, string>>,
+    sorting?: { sort: string; onSort: (sort: string) => void },
+  ) => ComponentChildren;
   /**
    * The list's create affordance, rendered in the same bar as search and
    * refresh so every collection offers "New …" in one predictable place.
    * The form it reveals stays behind this action — never in the default view.
    */
-  createAction?:
-    | {
-        label: string;
-        onSelect: () => void;
-        disabled?: boolean;
-        /** Disclosure state for a nonediting control; edit forms belong in dedicated views. */
-        expanded?: boolean;
-        items?: never;
-      }
-    | SplitButtonProps;
+  createAction?: CollectionCreateAction;
   /**
    * Namespace for URL-addressed list state: search, sort, and page mirror
    * into `<namespace>.q` etc. in the query string, so a filtered page can be
@@ -79,9 +75,13 @@ export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, 
   bulkBar?: ComponentChildren;
   actionsRef?: MutableRef<ApiTableActions | null>;
   onData?: (data: Response) => void;
+  /** Clear page-scoped selections before the active server query changes. */
+  onQueryChange?: (query: Readonly<Record<string, string>>) => void;
   load?: CollectionLoader;
   clearDataOnReload?: boolean;
   retainDataOnError?: boolean;
+  /** Alternative item presentation with the same bounded server collection controller. */
+  renderItems?: (rows: readonly T[], sorting: { sort: string; onSort: (sort: string) => void }) => ComponentChildren;
 }
 
 const loadCollection: CollectionLoader = (url, signal, schema) => getJson(url, schema, { signal });
@@ -104,6 +104,7 @@ export function ApiDataTable<T, Response = unknown>({
   selection,
   caption,
   showCaption,
+  narrowLayout,
   initialSort = "",
   toolbar,
   createAction,
@@ -115,9 +116,11 @@ export function ApiDataTable<T, Response = unknown>({
   bulkBar,
   actionsRef,
   onData,
+  onQueryChange,
   load = loadCollection,
   clearDataOnReload = false,
   retainDataOnError = true,
+  renderItems,
 }: ApiDataTableProps<T, Response>) {
   const url = useUrlTableState(
     urlState,
@@ -171,6 +174,13 @@ export function ApiDataTable<T, Response = unknown>({
     ...(search ? { q: search } : {}),
     ...(sort ? { sort } : {}),
   };
+  const queryKey = buildCollectionResetKey(endpoint, query);
+  const lastQueryKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastQueryKey.current === queryKey) return;
+    lastQueryKey.current = queryKey;
+    onQueryChange?.(query);
+  }, [queryKey, onQueryChange]);
   const collection = useServerCollection({
     endpoint,
     params: query,
@@ -204,12 +214,13 @@ export function ApiDataTable<T, Response = unknown>({
     // head (search, filters, actions) → table → pager, sharing the panel's
     // edges. Before this the toolbar floated over a borderless table and the
     // count centred itself under the screen rather than under the rows.
-    <section class="pk pk-panel pk-table-list" aria-label={caption}>
+    <TableList caption={caption}>
       {(searchPlaceholder || toolbar || createAction) && (
         // The toolbar is named after the list it controls, so a page with
         // several collections does not present several toolbars called
         // "Toolbar".
-        <Toolbar
+        <CollectionToolbar
+          createAction={createAction}
           label={`${caption} controls`}
           search={
             searchPlaceholder
@@ -223,32 +234,7 @@ export function ApiDataTable<T, Response = unknown>({
               : undefined
           }
         >
-          {toolbar?.(actions, query)}
-          {/* Default size, not `sm`: these sit on the same row as the search
-              field, which is a full-size control, and a button that is eight
-              pixels shorter than the input beside it reads as shrunken rather
-              than as quiet. `sm` belongs inside a dense row, not next to a
-              full-size control. Primary, because the list's create affordance
-              is the one thing the head offers beyond finding rows — the
-              design system's list head draws it the same way. */}
-          {createAction && "items" in createAction && createAction.items ? (
-            <SplitButton {...createAction} />
-          ) : (
-            createAction && (
-              <Button
-                variant="primary"
-                icon
-                aria-label={createAction.label}
-                title={createAction.label}
-                onClick={createAction.onSelect}
-                disabled={createAction.disabled}
-                aria-expanded={createAction.expanded}
-              >
-                <IconPlus />
-                <span class="pk-sr-only">{createAction.label}</span>
-              </Button>
-            )
-          )}
+          {toolbar?.(actions, query, { sort, onSort: applySort })}
           <Button
             variant="secondary"
             icon
@@ -258,7 +244,7 @@ export function ApiDataTable<T, Response = unknown>({
             <IconRefresh />
             <span class="pk-sr-only">Refresh</span>
           </Button>
-        </Toolbar>
+        </CollectionToolbar>
       )}
 
       {inset && <div class="pk-table-list__inset">{inset}</div>}
@@ -277,25 +263,38 @@ export function ApiDataTable<T, Response = unknown>({
               rows under its real headers — the columns keep their widths and
               the toolbar keeps focus, instead of the whole list collapsing to
               a spinner between every page and search. */}
-          <DataTable
-            caption={caption}
-            showCaption={showCaption}
-            columns={columns}
-            data={rows}
-            loading={collection.loading && !collection.data}
-            empty={empty}
-            rowKey={rowKey}
-            rowAction={rowAction}
-            detailRow={detailRow}
-            selection={selection}
-            currentSort={sort}
-            onSort={applySort}
-            filters={filters}
-            onFilterChange={applyFilter}
-          />
+          {renderItems ? (
+            <div class="pk-table-list__inset">
+              {collection.loading && !collection.data ? (
+                <Spinner label={`Loading ${caption.toLowerCase()}…`} />
+              ) : rows.length ? (
+                renderItems(rows, { sort, onSort: applySort })
+              ) : (
+                <p>{empty}</p>
+              )}
+            </div>
+          ) : (
+            <DataTable
+              caption={caption}
+              showCaption={showCaption}
+              narrowLayout={narrowLayout}
+              columns={columns}
+              data={rows}
+              loading={collection.loading && !collection.data}
+              empty={empty}
+              rowKey={rowKey}
+              rowAction={rowAction}
+              detailRow={detailRow}
+              selection={selection}
+              currentSort={sort}
+              onSort={applySort}
+              filters={filters}
+              onFilterChange={applyFilter}
+            />
+          )}
           {paginate && !collection.loading && <Pager {...pagerProps} />}
         </>
       )}
-    </section>
+    </TableList>
   );
 }

@@ -3,6 +3,7 @@ import {
   agendaImportResponseSchema,
   agendaImportSchema,
   agendaSnapshotSchema,
+  type AgendaSnapshot,
 } from "../../../assets/shared/schemas/event-agenda";
 import {
   agendaScheduleApplySchema,
@@ -10,8 +11,78 @@ import {
   agendaScheduleReviewSchema,
 } from "../../../assets/shared/schemas/event-agenda-schedule";
 import { formatTimeRangeInZone } from "../../../assets/shared/format-date";
-import { agendaContent } from "../../../assets/shared/public-agenda-content";
 import { instantToDateTimeLocal } from "../../../assets/shared/timezone";
+
+export async function expectUnclippedAgendaLink(link: Locator) {
+  const geometry = await link.evaluate((element) => {
+    const rect = element.getBoundingClientRect();
+    const clipped: string[] = [];
+    for (let parent = element.parentElement; parent; parent = parent.parentElement) {
+      const bounds = parent.getBoundingClientRect(),
+        style = getComputedStyle(parent);
+      const left = bounds.left + parent.clientLeft,
+        top = bounds.top + parent.clientTop;
+      const clipX = parent.matches("article") || style.overflowX !== "visible";
+      const clipY = parent.matches("article") || style.overflowY !== "visible";
+      if (clipX && (rect.left < left - 1 || rect.right > left + parent.clientWidth + 1))
+        clipped.push(`${parent.className}:x`);
+      if (clipY && (rect.top < top - 1 || rect.bottom > top + parent.clientHeight + 1))
+        clipped.push(`${parent.className}:y`);
+    }
+    if (!clipped.length) window.scrollBy({ top: rect.top + rect.height / 2 - innerHeight / 2, behavior: "instant" });
+    const visible = element.getBoundingClientRect(),
+      hit = document.elementFromPoint(visible.left + visible.width / 2, visible.top + visible.height / 2);
+    return { clipped, hit: hit !== null && element.contains(hit) };
+  });
+  expect(geometry.clipped).toEqual([]);
+  expect(geometry.hit).toBe(true);
+}
+
+/** Observe the actual UI command through its canonical review and guarded apply receipts. */
+export async function commitScheduleCommand(
+  page: Page,
+  slug: string,
+  before: AgendaSnapshot,
+  perform: () => Promise<void>,
+) {
+  const endpoint = `/api/v1/events/${slug}/agenda/schedule`;
+  const reviewing = page
+    .waitForResponse(
+      (response) =>
+        response.request().method() === "POST" && new URL(response.url()).pathname === `${endpoint}/reviews`,
+    )
+    .then(async (response) => {
+      expect(response.status()).toBe(200);
+      return {
+        request: agendaScheduleProposalSchema.parse(response.request().postDataJSON()),
+        review: agendaScheduleReviewSchema.parse(await response.json()),
+      };
+    });
+  const applying = page
+    .waitForResponse(
+      (response) => response.request().method() === "POST" && new URL(response.url()).pathname === endpoint,
+    )
+    .then(async (response) => {
+      expect(response.status()).toBe(200);
+      return {
+        command: agendaScheduleApplySchema.parse(response.request().postDataJSON()),
+        agenda: agendaSnapshotSchema.parse(await response.json()),
+      };
+    });
+  const [reviewed, applied] = await Promise.all([reviewing, applying, perform()]);
+  expect(reviewed.request.expectedRevision).toBe(before.revision);
+  expect(reviewed.review.expectedRevision).toBe(before.revision);
+  expect(applied.command).toEqual({ ...reviewed.request, reviewHash: reviewed.review.reviewHash });
+  for (const affected of reviewed.review.affected) {
+    expect(affected.before).toEqual(before.occurrences.find((row) => row.id === affected.before.id));
+    expect(affected.after).toEqual(applied.agenda.occurrences.find((row) => row.id === affected.after.id));
+  }
+  expect(applied.agenda.revision).toBe(before.revision + 1);
+  expect(agendaSnapshotSchema.parse(await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json())).toEqual(
+    applied.agenda,
+  );
+  return applied.agenda;
+}
 
 type Activation = "keyboard" | "touch" | "pointer";
 
@@ -149,7 +220,46 @@ export async function readPlacementAgenda(page: Page, endpoint: string) {
   return agendaSnapshotSchema.parse(await response.json());
 }
 
-/** Real menu/candidate activation completes the same reviewed import used by native drag. */
+/** The sidebar consumes canvas width rather than covering the calendar or portal. */
+export async function openSessionSources(page: Page) {
+  const canvas = page.locator(".pk-agenda-editor__canvas");
+  const day = canvas.locator(".pk-content-agenda__day");
+  const before = await day.evaluate((element) => ({
+    viewport: element.clientWidth,
+    canvas: element.parentElement!.clientWidth,
+  }));
+  const control = page.getByRole("button", { name: "Session sources", exact: true });
+  if ((await control.getAttribute("aria-expanded")) !== "true") await control.click();
+  const sidebar = page.getByRole("complementary", { name: "Session sources", exact: true });
+  await expect(sidebar).toBeVisible();
+  const bounds = await canvas.evaluate((element) => {
+    const day = element.querySelector<HTMLElement>(".pk-content-agenda__day")!;
+    const sidebar = element.querySelector<HTMLElement>(".pk-agenda-sources-panel")!;
+    const main = day.getBoundingClientRect(),
+      side = sidebar.getBoundingClientRect();
+    return {
+      viewport: day.clientWidth,
+      canvas: element.clientWidth,
+      mainRight: main.right,
+      sideLeft: side.left,
+      mainHeight: main.height,
+      sideHeight: side.height,
+    };
+  });
+  expect(bounds.canvas).toBe(before.canvas);
+  expect(bounds.viewport).toBeLessThan(before.viewport);
+  expect(bounds.sideLeft).toBeGreaterThanOrEqual(bounds.mainRight - 1);
+  expect(Math.abs(bounds.sideHeight - bounds.mainHeight)).toBeLessThanOrEqual(1);
+  await sidebar.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(sidebar).toBeHidden();
+  await expect.poll(() => day.evaluate((element) => element.clientWidth)).toBe(before.viewport);
+  await expect(control).toBeFocused();
+  await control.press("Enter");
+  await expect(sidebar).toBeVisible();
+  return sidebar;
+}
+
+/** Select a source and activate the exact free slot; both import phases remain canonical. */
 export async function completeAcceptedPlacement(
   page: Page,
   endpoint: string,
@@ -161,53 +271,53 @@ export async function completeAcceptedPlacement(
   const before = await readPlacementAgenda(page, endpoint);
   const room = before.rooms.find((value) => value.name === "Workshop")!;
   expect(room).toBeDefined();
-  const row = page
-    .getByRole("table", { name: "Accepted proposals", exact: true })
-    .getByRole("row")
-    .filter({ hasText: title });
-  await rowAction(page, row, "Schedule on agenda", mode);
-  const candidateAt = agendaContent(before, true).days[0]?.slots[0]?.startsAt;
-  expect(candidateAt, "The current canonical board must provide a scheduling candidate").toBeDefined();
+  const card = page
+    .getByRole("complementary", { name: "Session sources", exact: true })
+    .getByRole("article")
+    .filter({ has: page.getByRole("heading", { name: title, exact: true }) });
+  await rowAction(page, card, "Schedule on agenda", mode);
+  expect(await readPlacementAgenda(page, endpoint)).toEqual(before);
   const candidate = page
     .getByRole("button", {
-      name: `Schedule selected proposal at ${formatTimeRangeInZone(candidateAt!, undefined, before.timeZone)} in Workshop`,
+      name: `Schedule selected proposal at ${formatTimeRangeInZone(startAt, undefined, before.timeZone)} in Workshop`,
       exact: true,
     })
     .first();
-  await activate(candidate, mode);
-  await expect(page.getByLabel("Start time", { exact: true })).toHaveValue(
-    instantToDateTimeLocal(candidateAt!, before.timeZone),
-  );
-  await expect(page.getByLabel("Location", { exact: true })).toHaveValue(room.id);
-  await expect(page.getByRole("button", { name: "Save placement", exact: true })).toBeDisabled();
-  await page.getByLabel("Start time", { exact: true }).fill(instantToDateTimeLocal(startAt, before.timeZone));
-  await page.getByLabel("End time", { exact: true }).fill(instantToDateTimeLocal(endAt, before.timeZone));
-  const reviewing = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === `${endpoint}/imports` && response.request().method() === "POST",
-  );
-  await activate(page.getByRole("button", { name: "Review placement", exact: true }), mode);
-  const review = await reviewing;
-  expect(review.status(), await review.text()).toBe(200);
+  await commitAcceptedPlacement(page, endpoint, title, startAt, endAt, before, () => activate(candidate, mode));
+}
+
+/** Observe the real dry-run fingerprint and guarded save, including untouched existing occurrences. */
+export async function commitAcceptedPlacement(
+  page: Page,
+  endpoint: string,
+  title: string,
+  startAt: string,
+  endAt: string,
+  before: ReturnType<typeof agendaSnapshotSchema.parse>,
+  trigger: () => Promise<unknown>,
+) {
+  const matching = (response: import("@playwright/test").Response, dryRun: boolean) =>
+    response.request().method() === "POST" &&
+    new URL(response.url()).pathname === `${endpoint}/imports` &&
+    agendaImportSchema.parse(response.request().postDataJSON()).dryRun === dryRun;
+  const reviewing = page.waitForResponse((response) => matching(response, true), { timeout: 20_000 });
+  const applying = page.waitForResponse((response) => matching(response, false), { timeout: 20_000 });
+  await trigger();
+  const review = await reviewing,
+    applied = await applying;
+  expect(review.status()).toBe(200);
+  expect(applied.status()).toBe(200);
   const reviewed = agendaImportSchema.parse(review.request().postDataJSON());
   const preview = agendaImportResponseSchema.parse(await review.json());
-  expect(reviewed.dryRun).toBe(true);
+  const command = agendaImportSchema.parse(applied.request().postDataJSON());
+  const room = before.rooms.find((value) => value.name === "Workshop")!;
   expect(reviewed.expectedRevision).toBe(before.revision);
   expect(reviewed.proposalIds).toHaveLength(1);
   expect(reviewed.proposalPlacement).toMatchObject({ startAt, endAt, roomId: room.id });
-  await expect(page.getByText("Placement reviewed.", { exact: false })).toBeVisible();
-  expect(await readPlacementAgenda(page, endpoint)).toEqual(before);
-  const applying = page.waitForResponse(
-    (response) => new URL(response.url()).pathname === `${endpoint}/imports` && response.request().method() === "POST",
-  );
-  await activate(page.getByRole("button", { name: "Save placement", exact: true }), mode);
-  const applied = await applying;
-  expect(applied.status(), await applied.text()).toBe(200);
-  const command = agendaImportSchema.parse(applied.request().postDataJSON());
   expect(command.dryRun).toBe(false);
   expect(command.proposalIds).toEqual(reviewed.proposalIds);
   expect(command.proposalPlacement).toEqual(reviewed.proposalPlacement);
   expect(command.expectedPlacementFingerprint).toBe(preview.placementFingerprint);
-  await expect(page.getByLabel("End time", { exact: true })).toHaveCount(0);
   const after = await readPlacementAgenda(page, endpoint);
   expect(after.revision).toBe(before.revision + 1);
   expect(after.occurrences).toHaveLength(before.occurrences.length + 1);
@@ -216,7 +326,7 @@ export async function completeAcceptedPlacement(
     expect(after.occurrences.find((value) => value.id === prior.id)).toEqual(prior);
 }
 
-/** Drag a real card, or activate its equivalent menu; cancel and then apply the exact same candidate. */
+/** Actual pointer move follows calendar rows; keyboard/touch use the equivalent focused dialog. */
 export async function movePlacedSession(
   page: Page,
   endpoint: string,
@@ -227,105 +337,84 @@ export async function movePlacedSession(
   const before = await readPlacementAgenda(page, endpoint);
   const original = before.occurrences.find((value) => value.title === title)!;
   const room = before.rooms.find((value) => value.name === "Second workshop")!;
-  expect(original.startAt).not.toBeNull();
-  expect(original.endAt).not.toBeNull();
-  expect(room).toBeDefined();
-  expect(original.roomId).not.toBe(room.id);
-  expect(original.startAt).not.toBe(startAt);
-  const duration = Date.parse(original.endAt!) - Date.parse(original.startAt!);
-  const endAt = new Date(Date.parse(startAt) + duration).toISOString();
-  const candidateName = `Move selected session at ${formatTimeRangeInZone(startAt, undefined, before.timeZone)} in ${room.name}`;
-  await page.getByLabel("Scheduling time step", { exact: true }).selectOption("15");
-  for (const commit of [false, true]) {
-    const journalStart = await page.evaluate(() => {
-      const journal = Reflect.get(window, "acceptedPlacementDragJournal");
-      return Array.isArray(journal) ? journal.length : 0;
-    });
-    const card = page
-      .getByRole("article")
-      .filter({ has: page.getByRole("heading", { name: title, exact: true }) })
-      .first();
-    if (mode === "pointer") {
-      const heading = card.getByRole("heading", { name: title, exact: true });
-      await startPlacementDrag(page, heading);
-    } else await rowAction(page, card, "Select for move", mode);
-    const destination = page.getByRole("button", { name: candidateName, exact: true }).first();
-    await expect(destination).toBeVisible();
-    await expect(destination).toBeEnabled();
-    expect(await readPlacementAgenda(page, endpoint)).toEqual(before);
-    const reviewing = page.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname === `${endpoint}/schedule/reviews` && response.request().method() === "POST",
+  const endAt = new Date(
+    Date.parse(startAt) + Date.parse(original.endAt!) - Date.parse(original.startAt!),
+  ).toISOString();
+  const sources = page.getByRole("complementary", { name: "Session sources", exact: true });
+  if (await sources.isVisible()) await sources.getByRole("button", { name: "Close", exact: true }).click();
+  const card = page.locator(`article[data-agenda-occurrence="${original.id}"]`).first();
+  async function preparePointer() {
+    await card.scrollIntoViewIfNeeded();
+    const origin = await card.boundingBox();
+    if (!origin) throw new Error("Scheduled card has no pointer geometry");
+    const target = await page.locator(`tr[data-agenda-start="${startAt}"]`).evaluate(
+      (row, roomIndex) => {
+        const table = row.closest("table")!;
+        const heading = table.querySelectorAll<HTMLElement>("thead th")[roomIndex + 1]!;
+        const column = heading.getBoundingClientRect(),
+          line = row.getBoundingClientRect();
+        return { x: column.left + column.width / 2, y: line.top };
+      },
+      before.rooms.findIndex((value) => value.id === room.id),
     );
-    if (mode === "pointer") {
-      await destination.scrollIntoViewIfNeeded();
-      const target = await destination.boundingBox();
-      if (!target) throw new Error("Move destination has no native pointer geometry");
-      expect(
-        await destination.evaluate((element) => {
-          const rect = element.getBoundingClientRect();
-          return element.contains(document.elementFromPoint(rect.x + rect.width / 2, rect.y + rect.height / 2));
-        }),
-      ).toBe(true);
-      await page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 12 });
-      await page.mouse.up();
-    } else await activate(destination, mode);
-    const response = await reviewing;
-    expect(response.status(), await response.text()).toBe(200);
-    if (mode === "pointer") {
-      expect(
-        await page.evaluate(
-          ({ from, id }) => {
-            const journal = Reflect.get(window, "acceptedPlacementDragJournal") as Array<{
-              type: string;
-              sessionPayload?: string;
-            }>;
-            const events = journal.slice(from);
-            return {
-              started: events.some((event) => event.type === "dragstart"),
-              dropped: events.some((event) => event.type === "drop" && event.sessionPayload === id),
-            };
-          },
-          { from: journalStart, id: original.id },
-        ),
-      ).toEqual({ started: true, dropped: true });
-    }
-    const request = agendaScheduleProposalSchema.parse(response.request().postDataJSON());
-    const review = agendaScheduleReviewSchema.parse(await response.json());
-    expect(request.expectedRevision).toBe(before.revision);
-    expect(request.changes).toEqual([{ id: original.id, startAt, endAt, roomId: room.id, additionalRoomIds: [] }]);
-    expect(review.affected).toHaveLength(1);
-    expect(review.affected[0]!.before).toEqual(original);
-    expect(review.affected[0]!.after).toMatchObject({ id: original.id, startAt, endAt, roomId: room.id });
-    await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toBeVisible();
-    expect(await readPlacementAgenda(page, endpoint)).toEqual(before);
-    if (!commit) {
-      await activate(page.getByRole("button", { name: "Cancel schedule changes", exact: true }), mode);
-      await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toHaveCount(0);
-      expect(await readPlacementAgenda(page, endpoint)).toEqual(before);
-      continue;
-    }
-    const applying = page.waitForResponse(
-      (response) =>
-        new URL(response.url()).pathname === `${endpoint}/schedule` && response.request().method() === "POST",
-    );
-    await activate(page.getByRole("button", { name: "Apply reviewed schedule", exact: true }), mode);
-    const applied = await applying;
-    expect(applied.status(), await applied.text()).toBe(200);
-    const command = agendaScheduleApplySchema.parse(applied.request().postDataJSON());
-    expect(command.expectedRevision).toBe(before.revision);
-    expect(command.changes).toEqual(request.changes);
-    expect(command.reviewHash).toBe(review.reviewHash);
-    await expect(page.getByRole("heading", { name: "Review schedule changes", exact: true })).toHaveCount(0);
-    const after = await readPlacementAgenda(page, endpoint);
-    expect(after.revision).toBe(before.revision + 1);
-    expect(after.occurrences).toHaveLength(before.occurrences.length);
-    expect(after.occurrences.find((value) => value.id === original.id)).toMatchObject({
-      startAt,
-      endAt,
-      roomId: room.id,
-    });
-    for (const prior of before.occurrences.filter((value) => value.id !== original.id))
-      expect(after.occurrences.find((value) => value.id === prior.id)).toEqual(prior);
+    await page.mouse.move(origin.x + origin.width / 2, origin.y + 12);
+    await page.mouse.down();
+    await page.mouse.move(target.x, target.y + 12, { steps: 12 });
+    await expect(page.locator("[data-agenda-pointer-source]")).toHaveCount(1);
+    await expect(page.locator(".pk-agenda-editor__pointer-preview:not([hidden])")).toHaveCount(1);
   }
+  if (mode === "pointer") {
+    await preparePointer();
+    await page.keyboard.press("Escape");
+    await page.mouse.up();
+  } else {
+    await rowAction(page, card, "Move to day / location", mode);
+    const dialog = page.getByRole("dialog", { name: `Move ${title}`, exact: true });
+    await dialog.getByLabel(/^New day and start time/).fill(instantToDateTimeLocal(startAt, before.timeZone));
+    await dialog.getByLabel("New location", { exact: true }).selectOption(room.id);
+    await activate(dialog.getByRole("button", { name: "Cancel", exact: true }), mode);
+  }
+  expect(await readPlacementAgenda(page, endpoint)).toEqual(before);
+  const reviewing = page.waitForResponse(
+    (response) =>
+      response.request().method() === "POST" && new URL(response.url()).pathname === `${endpoint}/schedule/reviews`,
+    { timeout: 20_000 },
+  );
+  const applying = page.waitForResponse(
+    (response) => response.request().method() === "POST" && new URL(response.url()).pathname === `${endpoint}/schedule`,
+    { timeout: 20_000 },
+  );
+  if (mode === "pointer") {
+    await preparePointer();
+    await page.mouse.up();
+  } else {
+    await rowAction(page, card, "Move to day / location", mode);
+    const dialog = page.getByRole("dialog", { name: `Move ${title}`, exact: true });
+    await dialog.getByLabel(/^New day and start time/).fill(instantToDateTimeLocal(startAt, before.timeZone));
+    await dialog.getByLabel("New location", { exact: true }).selectOption(room.id);
+    await activate(dialog.getByRole("button", { name: "Move session", exact: true }), mode);
+    await expect(dialog).toBeHidden();
+  }
+  const reviewed = await reviewing,
+    applied = await applying;
+  expect(reviewed.status()).toBe(200);
+  expect(applied.status()).toBe(200);
+  const request = agendaScheduleProposalSchema.parse(reviewed.request().postDataJSON());
+  const review = agendaScheduleReviewSchema.parse(await reviewed.json());
+  const command = agendaScheduleApplySchema.parse(applied.request().postDataJSON());
+  expect(request.expectedRevision).toBe(before.revision);
+  expect(request.changes).toEqual([{ id: original.id, startAt, endAt, roomId: room.id, additionalRoomIds: [] }]);
+  expect(review.affected[0]!.before).toEqual(original);
+  expect(command.changes).toEqual(request.changes);
+  expect(command.reviewHash).toBe(review.reviewHash);
+  const after = await readPlacementAgenda(page, endpoint);
+  expect(after.revision).toBe(before.revision + 1);
+  expect(after.occurrences).toHaveLength(before.occurrences.length);
+  expect(after.occurrences.find((value) => value.id === original.id)).toMatchObject({
+    startAt,
+    endAt,
+    roomId: room.id,
+  });
+  for (const prior of before.occurrences.filter((value) => value.id !== original.id))
+    expect(after.occurrences.find((value) => value.id === prior.id)).toEqual(prior);
 }

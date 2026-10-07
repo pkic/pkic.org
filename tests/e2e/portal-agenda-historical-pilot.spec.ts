@@ -159,7 +159,7 @@ test("real Ottawa YAML archives all rows and offsets and uploads eight resumable
       .every((material) => material.status === "draft" && material.approvedAt === null),
   ).toBe(true);
   await page.goto(`/portal/#/events/${slug}/agenda`);
-  await page.getByRole("tab", { name: "All sessions", exact: true }).click();
+  await page.getByRole("tab", { name: "Schedule", exact: true }).click();
   const networkingRow = page.getByRole("row").filter({ has: page.getByText("Networking", { exact: true }) });
   await expect(networkingRow).toBeVisible();
   const timeHeader = page
@@ -183,18 +183,30 @@ test("real Ottawa YAML archives all rows and offsets and uploads eight resumable
   await expect(timeCell.locator(".pk-table__value")).toContainText("15:30");
   await expect(timeCell.locator(".pk-table__value")).toContainText("End not recorded");
   await expect(networkingRow).not.toContainText("Unscheduled");
-  await expect(networkingRow.getByText("Not checked", { exact: true })).toBeVisible();
+  const notChecked = networkingRow.getByRole("img", {
+    name: "Conflict checks require a complete scheduled interval.",
+    exact: true,
+  });
+  await expect(notChecked).toBeVisible();
+  await expect(notChecked).toHaveAttribute("title", "Conflict checks require a complete scheduled interval.");
+  await expect(notChecked).not.toHaveClass(/pk-badge--ok/);
+  await expect(networkingRow.getByRole("img", { name: "No scheduling conflicts", exact: true })).toHaveCount(0);
   const sourceCreditTitle = imported.occurrences.find(
     (row) => row.startAt && (row.history?.archivalCredits.length ?? 0) > 0,
   )!.title;
   const sourceCreditRow = table.getByRole("row").filter({ has: page.getByText(sourceCreditTitle, { exact: true }) });
   const needsReview = sourceCreditRow.getByRole("img", {
     name: "Conflict checks are incomplete; review unresolved source credits.",
+    exact: true,
   });
-  await expect(needsReview).toHaveText("Needs review");
+  await expect(needsReview).toBeVisible();
+  await expect(needsReview).toHaveAttribute(
+    "title",
+    "Conflict checks are incomplete; review unresolved source credits.",
+  );
   await expect(needsReview).toHaveClass(/pk-badge--warn/);
   await expect(needsReview).not.toHaveClass(/pk-badge--ok/);
-  await expect(sourceCreditRow.getByText("Clear", { exact: true })).toHaveCount(0);
+  await expect(sourceCreditRow.getByRole("img", { name: "No scheduling conflicts", exact: true })).toHaveCount(0);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: info.outputPath("historical-ottawa-desktop.png"), fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });

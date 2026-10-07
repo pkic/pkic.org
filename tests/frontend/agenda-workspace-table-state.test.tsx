@@ -99,7 +99,7 @@ it("restores the server query and selection across workspace views without fetch
   await act(() => render(<AgendaEditor slug={snapshot.eventSlug} canEdit />, host!));
   await settle();
   expect(requests.some((url) => url.pathname.endsWith("/occurrences"))).toBe(false);
-  await click("All sessions");
+  await click("Schedule");
   const query = () =>
     agendaOccurrenceQuerySchema.parse(
       Object.fromEntries(requests.filter((url) => url.pathname.endsWith("/occurrences")).at(-1)!.searchParams),
@@ -130,7 +130,7 @@ it("restores the server query and selection across workspace views without fetch
   const inactiveRequestCount = requests.length;
   await settle();
   expect(requests).toHaveLength(inactiveRequestCount);
-  await click("All sessions");
+  await click("Schedule");
   expect(query()).toMatchObject({
     q: "migration",
     sort: "-title",

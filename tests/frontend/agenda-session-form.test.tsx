@@ -65,11 +65,27 @@ async function input(name: string, value: string) {
     control.dispatchEvent(new Event("input", { bubbles: true }));
   });
 }
+async function selectLocations(ids: string[]) {
+  const control = host.querySelector<HTMLSelectElement>('[name="additionalRoomIds"]')!;
+  expect(control.multiple).toBe(true);
+  await act(() => {
+    for (const option of control.options) option.selected = ids.includes(option.value);
+    control.dispatchEvent(new Event("change", { bubbles: true }));
+  });
+}
+async function optionalDetails() {
+  await act(() => {
+    [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+      .find((button) => button.textContent === "Optional / settings")!
+      .click();
+  });
+}
 async function submit() {
   await act(async () => {
     host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     await Promise.resolve();
   });
+  await vi.waitFor(() => expect(host.querySelector<HTMLFieldSetElement>("fieldset")?.disabled).toBe(false));
 }
 function capture() {
   const bodies: Array<{ method: string; body: unknown }> = [];
@@ -101,11 +117,7 @@ describe("agenda session request contracts", () => {
         host,
       ),
     );
-    const location = host.querySelector<HTMLSelectElement>('[name="roomId"]')!;
-    await act(() => {
-      location.value = "overflow";
-      location.dispatchEvent(new Event("change", { bubbles: true }));
-    });
+    await selectLocations(["overflow"]);
     const presenter = host.querySelector<HTMLSelectElement>('[aria-label="Location for Speaker"]')!;
     expect(presenter.value).toBe("");
     expect(presenter.selectedOptions[0].textContent).toBe("Follow session location");
@@ -117,11 +129,7 @@ describe("agenda session request contracts", () => {
   it("saves additional room reservations while preserving one canonical session", async () => {
     const bodies = capture();
     await mount(true);
-    const choice = host.querySelector<HTMLInputElement>('[name="additionalRoomIds"][value="overflow"]')!;
-    await act(() => {
-      choice.checked = true;
-      choice.dispatchEvent(new Event("input", { bubbles: true }));
-    });
+    await selectLocations(["room", "overflow"]);
     await submit();
     const body = agendaOccurrencePatchSchema.parse(bodies[0].body);
     expect(body.roomId).toBe("room");
@@ -131,17 +139,11 @@ describe("agenda session request contracts", () => {
   it("swaps primary and additional room roles without losing either reservation", async () => {
     const bodies = capture();
     await mount(true);
-    const additional = host.querySelector<HTMLInputElement>('[name="additionalRoomIds"][value="overflow"]')!;
-    await act(() => {
-      additional.checked = true;
-      additional.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    const primary = host.querySelector<HTMLSelectElement>('[name="roomId"]')!;
-    await act(() => {
-      primary.value = "overflow";
-      primary.dispatchEvent(new Event("change", { bubbles: true }));
-    });
-    expect(host.querySelector<HTMLInputElement>('[name="additionalRoomIds"][value="room"]')!.checked).toBe(true);
+    await selectLocations(["overflow"]);
+    await selectLocations(["overflow", "room"]);
+    const chosen = host.querySelector<HTMLSelectElement>('[name="additionalRoomIds"]')!;
+    expect([...chosen.selectedOptions].map((option) => option.value)).toEqual([""]);
+    expect(host.textContent).toContain("All locations");
     await submit();
     expect(agendaOccurrencePatchSchema.parse(bodies[0].body)).toMatchObject({
       roomId: "overflow",
@@ -200,11 +202,7 @@ it("moves an explicit primary-room speaker when the session editor changes locat
   await act(() =>
     render(<SessionEditor snapshot={snapshot} occurrence={placed} onSaved={() => {}} onClose={() => {}} />, host),
   );
-  await act(() => {
-    const control = host.querySelector<HTMLSelectElement>('[name="roomId"]')!;
-    control.value = "overflow";
-    control.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  await selectLocations(["overflow"]);
   expect(host.querySelector<HTMLSelectElement>('[aria-label="Location for Speaker"]')!.value).toBe("overflow");
   await submit();
   const body = agendaOccurrencePatchSchema.parse(bodies[0].body);
@@ -233,14 +231,11 @@ it("honors an explicit speaker placement after promoting the overflow room", asy
   await act(() =>
     render(<SessionEditor snapshot={snapshot} occurrence={placed} onSaved={() => {}} onClose={() => {}} />, host),
   );
-  await act(() => {
-    const control = host.querySelector<HTMLSelectElement>('[name="roomId"]')!;
-    control.value = "overflow";
-    control.dispatchEvent(new Event("change", { bubbles: true }));
-  });
+  await selectLocations(["overflow"]);
   const speaker = host.querySelector<HTMLSelectElement>('[aria-label="Location for Speaker"]')!;
   expect(speaker.value).toBe("overflow");
-  expect(host.querySelector<HTMLInputElement>('[name="additionalRoomIds"][value="room"]')!.checked).toBe(true);
+  await selectLocations(["overflow", "room"]);
+  expect(host.textContent).toContain("All locations");
   await act(() => {
     speaker.value = "room";
     speaker.dispatchEvent(new Event("change", { bubbles: true }));
@@ -259,6 +254,7 @@ it("honors an explicit speaker placement after promoting the overflow room", asy
 it("submits and clears optional track metadata independently of location", async () => {
   const bodies = capture();
   await mount(true);
+  await optionalDetails();
   await input("track", "  Cryptography  ");
   await submit();
   const saved = agendaOccurrencePatchSchema.parse(bodies[0].body);

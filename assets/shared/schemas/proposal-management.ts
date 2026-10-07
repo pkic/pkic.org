@@ -28,6 +28,7 @@ export type ProposalType = z.infer<typeof proposalTypeSchema>;
 export const proposalSessionTypeSchema = z.object({
   label: proposalTypeSchema,
   requiresPresentation: z.boolean(),
+  durationMinutes: z.number().int().min(1).max(1440).optional(),
 });
 export const proposalSessionTypesSchema = z
   .array(proposalSessionTypeSchema)

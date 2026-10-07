@@ -97,15 +97,21 @@ describe("canonical session demand display", () => {
     });
     const columns = agendaSessionColumns(snapshot, [], true, () => []);
     for (const [label, status] of [
-      ["Confirmed", "confirmed"],
-      ["Pending", "pending"],
+      ["Reserved", "confirmed"],
+      ["Pending approval", "pending"],
       ["Waitlisted", "waitlisted"],
     ] as const) {
       const column = columns.find((item) => item.header === label)!;
       expect(column).toMatchObject({ align: "end", width: "fit", defaultHidden: status !== "confirmed" });
       const cell = html(<div>{column.cell(row, 0)}</div>);
-      expect(cell).toContain(`In person: ${formatNumber(response.demand.physical[status])}`);
-      expect(cell).toContain(`Remote: ${formatNumber(response.demand.remote[status])}`);
+      const meaning =
+        status === "confirmed"
+          ? "reservations"
+          : status === "pending"
+            ? "reservations awaiting approval"
+            : "waitlisted participants";
+      expect(cell).toContain(`aria-label="In-person ${meaning}: ${formatNumber(response.demand.physical[status])}"`);
+      expect(cell).toContain(`aria-label="Remote ${meaning}: ${formatNumber(response.demand.remote[status])}"`);
       expect(cell).not.toContain(formatNumber(response.demand.physical.occupied));
       expect(cell).not.toContain(formatNumber(response.demand.physical.preferences));
     }

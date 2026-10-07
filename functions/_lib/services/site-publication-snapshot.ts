@@ -155,13 +155,15 @@ export async function readSitePublicationSnapshot(
   snapshot.publicResources["/api/v1/members/applications/form"] = z
     .json()
     .parse(await getPublicMembershipApplicationForm(db));
-  snapshot.publicResources["/api/v1/sponsors/tiers?sponsorType=consortium"] = z.json().parse(
-    publicSponsorTiersResponseSchema.parse({
-      visibility: "public",
-      sponsorType: "consortium",
-      tiers: (await listActiveSponsorshipTierNames(db, "consortium")).map((tier) => ({ tier })),
-    }),
-  );
+  for (const sponsorType of ["consortium", "event"] as const) {
+    snapshot.publicResources[`/api/v1/sponsors/tiers?sponsorType=${sponsorType}`] = z.json().parse(
+      publicSponsorTiersResponseSchema.parse({
+        visibility: "public",
+        sponsorType,
+        tiers: (await listActiveSponsorshipTierNames(db, sponsorType)).map((tier) => ({ tier })),
+      }),
+    );
+  }
   async function publishEventForms(slug: string) {
     const key = `/api/v1/events/${encodeURIComponent(slug)}/forms/placements/`;
     if (`${key}event_registration` in snapshot.publicResources) return;

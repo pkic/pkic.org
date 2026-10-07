@@ -10,8 +10,13 @@ interface AgendaSessionActionContext {
   open: Record<
     "duplicate" | "history" | "promotion" | "participation" | "move" | "swap" | "edit",
     (session: AgendaOccurrence) => void
-  >;
+  > & { locations?: (session: AgendaOccurrence) => void };
   select: (id: string, kind: "move" | "resize") => void;
+}
+
+/** Direct card interactions replace selection commands; table bulk selection stays available. */
+export function agendaCardActions(actions: RowActionsProps["actions"]) {
+  return actions.filter((action) => !["resize", "select", "bulk"].includes(action.id));
 }
 
 /** Cards, rows and details offer the same authorized commands for the same occurrence. */
@@ -25,6 +30,17 @@ export function agendaSessionActions(
       ? [{ id: "history", label: "Review historical representation", onSelect: () => open.history(occurrence) }]
       : []
     : [
+        { id: "edit", label: "Edit session", disabled: busy, onSelect: () => open.edit(occurrence) },
+        ...(open.locations
+          ? [
+              {
+                id: "locations",
+                label: "Change locations…",
+                disabled: busy,
+                onSelect: () => open.locations?.(occurrence),
+              },
+            ]
+          : []),
         ...scheduling.actions(occurrence),
         { id: "duplicate", label: "Duplicate session", disabled: busy, onSelect: () => open.duplicate(occurrence) },
         { id: "history", label: "Session archive / materials", onSelect: () => open.history(occurrence) },
@@ -56,7 +72,6 @@ export function agendaSessionActions(
               occurrence.roomId ?? "",
             ),
         },
-        { id: "edit", label: "Edit / move session", onSelect: () => open.edit(occurrence) },
         ...([-1, 1] as const).map((direction) => ({
           id: direction === -1 ? "earlier" : "later",
           label: `Move ${direction === -1 ? "earlier" : "later"} · ${scheduling.timeStep} minutes`,

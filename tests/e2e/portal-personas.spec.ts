@@ -22,6 +22,7 @@ import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const USER_ID = "20000000-0000-4000-8000-000000000001";
+const SESSION_ID = "20000000-0000-4000-8000-000000000002";
 const MEMBER_ID = "30000000-0000-4000-8000-000000000001";
 const IDENTITY_ID = "30000000-0000-4000-8000-000000000002";
 
@@ -120,6 +121,7 @@ const activeIdentities = [
 function sessionFor(persona: Persona): Record<string, unknown> {
   return userAuthSessionResponseSchema.parse({
     success: true,
+    sessionId: SESSION_ID,
     expiresAt: "2099-12-31T23:59:59.000Z",
     idleExpiresAt: "2099-12-31T23:59:59.000Z",
     identity: { id: USER_ID, email: persona.email },

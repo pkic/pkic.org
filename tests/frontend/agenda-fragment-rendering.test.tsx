@@ -66,10 +66,19 @@ it("emits exact authored room-specific modal and label aliases once alongside na
     expect(matches).toHaveLength(1);
     const alias = matches[0]!;
     expect(alias.hidden).toBe(true);
-    expect(alias.closest("td")?.getAttribute("data-agenda-cell")).toBe(fragment.roomId);
+    expect(alias.closest("td")?.getAttribute("data-agenda-cell")).toBe("main");
+    expect(alias.closest("td")?.getAttribute("colspan")).toBe("2");
     const target = alias.dataset.agendaFragmentDialog!;
     expect([...host.querySelectorAll("dialog")].find((dialog) => dialog.id === target)).toBeDefined();
   }
+  expect(host.querySelectorAll('[data-agenda-occurrence="canonical-session"]')).toHaveLength(1);
+  expect(
+    new Set(
+      [...host.querySelectorAll<HTMLElement>("[data-agenda-fragment-dialog]")].map(
+        (alias) => alias.dataset.agendaFragmentDialog,
+      ),
+    ).size,
+  ).toBe(1);
   for (const id of ["nav-thursday", "nav-thursday-tab", "speakers", "nav-speakers", "retained-primary"])
     expect([...host.querySelectorAll("[id]")].filter((node) => node.id === id)).toHaveLength(1);
   expect(host.querySelector(".pk-content-agenda")!.hasAttribute("data-agenda-public-fragments")).toBe(true);

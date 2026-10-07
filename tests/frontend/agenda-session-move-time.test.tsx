@@ -40,46 +40,30 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 describe("precise agenda time adjustments", () => {
-  it("keeps typed times exact until an explicit snap and reviews a duration-preserving proposal", async () => {
+  it("applies an exact typed destination with the original duration and closes only after saving", async () => {
     const requests: ReturnType<typeof agendaScheduleProposalSchema.parse>[] = [];
-    const fetcher = vi.fn(async (_url: string, init: RequestInit) => {
-      const proposal = agendaScheduleProposalSchema.parse(JSON.parse(String(init.body)));
-      requests.push(proposal);
-      return Response.json({
-        expectedRevision: 4,
-        reviewHash: "a".repeat(64),
-        affected: proposal.changes.map((change) => ({
-          before: snapshot.occurrences[0],
-          after: { ...snapshot.occurrences[0], ...change },
-          beforeOrder: 1,
-          afterOrder: 1,
-        })),
-      });
+    const close = vi.fn();
+    const apply = vi.fn(async (input: unknown) => {
+      requests.push(agendaScheduleProposalSchema.parse(input));
+      return { saved: true, message: "" };
     });
-    vi.stubGlobal("fetch", fetcher);
     host = document.createElement("div");
     document.body.append(host);
     await act(() =>
       render(
-        <SessionMove snapshot={snapshot} session={snapshot.occurrences[0]!} onSaved={vi.fn()} onClose={vi.fn()} />,
+        <SessionMove snapshot={snapshot} session={snapshot.occurrences[0]!} onApply={apply} onClose={close} />,
         host,
       ),
     );
-    const input = () => host.querySelector<HTMLInputElement>('[name="startAt"]')!;
-    expect(input().value).toBe("2026-12-01T10:07");
+    const input = host.querySelector<HTMLInputElement>('[name="changes.0.startAt"]')!;
+    expect(input.value).toBe("2026-12-01T10:07");
     await act(() => {
-      const step = host.querySelector<HTMLSelectElement>('[name="timeStep"]')!;
-      step.value = "15";
-      step.dispatchEvent(new Event("change", { bubbles: true }));
+      input.value = "2026-12-01T10:22";
+      input.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    expect(input().value).toBe("2026-12-01T10:07");
-    const button = (label: string) =>
-      [...host.querySelectorAll<HTMLButtonElement>("button")].find((row) => row.textContent === label)!;
-    await act(() => button("Later by 15 minutes").click());
-    expect(input().value).toBe("2026-12-01T10:22");
-    await act(() => button("Snap start to 15-minute grid").click());
-    expect(input().value).toBe("2026-12-01T10:15");
-    expect(fetcher).not.toHaveBeenCalled();
+    expect(input.value).toBe("2026-12-01T10:22");
+    expect(apply).not.toHaveBeenCalled();
+    expect(close).not.toHaveBeenCalled();
     await act(async () => {
       host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
@@ -89,13 +73,14 @@ describe("precise agenda time adjustments", () => {
       changes: [
         {
           id: "session",
-          startAt: "2026-12-01T09:15:00.000Z",
-          endAt: "2026-12-01T09:45:00.000Z",
+          startAt: "2026-12-01T09:22:00.000Z",
+          endAt: "2026-12-01T09:52:00.000Z",
           roomId: null,
           additionalRoomIds: [],
         },
       ],
     });
+    expect(close).toHaveBeenCalledOnce();
   });
   it("uses one displayed snapped candidate for touch, keyboard activation and drag move/resize", async () => {
     host = document.createElement("div");

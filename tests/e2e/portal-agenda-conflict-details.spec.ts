@@ -28,7 +28,7 @@ async function capture(page: Page, info: TestInfo, name: string) {
   await page.setViewportSize({ width: 1280, height: 900 });
 }
 
-test("real room refusal preserves the dedicated session draft and succeeds after explicit correction", async ({
+test("real room refusal preserves the session dialog draft and succeeds after explicit correction", async ({
   page,
 }, info) => {
   test.setTimeout(120_000);
@@ -110,9 +110,11 @@ test("real room refusal preserves the dedicated session draft and succeeds after
   const auditBefore = await audit();
   await page.goto(`/portal/#/events/${slug}/agenda`);
   await page.getByRole("button", { name: `Open session details: ${title}`, exact: true }).click();
-  await runRowAction(page, page.getByRole("dialog", { name: title, exact: true }), "Edit / move session");
+  await runRowAction(page, page.getByRole("dialog", { name: title, exact: true }), "Edit session");
   await expect(page.getByRole("heading", { name: "Edit session", exact: true })).toBeVisible();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(page.getByRole("dialog", { name: title, exact: true })).toBeHidden();
+  await expect(page.getByRole("dialog", { name: "Edit session", exact: true })).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(1);
   await page.getByRole("textbox", { name: /^Session title/ }).fill(draftTitle);
   await page.getByLabel("Starts", { exact: true }).fill(instantToDateTimeLocal(at(75), snapshot.timeZone));
   await page.getByLabel("Ends", { exact: true }).fill(instantToDateTimeLocal(at(105), snapshot.timeZone));

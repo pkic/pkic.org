@@ -16,7 +16,6 @@
     display: contents;
   }
 
-
   .mermaid-wrap {
     background: transparent;
     border: 1px solid rgba(0, 0, 0, 0.08);
@@ -56,45 +55,50 @@
     --wg-color: var(--pk-palette-blue);
   }
 
-  [data-pagefind-body] h1,
-  [data-pagefind-body] h2,
-  [data-pagefind-body] h3,
-  [data-pagefind-body] h4,
-  [data-pagefind-body] h5,
-  [data-pagefind-body] h6 {
+  [data-pagefind-body] h1:not(:where(.pk *)),
+  [data-pagefind-body] h2:not(:where(.pk *)),
+  [data-pagefind-body] h3:not(:where(.pk *)),
+  [data-pagefind-body] h4:not(:where(.pk *)),
+  [data-pagefind-body] h5:not(:where(.pk *)),
+  [data-pagefind-body] h6:not(:where(.pk *)) {
     font-weight: 700;
     line-height: 1.25;
     scroll-margin-top: 5rem;
   }
-  [data-pagefind-body] h1 {
+  [data-pagefind-body] h1:not(:where(.pk *)) {
     font-size: 2rem;
     margin-top: 0;
     margin-bottom: 1rem;
   }
-  [data-pagefind-body] h2 {
+  [data-pagefind-body] h2:not(:where(.pk *)) {
     font-size: 1.5rem;
     margin-top: 2.5rem;
     margin-bottom: 0.75rem;
     padding-bottom: 0.4rem;
-    border-bottom: 1px solid color-mix(in srgb, var(--page-accent, var(--wg-color, var(--pk-palette-green))) 20%, transparent);
-    background: linear-gradient(120deg, var(--page-accent, var(--wg-color, var(--pk-palette-green))), var(--page-accent-2, rgb(72, 124, 170)));
+    border-bottom: 1px solid
+      color-mix(in srgb, var(--page-accent, var(--wg-color, var(--pk-palette-green))) 20%, transparent);
+    background: linear-gradient(
+      120deg,
+      var(--page-accent, var(--wg-color, var(--pk-palette-green))),
+      var(--page-accent-2, rgb(72, 124, 170))
+    );
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
     background-clip: text;
   }
   @supports not (-webkit-background-clip: text) {
-    [data-pagefind-body] h2 {
+    [data-pagefind-body] h2:not(:where(.pk *)) {
       color: var(--page-accent, var(--wg-color, var(--pk-palette-green)));
       background: none;
     }
   }
-  [data-pagefind-body] h3 {
+  [data-pagefind-body] h3:not(:where(.pk *)) {
     font-size: 1.2rem;
     margin-top: 2rem;
     margin-bottom: 0.5rem;
     color: var(--page-accent-2, var(--page-accent, var(--wg-color, rgb(72, 124, 170))));
   }
-  [data-pagefind-body] h4 {
+  [data-pagefind-body] h4:not(:where(.pk *)) {
     font-size: 1rem;
     margin-top: 1.5rem;
     margin-bottom: 0.4rem;
@@ -196,7 +200,9 @@
 
   .mermaid-wrap {
     cursor: zoom-in;
-    transition: transform 0.2s, box-shadow 0.2s;
+    transition:
+      transform 0.2s,
+      box-shadow 0.2s;
   }
   .mermaid-wrap:hover {
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);

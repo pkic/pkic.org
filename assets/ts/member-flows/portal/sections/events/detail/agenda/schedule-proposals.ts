@@ -1,4 +1,5 @@
-import { stepAgendaSessions } from "../../../../../../../shared/event-agenda-order";
+import { resolveAgendaDurationRules } from "../../../../../../../shared/event-agenda-duration";
+import { stepAgendaSession, stepAgendaSessions } from "../../../../../../../shared/event-agenda-order";
 import {
   agendaScheduleProposalSchema,
   AGENDA_SCHEDULE_BATCH_LIMIT,
@@ -11,7 +12,10 @@ export function scheduleMove(
   startAt: string,
   roomId: string | null,
 ) {
-  const duration = session.startAt && session.endAt ? Date.parse(session.endAt) - Date.parse(session.startAt) : 1800000;
+  const duration =
+    session.startAt && session.endAt
+      ? Date.parse(session.endAt) - Date.parse(session.startAt)
+      : resolveAgendaDurationRules(snapshot.durationRules).defaultMinutes * 60000;
   return agendaScheduleProposalSchema.parse({
     expectedRevision: snapshot.revision,
     changes: [
@@ -47,8 +51,16 @@ export function scheduleSwap(snapshot: AgendaSnapshot, first: AgendaOccurrence, 
 }
 
 /** Canonical movement includes displaced neighbors, which also count toward the atomic review limit. */
-export function scheduleStep(snapshot: AgendaSnapshot, selected: ReadonlySet<string>, direction: -1 | 1) {
-  const changes = stepAgendaSessions(snapshot.occurrences, selected, snapshot.timeZone, direction);
+export function scheduleStep(
+  snapshot: AgendaSnapshot,
+  selected: ReadonlySet<string>,
+  direction: -1 | 1,
+  bounds?: { startAt: string; endAt: string },
+) {
+  const session = selected.size === 1 ? snapshot.occurrences.find((item) => selected.has(item.id)) : undefined;
+  const changes = session
+    ? stepAgendaSession(snapshot.occurrences, session, snapshot.timeZone, direction, bounds)
+    : stepAgendaSessions(snapshot.occurrences, selected, snapshot.timeZone, direction);
   if (changes.length > AGENDA_SCHEDULE_BATCH_LIMIT)
     throw new Error(
       `This move affects ${changes.length} sessions, including neighboring sessions. One change can affect at most ${AGENDA_SCHEDULE_BATCH_LIMIT}. Select fewer sessions and try again.`,

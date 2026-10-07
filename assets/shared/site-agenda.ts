@@ -1,3 +1,7 @@
+import type { AgendaBreakSponsorDisplay } from "./schemas/event-agenda-sponsors";
+import type { AgendaOccurrence } from "./schemas/event-agenda";
+import type { AgendaMediaCapabilities } from "./event-agenda-media";
+
 export interface ContentAgendaDay {
   legacyFragments?: ContentAgendaDayFragment[];
   date: string;
@@ -8,11 +12,15 @@ export interface ContentAgendaDay {
     startsAt: string;
     sessions: Array<{
       id?: string;
+      kind?: AgendaOccurrence["kind"];
       publicAnchor?: string;
       legacyFragments?: ContentAgendaSessionFragment[];
       descriptionHtml: string;
       descriptionMarkdown?: string;
       durationMinutes?: number;
+      /** Derived content time; authored duration remains the scheduled slot. */
+      contentDurationMinutes?: number;
+      transitionMinutes?: number;
       endsAt?: string;
       endNotRecorded?: boolean;
       locations: string[];
@@ -21,6 +29,10 @@ export interface ContentAgendaDay {
       presentationUrl?: string;
       legacyPresentationUrl?: string;
       recordingUrl?: string;
+      recordingApproved?: boolean;
+      onlineAccessUrl?: string;
+      plannedMedia?: AgendaMediaCapabilities;
+      sponsors?: AgendaBreakSponsorDisplay[];
       speakers: ContentAgendaSpeaker[];
       title: string;
       track?: string;

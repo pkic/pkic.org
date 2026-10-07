@@ -1,165 +1,125 @@
-import { AgendaTimeStep } from "./AgendaTimeStep";
-import { adjustAgendaStart, snapAgendaStart } from "./schedule-time-controls";
+import { resolveAgendaDurationRules } from "../../../../../../../shared/event-agenda-duration";
 import { formatNumber } from "../../../../../../../shared/format-number";
-import { AgendaSchedulePreview } from "./AgendaSchedulePreview";
-import {
-  agendaScheduleProposalSchema,
-  type AgendaScheduleProposal,
-} from "../../../../../../../shared/schemas/event-agenda-schedule";
+import { agendaScheduleProposalSchema } from "../../../../../../../shared/schemas/event-agenda-schedule";
 import { agendaMovedAdditionalRoomIds } from "../../../../../../../shared/event-agenda-rooms";
 import { useEditorFocus } from "./useEditorFocus";
 import { useState } from "preact/hooks";
-import {
-  agendaOccurrencePatchSchema,
-  type AgendaSnapshot,
-  type AgendaOccurrence,
-} from "../../../../../../../shared/schemas/event-agenda";
+import type { AgendaSnapshot, AgendaOccurrence } from "../../../../../../../shared/schemas/event-agenda";
 import { instantToDateTimeLocal, dateTimeLocalToIso } from "../../../../../../../shared/timezone";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { Field } from "../../../../../../ui/Field";
 import { TextInput, Select } from "../../../../../../ui/TextControl";
-import { Button } from "../../../../../../ui/Button";
-import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
+import { Dialog } from "../../../../../../ui/Dialog";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
+import type { useAgendaScheduling } from "./useAgendaScheduling";
+
+/** Choose a destination, then commit the guarded move without leaving the calendar. */
 export function SessionMove({
   snapshot,
   session,
-  onSaved,
+  onApply,
   onClose,
-  timeStep: configuredStep,
-  onTimeStep,
 }: {
-  timeStep?: number;
-  onTimeStep?: (minutes: number) => void;
   snapshot: AgendaSnapshot;
   session: AgendaOccurrence;
-  onSaved: (value: AgendaSnapshot) => void;
+  onApply: ReturnType<typeof useAgendaScheduling>["apply"];
   onClose: () => void;
 }) {
   const focus = useEditorFocus();
   const [start, setStart] = useState(session.startAt ? instantToDateTimeLocal(session.startAt, snapshot.timeZone) : "");
-  const [localStep, setLocalStep] = useState<number>(5);
-  const timeStep = configuredStep ?? localStep;
-  const setTimeStep = onTimeStep ?? setLocalStep;
   const [room, setRoom] = useState(session.roomId ?? "");
-  const [proposal, setProposal] = useState<AgendaScheduleProposal | null>(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const duration = session.startAt && session.endAt ? Date.parse(session.endAt) - Date.parse(session.startAt) : 1800000;
-  let startAt = "";
-  let endAt = "";
-  try {
-    if (start) {
-      startAt = dateTimeLocalToIso(start, snapshot.timeZone);
-      endAt = new Date(Date.parse(startAt) + duration).toISOString();
-    }
-  } catch {
-    startAt = start;
+  const duration =
+    session.startAt && session.endAt
+      ? Date.parse(session.endAt) - Date.parse(session.startAt)
+      : resolveAgendaDurationRules(snapshot.durationRules).defaultMinutes * 60000;
+  let startAt = start,
     endAt = start;
+  try {
+    startAt = dateTimeLocalToIso(start, snapshot.timeZone);
+    endAt = new Date(Date.parse(startAt) + duration).toISOString();
+  } catch {
+    /* The canonical form reports invalid local times. */
   }
-  const form = useContractForm(agendaOccurrencePatchSchema, {
+  const form = useContractForm(agendaScheduleProposalSchema, {
     expectedRevision: snapshot.revision,
-    startAt,
-    endAt,
-    roomId: room || null,
-    additionalRoomIds: agendaMovedAdditionalRoomIds(session, room || null),
+    changes: [
+      {
+        id: session.id,
+        startAt,
+        endAt,
+        roomId: room || null,
+        additionalRoomIds: agendaMovedAdditionalRoomIds(session, room || null),
+      },
+    ],
   });
-  function adjustTime(direction: -1 | 0 | 1) {
-    try {
-      setStart(
-        direction === 0
-          ? snapAgendaStart(start, snapshot.timeZone, timeStep)
-          : adjustAgendaStart(start, snapshot.timeZone, direction * timeStep),
-      );
-      setError("");
-    } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Enter a valid start time first.");
-    }
-  }
   async function move(event: Event) {
     event.preventDefault();
+    if (busy) return;
     const checked = form.submit();
     if (!checked.data) {
       setError(checked.message);
       return;
     }
-    setProposal(
-      agendaScheduleProposalSchema.parse({
-        expectedRevision: snapshot.revision,
-        changes: [
-          {
-            id: session.id,
-            startAt: checked.data.startAt,
-            endAt: checked.data.endAt,
-            roomId: checked.data.roomId,
-            additionalRoomIds: checked.data.additionalRoomIds,
-          },
-        ],
-      }),
-    );
+    setBusy(true);
+    setError("");
+    try {
+      const result = await onApply(checked.data);
+      if (result.saved) onClose();
+      else setError(result.message);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "The session could not be moved.");
+    } finally {
+      setBusy(false);
+    }
   }
-  if (proposal)
-    return (
-      <AgendaSchedulePreview
-        snapshot={snapshot}
-        proposal={proposal}
-        onSaved={onSaved}
-        onClose={() => {
-          setProposal(null);
-          onClose();
-        }}
-      />
-    );
   return (
-    <Panel>
-      <PanelHeader title={`Move ${session.title}`} />
-      <PanelBody>
-        <p>
-          Choose any day, start time, and location. This session keeps its {formatNumber(duration / 60000)}-minute
-          duration. Times in {snapshot.timeZone}.
-        </p>
-        {error && <ErrorAlert error={error} />}
-        <form ref={focus} noValidate {...form.handlers} onSubmit={(event) => void move(event)} class="pk-stack">
-          <Field label="New day and start time" required {...form.of("startAt")}>
+    <Dialog
+      open
+      title={`Move ${session.title}`}
+      confirmLabel={busy ? "Moving…" : "Move session"}
+      confirmDisabled={busy}
+      onConfirm={() => focus.current?.requestSubmit()}
+      onCancel={() => {
+        if (!busy) onClose();
+      }}
+    >
+      <p>
+        Choose the day, time and location. The {formatNumber(duration / 60000)}-minute duration stays the same. Times in{" "}
+        {snapshot.timeZone}.
+      </p>
+      {error && <ErrorAlert error={error} />}
+      <form ref={focus} noValidate {...form.handlers} onSubmit={(event) => void move(event)} class="pk-stack">
+        <fieldset disabled={busy} class="pk-fieldset pk-stack">
+          <Field label="New day and start time" required {...form.of("changes.0.startAt")}>
             {(control) => (
               <TextInput
                 {...control}
-                name="startAt"
+                name="changes.0.startAt"
                 type="datetime-local"
                 value={start}
                 onInput={(event) => setStart(event.currentTarget.value)}
               />
             )}
           </Field>
-          <AgendaTimeStep value={timeStep} onChange={setTimeStep} />
-          <div class="pk-cluster">
-            <Button type="button" disabled={!start} onClick={() => adjustTime(-1)}>
-              Earlier by {formatNumber(timeStep)} minutes
-            </Button>
-            <Button type="button" disabled={!start} onClick={() => adjustTime(1)}>
-              Later by {formatNumber(timeStep)} minutes
-            </Button>
-            <Button type="button" disabled={!start} onClick={() => adjustTime(0)}>
-              Snap start to {formatNumber(timeStep)}-minute grid
-            </Button>
-          </div>
-          <Field label="New location" {...form.of("roomId")}>
+          <Field label="New location" {...form.of("changes.0.roomId")}>
             {(control) => (
-              <Select {...control} name="roomId" value={room} onChange={(event) => setRoom(event.currentTarget.value)}>
-                <option value="">Across all locations</option>
+              <Select
+                {...control}
+                name="changes.0.roomId"
+                value={room}
+                onChange={(event) => setRoom(event.currentTarget.value)}
+              >
+                <option value="">{session.kind === "break" ? "All locations" : "No location assigned"}</option>
                 {snapshot.rooms.map((value) => (
                   <option value={value.id}>{value.name}</option>
                 ))}
               </Select>
             )}
           </Field>
-          <div class="pk-cluster pk-cluster--end">
-            <Button onClick={onClose}>Cancel</Button>
-            <Button type="submit" variant="primary">
-              Review move
-            </Button>
-          </div>
-        </form>
-      </PanelBody>
-    </Panel>
+        </fieldset>
+      </form>
+    </Dialog>
   );
 }

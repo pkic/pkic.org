@@ -1,5 +1,7 @@
+import { localSnapshotReceiptPath } from "../../scripts/publication/local-snapshot-receipt.mjs";
 import { mkdir, readFile, rm, symlink, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
+import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { afterEach, expect, it, vi } from "vitest";
 import { publicationImageInputs, publicationRouteCacheKey } from "../../site/publication-cache";
@@ -241,5 +243,29 @@ it("supports the intentional node_modules anchor symlink while checking each cac
   } finally {
     await rm(parent, { recursive: true, force: true });
     await rm(canonicalAnchor, { recursive: true, force: true });
+  }
+});
+
+it("keeps local snapshot receipts outside every public input, output, and staging tree", async () => {
+  const root = resolve(process.env.PKIC_TEST_TEMP_ROOT ?? tmpdir(), `publication-receipt-${randomUUID()}`);
+  const names = ["output", "public", "static", "content", "staging"];
+  try {
+    const protectedTrees = names.map((name) => resolve(root, name));
+    for (const tree of [...protectedTrees, resolve(root, "private")]) await mkdir(tree, { recursive: true });
+    const receipt = resolve(root, "private/snapshot.json");
+    expect(await localSnapshotReceiptPath(receipt, "local", protectedTrees)).toBe(receipt);
+    expect(await localSnapshotReceiptPath(undefined, "production", protectedTrees)).toBeUndefined();
+    await expect(localSnapshotReceiptPath(receipt, "preview", protectedTrees)).rejects.toThrow("local-only");
+    for (const tree of protectedTrees) {
+      await expect(localSnapshotReceiptPath(resolve(tree, "snapshot.json"), "local", protectedTrees)).rejects.toThrow(
+        "outside",
+      );
+    }
+    await symlink(resolve(root, "public"), resolve(root, "alias"));
+    await expect(
+      localSnapshotReceiptPath(resolve(root, "alias/snapshot.json"), "local", protectedTrees),
+    ).rejects.toThrow("outside");
+  } finally {
+    await rm(root, { recursive: true, force: true });
   }
 });

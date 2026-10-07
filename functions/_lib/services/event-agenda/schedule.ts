@@ -11,7 +11,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { getAgenda } from "./read";
 import { validateAgendaSchedule } from "./mutations";
-import { assertPublicationCapacity, preparePublicationCapacityGuard } from "./publication-capacity";
+import { assertPlanningPublicationCapacity, preparePlanningPublicationCapacityGuard } from "./publication-capacity";
 import { agendaAdditionalRoomStatements } from "./occurrence-rooms";
 import { commitAgendaRevision } from "./revision";
 import { occurrenceRepresentationReferences, prepareRepresentationEligibility } from "./representation-eligibility";
@@ -60,7 +60,7 @@ async function prepare(
     db,
     occurrenceRepresentationReferences(occurrences.filter((item) => requested.has(item.id))),
   );
-  await assertPublicationCapacity(db, next);
+  await assertPlanningPublicationCapacity(db, next, snapshot);
   const beforeOrder = canonicalAgendaOrder(snapshot.occurrences),
     afterOrder = canonicalAgendaOrder(occurrences);
   const affected = snapshot.occurrences
@@ -80,6 +80,7 @@ async function prepare(
   );
   const reviewHash = [...new Uint8Array(digest)].map((byte) => byte.toString(16).padStart(2, "0")).join("");
   return {
+    baseline: snapshot,
     next,
     conflictProposal,
     representationGuards,
@@ -102,7 +103,7 @@ export async function applyAgendaSchedule(
   input: z.infer<typeof agendaScheduleApplySchema>,
   actorId: string,
 ) {
-  const { next, review, representationGuards, conflictProposal } = await prepare(
+  const { baseline, next, review, representationGuards, conflictProposal } = await prepare(
     db,
     eventId,
     eventSlug,
@@ -120,7 +121,7 @@ export async function applyAgendaSchedule(
     eventId,
     input.expectedRevision,
     [
-      preparePublicationCapacityGuard(db, next),
+      preparePlanningPublicationCapacityGuard(db, next, baseline),
       ...representationGuards,
       ...review.affected.flatMap(({ before, after }) => [
         db

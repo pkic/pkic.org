@@ -20,7 +20,11 @@ export interface ApprovedPublicationCapacityBasis {
 }
 
 /** Approval uses proposed people; activation uses the exact approved normalized private authority. */
-function publicationCapacityEvidence(snapshot: AgendaSnapshot, approved?: ApprovedPublicationCapacityBasis) {
+function publicationCapacityEvidence(
+  snapshot: AgendaSnapshot,
+  approved?: ApprovedPublicationCapacityBasis,
+  planningBaseline?: AgendaSnapshot,
+) {
   const sessions = snapshot.occurrences.map((item) => ({
     id: item.id,
     roomIds: agendaOccurrenceRoomIds(item),
@@ -40,8 +44,12 @@ function publicationCapacityEvidence(snapshot: AgendaSnapshot, approved?: Approv
   const people = approved
     ? "SELECT occurrence_id,user_id,attendance_mode,room_id FROM event_agenda_operational_people WHERE event_id=? AND revision=?"
     : "SELECT json_extract(value,'$.occurrence_id') AS occurrence_id,json_extract(value,'$.user_id') AS user_id,json_extract(value,'$.attendance_mode') AS attendance_mode,json_extract(value,'$.room_id') AS room_id FROM json_each(?)";
+  const planningPeople = planningBaseline ? `,planning_day_people AS(${dayPeople})` : "";
+  const dayCapacity = planningBaseline
+    ? `MAX(day.capacity,${eventEntryOccupiedSql("day.event_id", "day.day_date", undefined, true, undefined, "SELECT event_id,day_date,user_id FROM planning_day_people")})`
+    : "day.capacity";
   return {
-    sql: `WITH target_event AS(SELECT id,capacity_in_person FROM events WHERE slug=?),day_people AS(${dayPeople}),day_limits AS(
+    sql: `WITH target_event AS(SELECT id,capacity_in_person FROM events WHERE slug=?),day_people AS(${dayPeople})${planningPeople},day_limits AS(
  SELECT day.event_id,day.day_date,day.in_person_capacity AS capacity FROM event_days day WHERE day.event_id=(SELECT id FROM target_event)
  UNION SELECT (SELECT id FROM target_event),person.day_date,(SELECT capacity_in_person FROM target_event) FROM day_people person WHERE NOT EXISTS(SELECT 1 FROM event_days day WHERE day.event_id=person.event_id AND day.day_date=person.day_date)
  ),operational_people AS(${people}),sessions AS(
@@ -49,7 +57,7 @@ function publicationCapacityEvidence(snapshot: AgendaSnapshot, approved?: Approv
  ),rooms AS(SELECT json_extract(value,'$.id') AS id,json_extract(value,'$.capacity') AS capacity,json_extract(value,'$.setupMinutes') AS setup_minutes FROM json_each(?)),locations AS(
  SELECT session.id,placement.value AS room_id,room.capacity FROM sessions session JOIN json_each(session.room_ids) placement JOIN rooms room ON room.id=placement.value
  ),limits AS(SELECT session.id,session.room_ids,session.remote_capacity,CASE WHEN json_array_length(session.room_ids)=1 AND room.capacity IS NOT NULL THEN CASE WHEN session.capacity IS NULL THEN room.capacity ELSE MIN(session.capacity,room.capacity) END ELSE session.capacity END AS physical_capacity FROM sessions session LEFT JOIN rooms room ON room.id=json_extract(session.room_ids,'$[0]'))
- SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM day_limits day WHERE day.capacity IS NOT NULL AND day.capacity>0 AND ${eventEntryOccupiedSql("day.event_id", "day.day_date", undefined, true, undefined, "SELECT event_id,day_date,user_id FROM day_people")}>day.capacity)
+ SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM day_limits day WHERE day.capacity IS NOT NULL AND day.capacity>0 AND ${eventEntryOccupiedSql("day.event_id", "day.day_date", undefined, true, undefined, "SELECT event_id,day_date,user_id FROM day_people")}>${dayCapacity})
  AND NOT EXISTS(SELECT 1 FROM operational_people person JOIN (
  SELECT occurrence_id,user_id,attendance_mode,room_id FROM agenda_session_participations WHERE status='reserved' AND occurrence_id IN(SELECT occurrence_id FROM operational_people)
  UNION SELECT occurrence_id,user_id,attendance_mode,room_id FROM agenda_session_holds WHERE occurrence_id IN(SELECT occurrence_id FROM operational_people) AND revoked_at IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')
@@ -64,7 +72,11 @@ function publicationCapacityEvidence(snapshot: AgendaSnapshot, approved?: Approv
       snapshot.eventSlug,
       ...(approved
         ? [approved.eventId, approved.revision, approved.eventId, approved.revision]
-        : [JSON.stringify(operationalDays(snapshot)), JSON.stringify(operationalPeople(snapshot))]),
+        : [
+            JSON.stringify(operationalDays(snapshot)),
+            ...(planningBaseline ? [JSON.stringify(operationalDays(planningBaseline))] : []),
+            JSON.stringify(operationalPeople(snapshot)),
+          ]),
       JSON.stringify(sessions),
       JSON.stringify(rooms),
     ],
@@ -78,8 +90,27 @@ export function preparePublicationCapacityGuard(
 ) {
   return prepareAuthorizationGuard(db, publicationCapacityEvidence(snapshot, approved));
 }
+/** Draft moves may retain an existing day overage, but cannot add demand to it.
+ * Both bases count current registrations/offers in the same SQL evaluation.
+ * Approval and activation continue to use the strict publication guard above. */
+export function preparePlanningPublicationCapacityGuard(
+  db: DatabaseLike,
+  snapshot: AgendaSnapshot,
+  baseline: AgendaSnapshot,
+) {
+  return prepareAuthorizationGuard(db, publicationCapacityEvidence(snapshot, undefined, baseline));
+}
+export async function assertPlanningPublicationCapacity(
+  db: DatabaseLike,
+  snapshot: AgendaSnapshot,
+  baseline: AgendaSnapshot,
+) {
+  await assertCapacityEvidence(db, publicationCapacityEvidence(snapshot, undefined, baseline));
+}
 export async function assertPublicationCapacity(db: DatabaseLike, snapshot: AgendaSnapshot) {
-  const evidence = publicationCapacityEvidence(snapshot);
+  await assertCapacityEvidence(db, publicationCapacityEvidence(snapshot));
+}
+async function assertCapacityEvidence(db: DatabaseLike, evidence: ReturnType<typeof publicationCapacityEvidence>) {
   if (!(await first(db, evidence.sql, evidence.bindings)))
     throw new AppError(
       409,

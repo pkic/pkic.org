@@ -19,7 +19,11 @@ export function preparePublicAgendaSnapshot(
     calendarPublic,
     occurrences: snapshot.occurrences
       .filter((item) => publicSessionTiming(item) !== undefined)
-      .map((item) => ({ ...item, ...publicSessionMediaUrls(item.history?.materials ?? []) })),
+      .map((item) => ({
+        ...item,
+        ...publicSessionMediaUrls(item.history?.materials ?? []),
+        speakers: item.speakers.map(({ profileCandidate: _candidate, ...speaker }) => speaker),
+      })),
     displayRoles: [
       ...new Set(snapshot.blocks.map((block) => instantToDateTimeLocal(block.startAt, snapshot.timeZone).slice(0, 10))),
     ].flatMap((date) => agendaDisplayRoles(snapshot, date, true)),

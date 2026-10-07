@@ -51,7 +51,7 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
   context,
 }, info) => {
   test.setTimeout(240_000);
-  const ownerEmail = e2eAdminEmail("default");
+  const ownerEmail = e2eAdminEmail("promotion-registration-attribution");
   const ownerSince = await capturedEmailCount();
   const owner = await registerInBrowser(page, ownerEmail);
   await confirmRegistration(page, ownerEmail, ownerSince);
@@ -111,7 +111,7 @@ test("a rendered promotion QR preserves its referral through email sign-in and c
   await page.goto(
     `/portal/#/groups/${encodeURIComponent(event.ownerGroupId)}/events/${encodeURIComponent(event.id)}/agenda`,
   );
-  await page.getByRole("tab", { name: "All sessions", exact: true }).click();
+  await page.getByRole("tab", { name: "Schedule", exact: true }).click();
   const row = page.getByRole("row").filter({ hasText: title });
   await row.getByRole("button", { name: /actions/i }).click();
   await page.getByRole("menuitem", { name: "Speaker promotion kit", exact: true }).click();

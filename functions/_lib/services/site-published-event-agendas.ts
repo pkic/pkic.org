@@ -19,3 +19,25 @@ export function approvedEventProgram(snapshot: AgendaSnapshot) {
     snapshot,
   );
 }
+
+/** Links exist only for an approved public feed retained in the publication catalog. */
+export function publishedAgendaCalendarLinks(publication: SitePublicationSnapshot, snapshot: AgendaSnapshot) {
+  const calendar = publication.eventAgendaCalendars?.[snapshot.eventSlug];
+  if (!snapshot.calendarPublic || !calendar || calendar.agendaPath !== snapshot.publicAgendaPath) return undefined;
+  const downloadHref = `${calendar.agendaPath}calendar.ics`;
+  return { downloadHref, subscribeHref: new URL(downloadHref, "https://pkic.org").href.replace(/^https?:/, "webcal:") };
+}
+
+/** Apply a publication only to its canonical agenda or explicitly owned event root. */
+export function approvedEventAgendaForRoute(
+  publication: SitePublicationSnapshot | undefined,
+  route: string,
+  eventRoute?: string,
+): AgendaSnapshot | undefined {
+  if (!publication) return undefined;
+  const owners = publishedEventAgendas(publication).filter(
+    (entry) => route === entry.route || `${eventRoute ?? route}agenda/` === entry.route,
+  );
+  if (owners.length > 1) throw new Error(`Ambiguous approved agenda ownership for route ${route}`);
+  return owners[0]?.snapshot;
+}

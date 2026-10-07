@@ -179,12 +179,15 @@ test("every delivered long-panel promotion export has complete evidence and refu
   );
   await page
     .getByRole("tablist", { name: "Agenda views", exact: true })
-    .getByRole("tab", { name: "All sessions", exact: true })
+    .getByRole("tab", { name: "Schedule", exact: true })
     .click();
-  const row = page
-    .getByRole("table", { name: "Sessions across all days", exact: true })
+  const sessions = page.getByRole("region", { name: "Event sessions", exact: true });
+  await sessions.getByRole("searchbox", { name: "Search event sessions", exact: true }).fill(title);
+  await sessions.getByRole("button", { name: "Search event sessions", exact: true }).click();
+  const row = sessions
+    .getByRole("table", { name: "Event sessions", exact: true })
     .getByRole("row")
-    .filter({ hasText: title });
+    .filter({ has: page.getByText(title, { exact: true }) });
   await runRowAction(page, row, "Speaker promotion kit");
   await page.getByRole("button", { name: "Prepare published kit", exact: true }).click();
   const kitResponse = await page.request.get(kitApi);

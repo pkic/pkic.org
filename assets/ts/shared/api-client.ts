@@ -38,13 +38,19 @@ function connectionError(): ApiClientError {
   );
 }
 
-async function parseJson(response: Response): Promise<unknown> {
+async function parseJson(response: Response, signal?: AbortSignal): Promise<unknown> {
   const contentType = response.headers.get("content-type") ?? "";
   if (!contentType.includes("application/json")) {
     return undefined;
   }
   return response.json().catch((error: unknown) => {
-    if (error instanceof Error && ["AbortError", "TimeoutError", "TypeError"].includes(error.name))
+    if (signal?.aborted) throw error;
+    // The received HTTP refusal remains authoritative even if its body is interrupted.
+    if (!response.ok) return undefined;
+    if (
+      (error instanceof Error || (typeof DOMException !== "undefined" && error instanceof DOMException)) &&
+      ["AbortError", "TimeoutError", "TypeError"].includes(error.name)
+    )
       throw connectionError();
     return undefined;
   });
@@ -113,7 +119,7 @@ export async function requestJson<Schema extends z.ZodType>(
   };
   let response = await send();
 
-  let body = await parseJson(response);
+  let body = await parseJson(response, requestInit.signal ?? undefined);
   const refusal = apiErrorPayloadSchema.safeParse(body);
   if (
     response.status === 403 &&
@@ -130,7 +136,7 @@ export async function requestJson<Schema extends z.ZodType>(
     headers.set(TURNSTILE_TOKEN_HEADER, token);
     // The server's challenge refusal guarantees the handler has not run. Retry once only.
     response = await send();
-    body = await parseJson(response);
+    body = await parseJson(response, requestInit.signal ?? undefined);
   }
   if (!response.ok) {
     const fallback: ApiErrorPayload = {

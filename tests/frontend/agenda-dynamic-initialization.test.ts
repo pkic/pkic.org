@@ -99,15 +99,67 @@ it("initializes a later-mounted agenda once, switches days by keyboard, and rele
   const dispose = initializeContentAgenda(root);
   expect(replaceSync).toHaveBeenLastCalledWith(agendaLayoutCss([320]));
   expect(initializeContentAgenda(root)).toBe(dispose);
-  expect(observe).toHaveBeenCalledOnce();
+  expect(observe).toHaveBeenCalledTimes(2);
+  expect(observe.mock.calls.every(([element]) => element === root)).toBe(true);
   const buttons = root.querySelectorAll<HTMLButtonElement>("button");
   buttons[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
   expect(buttons[1].getAttribute("aria-selected")).toBe("true");
   expect(document.activeElement).toBe(buttons[1]);
   expect(root.querySelector<HTMLElement>('[data-agenda-panel="one"]')!.hidden).toBe(true);
   dispose();
-  expect(disconnect).toHaveBeenCalledOnce();
+  expect(disconnect).toHaveBeenCalledTimes(2);
   expect(document.adoptedStyleSheets).toEqual([]);
   buttons[0].click();
   expect(buttons[1].getAttribute("aria-selected")).toBe("true");
+});
+
+it("progressively opens canonical title links while preserving native navigation intents and missing-dialog fallback", async () => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe = vi.fn();
+      disconnect = vi.fn();
+    },
+  );
+  const { initializeContentAgenda } = await import("../../assets/ts/site/agenda");
+  root = document.createElement("section");
+  root.innerHTML =
+    '<a href="/sessions/canonical/" data-agenda-open-session="details">Canonical session</a><dialog id="details"></dialog>';
+  document.body.append(root);
+  const dialog = root.querySelector("dialog")!;
+  const showModal = vi.fn(() => {
+    dialog.open = true;
+  });
+  Object.defineProperty(dialog, "showModal", { value: showModal });
+  Object.defineProperty(dialog, "close", {
+    value: () => {
+      dialog.open = false;
+    },
+  });
+  const dispose = initializeContentAgenda(root);
+  const link = root.querySelector("a")!;
+  for (const init of [{ ctrlKey: true }, { metaKey: true }, { shiftKey: true }, { altKey: true }, { button: 1 }]) {
+    const click = new MouseEvent("click", { bubbles: true, cancelable: true, ...init });
+    link.dispatchEvent(click);
+    expect(click.defaultPrevented).toBe(false);
+    expect(showModal).not.toHaveBeenCalled();
+  }
+  const click = new MouseEvent("click", { bubbles: true, cancelable: true });
+  link.dispatchEvent(click);
+  expect(click.defaultPrevented).toBe(true);
+  expect(showModal).toHaveBeenCalledTimes(1);
+  dialog.close();
+  link.target = "_blank";
+  const newTab = new MouseEvent("click", { bubbles: true, cancelable: true });
+  link.dispatchEvent(newTab);
+  expect(newTab.defaultPrevented).toBe(false);
+  link.removeAttribute("target");
+  dialog.remove();
+  const missing = new MouseEvent("click", { bubbles: true, cancelable: true });
+  link.dispatchEvent(missing);
+  expect(missing.defaultPrevented).toBe(false);
+  expect(link.getAttribute("href")).toBe("/sessions/canonical/");
+  expect(showModal).toHaveBeenCalledTimes(1);
+  dispose();
+  document.body.classList.remove("agenda-modal-open");
 });

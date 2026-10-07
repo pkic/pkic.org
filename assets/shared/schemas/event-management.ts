@@ -40,6 +40,7 @@ export const eventProfileCatalogResponseSchema = z.object({
  * generic portal-event setting.
  */
 export const EVENT_MANAGED_SETTING_KEYS = [
+  "agenda",
   "forms",
   "frontend",
   "heroImageUrl",

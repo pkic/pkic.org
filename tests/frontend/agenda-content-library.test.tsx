@@ -163,12 +163,12 @@ it("keeps local source edits until the organizer deliberately adopts the incomin
 it("cancels dedicated edits and copying without leaving forms in the library", async () => {
   expect(host.querySelector("form")).toBeNull();
   await act(async () => button("New session content").click());
-  await act(async () => button("Back to session library").click());
+  await act(async () => button("Back to reusable sessions").click());
   expect(host.querySelector("form")).toBeNull();
   await act(async () => button("Reuse from another event").click());
   expect(host.querySelector('[data-testid="content-list"]')).toBeNull();
   expect(host.querySelector("form")).not.toBeNull();
-  await act(async () => button("Back to session library").click());
+  await act(async () => button("Back to reusable sessions").click());
   expect(host.querySelector("form")).toBeNull();
   expect(mocks.post).not.toHaveBeenCalled();
   expect(mocks.patch).not.toHaveBeenCalled();

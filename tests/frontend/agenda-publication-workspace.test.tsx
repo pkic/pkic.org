@@ -68,7 +68,7 @@ it("keeps agenda actions at card scope and list creation in the table toolbar an
   await settle();
   await act(() =>
     [...host.querySelectorAll<HTMLButtonElement>("button")]
-      .find((button) => button.textContent === "All sessions")!
+      .find((button) => button.textContent === "Schedule")!
       .click(),
   );
   await settle();
@@ -77,11 +77,11 @@ it("keeps agenda actions at card scope and list creation in the table toolbar an
   expect(host.textContent).not.toContain("Draft revision");
   expect(host.textContent).not.toContain("Approve for publication");
   const menu = host.querySelector<HTMLButtonElement>('[aria-label="Actions for Agenda"]');
-  expect(menu?.closest('[aria-label="Agenda workspace"]')).not.toBeNull();
+  expect(menu?.closest(".pk-agenda-workspace-header")).not.toBeNull();
   expect(menu?.closest('[role="toolbar"]')).toBeNull();
   expect(host.querySelectorAll('[aria-label="Actions for Agenda"]')).toHaveLength(1);
   const selected = host.querySelector('[role="tab"][aria-selected="true"]');
-  expect(selected?.textContent).toBe("All sessions");
+  expect(selected?.textContent).toBe("Schedule");
   expect(document.getElementById(selected!.getAttribute("aria-controls")!)).toBe(
     host.querySelector('[role="tabpanel"]:not([hidden])'),
   );
@@ -101,7 +101,7 @@ it("keeps agenda actions at card scope and list creation in the table toolbar an
       .dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
   });
   await settle();
-  expect(host.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("All sessions");
+  expect(host.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Schedule");
   await runRowAction(host, "Agenda", "Review for publication");
   await settle();
   expect(host.querySelector("table")).toBeNull();

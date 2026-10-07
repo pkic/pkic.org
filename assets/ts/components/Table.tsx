@@ -27,6 +27,7 @@ import { useState } from "preact/hooks";
 
 import {
   DataTable as SystemDataTable,
+  type DataTableProps as SystemDataTableProps,
   type DataTableColumn,
   type DataTableColumnWidth,
   type DataTableSelection,
@@ -48,6 +49,8 @@ export interface ColumnSort {
 
 export interface Column<T> {
   header: HeadCell;
+  /** Compact symbol; the text header still names menus and assistive technology. */
+  headerIcon?: ComponentChildren;
   cell: (row: T, index: number) => ComponentChildren;
   className?: string;
   sort?: ColumnSort;
@@ -195,6 +198,8 @@ export interface DataTableProps<T> {
   /** Names the table. Hidden unless `showCaption`, but always announced. */
   caption: string;
   showCaption?: boolean;
+  /** Compact docks retain table rows instead of responsive record cards. */
+  narrowLayout?: SystemDataTableProps<T>["narrowLayout"];
   columns: Column<T>[];
   data: T[];
   empty?: ComponentChildren;
@@ -225,6 +230,7 @@ export interface DataTableProps<T> {
 export function DataTable<T>({
   caption,
   showCaption,
+  narrowLayout,
   columns,
   data,
   empty = "No data",
@@ -370,6 +376,7 @@ export function DataTable<T>({
     return {
       id: `column-${String(index)}`,
       header: isActions ? ACTIONS_COLUMN_LABEL : label,
+      headerIcon: column.headerIcon,
       headerHidden: isActions || undefined,
       cell: (row) => column.cell(row, indexOf.get(row) ?? 0),
       sortable: Boolean(column.sort),
@@ -468,6 +475,7 @@ export function DataTable<T>({
       <SystemDataTable
         caption={caption}
         showCaption={showCaption}
+        narrowLayout={narrowLayout}
         columns={systemColumns}
         rows={data}
         rowKey={keyFor}

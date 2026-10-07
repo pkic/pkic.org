@@ -47,7 +47,8 @@ export function AgendaSessionTable({
       paginate
       urlState="agenda"
       retainUrlStateOnUnmount={retainUrlStateOnUnmount}
-      caption="Sessions across all days"
+      caption="Event sessions"
+      empty="No event sessions match this search. Add a session here, or reuse content from the session library."
       rowKey={(row) => row.id}
       selection={selection}
       onData={onData}

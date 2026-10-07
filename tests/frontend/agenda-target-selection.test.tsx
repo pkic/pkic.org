@@ -1,3 +1,4 @@
+import { eventProposalsResponseSchema } from "../../assets/shared/schemas/event-proposals";
 import {
   agendaScheduleProposalSchema,
   agendaScheduleApplySchema,
@@ -6,11 +7,14 @@ import {
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, it, expect, vi } from "vitest";
+import { AgendaPointerPlacement } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/AgendaPointerPlacement";
+import { ContentAgenda } from "../../assets/ts/site/ContentAgenda";
+import { agendaPresenter } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/presenter";
 import { AgendaEditor } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/AgendaEditor";
 import { agendaSnapshotSchema, agendaOccurrenceListSchema } from "../../assets/shared/schemas/event-agenda";
 import { emptySessionDemandCounts } from "../../assets/shared/schemas/event-session-demand";
 import { listFilterOptionsResponseSchema } from "../../assets/shared/schemas/list-filter-options";
-import { runRowAction } from "./helpers/row-actions";
+import { runRowAction as runTableRowAction } from "./helpers/row-actions";
 const snapshot = agendaSnapshotSchema.parse({
   eventSlug: "synthetic",
   timeZone: "Europe/Amsterdam",
@@ -37,6 +41,7 @@ afterEach(() => {
   render(null, host);
   host.remove();
   vi.unstubAllGlobals();
+  vi.restoreAllMocks();
 });
 const json = (value: unknown, status = 200) =>
   new Response(JSON.stringify(value), {
@@ -55,59 +60,159 @@ async function mount() {
   await act(() => render(<AgendaEditor slug="synthetic" canEdit />, host));
   await settle();
 }
+function agendaReads(url: string, data = snapshot) {
+  if (url.includes("/occurrences/filters"))
+    return json(
+      listFilterOptionsResponseSchema.parse({ options: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } }),
+    );
+  if (url.includes("/occurrences"))
+    return json(
+      agendaOccurrenceListSchema.parse({
+        occurrences: data.occurrences.map((row) => ({
+          ...row,
+          demand: { physical: emptySessionDemandCounts(), remote: emptySessionDemandCounts() },
+          conflicts: { hasConflict: false, categories: [] },
+        })),
+        page: { limit: 50, offset: 0, total: data.occurrences.length, hasMore: false },
+      }),
+    );
+  if (url.includes("/proposals"))
+    return json(
+      eventProposalsResponseSchema.parse({
+        event: { id: "10000000-0000-4000-8000-000000000001", slug: data.eventSlug, name: "Synthetic event" },
+        access: {
+          eventPermissions: ["proposals:read"],
+          canRead: true,
+          canReview: false,
+          canFinalize: false,
+          canEditAcceptedAbstract: false,
+          canCancelAcceptedProposal: false,
+        },
+        proposals: [],
+        stats: { byStatus: {}, byRecommendation: {}, reviewedCount: 0, unreviewedCount: 0, total: 0 },
+        page: { limit: 50, offset: 0, total: 0, hasMore: false },
+      }),
+    );
+  return json(data);
+}
+async function runRowAction(root: ParentNode, subject: string, action: string) {
+  await act(() => {
+    [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+      .find((button) => button.textContent === "Schedule")!
+      .click();
+  });
+  await settle();
+  await runTableRowAction(root, subject, action);
+  await settle();
+}
+async function openUnscheduledSources() {
+  const source = host.querySelector<HTMLButtonElement>('[aria-label="Session sources"]')!;
+  if (source.getAttribute("aria-expanded") !== "true") await act(() => source.click());
+  await settle();
+  await act(() => {
+    [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+      .find((button) => button.textContent === "Unscheduled sessions")!
+      .click();
+  });
+  await settle();
+}
 describe("touch and keyboard agenda destinations", () => {
-  it.each([null, "room"])(
-    "keeps the dragged article attached while revealing destinations for room=%s",
-    async (roomId) => {
+  it.each(["move", "resize", "cancel", "locked"] as const)(
+    "tracks continuous pointer %s on the shared card without native drag or occupied-cell targets",
+    async (mode) => {
+      const data = agendaSnapshotSchema.parse({
+        ...snapshot,
+        eventStartsAt: "2026-12-01T10:00:00.000Z",
+        eventEndsAt: "2026-12-01T12:00:00.000Z",
+        occurrences: snapshot.occurrences.map((row) => ({ ...row, roomId: "room" })),
+      });
+      const before = JSON.stringify(data);
+      const move = vi.fn();
+      const resize = vi.fn();
       vi.stubGlobal(
-        "fetch",
-        vi.fn(async () =>
-          json({
-            ...snapshot,
-            occurrences: snapshot.occurrences.map((row) => ({ ...row, roomId })),
-          }),
+        "CSSStyleSheet",
+        class {
+          replaceSync = vi.fn();
+        },
+      );
+      document.adoptedStyleSheets = [];
+      vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+        const start = this.dataset.agendaStart;
+        const top = start ? 100 + (Date.parse(start) - Date.parse(data.eventStartsAt!)) / 30000 : 100;
+        return new DOMRect(this.matches("thead th:first-child") ? 0 : 100, top, 200, 10);
+      });
+      host = document.createElement("div");
+      document.body.append(host);
+      await act(() =>
+        render(
+          <AgendaPointerPlacement snapshot={data} disabled={mode === "locked"} onMove={move} onResize={resize}>
+            <ContentAgenda
+              days={agendaPresenter(data)}
+              speakers={[]}
+              timeZone={data.timeZone}
+              editor={{
+                session: () => ({
+                  controls: null,
+                  resizeHandle: <button class="pk-agenda-editor__resize">Resize</button>,
+                }),
+                dropTarget: () => null,
+              }}
+            />
+          </AgendaPointerPlacement>,
+          host,
         ),
       );
-      await mount();
-      const card = host.querySelector<HTMLElement>('article[data-agenda-occurrence="session"]')!;
-      const ancestors = new Set<Node>();
-      for (let parent = card.parentNode; parent && parent !== host; parent = parent.parentNode) ancestors.add(parent);
-      const removals: Node[] = [];
-      const observe = (records: MutationRecord[]) => {
-        for (const record of records)
-          for (const removed of record.removedNodes)
-            if (removed === card || ancestors.has(removed)) removals.push(removed);
+      const coordinator = host.querySelector<HTMLElement>(".pk-agenda-editor__pointer-calendar")!;
+      let captured = false;
+      coordinator.setPointerCapture = () => {
+        captured = true;
       };
-      const observer = new MutationObserver(observe);
-      observer.observe(host, { childList: true, subtree: true });
-      const transfer = { setData: vi.fn(), getData: vi.fn() };
-      const start = new Event("dragstart", { bubbles: true });
-      Object.defineProperty(start, "dataTransfer", { value: transfer });
-      try {
-        // This checks browser-event reconciliation and DOM continuity, not native pointer dragging in jsdom.
-        await act(() => {
-          card.dispatchEvent(start);
+      coordinator.hasPointerCapture = () => captured;
+      coordinator.releasePointerCapture = () => {
+        captured = false;
+      };
+      const card = host.querySelector<HTMLElement>("[data-agenda-occurrence]")!;
+      function pointer(target: HTMLElement, name: string, y: number) {
+        const event = new Event(name, { bubbles: true, cancelable: true });
+        Object.assign(event, {
+          pointerId: 1,
+          pointerType: mode === "resize" ? "touch" : "mouse",
+          button: 0,
+          clientX: 150,
+          clientY: y,
         });
-        observe(observer.takeRecords());
-        expect(transfer.setData).toHaveBeenCalledWith("text/plain", "session");
-        expect(host.querySelector(".pk-agenda-editor--native-drag")).not.toBeNull();
-        expect(host.querySelector('[role="status"]')?.textContent).toContain("Choose a time and location");
-        expect(host.querySelector('[role="status"]')?.textContent).toContain("Original workshop");
-        expect(host.querySelectorAll(".pk-agenda-editor__drop").length).toBeGreaterThan(0);
-        expect(host.querySelector('article[data-agenda-occurrence="session"]')).toBe(card);
-        expect(card.isConnected).toBe(true);
-        expect(removals).toEqual([]);
-        await act(() => {
-          card.dispatchEvent(new Event("dragend", { bubbles: true }));
-        });
-        observe(observer.takeRecords());
-        expect(host.querySelectorAll(".pk-agenda-editor__drop")).toHaveLength(0);
-        expect(host.querySelector(".pk-agenda-editor--native-drag")).toBeNull();
-        expect(host.querySelector('article[data-agenda-occurrence="session"]')).toBe(card);
-        expect(removals).toEqual([]);
-      } finally {
-        observer.disconnect();
+        target.dispatchEvent(event);
       }
+      await act(() => {
+        pointer(
+          mode === "resize" ? card.querySelector<HTMLElement>(".pk-agenda-editor__resize")! : card,
+          "pointerdown",
+          mode === "resize" ? 160 : 120,
+        );
+        pointer(coordinator, "pointermove", mode === "resize" ? 140 : 180);
+      });
+      expect(card.draggable).toBe(false);
+      expect(host.querySelector("[data-agenda-occurrence]")).toBe(card);
+      expect(card.isConnected).toBe(true);
+      const preview = document.querySelector(".pk-agenda-editor__pointer-preview");
+      expect(Boolean(preview)).toBe(mode !== "locked");
+      if (preview) {
+        expect(preview.textContent).toContain("Original workshop");
+        expect(preview.getAttribute("aria-hidden")).toBe("true");
+        expect(preview.hasAttribute("style")).toBe(false);
+        expect(document.adoptedStyleSheets).toHaveLength(1);
+      }
+      await act(() =>
+        pointer(coordinator, mode === "cancel" ? "pointercancel" : "pointerup", mode === "resize" ? 140 : 180),
+      );
+      if (mode === "move") expect(move).toHaveBeenCalledWith("session", "2026-12-01T10:30:00.000Z", "room");
+      else expect(move).not.toHaveBeenCalled();
+      if (mode === "resize") expect(resize).toHaveBeenCalledWith("session", "2026-12-01T10:20:00.000Z", "room");
+      else expect(resize).not.toHaveBeenCalled();
+      expect(document.querySelector(".pk-agenda-editor__pointer-preview")).toBeNull();
+      expect(document.adoptedStyleSheets).toHaveLength(0);
+      expect(card.hasAttribute("data-agenda-pointer-source")).toBe(false);
+      expect(JSON.stringify(data)).toBe(before);
     },
   );
   it.each([
@@ -148,7 +253,7 @@ describe("touch and keyboard agenda destinations", () => {
       );
       await settle();
     };
-    await chooseView("All sessions");
+    await chooseView("Schedule");
     expect(host.querySelector("table")).not.toBeNull();
     await runRowAction(host, "Original workshop", action);
     await settle();
@@ -156,7 +261,7 @@ describe("touch and keyboard agenda destinations", () => {
     expect(host.querySelector(".pk-agenda-editor__drop")?.getAttribute("aria-label")).toContain(label);
     expect(host.querySelector(".pk-agenda-editor--native-drag")).toBeNull();
     expect(host.querySelector('[role="status"]')?.textContent).toContain("Original workshop");
-    await chooseView("All sessions");
+    await chooseView("Schedule");
     await chooseView("Agenda");
     expect(host.querySelector(".pk-agenda-editor__drop")?.getAttribute("aria-label")).toContain(label);
     await act(() => render(<AgendaEditor slug="another-event" canEdit />, host));
@@ -164,22 +269,43 @@ describe("touch and keyboard agenda destinations", () => {
     expect(host.querySelectorAll(".pk-agenda-editor__drop")).toHaveLength(0);
   });
 
-  it("clears a cancelled native drag without cancelling a keyboard selection", async () => {
+  it("clears a cancelled native dock drag without cancelling a keyboard selection", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json(snapshot)),
+      vi.fn(async (url: string) =>
+        agendaReads(
+          url,
+          agendaSnapshotSchema.parse({
+            ...snapshot,
+            occurrences: [
+              ...snapshot.occurrences,
+              { ...snapshot.occurrences[0], id: "backlog", title: "Waiting workshop", startAt: null, endAt: null },
+            ],
+          }),
+        ),
+      ),
     );
     await mount();
-    const card = host.querySelector<HTMLElement>("article[draggable]")!;
+    await openUnscheduledSources();
+    let card = host.querySelector<HTMLElement>('article[data-agenda-occurrence="backlog"]')!;
+    expect(card.draggable).toBe(true);
+    expect(host.querySelector<HTMLElement>('article[data-agenda-occurrence="session"]')!.draggable).toBe(false);
+    const transfer = { setData: vi.fn(), setDragImage: vi.fn() };
+    const start = new Event("dragstart", { bubbles: true });
+    Object.defineProperty(start, "dataTransfer", { value: transfer });
     await act(() => {
-      card.dispatchEvent(new Event("dragstart", { bubbles: true }));
+      card.dispatchEvent(start);
     });
+    expect(transfer.setData).toHaveBeenCalledWith("text/plain", "backlog");
+    expect(transfer.setDragImage.mock.calls[0][0]).toBe(card);
     expect(host.querySelectorAll(".pk-agenda-editor__drop").length).toBeGreaterThan(0);
     await act(() => {
       card.dispatchEvent(new Event("dragend", { bubbles: true }));
     });
     expect(host.querySelectorAll(".pk-agenda-editor__drop")).toHaveLength(0);
     await runRowAction(host, "Original workshop", "Select for move");
+    await openUnscheduledSources();
+    card = host.querySelector<HTMLElement>('article[data-agenda-occurrence="backlog"]')!;
     await act(() => {
       card.dispatchEvent(new Event("dragend", { bubbles: true }));
     });
@@ -189,7 +315,7 @@ describe("touch and keyboard agenda destinations", () => {
   it("keeps idle session cards without destinations, reveals all locations and cancels with Escape", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json(snapshot)),
+      vi.fn(async (url: string) => agendaReads(url)),
     );
     await mount();
     expect(host.querySelectorAll(".pk-agenda-editor__drop")).toHaveLength(0);
@@ -234,7 +360,7 @@ describe("touch and keyboard agenda destinations", () => {
             occurrences: [{ ...snapshot.occurrences[0], ...body.changes[0] }],
           });
         }
-        return json(snapshot);
+        return agendaReads(String(_url));
       }),
     );
     await mount();
@@ -247,37 +373,30 @@ describe("touch and keyboard agenda destinations", () => {
       await Promise.resolve();
     });
     await settle();
-    expect(bodies).toHaveLength(0);
-    await act(async () =>
-      [...host.querySelectorAll<HTMLButtonElement>("button")]
-        .find((button) => button.textContent === "Apply reviewed schedule")!
-        .click(),
-    );
-    await settle();
     expect(bodies).toHaveLength(1);
+    expect(host.textContent).not.toContain("Apply reviewed schedule");
     expect(bodies[0]).toMatchObject({
       expectedRevision: 7,
-      changes: [{ roomId: null, additionalRoomIds: [] }],
+      reviewHash: "a".repeat(64),
+      changes: [{ id: "session", roomId: null, additionalRoomIds: [] }],
     });
     expect(host.querySelectorAll(".pk-agenda-editor__drop")).toHaveLength(0);
     expect(host.textContent).toContain("Original workshop");
   });
   it("switches resize to move and preserves the selected session after a rejected write", async () => {
+    const reviews: unknown[] = [];
+    const apply = vi.fn();
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (_url: string, init: RequestInit) =>
-        init.method === "POST"
-          ? json(
-              {
-                error: {
-                  code: "CONFLICT",
-                  message: "Another organizer changed the agenda.",
-                },
-              },
-              409,
-            )
-          : json(snapshot),
-      ),
+      vi.fn(async (_url: string, init: RequestInit) => {
+        if (init.method === "POST") {
+          if (_url.endsWith("/schedule/reviews"))
+            reviews.push(agendaScheduleProposalSchema.parse(JSON.parse(String(init.body))));
+          else apply(agendaScheduleApplySchema.parse(JSON.parse(String(init.body))));
+          return json({ error: { code: "CONFLICT", message: "Another organizer changed the agenda." } }, 409);
+        }
+        return agendaReads(String(_url));
+      }),
     );
     await mount();
     await runRowAction(host, "Original workshop", "Select end time to resize");
@@ -290,13 +409,18 @@ describe("touch and keyboard agenda destinations", () => {
     });
     await settle();
     expect(host.textContent).toContain("Another organizer changed the agenda.");
-    expect(host.querySelectorAll(".pk-agenda-editor__drop")).toHaveLength(0);
-    await act(() =>
-      [...host.querySelectorAll<HTMLButtonElement>("button")]
-        .find((button) => button.textContent === "Cancel schedule changes")!
-        .click(),
-    );
+    expect(reviews).toHaveLength(1);
+    expect(apply).not.toHaveBeenCalled();
     expect(host.querySelectorAll(".pk-agenda-editor__drop").length).toBeGreaterThan(0);
+    expect(host.querySelector('[role="status"]')?.textContent).toContain("Original workshop");
+    expect(host.textContent).not.toContain("Cancel schedule changes");
+    await act(async () => {
+      destination.click();
+      await Promise.resolve();
+    });
+    await settle();
+    expect(reviews).toHaveLength(2);
+    expect(apply).not.toHaveBeenCalled();
     await act(() =>
       [...host.querySelectorAll<HTMLButtonElement>("button")]
         .find((button) => button.textContent === "Cancel selection")!

@@ -17,6 +17,10 @@ export function publicAgendaProjection(approved: AgendaSnapshot, basePath: strin
       .filter((item) => item.visibility === "public" && publicSessionTiming(item) !== undefined)
       .map((item) => ({
         ...item,
+        virtualRoomUrl: undefined,
+        sponsorIds: undefined,
+        sponsors: item.kind === "break" ? item.sponsors : undefined,
+        onlineAccessAvailable: Boolean(item.virtualRoomUrl),
         ...publicSessionMediaUrls(item.history?.materials ?? []),
         speakers: item.speakers.map((speaker) => ({
           userId: speaker.userId,

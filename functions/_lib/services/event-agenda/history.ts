@@ -26,6 +26,7 @@ import { ownedIdentityLifecycleSql } from "../identities/selection";
 import { prepareRepresentationEligibility } from "./representation-eligibility";
 import { commitAgendaRevision } from "./mutations";
 import { getAgenda, getAgendaOccurrence } from "./read";
+import { publicUserHeadshotPath } from "../user-headshot";
 
 /** Audited corrections alter the draft only; an explicit publication creates a new archive. */
 export async function saveSessionHistory(
@@ -344,11 +345,23 @@ export async function listSessionAppearanceChoices(
     organization_name: string | null;
     job_title: string | null;
     biography: string | null;
+    headshot_r2_key: string | null;
   }>(
     db,
-    `SELECT identity.id,identity.user_id,organization.name AS organization_name,identity.job_title,identity.biography ${source} ORDER BY organization.name ${direction},identity.id ASC LIMIT ? OFFSET ?`,
+    `SELECT identity.id,identity.user_id,organization.name AS organization_name,identity.job_title,identity.biography,
+      (SELECT person.headshot_r2_key FROM users person WHERE person.id=identity.user_id AND person.active=1 AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL) AS headshot_r2_key
+      ${source} ORDER BY organization.name ${direction},identity.id ASC LIMIT ? OFFSET ?`,
     [...values, query.limit, query.offset],
   );
+  const portraits = await all<{ user_id: string; headshot_r2_key: string }>(
+    db,
+    `SELECT person.id AS user_id,person.headshot_r2_key FROM event_agenda_occurrence_speakers speaker
+      JOIN users person ON person.id=speaker.user_id WHERE speaker.occurrence_id=? AND person.headshot_r2_key IS NOT NULL
+      AND person.active=1 AND person.pii_redacted_at IS NULL AND person.merged_into_user_id IS NULL ORDER BY person.id LIMIT 31`,
+    [occurrenceId],
+  );
+  if (portraits.length > 30)
+    throw new AppError(422, "AGENDA_APPEARANCE_ROSTER_LIMIT", "Review at most 30 credited people per session.");
   return {
     identities: rows.map((row) => ({
       id: row.id,
@@ -356,6 +369,11 @@ export async function listSessionAppearanceChoices(
       organizationName: row.organization_name,
       jobTitle: row.job_title,
       biography: row.biography ?? "",
+      photoUrl: publicUserHeadshotPath(row.user_id, row.headshot_r2_key),
+    })),
+    portraits: portraits.map((person) => ({
+      userId: person.user_id,
+      photoUrl: publicUserHeadshotPath(person.user_id, person.headshot_r2_key),
     })),
     page: buildPageInfo(query.limit, query.offset, total?.total ?? 0, rows.length),
   };

@@ -1,14 +1,15 @@
 ---
-import { publicationRouteCacheKey, PUBLICATION_SITE_ORIGIN } from "../publication-cache";
+import { publicationRouteCacheKey } from "../publication-cache";
 import { publicationPageInputs } from "../publication-page-inputs";
 import { h } from "preact";
 import { renderToStringAsync as render } from "preact-render-to-string";
 import { agendaContent } from "../../assets/shared/public-agenda-content";
+import { AgendaCalendarLinks } from "../../assets/ts/site/AgendaCalendarLinks";
 import { ContentAgenda } from "../../assets/ts/site/ContentAgenda";
 import { publishedSiteRoutes } from "../../functions/_lib/services/site-content";
 import PublicPage from "../layouts/PublicPage.astro";
 import { publication } from "../publication";
-import { publishedEventAgendas } from "../../functions/_lib/services/site-published-event-agendas";
+import { publishedEventAgendas, publishedAgendaCalendarLinks } from "../../functions/_lib/services/site-published-event-agendas";
 import { markdownImageSources } from "../publication-markdown-images";
 
 export async function getStaticPaths() {
@@ -17,8 +18,7 @@ export async function getStaticPaths() {
     const view = {
       route, title: `${snapshot.eventName ?? "Event"} agenda`, timeZone: snapshot.timeZone,
       content: agendaContent(snapshot),
-      calendarPath: `${route}calendar.ics`,
-      subscribeUrl: new URL(`${route}calendar.ics`, PUBLICATION_SITE_ORIGIN).href.replace(/^https?:/, "webcal:"),
+      calendarLinks: publishedAgendaCalendarLinks(publication, snapshot),
     };
     const sessions = view.content.days.flatMap((day) => day.slots.flatMap((slot) => slot.sessions));
     const speakers = [...view.content.speakers, ...sessions.flatMap((session) => session.speakers)];
@@ -36,12 +36,14 @@ export async function getStaticPaths() {
   }));
 }
 const { view, pageInputs } = Astro.props;
+const calendarHtml = await render(h(AgendaCalendarLinks, { links: view.calendarLinks }));
 const html = await render(h(ContentAgenda, { ...view.content, timeZone: view.timeZone, fragmentNavigation: true }));
 ---
 <PublicPage title={view.title} pageInputs={pageInputs}>
   <section class="pk-section pk-container pk-container--wide" data-pagefind-body>
   <h1>{view.title}</h1>
-  <p>Times in {view.timeZone}. <a href={view.subscribeUrl}>Subscribe to calendar</a> · <a href={view.calendarPath} download>Download calendar</a></p>
+  <p>Times in {view.timeZone}.</p>
+  <div set:html={calendarHtml} />
   <div set:html={html} />
   </section>
 </PublicPage>

@@ -184,7 +184,7 @@ describe("compact agenda scheduling conflicts", () => {
   it("starts with a concise operational table and keeps other columns selectable", async () => {
     await mount(false);
     const headers = [...host.querySelectorAll("thead th")].map((cell) => cell.textContent?.trim());
-    expect(headers).toEqual(["Session", "Day", "Time", "Location", "Confirmed", "Conflicts", "Actions"]);
+    expect(headers).toEqual(["Session", "Day", "Time", "Location", "Reserved", "Conflicts", "Actions"]);
     expect(host.querySelector("tbody td")?.classList.contains("pk-table__col--primary")).toBe(true);
     await act(() => host.querySelector<HTMLButtonElement>('[aria-label="Choose columns"]')!.click());
     const menu = document.querySelector<HTMLElement>('[role="menu"]')!;
@@ -195,7 +195,8 @@ describe("compact agenda scheduling conflicts", () => {
       "Type",
       "Speakers",
       "Track",
-      "Pending",
+      "Pending approval",
+      "Recording",
       "Waitlisted",
       "Access",
       "Publication",
@@ -210,22 +211,33 @@ describe("compact agenda scheduling conflicts", () => {
     const badge = host.querySelector(
       '[aria-label="Needs attention: speaker overlap or travel time, location setup time"]',
     );
-    expect(badge?.textContent).toBe("Needs attention");
+    expect(badge?.getAttribute("role")).toBe("img");
+    expect(badge?.getAttribute("title")).toBe("Needs attention: speaker overlap or travel time, location setup time");
+    expect(badge?.querySelector("svg")).not.toBeNull();
     expect(badge?.classList.contains("pk-badge--warn")).toBe(true);
     expect(host.textContent).not.toContain("userId");
     expect(host.textContent).not.toContain("speaker_conflict");
   });
   it("labels a verified conflict-free row", async () => {
     await mount(false);
-    expect(host.querySelector('[aria-label="No scheduling conflicts"]')?.textContent).toBe("Clear");
+    const badge = host.querySelector('[aria-label="No scheduling conflicts"]');
+    expect(badge?.getAttribute("role")).toBe("img");
+    expect(badge?.getAttribute("title")).toBe("No scheduling conflicts");
+    expect(badge?.querySelector("svg")).not.toBeNull();
+    expect(badge?.classList.contains("pk-badge--ok")).toBe(true);
   });
   it.each([
-    ["incomplete", "Needs review", "pk-badge--warn"],
-    ["not_scheduled", "Not checked", "pk-badge--neutral"],
+    ["incomplete", "Conflict checks are incomplete; review unresolved source credits.", "pk-badge--warn"],
+    ["not_scheduled", "Conflict checks require a complete scheduled interval.", "pk-badge--neutral"],
   ] as const)("does not label %s checks as verified conflict-free", async (coverage, label, tone) => {
     await mount(false, coverage);
-    const badge = [...host.querySelectorAll<HTMLElement>(".pk-badge")].find((item) => item.textContent === label);
+    const badge = [...host.querySelectorAll<HTMLElement>(".pk-badge")].find(
+      (item) => item.getAttribute("aria-label") === label,
+    );
     expect(badge).toBeDefined();
+    expect(badge?.getAttribute("role")).toBe("img");
+    expect(badge?.getAttribute("title")).toBe(label);
+    expect(badge?.querySelector("svg")).not.toBeNull();
     expect(badge?.classList.contains(tone)).toBe(true);
     expect(host.querySelector('[aria-label="No scheduling conflicts"]')).toBeNull();
     expect(host.querySelector(".pk-badge--ok")).toBeNull();

@@ -603,30 +603,45 @@ test.describe("browser workflows", () => {
     });
 
     await page.goto("/events/2023/pqc-conference-amsterdam-nl/");
-    const watchButton = page.getByRole("button", { name: "Watch recording", exact: true }).first();
-    await watchButton.click();
-
-    // The session detail is a native <dialog>; an open one is the only visible
-    // dialog on the page, so the role locator is enough and survives the next
-    // restyle in a way a class selector would not.
-    const modal = page
-      .getByRole("dialog", { includeHidden: true })
-      .filter({ has: page.locator("iframe") })
+    const recordedSession = page
+      .getByRole("tabpanel", { name: "Tuesday", exact: true })
+      .locator("article[data-agenda-session-dialog]")
+      .filter({ has: page.locator("a[data-agenda-watch-recording]") })
       .first();
+    const watchLink = recordedSession
+      .locator(".pk-content-agenda__card-footer")
+      .getByRole("link", { name: "Watch recording", exact: true });
+    await expect(watchLink).toBeVisible();
+    const watchUrl = new URL((await watchLink.getAttribute("href"))!);
+    expect(watchUrl.origin).toBe("https://www.youtube.com");
+    expect(watchUrl.pathname).toBe("/watch");
+    expect(watchUrl.searchParams.get("v")).toBeTruthy();
+    const modal = recordedSession.getByRole("dialog", { includeHidden: true });
+    await expect(modal).toHaveCount(1);
+    expect(await modal.getAttribute("id")).toBe(await watchLink.getAttribute("data-agenda-open-session"));
+    await expect(modal.locator("iframe")).not.toHaveAttribute("src");
+    const agendaUrl = page.url();
+    await watchLink.click();
+    expect(page.url()).toBe(agendaUrl);
+
     await expect(modal).toBeVisible();
     const iframe = modal.locator("iframe").first();
     await expect(iframe).toBeVisible();
 
     const embedUrl = await iframe.getAttribute("src");
     expect(embedUrl).toBeTruthy();
-    const requestsBeforeClose = embedRequestCounts.get(embedUrl ?? "") ?? 0;
+    const embed = new URL(embedUrl!);
+    expect(embed.origin).toBe("https://www.youtube-nocookie.com");
+    expect(embed.pathname).toBe(`/embed/${watchUrl.searchParams.get("v")}`);
+    await expect.poll(() => embedRequestCounts.get(embedUrl!) ?? 0).toBe(1);
+    const requestsBeforeClose = embedRequestCounts.get(embedUrl!)!;
 
     await modal.getByRole("button", { name: "Close", exact: true }).first().click();
     await expect(modal).toBeHidden();
     await expect(iframe).not.toHaveAttribute("src");
     expect(embedRequestCounts.get(embedUrl ?? "") ?? 0).toBe(requestsBeforeClose);
 
-    await watchButton.click();
+    await watchLink.click();
     await expect(modal).toBeVisible();
     await expect(iframe).toHaveAttribute("src", embedUrl ?? "");
     await expect.poll(() => embedRequestCounts.get(embedUrl ?? "") ?? 0).toBeGreaterThan(requestsBeforeClose);

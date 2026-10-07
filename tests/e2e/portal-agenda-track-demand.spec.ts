@@ -1,4 +1,5 @@
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { runAgendaAction } from "./helpers/agenda-actions";
+import { expect, test, type Page, type TestInfo, type Request } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { runRowAction } from "./helpers/data-table";
@@ -13,6 +14,7 @@ import {
   agendaRoomCreateSchema,
   agendaOccurrenceCreateSchema,
   agendaOccurrenceListSchema,
+  agendaOccurrencePatchSchema,
 } from "../../assets/shared/schemas/event-agenda";
 import { personalAgendaResponseSchema } from "../../assets/shared/schemas/event-personal-agenda";
 import { roomRecommendationsResponseSchema } from "../../assets/shared/schemas/event-room-recommendations";
@@ -56,7 +58,7 @@ test("organizers preserve exact track filters and inspect canonical demand witho
   await page.goto(extractEmailUrl(confirmation, "/register/confirm"));
   await page.getByRole("button", { name: /Confirm my registration/i }).click();
   await waitForCapturedEmail(attendeeEmail, "registration is confirmed", { since });
-  await signInAsE2eStaff(page, e2eAdminEmail("default"));
+  await signInAsE2eStaff(page, e2eAdminEmail("portal-agenda-track-demand"));
   const base = `/api/v1/events/${slug}/agenda`;
   let snapshot = agendaSnapshotSchema.parse(await (await page.request.get(base)).json());
   const room = await page.request.post(`${base}/rooms`, {
@@ -66,18 +68,20 @@ test("organizers preserve exact track filters and inspect canonical demand witho
   snapshot = agendaSnapshotSchema.parse(await room.json());
   const roomId = snapshot.rooms.find((item) => item.name === roomName)!.id;
   await page.goto(`/portal/#/events/${slug}/agenda`);
-  await page.getByRole("button", { name: "New session", exact: true }).click();
-  await page.getByRole("textbox", { name: /^Session title/ }).fill(title);
-  await page.getByLabel("Track", { exact: true }).fill(`  ${track}  `);
-  await page.getByLabel("Starts", { exact: true }).fill("2026-12-01T10:00");
-  await page.getByLabel("Ends", { exact: true }).fill("2026-12-01T11:00");
-  await page.getByLabel("Location", { exact: true }).selectOption(roomId);
-  await page.getByLabel("Admission", { exact: true }).selectOption("reservation");
-  await page
+  await runAgendaAction(page, "New session");
+  const creation = page.getByRole("dialog", { name: "New session", exact: true });
+  await creation.getByRole("textbox", { name: /^Session title/ }).fill(title);
+  await creation.getByRole("tab", { name: "Optional / settings", exact: true }).click();
+  await creation.getByLabel("Track", { exact: true }).fill(`  ${track}  `);
+  await creation.getByLabel("Starts", { exact: true }).fill("2026-12-01T10:00");
+  await creation.getByLabel("Ends", { exact: true }).fill("2026-12-01T11:00");
+  await creation.getByLabel("Locations", { exact: true }).selectOption(roomId);
+  await creation.getByLabel("Admission", { exact: true }).selectOption("reservation");
+  await creation
     .getByLabel("Description", { exact: true })
     .fill("A substantive workshop on operational cryptography and program planning.");
-  await page.getByRole("button", { name: "Save session", exact: true }).click();
-  await expect(page.getByRole("textbox", { name: /^Session title/ })).toHaveCount(0);
+  await creation.getByRole("button", { name: "Save session", exact: true }).click();
+  await expect(creation).toBeHidden();
   snapshot = agendaSnapshotSchema.parse(await (await page.request.get(base)).json());
   const occurrence = snapshot.occurrences.find((item) => item.title === title)!;
   expect(occurrence.track).toBe(track);
@@ -123,7 +127,7 @@ test("organizers preserve exact track filters and inspect canonical demand witho
     await attendeeContext.close();
   }
   await page.reload();
-  await page.getByRole("tab", { name: "All sessions", exact: true }).click();
+  await page.getByRole("tab", { name: "Schedule", exact: true }).click();
   await page.getByRole("button", { name: "Choose columns", exact: true }).click();
   await page.getByRole("menuitemradio", { name: "Track", exact: true }).click();
   await page.getByRole("button", { name: "Track column options", exact: true }).click();
@@ -140,7 +144,7 @@ test("organizers preserve exact track filters and inspect canonical demand witho
   const list = agendaOccurrenceListSchema.parse(await filterResponse.json());
   expect(list.occurrences.map((item) => item.id)).toEqual([occurrence.id]);
   await page.getByRole("button", { name: "Done", exact: true }).click();
-  for (const column of ["Pending", "Waitlisted"]) {
+  for (const column of ["Pending approval", "Waitlisted"]) {
     await page.getByRole("button", { name: "Choose columns", exact: true }).click();
     await page.getByRole("menuitemradio", { name: column, exact: true }).click();
   }
@@ -149,21 +153,29 @@ test("organizers preserve exact track filters and inspect canonical demand witho
   ).demand;
   expect(demand.physical.confirmed).toBe(1);
   expect(demand.remote.confirmed).toBe(0);
-  const table = page.getByRole("table", { name: "Sessions across all days", exact: true });
+  const table = page.getByRole("table", { name: "Event sessions", exact: true });
   const row = table.getByRole("row").filter({ hasText: occurrence.title });
-  await expect(row).toContainText(`In person: ${demand.physical.confirmed}`);
-  await expect(row).toContainText(`Remote: ${demand.remote.confirmed}`);
   const headings = await table.getByRole("columnheader").allTextContents();
   for (const [status, label] of [
-    ["confirmed", "Confirmed"],
-    ["pending", "Pending"],
+    ["confirmed", "Reserved"],
+    ["pending", "Pending approval"],
     ["waitlisted", "Waitlisted"],
   ] as const) {
     const index = headings.findIndex((heading) => heading.includes(label));
     expect(index).toBeGreaterThanOrEqual(0);
     const cell = row.getByRole("cell").nth(index);
-    await expect(cell).toContainText(`In person: ${demand.physical[status]}`);
-    await expect(cell).toContainText(`Remote: ${demand.remote[status]}`);
+    const meaning =
+      status === "confirmed"
+        ? "reservations"
+        : status === "pending"
+          ? "reservations awaiting approval"
+          : "waitlisted participants";
+    await expect(
+      cell.getByRole("img", { name: `In-person ${meaning}: ${demand.physical[status]}`, exact: true }),
+    ).toHaveText(String(demand.physical[status]));
+    await expect(
+      cell.getByRole("img", { name: `Remote ${meaning}: ${demand.remote[status]}`, exact: true }),
+    ).toHaveText(String(demand.remote[status]));
   }
   await expect(table.getByRole("row").filter({ hasText: "Different program track" })).toHaveCount(0);
   await capture(page, info, "track-filter-demand-table");
@@ -171,12 +183,15 @@ test("organizers preserve exact track filters and inspect canonical demand witho
   await page.getByRole("button", { name: `Open session details: ${occurrence.title}`, exact: true }).click();
   const details = page.getByRole("dialog", { name: occurrence.title, exact: true });
   await expect(details).toBeVisible();
-  await runRowAction(page, details, "Edit / move session");
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  await expect(page.getByRole("heading", { name: "Edit session", exact: true })).toBeVisible();
-  await expect(page.locator("form")).toHaveCount(1);
-  await expect(page.getByLabel("Track", { exact: true })).toHaveValue(track);
-  const demandTable = page.getByRole("table", { name: "Current session demand", exact: true });
+  await runRowAction(page, details, "Edit session");
+  await expect(details).toBeHidden();
+  const editor = page.getByRole("dialog", { name: "Edit session", exact: true });
+  await expect(editor).toBeVisible();
+  await expect(page.getByRole("dialog")).toHaveCount(1);
+  await expect(editor.locator("form")).toHaveCount(1);
+  await editor.getByRole("tab", { name: "Optional / settings", exact: true }).click();
+  await expect(editor.getByLabel("Track", { exact: true })).toHaveValue(track);
+  const demandTable = editor.getByRole("table", { name: "Current session demand", exact: true });
   for (const [mode, label] of [
     ["physical", "In person"],
     ["remote", "Remote"],
@@ -192,26 +207,49 @@ test("organizers preserve exact track filters and inspect canonical demand witho
       String(actual.preferences),
     ]);
   }
-  await capture(page, info, "track-dedicated-editor-demand");
-  await page.getByLabel("Track", { exact: true }).fill("");
-  await expect(
-    page.getByText("Save or cancel your changes before using session actions.", { exact: true }),
-  ).toBeVisible();
-  await page.getByRole("button", { name: `Actions for ${occurrence.title}`, exact: true }).click();
-  await expect(page.getByRole("menuitem", { name: "Duplicate session", exact: true })).toBeDisabled();
-  await page.keyboard.press("Escape");
+  await capture(page, info, "track-modal-editor-demand");
+  const beforeDraft = agendaSnapshotSchema.parse(await (await page.request.get(base)).json());
+  const mutations: string[] = [];
+  const recordMutation = (request: Request) => {
+    if (
+      ["POST", "PATCH", "PUT", "DELETE"].includes(request.method()) &&
+      new URL(request.url()).pathname.startsWith(base)
+    )
+      mutations.push(request.url());
+  };
+  page.on("request", recordMutation);
+  await editor.getByLabel("Track", { exact: true }).fill("");
+  await expect(editor.getByLabel("Track", { exact: true })).toHaveValue("");
+  await expect(editor.getByRole("button", { name: /^Actions for / })).toHaveCount(0);
+  expect(agendaSnapshotSchema.parse(await (await page.request.get(base)).json())).toEqual(beforeDraft);
+  await editor.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(editor).toBeHidden();
+  expect(agendaSnapshotSchema.parse(await (await page.request.get(base)).json())).toEqual(beforeDraft);
+  expect(mutations).toEqual([]);
+  await page.getByRole("button", { name: `Open session details: ${occurrence.title}`, exact: true }).click();
+  await runRowAction(page, details, "Edit session");
+  await expect(details).toBeHidden();
+  await editor.getByRole("tab", { name: "Optional / settings", exact: true }).click();
+  await expect(editor.getByLabel("Track", { exact: true })).toHaveValue(track);
+  await editor.getByLabel("Track", { exact: true }).fill("");
+  expect(mutations).toEqual([]);
+  page.off("request", recordMutation);
   const clearedTrack = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === `${base}/occurrences/${occurrence.id}` &&
       response.request().method() === "PATCH",
   );
-  await page.getByRole("button", { name: "Save session", exact: true }).click();
+  await editor.getByRole("button", { name: "Save session", exact: true }).click();
   const clearedResponse = await clearedTrack;
   expect(clearedResponse.status(), await clearedResponse.text()).toBe(200);
+  const patch = agendaOccurrencePatchSchema.parse(clearedResponse.request().postDataJSON());
+  expect(patch.expectedRevision).toBe(beforeDraft.revision);
+  expect(patch.track).toBeNull();
   snapshot = agendaSnapshotSchema.parse(await clearedResponse.json());
-  await expect(page.getByRole("heading", { name: "Edit session", exact: true })).toHaveCount(0);
+  expect(snapshot.revision).toBe(beforeDraft.revision + 1);
+  await expect(editor).toBeHidden();
   expect(snapshot.occurrences.find((item) => item.id === occurrence.id)?.track).toBeNull();
-  await page.getByRole("tab", { name: "All sessions", exact: true }).click();
+  await page.getByRole("tab", { name: "Schedule", exact: true }).click();
   await expect(page.getByRole("button", { name: "Clear the Track filter", exact: true })).toBeVisible();
   await expect(page.getByRole("row").filter({ hasText: occurrence.title })).toHaveCount(0);
 });

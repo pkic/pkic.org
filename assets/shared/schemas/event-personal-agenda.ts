@@ -14,6 +14,7 @@ export const personalAgendaSessionSchema = z.object({
   id: databaseIdSchema,
   publishedRevision: z.number().int().nonnegative(),
   title: z.string(),
+  onlineAccessAvailable: z.boolean().optional(),
   roomId: databaseIdSchema.nullable().optional(),
   rooms: z.array(z.object({ id: databaseIdSchema, name: z.string() })).default([]),
   timeZone: timeZoneSchema,

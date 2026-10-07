@@ -1,3 +1,5 @@
+import { sessionVirtualRoomRouteSchema } from "../../../../../assets/shared/schemas/event-session-virtual-room";
+import { readSessionVirtualRoom } from "../../../../_lib/services/event-participation/session-virtual-room";
 import { requireSessionParticipantManager } from "../../../../_lib/services/event-participation/management-authorization";
 import {
   sessionHoldRouteSchema,
@@ -110,4 +112,12 @@ export const SessionHoldDelete = openApiRoute(sessionHoldDeleteRouteSchema, asyn
   );
   if (!canDelegate) throw new AppError(403, "HOLD_ORGANIZER_REQUIRED", "Only organizers can manage counted holds.");
   return json(await revokeSessionHold(db, event.id, data.params.occurrenceId, data.params.holdId, actor.id));
+});
+
+export const SessionVirtualRoomGet = openApiRoute(sessionVirtualRoomRouteSchema, async (c: AdminContext, data) => {
+  markResponseSensitive(c);
+  const db = requestDb(c);
+  const actor = await requireIdentityFromRequest(db, c.req.raw, c.env);
+  const event = await getEventBySlug(db, data.params.eventSlug);
+  return json(await readSessionVirtualRoom(db, event.id, data.params.occurrenceId, actor));
 });

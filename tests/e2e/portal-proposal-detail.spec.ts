@@ -104,6 +104,7 @@ async function fulfillGroupRoute(route: Route, event: ReturnType<typeof groupEve
 
 const adminSessionResponse = userAuthSessionResponseSchema.parse({
   success: true,
+  sessionId: "10000000-0000-4000-8000-000000000002",
   expiresAt: "2099-12-31T23:59:59.000Z",
   idleExpiresAt: "2099-12-31T23:59:59.000Z",
   identity: { id: "10000000000000000000000000000001", email: "admin@pkic.org" },
@@ -897,7 +898,14 @@ test("offers event presentation archives only with proposal read access", async 
     });
   });
 
-  await page.goto("/portal/#/events/pqc-2026/proposals");
+  const catalogueLoaded = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/events/pqc-2026/proposals" && response.request().method() === "GET",
+  );
+  await page.goto(`/portal/#/groups/${GROUP_ID}/events/${groupEvent.event.id}/proposals`);
+  expect((await catalogueLoaded).status()).toBe(200);
+  await expect(page).toHaveURL(new RegExp(`#/groups/${GROUP_ID}/events/${groupEvent.event.id}/proposals(?:\\?|$)`));
+  await expect(page.getByRole("table", { name: "Event proposals" })).toBeVisible();
 
   const currentDownload = page.getByRole("link", { name: "Download current presentations for all accepted proposals" });
   const downloadOptions = page.getByRole("button", { name: "Presentation download options" });
@@ -905,7 +913,13 @@ test("offers event presentation archives only with proposal read access", async 
   await expect(downloadOptions).toHaveCount(0);
 
   canReadPresentations = true;
+  const refreshedCatalogue = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/events/pqc-2026/proposals" && response.request().method() === "GET",
+  );
   await page.reload();
+  expect((await refreshedCatalogue).status()).toBe(200);
+  await expect(page.getByRole("table", { name: "Event proposals" })).toBeVisible();
 
   await expect(currentDownload).toBeVisible();
   await expect(currentDownload).toHaveAttribute("href", "/api/v1/events/pqc-2026/presentations/archive");

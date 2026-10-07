@@ -15,6 +15,19 @@ import type { ParticipantAuthority } from "./participant-authority";
 import { activeEffectiveInviteExpirySql, effectiveProposalSpeakerInviteExpirySql } from "../invite-validity";
 import type { eventProposalProofContextSchema, EventProposalProofPayload } from "./event-proposal-proof-capabilities";
 
+/** The proposal resource identifies only its authenticated speaker owner, never another roster member. */
+export function eventProposalSpeakerAuthority(input: {
+  actor?: Pick<AuthenticatedIdentity, "userId" | "sessionId">;
+  speakerManagementToken?: string;
+  speakerProposalId?: string;
+}): ParticipantAuthority | undefined {
+  if (input.speakerManagementToken && input.speakerProposalId)
+    throw new AppError(422, "PROPOSAL_PROOF_CONTEXT_MISMATCH", "Choose one speaker authority.");
+  if (!input.speakerProposalId) return input.speakerManagementToken;
+  if (!input.actor) throw new AppError(401, "AUTH_REQUIRED", "Sign in to manage your speaker participation.");
+  return { resourceId: input.speakerProposalId, ...input.actor };
+}
+
 export async function createEventProposalProofContext(
   db: DatabaseLike,
   input: {
@@ -22,10 +35,22 @@ export async function createEventProposalProofContext(
     signingSecret: string;
     actor?: Pick<AuthenticatedIdentity, "userId" | "sessionId">;
     speakerManagementToken?: string;
+    speakerProposalId?: string;
   },
 ): Promise<EventProposalProofContext> {
-  if (input.speakerManagementToken) {
-    const { speaker, proposal } = await getSpeakerByManageToken(db, input.speakerManagementToken, input.signingSecret);
+  const authority = eventProposalSpeakerAuthority(input);
+  if (authority) {
+    const { speaker, proposal } = await getSpeakerByManageToken(db, authority, input.signingSecret);
+    const session =
+      typeof authority === "string"
+        ? null
+        : await first<{ expires_at: string }>(
+            db,
+            "SELECT expires_at FROM sessions WHERE id=? AND user_id=? AND revoked_at IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')",
+            [authority.sessionId ?? "", authority.userId],
+          );
+    if (typeof authority !== "string" && !session)
+      throw new AppError(403, "PROPOSAL_PROOF_CONTEXT_MISMATCH", "Your speaker session has ended.");
     if (proposal.event_id !== input.eventId || (input.actor && input.actor.userId !== speaker.user_id))
       throw new AppError(403, "PROPOSAL_PROOF_CONTEXT_MISMATCH", "Use your own speaker invitation.");
     return {
@@ -34,7 +59,11 @@ export async function createEventProposalProofContext(
       speakerId: speaker.id,
       inviteGeneration: speaker.invite_generation,
       secretDigest: await sha256Hex(speaker.manage_link_secret ?? ""),
-      expiresAt: parseCapabilityToken(input.speakerManagementToken, "speaker_manage")!.expiresAt,
+      expiresAt:
+        typeof authority === "string"
+          ? parseCapabilityToken(authority, "speaker_manage")!.expiresAt
+          : Math.floor(Date.parse(session!.expires_at) / 1000),
+      ...(typeof authority !== "string" ? { sessionId: authority.sessionId } : {}),
     };
   }
   return input.actor
@@ -109,6 +138,8 @@ export async function prepareEventProposalProofContext(
     ];
   }
   if (context.kind === "session") {
+    if (input.operation !== "proposal_submission")
+      throw new AppError(403, "PROPOSAL_PROOF_CONTEXT_MISMATCH", "This confirmation does not identify a speaker.");
     if (!input.actor || input.actor.userId !== context.userId || input.actor.sessionId !== context.sessionId)
       throw new AppError(
         403,
@@ -124,6 +155,16 @@ export async function prepareEventProposalProofContext(
   }
   if (input.operation !== "speaker_profile" || input.speakerId !== context.speakerId || !input.speakerAuthority)
     throw new AppError(403, "PROPOSAL_PROOF_CONTEXT_MISMATCH", "Continue with the same speaker invitation.");
+  if (
+    context.sessionId &&
+    (!input.actor ||
+      input.actor.userId !== context.userId ||
+      input.actor.sessionId !== context.sessionId ||
+      typeof input.speakerAuthority === "string" ||
+      input.speakerAuthority.sessionId !== context.sessionId ||
+      input.speakerAuthority.userId !== context.userId)
+  )
+    throw new AppError(403, "PROPOSAL_PROOF_CONTEXT_MISMATCH", "Continue with the same signed-in speaker session.");
   const { speaker, proposal } = await getSpeakerByManageToken(db, input.speakerAuthority, input.signingSecret);
   if (
     proposal.event_id !== input.payload.eventId ||
@@ -141,9 +182,10 @@ export async function prepareEventProposalProofContext(
     typeof input.speakerAuthority === "string" ? parseCapabilityToken(input.speakerAuthority, "speaker_manage") : null;
   return [
     prepareAuthorizationGuard(db, {
-      sql: `SELECT 1 FROM proposal_speakers ps JOIN session_proposals sp ON sp.id=ps.proposal_id AND sp.deleted_at IS NULL JOIN events e ON e.id=sp.event_id WHERE ps.id=? AND ps.user_id=? AND ps.invite_generation=? AND ps.manage_link_secret IS ? AND sp.event_id=? AND (ps.status NOT IN ('invited','pending') OR (${activeEffectiveInviteExpirySql(effectiveProposalSpeakerInviteExpirySql("ps", "e"), "strftime('%Y-%m-%dT%H:%M:%fZ','now')")})) AND ${capability ? "? > unixepoch('now')" : "EXISTS(SELECT 1 FROM sessions WHERE id=? AND user_id=ps.user_id AND revoked_at IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))"}`,
+      sql: `SELECT 1 FROM proposal_speakers ps JOIN session_proposals sp ON sp.id=ps.proposal_id AND sp.deleted_at IS NULL JOIN events e ON e.id=sp.event_id WHERE ps.id=? AND ps.proposal_id=? AND ps.user_id=? AND ps.invite_generation=? AND ps.manage_link_secret IS ? AND sp.event_id=? AND (ps.status NOT IN ('invited','pending') OR (${activeEffectiveInviteExpirySql(effectiveProposalSpeakerInviteExpirySql("ps", "e"), "strftime('%Y-%m-%dT%H:%M:%fZ','now')")})) AND ${capability ? "? > unixepoch('now')" : "EXISTS(SELECT 1 FROM sessions WHERE id=? AND user_id=ps.user_id AND revoked_at IS NULL AND expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))"}`,
       bindings: [
         speaker.id,
+        proposal.id,
         speaker.user_id,
         speaker.invite_generation,
         speaker.manage_link_secret,
@@ -166,7 +208,7 @@ export async function resumeEventProposalSpeakerProof(
   input: { payload: EventProposalProofPayload & { expiresAt: number }; signingSecret: string },
 ): Promise<string> {
   const context = input.payload.context;
-  if (input.payload.operation !== "speaker_profile" || context?.kind !== "speaker")
+  if (input.payload.operation !== "speaker_profile" || context?.kind !== "speaker" || context.sessionId)
     throw new AppError(403, "PROPOSAL_PROOF_CONTEXT_MISMATCH", "Invalid speaker confirmation context.");
   const row = await first<{ manage_link_secret: string }>(
     db,

@@ -12,7 +12,11 @@ export function AgendaBoardDropTarget({
   snapshot: AgendaSnapshot;
   placement: ReturnType<typeof useAcceptedProposalPlacement>;
 }) {
-  const roomName = snapshot.rooms.find((room) => room.id === target.roomId)?.name ?? "Across all locations";
+  const roomId =
+    target.resizing && !target.roomId
+      ? (snapshot.occurrences.find((occurrence) => occurrence.id === target.resizing)?.roomId ?? "")
+      : target.roomId;
+  const roomName = snapshot.rooms.find((room) => room.id === roomId)?.name ?? "Across all locations";
   if (placement.selected)
     return (
       <AcceptedProposalDropTarget
@@ -26,6 +30,6 @@ export function AgendaBoardDropTarget({
       />
     );
   return target.dragged || target.resizing ? (
-    <AgendaDropTarget {...target} roomName={roomName} timeZone={snapshot.timeZone} />
+    <AgendaDropTarget {...target} roomId={roomId} roomName={roomName} timeZone={snapshot.timeZone} />
   ) : null;
 }

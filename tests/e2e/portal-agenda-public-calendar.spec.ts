@@ -61,7 +61,7 @@ test("pre-generated public calendar keeps identity across correction, cancellati
   browser,
 }, testInfo) => {
   test.setTimeout(300_000);
-  await signInAsE2eStaff(page, e2eAdminEmail("default"));
+  await signInAsE2eStaff(page, e2eAdminEmail("portal-agenda-public-calendar"));
   let snapshot = agendaSnapshotSchema.parse(await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json());
   for (const name of ["Calendar lifecycle hall", "Calendar lifecycle moved hall"]) {
     const response = await page.request.post(`/api/v1/events/${slug}/agenda/rooms`, {

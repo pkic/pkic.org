@@ -1,6 +1,7 @@
 import { seedEventAndAdmin } from "./helpers/context";
 import { eventFormsResponseSchema } from "../assets/shared/schemas/forms";
 import { publishedFormResourcesForPath } from "../assets/shared/published-resource-url";
+import { publicSponsorTiersResponseSchema } from "../assets/shared/schemas/sponsors";
 import { env } from "cloudflare:test";
 import { beforeEach, expect, it } from "vitest";
 import { resetDb } from "./helpers/reset-db";
@@ -13,6 +14,26 @@ import { prepareSitePublicationRequest } from "../functions/_lib/services/site-p
 import { publishedMediaReferences, resolvePublishedMediaKeys } from "../functions/_lib/services/site-publication-media";
 
 beforeEach(async () => resetDb());
+
+it("publishes independent configured active tier catalogs for both sponsorship forms without prices", async () => {
+  await env.DB.prepare("UPDATE sponsorship_tier_catalog SET active = 0").run();
+  await env.DB.batch([
+    env.DB.prepare(
+      "UPDATE sponsorship_tier_catalog SET active = 1 WHERE sponsor_type = 'consortium' AND tier = 'Silver'",
+    ),
+    env.DB.prepare(
+      "UPDATE sponsorship_tier_catalog SET active = 1 WHERE sponsor_type = 'event' AND tier = 'Innovator'",
+    ),
+  ]);
+  const snapshot = await readSitePublicationSnapshot(env.DB, []);
+  const resources = publishedFormResourcesForPath(snapshot.publicResources, "/events/2026/pqc-2026/sponsors/");
+  const consortium = publicSponsorTiersResponseSchema.parse(resources["/api/v1/sponsors/tiers?sponsorType=consortium"]);
+  const event = publicSponsorTiersResponseSchema.parse(resources["/api/v1/sponsors/tiers?sponsorType=event"]);
+  expect(consortium).toEqual({ visibility: "public", sponsorType: "consortium", tiers: [{ tier: "Silver" }] });
+  expect(event).toEqual({ visibility: "public", sponsorType: "event", tiers: [{ tier: "Innovator" }] });
+  expect(resources["/api/v1/sponsors/tiers?sponsorType=consortium"]).toEqual(consortium);
+  expect(resources["/api/v1/sponsors/tiers?sponsorType=event"]).toEqual(event);
+});
 
 it("captures the desired publication highwater separately from immutable public content identity", async () => {
   const { eventId } = await seedEventAndAdmin(env.DB);

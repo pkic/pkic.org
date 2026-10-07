@@ -22,6 +22,45 @@ import {
 } from "../fixtures/approved-agenda";
 
 describe("shared public agenda content", () => {
+  it.each([false, true])(
+    "keeps a linked person's profile candidate private and respects approved appearance=%s",
+    (approved) => {
+      const source = structuredClone(snapshot);
+      const occurrence = source.occurrences[0]!;
+      if (!approved) occurrence.history!.appearances = [];
+      occurrence.history!.proposalRepresentations = [];
+      const parsed = agendaSnapshotSchema.parse({
+        ...source,
+        occurrences: [
+          {
+            ...occurrence,
+            speakers: occurrence.speakers.map((speaker) => ({
+              ...speaker,
+              profileCandidate: { biography: "Current intrinsic profile biography", photoUrl: "/candidate-photo.jpg" },
+            })),
+          },
+        ],
+      });
+      const before = structuredClone(parsed);
+      const organizer = agendaContent(parsed, true).days[0]!.slots[0]!.sessions[0]!.speakers[0]!;
+      expect(organizer.bioMarkdown).toBe(
+        approved ? occurrence.history!.appearances[0].biography : "Current intrinsic profile biography",
+      );
+      expect(organizer.imageSrc).toBe(approved ? "/approved-photo.jpg" : "/candidate-photo.jpg");
+      expect(organizer.title).toBe(approved ? "Engineer at Historical organization" : "");
+      const publicProjection = publicAgendaProjection(parsed, null);
+      expect(JSON.stringify(publicProjection)).not.toContain("profileCandidate");
+      for (const publicSource of [parsed, publicProjection]) {
+        const credit = agendaContent(publicSource).days[0]!.slots[0]!.sessions[0]!.speakers[0]!;
+        expect(credit.bioMarkdown).toBe(approved ? occurrence.history!.appearances[0].biography : undefined);
+        expect(credit.imageSrc).toBe(approved ? "/approved-photo.jpg" : undefined);
+        expect(JSON.stringify(credit)).not.toContain("Current intrinsic");
+        expect(JSON.stringify(credit)).not.toContain("candidate-photo");
+      }
+      expect(parsed).toEqual(before);
+    },
+  );
+
   it.each(["missing", "draft", "withdrawn", "failed", "rights", "consent", "validation", "approval"])(
     "keeps raw slide/recording candidates private when material release is %s",
     (condition) => {
@@ -189,7 +228,7 @@ describe("shared public agenda content", () => {
     expect(content.speakers).toEqual([
       {
         name: "Historical speaker",
-        title: "Engineer · Historical organization",
+        title: "Engineer at Historical organization",
         bioMarkdown: "**Approved biography** <script>unsafe()</script>",
         imageSrc: "/approved-photo.jpg",
         moderator: true,
@@ -201,6 +240,51 @@ describe("shared public agenda content", () => {
     expect(session.presentationUrl).toBe("/approved-slides.pdf");
     expect(session.recordingUrl).toBeUndefined();
   });
+
+  it.each(["recorded", "unselected", "approved"])(
+    "uses %s proposal representation only within the appropriate draft display boundary",
+    (state) => {
+      const source = structuredClone(snapshot);
+      const occurrence = source.occurrences[0]!;
+      if (state !== "approved") occurrence.history!.appearances = [];
+      occurrence.history!.proposalRepresentations = [
+        {
+          userId: "person",
+          actingIdentityId: state === "unselected" ? null : crypto.randomUUID(),
+          selectedAt: state === "unselected" ? null : instant,
+          snapshot:
+            state === "unselected"
+              ? null
+              : {
+                  jobTitle: "Recorded proposal title",
+                  organizationName: "Recorded proposal organization",
+                  biography: null,
+                  links: [],
+                },
+        },
+      ];
+      const parsed = agendaSnapshotSchema.parse(source);
+      const before = structuredClone(parsed);
+      const organizer = agendaContent(parsed, true);
+      const organizerCredit = organizer.days[0]!.slots[0]!.sessions[0]!.speakers[0]!;
+      expect(organizerCredit).toMatchObject({ moderator: true });
+      expect(organizerCredit.title).toBe(
+        state === "approved"
+          ? "Engineer at Historical organization"
+          : state === "recorded"
+            ? "Recorded proposal title at Recorded proposal organization"
+            : undefined,
+      );
+      expect(organizerCredit.name).toBe(state === "approved" ? "Historical speaker" : "Current profile name");
+      expect(organizer.speakers).toEqual([organizerCredit]);
+      for (const publicSource of [parsed, publicAgendaProjection(parsed, null)]) {
+        const publicCredit = agendaContent(publicSource).days[0]!.slots[0]!.sessions[0]!.speakers[0]!;
+        expect(publicCredit.title).toBe(state === "approved" ? "Engineer at Historical organization" : undefined);
+        expect(JSON.stringify(publicCredit)).not.toContain("Recorded proposal");
+      }
+      expect(parsed).toEqual(before);
+    },
+  );
 
   it("keeps private scheduled cards in organizer mode but excludes them from public cards and gallery", () => {
     const privateOccurrence = {
@@ -300,7 +384,7 @@ describe("shared public agenda content", () => {
       "Historical speaker",
     ]);
     expect(content.speakers[2]).toMatchObject({
-      title: "Source title · Source organization",
+      title: "Source title at Source organization",
       bioMarkdown: "Preserved source biography",
       imageSrc: "/source-photo.jpg",
       moderator: true,

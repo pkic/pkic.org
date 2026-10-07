@@ -30,8 +30,14 @@ export function agendaFragmentRegistry(
           const owner = session.id ?? `${day.date}:${slotIndex}:${day.slots[slotIndex]!.sessions.indexOf(session)}`;
           if (session.publicAnchor) claim(primary, session.publicAnchor, owner);
           for (const fragment of session.legacyFragments ?? []) {
-            if (legacyAgendaFragmentMatchesPlacement(fragment, session, day.locations[roomIndex]?.id, roomIndex))
-              claim(aliases, fragment.anchor, dialogId);
+            if (
+              day.locations
+                .slice(roomIndex, roomIndex + cell.colSpan)
+                .some((room, offset) =>
+                  legacyAgendaFragmentMatchesPlacement(fragment, session, room.id, roomIndex + offset),
+                )
+            )
+              claim(aliases, fragment.anchor, `${dialogId}:${fragment.roomId ?? "unassigned"}`);
           }
         });
       });

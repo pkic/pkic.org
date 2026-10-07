@@ -15,6 +15,7 @@ import { Field } from "../../../../../../ui/Field";
 import { TextInput, Textarea, Select } from "../../../../../../ui/TextControl";
 import { Button } from "../../../../../../ui/Button";
 import { Checkbox } from "../../../../../../ui/Checkbox";
+import { Avatar } from "../../../../../../ui/Avatar";
 import type { LegacyAgendaDownload } from "../../../../../../../shared/schemas/event-agenda-legacy-fragments";
 export function AppearanceFields({
   appearances,
@@ -110,116 +111,159 @@ export function AppearanceFields({
         Next identities
       </Button>
 
-      {drafts.map((person, index) => (
-        <fieldset key={person.userId}>
-          <legend>{person.displayName}</legend>
-          <p>{person.approvedAt ? "Representation approved" : "Representation needs review"}</p>
-          <Field label="Display name">
-            {(control) => (
-              <>
-                <TextInput
+      {drafts.map((person, index) => {
+        const profileCandidate = speakers.find((speaker) => speaker.userId === person.userId)?.profileCandidate;
+        const currentPortrait =
+          catalog.data?.portraits.find((candidate) => candidate.userId === person.userId)?.photoUrl ??
+          profileCandidate?.photoUrl;
+        return (
+          <fieldset key={person.userId}>
+            <legend>{person.displayName}</legend>
+            <p>{person.approvedAt ? "Representation approved" : "Representation needs review"}</p>
+            <Field label="Display name">
+              {(control) => (
+                <>
+                  <TextInput
+                    {...control}
+                    value={person.displayName}
+                    onInput={(e) => update(index, { displayName: e.currentTarget.value })}
+                  />
+                </>
+              )}
+            </Field>
+            <Field
+              label="Representation at this event"
+              help="Choose the canonical identity that represented this speaker at the session date."
+            >
+              {(control) => (
+                <Select
                   {...control}
-                  value={person.displayName}
-                  onInput={(e) => update(index, { displayName: e.currentTarget.value })}
-                />
-              </>
-            )}
-          </Field>
-          <Field
-            label="Representation at this event"
-            help="Choose the canonical identity that represented this speaker at the session date."
-          >
-            {(control) => (
-              <Select
-                {...control}
-                value={person.actingIdentityId === undefined ? "__needs_review" : (person.actingIdentityId ?? "")}
-                onChange={(e) => {
-                  const identity = catalog.data?.identities.find(
-                    (item) => item.id === e.currentTarget.value && item.userId === person.userId,
-                  );
-                  if (e.currentTarget.value !== "" && !identity) return;
-                  update(
-                    index,
-                    identity
-                      ? {
-                          actingIdentityId: identity.id,
-                          organizationName: identity.organizationName,
-                          jobTitle: identity.jobTitle,
-                          biography: identity.biography,
-                        }
-                      : { actingIdentityId: null, organizationName: null, jobTitle: null },
-                  );
-                }}
+                  value={person.actingIdentityId === undefined ? "__needs_review" : (person.actingIdentityId ?? "")}
+                  onChange={(e) => {
+                    const identity = catalog.data?.identities.find(
+                      (item) => item.id === e.currentTarget.value && item.userId === person.userId,
+                    );
+                    if (e.currentTarget.value !== "" && !identity) return;
+                    update(
+                      index,
+                      identity
+                        ? {
+                            actingIdentityId: identity.id,
+                            organizationName: identity.organizationName,
+                            jobTitle: identity.jobTitle,
+                            biography: identity.biography,
+                          }
+                        : { actingIdentityId: null, organizationName: null, jobTitle: null },
+                    );
+                  }}
+                >
+                  <option value="__needs_review" disabled>
+                    Representation needs review
+                  </option>
+                  <option value="">Individual appearance</option>
+                  {catalog.data?.identities
+                    ?.filter((item) => item.userId === person.userId)
+                    .map((item) => (
+                      <option value={item.id}>
+                        {[item.organizationName ?? "Individual", item.jobTitle].filter(Boolean).join(" · ")}
+                      </option>
+                    ))}
+                  {person.actingIdentityId &&
+                    !catalog.data?.identities.some((item) => item.id === person.actingIdentityId) && (
+                      <option value={person.actingIdentityId}>
+                        {person.organizationName ?? "Source representation awaiting review"}
+                      </option>
+                    )}
+                </Select>
+              )}
+            </Field>
+            <Field label="Organization at this event">
+              {(control) => (
+                <>
+                  <TextInput
+                    {...control}
+                    value={person.organizationName ?? ""}
+                    onInput={(e) => update(index, { organizationName: e.currentTarget.value || null })}
+                  />
+                </>
+              )}
+            </Field>
+            <Field label="Role at this event">
+              {(control) => (
+                <>
+                  <TextInput
+                    {...control}
+                    value={person.jobTitle ?? ""}
+                    onInput={(e) => update(index, { jobTitle: e.currentTarget.value || null })}
+                  />
+                </>
+              )}
+            </Field>
+            <Field label="Approved biography">
+              {(control) => (
+                <>
+                  <Textarea
+                    {...control}
+                    value={person.biography}
+                    onInput={(e) => update(index, { biography: e.currentTarget.value })}
+                  />
+                </>
+              )}
+            </Field>
+            {profileCandidate?.biography && (
+              <Button
+                size="sm"
+                disabled={person.biography === profileCandidate.biography}
+                onClick={() => update(index, { biography: profileCandidate.biography ?? "" })}
               >
-                <option value="__needs_review" disabled>
-                  Representation needs review
-                </option>
-                <option value="">Individual appearance</option>
-                {catalog.data?.identities
-                  ?.filter((item) => item.userId === person.userId)
-                  .map((item) => (
-                    <option value={item.id}>
-                      {[item.organizationName ?? "Individual", item.jobTitle].filter(Boolean).join(" · ")}
-                    </option>
-                  ))}
-                {person.actingIdentityId &&
-                  !catalog.data?.identities.some((item) => item.id === person.actingIdentityId) && (
-                    <option value={person.actingIdentityId}>
-                      {person.organizationName ?? "Source representation awaiting review"}
-                    </option>
-                  )}
-              </Select>
+                Use profile biography
+              </Button>
             )}
-          </Field>
-          <Field label="Organization at this event">
-            {(control) => (
-              <>
-                <TextInput
-                  {...control}
-                  value={person.organizationName ?? ""}
-                  onInput={(e) => update(index, { organizationName: e.currentTarget.value || null })}
-                />
-              </>
+            <Field label="Approved portrait URL">
+              {(control) => (
+                <>
+                  <TextInput
+                    {...control}
+                    value={person.photoUrl ?? ""}
+                    onInput={(e) => update(index, { photoUrl: e.currentTarget.value || null })}
+                  />
+                </>
+              )}
+            </Field>
+            {person.photoUrl && (
+              <Avatar
+                name={person.displayName}
+                src={person.photoUrl}
+                size="lg"
+                alt={`Selected portrait for ${person.displayName}`}
+              />
             )}
-          </Field>
-          <Field label="Role at this event">
-            {(control) => (
-              <>
-                <TextInput
-                  {...control}
-                  value={person.jobTitle ?? ""}
-                  onInput={(e) => update(index, { jobTitle: e.currentTarget.value || null })}
-                />
-              </>
+            {currentPortrait && (
+              <div class="pk-stack">
+                {currentPortrait !== person.photoUrl && (
+                  <Avatar
+                    name={person.displayName}
+                    src={currentPortrait}
+                    size="lg"
+                    alt={`Current portrait for ${person.displayName}`}
+                  />
+                )}
+                <Button
+                  type="button"
+                  disabled={currentPortrait === person.photoUrl}
+                  onClick={() => update(index, { photoUrl: currentPortrait })}
+                >
+                  Use current portrait
+                </Button>
+                <p>The selected portrait remains a draft until you approve this event appearance and save.</p>
+              </div>
             )}
-          </Field>
-          <Field label="Approved biography">
-            {(control) => (
-              <>
-                <Textarea
-                  {...control}
-                  value={person.biography}
-                  onInput={(e) => update(index, { biography: e.currentTarget.value })}
-                />
-              </>
-            )}
-          </Field>
-          <Field label="Approved portrait URL">
-            {(control) => (
-              <>
-                <TextInput
-                  {...control}
-                  value={person.photoUrl ?? ""}
-                  onInput={(e) => update(index, { photoUrl: e.currentTarget.value || null })}
-                />
-              </>
-            )}
-          </Field>
-          <Button type="button" onClick={() => approve(index)}>
-            Approve representation for {person.displayName}
-          </Button>
-        </fieldset>
-      ))}
+            <Button type="button" onClick={() => approve(index)}>
+              Approve representation for {person.displayName}
+            </Button>
+          </fieldset>
+        );
+      })}
     </section>
   );
 }

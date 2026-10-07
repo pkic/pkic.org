@@ -170,7 +170,28 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
   };
 }
 
+async function openManualBadgeEntry(page: Page) {
+  const manual = page.locator("details").filter({
+    has: page.getByText("Enter or paste badge code", { exact: true }),
+  });
+  if (!(await manual.evaluate((element) => (element as HTMLDetailsElement).open)))
+    await manual.getByText("Enter or paste badge code", { exact: true }).click();
+  await expect(page.getByLabel("Badge code", { exact: true })).toBeVisible();
+}
+
+async function expectDoorScannerReady(page: Page) {
+  const diagnostics = await openScannerDiagnostics(page);
+  await expect(
+    diagnostics.getByText("Eligibility data ready. Checks run locally; attendance uploads in the background.", {
+      exact: true,
+    }),
+  ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
+  await diagnostics.getByText("Recovery and diagnostics", { exact: true }).click();
+}
+
 export async function captureSponsorBadge(page: Page, badgeId: string, sponsorId: string, operatorUserId: string) {
+  await openManualBadgeEntry(page);
   await page.getByLabel("Badge code", { exact: true }).fill(badgeId);
   await page
     .getByRole("checkbox", {
@@ -184,7 +205,7 @@ export async function captureSponsorBadge(page: Page, badgeId: string, sponsorId
       response.request().method() === "POST" &&
       response.request().postDataJSON()?.badgeId === badgeId,
   );
-  await page.getByRole("button", { name: "Capture lead", exact: true }).click();
+  await page.getByRole("button", { name: "Capture sponsor lead", exact: true }).click();
   const response = await receiving;
   expect(response.status()).toBe(200);
   const request = enrolledEventScanRequestSchema.parse(response.request().postDataJSON());
@@ -225,11 +246,26 @@ export async function captureOfflineSponsorBadge(
       exact: true,
     }),
   ).toBeVisible();
+  await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
   await diagnostics.getByText("Recovery and diagnostics", { exact: true }).click();
+  expect((await scannerStorage(page)).pending).toHaveLength(0);
+  const offlineReceipts: number[] = [];
+  const observeReceipt = (response: import("@playwright/test").Response) => {
+    if (
+      new URL(response.url()).pathname === `${eventApi}/scans` &&
+      response.request().method() === "POST" &&
+      response.ok()
+    )
+      offlineReceipts.push(response.status());
+  };
   await page.context().setOffline(true);
+  page.on("response", observeReceipt);
   let pendingLead: ReturnType<typeof enrolledEventScanRequestSchema.parse> | undefined;
   let pendingPrivacy: Awaited<ReturnType<typeof expectNoStoredSponsorContacts>> | undefined;
   try {
+    await expect.poll(() => page.evaluate(() => navigator.onLine)).toBe(false);
+    await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
+    await openManualBadgeEntry(page);
     await page.getByLabel("Badge code", { exact: true }).fill(badgeId);
     await page
       .getByRole("checkbox", {
@@ -237,7 +273,21 @@ export async function captureOfflineSponsorBadge(
         exact: true,
       })
       .check();
-    await page.getByRole("button", { name: "Capture lead", exact: true }).click();
+    const capture = page.getByRole("button", { name: "Capture sponsor lead", exact: true });
+    expect(
+      await capture.evaluate((button) => {
+        const form = (button as HTMLButtonElement).form;
+        return Boolean(
+          form?.noValidate && form.querySelector('[name="badgeId"]') && form.querySelector('[name="consentConfirmed"]'),
+        );
+      }),
+    ).toBe(true);
+    await capture.click();
+    await expect
+      .poll(async () => (await scannerStorage(page)).pending.length, {
+        message: "The real offline sponsor capture must commit exactly one durable pending scan before upload",
+      })
+      .toBe(1);
     await expect(page.getByText("1 scans awaiting upload", { exact: true })).toBeVisible();
     const pending = await scannerStorage(page);
     expect(pending.pending).toHaveLength(1);
@@ -253,7 +303,9 @@ export async function captureOfflineSponsorBadge(
     expect(pendingLead.offlineRight).toBeUndefined();
     for (const marker of forbidden) await expect(page.getByText(marker, { exact: true })).toHaveCount(0);
     pendingPrivacy = await expectNoStoredSponsorContacts(page, forbidden, await readConsole());
+    expect(offlineReceipts).toEqual([]);
   } finally {
+    page.off("response", observeReceipt);
     await reconnectScannerBrowser(page.context(), page);
   }
   if (!pendingLead || !pendingPrivacy) throw new Error("The inspected offline lead must survive to reconciliation");
@@ -288,7 +340,7 @@ export async function captureSponsorViews(page: Page, info: TestInfo, checkpoint
       expect(bounds!.x + bounds!.width).toBeLessThanOrEqual(width);
     }
     if (await page.locator(".pk-event-scanner").count()) {
-      await expect(page.getByLabel("Check-in location", { exact: true })).toHaveCount(0);
+      await expect(page.getByLabel("Session", { exact: true })).toHaveCount(0);
       await expect(page.locator(".pk-event-scanner")).not.toContainText("Missing required permission");
     }
     await page.screenshot({
@@ -375,12 +427,8 @@ export async function startNextDoorScannerContext(
   });
   expect(manifest.epochId).not.toBe(previous.epochId);
   await expect(page.getByText("New scanner session prepared. Ready to scan.", { exact: true })).toBeVisible();
-  await expect(
-    page.getByText("Eligibility data ready. Checks run locally; attendance uploads in the background.", {
-      exact: true,
-    }),
-  ).toBeVisible();
-  await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
+  await expectDoorScannerReady(page);
+  await openManualBadgeEntry(page);
   return manifest;
 }
 
@@ -394,8 +442,9 @@ export async function expectContactBadgeRejected(page: Page, email: string, free
   };
   page.on("request", observe);
   try {
+    await openManualBadgeEntry(page);
     await page.getByLabel("Badge code", { exact: true }).fill(JSON.stringify({ email, biography: freeText }));
-    await page.getByRole("button", { name: "Check registration", exact: true }).click();
+    await page.getByRole("button", { name: "Admission decision", exact: true }).click();
     await expect(page.getByLabel("Badge code", { exact: true })).toHaveAttribute("aria-invalid", "true");
     expect(submissions).toEqual([]);
     expect(await scannerStorage(page)).toEqual(before);
@@ -415,11 +464,7 @@ export async function prepareDoorScannerContext(
   await page.goto(`/portal/#/events/${sponsorEventSlug}/scanner`);
   const manifest = enrolledOfflineEligibilityResponseSchema.parse(await (await preparing).json());
   expect(manifest.publishedRevision).toBe(publishedRevision);
-  await expect(
-    page.getByText("Eligibility data ready. Checks run locally; attendance uploads in the background.", {
-      exact: true,
-    }),
-  ).toBeVisible();
+  await expectDoorScannerReady(page);
   await expect.poll(() => page.evaluate(() => navigator.serviceWorker.controller?.scriptURL ?? "")).not.toBe("");
   const selected = page.waitForResponse((response) => {
     const url = new URL(response.url());
@@ -431,9 +476,9 @@ export async function prepareDoorScannerContext(
       url.searchParams.get("epochId") === manifest.epochId
     );
   });
-  await page.getByRole("combobox", { name: "Check-in location", exact: true }).fill(occurrence.title);
+  await page.getByRole("combobox", { name: "Session", exact: true }).fill(occurrence.title);
   await page.getByRole("option", { name: occurrence.title, exact: true }).click();
-  await expect(page.getByRole("combobox", { name: "Check-in location", exact: true })).toHaveValue(occurrence.title);
+  await expect(page.getByRole("combobox", { name: "Session", exact: true })).toHaveValue(occurrence.title);
   await expect(page.getByRole("combobox", { name: "Physical room", exact: true })).toHaveValue(occurrence.roomId!);
   const prepared = enrolledOfflineEligibilityResponseSchema.parse(await (await selected).json());
   expect(prepared).toMatchObject({
@@ -444,7 +489,8 @@ export async function prepareDoorScannerContext(
     roomId: occurrence.roomId,
     publishedRevision,
   });
-  await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
+  await expectDoorScannerReady(page);
+  await openManualBadgeEntry(page);
   return prepared;
 }
 

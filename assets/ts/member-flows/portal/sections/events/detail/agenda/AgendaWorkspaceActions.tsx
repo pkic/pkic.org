@@ -5,9 +5,13 @@ export function AgendaWorkspaceActions({
   canEdit,
   busy,
   onUndo,
+  calendarLocked,
+  onToggleCalendarLock,
+  onNewSession,
+  onNewBreak,
   onSettings,
   onImport,
-  onAcceptedProposals,
+  onReuseSession,
   onPreview,
   onNewLocation,
   onEditLocation,
@@ -17,9 +21,13 @@ export function AgendaWorkspaceActions({
   canEdit: boolean;
   busy: boolean;
   onUndo?: () => void;
+  calendarLocked: boolean;
+  onToggleCalendarLock: () => void;
+  onNewSession: () => void;
+  onNewBreak: () => void;
   onSettings: () => void;
   onImport: () => void;
-  onAcceptedProposals: () => void;
+  onReuseSession: () => void;
   onPreview: () => void;
   onNewLocation: () => void;
   onEditLocation: (room: AgendaSnapshot["rooms"][number]) => void;
@@ -34,9 +42,16 @@ export function AgendaWorkspaceActions({
         ...(canEdit
           ? [
               ...(onUndo ? [{ id: "undo", label: "Undo last session edit", disabled: busy, onSelect: onUndo }] : []),
+              {
+                id: "calendar-lock",
+                label: calendarLocked ? "Unlock calendar" : "Lock calendar",
+                onSelect: onToggleCalendarLock,
+              },
+              { id: "new-session", label: "New session", onSelect: onNewSession },
+              { id: "new-break", label: "Add break or lunch", onSelect: onNewBreak },
               { id: "rules", label: "Scheduling rules", onSelect: onSettings },
               { id: "import", label: "Import sessions", onSelect: onImport },
-              { id: "accepted", label: "Accepted proposals", onSelect: onAcceptedProposals },
+              { id: "reuse", label: "Reuse a session", onSelect: onReuseSession },
               { id: "location", label: "New location", onSelect: onNewLocation },
               ...snapshot.rooms.map((room) => ({
                 id: room.id,

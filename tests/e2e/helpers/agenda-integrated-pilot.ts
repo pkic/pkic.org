@@ -357,19 +357,19 @@ export async function preparePilotConference(staff: Page, speaker: Awaited<Retur
 
 export async function editAndSwapPilot(staff: Page, first: AgendaOccurrence, second: AgendaOccurrence, info: TestInfo) {
   await staff.goto(pilotAgendaPage);
-  await staff.getByRole("tab", { name: "All sessions", exact: true }).click();
-  await runRowAction(staff, staff.getByRole("row").filter({ hasText: first.title }), "Edit / move session");
+  await staff.getByRole("tab", { name: "Schedule", exact: true }).click();
+  await runRowAction(staff, staff.getByRole("row").filter({ hasText: first.title }), "Edit session");
   await staff
     .getByLabel("Description", { exact: true })
     .fill("Edited synthetic abstract carried into the same approved session.");
   await staff.getByRole("button", { name: "Save session", exact: true }).click();
   await expect(staff.getByRole("button", { name: "Save session", exact: true })).toHaveCount(0);
-  await staff.getByRole("tab", { name: "All sessions", exact: true }).click();
+  await staff.getByRole("tab", { name: "Schedule", exact: true }).click();
   await runRowAction(staff, staff.getByRole("row").filter({ hasText: first.title }), "Swap sessions");
   await staff.getByLabel(fieldLabel("Swap with session")).selectOption(second.id);
-  await staff.getByRole("button", { name: "Review swap", exact: true }).click();
-  await staff.getByRole("button", { name: "Apply reviewed schedule", exact: true }).click();
-  await expect(staff.getByRole("button", { name: "Apply reviewed schedule", exact: true })).toHaveCount(0);
+  const swapping = staff.getByRole("dialog", { name: `Swap ${first.title}`, exact: true });
+  await swapping.getByRole("button", { name: "Swap sessions", exact: true }).click();
+  await expect(swapping).toBeHidden();
   const after = await readPilotAgenda(staff);
   const moved = after.occurrences.find((row) => row.id === first.id)!;
   const exchanged = after.occurrences.find((row) => row.id === second.id)!;
@@ -513,7 +513,7 @@ export async function grantPilotDoor(staff: Page, userId: string, eventId: strin
 
 export async function releasePilotArchive(staff: Page, occurrence: AgendaOccurrence, info: TestInfo) {
   await staff.goto(pilotAgendaPage);
-  await staff.getByRole("tab", { name: "All sessions", exact: true }).click();
+  await staff.getByRole("tab", { name: "Schedule", exact: true }).click();
   await runRowAction(
     staff,
     staff.getByRole("row").filter({ hasText: occurrence.title }),
@@ -558,7 +558,7 @@ export async function releasePilotArchive(staff: Page, occurrence: AgendaOccurre
 
 export async function approvePilotAppearance(staff: Page, occurrence: AgendaOccurrence, userId: string) {
   await staff.goto(pilotAgendaPage);
-  await staff.getByRole("tab", { name: "All sessions", exact: true }).click();
+  await staff.getByRole("tab", { name: "Schedule", exact: true }).click();
   await runRowAction(
     staff,
     staff.getByRole("row").filter({ hasText: occurrence.title }),

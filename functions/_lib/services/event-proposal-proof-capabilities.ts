@@ -48,6 +48,7 @@ export const eventProposalProofContextSchema = z
         kind: z.literal("speaker"),
         userId: databaseIdSchema,
         speakerId: databaseIdSchema,
+        sessionId: databaseIdSchema.optional(),
         inviteGeneration: z.number().int().nonnegative(),
         secretDigest: z.string().regex(/^[a-f0-9]{64}$/),
         expiresAt: z.number().int().positive(),

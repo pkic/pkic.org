@@ -24,9 +24,9 @@ test("server agenda sort, day filters and nonempty pagination preserve schedule 
       writes.push(`${request.method()} ${new URL(request.url()).pathname}`);
   });
   await page.goto(fixture.workspace);
-  await page.getByRole("tab", { name: "All sessions", exact: true }).click();
-  const panel = page.getByRole("tabpanel", { name: "All sessions", exact: true });
-  const table = panel.getByRole("table", { name: "Sessions across all days", exact: true });
+  await page.getByRole("tab", { name: "Schedule", exact: true }).click();
+  const panel = page.getByRole("tabpanel", { name: "Schedule", exact: true });
+  const table = panel.getByRole("table", { name: "Event sessions", exact: true });
   await expect(table).toBeVisible();
   const path = `${fixture.endpoint}/occurrences`;
   async function query(
@@ -150,7 +150,7 @@ test("server agenda sort, day filters and nonempty pagination preserve schedule 
   await page.getByRole("tab", { name: "Agenda", exact: true }).click();
   expect(await fixture.read()).toEqual(before);
   const restored = await query(
-    () => page.getByRole("tab", { name: "All sessions", exact: true }).click(),
+    () => page.getByRole("tab", { name: "Schedule", exact: true }).click(),
     { q: "Unscheduled", sort: "title", offset: 0, limit: 25 },
     unscheduled,
   );

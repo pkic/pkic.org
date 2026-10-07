@@ -18,6 +18,7 @@ export const eventProposalProofStartSchema = z
     email: normalizedEmailSchema,
     unaffiliatedAttestation: z.boolean().default(false),
     speakerManagementToken: eventProposalContinuationTokenSchema.optional(),
+    speakerProposalId: databaseIdSchema.optional(),
     continuationToken: eventProposalContinuationTokenSchema.optional(),
     entryContext: proposalEntryContextSchema.optional(),
     consents: z.array(consentItemSchema).max(20),
@@ -31,6 +32,7 @@ export const eventProposalProofVerifySchema = z
   .object({
     token: eventProposalContinuationTokenSchema,
     speakerManagementToken: eventProposalContinuationTokenSchema.optional(),
+    speakerProposalId: databaseIdSchema.optional(),
   })
   .strict();
 export const eventProposalProofPersonSchema = z.object({
@@ -70,6 +72,7 @@ export const eventProposalIdentityJobTitlePatchSchema = z
 export const eventProposalProofIdentityPatchSchema = eventProposalIdentityJobTitlePatchSchema.extend({
   continuationToken: eventProposalContinuationTokenSchema.optional(),
   speakerManagementToken: eventProposalContinuationTokenSchema.optional(),
+  speakerProposalId: databaseIdSchema.optional(),
 });
 export const eventProposalProofIdentityPatchResponseSchema = z.object({
   identityId: databaseIdSchema,
@@ -96,6 +99,7 @@ export const eventProposalProofVerifyResponseSchema = z.discriminatedUnion("stat
     email: normalizedEmailSchema,
     organization: z.object({ id: databaseIdSchema, name: z.string() }).nullable(),
     speakerManagementToken: eventProposalContinuationTokenSchema.optional(),
+    speakerProposalId: databaseIdSchema.optional(),
     speakerManageUrl: httpCapabilityUrlSchema.optional(),
     entryContext: proposalEntryContextSchema.optional(),
   }),
@@ -105,6 +109,7 @@ export const eventProposalProofIdentitiesSchema = z
   .object({
     continuationToken: eventProposalContinuationTokenSchema,
     speakerManagementToken: eventProposalContinuationTokenSchema.optional(),
+    speakerProposalId: databaseIdSchema.optional(),
   })
   .strict();
 

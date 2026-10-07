@@ -1,32 +1,30 @@
-import { AgendaSchedulePreview } from "./AgendaSchedulePreview";
 import { scheduleSwap } from "./schedule-proposals";
-import {
-  agendaScheduleSwapSelectionSchema,
-  type AgendaScheduleProposal,
-} from "../../../../../../../shared/schemas/event-agenda-schedule";
+import { agendaScheduleSwapSelectionSchema } from "../../../../../../../shared/schemas/event-agenda-schedule";
 import { useEditorFocus } from "./useEditorFocus";
 import { useState } from "preact/hooks";
-import { type AgendaSnapshot, type AgendaOccurrence } from "../../../../../../../shared/schemas/event-agenda";
+import type { AgendaSnapshot, AgendaOccurrence } from "../../../../../../../shared/schemas/event-agenda";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { Field } from "../../../../../../ui/Field";
 import { Select } from "../../../../../../ui/TextControl";
-import { Button } from "../../../../../../ui/Button";
-import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
+import { Dialog } from "../../../../../../ui/Dialog";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
+import type { useAgendaScheduling } from "./useAgendaScheduling";
+
+/** Swap the selected pair through the same reviewed atomic scheduling command. */
 export function SessionSwap({
   snapshot,
   first,
-  onSaved,
+  onApply,
   onClose,
 }: {
   snapshot: AgendaSnapshot;
   first: AgendaOccurrence;
-  onSaved: (value: AgendaSnapshot) => void;
+  onApply: ReturnType<typeof useAgendaScheduling>["apply"];
   onClose: () => void;
 }) {
   const focus = useEditorFocus();
   const [secondId, setSecond] = useState("");
-  const [proposal, setProposal] = useState<AgendaScheduleProposal | null>(null);
+  const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const form = useContractForm(agendaScheduleSwapSelectionSchema, {
     expectedRevision: snapshot.revision,
@@ -35,58 +33,64 @@ export function SessionSwap({
   });
   async function swap(event: Event) {
     event.preventDefault();
+    if (busy) return;
     const checked = form.submit();
     if (!checked.data) {
       setError(checked.message);
       return;
     }
     const second = snapshot.occurrences.find((item) => item.id === checked.data.secondId);
-    if (second) setProposal(scheduleSwap(snapshot, first, second));
+    if (!second) {
+      setError("Choose a session from the agenda.");
+      return;
+    }
+    setBusy(true);
+    setError("");
+    try {
+      const result = await onApply(scheduleSwap(snapshot, first, second));
+      if (result.saved) onClose();
+      else setError(result.message);
+    } catch (failure) {
+      setError(failure instanceof Error ? failure.message : "The sessions could not be swapped.");
+    } finally {
+      setBusy(false);
+    }
   }
-  if (proposal)
-    return (
-      <AgendaSchedulePreview
-        snapshot={snapshot}
-        proposal={proposal}
-        onSaved={onSaved}
-        onClose={() => {
-          setProposal(null);
-          onClose();
-        }}
-      />
-    );
   return (
-    <Panel>
-      <PanelHeader title={`Swap ${first.title}`} />
-      <PanelBody>
-        <p>Exchange start time and location. Each session keeps its duration. Both moves must pass conflict checks.</p>
-        {error && <ErrorAlert error={error} />}
-        <form ref={focus} noValidate {...form.handlers} class="pk-stack" onSubmit={(event) => void swap(event)}>
-          <Field label="Swap with session" required {...form.of("secondId")}>
-            {(control) => (
-              <Select
-                {...control}
-                name="secondId"
-                value={secondId}
-                onChange={(event) => setSecond(event.currentTarget.value)}
-              >
-                <option value="">Choose a session</option>
-                {snapshot.occurrences
-                  .filter((value) => value.id !== first.id && value.startAt && value.endAt)
-                  .map((value) => (
-                    <option value={value.id}>{value.title}</option>
-                  ))}
-              </Select>
-            )}
-          </Field>
-          <div class="pk-cluster pk-cluster--end">
-            <Button onClick={onClose}>Cancel</Button>
-            <Button type="submit" variant="primary">
-              Review swap
-            </Button>
-          </div>
-        </form>
-      </PanelBody>
-    </Panel>
+    <Dialog
+      open
+      title={`Swap ${first.title}`}
+      confirmLabel={busy ? "Swapping…" : "Swap sessions"}
+      confirmDisabled={busy}
+      onConfirm={() => focus.current?.requestSubmit()}
+      onCancel={() => {
+        if (!busy) onClose();
+      }}
+    >
+      <p>
+        Exchange the start time and locations. Each session keeps its duration; both moves must pass conflict checks.
+      </p>
+      {error && <ErrorAlert error={error} />}
+      <form ref={focus} noValidate {...form.handlers} class="pk-stack" onSubmit={(event) => void swap(event)}>
+        <Field label="Swap with session" required {...form.of("secondId")}>
+          {(control) => (
+            <Select
+              {...control}
+              name="secondId"
+              disabled={busy}
+              value={secondId}
+              onChange={(event) => setSecond(event.currentTarget.value)}
+            >
+              <option value="">Choose a session</option>
+              {snapshot.occurrences
+                .filter((value) => value.id !== first.id && value.startAt && value.endAt)
+                .map((value) => (
+                  <option value={value.id}>{value.title}</option>
+                ))}
+            </Select>
+          )}
+        </Field>
+      </form>
+    </Dialog>
   );
 }

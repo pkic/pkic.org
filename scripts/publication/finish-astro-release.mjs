@@ -10,6 +10,8 @@ import {
   PUBLICATION_DOCUMENT_ROUTES_PATH,
   sitePublicationReleaseSchema,
 } from "../../assets/shared/schemas/site-publication-release.ts";
+import { localSnapshotReceiptPath } from "./local-snapshot-receipt.mjs";
+import { sitePublicationSnapshotSchema } from "../../assets/shared/schemas/site-publication.ts";
 import { publicationStagingDirectory } from "./build-context.mjs";
 import { cp, readFile, writeFile, access, rm, readdir, mkdir } from "node:fs/promises";
 import { resolve, relative } from "node:path";
@@ -46,9 +48,16 @@ async function finishRelease(output, pages, timings) {
   }
   const environment = process.env.CLOUDFLARE_ENV ?? "local";
   const source = process.env.PKIC_PUBLICATION_SNAPSHOT;
-  const snapshot = JSON.parse(
-    await readFile(source ?? resolve(publicationStagingDirectory(), "snapshot.json"), "utf8"),
+  const snapshot = sitePublicationSnapshotSchema.parse(
+    JSON.parse(await readFile(source ?? resolve(publicationStagingDirectory(), "snapshot.json"), "utf8")),
   );
+  const receiptPath = await localSnapshotReceiptPath(process.env.PKIC_PUBLICATION_SNAPSHOT_RECEIPT, environment, [
+    output,
+    resolve("public"),
+    resolve("static"),
+    resolve("content"),
+    resolve(".cache/publication"),
+  ]);
   const documentRoutes = assertDocumentRoutesSnapshot(
     { ...snapshot, sourceSequence: source ? null : snapshot.sourceSequence },
     JSON.parse(await readFile(resolve(publicationStagingDirectory(), "document-routes.json"), "utf8")),
@@ -198,6 +207,7 @@ async function finishRelease(output, pages, timings) {
         }),
       ),
     );
+    if (receiptPath) await writeFile(receiptPath, JSON.stringify(snapshot), { flag: "wx" });
     await rm(publicationStagingDirectory(), { recursive: true, force: true });
   } finally {
     await diagrams.finish();

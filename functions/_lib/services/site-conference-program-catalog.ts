@@ -1,3 +1,4 @@
+import { approvedEventAgendaForRoute } from "./site-published-event-agendas";
 import type { SitePublicationSnapshot } from "../../../assets/shared/schemas/site-publication";
 import { applyApprovedAgenda } from "./site-approved-agenda";
 import { conferenceDisplaySponsorSelection } from "../../../assets/shared/conference-display-policy";
@@ -25,7 +26,7 @@ export function createSiteConferencePrograms(
         sponsorSelection: conferenceDisplaySponsorSelection(document.data.params?.sponsoring),
         program: applyApprovedAgenda(
           publishedConferenceProgram(document.data.data, (pattern) => assetUrls(document.sourcePath, pattern)),
-          publication?.eventAgendas?.[document.route.split("/").filter(Boolean).at(-1) ?? ""],
+          approvedEventAgendaForRoute(publication, document.route),
         ),
       }));
 }

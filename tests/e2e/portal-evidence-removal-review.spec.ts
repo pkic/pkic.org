@@ -16,7 +16,7 @@ test("organizers inspect a synthetic evidence removal review on desktop and phon
   page,
 }) => {
   await mkdir(artifacts, { recursive: true });
-  await signInAsE2eStaff(page, e2eAdminEmail("default"));
+  await signInAsE2eStaff(page, e2eAdminEmail("portal-evidence-removal-review"));
   const detail = eventManagementDetailResponseSchema.parse(
     await (await page.request.get(`/api/v1/events/${slug}`)).json(),
   );

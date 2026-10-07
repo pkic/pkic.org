@@ -6,8 +6,11 @@ import { submitProposal, decideProposal } from "./helpers/proposals";
 import { runAgendaAction } from "./helpers/agenda-actions";
 import { runRowAction } from "./helpers/data-table";
 import { agendaImportSchema, agendaSnapshotSchema } from "../../assets/shared/schemas/event-agenda";
+import { formatTimeRangeInZone } from "../../assets/shared/format-date";
 import {
   completeAcceptedPlacement,
+  commitAcceptedPlacement,
+  openSessionSources,
   movePlacedSession,
   readPlacementAgenda,
   startPlacementDrag,
@@ -76,7 +79,13 @@ test("accepted sources place and move between times and rooms through native poi
   }
   const endpoint = `/api/v1/events/${slug}/agenda`;
   const workshop = (await readPlacementAgenda(page, endpoint)).rooms.find((value) => value.name === "Workshop")!;
-  await runAgendaAction(page, "Accepted proposals");
+  expect(workshop).toBeDefined();
+  await runAgendaAction(page, "Scheduling rules");
+  const rules = page.getByRole("dialog", { name: "Scheduling rules", exact: true });
+  await rules.getByLabel(/^Default session duration/).fill("60");
+  await rules.getByRole("button", { name: "Save rules", exact: true }).click();
+  await expect(rules).toBeHidden();
+  await openSessionSources(page);
   await page.evaluate(() => {
     const journal: unknown[] = [];
     Object.assign(window, { acceptedPlacementDragJournal: journal });
@@ -117,10 +126,17 @@ test("accepted sources place and move between times and rooms through native poi
   for (let index = 1; index <= 2; index++) {
     const before = await readPlacementAgenda(page, endpoint);
     const title = page
-      .getByRole("table", { name: "Accepted proposals" })
-      .getByText(`Accepted placement ${index}`, { exact: true });
+      .getByRole("complementary", { name: "Session sources", exact: true })
+      .getByRole("heading", { name: `Accepted placement ${index}`, exact: true });
+    const startAt = `2027-09-10T${index === 1 ? "09" : "10"}:00:00.000Z`;
+    const endAt = `2027-09-10T${index === 1 ? "10" : "11"}:00:00.000Z`;
     await startPlacementDrag(page, title);
-    const destination = page.getByRole("button", { name: /^Schedule selected proposal at .* in Workshop$/ }).first();
+    const destination = page
+      .getByRole("button", {
+        name: `Schedule selected proposal at ${formatTimeRangeInZone(startAt, undefined, before.timeZone)} in ${workshop.name}`,
+        exact: true,
+      })
+      .first();
     await expect(destination).toBeVisible();
     await destination.scrollIntoViewIfNeeded();
     const target = await destination.boundingBox();
@@ -134,34 +150,18 @@ test("accepted sources place and move between times and rooms through native poi
     ).toBe(true);
     await page.mouse.move(target!.x + target!.width / 2, target!.y + target!.height / 2, { steps: 12 });
     await page.mouse.move(target!.x + target!.width / 2 + 1, target!.y + target!.height / 2 + 1);
-    await page.mouse.up();
-    await expect(page.getByLabel("End time", { exact: true })).toHaveValue("");
     expect(imports.filter((value) => !value.dryRun)).toHaveLength(index - 1);
-    await page.getByLabel("Start time", { exact: true }).fill(index === 1 ? "2027-09-10T09:00" : "2027-09-10T10:00");
-    await page.getByLabel("End time", { exact: true }).fill(index === 1 ? "2027-09-10T10:00" : "2027-09-10T11:00");
-    await page.getByRole("button", { name: "Review placement", exact: true }).click();
-    await expect(page.getByText("Placement reviewed.", { exact: false })).toBeVisible();
-    expect(await readPlacementAgenda(page, endpoint)).toEqual(before);
-    await page.getByRole("button", { name: "Save placement", exact: true }).click();
-    await expect(page.getByLabel("End time", { exact: true })).toHaveCount(0);
-    const after = await readPlacementAgenda(page, endpoint);
-    expect(after.revision).toBe(before.revision + 1);
-    expect(after.occurrences).toHaveLength(index);
-    expect(after.occurrences.find((value) => value.title === `Accepted placement ${index}`)).toMatchObject({
-      startAt: `2027-09-10T${index === 1 ? "09" : "10"}:00:00.000Z`,
-      endAt: `2027-09-10T${index === 1 ? "10" : "11"}:00:00.000Z`,
-      roomId: workshop.id,
-    });
-    for (const prior of before.occurrences)
-      expect(after.occurrences.find((value) => value.id === prior.id)).toEqual(prior);
+    await commitAcceptedPlacement(page, endpoint, `Accepted placement ${index}`, startAt, endAt, before, () =>
+      page.mouse.up(),
+    );
+    await expect(page.getByRole("dialog", { name: /placement/i })).toHaveCount(0);
   }
-  const row = page.getByRole("row").filter({ hasText: "Accepted placement 3" });
+  const row = page
+    .getByRole("complementary", { name: "Session sources", exact: true })
+    .getByRole("article")
+    .filter({ has: page.getByRole("heading", { name: "Accepted placement 3", exact: true }) });
   await runRowAction(page, row, "Schedule on agenda");
-  const precise = page.getByRole("button", { name: "Schedule precisely", exact: true });
-  await precise.focus();
-  await precise.press("Enter");
-  await expect(page.getByLabel("End time", { exact: true })).toHaveValue("");
-  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+  await page.getByRole("button", { name: "Cancel selection", exact: true }).press("Enter");
   const snapshot = agendaSnapshotSchema.parse(await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json());
   expect(snapshot.occurrences).toHaveLength(2);
   expect(imports.filter((value) => !value.dryRun)).toHaveLength(2);
@@ -192,7 +192,7 @@ test("accepted sources place and move between times and rooms through native poi
     });
     expect(await readPlacementAgenda(touchPage, endpoint)).toEqual(await readPlacementAgenda(page, endpoint));
     await touchPage.goto(`/portal/#/events/${slug}/agenda`);
-    await runAgendaAction(touchPage, "Accepted proposals");
+    await openSessionSources(touchPage);
     await completeAcceptedPlacement(
       touchPage,
       endpoint,

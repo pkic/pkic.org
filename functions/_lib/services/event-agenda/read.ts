@@ -1,3 +1,7 @@
+import { readAgendaSponsorRows, agendaSponsorDisplay } from "./sponsors";
+import { agendaSponsorIdsSchema } from "../../../../assets/shared/schemas/event-agenda-sponsors";
+import { orderedAgendaRooms } from "./room-order-settings";
+import { readAgendaDurationRules } from "../../../../assets/shared/event-agenda-duration";
 import { agendaOccurrenceDisplayStartSql, agendaOccurrenceConflictCoverageSql } from "./occurrence-display-timing";
 import { getAgendaStaffingReport } from "./staffing-report";
 import { agendaOccurrenceConflictSql } from "./occurrence-conflicts";
@@ -5,7 +9,7 @@ import {
   agendaConflictCoverageSchema,
   agendaConflictCategorySchema,
 } from "../../../../assets/shared/schemas/event-agenda";
-import { agendaSpeakerDisplayNameSql } from "./speaker-name";
+import { readAgendaSpeakers } from "./speaker-profiles";
 import { agendaPublicationStatusSql } from "./publication-status";
 import { readSessionDemand } from "../event-participation/session-demand";
 import { promotionCopySchema } from "../../../../assets/shared/schemas/event-promotion-kit";
@@ -24,6 +28,7 @@ import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
 
 interface OccurrenceRow {
+  source_proposal_type: string | null;
   content_id: string | null;
   publication_status: string;
   id: string;
@@ -31,6 +36,9 @@ interface OccurrenceRow {
   description: string;
   presentation_url: string | null;
   recording_url: string | null;
+  virtual_room_url: string | null;
+  virtual_room_type: string | null;
+  sponsor_ids_json: string | null;
   public_anchor: string | null;
   start_at: string | null;
   end_at: string | null;
@@ -57,45 +65,15 @@ async function occurrences(
 ) {
   const rows = await all<OccurrenceRow>(
     db,
-    `SELECT ${columns},${agendaPublicationStatusSql} AS publication_status FROM event_agenda_occurrences WHERE event_id = ? ${where} ${suffix}`,
+    `SELECT ${columns},json_extract((SELECT settings_json FROM events WHERE id=event_agenda_occurrences.event_id),'$.agenda.sessionMedia.'||json_quote(id)||'.joinUrl') AS virtual_room_url,json_type((SELECT settings_json FROM events WHERE id=event_agenda_occurrences.event_id),'$.agenda.sessionMedia.'||json_quote(id)||'.joinUrl') AS virtual_room_type,json_extract((SELECT settings_json FROM events WHERE id=event_agenda_occurrences.event_id),'$.agenda.sessionSponsors.'||json_quote(id)||'.sponsorIds') AS sponsor_ids_json,${agendaPublicationStatusSql} AS publication_status,(SELECT proposal.proposal_type FROM session_proposals proposal WHERE proposal.event_id = event_agenda_occurrences.event_id AND event_agenda_occurrences.source_key = 'proposal:' || proposal.id) AS source_proposal_type FROM event_agenda_occurrences WHERE event_id = ? ${where} ${suffix}`,
     [eventId, ...values],
   );
   const requestedIds = JSON.stringify(rows.map((row) => row.id));
-  const speakers = rows.length
-    ? await all<{
-        occurrence_id: string;
-        user_id: string;
-        display_name: string;
-        role: string;
-        attendance_mode: "physical" | "remote";
-        room_id: string | null;
-      }>(
-        db,
-        `SELECT speaker.occurrence_id,speaker.user_id,speaker.role,speaker.attendance_mode,speaker.room_id,${agendaSpeakerDisplayNameSql} AS display_name FROM event_agenda_occurrence_speakers speaker JOIN users user ON user.id=speaker.user_id JOIN event_agenda_occurrences occurrence ON occurrence.id=speaker.occurrence_id WHERE speaker.occurrence_id IN(SELECT value FROM json_each(?)) AND occurrence.event_id = ? LIMIT 60000`,
-        [requestedIds, eventId],
-      )
-    : [];
-  const speakerGroups = new Map<
-    string,
-    Array<{
-      userId: string;
-      displayName: string;
-      role: string;
-      attendanceMode: "physical" | "remote";
-      roomId: string | null;
-    }>
-  >();
-  for (const speaker of speakers) {
-    const group = speakerGroups.get(speaker.occurrence_id) ?? [];
-    group.push({
-      userId: speaker.user_id,
-      displayName: speaker.display_name,
-      role: speaker.role,
-      attendanceMode: speaker.attendance_mode,
-      roomId: speaker.room_id,
-    });
-    speakerGroups.set(speaker.occurrence_id, group);
-  }
+  const speakerGroups = await readAgendaSpeakers(
+    db,
+    eventId,
+    rows.map((row) => row.id),
+  );
   const histories = await all<{ occurrence_id: string; metadata_json: string }>(
     db,
     "SELECT h.occurrence_id,h.metadata_json FROM event_agenda_session_history h JOIN event_agenda_occurrences o ON o.id=h.occurrence_id WHERE h.occurrence_id IN(SELECT value FROM json_each(?)) AND o.event_id=? LIMIT 2001",
@@ -120,17 +98,36 @@ async function occurrences(
   const roomsByOccurrence = new Map<string, string[]>();
   for (const room of additionalRooms)
     roomsByOccurrence.set(room.occurrence_id, [...(roomsByOccurrence.get(room.occurrence_id) ?? []), room.room_id]);
+  const sponsorIdsByOccurrence = new Map(
+    rows
+      .filter((row) => row.kind === "break" && row.sponsor_ids_json !== null)
+      .map((row) => [row.id, agendaSponsorIdsSchema.parse(JSON.parse(row.sponsor_ids_json!))]),
+  );
+  const sponsorRows = await readAgendaSponsorRows(db, eventId, [
+    ...new Set([...sponsorIdsByOccurrence.values()].flat()),
+  ]);
+  const sponsorsById = new Map(sponsorRows.map((sponsor) => [sponsor.sponsor_id, agendaSponsorDisplay(sponsor)]));
   return rows.map((row) =>
     agendaOccurrenceSchema.parse({
       id: row.id,
       contentId: row.content_id,
       publicationStatus: row.publication_status,
+      sourceProposalType: row.source_proposal_type,
+      ...(sponsorIdsByOccurrence.has(row.id)
+        ? {
+            sponsorIds: sponsorIdsByOccurrence.get(row.id),
+            sponsors: (sponsorIdsByOccurrence.get(row.id) ?? []).flatMap((id) =>
+              sponsorsById.has(id) ? [sponsorsById.get(id)!] : [],
+            ),
+          }
+        : {}),
       history: historyById.get(row.id),
       promotionCopy: copyById.get(row.id),
       title: row.title,
       description: row.description,
       presentationUrl: row.presentation_url,
       recordingUrl: row.recording_url,
+      ...(row.virtual_room_type !== null ? { virtualRoomUrl: row.virtual_room_url } : {}),
       publicAnchor: row.public_anchor,
       startAt: row.start_at,
       endAt: row.end_at,
@@ -157,12 +154,13 @@ export async function getAgendaOccurrence(db: DatabaseLike, eventId: string, id:
 }
 export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: string) {
   const event = await first<{
+    settings_json: string;
     timezone: string;
     starts_at: string | null;
     ends_at: string | null;
     name: string;
     base_path: string | null;
-  }>(db, "SELECT timezone,starts_at,ends_at,name,base_path FROM events WHERE id = ?", [eventId]);
+  }>(db, "SELECT settings_json,timezone,starts_at,ends_at,name,base_path FROM events WHERE id = ?", [eventId]);
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
   const state = await first<{ revision: number; published_revision: number | null; travel_minutes: number }>(
     db,
@@ -178,7 +176,7 @@ export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: st
     available_periods_json: string;
   }>(
     db,
-    "SELECT id,name,capacity,setup_minutes,equipment_json,available_periods_json FROM event_agenda_rooms WHERE event_id = ? ORDER BY name LIMIT 200",
+    "SELECT id,name,capacity,setup_minutes,equipment_json,available_periods_json FROM event_agenda_rooms WHERE event_id = ? ORDER BY name,id LIMIT 200",
     [eventId],
   );
   const items = await occurrences(db, eventId);
@@ -267,13 +265,14 @@ export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: st
     eventEndsAt: event.ends_at,
     revision: state?.revision ?? 0,
     publishedRevision: state?.published_revision ?? null,
-    rooms: rooms.map((room) => ({
+    rooms: orderedAgendaRooms(rooms, event.settings_json).map((room) => ({
       ...room,
       setupMinutes: room.setup_minutes,
       equipment: JSON.parse(room.equipment_json),
       availablePeriods: JSON.parse(room.available_periods_json),
     })),
     travelMinutes: state?.travel_minutes ?? 0,
+    durationRules: readAgendaDurationRules(event.settings_json),
     occurrences: items,
     blocks: blocks.map((block) => ({
       id: block.id,

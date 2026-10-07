@@ -7,6 +7,22 @@ import {
   useAcceptedProposalPlacement,
   acceptedProposalDragType,
 } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/useAcceptedProposalPlacement";
+import { agendaSnapshotSchema } from "../../assets/shared/schemas/event-agenda";
+import { saveAcceptedProposalAt } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/accepted-proposal-placement";
+vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/agenda/accepted-proposal-placement", () => ({
+  saveAcceptedProposalAt: vi.fn(),
+}));
+const snapshot = agendaSnapshotSchema.parse({
+  eventSlug: "event",
+  timeZone: "UTC",
+  revision: 4,
+  publishedRevision: null,
+  rooms: [],
+  occurrences: [],
+  blocks: [],
+  roleMembers: [],
+  assignments: [],
+});
 let host: HTMLElement;
 afterEach(() => {
   if (host) {
@@ -54,8 +70,16 @@ it("keeps touch selection until an explicit placement and clears native drag can
   host = document.createElement("div");
   document.body.append(host);
   let controller!: ReturnType<typeof useAcceptedProposalPlacement>;
+  const saved = vi.fn();
+  vi.mocked(saveAcceptedProposalAt).mockResolvedValue({
+    agenda: snapshot,
+    imported: 1,
+    skipped: 0,
+    dryRun: false,
+    reviewRequired: 0,
+  });
   function Harness() {
-    controller = useAcceptedProposalPlacement("event");
+    controller = useAcceptedProposalPlacement("event", { snapshot, onSaved: saved, canEdit: true });
     return <span>{controller.selected?.title}</span>;
   }
   await act(() => render(<Harness />, host));
@@ -63,9 +87,11 @@ it("keeps touch selection until an explicit placement and clears native drag can
   await act(() => controller.endDrag());
   expect(controller.selected?.id).toBe("proposal");
   await act(() => controller.place("2026-12-01T08:00:00.000Z", "room"));
-  expect(controller.candidate).toMatchObject({ id: "proposal", roomId: "room" });
+  expect(saveAcceptedProposalAt).toHaveBeenCalledWith(snapshot, "proposal", "2026-12-01T08:00:00.000Z", "room");
+  expect(saved).toHaveBeenCalledWith(snapshot);
+  expect(controller.selected).toBeNull();
   await act(() => controller.cancel());
-  expect(controller.candidate).toBeNull();
+  expect(controller.selected).toBeNull();
   await act(() => controller.select({ id: "proposal", title: "Accepted talk" }, true));
   await act(() => controller.endDrag());
   expect(controller.selected).toBeNull();

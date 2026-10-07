@@ -1,11 +1,17 @@
+import { AgendaSourcesControl } from "./AgendaSourcesControl";
+import { useAgendaSessionLocations } from "./useAgendaSessionLocations";
+import { splitHash } from "../../../../../../shared/hash-query";
+import { AgendaPointerPlacement } from "./AgendaPointerPlacement";
 import { useAgendaRoomEditor } from "./useAgendaRoomEditor";
+import { useAgendaInteractionLock } from "./useAgendaInteractionLock";
+import { agendaSessionInteractions } from "./AgendaSessionInteractions";
+import { AgendaWindowSelection, type AgendaSessionWindow } from "./AgendaWindowSelection";
 import { AgendaWorkspaceActions } from "./AgendaWorkspaceActions";
 import { AgendaPublicationWorkspace } from "./AgendaPublicationWorkspace";
-import { AgendaTimeStep } from "./AgendaTimeStep";
+import { AgendaRoomQuickEdit } from "./AgendaRoomQuickEdit";
 import { AgendaSelectionStatus } from "./AgendaSelectionStatus";
-import { AcceptedProposalSchedulingPanel } from "./AcceptedProposalSchedulingPanel";
+import { AgendaPlanningSources } from "./AgendaPlanningSources";
 import { useAcceptedProposalPlacement } from "./useAcceptedProposalPlacement";
-import { AcceptedProposalPlacementReview } from "./AcceptedProposalPlacementReview";
 import { AgendaBoardDropTarget } from "./AgendaBoardDropTarget";
 import { AgendaPublicPreview } from "./AgendaPublicPreview";
 import { AgendaWorkspaceHeader, AgendaWorkspacePanels, type AgendaWorkspaceView } from "./AgendaWorkspaceHeader";
@@ -18,7 +24,8 @@ import {
 import { useAgendaScheduling } from "./useAgendaScheduling";
 import { agendaSessionActions } from "./session-actions";
 import { useAgendaTargetSelection } from "./useAgendaTargetSelection";
-import { ContentLibrary } from "./ContentLibrary";
+import { ContentLibrary, StaffingEditor, AgendaImport } from "./AgendaOptionalPanels";
+import { AgendaCreationDialogs } from "./AgendaCreationDialogs";
 import { AgendaSessionTable } from "./AgendaSessionTable";
 import { SessionPromotionKit } from "./SessionPromotionKit";
 import { SessionHistoryEditor } from "./SessionHistoryEditor";
@@ -38,20 +45,17 @@ import { getJson, patchJson } from "../../../../../../shared/api-client";
 import { ContentAgenda } from "../../../../../../site/ContentAgenda";
 import { Button } from "../../../../../../ui/Button";
 import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
-import { RowActions } from "../../../../../../ui/RowActions";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { Spinner } from "../../../../../../components/Spinner";
 import { agendaPresenter } from "./presenter";
 import { AgendaGeometry } from "./AgendaGeometry";
 import { AgendaSettings } from "./AgendaSettings";
 import { SessionMove } from "./SessionMove";
-import { AgendaImport } from "./AgendaImport";
 import { SessionSwap } from "./SessionSwap";
 import { RoomEditor } from "./RoomEditor";
-import { StaffingEditor } from "./StaffingEditor";
 import "./AgendaEditor.css";
 
-const SessionEditor = lazy(() => import("./SessionEditor").then((module) => ({ default: module.SessionEditor })));
+const Locations = lazy(() => import("./AgendaLocations").then((module) => ({ default: module.AgendaLocations })));
 
 const SessionBookings = lazy(() =>
   import("../participation/SessionBookings").then((module) => ({ default: module.SessionBookings })),
@@ -61,10 +65,12 @@ export function AgendaEditor({
   slug,
   canEdit,
   canReviewAppearances = false,
+  teamEligibilityPath,
 }: {
   slug: string;
   canEdit: boolean;
   canReviewAppearances?: boolean;
+  teamEligibilityPath?: string;
 }) {
   const source = useData(
     () => getJson(`/api/v1/events/${encodeURIComponent(slug)}/agenda`, agendaSnapshotSchema),
@@ -81,28 +87,42 @@ export function AgendaEditor({
     | null
   >(null);
   const [importing, setImporting] = useState(false);
-  const [acceptedBacklog, setAcceptedBacklog] = useState(false);
+  const [sourcesOpen, setSourcesOpen] = useState(false);
   const [publicPreview, setPublicPreview] = useState(false);
   const [publicationReview, setPublicationReview] = useState(false);
+  const [addingBreak, setAddingBreak] = useState(false);
   const [importProposalIds, setImportProposalIds] = useState<string[] | undefined>();
   const [duplicating, setDuplicating] = useState<AgendaOccurrence | null>(null);
   const [swapping, setSwapping] = useState<AgendaOccurrence | null>(null);
   const roomEditor = useAgendaRoomEditor();
   const [snapshot, setSnapshot] = useState<AgendaSnapshot | null>(null);
-  const [view, setView] = useState<AgendaWorkspaceView>("agenda");
+  const [view, setView] = useState<AgendaWorkspaceView>(() =>
+    splitHash().params.get("view") === "staffing" ? "staffing" : "agenda",
+  );
   const [day, setDay] = useState("");
+  const [newWindow, setNewWindow] = useState<AgendaSessionWindow | undefined>();
   const [editing, setEditing] = useState<AgendaOccurrence | null | undefined>(undefined);
+  function createSession(window?: AgendaSessionWindow) {
+    setNewWindow(window);
+    setEditing(null);
+  }
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
   const data = snapshot?.eventSlug === slug ? snapshot : source.data;
-  const acceptedPlacement = useAcceptedProposalPlacement(slug);
-  const target = useAgendaTargetSelection(slug, busy, data?.occurrences);
+  const interactionLock = useAgendaInteractionLock(slug);
+  const acceptedPlacement = useAcceptedProposalPlacement(slug, {
+    snapshot: data,
+    onSaved: accept,
+    canEdit: canEdit && !interactionLock.locked,
+  });
+  const target = useAgendaTargetSelection(slug, busy, data?.occurrences, interactionLock.locked || !canEdit);
   const { resizing, dragged } = target;
   const scheduling = useAgendaScheduling(slug, data, busy, accept, target.cancel, setError);
+  const roomSelection = useAgendaSessionLocations(data, scheduling);
   useUrlTableState("agenda");
   if (source.loading && !data) return <Spinner label="Loading agenda…" />;
   if (!data) return <ErrorAlert error={source.error ?? "Agenda unavailable"} />;
-  const days = agendaPresenter(data);
+  const days = agendaPresenter(data, scheduling.timeStep);
   const activeDay = days.find((value) => value.date === day) ?? days[0];
   const base = `/api/v1/events/${encodeURIComponent(slug)}/agenda`;
   function accept(next: AgendaSnapshot) {
@@ -193,7 +213,7 @@ export function AgendaEditor({
   async function undoLastEdit() {
     if (!undo) return;
     if ("schedule" in undo) {
-      scheduling.preview(undo.body);
+      void scheduling.apply(undo.body);
       setUndo(null);
       return;
     }
@@ -239,6 +259,7 @@ export function AgendaEditor({
           move: setMoving,
           swap: setSwapping,
           edit: setEditing,
+          locations: roomSelection.open,
         },
         select: (id, kind) => {
           setView("agenda");
@@ -254,14 +275,15 @@ export function AgendaEditor({
       canEdit={canEdit}
       busy={busy}
       onUndo={undo ? () => void undoLastEdit() : undefined}
+      calendarLocked={interactionLock.locked}
+      onToggleCalendarLock={interactionLock.toggle}
+      onNewSession={() => createSession()}
+      onNewBreak={() => setAddingBreak(true)}
       onSettings={() => setSettings(true)}
+      onReuseSession={() => setView("library")}
       onImport={() => {
         setImportProposalIds(undefined);
         setImporting(true);
-      }}
-      onAcceptedProposals={() => {
-        setView("agenda");
-        setAcceptedBacklog((value) => !value);
       }}
       onPreview={() => setPublicPreview(true)}
       onNewLocation={roomEditor.create}
@@ -271,8 +293,7 @@ export function AgendaEditor({
   );
   if (canEdit && scheduling.panel) return scheduling.panel;
   if (
-    (canEdit &&
-      (participation || settings || moving || importing || swapping || roomEditor.open || editing !== undefined)) ||
+    (canEdit && (participation || importing || roomEditor.open)) ||
     promotionSession ||
     (historySession && (canEdit || canReviewAppearances))
   )
@@ -303,17 +324,7 @@ export function AgendaEditor({
             </PanelBody>
           </Panel>
         )}
-        {settings && canEdit && <AgendaSettings snapshot={data} onSaved={accept} onClose={() => setSettings(false)} />}
-        {moving && canEdit && (
-          <SessionMove
-            snapshot={data}
-            session={moving}
-            timeStep={scheduling.timeStep}
-            onTimeStep={scheduling.setTimeStep}
-            onSaved={accept}
-            onClose={() => setMoving(null)}
-          />
-        )}
+
         {importing && canEdit && (
           <AgendaImport
             snapshot={data}
@@ -322,9 +333,7 @@ export function AgendaEditor({
             onClose={() => setImporting(false)}
           />
         )}
-        {swapping && canEdit && (
-          <SessionSwap snapshot={data} first={swapping} onSaved={accept} onClose={() => setSwapping(null)} />
-        )}
+
         {roomEditor.open && canEdit && (
           <RoomEditor
             key={roomEditor.room?.id ?? "new"}
@@ -352,25 +361,9 @@ export function AgendaEditor({
             onClose={() => setHistorySession(null)}
           />
         )}
-        {editing !== undefined && canEdit && (
-          <Suspense fallback={<Spinner label="Loading session editor…" />}>
-            <SessionEditor
-              key={`${editing?.id ?? "new"}:${editing?.roomId ?? ""}:${editing?.capacity ?? ""}:${(editing?.additionalRoomIds ?? []).join(",")}`}
-              snapshot={data}
-              occurrence={editing ?? undefined}
-              actions={editing ? (close) => actions(editing, close) : undefined}
-              onSaved={accept}
-              onClose={() => setEditing(undefined)}
-            />
-          </Suspense>
-        )}
       </div>
     );
   if (publicPreview) return <AgendaPublicPreview slug={slug} onClose={() => setPublicPreview(false)} />;
-  if (canEdit && duplicating)
-    return (
-      <SessionDuplicate snapshot={data} session={duplicating} onSaved={accept} onClose={() => setDuplicating(null)} />
-    );
   if (publicationReview)
     return (
       <AgendaPublicationWorkspace
@@ -380,155 +373,186 @@ export function AgendaEditor({
         onClose={() => setPublicationReview(false)}
       />
     );
-  if (canEdit && acceptedPlacement.candidate)
-    return (
-      <AcceptedProposalPlacementReview
-        snapshot={data}
-        candidate={acceptedPlacement.candidate}
-        onSaved={accept}
-        onClose={acceptedPlacement.cancel}
-      />
-    );
   return (
     <div class={`pk-stack pk-agenda-editor${target.native ? " pk-agenda-editor--native-drag" : ""}`}>
+      {settings && canEdit && (
+        <AgendaSettings
+          snapshot={data}
+          timeStep={scheduling.timeStep}
+          onTimeStepChange={scheduling.setTimeStep}
+          onSaved={accept}
+          onClose={() => setSettings(false)}
+        />
+      )}
+      {roomSelection.dialog}
+      {moving && canEdit && (
+        <SessionMove snapshot={data} session={moving} onApply={scheduling.apply} onClose={() => setMoving(null)} />
+      )}
+      {swapping && canEdit && (
+        <SessionSwap snapshot={data} first={swapping} onApply={scheduling.apply} onClose={() => setSwapping(null)} />
+      )}
+      {duplicating && canEdit && (
+        <SessionDuplicate snapshot={data} session={duplicating} onSaved={accept} onClose={() => setDuplicating(null)} />
+      )}
+      <AgendaCreationDialogs
+        session={
+          editing !== undefined && canEdit
+            ? {
+                snapshot: data,
+                occurrence: editing ?? undefined,
+                initialSchedule: editing === null ? newWindow : undefined,
+                onSaved: accept,
+                onClose: () => setEditing(undefined),
+              }
+            : undefined
+        }
+        breaks={
+          addingBreak && canEdit
+            ? {
+                snapshot: data,
+                days,
+                viewedDay: activeDay?.date,
+                onSaved: accept,
+                onClose: () => setAddingBreak(false),
+              }
+            : undefined
+        }
+      />
       <AgendaWorkspaceHeader view={view} onViewChange={setView} actions={workspaceActions} />
       <AgendaWorkspacePanels view={view}>
-        {(error || source.error) && <ErrorAlert error={error || source.error!} />}
+        {view === "agenda" && <AgendaDayNavigation days={days} activeDate={activeDay?.date} onSelect={setDay} />}
+        {(error || acceptedPlacement.error || source.error) && (
+          <ErrorAlert error={error || acceptedPlacement.error || source.error!} />
+        )}
         {canEdit && view === "agenda" && scheduling.bar}
         {view === "agenda" && (
           <>
-            <div class="pk-cluster">
-              {canEdit && <AgendaTimeStep value={scheduling.timeStep} onChange={scheduling.setTimeStep} />}
-              {canEdit && <Button onClick={() => setEditing(null)}>New session</Button>}
-            </div>
-            {canEdit && (
-              <AcceptedProposalSchedulingPanel
+            <div class="pk-agenda-editor__planning">
+              <AgendaPointerPlacement
                 snapshot={data}
-                visible={acceptedBacklog}
-                empty={!activeDay}
                 timeStep={scheduling.timeStep}
-                placement={acceptedPlacement}
-                onSelecting={target.cancel}
-                onReview={(id) => {
-                  setImportProposalIds([id]);
-                  setImporting(true);
-                }}
-              />
-            )}
-            <AgendaDayNavigation days={days} activeDate={activeDay?.date} onSelect={setDay} />
-            {(dragged || resizing) && (
-              <div class="pk-agenda-editor__selection-status">
-                <AgendaSelectionStatus
-                  title={
-                    data.occurrences.find((value) => value.id === (resizing || dragged))?.title ?? "selected session"
+                disabled={!canEdit || interactionLock.locked || busy || scheduling.applying || acceptedPlacement.busy}
+                onMove={move}
+                onResize={resize}
+                onResizeStart={scheduling.resizeStart}
+                onRoomResize={(id, roomIds) => void scheduling.setRooms(id, roomIds)}
+              >
+                <AgendaWindowSelection
+                  disabled={
+                    !canEdit ||
+                    interactionLock.locked ||
+                    busy ||
+                    scheduling.applying ||
+                    acceptedPlacement.busy ||
+                    Boolean(dragged || resizing || acceptedPlacement.selected)
                   }
-                  resizing={Boolean(resizing)}
-                  busy={busy}
-                  onCancel={target.cancel}
-                />
-              </div>
-            )}
-            {activeDay && <AgendaGeometry day={activeDay} />}
-            {activeDay ? (
-              <ContentAgenda
-                days={[activeDay]}
-                speakers={[]}
-                timeZone={data.timeZone}
-                editor={{
-                  session: (id) => {
-                    const occurrence = data.occurrences.find((value) => value.id === id)!;
-                    return {
-                      resizeHandle: canEdit ? (
-                        <button
-                          class="pk-agenda-editor__resize"
-                          type="button"
-                          draggable
-                          aria-label={`Resize ${occurrence.title} by dragging to an end time`}
-                          onDragStart={(event) => {
-                            event.stopPropagation();
-                            event.dataTransfer?.setData("application/x-pkic-agenda-resize", id);
-                            acceptedPlacement.cancel();
-                            target.select(id, "resize", true);
-                          }}
-                          onDragEnd={target.endDrag}
-                          onClick={() => {
-                            acceptedPlacement.cancel();
-                            target.select(id, "resize");
-                          }}
-                        >
-                          ↕ Resize duration
-                        </button>
-                      ) : null,
-                      controls:
-                        canEdit || canReviewAppearances ? (
-                          <div class="pk-agenda-editor__card-actions">
-                            <RowActions subject={occurrence.title} actions={actions(occurrence)} />
-                          </div>
-                        ) : null,
-                      detailControls: (close) => (
-                        <RowActions subject={occurrence.title} actions={actions(occurrence, close)} />
-                      ),
-                      onOpen: undefined,
-                      onDragEnd: target.endDrag,
-                      onDragStart: canEdit
-                        ? (event) => {
-                            event.dataTransfer?.setData("text/plain", id);
-                            acceptedPlacement.cancel();
-                            target.select(id, "move", true);
+                  onSelect={createSession}
+                >
+                  <div class="pk-agenda-editor__calendar">
+                    {(dragged || resizing) && (
+                      <div class="pk-agenda-editor__selection-status">
+                        <AgendaSelectionStatus
+                          title={
+                            data.occurrences.find((value) => value.id === (resizing || dragged))?.title ??
+                            "selected session"
                           }
-                        : undefined,
-                    };
-                  },
-                  dropTarget: (startAt, roomId) =>
-                    canEdit ? (
-                      <AgendaBoardDropTarget
-                        snapshot={data}
-                        placement={acceptedPlacement}
-                        instant={startAt}
-                        roomId={roomId}
-                        timeStep={scheduling.timeStep}
-                        dragged={dragged}
-                        resizing={resizing}
-                        busy={busy}
-                        invalidResize={invalidResizeTarget}
-                        move={move}
-                        resize={resize}
-                      />
-                    ) : null,
-                }}
-              />
-            ) : (
-              <Panel>
-                <PanelBody>
-                  <p>No scheduled sessions yet. Create a session or schedule one from the backlog.</p>
-                </PanelBody>
-              </Panel>
-            )}
-            <Panel>
-              <PanelHeader title="Unscheduled sessions" />
-              <PanelBody>
-                <div class="pk-agenda-editor__backlog">
-                  {data.occurrences
-                    .filter((value) => !value.startAt || !value.endAt)
-                    .map((value) => (
-                      <article
-                        draggable={canEdit}
-                        onDragEnd={target.endDrag}
-                        onDragStart={(event) => {
-                          event.dataTransfer?.setData("text/plain", value.id);
-                          acceptedPlacement.cancel();
-                          target.select(value.id, "move", true);
+                          resizing={Boolean(resizing)}
+                          busy={busy}
+                          onCancel={target.cancel}
+                        />
+                      </div>
+                    )}
+                    {(scheduling.applying || acceptedPlacement.busy) && <Spinner label="Saving session placement…" />}
+                    {activeDay && <AgendaGeometry day={activeDay} />}
+                    {activeDay ? (
+                      <ContentAgenda
+                        days={[activeDay]}
+                        speakers={[]}
+                        timeZone={data.timeZone}
+                        editor={{
+                          sidebar: view === "agenda" && (
+                            <AgendaPlanningSources
+                              snapshot={data}
+                              canEdit={canEdit}
+                              open={sourcesOpen}
+                              onClose={() => setSourcesOpen(false)}
+                              timeStep={scheduling.timeStep}
+                              viewedDay={activeDay?.date}
+                              placement={acceptedPlacement}
+                              target={target}
+                              onSaved={accept}
+                              locked={interactionLock.locked}
+                              busy={busy || scheduling.applying || acceptedPlacement.busy}
+                              actions={actions}
+                              onReview={(id) => {
+                                setImportProposalIds([id]);
+                                setImporting(true);
+                              }}
+                            />
+                          ),
+                          toolbarControls: (
+                            <AgendaSourcesControl
+                              eventSlug={data.eventSlug}
+                              open={sourcesOpen}
+                              onToggle={() => setSourcesOpen((value) => !value)}
+                            />
+                          ),
+                          roomHeader: canEdit
+                            ? (location) => (
+                                <AgendaRoomQuickEdit
+                                  snapshot={data}
+                                  room={data.rooms.find((room) => room.id === location.id)}
+                                  onSaved={accept}
+                                  onEdit={roomEditor.edit}
+                                />
+                              )
+                            : undefined,
+                          addLocation: canEdit ? <AgendaRoomQuickEdit snapshot={data} onSaved={accept} /> : undefined,
+                          session: (id) =>
+                            agendaSessionInteractions({
+                              occurrence: data.occurrences.find((value) => value.id === id)!,
+                              canEdit,
+                              canReview: canReviewAppearances,
+                              locked: interactionLock.locked,
+                              busy: busy || scheduling.applying || acceptedPlacement.busy,
+                              target,
+                              scheduling,
+                              cancelProposal: acceptedPlacement.cancel,
+                              actions: (close) =>
+                                actions(
+                                  data.occurrences.find((value) => value.id === id)!,
+                                  close,
+                                ),
+                            }),
+                          dropTarget: (startAt, roomId) =>
+                            canEdit && !interactionLock.locked ? (
+                              <AgendaBoardDropTarget
+                                snapshot={data}
+                                placement={acceptedPlacement}
+                                instant={startAt}
+                                roomId={roomId}
+                                timeStep={scheduling.timeStep}
+                                dragged={dragged}
+                                resizing={resizing}
+                                busy={busy || scheduling.applying || acceptedPlacement.busy}
+                                invalidResize={invalidResizeTarget}
+                                move={move}
+                                resize={resize}
+                              />
+                            ) : null,
                         }}
-                      >
-                        <strong>{value.title}</strong>
-                        {(canEdit || canReviewAppearances) && (
-                          <RowActions subject={value.title} actions={actions(value)} />
-                        )}
-                      </article>
-                    ))}
-                </div>
-              </PanelBody>
-            </Panel>
+                      />
+                    ) : (
+                      <Panel>
+                        <PanelBody>
+                          <p>No scheduled sessions yet. Create a session or schedule one from the backlog.</p>
+                        </PanelBody>
+                      </Panel>
+                    )}
+                  </div>
+                </AgendaWindowSelection>
+              </AgendaPointerPlacement>
+            </div>
           </>
         )}
         {view === "sessions" && (
@@ -540,14 +564,28 @@ export function AgendaEditor({
             canAct={canEdit || canReviewAppearances}
             actions={actions}
             toolbar={canEdit ? scheduling.bar : undefined}
-            onNewSession={canEdit ? () => setEditing(null) : undefined}
+            onNewSession={canEdit ? () => createSession() : undefined}
             onEdit={canEdit ? setEditing : undefined}
             selection={canEdit ? scheduling.selection : undefined}
             onData={scheduling.onTableData}
           />
         )}
-        {view === "library" && <ContentLibrary snapshot={data} canEdit={canEdit} onSaved={accept} />}
-        {view === "staffing" && <StaffingEditor snapshot={data} canEdit={canEdit} onSaved={accept} />}
+        {view === "locations" && (
+          <Suspense fallback={<Spinner label="Loading locations…" />}>
+            <Locations snapshot={data} canEdit={canEdit} onEdit={roomEditor.edit} onNew={roomEditor.create} />
+          </Suspense>
+        )}
+        {view === "library" && (
+          <ContentLibrary snapshot={data} canEdit={canEdit} onSaved={accept} onClose={() => setView("agenda")} />
+        )}
+        {view === "staffing" && (
+          <StaffingEditor
+            snapshot={data}
+            canEdit={canEdit}
+            onSaved={accept}
+            teamEligibilityPath={teamEligibilityPath}
+          />
+        )}
       </AgendaWorkspacePanels>
     </div>
   );

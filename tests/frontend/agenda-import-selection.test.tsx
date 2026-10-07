@@ -83,7 +83,7 @@ it("selects a bounded proposal batch and reviews it before applying the canonica
   await click("Choose accepted proposals");
   await click("Use selected proposals");
   expect(requests).toHaveLength(0);
-  expect(host.textContent).toContain("2 proposals selected for this batch.");
+  expect(host.textContent).toContain("2 proposals selected.");
   await click("Preview import");
   expect(requests).toHaveLength(1);
   const review = agendaImportSchema.parse(requests[0]);

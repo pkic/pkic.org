@@ -124,6 +124,8 @@
 
   /* A list placed directly under a panel header shares that panel's frame.
      The toolbar, rows, and pager keep their own spacing and separators. */
+  .pk-panel__body--flush > .pk-table-list,
+  .pk-panel__body--flush > [role="tabpanel"] > .pk-table-list,
   .pk-panel > .pk-table-list,
   .pk-panel > [role="tabpanel"] > .pk-table-list,
   .pk-profile-header__content > section > .pk-table-list {
