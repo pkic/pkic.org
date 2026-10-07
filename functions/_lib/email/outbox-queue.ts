@@ -46,8 +46,6 @@ export interface QueueEmailPayload {
   sendAfterSeconds?: number;
   /** Absolute UTC delivery eligibility for calendar-aligned notifications. */
   sendAt?: string;
-  /** Relative response period, materialized when a delivery is attempted. */
-  deliveryWindowDays?: number;
 }
 
 const EMAIL_OUTBOX_COLUMNS = `id, event_id, template_key, template_version, recipient_user_id, recipient_email,
@@ -105,7 +103,6 @@ const BULK_EMAIL_OUTBOX_INSERT_SQL = `INSERT INTO email_outbox (
 
 function buildEmailOutboxValues(payload: QueueEmailPayload, id: string, queuedAt: string): unknown[] {
   const data = { ...payload.data } as Record<string, unknown>;
-  if (payload.deliveryWindowDays !== undefined) data.__deliveryWindowDays = payload.deliveryWindowDays;
   if (payload.baseUrl) data.__baseUrl = payload.baseUrl;
   if (payload.calendar) data.__calendarInvite = payload.calendar;
   if (payload.attachments?.length) data.__attachments = payload.attachments;

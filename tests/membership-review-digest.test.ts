@@ -187,7 +187,11 @@ it("combines concurrent organization reviews and starts both full windows only a
   const send = vi
     .fn()
     .mockResolvedValueOnce(new Response("Try again", { status: 500 }))
-    .mockResolvedValue(new Response(null, { status: 202, headers: { "x-message-id": "digest-message" } }));
+    .mockImplementationOnce(async () => {
+      // Provider acceptance crosses midnight after the email has been rendered.
+      vi.setSystemTime(new Date(Date.now() + 1000));
+      return new Response(null, { status: 202, headers: { "x-message-id": "digest-message" } });
+    });
   vi.stubGlobal("fetch", send);
   await seedDigestTemplates();
   const baseline = await resolveTemplate(env.DB, "membership-workflow-review-digest");
@@ -215,8 +219,10 @@ it("combines concurrent organization reviews and starts both full windows only a
   }
   const [retry] = await digests();
   expect(retry.status).toBe("retrying");
-  const deliveredAt = new Date(Date.parse(retry.send_after) + 86400_000).toISOString();
-  vi.setSystemTime(new Date(deliveredAt));
+  const renderStartedAt = new Date(Date.parse(retry.send_after) + 86400_000);
+  renderStartedAt.setUTCHours(23, 59, 59, 500);
+  const deliveredAt = new Date(renderStartedAt.getTime() + 1000).toISOString();
+  vi.setSystemTime(renderStartedAt);
   expect(await processPendingOutbox(env.DB, env as Env)).toEqual({ processed: 1, failed: 0 });
   expect(await processPendingOutbox(env.DB, env as Env)).toEqual({ processed: 0, failed: 0 });
   expect(send).toHaveBeenCalledTimes(2);
@@ -227,14 +233,9 @@ it("combines concurrent organization reviews and starts both full windows only a
   expect(html).toContain("Below you will find the complete application details:");
   expect(html).toContain("Dear Members,");
   expect(html).toContain("Questions? Contact the membership team.");
-  const closesOn = new Intl.DateTimeFormat("en-US", {
-    timeZone: "UTC",
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  }).format(new Date(Date.parse(deliveredAt) + 7 * 86400_000));
-  expect(html).toContain(`will close on ${closesOn} (UTC)`);
+  expect(html).toContain("will close 7 days after this email is sent");
+  expect(html).toContain("Each review page shows the exact deadline");
+  expect(html).not.toContain("will close on");
   expect(message.subject).toContain(`Review forms: Member consultation — ${today.slice(0, 10)} UTC`);
   expect(message.from).toEqual({ email: "membership@example.test", name: "Membership Team" });
   expect(

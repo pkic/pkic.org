@@ -39,7 +39,6 @@ export async function prepareMembershipReviewDigest(
       subject: `${step.label}: membership applications — ${now.slice(0, 10)} UTC`,
       messageType: "transactional",
       sendAt,
-      deliveryWindowDays: step.durationDays,
       data: {
         reviewDate: now.slice(0, 10),
         isMemberConsultation: step.audience.kind === "active_voting_members",

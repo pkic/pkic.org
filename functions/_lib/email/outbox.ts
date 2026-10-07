@@ -1,4 +1,3 @@
-import { emailDeliveryWindowData } from "./delivery-window";
 import { getAvailability } from "../availability";
 import { all, first, run } from "../db/queries";
 import { buildD1JsonMembershipFilter } from "../db/json-membership";
@@ -276,7 +275,7 @@ async function processOutboxRow(
     const payload = await materializeQueuedCapabilityLinks(db, env, storedPayload);
     const { partials, layoutHtml } = await loadRenderResources(db, context);
     const emailBaseUrl = resolveEmailBaseUrl(payload, env);
-    const dataWithPartials = { ...payload, ...emailDeliveryWindowData(payload, nowIso()), _partials: partials };
+    const dataWithPartials = { ...payload, _partials: partials };
     const bodyOverride = readDirectEmailBody(payload);
 
     let subject: string;
