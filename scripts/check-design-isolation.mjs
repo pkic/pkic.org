@@ -338,7 +338,8 @@ function inspect(file) {
     rel === "assets/design/tokens.generated.css" ||
     rel === "assets/design/tokens.public.generated.css" ||
     rel === "assets/design/tokens.agenda.generated.css" ||
-    rel === "assets/design/tokens.scanner.generated.css";
+    rel === "assets/design/tokens.scanner.generated.css" ||
+    rel === "assets/design/tokens.template.generated.css";
   const isTokenSource = rel.startsWith("assets/design/") && /\.ts$/.test(rel);
 
   readFileSync(file, "utf8")

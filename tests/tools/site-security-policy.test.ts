@@ -44,6 +44,8 @@ it("limits payment, assessment, and presentation data permissions to their canon
 it("keeps native Cloudflare headers identical to the canonical policy and within platform line limits", async () => {
   const headers = await readFile("static/_headers", "utf8");
   expect(headers).toBe(siteStaticHeaders());
+  const paths = headers.split("\n").filter((line) => line && !line.startsWith(" ") && !line.startsWith("#"));
+  expect(new Set(paths).size).toBe(paths.length);
   expect(headers.split("\n").every((line) => line.length <= 2000)).toBe(true);
   expect(headers).toContain("Strict-Transport-Security: max-age=31536000");
   expect(headers).toContain("Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()");
@@ -52,5 +54,26 @@ it("keeps native Cloudflare headers identical to the canonical policy and within
 it("allows a first-party camera only in the portal scanner shell", () => {
   expect(siteSecurityHeaders("/portal/")["Permissions-Policy"]).toContain("camera=(self)");
   expect(siteSecurityHeaders("/events/example/")["Permissions-Policy"]).toContain("camera=()");
-  expect(siteStaticHeaders()).toContain("/portal/*\n    ! Permissions-Policy\n    Permissions-Policy: camera=(self)");
+  const portalRule = siteStaticHeaders()
+    .split("\n\n")
+    .find((block) => block.startsWith("/portal/*\n"));
+  expect(portalRule).toBe(
+    `/portal/*\n    ! Content-Security-Policy\n    Content-Security-Policy: ${siteContentSecurityPolicy("/portal/")}\n    ! Permissions-Policy\n    Permissions-Policy: ${siteSecurityHeaders("/portal/")["Permissions-Policy"]}`,
+  );
+});
+
+it("allows email styling only in the isolated preview document", () => {
+  const portal = siteContentSecurityPolicy("/portal/");
+  expect(directive(portal, "style-src")).toBe("style-src 'self'");
+  expect(directive(portal, "style-src-attr")).toBe("style-src-attr 'none'");
+  expect(directive(portal, "frame-src")).toContain("'self'");
+  const preview = siteSecurityHeaders("/email/preview/");
+  const policy = preview["Content-Security-Policy"];
+  expect(directive(policy, "style-src")).toBe("style-src 'self' 'unsafe-inline'");
+  expect(directive(policy, "script-src")).toBe("script-src 'self'");
+  expect(directive(policy, "script-src-attr")).toBe("script-src-attr 'none'");
+  expect(directive(policy, "connect-src")).toBe("connect-src 'none'");
+  expect(directive(policy, "frame-ancestors")).toBe("frame-ancestors 'self'");
+  expect(preview["X-Frame-Options"]).toBe("SAMEORIGIN");
+  expect(siteContentSecurityPolicy("/email/preview/other")).not.toContain("'unsafe-inline'");
 });

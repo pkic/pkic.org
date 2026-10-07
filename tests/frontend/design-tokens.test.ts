@@ -10,7 +10,12 @@
 
 import { describe, expect, it } from "vitest";
 
-import { emitFeatureTokenCss, emitTokenCss } from "../../assets/design/emit-css.ts";
+import {
+  emitFeatureTokenCss,
+  emitPublicTokenCss,
+  emitTemplateTokenCss,
+  emitTokenCss,
+} from "../../assets/design/emit-css.ts";
 import { accentNeighbour, isAccentHue, markArcs, palette } from "../../assets/design/palette.ts";
 import { constants, cssVar, density, layers, themes, tokenNames } from "../../assets/design/tokens.ts";
 
@@ -101,6 +106,18 @@ describe("emitted stylesheet", () => {
     for (const name of Object.keys(themes.dark) as (keyof typeof themes.dark)[]) {
       if (themes.dark[name] !== themes.light[name]) expect(stamped, name).toContain(`${cssVar(name)}:`);
       else expect(css.split(`${cssVar(name)}:`)).toHaveLength(2);
+    }
+  });
+
+  it("loads the complete template palette separately from the shared entry", () => {
+    const templateCss = emitTemplateTokenCss();
+    const publicCss = emitPublicTokenCss();
+    const names = Object.keys(constants).filter((name) => name.startsWith("template-"));
+    expect(names).toHaveLength(11);
+    for (const name of names) {
+      expect(templateCss).toContain(`${cssVar(name)}:`);
+      expect(css).not.toContain(`${cssVar(name)}:`);
+      expect(publicCss).not.toContain(`${cssVar(name)}:`);
     }
   });
 

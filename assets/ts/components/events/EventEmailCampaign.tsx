@@ -8,6 +8,7 @@ import { useContractForm } from "../../hooks/useContractForm";
 import { useHashQueryParam } from "../../hooks/useHashQueryParam";
 import { Tabs } from "../Tabs";
 import { Button, ButtonLink } from "../../ui/Button";
+import { EmailHtmlPreview } from "../../ui/EmailHtmlPreview";
 import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
@@ -518,20 +519,8 @@ export function EventEmailCampaign({
             </div>
             <span class="pk-small">{preview.recipientCount} recipients</span>
             <Tabs items={EMAIL_PREVIEW_TABS} active={previewTab} onChange={(key) => setPreviewTab(key)} className="" />
-            {/*
-             * The rendered email is author-supplied HTML, so it stays in an
-             * iframe with an empty `sandbox`: no scripts, no forms, no
-             * same-origin access, no navigation. `srcdoc` keeps it out of a
-             * network fetch. Neither may be relaxed.
-             */}
             {previewTab === "html" && (
-              <iframe
-                title="Rendered campaign email preview"
-                srcdoc={preview.html}
-                sandbox=""
-                class="pk-framed"
-                height={600}
-              />
+              <EmailHtmlPreview title="Rendered campaign email preview" html={preview.html} height={600} />
             )}
             {previewTab === "text" && <pre class="pk-code-block pk-small pk-break">{preview.text}</pre>}
           </PanelBody>

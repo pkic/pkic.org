@@ -25,6 +25,10 @@ function isPublicToken(name: string): boolean {
   return name.startsWith("public-") || name.startsWith("wg-");
 }
 
+function isTemplateToken(name: string): boolean {
+  return name.startsWith("template-");
+}
+
 function isFeatureToken(name: string): boolean {
   return Object.values(featureTokenGroups).some((names) => (names as readonly string[]).includes(name));
 }
@@ -70,7 +74,7 @@ ${block(paletteEntries, "    ")}
 ${block(accentPair(defaultAccent), "    ")}
 
 ${block(
-  partition(constants, (name) => !isPublicToken(name) && !isFeatureToken(name)),
+  partition(constants, (name) => !isPublicToken(name) && !isFeatureToken(name) && !isTemplateToken(name)),
   "    ",
 )}
 
@@ -160,6 +164,17 @@ ${block(
   partition(constants, (name) => names.includes(name)),
   "    ",
 )}
+  }
+}
+`;
+}
+
+/** The template palette is loaded only by source and visual template editors. */
+export function emitTemplateTokenCss(): string {
+  return `/* Generated from assets/design/tokens.ts. Regenerate: pnpm run build:tokens. */
+@layer tokens {
+  :root {
+${block(partition(constants, isTemplateToken), "    ")}
   }
 }
 `;

@@ -17,7 +17,12 @@ import { fileURLToPath } from "node:url";
 
 import { layers, featureTokenGroups } from "../assets/design/tokens.ts";
 
-import { emitFeatureTokenCss, emitPublicTokenCss, emitTokenCss } from "../assets/design/emit-css.ts";
+import {
+  emitFeatureTokenCss,
+  emitPublicTokenCss,
+  emitTemplateTokenCss,
+  emitTokenCss,
+} from "../assets/design/emit-css.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const checkOnly = process.argv.includes("--check");
@@ -33,6 +38,8 @@ const sheets = [
     name: `tokens.${feature}.generated.css`,
     render: () => emitFeatureTokenCss(feature),
   })),
+
+  { name: "tokens.template.generated.css", render: emitTemplateTokenCss },
 ];
 
 for (const sheet of sheets) {
