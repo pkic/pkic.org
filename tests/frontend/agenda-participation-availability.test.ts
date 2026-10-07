@@ -62,6 +62,11 @@ describe("participant availability projection", () => {
     expect(link.url).toBe("/portal/#/events/event%20name/agenda?session=session%2Fid");
     expect(link.label).toBe("Invitation required");
     expect(link.message).toContain("Sign in");
-    expect(eventParticipationLink("event", "id", "preference").label).toBe("Save preference");
+    expect(eventParticipationLink("event", "id", "preference")).toMatchObject({
+      label: "Save preference",
+      preference: true,
+    });
+    expect(eventParticipationLink("event", "id", "reservation").preference).toBe(false);
+    expect(link.preference).toBe(false);
   });
 });

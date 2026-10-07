@@ -891,17 +891,17 @@ test.describe("browser workflows", () => {
     await page.goto(proposalManageRoute);
     await expect(page.getByText(/Open this page from your proposal management link/i)).toBeVisible();
     await expect(page.locator("#manage-proposal-type")).toHaveValue("panel");
-    const proposerSpeakerCard = page
-      .locator("[data-speaker-card]")
-      .filter({ hasText: "proposal-speaker@example.test" });
+    const proposerSpeakerCard = page.locator('[data-speaker-card][data-speaker-email="proposal-speaker@example.test"]');
     await expect(proposerSpeakerCard).toBeVisible();
+    await proposerSpeakerCard.getByRole("button", { name: /^Actions for / }).click();
+    await proposerSpeakerCard.getByRole("menuitem", { name: "Edit speaker details", exact: true }).click();
     await expect(proposerSpeakerCard.getByLabel("Role")).toHaveValue("moderator");
     await proposerSpeakerCard.getByLabel("Role").selectOption("speaker");
     await proposerSpeakerCard.getByRole("button", { name: /Save speaker details/i }).click();
     await expect(page.getByText(/Saved speaker details for proposal-speaker@example.test/i)).toBeVisible({
       timeout: 15_000,
     });
-    await expect(proposerSpeakerCard.getByLabel("Role")).toHaveValue("speaker");
+    await expect(proposerSpeakerCard.getByText("Speaker", { exact: true })).toBeVisible();
     await page.locator("#manage-proposal-title").fill("Operational Trust in a Post-Quantum Transition, Revised");
     await page
       .locator("#manage-proposal-abstract")
@@ -1364,8 +1364,10 @@ test.describe("browser workflows", () => {
     await nominationInviteForm.getByRole("button", { name: /Send invite/i }).click();
     await expect(page.getByText(/Invite sent to co-sam-speaker@example.test/i)).toBeVisible();
 
-    const coSpeakerCard = page.locator("[data-speaker-card]").filter({ hasText: "co-sam-speaker@example.test" });
+    const coSpeakerCard = page.locator('[data-speaker-card][data-speaker-email="co-sam-speaker@example.test"]');
     await expect(coSpeakerCard).toBeVisible();
+    await coSpeakerCard.getByRole("button", { name: /^Actions for / }).click();
+    await coSpeakerCard.getByRole("menuitem", { name: "Edit speaker details", exact: true }).click();
     await coSpeakerCard.getByLabel("First name").fill("Co");
     await coSpeakerCard.getByLabel("Last name").fill("Sam Speaker");
     await coSpeakerCard.getByLabel("Organization").fill("PKIC Partner Org");
@@ -1380,9 +1382,7 @@ test.describe("browser workflows", () => {
       timeout: 15_000,
     });
 
-    const speakerUserId = await coSpeakerCard
-      .locator("form[data-speaker-user-id]")
-      .getAttribute("data-speaker-user-id");
+    const speakerUserId = await coSpeakerCard.getAttribute("data-speaker-user-id");
     if (!speakerUserId) throw new Error("the co-speaker card names no user id");
     const proposerHeadshotResult = await page.evaluate(
       async ({ token, userId }) => {

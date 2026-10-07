@@ -212,28 +212,60 @@ describe("personal agenda publication revisions", () => {
     "leaves %s independent of reservation revision preconditions",
     async (action) => {
       const bodies: ReturnType<typeof sessionParticipationRequestSchema.parse>[] = [];
+      let saved = action === "unsave";
       vi.stubGlobal(
         "fetch",
         vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
           if (init?.method === "PUT") {
             bodies.push(sessionParticipationRequestSchema.parse(JSON.parse(String(init.body))));
+            saved = action === "save";
             return json(
               sessionParticipationResponseSchema.parse({
-                status: action === "save" ? "saved" : "canceled",
+                status: action === "cancel" ? "canceled" : "reserved",
                 attendanceMode: "physical",
               }),
             );
           }
-          return json(listing(1, "request"));
+          const response = listing(1, "request");
+          Object.assign(response.sessions[0]!, { status: "reserved", saved, roomId: OLD_ROOM });
+          return json(response);
         }),
       );
       const host = mount();
       await vi.waitFor(() => expect(host.textContent).toContain("Original workshop"));
-      await choose(host, action);
-      await clickUpdate(host);
+      if (action === "cancel") {
+        await choose(host, action);
+        await clickUpdate(host);
+      } else {
+        const label = action === "save" ? "Save preference" : "Remove preference";
+        const star = host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
+        expect(star.getAttribute("type")).toBe("button");
+        expect(star.getAttribute("aria-pressed")).toBe(String(action === "unsave"));
+        expect(star.textContent).toBe("");
+        expect(star.querySelector("path")?.getAttribute("fill")).toBe(action === "unsave" ? "currentColor" : "none");
+        await act(() => {
+          star.click();
+          star.click();
+        });
+      }
       await vi.waitFor(() => expect(bodies).toHaveLength(1));
       expect(bodies[0]?.action).toBe(action);
       expect(bodies[0]).not.toHaveProperty("expectedPublishedRevision");
+      if (action !== "cancel") {
+        expect(bodies[0]?.attendanceMode).toBe("physical");
+        expect(bodies[0]?.roomId).toBe(OLD_ROOM);
+        await vi.waitFor(() =>
+          expect(
+            host
+              .querySelector(`button[aria-label="${action === "save" ? "Remove preference" : "Save preference"}"]`)
+              ?.getAttribute("aria-pressed"),
+          ).toBe(String(action === "save")),
+        );
+        expect(host.textContent).toContain("Reserved");
+        expect(host.textContent).toContain("Original room");
+        expect(host.querySelector<HTMLSelectElement>('select[name="attendanceMode"]')?.value).toBe("physical");
+        expect(host.querySelector('option[value="save"],option[value="unsave"]')).toBeNull();
+      }
     },
   );
 });

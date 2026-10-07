@@ -135,7 +135,7 @@ function PolicyForm({ event, canWrite }: { event: RetentionEvent; canWrite: bool
               {policy.revision === 0 ? "No raw evidence policy is configured." : `Policy revision ${policy.revision}.`}{" "}
               Times are shown in {event.timezone} and stored in UTC.
             </p>
-            <fieldset disabled={!canWrite || saving}>
+            <fieldset disabled={!canWrite || saving} class="pk-fieldset pk-stack">
               <FormSection title="Retention deadline and purpose">
                 <Field {...form.of("evidenceUntil")} label={`Retain evidence until (${event.timezone})`}>
                   {(control) => (

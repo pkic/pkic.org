@@ -1,4 +1,5 @@
 import { AgendaBreakSponsors } from "./AgendaBreakSponsors";
+import { AgendaSpeaker } from "./AgendaSpeaker";
 import { resolveAgendaDurationRules } from "../../shared/event-agenda-duration";
 import { formatNumber } from "../../shared/format-number";
 import { Menu } from "../ui/Menu";
@@ -10,18 +11,11 @@ import { sameOriginPathSchema } from "../../shared/schemas/urls";
 import { initializeAgendaSessionMedia } from "./agenda-session-media";
 import { IconBadge } from "../ui/Badge";
 import { IconDownload, IconRemote, IconVideo } from "../ui/MediaIcons";
-import { LinkList } from "../ui/LinkList";
-import { Badge } from "../ui/Badge";
-import { Avatar } from "../ui/Avatar";
+import { PreferenceStar } from "../ui/PreferenceStar";
 import { Button, ButtonLink } from "../ui/Button";
 import { Markdown } from "../ui/Markdown";
 import { formatTimeRangeInZone } from "../../shared/format-date";
-import type {
-  ContentAgendaDay,
-  ContentAgendaLocation,
-  ContentAgendaSpeaker,
-  ContentAgendaSessionFragment,
-} from "../../shared/site-agenda";
+import type { ContentAgendaDay, ContentAgendaLocation, ContentAgendaSessionFragment } from "../../shared/site-agenda";
 
 export function ClockIcon() {
   return (
@@ -29,41 +23,6 @@ export function ClockIcon() {
       <circle cx="8" cy="8" r="6.5" />
       <path d="M8 4.5v4l2.5 1.5" />
     </svg>
-  );
-}
-
-export function AgendaSpeaker({ speaker, detail = false }: { speaker: ContentAgendaSpeaker; detail?: boolean }) {
-  return (
-    <>
-      <div class="pk-content-agenda__speaker">
-        <Avatar name={speaker.name} src={speaker.imageSrc} size="md" />
-        <div>
-          {detail ? <h3>{speaker.name}</h3> : <strong>{speaker.name}</strong>}
-          {speaker.moderator ? (
-            <Badge tone="warn" dot={false}>
-              Moderator
-            </Badge>
-          ) : null}
-          {speaker.roleLabel ? (
-            <Badge tone="neutral" dot={false}>
-              {speaker.roleLabel}
-            </Badge>
-          ) : null}
-          {speaker.title ? <small>{speaker.title}</small> : null}
-          {detail && speaker.links?.length ? <LinkList links={speaker.links} ownerName={speaker.name} compact /> : null}
-        </div>
-      </div>
-      {detail && (speaker.bioMarkdown || speaker.bioHtml) ? (
-        <details class="pk-content-agenda__speaker-bio">
-          <summary>Biography</summary>
-          {speaker.bioMarkdown ? (
-            <Markdown markdown={speaker.bioMarkdown} />
-          ) : (
-            <div dangerouslySetInnerHTML={{ __html: speaker.bioHtml! }} />
-          )}
-        </details>
-      ) : null}
-    </>
   );
 }
 
@@ -308,9 +267,16 @@ export function AgendaSession({
               <a
                 class="pk-content-agenda__media-action"
                 href={session.participation.url}
-                title={session.participation.message}
+                title={
+                  session.participation.preference
+                    ? `${session.participation.label}. ${session.participation.message}`
+                    : session.participation.message
+                }
+                aria-label={
+                  session.participation.preference ? `${session.participation.label} for ${session.title}` : undefined
+                }
               >
-                {session.participation.label}
+                {session.participation.preference ? <PreferenceStar /> : session.participation.label}
               </a>
             )}
             {onlineAccessUrl && (
@@ -450,8 +416,19 @@ export function AgendaSession({
         </div>
         <div class="session-modal__footer pk-cluster pk-cluster--end">
           {!editor && session.participation && (
-            <ButtonLink href={session.participation.url} title={session.participation.message}>
-              {session.participation.label}
+            <ButtonLink
+              href={session.participation.url}
+              icon={session.participation.preference}
+              aria-label={
+                session.participation.preference ? `${session.participation.label} for ${session.title}` : undefined
+              }
+              title={
+                session.participation.preference
+                  ? `${session.participation.label}. ${session.participation.message}`
+                  : session.participation.message
+              }
+            >
+              {session.participation.preference ? <PreferenceStar /> : session.participation.label}
             </ButtonLink>
           )}
           {recordingUrl && (

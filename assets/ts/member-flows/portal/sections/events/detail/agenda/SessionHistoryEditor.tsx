@@ -134,7 +134,7 @@ export function SessionHistoryEditor({
         {canEdit && (
           <>
             <p>Corrections update the draft. Approve the agenda again to publish a new historical version.</p>
-            <form noValidate onSubmit={save}>
+            <form noValidate onSubmit={save} class="pk-form">
               <Field label="Prerequisites" {...form.of("history.prerequisites")}>
                 {(control) => (
                   <Textarea

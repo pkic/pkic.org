@@ -26,6 +26,7 @@
 }
 .pk-agenda-sources-panel__header {
   display: flex;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
   gap: var(--pk-2);
@@ -34,4 +35,18 @@
 .pk-agenda-sources-panel__header h2 {
   margin: 0;
   font-size: var(--pk-text-lg);
+}
+
+/* Source tabs fit their sidebar rather than assuming the page's viewport width. */
+.pk-agenda-sources-panel .pk-tabs__list {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
+.pk-agenda-sources-panel .pk-tabs__link {
+  flex: 1 1 8rem;
+  min-inline-size: min(8rem, 100%);
+  max-inline-size: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding-inline: var(--pk-2);
 }

@@ -1,7 +1,7 @@
 import type { AgendaOccurrence, AgendaSnapshot } from "../../../../../../../shared/schemas/event-agenda";
 import { agendaCreditRoleSchema } from "../../../../../../../shared/schemas/event-agenda";
 import { agendaSessionContent } from "../../../../../../../shared/public-agenda-content";
-import { AgendaSpeaker } from "../../../../../../site/AgendaSession";
+import { AgendaSpeaker } from "../../../../../../site/AgendaSpeaker";
 import { Button } from "../../../../../../ui/Button";
 import { Select } from "../../../../../../ui/TextControl";
 

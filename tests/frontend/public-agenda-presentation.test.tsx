@@ -4,7 +4,10 @@ import { render as mount } from "preact";
 import { act } from "preact/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import { AgendaSession } from "../../assets/ts/site/AgendaSession";
-import { agendaContent } from "../../assets/shared/public-agenda-content";
+import { AgendaSpeaker } from "../../assets/ts/site/AgendaSpeaker";
+import { eventParticipationLink } from "../../assets/shared/event-participation-link";
+import { agendaContent, agendaSpeakerContent } from "../../assets/shared/public-agenda-content";
+import { publicSessionCredits } from "../../assets/shared/session-public-credits";
 import { agendaOccurrenceSchema } from "../../assets/shared/schemas/event-agenda";
 import { approvedAgendaSnapshot } from "../fixtures/approved-agenda";
 import { ContentAgenda } from "../../assets/ts/site/ContentAgenda";
@@ -49,6 +52,61 @@ function agenda(): HTMLElement {
 }
 
 describe("published agenda presentation", () => {
+  it("shares frozen portraits, attribution and person links with static session history", async () => {
+    const snapshot = structuredClone(approvedAgendaSnapshot);
+    const occurrence = snapshot.occurrences[0]!;
+    occurrence.speakers[0] = {
+      ...occurrence.speakers[0]!,
+      displayName: "Later current profile name",
+      profileCandidate: { biography: "Later current biography", photoUrl: "/unapproved-photo.jpg" },
+    };
+    occurrence.history!.archivalCredits.push({
+      sourceRef: "authored-speaker",
+      sourcePath: "synthetic-public-agenda.yaml",
+      sourceDigest: "a".repeat(64),
+      provenance: "authored_public",
+      role: "panelist",
+      displayName: "Retained source speaker",
+      jobTitle: "Recorded researcher",
+      organizationName: "Recorded employer",
+      biography: "Source-authored biography.",
+      photoUrl: null,
+    });
+    const credits = publicSessionCredits(occurrence);
+    const host = document.createElement("div");
+    host.innerHTML = await renderToStringAsync(
+      <div class="pk-content-agenda__speakers">
+        {credits.map((credit, index) => (
+          <article key={index}>
+            <AgendaSpeaker
+              speaker={agendaSpeakerContent(occurrence, credit)}
+              personPath={"userId" in credit ? `/people/${encodeURIComponent(credit.userId)}/` : undefined}
+              detail
+            />
+          </article>
+        ))}
+      </div>,
+    );
+    const [approved, source] = host.querySelectorAll("article");
+    expect(approved.querySelector("h3 a")?.textContent).toBe("Historical speaker");
+    expect(approved.querySelector("h3 a")?.getAttribute("href")).toBe("/people/person/");
+    expect(approved.querySelector("img")?.getAttribute("src")).toBe("/approved-photo.jpg");
+    expect(approved.textContent).toContain("Engineer at Historical organization");
+    expect(approved.textContent).toContain("Moderator");
+    expect(approved.querySelector("details summary")?.textContent).toBe("Biography");
+    expect(approved.querySelector("details strong")?.textContent).toBe("Approved biography");
+    expect(source.querySelector("h3")?.textContent).toBe("Retained source speaker");
+    expect(source.querySelector("h3 a")).toBeNull();
+    expect(source.querySelector("img")).toBeNull();
+    expect(source.querySelector(".pk-avatar__initials")).not.toBeNull();
+    expect(source.textContent).toContain("Panelist");
+    expect(source.textContent).toContain("Recorded researcher at Recorded employer");
+    expect(source.textContent).toContain("Source-authored biography.");
+    expect(host.textContent).not.toContain("Later current");
+    expect(host.querySelector('[src="/unapproved-photo.jpg"]')).toBeNull();
+    expect(host.querySelector("script")).toBeNull();
+    expect(occurrence.history!.appearances).toEqual(approvedAgendaSnapshot.occurrences[0]!.history!.appearances);
+  });
   it.each([false, true])("keeps native footers and occupied boundary cells in editor=%s cards", async (editing) => {
     const fixture = structuredClone(days);
     const day = fixture[0];
@@ -368,4 +426,32 @@ it("does not derive public handover from a private next-session choice", () => {
   );
   expect(agendaContent(source).days[0]!.slots[0]!.sessions[0]!.contentDurationMinutes).toBeUndefined();
   expect(agendaContent(source, true).days[0]!.slots[0]!.sessions[0]!.contentDurationMinutes).toBe(25);
+});
+
+it("renders an accessible outline preference star linking to authenticated participation without pretending it is saved", () => {
+  const day = days[0]!;
+  const session = {
+    ...day.slots[0]!.sessions[0]!,
+    participation: eventParticipationLink("workshop", "session-id", "preference"),
+  };
+  const host = document.createElement("div");
+  host.innerHTML = render(
+    <AgendaSession
+      session={session}
+      slot={day.slots[0]}
+      locations={day.locations}
+      dialogId="preference-detail"
+      timeZone="Europe/Amsterdam"
+    />,
+  );
+  const stars = host.querySelectorAll<HTMLAnchorElement>(`a[aria-label="Save preference for ${session.title}"]`);
+  expect(stars).toHaveLength(2);
+  for (const star of stars) {
+    expect(star.getAttribute("href")).toBe("/portal/#/events/workshop/agenda?session=session-id");
+    expect(star.title).toContain("does not reserve a place");
+    expect(star.textContent).toBe("");
+    expect(star.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
+    expect(star.querySelector("path")?.getAttribute("fill")).toBe("none");
+    expect(star.hasAttribute("aria-pressed")).toBe(false);
+  }
 });

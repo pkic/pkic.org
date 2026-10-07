@@ -14,15 +14,12 @@ import { instantToDateTimeLocal } from "./timezone";
 import { authoredAgendaDayFragments, authoredAgendaSpeakerFragments } from "./legacy-agenda-fragments";
 import type { ContentAgendaSpeakerFragment } from "./site-agenda";
 
-/** The canonical session card projection, including occurrences whose placement is not yet known. */
-export function agendaSessionContent(
-  snapshot: AgendaSnapshot,
+/** A supplied credit keeps the same frozen/source presentation on every public surface. */
+export function agendaSpeakerContent(
   occurrence: AgendaOccurrence,
-  organizer = false,
-): ContentAgendaDay["slots"][number]["sessions"][number] {
-  const timing = publicSessionTiming(occurrence);
-  const credits = sessionDisplayCredits(occurrence, organizer).map((credit) => ({
-    key: "userId" in credit ? `user:${credit.userId}` : `source:${credit.sourceRef}`,
+  credit: Parameters<typeof publicSessionCreditRole>[1],
+): ContentAgendaSpeaker {
+  return {
     name: credit.displayName,
     ...("biography" in credit
       ? {
@@ -33,6 +30,19 @@ export function agendaSessionContent(
       : {}),
     moderator: publicSessionCreditRole(occurrence, credit) === "moderator",
     ...(publicSessionCreditRole(occurrence, credit) === "panelist" ? { roleLabel: statusLabel("panelist") } : {}),
+  };
+}
+
+/** The canonical session card projection, including occurrences whose placement is not yet known. */
+export function agendaSessionContent(
+  snapshot: AgendaSnapshot,
+  occurrence: AgendaOccurrence,
+  organizer = false,
+): ContentAgendaDay["slots"][number]["sessions"][number] {
+  const timing = publicSessionTiming(occurrence);
+  const credits = sessionDisplayCredits(occurrence, organizer).map((credit) => ({
+    key: "userId" in credit ? `user:${credit.userId}` : `source:${credit.sourceRef}`,
+    ...agendaSpeakerContent(occurrence, credit),
   }));
   const materials = publicSessionMaterials(occurrence.history?.materials ?? []);
   const currentRoomIds = agendaOccurrenceRoomIds(occurrence);

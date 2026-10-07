@@ -7,6 +7,7 @@ export function eventParticipationLink(
 ) {
   return {
     url: `/portal/#/events/${encodeURIComponent(eventSlug)}/agenda?session=${encodeURIComponent(occurrenceId)}`,
+    preference: access === "open" && policy === "preference",
     label:
       access === "invitation"
         ? "Invitation required"

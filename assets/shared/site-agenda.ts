@@ -25,7 +25,7 @@ export interface ContentAgendaDay {
       endNotRecorded?: boolean;
       locations: string[];
       sessionUrl?: string;
-      participation?: { url: string; label: string; message: string };
+      participation?: { url: string; label: string; message: string; preference?: boolean };
       presentationUrl?: string;
       legacyPresentationUrl?: string;
       recordingUrl?: string;

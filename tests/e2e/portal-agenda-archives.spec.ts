@@ -128,11 +128,16 @@ test("approved archive corrections and promotion exports remain tied to a frozen
     await fields
       .getByLabel("Material type", { exact: true })
       .selectOption(key === "captions" || key === "transcript" ? key : "recording");
-    await fields.getByLabel("Public delivery URL", { exact: true }).fill(material.url);
+    await fields
+      .getByLabel(`${key === "captions" ? "Captions" : key === "transcript" ? "Transcript" : "Recording"} link`, {
+        exact: true,
+      })
+      .fill(material.url);
     if (key !== "draft" && key !== "failed") {
-      if (key !== "recording") await fields.getByLabel("Rights confirmed", { exact: true }).check();
-      await fields.getByLabel("Speaker consent confirmed", { exact: true }).check();
-      await fields.getByLabel("File and accessibility reviewed", { exact: true }).check();
+      if (key !== "recording")
+        await fields.getByLabel("We have permission to publish this material", { exact: true }).check();
+      await fields.getByLabel("Speaker has agreed to publication", { exact: true }).check();
+      await fields.getByLabel("File and accessibility have been reviewed", { exact: true }).check();
       await fields.getByLabel("Release status", { exact: true }).selectOption("approved");
     } else if (key === "failed") {
       await fields.getByLabel("Release status", { exact: true }).selectOption("failed");
@@ -162,7 +167,7 @@ test("approved archive corrections and promotion exports remain tied to a frozen
   await expect(page.getByRole("alert")).toContainText("Confirm rights, consent and validation");
   await page
     .getByRole("group", { name: media.recording.title, exact: true })
-    .getByLabel("Rights confirmed", { exact: true })
+    .getByLabel("We have permission to publish this material", { exact: true })
     .check();
   await page.screenshot({ path: `${artifacts}/archive-editor-desktop.png`, fullPage: true });
   const historySaved = page.waitForResponse(

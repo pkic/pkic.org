@@ -2,12 +2,13 @@
 import { publicationRouteCacheKey, PUBLICATION_SITE_ORIGIN } from "../publication-cache";
 import { publicationPageInputs } from "../publication-page-inputs";
 import { publicSessionCalendarPath } from "../../functions/_lib/services/site-public-agenda-calendar";
-import { publicSessionCreditRole } from "../../assets/shared/session-public-credits";
-import { statusLabel } from "../../assets/shared/status-display";
+import { agendaSpeakerContent } from "../../assets/shared/public-agenda-content";
 import { publicSessionTiming } from "../../assets/shared/session-public-timing";
 import { sessionHistoryStructuredData } from "../../functions/_lib/services/site-history-structured-data";
 import PublicPage from "../layouts/PublicPage.astro";
 import { Markdown } from "../../assets/ts/ui/Markdown";
+import { Breadcrumb } from "../../assets/ts/ui/Breadcrumb";
+import { AgendaSpeaker } from "../../assets/ts/site/AgendaSpeaker";
 import { publication } from "../publication";
 import { publishedSessionHistory } from "../../functions/_lib/services/site-session-history";
 import { agendaOccurrenceRoomIds } from "../../assets/shared/event-agenda-rooms";
@@ -29,14 +30,9 @@ export async function getStaticPaths() {
       rooms: agendaOccurrenceRoomIds(session).map((id) => agenda.rooms.find((room) => room.id === id)?.name).filter(Boolean),
       prerequisites: session.history?.prerequisites,
       credits: item.credits.map((credit) => {
-        const role = publicSessionCreditRole(session, credit);
         return {
-          displayName: credit.displayName,
+          speaker: agendaSpeakerContent(session, credit),
           personPath: "userId" in credit ? `/people/${encodeURIComponent(credit.userId)}/` : undefined,
-          roleLabel: role !== "speaker" ? statusLabel(role) : undefined,
-          organizationName: "organizationName" in credit ? credit.organizationName : undefined,
-          jobTitle: "jobTitle" in credit ? credit.jobTitle : undefined,
-          biography: "biography" in credit ? credit.biography : undefined,
         };
       }),
       materials: item.materials.map(({ title, url, kind, version }) => ({ title, url, kind, version })),
@@ -47,8 +43,11 @@ export async function getStaticPaths() {
     const pageInputs = await publicationPageInputs({ route: item.route,
       title: `${session.title} · ${agenda.eventName ?? "PKI Consortium"}`, description: session.description.slice(0, 180),
       structuredData: sessionHistoryStructuredData(item, PUBLICATION_SITE_ORIGIN),
-      imageRefs: markdownImageSources([view.description, view.prerequisites, ...view.credits.map((credit) => credit.biography)])
-        .map((source) => ({ source, portrait: false })),
+      imageRefs: [
+        ...markdownImageSources([view.description, view.prerequisites, ...view.credits.map((credit) => credit.speaker.bioMarkdown)])
+          .map((source) => ({ source, portrait: false })),
+        ...view.credits.flatMap((credit) => credit.speaker.imageSrc ? [{ source: credit.speaker.imageSrc, portrait: true }] : []),
+      ],
     });
     return {
       params: { sessionHistory: item.route.replace(/^\/|\/$/g, "") }, props: { view, pageInputs },
@@ -60,12 +59,12 @@ const { view, pageInputs } = Astro.props;
 ---
 <PublicPage title={pageInputs.title} pageInputs={pageInputs}>
   <article class="pk-section pk-container" data-pagefind-body>
-    <nav aria-label="Breadcrumb"><a href={view.agendaPath}>{view.eventName ?? "Event"} agenda</a> / Session</nav>
+    <Breadcrumb items={[{ label: `${view.eventName ?? "Event"} agenda`, href: view.agendaPath }, { label: "Session" }]} />
     <h1>{view.title}</h1>
     <p><time datetime={view.timing?.startAt}>{view.date}</time> · {view.times}{view.timing?.endNotRecorded && " · End not recorded"} · {view.timeZone}{view.rooms.length > 0 && ` · ${view.rooms.join(" / ")}`}</p>
     <Markdown className="pk-session-abstract" markdown={view.description} />
     {view.prerequisites && <section><h2>Before attending</h2><Markdown markdown={view.prerequisites} /></section>}
-    <section><h2>Speakers</h2><ul>{view.credits.map((credit) => <li>{credit.personPath ? <a href={credit.personPath}>{credit.displayName}</a> : <span>{credit.displayName}</span>}{credit.roleLabel && ` · ${credit.roleLabel}`}{credit.organizationName && ` · ${credit.organizationName}`}{credit.jobTitle && ` · ${credit.jobTitle}`}{credit.biography && <Markdown markdown={credit.biography} />}</li>)}</ul></section>
+    <section><h2>Speakers</h2><div class="pk-content-agenda__speakers">{view.credits.map((credit) => <article><AgendaSpeaker speaker={credit.speaker} personPath={credit.personPath} detail /></article>)}</div></section>
     {!view.timing?.endNotRecorded && <section><h2>Attendance</h2><p>{view.admissionText}</p><a href={`/portal/events/${encodeURIComponent(view.eventSlug)}`}>Open my agenda</a></section>}
     {view.materials.length > 0 && <section><h2>Session materials</h2><ul>{view.materials.map((material) => <li><a href={material.url} rel="noopener noreferrer">{material.title}</a> · {material.kind} · version {material.version}</li>)}</ul></section>}
     <p><a href={`${view.agendaPath}calendar.ics`}>Event calendar</a>{view.sessionCalendar && <> · <a href={view.sessionCalendar} download>Download session calendar</a></>} · <a href={view.agendaPath}>Full agenda</a></p>
