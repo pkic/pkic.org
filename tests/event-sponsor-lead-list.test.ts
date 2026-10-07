@@ -1,3 +1,4 @@
+import { generateBadgeCredential } from "../assets/shared/schemas/badge-credential";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
@@ -127,7 +128,7 @@ describe("sponsor live lead viewing through the mounted API", () => {
     await env.DB.prepare("DELETE FROM event_sponsor_leads WHERE event_id=? AND sponsor_id=? AND user_id=?")
       .bind(eventId, sponsorId, attendee!.user_id)
       .run();
-    const credential = crypto.randomUUID();
+    const credential = generateBadgeCredential();
     await env.DB.prepare(
       "INSERT INTO event_badge_credentials(id,event_id,user_id,credential_hash,created_at) VALUES(?,?,?,?,?)",
     )
@@ -465,7 +466,7 @@ it("records recognized denials without collecting leads when contact expiry prec
   const lead = await env.DB.prepare("SELECT user_id FROM event_sponsor_leads WHERE event_id=? LIMIT 1")
     .bind(eventId)
     .first<{ user_id: string }>();
-  const credential = crypto.randomUUID();
+  const credential = generateBadgeCredential();
   await env.DB.prepare(
     "INSERT INTO event_badge_credentials(id,event_id,user_id,credential_hash,created_at) VALUES(?,?,?,?,?)",
   )

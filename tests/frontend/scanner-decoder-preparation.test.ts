@@ -1,5 +1,10 @@
 import { beforeEach, afterEach, describe, expect, it, vi } from "vitest";
-const modules = vi.hoisted(() => ({ mainLoaded: vi.fn(), fallbackLoaded: vi.fn(), createWorker: vi.fn() }));
+const modules = vi.hoisted(() => ({
+  mainLoaded: vi.fn(),
+  fallbackLoaded: vi.fn(),
+  bootstrapLoaded: vi.fn(),
+  createWorker: vi.fn(),
+}));
 let serviceWorkers: EventTarget & { controller: object | null; ready: Promise<object> };
 beforeEach(() => {
   vi.resetModules();
@@ -13,6 +18,10 @@ beforeEach(() => {
     return { createWorker: modules.createWorker };
   });
 
+  vi.doMock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/OfflineScannerBootstrap", () => {
+    modules.bootstrapLoaded();
+    return { OfflineScannerBootstrap: () => null };
+  });
   serviceWorkers = Object.assign(new EventTarget(), { controller: null as object | null, ready: Promise.resolve({}) });
   vi.stubGlobal("navigator", { serviceWorker: serviceWorkers });
 });
@@ -29,11 +38,13 @@ describe("offline camera decoder preparation", () => {
     await Promise.resolve();
     expect(modules.mainLoaded).not.toHaveBeenCalled();
     expect(modules.fallbackLoaded).not.toHaveBeenCalled();
+    expect(modules.bootstrapLoaded).not.toHaveBeenCalled();
     serviceWorkers.controller = {};
     serviceWorkers.dispatchEvent(new Event("controllerchange"));
     expect(await preparation).toBe(true);
     expect(modules.mainLoaded).toHaveBeenCalledOnce();
     expect(modules.fallbackLoaded).toHaveBeenCalledOnce();
+    expect(modules.bootstrapLoaded).toHaveBeenCalledOnce();
     expect(modules.createWorker).not.toHaveBeenCalled();
   });
   it("warms both modules immediately when the scanner is already controlled", async () => {
@@ -43,6 +54,7 @@ describe("offline camera decoder preparation", () => {
     expect(await prepareScannerDecoder(new AbortController().signal)).toBe(true);
     expect(modules.mainLoaded).toHaveBeenCalledOnce();
     expect(modules.fallbackLoaded).toHaveBeenCalledOnce();
+    expect(modules.bootstrapLoaded).toHaveBeenCalledOnce();
   });
   it("cancels an unmounted scanner without importing modules or retaining the controller listener", async () => {
     const remove = vi.spyOn(serviceWorkers, "removeEventListener");
@@ -57,6 +69,7 @@ describe("offline camera decoder preparation", () => {
     serviceWorkers.dispatchEvent(new Event("controllerchange"));
     expect(modules.mainLoaded).not.toHaveBeenCalled();
     expect(modules.fallbackLoaded).not.toHaveBeenCalled();
+    expect(modules.bootstrapLoaded).not.toHaveBeenCalled();
   });
   it("bounds a stalled controller wait and removes its listener", async () => {
     vi.useFakeTimers();
@@ -69,6 +82,7 @@ describe("offline camera decoder preparation", () => {
     expect(remove).toHaveBeenCalledWith("controllerchange", expect.any(Function));
     expect(vi.getTimerCount()).toBe(0);
     expect(modules.fallbackLoaded).not.toHaveBeenCalled();
+    expect(modules.bootstrapLoaded).not.toHaveBeenCalled();
   });
   it("does not claim prepared offline modules on a browser without service workers", async () => {
     vi.stubGlobal("navigator", {});

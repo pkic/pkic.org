@@ -88,7 +88,7 @@ describe("session archive correction", () => {
         );
       }
       await act(() => render(<ControlledMaterials />, host));
-      expect(controlFor(host, "Uploaded presentation version")).toBeDefined();
+      expect(controlFor(host, "Uploaded slides")).toBeDefined();
       await chooseOption(controlFor(host, "Material type"), kind);
       const result = sessionMaterialSchema.parse(changed.mock.calls[0]![0][0]);
       expect(result).toMatchObject({
@@ -100,11 +100,21 @@ describe("session archive correction", () => {
         status: "draft",
         approvedAt: null,
       });
-      expect(controlFor<HTMLInputElement>(host, "Public delivery URL").value).toBe(externalUrl);
-      expect([...host.querySelectorAll("label")].map((label) => label.textContent)).not.toContain(
-        "Uploaded presentation version",
-      );
-      expect(host.textContent).not.toContain("The public delivery URL is generated from this uploaded version.");
+      expect(
+        controlFor<HTMLInputElement>(
+          host,
+          `${{ recording: "Recording", transcript: "Transcript", captions: "Captions" }[kind]} link`,
+        ).value,
+      ).toBe(externalUrl);
+      expect([...host.querySelectorAll("label")].map((label) => label.textContent)).not.toContain("Uploaded slides");
+      expect(host.textContent).not.toContain("The selected slides will receive a download link");
+      expect(host.querySelector("fieldset")?.className).toBe("pk-form-section");
+      expect(host.textContent).not.toContain("Find uploaded slides");
+      expect(host.textContent).not.toContain("Previous uploads");
+      expect(host.textContent).not.toContain("Next uploads");
+      const details = host.querySelector<HTMLDetailsElement>("details.pk-panel");
+      expect(details?.querySelector("summary")?.textContent).toBe("Additional details");
+      expect(details?.open).toBe(false);
       expect(initial.presentationVersionId).toBe("uploaded-version");
       expect(initial.kind).toBe("presentation");
     },
@@ -208,9 +218,9 @@ describe("session archive correction", () => {
       sessionHistoryCorrectionSchema.parse(api.postJson.mock.calls[1]![1]).history.materials[0]!.legacyDownloadUrl,
     ).toBeNull();
     await chooseOption(choice, downloads[0]!.url);
-    await chooseOption(controlFor(host, "Uploaded presentation version"), "");
+    await chooseOption(controlFor(host, "Uploaded slides"), "");
     expect(host.textContent).not.toContain("Historical download link");
-    await typeInto(controlFor(host, "Public delivery URL"), "https://media.example.test/external.pdf");
+    await typeInto(controlFor(host, "Slides link"), "https://media.example.test/external.pdf");
     await submitForm(host);
     const unbound = sessionHistoryCorrectionSchema.parse(api.postJson.mock.calls[2]![1]).history.materials[0]!;
     expect(unbound.legacyDownloadUrl).toBeNull();
@@ -370,6 +380,53 @@ describe("session archive correction", () => {
       organizationName: null,
       jobTitle: null,
     });
+  });
+  it("keeps slide search available after zero results so the organizer can clear it", async () => {
+    const upload = {
+      source: "session",
+      id: "slides-version",
+      title: "Slides",
+      fileName: "slides.pdf",
+      version: 1,
+      reviewStatus: null,
+      uploadedAt: "2026-12-01T09:00:00.000Z",
+    };
+    mockGetJson(async (path: string) => {
+      const versions = path.includes("q=missing") ? [] : [upload];
+      return { versions, page: { limit: 200, offset: 0, total: versions.length, hasMore: false } };
+    });
+    const material = sessionMaterialSchema.parse({
+      id: "slides",
+      kind: "presentation",
+      title: "Slides",
+      url: "https://media.example.test/slides.pdf",
+      presentationVersionId: null,
+      version: 1,
+      rightsConfirmed: false,
+      consentConfirmed: false,
+      validated: false,
+      status: "draft",
+      approvedAt: null,
+    });
+    await act(() =>
+      render(<MaterialFields slug="event" occurrenceId="session" materials={[material]} onChange={() => {}} />, host),
+    );
+    await vi.waitFor(() => expect(controlFor<HTMLSelectElement>(host, "Uploaded slides").options.length).toBe(2));
+    const disclosure = host.querySelector<HTMLDetailsElement>("details.pk-panel")!;
+    await act(() => {
+      disclosure.open = true;
+    });
+    await typeInto(controlFor(host, "Find uploaded version"), "missing");
+    await vi.waitFor(() => expect(controlFor<HTMLSelectElement>(host, "Uploaded slides").options.length).toBe(1));
+    expect(controlFor<HTMLInputElement>(host, "Find uploaded version").value).toBe("missing");
+    await typeInto(controlFor(host, "Find uploaded version"), "");
+    await vi.waitFor(() =>
+      expect(optionValues(controlFor<HTMLSelectElement>(host, "Uploaded slides"))).toEqual([
+        "",
+        "session:slides-version",
+      ]),
+    );
+    expect(controlFor<HTMLInputElement>(host, "Find uploaded version").value).toBe("");
   });
   it("binds a direct version by its source without approving rights or public release", async () => {
     mockGetJson(

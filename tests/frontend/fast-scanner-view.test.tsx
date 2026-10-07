@@ -151,7 +151,7 @@ describe("continuous scanner presentation", () => {
       operatorUserId: "00000000-0000-4000-8000-000000000001",
       operationId: "00000000-0000-4000-8000-000000000001",
       deviceId: "00000000-0000-4000-8000-000000000001",
-      badgeId: "00000000-0000-4000-8000-000000000001",
+      badgeId: "ABCDEFGHJKLMNPQR",
       occurrenceId: null,
       action: "exception",
       exceptionReason: "organizer_approval",

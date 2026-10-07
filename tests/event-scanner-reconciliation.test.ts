@@ -1,3 +1,4 @@
+import { generateBadgeCredential } from "../assets/shared/schemas/badge-credential";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
@@ -84,7 +85,7 @@ describe("Event-wide scanner transport reconciliation coverage", () => {
   });
   it("counts missing declared receipts across the event even when an attendance report filters a session", async () => {
     const body = fixture.scanBody({
-      badgeId: crypto.randomUUID(),
+      badgeId: generateBadgeCredential(),
       scannerSession: { epochId: fixture.epochId, sequence: 2 },
     });
     expect((await fixture.scan(body)).status).toBe(200);

@@ -3,12 +3,14 @@ import {
   scannerTargetsResponseSchema,
   type ScannerTarget,
 } from "../../../../../../../shared/schemas/event-participation-scanning";
+import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
 /** Session metadata is resolved once outside the scan hot path; a room choice belongs to this target. */
 export function useScannerLocation(
   slug: string,
   initialId: string | null,
   enabled: boolean,
   onContextChange: () => void,
+  collector?: ScannerOfflineContext,
 ) {
   const [targetId, setTarget] = useState(initialId),
     [targetLabel, setLabel] = useState(""),
@@ -31,7 +33,7 @@ export function useScannerLocation(
     setRoom(id);
   }
   useEffect(() => {
-    if (!enabled || !initialId) return;
+    if (collector || !enabled || !initialId) return;
     const controller = new AbortController();
     void (async () => {
       try {
@@ -50,13 +52,25 @@ export function useScannerLocation(
       }
     })();
     return () => controller.abort();
-  }, [slug, initialId, enabled]);
+  }, [slug, initialId, enabled, collector?.epochId]);
   // Lead capture is event-wide. Retain the prior check-in choice for a return to that mode.
   return {
-    targetId: enabled ? targetId : null,
-    targetLabel: enabled ? targetLabel : "",
-    rooms: enabled ? rooms : [],
-    roomId: enabled ? roomId : null,
+    targetId: collector ? collector.occurrenceId : enabled ? targetId : null,
+    targetLabel: collector
+      ? collector.occurrenceId
+        ? "Prepared session"
+        : "Event entrance"
+      : enabled
+        ? targetLabel
+        : "",
+    rooms: collector
+      ? collector.roomId
+        ? [{ id: collector.roomId, name: "Prepared room" }]
+        : []
+      : enabled
+        ? rooms
+        : [],
+    roomId: collector ? (collector.roomId ?? null) : enabled ? roomId : null,
     selectTarget,
     selectRoom,
   };

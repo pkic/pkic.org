@@ -1,3 +1,4 @@
+import { generateBadgeCredential } from "../assets/shared/schemas/badge-credential";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
@@ -36,7 +37,7 @@ describe("Immutable scan calendar context", () => {
       expect(
         await (
           await fixture.scan(
-            fixture.scanBody({ action, occurrenceId: body.occurrenceId, badgeId: crypto.randomUUID() }),
+            fixture.scanBody({ action, occurrenceId: body.occurrenceId, badgeId: generateBadgeCredential() }),
           )
         ).json(),
       ).toMatchObject({ outcome: "unknown", recorded: false });

@@ -1,3 +1,4 @@
+import { scannerRecoveryEpochSchema } from "../../../../../../../shared/schemas/event-scanner-devices";
 import type { ScannerEpoch } from "./scanner-device-ledger";
 import {
   offlineScanRecordSchema,
@@ -291,7 +292,19 @@ export async function scannerRecoverySnapshot(operatorUserId: string, eventId: s
             epoch.epochId &&
             epoch.state !== "preparing",
         )
-        .map(({ key: _, ...epoch }) => epoch),
+        .map((epoch) =>
+          scannerRecoveryEpochSchema.parse({
+            eventId: epoch.eventId,
+            operatorUserId: epoch.operatorUserId,
+            deviceId: epoch.deviceId,
+            epochId: epoch.epochId,
+            enrollmentOperationId: epoch.enrollmentOperationId,
+            issuedHighWater: epoch.issuedHighWater,
+            state: epoch.state,
+            closingOperationId: epoch.closingOperationId,
+            openedAt: epoch.openedAt,
+          }),
+        ),
     };
   } finally {
     db.close();

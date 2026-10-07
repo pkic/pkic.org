@@ -1,3 +1,4 @@
+import { generateBadgeCredential } from "../../../../assets/shared/schemas/badge-credential";
 import {
   badgeIssueResponseSchema,
   type BadgeIssueRequest,
@@ -114,96 +115,109 @@ export async function issueBadge(
     );
   }
   const now = nowIso(),
-    expiresAt = resolveBadgeExpiry(now, event.ends_at, input.expiresAt),
-    id = crypto.randomUUID(),
-    credential = crypto.randomUUID();
-  const credentialHash = await hashBadgeCredential(credential);
-  const printCredentialJson = await sealBadgeCredential(
-    environment,
-    { eventId, id, userId: input.userId, credentialHash },
-    credential,
-  );
-  const scope = { type: "event", id: eventId };
-  const statements = [
-    prepareOneTimeAuditLog(
-      db,
-      "user",
-      actorId,
-      "badge_issuance_completed",
-      "event_badge_credential",
-      id,
-      {
-        userId: input.userId,
-        replacedBadgeId: input.replaceBadgeId ?? null,
-        requestDigest,
-        expiresAt,
-      },
-      now,
-      receiptKey(eventId, input.operationId),
-      scope,
-    ),
-  ];
-  if (previous)
+    expiresAt = resolveBadgeExpiry(now, event.ends_at, input.expiresAt);
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const id = crypto.randomUUID(),
+      credential = generateBadgeCredential();
+    const credentialHash = await hashBadgeCredential(credential);
+    const printCredentialJson = await sealBadgeCredential(
+      environment,
+      { eventId, id, userId: input.userId, credentialHash },
+      credential,
+    );
+    const scope = { type: "event", id: eventId };
+    const statements = [
+      prepareOneTimeAuditLog(
+        db,
+        "user",
+        actorId,
+        "badge_issuance_completed",
+        "event_badge_credential",
+        id,
+        {
+          userId: input.userId,
+          replacedBadgeId: input.replaceBadgeId ?? null,
+          requestDigest,
+          expiresAt,
+        },
+        now,
+        receiptKey(eventId, input.operationId),
+        scope,
+      ),
+    ];
+    if (previous)
+      statements.push(
+        prepareRevocation(db, eventId, previous, now),
+        prepareScopedAuditLogAfterOneChange(
+          db,
+          scope,
+          "user",
+          actorId,
+          "badge_replaced",
+          "event_badge_credential",
+          previous.id,
+          { userId: input.userId, replacementBadgeId: id },
+          now,
+        ),
+      );
     statements.push(
-      prepareRevocation(db, eventId, previous, now),
+      db
+        .prepare(
+          "INSERT INTO event_badge_credentials(id,event_id,user_id,credential_hash,created_at,expires_at,print_credential_json) SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM registrations WHERE event_id=? AND user_id=?) AND EXISTS(SELECT 1 FROM events WHERE id=? AND ends_at IS ?)",
+        )
+        .bind(
+          id,
+          eventId,
+          input.userId,
+          credentialHash,
+          now,
+          expiresAt,
+          printCredentialJson,
+          eventId,
+          input.userId,
+          eventId,
+          event.ends_at,
+        ),
       prepareScopedAuditLogAfterOneChange(
         db,
         scope,
         "user",
         actorId,
-        "badge_replaced",
+        "badge_issued",
         "event_badge_credential",
-        previous.id,
-        { userId: input.userId, replacementBadgeId: id },
+        id,
+        {
+          userId: input.userId,
+          replacedBadgeId: input.replaceBadgeId ?? null,
+          expiresAt,
+        },
         now,
       ),
     );
-  statements.push(
-    db
-      .prepare(
-        "INSERT INTO event_badge_credentials(id,event_id,user_id,credential_hash,created_at,expires_at,print_credential_json) SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM registrations WHERE event_id=? AND user_id=?) AND EXISTS(SELECT 1 FROM events WHERE id=? AND ends_at IS ?)",
+    try {
+      await db.batch(statements);
+    } catch (error) {
+      if (error instanceof Error && error.message.includes("audit_log.idempotency_key")) {
+        const committed = await completedIssue(db, eventId, actorId, input, requestDigest);
+        if (committed) return committed;
+      }
+      // The whole command rolls back before regenerating a colliding credential.
+      if (
+        error instanceof Error &&
+        /UNIQUE constraint failed: event_badge_credentials\.credential_hash(?:\s|:|$)/.test(error.message)
       )
-      .bind(
-        id,
-        eventId,
-        input.userId,
-        credentialHash,
-        now,
-        expiresAt,
-        printCredentialJson,
-        eventId,
-        input.userId,
-        eventId,
-        event.ends_at,
-      ),
-    prepareScopedAuditLogAfterOneChange(
-      db,
-      scope,
-      "user",
-      actorId,
-      "badge_issued",
-      "event_badge_credential",
-      id,
-      { userId: input.userId, replacedBadgeId: input.replaceBadgeId ?? null, expiresAt },
-      now,
-    ),
-  );
-  try {
-    await db.batch(statements);
-  } catch (error) {
-    if (error instanceof Error && error.message.includes("audit_log.idempotency_key")) {
-      const committed = await completedIssue(db, eventId, actorId, input, requestDigest);
-      if (committed) return committed;
+        continue;
+      throwBadgeCommandError(error);
     }
-    throwBadgeCommandError(error);
+    return badgeIssueResponseSchema.parse({
+      result: "issued",
+      id,
+      credential,
+      expiresAt,
+      replacedBadgeId: previous?.id ?? null,
+    });
   }
-  return badgeIssueResponseSchema.parse({
-    result: "issued",
-    id,
-    credential,
-    expiresAt,
-    replacedBadgeId: previous?.id ?? null,
-  });
+  throw new AppError(503, "BADGE_ISSUANCE_RETRY", "A unique badge code could not be issued. Try again.");
 }
 
 /** Keep credential IDs for historical scan evidence; repeated revocation never rewrites the first receipt. */

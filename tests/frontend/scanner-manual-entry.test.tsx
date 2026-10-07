@@ -49,13 +49,15 @@ it("focuses the real badge input on opening and reopening, preserving controlled
     details.dispatchEvent(new Event("toggle"));
   });
   expect(document.activeElement).toBe(input);
-  const badgeId = "11111111-1111-4111-8111-111111111111";
+  const badgeId = "abcd-efgh-jklm-npqr";
   await act(() => {
     input.value = badgeId;
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
   expect(host.querySelector('input[name="badgeId"]')).toBe(input);
   expect(input.value).toBe(badgeId);
+  expect(host.textContent).toContain("Spaces and hyphens are optional.");
+  expect(host.textContent).not.toContain("credential reference");
   expect(document.activeElement).toBe(input);
   expect(host.querySelector('button[type="submit"]')?.textContent).toBe("Record attendance");
 

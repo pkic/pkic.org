@@ -142,7 +142,7 @@ export function SessionManagementTools({
         An invitation grants access to this session. It does not create event registration, approval, or a reserved
         seat.
       </p>
-      <form noValidate {...invitation.handlers} onSubmit={invite}>
+      <form noValidate {...invitation.handlers} onSubmit={invite} class="pk-form">
         <Field label="Attendee" {...invitation.of("userId")}>
           {(control) => (
             <UserPicker
@@ -234,7 +234,7 @@ export function SessionManagementTools({
       {info?.canDelegate && info.speakers.length > 0 && (
         <>
           <h3>Speaker delegation</h3>
-          <form noValidate {...delegation.handlers} onSubmit={delegate}>
+          <form noValidate {...delegation.handlers} onSubmit={delegate} class="pk-form">
             <Field label="Assigned speaker" {...delegation.of("userId")}>
               {(control) => (
                 <Select

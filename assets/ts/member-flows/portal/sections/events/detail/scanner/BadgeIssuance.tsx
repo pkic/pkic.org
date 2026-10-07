@@ -1,3 +1,4 @@
+import { composeBadgePrintSvg } from "../../../../../../../shared/badge-print-svg";
 import { formatDateTime } from "../../../../../../../shared/format-date";
 import { TextInput } from "../../../../../../ui/TextControl";
 import { useState } from "preact/hooks";
@@ -56,7 +57,10 @@ export function BadgeIssuance({
   });
   async function preparePrint(issued: Extract<BadgeIssueResponse, { result: "issued" }>) {
     const { default: QR } = await import("qrcode");
-    const svg = await QR.toString(issued.credential, { type: "svg", errorCorrectionLevel: "M", margin: 4 });
+    const svg = composeBadgePrintSvg(
+      await QR.toString(issued.credential, { type: "svg", errorCorrectionLevel: "M", margin: 4 }),
+      issued.credential,
+    );
     const displayName =
       replacement?.displayName ?? ([user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Attendee");
     setPrintable({ id: issued.id, credential: issued.credential, displayName, svg });

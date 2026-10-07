@@ -31,24 +31,25 @@ export function ScannerManualEntry({
   return (
     <details ref={manual} open={open} onToggle={(event) => onOpen(event.currentTarget.open)}>
       <summary>Enter or paste badge code</summary>
-      <p>
-        Paste the full code from a PKI Consortium badge, or use a connected badge reader. Short codes are not available
-        yet.
-      </p>
-      <Field label="Badge code" {...field}>
-        {(control) => (
-          <TextInput
-            {...control}
-            name="badgeId"
-            value={badgeId}
-            onInput={(event) => onBadge(event.currentTarget.value)}
-            autoComplete="off"
-          />
-        )}
-      </Field>
-      <Button type="submit" loading={busy}>
-        {scannerActionLabel(action)}
-      </Button>
+      <div class="pk-form">
+        <p>Type or paste the badge code printed below the QR. Spaces and hyphens are optional.</p>
+        <Field label="Badge code" {...field}>
+          {(control) => (
+            <TextInput
+              {...control}
+              name="badgeId"
+              value={badgeId}
+              onInput={(event) => onBadge(event.currentTarget.value)}
+              autoComplete="off"
+            />
+          )}
+        </Field>
+        <div class="pk-cluster">
+          <Button type="submit" loading={busy}>
+            {scannerActionLabel(action)}
+          </Button>
+        </div>
+      </div>
     </details>
   );
 }

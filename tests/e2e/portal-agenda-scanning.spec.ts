@@ -1,3 +1,4 @@
+import { generateBadgeCredential } from "../../assets/shared/schemas/badge-credential";
 import { SCAN_STORAGE_VERSION } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/outbox-storage";
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
@@ -265,7 +266,7 @@ test("phone scanner retains an IDs-only offline scan and acknowledges it after r
   ).toHaveCount(0);
   await page.screenshot({ animations: "disabled", path: testInfo.outputPath("scanner-simple-operator-phone.png") });
   await context.setOffline(true);
-  const badgeId = randomUUID();
+  const badgeId = generateBadgeCredential();
   await openScannerManualEntry(page);
   await page.getByLabel("Badge code", { exact: true }).fill(badgeId);
   await page.getByRole("button", { name: "Record attendance", exact: true }).click();

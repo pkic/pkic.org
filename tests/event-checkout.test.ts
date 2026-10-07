@@ -1,3 +1,4 @@
+import { generateBadgeCredential } from "../assets/shared/schemas/badge-credential";
 import { callApi } from "./helpers/app";
 import type { Env } from "../functions/_lib/types";
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
@@ -84,7 +85,9 @@ describe("Event checkout evidence", () => {
       attendanceRecorded: false,
       admissionRecorded: false,
     });
-    expect(await (await scan(scanBody({ action: "checkout", badgeId: crypto.randomUUID() }))).json()).toMatchObject({
+    expect(
+      await (await scan(scanBody({ action: "checkout", badgeId: generateBadgeCredential() }))).json(),
+    ).toMatchObject({
       outcome: "unknown",
       recorded: false,
       attendanceRecorded: false,

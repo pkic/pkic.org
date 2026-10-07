@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { databaseIdSchema } from "../../../../assets/shared/schemas/identifiers";
+import { badgeCredentialSchema } from "../../../../assets/shared/schemas/badge-credential";
 import { AppError } from "../../errors";
 import type { Env } from "../../types";
 import { openValue, sealValue } from "../../utils/sealed-value";
@@ -57,7 +57,7 @@ export async function recoverBadgeCredential(
   try {
     const stored = envelopeSchema.parse(JSON.parse(envelope));
     if (!Object.hasOwn(ring.keys, stored.keyId)) return unavailable();
-    const credential = databaseIdSchema.parse(
+    const credential = badgeCredentialSchema.parse(
       await openValue(stored.sealed, ring.keys[stored.keyId]!, purpose, additionalData(binding)),
     );
     if ((await hashBadgeCredential(credential)) !== binding.credentialHash) return unavailable();

@@ -120,7 +120,7 @@ export function ScannerRecovery({
       link.click();
       window.setTimeout(() => URL.revokeObjectURL(url), 1000);
       setMessage(
-        `Downloaded ${formatNumber(records.length)} uploaded scans and ${formatNumber(pending.length)} pending scans. The backup contains IDs and outcomes only.`,
+        `Downloaded ${formatNumber(records.length)} uploaded scans and ${formatNumber(pending.length)} pending scans. The file contains usable badge codes. Keep it private.`,
       );
     } catch (error) {
       setMessage(
@@ -139,65 +139,68 @@ export function ScannerRecovery({
       }}
     >
       <summary>Recovery backup</summary>
-      <p>
-        Uploaded scans remain on this phone for {formatNumber(14)} days using IDs, timestamps, and outcomes only.
-        Pending uploads remain until the server acknowledges them. Browser storage can be cleared; download a separate
-        recovery copy.
-      </p>
-      <p>{formatNumber(count)} uploaded scans available for this event and your account.</p>
-      <p>{formatNumber(pendingCount)} pending scans included in recovery downloads.</p>
-      <Button
-        type="button"
-        loading={busy}
-        disabled={!count}
-        onClick={() => {
-          void restore();
-        }}
-      >
-        Restore uploaded scans
-      </Button>{" "}
-      <Button
-        type="button"
-        loading={busy}
-        disabled={!count && !pendingCount && !epochCount}
-        onClick={() => {
-          void download();
-        }}
-      >
-        Download recovery IDs
-      </Button>{" "}
-      <Button
-        type="button"
-        onClick={() => {
-          void navigator.storage
-            ?.persist?.()
-            .then((kept) =>
-              setMessage(
-                kept ? "Browser storage retention enabled." : "The browser manages storage retention on this phone.",
-              ),
-            )
-            .catch(() => setMessage("The browser manages storage retention on this phone."));
-        }}
-      >
-        Keep browser storage
-      </Button>
-      <Field
-        label="Recovery file"
-        help="Choose a recovery JSON file downloaded for this event and your account. An internet connection is required to verify it."
-      >
-        {(control) => (
-          <FileInput
-            {...control}
-            accept="application/json,.json"
-            disabled={busy || !sessionId}
-            onFileChange={setFile}
-          />
-        )}
-      </Field>
-      <Button type="button" loading={busy} disabled={!file || !sessionId} onClick={() => void importFile()}>
-        Import recovery file
-      </Button>
-      {message && <p role="status">{message}</p>}
+      <div class="pk-form">
+        <p>
+          Uploaded scan records remain on this phone for {formatNumber(14)} days, including badge codes and minimal scan
+          context. Pending uploads remain until the server acknowledges them. Browser storage can be cleared; download a
+          separate recovery copy. Recovery files contain usable badge codes; keep them private. No attendee profiles or
+          contact details are included.
+        </p>
+        <p>{formatNumber(count)} uploaded scans available for this event and your account.</p>
+        <p>{formatNumber(pendingCount)} pending scans included in recovery downloads.</p>
+        <Button
+          type="button"
+          loading={busy}
+          disabled={!count}
+          onClick={() => {
+            void restore();
+          }}
+        >
+          Restore uploaded scans
+        </Button>{" "}
+        <Button
+          type="button"
+          loading={busy}
+          disabled={!count && !pendingCount && !epochCount}
+          onClick={() => {
+            void download();
+          }}
+        >
+          Download recovery file
+        </Button>{" "}
+        <Button
+          type="button"
+          onClick={() => {
+            void navigator.storage
+              ?.persist?.()
+              .then((kept) =>
+                setMessage(
+                  kept ? "Browser storage retention enabled." : "The browser manages storage retention on this phone.",
+                ),
+              )
+              .catch(() => setMessage("The browser manages storage retention on this phone."));
+          }}
+        >
+          Keep browser storage
+        </Button>
+        <Field
+          label="Recovery file"
+          help="Choose a recovery JSON file downloaded for this event and your account. An internet connection is required to verify it."
+        >
+          {(control) => (
+            <FileInput
+              {...control}
+              accept="application/json,.json"
+              disabled={busy || !sessionId}
+              onFileChange={setFile}
+            />
+          )}
+        </Field>
+        <Button type="button" loading={busy} disabled={!file || !sessionId} onClick={() => void importFile()}>
+          Import recovery file
+        </Button>
+        {message && <p role="status">{message}</p>}
+      </div>
     </details>
   );
 }

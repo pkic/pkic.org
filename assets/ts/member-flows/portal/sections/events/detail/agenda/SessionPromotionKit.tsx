@@ -108,7 +108,7 @@ export function SessionPromotionKit({
       </PanelHeader>
       <PanelBody>
         {snapshot && (
-          <form noValidate onSubmit={approve}>
+          <form noValidate onSubmit={approve} class="pk-form">
             <p>
               Review the narrative, then approve the agenda to release this copy with its schedule and speaker credits.
             </p>

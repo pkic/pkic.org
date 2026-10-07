@@ -1,3 +1,6 @@
+import { composeBadgePrintSvg } from "../assets/shared/badge-print-svg";
+import { formatBadgeCredential } from "../assets/shared/schemas/badge-credential";
+import { sealBadgeCredential } from "../functions/_lib/services/event-participation/badge-print-protection";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import QRCode from "qrcode";
@@ -27,7 +30,10 @@ async function badge() {
 function request(path: string, init: RequestInit = {}, overrides: Partial<Env> = {}, token = fixture.token) {
   return callApi({ ...env, ...overrides }, path, {
     ...init,
-    headers: { "content-type": "application/json", authorization: `Bearer ${token}` },
+    headers: {
+      "content-type": "application/json",
+      authorization: `Bearer ${token}`,
+    },
   });
 }
 function print(id: string, operationId = crypto.randomUUID(), overrides: Partial<Env> = {}, token = fixture.token) {
@@ -95,8 +101,16 @@ describe("Authenticated recovery of the same active badge print", () => {
     expect(artifact.id).toBe(id);
     expect(artifact.displayName).toBe("Ada Lovelace");
     expect(artifact.svg).toBe(
-      await QRCode.toString(fixture.badgeId, { type: "svg", errorCorrectionLevel: "M", margin: 4 }),
+      composeBadgePrintSvg(
+        await QRCode.toString(fixture.badgeId, {
+          type: "svg",
+          errorCorrectionLevel: "M",
+          margin: 4,
+        }),
+        fixture.badgeId,
+      ),
     );
+    expect(artifact.svg).toContain(formatBadgeCredential(fixture.badgeId));
     expect(Object.keys(artifact)).not.toContain("credential");
     expect(await state()).toEqual(before);
     const replay = await print(id, operationId);
@@ -114,7 +128,40 @@ describe("Authenticated recovery of the same active badge print", () => {
     expect(JSON.stringify(inventory)).not.toContain(fixture.badgeId);
     const scan = await fixture.scan(fixture.scanBody({ action: "attendance", occurrenceId: null }));
     expect(scan.status).toBe(200);
-    expect(await scan.json()).toMatchObject({ outcome: "eligible", attendanceRecorded: true });
+    expect(await scan.json()).toMatchObject({
+      outcome: "eligible",
+      attendanceRecorded: true,
+    });
+  });
+  it("refuses an unsupported sealed credential instead of printing another format", async () => {
+    const id = crypto.randomUUID(),
+      credential = "abcdefab-cdef-4abc-8abc-abcdefabcdef";
+    const credentialHash = await hashBadgeCredential(credential);
+    const envelope = await sealBadgeCredential(
+      env,
+      { eventId: fixture.eventId, id, userId: fixture.userId, credentialHash },
+      credential,
+    );
+    await env.DB.prepare(
+      "INSERT INTO event_badge_credentials(id,event_id,user_id,credential_hash,created_at,expires_at,print_credential_json) VALUES(?,?,?,?,?,?,?)",
+    )
+      .bind(
+        id,
+        fixture.eventId,
+        fixture.userId,
+        credentialHash,
+        new Date().toISOString(),
+        "2099-01-01T00:00:00.000Z",
+        envelope,
+      )
+      .run();
+    const before = await state(),
+      beforeAudits = await audits(),
+      response = await print(id);
+    expect(response.status).toBe(503);
+    expect(await response.json()).toMatchObject({ error: { code: "BADGE_PRINT_UNAVAILABLE" } });
+    expect(await state()).toEqual(before);
+    expect(await audits()).toEqual(beforeAudits);
   });
   it("keeps issuance retries metadata-only while explicit print remains available", async () => {
     const body = { userId: fixture.userId, operationId: crypto.randomUUID() };
@@ -161,11 +208,11 @@ describe("Authenticated recovery of the same active badge print", () => {
     expect(await state()).toEqual(before);
     expect(await audits()).toEqual(log);
   });
-  it.each(["legacy", "revoked", "expired"] as const)(
+  it.each(["missing_envelope", "revoked", "expired"] as const)(
     "refuses %s credentials without replacement or print audit",
     async (kind) => {
       const id = await badge();
-      if (kind === "legacy")
+      if (kind === "missing_envelope")
         await env.DB.prepare("UPDATE event_badge_credentials SET print_credential_json=NULL WHERE id=?").bind(id).run();
       if (kind === "revoked")
         await env.DB.prepare("UPDATE event_badge_credentials SET revoked_at=? WHERE id=?")
@@ -236,7 +283,13 @@ describe("Authenticated recovery of the same active badge print", () => {
       log = await audits();
     const response = await request(
       base,
-      { method: "POST", body: JSON.stringify({ userId: fixture.userId, operationId: crypto.randomUUID() }) },
+      {
+        method: "POST",
+        body: JSON.stringify({
+          userId: fixture.userId,
+          operationId: crypto.randomUUID(),
+        }),
+      },
       { BADGE_PRINT_ENCRYPTION_KEYS: undefined },
     );
     expect(response.status).toBe(503);

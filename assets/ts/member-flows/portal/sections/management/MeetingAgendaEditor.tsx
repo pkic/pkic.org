@@ -156,7 +156,7 @@ function AgendaForm({ agenda, endpoint, groupId }: { agenda: MeetingAgenda; endp
         {immutable && (
           <p>This past or approved occurrence is preserved. Update the reusable format or another future draft.</p>
         )}
-        <form noValidate onSubmit={save}>
+        <form noValidate onSubmit={save} class="pk-form">
           <Field label="Agenda name" {...form.of("name")}>
             {(control) => (
               <TextInput
@@ -192,122 +192,126 @@ function AgendaForm({ agenda, endpoint, groupId }: { agenda: MeetingAgenda; endp
           <ol>
             {items.map((item, index) => (
               <li key={item.id}>
-                <Field label={`Item ${index + 1} title`} {...form.of(`items.${index}.title`)}>
-                  {(control) => (
-                    <TextInput
-                      {...control}
-                      value={item.title}
+                <div class="pk-stack">
+                  <Field label={`Item ${index + 1} title`} {...form.of(`items.${index}.title`)}>
+                    {(control) => (
+                      <TextInput
+                        {...control}
+                        value={item.title}
+                        disabled={immutable}
+                        onInput={(event) =>
+                          setItems(
+                            items.map((value, position) =>
+                              position === index ? { ...value, title: event.currentTarget.value } : value,
+                            ),
+                          )
+                        }
+                      />
+                    )}
+                  </Field>
+                  <Field label="Description" {...form.of(`items.${index}.description`)}>
+                    {(control) => (
+                      <Textarea
+                        {...control}
+                        value={item.description}
+                        disabled={immutable}
+                        onInput={(event) =>
+                          setItems(
+                            items.map((value, position) =>
+                              position === index ? { ...value, description: event.currentTarget.value } : value,
+                            ),
+                          )
+                        }
+                      />
+                    )}
+                  </Field>
+                  <Field label="Duration in minutes" {...form.of(`items.${index}.durationMinutes`)}>
+                    {(control) => (
+                      <TextInput
+                        type="number"
+                        {...control}
+                        value={item.durationMinutes}
+                        min={1}
+                        max={480}
+                        disabled={immutable}
+                        onInput={(event) =>
+                          setItems(
+                            items.map((value, position) =>
+                              position === index
+                                ? { ...value, durationMinutes: Number(event.currentTarget.value) }
+                                : value,
+                            ),
+                          )
+                        }
+                      />
+                    )}
+                  </Field>
+                  <Field label="Add speaker" {...form.of(`items.${index}.speakerUserIds`)}>
+                    {(control) => (
+                      <UserPicker
+                        inputProps={control}
+                        value={null}
+                        disabled={immutable || item.speakerUserIds.length >= 30}
+                        endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/memberships`}
+                        responseSchema={meetingPeopleResponseSchema}
+                        sort="user_name"
+                        placeholder="Search this group's people"
+                        onChange={(person) => {
+                          if (person && !item.speakerUserIds.includes(person.id))
+                            setItems(
+                              items.map((value, position) =>
+                                position === index
+                                  ? { ...value, speakerUserIds: [...value.speakerUserIds, person.id] }
+                                  : value,
+                              ),
+                            );
+                        }}
+                      />
+                    )}
+                  </Field>
+                  {item.speakerUserIds.map((person, position) => (
+                    <Button
+                      type="button"
                       disabled={immutable}
-                      onInput={(event) =>
+                      onClick={() =>
                         setItems(
-                          items.map((value, position) =>
-                            position === index ? { ...value, title: event.currentTarget.value } : value,
-                          ),
-                        )
-                      }
-                    />
-                  )}
-                </Field>
-                <Field label="Description" {...form.of(`items.${index}.description`)}>
-                  {(control) => (
-                    <Textarea
-                      {...control}
-                      value={item.description}
-                      disabled={immutable}
-                      onInput={(event) =>
-                        setItems(
-                          items.map((value, position) =>
-                            position === index ? { ...value, description: event.currentTarget.value } : value,
-                          ),
-                        )
-                      }
-                    />
-                  )}
-                </Field>
-                <Field label="Duration in minutes" {...form.of(`items.${index}.durationMinutes`)}>
-                  {(control) => (
-                    <TextInput
-                      type="number"
-                      {...control}
-                      value={item.durationMinutes}
-                      min={1}
-                      max={480}
-                      disabled={immutable}
-                      onInput={(event) =>
-                        setItems(
-                          items.map((value, position) =>
-                            position === index
-                              ? { ...value, durationMinutes: Number(event.currentTarget.value) }
+                          items.map((value, itemPosition) =>
+                            itemPosition === index
+                              ? { ...value, speakerUserIds: value.speakerUserIds.filter((id) => id !== person) }
                               : value,
                           ),
                         )
                       }
-                    />
+                    >
+                      Remove speaker {position + 1}
+                    </Button>
+                  ))}
+                  {times && (
+                    <p>
+                      {formatDateTimeInZone(times[index]!.startAt, snapshot.timezone)} –{" "}
+                      {formatDateTimeInZone(times[index]!.endAt, snapshot.timezone)}
+                    </p>
                   )}
-                </Field>
-                <Field label="Add speaker" {...form.of(`items.${index}.speakerUserIds`)}>
-                  {(control) => (
-                    <UserPicker
-                      inputProps={control}
-                      value={null}
-                      disabled={immutable || item.speakerUserIds.length >= 30}
-                      endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/memberships`}
-                      responseSchema={meetingPeopleResponseSchema}
-                      sort="user_name"
-                      placeholder="Search this group's people"
-                      onChange={(person) => {
-                        if (person && !item.speakerUserIds.includes(person.id))
-                          setItems(
-                            items.map((value, position) =>
-                              position === index
-                                ? { ...value, speakerUserIds: [...value.speakerUserIds, person.id] }
-                                : value,
-                            ),
-                          );
-                      }}
-                    />
-                  )}
-                </Field>
-                {item.speakerUserIds.map((person, position) => (
-                  <Button
-                    type="button"
-                    disabled={immutable}
-                    onClick={() =>
-                      setItems(
-                        items.map((value, itemPosition) =>
-                          itemPosition === index
-                            ? { ...value, speakerUserIds: value.speakerUserIds.filter((id) => id !== person) }
-                            : value,
-                        ),
-                      )
-                    }
-                  >
-                    Remove speaker {position + 1}
-                  </Button>
-                ))}
-                {times && (
-                  <p>
-                    {formatDateTimeInZone(times[index]!.startAt, snapshot.timezone)} –{" "}
-                    {formatDateTimeInZone(times[index]!.endAt, snapshot.timezone)}
-                  </p>
-                )}
-                <Button type="button" disabled={immutable || index === 0} onClick={() => move(index, index - 1)}>
-                  Move up
-                </Button>
-                <Button
-                  type="button"
-                  disabled={immutable || index === items.length - 1}
-                  onClick={() => move(index, index + 1)}
-                >
-                  Move down
-                </Button>
-                <Button
-                  type="button"
-                  disabled={immutable}
-                  onClick={() => setItems(items.filter((_, position) => position !== index))}
-                >
-                  Remove item
-                </Button>
+                  <div class="pk-cluster">
+                    <Button type="button" disabled={immutable || index === 0} onClick={() => move(index, index - 1)}>
+                      Move up
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={immutable || index === items.length - 1}
+                      onClick={() => move(index, index + 1)}
+                    >
+                      Move down
+                    </Button>
+                    <Button
+                      type="button"
+                      disabled={immutable}
+                      onClick={() => setItems(items.filter((_, position) => position !== index))}
+                    >
+                      Remove item
+                    </Button>
+                  </div>
+                </div>
               </li>
             ))}
           </ol>

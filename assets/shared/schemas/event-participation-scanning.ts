@@ -1,3 +1,4 @@
+import { badgeCredentialSchema } from "./badge-credential";
 import { scannerAdmissionDecisionSchema } from "./event-scanner-admission";
 import { offlineAdmissionRightSchema } from "./event-offline-rights";
 import { attendanceCaptureRequestFieldsSchema, refineAttendanceCaptureIntent } from "./event-attendance-capture";
@@ -59,7 +60,7 @@ const eventScanRequestFieldsSchema = z
     ...attendanceCaptureRequestFieldsSchema.shape,
     operationId: databaseIdSchema,
     deviceId: databaseIdSchema,
-    badgeId: databaseIdSchema,
+    badgeId: badgeCredentialSchema,
     occurrenceId: databaseIdSchema.nullable(),
     roomId: databaseIdSchema.nullable().optional(),
     action: scanActionSchema,
@@ -92,7 +93,11 @@ function refineScanIntent(value: z.infer<typeof eventScanRequestFieldsSchema>, c
       value.consentConfirmed !== undefined ||
       value.recordAttendance !== undefined)
   )
-    context.addIssue({ code: "custom", path: ["action"], message: "Checkout records departure only." });
+    context.addIssue({
+      code: "custom",
+      path: ["action"],
+      message: "Checkout records departure only.",
+    });
   if (value.recordAttendance && value.action !== "exception")
     context.addIssue({
       code: "custom",
@@ -100,7 +105,11 @@ function refineScanIntent(value: z.infer<typeof eventScanRequestFieldsSchema>, c
       message: "Record attendance with attendance mode or an explicit exception confirmation.",
     });
   if (value.action === "exception" && !value.exceptionReason)
-    context.addIssue({ code: "custom", path: ["exceptionReason"], message: "Choose an exception reason." });
+    context.addIssue({
+      code: "custom",
+      path: ["exceptionReason"],
+      message: "Choose an exception reason.",
+    });
   if (value.action === "lead" && (!value.sponsorId || value.consentConfirmed !== true))
     context.addIssue({
       code: "custom",
@@ -142,7 +151,9 @@ export const enrolledEventScanRequestSchema = eventScanRequestSchema.safeExtend(
   scannerSession: scannerSessionSchema,
 });
 export type EnrolledEventScanRequest = z.infer<typeof enrolledEventScanRequestSchema>;
-export const enrolledEventScanResponseSchema = eventScanResponseSchema.extend({ scannerReceipt: scannerReceiptSchema });
+export const enrolledEventScanResponseSchema = eventScanResponseSchema.extend({
+  scannerReceipt: scannerReceiptSchema,
+});
 export type EventScanResponse = z.infer<typeof eventScanResponseSchema>;
 export type OfflineScanRecord = z.infer<typeof offlineScanRecordSchema>;
 export const scannerTargetQuerySchema = listQuerySchema(["title"] as const).extend({
@@ -170,7 +181,11 @@ function scanSchemaForRooms<T extends z.ZodType<EventScanRequest>>(schema: T, ro
         message: "Choose the physical room where this badge is scanned.",
       });
     if (value.roomId && (!value.occurrenceId || !roomIds.includes(value.roomId)))
-      context.addIssue({ code: "custom", path: ["roomId"], message: "Choose a room reserved for this session." });
+      context.addIssue({
+        code: "custom",
+        path: ["roomId"],
+        message: "Choose a room reserved for this session.",
+      });
   });
 }
 

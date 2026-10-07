@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { generateBadgeCredential } from "../../assets/shared/schemas/badge-credential";
 import { writeFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { formatDateTime } from "../../assets/shared/format-date";
@@ -98,7 +98,7 @@ test("real pending scanner storage survives reload and logout without crossing a
   }
 
   await context.setOffline(true);
-  const badgeId = randomUUID();
+  const badgeId = generateBadgeCredential();
   await openScannerManualEntry(page);
   await page.getByLabel("Badge code", { exact: true }).fill(badgeId);
   await page.getByRole("button", { name: "Record attendance", exact: true }).click();
@@ -357,7 +357,7 @@ test("real pending scanner storage survives reload and logout without crossing a
     // A valid file with the same operation/sequence but substituted immutable badge data must fail atomically.
     const conflicting = scanRecoverySchema.parse({
       ...pendingBackup,
-      pending: [{ eventId: slug, scan: { ...original, badgeId: randomUUID() } }],
+      pending: [{ eventId: slug, scan: { ...original, badgeId: generateBadgeCredential() } }],
     });
     const conflictPath = testInfo.outputPath("scanner-recovery-conflict.json");
     await writeFile(conflictPath, JSON.stringify(conflicting));

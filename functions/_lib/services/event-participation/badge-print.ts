@@ -1,3 +1,4 @@
+import { composeBadgePrintSvg } from "../../../../assets/shared/badge-print-svg";
 import QRCode from "qrcode";
 import {
   badgePrintResponseSchema,
@@ -43,7 +44,7 @@ export async function prepareBadgePrint(
     throw new AppError(
       409,
       "BADGE_PRINT_UNAVAILABLE",
-      "This older badge has no recoverable print file. Use a saved original file or explicitly replace it.",
+      "This badge has no recoverable print file. Use a saved original file or explicitly replace it.",
     );
   const credential = await recoverBadgeCredential(
     environment,
@@ -55,7 +56,14 @@ export async function prepareBadgePrint(
     },
     row.print_credential_json,
   );
-  const svg = await QRCode.toString(credential, { type: "svg", errorCorrectionLevel: "M", margin: 4 });
+  const svg = composeBadgePrintSvg(
+    await QRCode.toString(credential, {
+      type: "svg",
+      errorCorrectionLevel: "M",
+      margin: 4,
+    }),
+    credential,
+  );
   const metadata = await getBadgeCredential(db, eventId, badgeId);
   // No artifact leaves the service unless its exact captured row is still active and the event is open for evidence.
   await db.batch([

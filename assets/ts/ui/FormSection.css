@@ -86,6 +86,11 @@
     grid-column: 1 / -1;
   }
 
+  /* A disclosure groups several fields and keeps the full form width. */
+  .pk-form-section__fields > .pk-panel {
+    grid-column: 1 / -1;
+  }
+
   /*
    * Prose takes the row too. A biography or a description is read across a
    * measure, and a textarea in a half-width track is a column of five words.

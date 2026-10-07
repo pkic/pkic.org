@@ -1,3 +1,4 @@
+import { generateBadgeCredential } from "../assets/shared/schemas/badge-credential";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
@@ -185,7 +186,7 @@ describe("Scanner admission decisions are independent evidence", () => {
       attendanceRecorded: false,
       reason: "verification_required",
     });
-    const unknown = await receive(scanBody({ action: "admission", badgeId: crypto.randomUUID() }));
+    const unknown = await receive(scanBody({ action: "admission", badgeId: generateBadgeCredential() }));
     expect(unknown).toMatchObject({
       outcome: "unknown",
       recorded: false,

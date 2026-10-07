@@ -5,6 +5,12 @@ import { Button } from "../../ui/Button";
  * therefore enter the portal without being granted member-only API access.
  */
 import { useEffect, useState } from "preact/hooks";
+import { lazy, Suspense } from "preact/compat";
+import {
+  scannerCollectorPath,
+  clearScannerOfflineContexts,
+  scannerTransportUnavailable,
+} from "./sections/events/detail/scanner/scanner-offline-context";
 import { getJson, postJson, ApiClientError } from "../../shared/api-client";
 import {
   authStatus,
@@ -45,6 +51,11 @@ import { meetingEntryReturnUrl } from "../../../shared/meeting-entry-navigation"
 import { MeetingEntryReturn } from "./shell/MeetingEntryReturn";
 import { useSessionExpiry } from "./use-session-expiry";
 import { useSessionActivity } from "./use-session-activity";
+const OfflineScannerBootstrap = lazy(() =>
+  import("./sections/events/detail/scanner/OfflineScannerBootstrap").then((module) => ({
+    default: module.OfflineScannerBootstrap,
+  })),
+);
 
 async function verifyMagicLink(token: string): Promise<PortalSession> {
   const session = await postJson("/api/v1/auth/verify-link", { token }, userAuthEstablishedResponseSchema);
@@ -64,9 +75,12 @@ export function App() {
   const [reauthenticating, setReauthenticating] = useState(false);
 
   async function loadPortalSession(): Promise<boolean> {
+    scannerTransportUnavailable.value = false;
     setSessionError(null);
     const checkedSessionId = portalSession.value?.sessionId;
+    let checkedLocalSession: Awaited<ReturnType<typeof readActiveUserSession>> = null;
     try {
+      checkedLocalSession = await readActiveUserSession();
       const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
       if (!(await recordCanonicalSession({ sessionId: session.sessionId, operatorUserId: session.identity.id }))) {
         if (portalSession.value?.sessionId === session.sessionId) clearAuth();
@@ -83,9 +97,15 @@ export function App() {
       }
     } catch (error) {
       if (error instanceof ApiClientError && [401, 403].includes(error.status)) {
+        await clearScannerOfflineContexts(checkedLocalSession).catch(() => {
+          setSessionError("Local scanner preparation could not be cleared. Reconnect before scanning.");
+        });
         if (portalSession.value?.sessionId === checkedSessionId) clearUserSession();
-      } else
+      } else {
+        scannerTransportUnavailable.value =
+          error instanceof ApiClientError && error.status === 0 && error.code === "NETWORK_UNAVAILABLE";
         setSessionError("We could not refresh your sign-in information. Keep this page open and try again shortly.");
+      }
     }
 
     finishAuthCheck();
@@ -168,6 +188,7 @@ export function App() {
 
   useEffect(() => {
     async function changed() {
+      scannerTransportUnavailable.value = false;
       const current = portalSession.value;
       if (!current) return;
       try {
@@ -187,6 +208,7 @@ export function App() {
     });
     window.addEventListener("online", reconnect);
     return () => {
+      scannerTransportUnavailable.value = false;
       unsubscribe();
       window.removeEventListener("online", reconnect);
     };
@@ -218,6 +240,15 @@ export function App() {
       </Button>
     </Alert>
   ) : null;
+  const collectorRoute = scannerCollectorPath(window.location.hash);
+  if (sessionError && !isAuthed.value && scannerTransportUnavailable.value && collectorRoute)
+    return (
+      <div class="pk pk-stack">
+        <Suspense fallback={<VerifyingOverlay />}>
+          <OfflineScannerBootstrap route={collectorRoute} onCheckSignIn={() => void loadPortalSession()} />
+        </Suspense>
+      </div>
+    );
   if (sessionError && !isAuthed.value) return <div class="pk pk-stack">{sessionNotice}</div>;
 
   if (isAuthed.value) {

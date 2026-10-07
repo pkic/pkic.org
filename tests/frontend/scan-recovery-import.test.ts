@@ -34,7 +34,7 @@ const pending = offlineScanRecordSchema.parse({
   scan: {
     operatorUserId: scope.operatorUserId,
     deviceId: epoch.deviceId,
-    badgeId: id("3"),
+    badgeId: "ABCDEFGHJKLMNPQR",
     operationId: id("4"),
     occurrenceId: null,
     action: "check",
@@ -344,7 +344,12 @@ describe("downloaded scanner recovery import", () => {
     };
     tables
       .get("scans")!
-      .set(extra.scan.operationId, { ...extra, scan: { ...extra.scan, badgeId: id("9") }, owner: null, leaseUntil: 0 });
+      .set(extra.scan.operationId, {
+        ...extra,
+        scan: { ...extra.scan, badgeId: "23456789ABCDEFGH" },
+        owner: null,
+        leaseUntil: 0,
+      });
     const before = structuredClone(tables);
     await expect(importBackup({ ...backup(), pending: [pending, extra] })).rejects.toThrow("conflicts");
     expect(tables).toEqual(before);

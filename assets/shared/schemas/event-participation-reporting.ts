@@ -1,3 +1,4 @@
+import { badgeCredentialSchema } from "./badge-credential";
 import { z } from "zod";
 import { attendanceCaptureRequestFieldsSchema, refineAttendanceCaptureIntent } from "./event-attendance-capture";
 import { databaseIdSchema } from "./identifiers";
@@ -51,7 +52,7 @@ export const leadCaptureRequestSchema = z
     operationId: databaseIdSchema,
     deviceId: databaseIdSchema,
     consentConfirmed: z.literal(true),
-    badgeId: databaseIdSchema,
+    badgeId: badgeCredentialSchema,
     observedAt: utcInstantSchema,
   })
   .strict()

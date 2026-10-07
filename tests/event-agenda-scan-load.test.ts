@@ -1,3 +1,4 @@
+import { generateBadgeCredential } from "../assets/shared/schemas/badge-credential";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
@@ -167,7 +168,9 @@ describe("high-volume event scanner", () => {
       const denied = await runBurst(deniedScans, 32, deniedExpected);
       const deniedReplay = await runBurst(deniedScans.slice(0, 256), 32, deniedExpected);
       const unknown = await runBurst(
-        scans.slice(0, 64).map((scan) => ({ ...scan, operationId: crypto.randomUUID(), badgeId: crypto.randomUUID() })),
+        scans
+          .slice(0, 64)
+          .map((scan) => ({ ...scan, operationId: crypto.randomUUID(), badgeId: generateBadgeCredential() })),
         32,
         { outcome: "unknown", reason: "unknown_credential", recorded: false, attendanceRecorded: false },
       );
@@ -347,7 +350,7 @@ describe("high-volume event scanner", () => {
               epochId: epoch.epochId,
               sequence: kind === "invalid" ? Math.max(1, epoch.sequence) : ++epoch.sequence,
             },
-            badgeId: kind === "unknown" ? crypto.randomUUID() : attendee.credential,
+            badgeId: kind === "unknown" ? generateBadgeCredential() : attendee.credential,
             occurrenceId: kind === "warning" ? occurrenceId : null,
             action: kind === "admission" || kind === "denied_admission" ? "admission" : "attendance",
             capturePublicationRevision: 0,

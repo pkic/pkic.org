@@ -14,6 +14,7 @@ import { TabList } from "../../../../../../ui/TabList";
 import { Badge } from "../../../../../../ui/Badge";
 import { Button } from "../../../../../../ui/Button";
 import { DescriptionList } from "../../../../../../ui/DescriptionList";
+import { PanelHeader, PanelBody } from "../../../../../../ui/Panel";
 import { StaffingShortfalls } from "./StaffingShortfalls";
 
 export function StaffingOverview({
@@ -54,20 +55,19 @@ export function StaffingOverview({
   const postName = (id: string | null) => snapshot.staffingPosts.find((row) => row.id === id)?.name ?? "Event";
   if (shift && requirement)
     return (
-      <section class="pk-stack">
-        <div class="pk-cluster">
+      <section>
+        <PanelHeader title={`${roleName(requirement.roleId)} · ${postName(requirement.postId)}`} headingLevel={4}>
           <Button onClick={() => setRequirement(null)}>Back to shift</Button>
-          <h3>
-            {roleName(requirement.roleId)} · {postName(requirement.postId)}
-          </h3>
-        </div>
-        <DescriptionList
-          items={[
-            { term: "Shift", value: shift.name },
-            { term: "Time", value: formatTimeRangeInZone(shift.startAt, shift.endAt, snapshot.timeZone) },
-            { term: "Ideal people", value: formatNumber(requirement.idealCount) },
-          ]}
-        />
+        </PanelHeader>
+        <PanelBody>
+          <DescriptionList
+            items={[
+              { term: "Shift", value: shift.name },
+              { term: "Time", value: formatTimeRangeInZone(shift.startAt, shift.endAt, snapshot.timeZone) },
+              { term: "Ideal people", value: formatNumber(requirement.idealCount) },
+            ]}
+          />
+        </PanelBody>
         <DataTable
           caption="Staffing positions"
           data={snapshot.staffingPositions.filter((row) => row.requirementId === requirement.id)}
@@ -110,22 +110,25 @@ export function StaffingOverview({
             },
           ]}
         />
-        <StaffingShortfalls snapshot={snapshot} requirementId={requirement.id} />
+        <PanelBody>
+          <StaffingShortfalls snapshot={snapshot} requirementId={requirement.id} />
+        </PanelBody>
       </section>
     );
   if (shift)
     return (
-      <section class="pk-stack">
-        <div class="pk-cluster">
+      <section>
+        <PanelHeader title={shift.name} headingLevel={4}>
           <Button onClick={() => setShift(null)}>Back to staffing</Button>
-          <h3>{shift.name}</h3>
-        </div>
-        <DescriptionList
-          items={[
-            { term: "Time", value: formatTimeRangeInZone(shift.startAt, shift.endAt, snapshot.timeZone) },
-            { term: "Time zone", value: snapshot.timeZone },
-          ]}
-        />
+        </PanelHeader>
+        <PanelBody>
+          <DescriptionList
+            items={[
+              { term: "Time", value: formatTimeRangeInZone(shift.startAt, shift.endAt, snapshot.timeZone) },
+              { term: "Time zone", value: snapshot.timeZone },
+            ]}
+          />
+        </PanelBody>
         <DataTable
           caption="Shift staffing needs"
           data={snapshot.staffingRequirements.filter((row) => row.shiftId === shift.id)}

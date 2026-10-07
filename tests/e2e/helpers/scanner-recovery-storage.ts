@@ -88,7 +88,7 @@ export async function openScannerRecovery(page: Page): Promise<void> {
 /** Parse the actual download through the same canonical recovery-file contract. */
 export async function downloadScannerRecoveryFile(page: Page) {
   const downloading = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download recovery IDs", exact: true }).click();
+  await page.getByRole("button", { name: "Download recovery file", exact: true }).click();
   const download = await downloading;
   expect(await download.failure()).toBeNull();
   const path = await download.path();

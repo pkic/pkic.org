@@ -14,7 +14,9 @@ import { render, type ComponentChild } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { SponsorCapacity } from "../../assets/shared/schemas/sponsor-access";
+import { sponsorCapacitySchema, type SponsorCapacity } from "../../assets/shared/schemas/sponsor-access";
+import { portalSession } from "../../assets/ts/member-flows/portal/state";
+import { portalSessionFixture } from "../helpers/portal-session";
 import { SponsorWorkspace } from "../../assets/ts/member-flows/portal/sections/sponsors";
 import { tabNames, tabs } from "./helpers/tabs";
 
@@ -29,16 +31,19 @@ vi.mock("../../assets/ts/member-flows/portal/sections/sponsors/management/Sponso
 }));
 
 function capacity(overrides: Partial<SponsorCapacity> = {}): SponsorCapacity {
-  return {
+  return sponsorCapacitySchema.parse({
+    eventId: "00000000-0000-4000-8000-000000000003",
+    contactEmail: "sponsor@example.test",
     sponsorId: "00000000-0000-4000-8000-000000000001",
     eventSlug: "pqc-2026",
     eventName: "PQC Conference 2026",
     tier: "gold",
     ...overrides,
-  } as SponsorCapacity;
+  });
 }
 
 let container: HTMLElement | null = null;
+const previousSession = portalSession.value;
 
 function mount(node: ComponentChild): HTMLElement {
   container = document.createElement("div");
@@ -53,10 +58,71 @@ afterEach(() => {
     container.remove();
     container = null;
   }
+  portalSession.value = previousSession;
   vi.clearAllMocks();
 });
 
 describe("sponsor workspace shell", () => {
+  it("opens the canonical scanner only for the selected sponsorship's capture grant", async () => {
+    const first = capacity();
+    const second = capacity({
+      sponsorId: "00000000-0000-4000-8000-000000000002",
+      eventId: "00000000-0000-4000-8000-000000000005",
+      eventSlug: "second-event",
+    });
+    portalSession.value = portalSessionFixture({
+      staff: true,
+      administrator: false,
+      grants: [{ permission: "agenda:leads_capture", contextType: "event_sponsor", contextId: first.sponsorId }],
+    });
+    const workspace = mount(
+      <SponsorWorkspace sponsors={[first, second]} canRead={false} canWrite={false} onSessionExpired={vi.fn()} />,
+    );
+    const scannerLink = () => [...workspace.querySelectorAll("a")].find((link) => link.textContent === "Lead scanner");
+    expect(scannerLink()?.getAttribute("href")).toBe(`#/events/${first.eventSlug}/sponsors/${first.sponsorId}/scanner`);
+    const label = [...workspace.querySelectorAll("label")].find((item) => item.textContent === "Sponsorship")!;
+    const picker = workspace.querySelector<HTMLSelectElement>(`[id="${label.htmlFor}"]`)!;
+    await act(() => {
+      picker.value = second.sponsorId;
+      picker.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(scannerLink()).toBeUndefined();
+    await act(() => {
+      picker.value = first.sponsorId;
+      picker.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(scannerLink()?.getAttribute("href")).toBe(`#/events/${first.eventSlug}/sponsors/${first.sponsorId}/scanner`);
+  });
+
+  it.each([
+    {
+      permission: "agenda:leads_capture",
+      contextType: "event_sponsor",
+      contextId: "00000000-0000-4000-8000-000000000002",
+    },
+    { permission: "agenda:leads_capture", contextType: "event", contextId: "00000000-0000-4000-8000-000000000003" },
+    {
+      permission: "agenda:leads_export",
+      contextType: "event_sponsor",
+      contextId: "00000000-0000-4000-8000-000000000001",
+    },
+  ])("does not disclose scanner access from an unrelated grant ($contextType/$permission)", (grant) => {
+    portalSession.value = portalSessionFixture({ staff: true, administrator: false, grants: [grant] });
+    const workspace = mount(<SponsorWorkspace sponsors={[capacity()]} canRead canWrite onSessionExpired={vi.fn()} />);
+    expect([...workspace.querySelectorAll("a")].some((link) => link.textContent === "Lead scanner")).toBe(false);
+  });
+
+  it("does not infer scanner access from sponsor capacity, tier, or management rights", () => {
+    const sponsor = capacity({ tier: "platinum" });
+    portalSession.value = {
+      ...portalSessionFixture({ staff: true, administrator: false, grants: [] }),
+      sponsors: [sponsor],
+    };
+    const workspace = mount(<SponsorWorkspace sponsors={[sponsor]} canRead canWrite onSessionExpired={vi.fn()} />);
+    expect([...workspace.querySelectorAll("a")].some((link) => link.textContent === "Lead scanner")).toBe(false);
+    expect(tabNames(workspace)).toEqual(["Management", "Attendees", "Settings"]);
+  });
+
   it("announces a session with no sponsor access rather than leaving a muted line", () => {
     const workspace = mount(
       <SponsorWorkspace sponsors={[]} canRead={false} canWrite={false} onSessionExpired={vi.fn()} />,

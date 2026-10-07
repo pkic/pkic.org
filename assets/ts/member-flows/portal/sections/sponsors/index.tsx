@@ -3,6 +3,9 @@ import type { SponsorCapacity } from "../../../../../shared/schemas/sponsor-acce
 import { EmptyState } from "../../../../ui/RecordEmptyState";
 import { Tabs } from "../../../../components/Tabs";
 import { PageHeader } from "../../../../ui/PageHeader";
+import { ButtonLink } from "../../../../ui/Button";
+import { usePortalHashLocation } from "../../hash-location";
+import { hasEventAgendaPermission } from "../events/event-agenda-access";
 import { Field } from "../../../../ui/Field";
 import { Select } from "../../../../ui/TextControl";
 import { SponsorAttendees } from "./Attendees";
@@ -76,7 +79,23 @@ export function SponsorWorkspace({
     <div class="pk pk-stack">
       {/* The section root opens with the anatomy's first region; a selected
           sponsorship replaces the whole surface and brings its own header. */}
-      {!detailId && <PageHeader title="Sponsors" />}
+      {!detailId && (
+        <PageHeader
+          title="Sponsors"
+          actions={
+            selectedSponsor &&
+            hasEventAgendaPermission(selectedSponsor.eventId, "agenda:leads_capture", selectedSponsor.sponsorId) && (
+              <ButtonLink
+                href={usePortalHashLocation.hrefs(
+                  `/events/${encodeURIComponent(selectedSponsor.eventSlug)}/sponsors/${encodeURIComponent(selectedSponsor.sponsorId)}/scanner`,
+                )}
+              >
+                Lead scanner
+              </ButtonLink>
+            )
+          }
+        />
+      )}
       {showTabs && (
         <Tabs
           items={tabs.map((item) => ({ key: item.key, label: item.label, panelId: `${TAB_PREFIX}-${item.key}-panel` }))}

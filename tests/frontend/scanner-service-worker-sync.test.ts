@@ -25,7 +25,7 @@ const record: OfflineScanRecord = {
     operatorUserId: "00000000000000000000000000000002",
     operationId: "00000000000000000000000000000003",
     deviceId: "00000000000000000000000000000004",
-    badgeId: "00000000000000000000000000000005",
+    badgeId: "ABCDEFGHJKLMNPQR",
     occurrenceId: null,
     action: "attendance",
     observedAt: "2026-10-04T12:00:00.000Z",

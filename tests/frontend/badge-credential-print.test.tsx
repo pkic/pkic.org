@@ -166,12 +166,12 @@ describe("authorized badge reprinting", () => {
   });
 
   it("keeps fresh issuance CSV available only when the supplied inputs contain fresh credentials", async () => {
-    const issued: FreshBadgePrint = { ...printable, displayName: "Synthetic Attendee", credential: OTHER };
+    const issued: FreshBadgePrint = { ...printable, displayName: "Synthetic Attendee", credential: "ABCDEFGHJKLMNPQR" };
     await mount(<BadgePrintPreview badges={[issued]} />);
     await click("Download print files");
     await click("Printing CSV with QR codes");
     expect(downloadBadgeArtifact).toHaveBeenCalledWith(
-      expect.stringContaining(OTHER),
+      expect.stringContaining("ABCDEFGHJKLMNPQR"),
       "text/csv;charset=utf-8",
       "attendee-badges-print.csv",
     );

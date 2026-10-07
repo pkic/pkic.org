@@ -1,3 +1,4 @@
+import { generateBadgeCredential } from "../../../assets/shared/schemas/badge-credential";
 import { randomUUID } from "node:crypto";
 import { performance } from "node:perf_hooks";
 import { expect, type Page, type BrowserContext, type Route } from "@playwright/test";
@@ -98,7 +99,7 @@ export async function prepareScannerMeasurement(page: Page) {
     eligible: eligible.credential,
     eligibleBadgeId: eligible.id,
     revoked: revoked.credential,
-    unknown: randomUUID(),
+    unknown: generateBadgeCredential(),
     publishedRevision: agenda.revision,
     malformed,
     forbidden: [email, malformed],

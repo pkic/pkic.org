@@ -30,7 +30,7 @@ export function Settings({
   const tab: SettingsTab = visibleTabs.find(({ key }) => key === subTab)?.key ?? "general";
 
   return (
-    <div>
+    <div class="pk-stack">
       <Tabs
         items={visibleTabs}
         active={tab}

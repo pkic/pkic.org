@@ -1,5 +1,6 @@
 import { readActiveUserSession, scannerUploadSuspended } from "../../../../../../shared/pending-user-logout";
 import { sequenceScannerRecord } from "./scanner-device-ledger";
+import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
 import { scannerReceiptMatches } from "./scanner-receipt";
 import {
   offlineScanRecordSchema,
@@ -37,7 +38,11 @@ export async function requestScanOutboxBackgroundSync() {
       .catch(() => {});
 }
 
-export async function queueScan(record: OfflineScanRecord, sessionId?: string): Promise<OfflineScanRecord["scan"]> {
+export async function queueScan(
+  record: OfflineScanRecord,
+  sessionId?: string,
+  collector?: ScannerOfflineContext,
+): Promise<OfflineScanRecord["scan"]> {
   const parsed = offlineScanRecordSchema.parse(record);
   if (await scannerUploadSuspended(parsed.scan.operatorUserId, sessionId))
     throw new Error("Sign in again before capturing scans.");
@@ -45,7 +50,13 @@ export async function queueScan(record: OfflineScanRecord, sessionId?: string): 
   try {
     const transaction = db.transaction([STORE, SCANNER_EPOCH_STORE], "readwrite");
     const done = completion(transaction);
-    const sequenced = await sequenceScannerRecord(transaction, parsed);
+    let sequenced: OfflineScanRecord;
+    try {
+      sequenced = await sequenceScannerRecord(transaction, parsed, collector);
+    } catch (error) {
+      await done.catch(() => {});
+      throw error;
+    }
     // Add protects an existing retry and lease from accidental overwrite.
     transaction.objectStore(STORE).add({ ...sequenced, leaseUntil: 0, owner: null });
     await done;

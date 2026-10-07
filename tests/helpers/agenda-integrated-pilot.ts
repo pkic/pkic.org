@@ -1,3 +1,4 @@
+import { generateBadgeCredential } from "../../assets/shared/schemas/badge-credential";
 import { env } from "cloudflare:workers";
 import { expect } from "vitest";
 import { z } from "zod";
@@ -132,7 +133,7 @@ export async function pilotEvidence(
     const result = await upload(enrolledEventScanRequestSchema.parse(saved.scan));
     expect(result).toMatchObject({ outcome: "eligible", attendanceRecorded: true });
     expect(await upload(original)).toEqual(result);
-    const denied = await upload(capture({ badgeId: crypto.randomUUID() }));
+    const denied = await upload(capture({ badgeId: generateBadgeCredential() }));
     expect(denied).toMatchObject({ outcome: "unknown", attendanceRecorded: false });
     for (let index = 0; index < 2; index++)
       expect(

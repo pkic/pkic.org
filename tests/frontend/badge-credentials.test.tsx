@@ -14,7 +14,10 @@ import { BadgeIssuance } from "../../assets/ts/member-flows/portal/sections/even
 import { confirmAction } from "../../assets/ts/components/ConfirmDialog";
 
 const navigate = vi.fn();
-const qr = vi.fn(async (..._args: unknown[]) => '<svg xmlns="http://www.w3.org/2000/svg"><path d="M0 0"/></svg>');
+const qr = vi.fn(
+  async (..._args: unknown[]) =>
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 37 37"><path d="M4 4h1v1H4z"/></svg>',
+);
 const viewer = vi.hoisted(() => ({ timeZone: "UTC" }));
 vi.mock("../../assets/ts/member-flows/portal/ui", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../assets/ts/member-flows/portal/ui")>()),
@@ -28,7 +31,7 @@ const BASE = "/groups/example/events/workshop/registrations/badges";
 const ID = "10000000-0000-4000-8000-000000000001";
 const USER = "10000000-0000-4000-8000-000000000002";
 const NEXT = "10000000-0000-4000-8000-000000000003";
-const BEARER = "10000000-0000-4000-8000-000000000004";
+const BEARER = "ABCDEFGHJKLMNPQR";
 const metadata = badgeCredentialMetadataSchema.parse({
   id: ID,
   eventId: "10000000-0000-4000-8000-000000000005",
@@ -215,6 +218,11 @@ describe("badge credentials", () => {
     expect(host.textContent).not.toContain(BEARER);
     expect(host.textContent).toContain(NEXT);
     expect(host.querySelector('img[alt="Attendee badge QR code"]')).not.toBeNull();
+    const printable = decodeURIComponent(
+      host.querySelector<HTMLImageElement>('img[alt="Attendee badge QR code"]')!.src.split(",")[1]!,
+    );
+    expect(printable).toContain(">Badge code</text>");
+    expect(printable).toContain(">ABCD-EFGH-JKLM-NPQR</text>");
     expect(qr).toHaveBeenCalledWith(
       BEARER,
       expect.objectContaining({ type: "svg", errorCorrectionLevel: "M", margin: 4 }),

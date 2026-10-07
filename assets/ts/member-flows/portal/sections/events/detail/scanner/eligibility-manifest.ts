@@ -27,6 +27,7 @@ const cachedManifestSchema = offlineEligibilityResponseSchema
 type CachedManifest = z.infer<typeof cachedManifestSchema>;
 export type LocalEligibility = Pick<EventScanResponse, "outcome" | "reason"> & { message: string; userId?: string };
 export interface EligibilityManifest {
+  enrollment?: Pick<CachedManifest, "eventId" | "deviceId" | "epochId" | "writtenAt">;
   operatorUserId: string;
   occurrenceId: string | null;
   roomId?: string | null;
@@ -120,6 +121,12 @@ export function buildEligibilityManifest(raw: unknown): EligibilityManifest {
     return !invalidated;
   };
   return {
+    enrollment: {
+      eventId: snapshot.eventId,
+      deviceId: snapshot.deviceId,
+      epochId: snapshot.epochId,
+      writtenAt: snapshot.writtenAt,
+    },
     operatorUserId: snapshot.operatorUserId,
     occurrenceId: snapshot.occurrenceId,
     roomId: snapshot.roomId ?? null,

@@ -1,3 +1,4 @@
+import { generateBadgeCredential } from "../../assets/shared/schemas/badge-credential";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { expect, test, type Page } from "@playwright/test";
@@ -56,7 +57,7 @@ test("offline supporting scanner captures registered and unregistered attendance
 }, testInfo) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await signInAsE2eStaff(page, e2eAdminEmail("portal-offline-attendance"));
-  const badges = [randomUUID(), randomUUID()];
+  const badges = [generateBadgeCredential(), generateBadgeCredential()];
   const users = [randomUUID(), randomUUID()];
   const eventId = randomUUID();
   let offline = false;

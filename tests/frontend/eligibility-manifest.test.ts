@@ -16,7 +16,7 @@ import {
   clearOperatorEligibilityManifests,
 } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/eligibility-manifest";
 
-const badge = "00000000-0000-4000-8000-000000000004";
+const badge = "ABCDEFGHJKLMNPQR";
 async function fixture() {
   vi.stubGlobal("crypto", webcrypto);
   const hash = Array.from(
@@ -39,7 +39,7 @@ async function fixture() {
     session: null,
     entries: [
       {
-        badgeId: badge,
+        badgeId: "00000000-0000-4000-8000-000000000004",
         userId: "00000000-0000-4000-8000-000000000003",
         credentialHash: hash,
         revoked: false,
@@ -227,7 +227,7 @@ describe("local scoped eligibility manifest", () => {
   });
   it("identifies unknown IDs only after the full scoped inventory was downloaded", async () => {
     const snapshot = await fixture();
-    const unknown = "00000000-0000-4000-8000-000000000099";
+    const unknown = "23456789ABCDEFGH";
     expect(await buildEligibilityManifest({ ...snapshot, complete: true }).lookup(unknown)).toMatchObject({
       outcome: "unknown",
       reason: "unknown_credential",
@@ -249,7 +249,7 @@ describe("local scoped eligibility manifest", () => {
     const manifest = buildEligibilityManifest(snapshot);
     for (let index = 0; index < 2000; index++) expect((await manifest.lookup(badge)).outcome).toBe("eligible");
     expect(network).not.toHaveBeenCalled();
-    expect(await manifest.lookup("00000000-0000-4000-8000-000000000099")).toMatchObject({
+    expect(await manifest.lookup("23456789ABCDEFGH")).toMatchObject({
       outcome: "unverified",
       reason: "verification_required",
     });
@@ -277,9 +277,7 @@ describe("local scoped eligibility manifest", () => {
       userId: snapshot.entries[0].userId,
       message: expect.stringContaining("expired snapshot"),
     });
-    expect(
-      await buildEligibilityManifest({ ...expired, complete: true }).lookup("00000000-0000-4000-8000-000000000099"),
-    ).toMatchObject({
+    expect(await buildEligibilityManifest({ ...expired, complete: true }).lookup("23456789ABCDEFGH")).toMatchObject({
       outcome: "unverified",
       reason: "verification_required",
     });
@@ -375,7 +373,7 @@ describe("local scoped eligibility manifest", () => {
     vi.spyOn(Date, "now").mockReturnValue(snapshot.writtenAt - 1);
     const manifest = buildEligibilityManifest({ ...snapshot, complete: true });
     expect(await manifest.lookup(badge)).toMatchObject({ outcome: "unverified", userId: snapshot.entries[0].userId });
-    expect(await manifest.lookup("00000000-0000-4000-8000-000000000099")).toMatchObject({ outcome: "unverified" });
+    expect(await manifest.lookup("23456789ABCDEFGH")).toMatchObject({ outcome: "unverified" });
   });
   it("prunes expired manifests without opening the independent attempt or recovery database", async () => {
     const snapshot = await fixture();

@@ -1,3 +1,4 @@
+import { composeBadgePrintSvg } from "../../../shared/badge-print-svg";
 import { useEffect, useRef, useState } from "preact/hooks";
 import {
   badgeIssueRequestSchema,
@@ -190,7 +191,10 @@ export function RegistrationBadgePrinting({
           fresh = { id: result.id, credential: result.credential, displayName: row.display_name ?? "Attendee" };
           issued.current.set(row.id, fresh);
         }
-        const svg = await QR.toString(fresh.credential, { type: "svg", errorCorrectionLevel: "M", margin: 4 });
+        const svg = composeBadgePrintSvg(
+          await QR.toString(fresh.credential, { type: "svg", errorCorrectionLevel: "M", margin: 4 }),
+          fresh.credential,
+        );
         requireCurrent();
         const printable = { ...fresh, svg };
         setPrinted((previous) => [...previous, printable]);

@@ -22,7 +22,13 @@ import QR from "qrcode";
 import { confirmAction } from "../../assets/ts/components/ConfirmDialog";
 
 vi.mock("../../assets/ts/components/ConfirmDialog", () => ({ confirmAction: vi.fn(async () => true) }));
-vi.mock("qrcode", () => ({ default: { toString: vi.fn(async () => '<svg xmlns="http://www.w3.org/2000/svg"/>') } }));
+vi.mock("qrcode", () => ({
+  default: {
+    toString: vi.fn(
+      async () => '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 37 37"><path d="M4 4h1v1H4z"/></svg>',
+    ),
+  },
+}));
 const eventId = "80000000-0000-4000-8000-000000000001";
 vi.mock("../../assets/ts/components/event-badges/badge-print-artifacts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../assets/ts/components/event-badges/badge-print-artifacts")>()),
@@ -173,7 +179,7 @@ it("loads every filtered page before confirmation, retains successful badges on 
       return json({
         result: "issued",
         id: `60000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
-        credential: `70000000-0000-4000-8000-${String(index).padStart(12, "0")}`,
+        credential: ["ABCDEFGHJKLMNPQR", "23456789ABCDEFGH", "JKLMNPQR23456789"][index - 1],
         expiresAt: "2026-12-01T00:00:00.000Z",
         replacedBadgeId: null,
       });
@@ -285,7 +291,7 @@ it.each(["session changed", "revoked"])(
           return json({
             result: "issued",
             id: "60000000-0000-4000-8000-000000000001",
-            credential: "70000000-0000-4000-8000-000000000001",
+            credential: "ABCDEFGHJKLMNPQR",
             expiresAt: metadata.expiresAt,
             replacedBadgeId: null,
           });

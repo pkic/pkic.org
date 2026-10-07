@@ -85,9 +85,14 @@ function inspect(file) {
   const rel = relative(root, file);
   const source = stripActions(readFileSync(file, "utf8"));
   const usesSharedField = /import\s*\{[^}]*\bField\b[^}]*\}\s*from\s*["'][^"']*\/ui\/Field["']/.test(source);
-  if (!source.includes("pk-field") && !source.includes("pk-input")) return;
+  const usesSharedButton = /import\s*\{[^}]*\bButton\b[^}]*\}\s*from\s*["'][^"']*\/ui\/Button["']/.test(source);
+  const usesFormSection = /import\s*\{[^}]*\bFormSection\b[^}]*\}\s*from\s*["'][^"']*\/ui\/FormSection["']/.test(
+    source,
+  );
+  if (!source.includes("pk-field") && !source.includes("pk-input") && !usesSharedField) return;
 
   const stack = [];
+  const disclosures = [];
   const tag = /<(\/?)([a-zA-Z][\w:-]*)((?:"[^"]*"|'[^']*'|[^>])*?)(\/?)>/g;
   let match;
   while ((match = tag.exec(source)) !== null) {
@@ -107,6 +112,16 @@ function inspect(file) {
     if (name === "Field" && usesSharedField) names.push("pk-field", "pk-field__control");
     const line = source.slice(0, match.index).split("\n").length;
 
+    if (lower === "details") disclosures.push({ line, controls: [], frame: null });
+    const disclosure = [...stack].reverse().find((frame) => frame.disclosure)?.disclosure;
+    if (disclosure && ((name === "Field" && usesSharedField) || (name === "Button" && usesSharedButton))) {
+      disclosure.controls.push({
+        name,
+        layouts: stack.filter((frame) => frame.layout && stack.indexOf(frame) > stack.indexOf(disclosure.frame)),
+        dynamic: stack.some((frame) => frame.dynamic),
+      });
+    }
+
     for (const className of names) {
       for (const { part, ancestor, onlyInside } of REQUIRED_ANCESTOR) {
         if (!part.test(className)) continue;
@@ -119,7 +134,29 @@ function inspect(file) {
       }
     }
 
-    if (!VOID.has(lower) && !selfClosing) stack.push({ name: lower, classes: names, dynamic });
+    if (!VOID.has(lower) && !selfClosing) {
+      const frame = {
+        name: lower,
+        classes: names,
+        dynamic,
+        layout: names.includes("pk-form") || names.includes("pk-stack") || (name === "FormSection" && usesFormSection),
+        disclosure: lower === "details" ? disclosures.at(-1) : undefined,
+      };
+      if (frame.disclosure) frame.disclosure.frame = frame;
+      stack.push(frame);
+    }
+  }
+  for (const { line, controls } of disclosures) {
+    if (!controls.some((control) => control.name === "Field") || !controls.some((control) => control.name === "Button"))
+      continue;
+    if (controls.some((control) => control.dynamic)) continue;
+    const commonLayout = controls[0].layouts.some((layout) =>
+      controls.every((control) => control.layouts.includes(layout)),
+    );
+    if (!commonLayout)
+      failures.push(
+        `${rel}:${line}  disclosure fields and actions need a shared pk-form, pk-stack, or FormSection body`,
+      );
   }
 }
 

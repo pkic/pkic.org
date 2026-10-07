@@ -1,3 +1,4 @@
+import { generateBadgeCredential } from "../assets/shared/schemas/badge-credential";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
@@ -209,7 +210,7 @@ describe("Event agenda scan evidence", () => {
     ).toBe(observedAt);
   });
   it("rejects unknown credentials without storing their contents", async () => {
-    const result = await (await scan(scanBody({ badgeId: crypto.randomUUID() }))).json();
+    const result = await (await scan(scanBody({ badgeId: generateBadgeCredential() }))).json();
     expect(result).toMatchObject({ outcome: "unknown", recorded: false });
     expect(
       (await env.DB.prepare("SELECT COUNT(*) AS total FROM event_scan_attempts").first<{ total: number }>())?.total,

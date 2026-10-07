@@ -1,6 +1,13 @@
 import { useEffect, useState } from "preact/hooks";
 import { prepareScannerDevice, prepareScannerEpoch, type ScannerEpoch } from "./scanner-device-ledger";
-export function useScannerDevice(slug: string, operatorUserId: string, sponsorId?: string) {
+import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
+import { readScannerOfflineEpoch } from "./scanner-offline-context";
+export function useScannerDevice(
+  slug: string,
+  operatorUserId: string,
+  sponsorId?: string,
+  collector?: ScannerOfflineContext,
+) {
   const [deviceId, setDeviceId] = useState("");
   const [epoch, setEpoch] = useState<ScannerEpoch | null>(null);
   const [error, setError] = useState("");
@@ -10,8 +17,10 @@ export function useScannerDevice(slug: string, operatorUserId: string, sponsorId
     setDeviceId("");
     void (async () => {
       try {
-        const device = await prepareScannerDevice(operatorUserId);
-        const prepared = await prepareScannerEpoch(slug, operatorUserId, device, sponsorId);
+        const device = collector?.deviceId ?? (await prepareScannerDevice(operatorUserId));
+        const prepared = collector
+          ? await readScannerOfflineEpoch(collector)
+          : await prepareScannerEpoch(slug, operatorUserId, device, sponsorId);
         if (!active) return;
         setDeviceId(device);
         setEpoch(prepared);
@@ -23,6 +32,6 @@ export function useScannerDevice(slug: string, operatorUserId: string, sponsorId
     return () => {
       active = false;
     };
-  }, [slug, operatorUserId, sponsorId]);
+  }, [slug, operatorUserId, sponsorId, collector?.epochId, collector?.sessionId]);
   return { deviceId, epoch, setEpoch, error, ready: epoch?.state === "open" };
 }

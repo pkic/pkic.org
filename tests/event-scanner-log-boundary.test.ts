@@ -1,3 +1,4 @@
+import { generateBadgeCredential } from "../assets/shared/schemas/badge-credential";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { callApi } from "./helpers/app";
@@ -26,7 +27,7 @@ describe("mounted scanner logging boundary", () => {
   it("does not log recognized, unknown or malformed scanner credentials or operator identifiers", async () => {
     const info = vi.spyOn(console, "log").mockImplementation(() => {});
     const errors = vi.spyOn(console, "error").mockImplementation(() => {});
-    const unknownBadge = crypto.randomUUID();
+    const unknownBadge = generateBadgeCredential();
     for (const badgeId of [fixture.badgeId, unknownBadge]) {
       const body = eventScanRequestSchema.parse(fixture.scanBody({ badgeId }));
       const response = await fixture.scan(body);

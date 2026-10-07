@@ -130,7 +130,7 @@ function ScopedSponsorLeads({ slug, timeZone }: { slug: string; timeZone: string
               ]}
             />
           </PanelHeader>
-          <PanelBody>
+          <PanelBody flush={!(scanning && selected.canCapture) && selected.canView && live}>
             {scanning && selected.canCapture ? (
               <Suspense fallback={<Spinner />}>
                 <EventScanner

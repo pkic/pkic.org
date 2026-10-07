@@ -1,3 +1,4 @@
+import { badgeCredentialSchema } from "./badge-credential";
 import { requiresPermissions } from "./route-contract";
 import { z } from "zod";
 import { eventSlugParamsSchema, jsonErrorResponse, successResponseSchema, utcInstantSchema } from "./api-common";
@@ -40,7 +41,7 @@ const badgeIssueResultSchema = z.object({
 });
 /** Issuance retries remain metadata-only; explicit authorized printing is a separate action. */
 export const badgeIssueResponseSchema = z.discriminatedUnion("result", [
-  badgeIssueResultSchema.extend({ result: z.literal("issued"), credential: databaseIdSchema }).strict(),
+  badgeIssueResultSchema.extend({ result: z.literal("issued"), credential: badgeCredentialSchema }).strict(),
   badgeIssueResultSchema.extend({ result: z.literal("replayed"), credential: z.null() }).strict(),
 ]);
 export type BadgeIssueResponse = z.infer<typeof badgeIssueResponseSchema>;
@@ -69,11 +70,16 @@ export const badgeCredentialsRouteSchema = {
   ...requiresPermissions("events:manage"),
   tags: ["Events"],
   summary: "List issued badge metadata without credentials",
-  request: { params: eventSlugParamsSchema, query: badgeCredentialsQuerySchema },
+  request: {
+    params: eventSlugParamsSchema,
+    query: badgeCredentialsQuerySchema,
+  },
   responses: {
     "200": {
       description: "Badge metadata",
-      content: { "application/json": { schema: badgeCredentialsResponseSchema } },
+      content: {
+        "application/json": { schema: badgeCredentialsResponseSchema },
+      },
     },
     "403": jsonErrorResponse("Event management permission required"),
   },
@@ -82,11 +88,15 @@ export const badgeCredentialRouteSchema = {
   ...requiresPermissions("events:manage"),
   tags: ["Events"],
   summary: "Read event-owned badge metadata without credentials",
-  request: { params: eventSlugParamsSchema.extend({ badgeId: databaseIdSchema }) },
+  request: {
+    params: eventSlugParamsSchema.extend({ badgeId: databaseIdSchema }),
+  },
   responses: {
     "200": {
       description: "Badge metadata",
-      content: { "application/json": { schema: badgeCredentialMetadataSchema } },
+      content: {
+        "application/json": { schema: badgeCredentialMetadataSchema },
+      },
     },
     "403": jsonErrorResponse("Event management permission required"),
     "404": jsonErrorResponse("Badge unavailable"),
@@ -98,7 +108,10 @@ export const badgeIssueRouteSchema = {
   summary: "Issue or explicitly replace an opaque printable badge credential",
   request: {
     params: eventSlugParamsSchema,
-    body: { content: { "application/json": { schema: badgeIssueRequestSchema } }, required: true },
+    body: {
+      content: { "application/json": { schema: badgeIssueRequestSchema } },
+      required: true,
+    },
   },
   responses: {
     "200": {
@@ -114,9 +127,14 @@ export const badgeRevokeRouteSchema = {
   ...requiresPermissions("events:manage"),
   tags: ["Events"],
   summary: "Revoke a badge credential",
-  request: { params: eventSlugParamsSchema.extend({ badgeId: databaseIdSchema }) },
+  request: {
+    params: eventSlugParamsSchema.extend({ badgeId: databaseIdSchema }),
+  },
   responses: {
-    "200": { description: "Badge revoked", content: { "application/json": { schema: successResponseSchema } } },
+    "200": {
+      description: "Badge revoked",
+      content: { "application/json": { schema: successResponseSchema } },
+    },
     "403": jsonErrorResponse("Event management permission required"),
     "404": jsonErrorResponse("Badge unavailable"),
     "409": jsonErrorResponse("Badge changed or capture closed"),
@@ -140,7 +158,10 @@ export const badgePrintRouteSchema = {
   summary: "Prepare an existing active badge for printing without replacement",
   request: {
     params: eventSlugParamsSchema.extend({ badgeId: databaseIdSchema }),
-    body: { content: { "application/json": { schema: badgePrintRequestSchema } }, required: true },
+    body: {
+      content: { "application/json": { schema: badgePrintRequestSchema } },
+      required: true,
+    },
   },
   responses: {
     "200": {

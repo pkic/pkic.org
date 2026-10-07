@@ -313,7 +313,7 @@ export function ContentLibrary({
         {canEdit && (
           <>
             {mode === "edit" && (
-              <form noValidate {...form.handlers} onSubmit={save}>
+              <form noValidate {...form.handlers} onSubmit={save} class="pk-form">
                 <h3>{selected ? "Edit session content" : "New unscheduled session"}</h3>
                 <Field label="Title" {...form.of("content.title")}>
                   {(control) => (
@@ -454,7 +454,7 @@ export function ContentLibrary({
               </form>
             )}
             {mode === "copy" && (
-              <form noValidate {...copyForm.handlers} onSubmit={copy}>
+              <form noValidate {...copyForm.handlers} onSubmit={copy} class="pk-form">
                 <h3>Reuse content from another event</h3>
                 <p>You need access to the source event. Copied content starts with no scheduled occurrence.</p>
                 <Field label="Source event slug" {...copyForm.of("sourceEventSlug")}>

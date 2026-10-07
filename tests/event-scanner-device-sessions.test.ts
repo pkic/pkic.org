@@ -1,3 +1,4 @@
+import { generateBadgeCredential } from "../assets/shared/schemas/badge-credential";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { callApi } from "./helpers/app";
@@ -73,7 +74,7 @@ describe("Scanner device enrollment and immutable upload closing barrier", () =>
     expect((await callApi(env, `${path}?${query}`, { headers })).status).toBe(409);
   });
   it("receipts unknown credentials without attendee data and closes their uploaded sequence", async () => {
-    const body = fixture.scanBody({ badgeId: crypto.randomUUID() });
+    const body = fixture.scanBody({ badgeId: generateBadgeCredential() });
     const response = await fixture.scan(body);
     expect(response.status).toBe(200);
     const receipt = await response.json();
@@ -96,7 +97,7 @@ describe("Scanner device enrollment and immutable upload closing barrier", () =>
       closedAt: expect.any(String),
     });
     expect(await (await fixture.scan(body)).json()).toEqual(receipt);
-    expect((await fixture.scan({ ...body, badgeId: crypto.randomUUID() })).status).toBe(409);
+    expect((await fixture.scan({ ...body, badgeId: generateBadgeCredential() })).status).toBe(409);
     const stored = await env.DB.prepare("SELECT response_json FROM event_scanner_upload_receipts").first<{
       response_json: string;
     }>();
@@ -104,8 +105,8 @@ describe("Scanner device enrollment and immutable upload closing barrier", () =>
     expect(stored!.response_json).not.toContain(fixture.userId);
   });
   it("freezes the declared high water and requires every issued sequence even when received counts are plausible", async () => {
-    const first = fixture.scanBody({ badgeId: crypto.randomUUID() });
-    const second = fixture.scanBody({ badgeId: crypto.randomUUID() });
+    const first = fixture.scanBody({ badgeId: generateBadgeCredential() });
+    const second = fixture.scanBody({ badgeId: generateBadgeCredential() });
     expect((await fixture.scan(second)).status).toBe(200);
     const declaration = { operationId: crypto.randomUUID(), highWaterSequence: 2, pendingCount: 0, recoveryCount: 0 };
     expect(await (await request(`/${first.scannerSession.epochId}/closing`, declaration)).json()).toMatchObject({

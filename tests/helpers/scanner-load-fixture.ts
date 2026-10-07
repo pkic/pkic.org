@@ -1,3 +1,4 @@
+import { generateBadgeCredential } from "../../assets/shared/schemas/badge-credential";
 import { env } from "cloudflare:workers";
 import { expect } from "vitest";
 import { seedEventAndAdmin, queryAll } from "./context";
@@ -50,7 +51,7 @@ export async function createScannerLoadFixture(population: number, mode: "servic
   const attendees = await Promise.all(
     Array.from({ length: population }, async () => {
       const userId = crypto.randomUUID();
-      const credential = crypto.randomUUID();
+      const credential = generateBadgeCredential();
       return {
         userId,
         credential,

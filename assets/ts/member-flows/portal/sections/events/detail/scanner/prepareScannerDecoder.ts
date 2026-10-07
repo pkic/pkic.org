@@ -28,7 +28,11 @@ export async function prepareScannerDecoder(signal: AbortSignal): Promise<boolea
     return await new Promise<boolean>((resolve, reject) => {
       const cancelled = () => resolve(false);
       preparation.signal.addEventListener("abort", cancelled, { once: true });
-      void Promise.all([import("qr-scanner"), import("qr-scanner/qr-scanner-worker.min.js")])
+      void Promise.all([
+        import("qr-scanner"),
+        import("qr-scanner/qr-scanner-worker.min.js"),
+        import("./OfflineScannerBootstrap"),
+      ])
         .then(() => resolve(!preparation.signal.aborted))
         .catch(reject)
         .finally(() => preparation.signal.removeEventListener("abort", cancelled));

@@ -1,3 +1,4 @@
+import { generateBadgeCredential } from "../assets/shared/schemas/badge-credential";
 import { describe, expect, it } from "vitest";
 import {
   attendanceCaptureContextSchema,
@@ -51,7 +52,7 @@ describe("Immutable attendance calendar capture policy", () => {
       operatorUserId: crypto.randomUUID(),
       operationId: crypto.randomUUID(),
       deviceId: crypto.randomUUID(),
-      badgeId: crypto.randomUUID(),
+      badgeId: generateBadgeCredential(),
       occurrenceId: null,
       observedAt: "2026-10-24T23:30:00.000Z",
       action: "attendance",

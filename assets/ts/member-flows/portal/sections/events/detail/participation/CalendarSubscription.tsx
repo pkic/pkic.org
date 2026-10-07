@@ -84,6 +84,7 @@ export function CalendarSubscription({ slug }: { slug: string }) {
           Subscribe to your reserved sessions. Calendar apps choose when to refresh; changes can take time to appear.
         </p>
         <form
+          class="pk-form"
           noValidate
           {...form.handlers}
           onSubmit={(event) => {
