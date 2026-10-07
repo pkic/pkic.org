@@ -1,4 +1,6 @@
 import { Button } from "../../ui/Button";
+import { ScannerCodePreparation } from "./sections/events/detail/scanner/scanner-code-preparation";
+import { prepareScannerDecoder } from "./sections/events/detail/scanner/prepareScannerDecoder";
 /**
  * Portal root — gates on identity authentication, then loads member profile
  * data only when the session advertises member capacity. Staff-only users can
@@ -51,11 +53,11 @@ import { meetingEntryReturnUrl } from "../../../shared/meeting-entry-navigation"
 import { MeetingEntryReturn } from "./shell/MeetingEntryReturn";
 import { useSessionExpiry } from "./use-session-expiry";
 import { useSessionActivity } from "./use-session-activity";
+const loadOfflineScannerBootstrap = () => import("./sections/events/detail/scanner/OfflineScannerBootstrap");
 const OfflineScannerBootstrap = lazy(() =>
-  import("./sections/events/detail/scanner/OfflineScannerBootstrap").then((module) => ({
-    default: module.OfflineScannerBootstrap,
-  })),
+  loadOfflineScannerBootstrap().then((module) => ({ default: module.OfflineScannerBootstrap })),
 );
+const prepareOfflineScannerCode = (signal: AbortSignal) => prepareScannerDecoder(signal, loadOfflineScannerBootstrap);
 
 async function verifyMagicLink(token: string): Promise<PortalSession> {
   const session = await postJson("/api/v1/auth/verify-link", { token }, userAuthEstablishedResponseSchema);
@@ -266,7 +268,9 @@ export function App() {
             </Button>
           </Alert>
         )}
-        <PortalShell key={`${portalSession.value?.identity.id}:${portalSession.value?.member?.identityId ?? ""}`} />
+        <ScannerCodePreparation.Provider value={prepareOfflineScannerCode}>
+          <PortalShell key={`${portalSession.value?.identity.id}:${portalSession.value?.member?.identityId ?? ""}`} />
+        </ScannerCodePreparation.Provider>
         <ConfirmDialogHost />
       </>
     );

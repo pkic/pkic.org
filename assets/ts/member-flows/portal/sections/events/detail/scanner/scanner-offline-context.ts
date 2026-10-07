@@ -15,7 +15,6 @@ import type { ScannerEpoch } from "./scanner-device-ledger";
 import type { EligibilityManifest } from "./eligibility-manifest";
 import { SCANNER_EPOCH_STORE, openScanStorage, idbRequest, idbCompletion } from "./outbox-storage";
 import type { EventScanRequest } from "../../../../../../../shared/schemas/event-participation-scanning";
-import { prepareScannerDecoder } from "./prepareScannerDecoder";
 import { portalHashPath } from "../../../../hash-route";
 
 const storedEpochSchema = scannerRecoveryEpochSchema
@@ -68,6 +67,7 @@ export async function saveScannerOfflineContext(input: {
   manifest: EligibilityManifest;
   action: EventScanRequest["action"];
   signal?: AbortSignal;
+  prepareCode: (signal: AbortSignal) => Promise<boolean>;
 }) {
   const { session, epoch, manifest } = input;
   const route = scannerCollectorPath(window.location.hash);
@@ -130,7 +130,7 @@ export async function saveScannerOfflineContext(input: {
   });
   if (!context.success || !scannerContextCurrent(context.data)) return;
   if (
-    !(await prepareScannerDecoder(input.signal ?? new AbortController().signal)) ||
+    !(await input.prepareCode(input.signal ?? new AbortController().signal)) ||
     !navigator.onLine ||
     scannerCollectorPath(window.location.hash) !== route ||
     !scannerContextCurrent(context.data) ||

@@ -27,9 +27,6 @@ vi.mock("../../assets/ts/shared/pending-user-logout", () => ({
   scannerUploadSuspended: mocks.suspended,
   subscribeUserSessionState: () => () => {},
 }));
-vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/prepareScannerDecoder", () => ({
-  prepareScannerDecoder: mocks.warm,
-}));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/scan-outbox", () => ({
   queueScan: mocks.queue,
   drainScanOutbox: mocks.drain,
@@ -201,6 +198,7 @@ describe("scanner-only offline preparation", () => {
     );
     const invokedAt = Date.now();
     const saving = saveScannerOfflineContext({
+      prepareCode: mocks.warm,
       slug,
       session,
       epoch: epoch(),
@@ -227,7 +225,14 @@ describe("scanner-only offline preparation", () => {
   it("refuses failed warming, mismatched enrollment and invalid receipt timestamps", async () => {
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
     mocks.warm.mockResolvedValue(false);
-    await saveScannerOfflineContext({ slug, session, epoch: epoch(), manifest: manifest(), action: "attendance" });
+    await saveScannerOfflineContext({
+      prepareCode: mocks.warm,
+      slug,
+      session,
+      epoch: epoch(),
+      manifest: manifest(),
+      action: "attendance",
+    });
     expect(mocks.rows[0]).not.toHaveProperty("collectorContext");
     mocks.warm.mockClear();
     for (const enrollment of [
@@ -237,6 +242,7 @@ describe("scanner-only offline preparation", () => {
       { ...manifest().enrollment!, writtenAt: Number.MAX_VALUE },
     ]) {
       await saveScannerOfflineContext({
+        prepareCode: mocks.warm,
         slug,
         session,
         epoch: epoch(),
@@ -251,7 +257,14 @@ describe("scanner-only offline preparation", () => {
     vi.spyOn(navigator, "onLine", "get").mockReturnValue(true);
     retain();
     vi.setSystemTime(new Date("2026-10-07T09:10:00.000Z"));
-    await saveScannerOfflineContext({ slug, session, epoch: epoch(), manifest: manifest(), action: "attendance" });
+    await saveScannerOfflineContext({
+      prepareCode: mocks.warm,
+      slug,
+      session,
+      epoch: epoch(),
+      manifest: manifest(),
+      action: "attendance",
+    });
     const stored = scannerOfflineContextSchema.parse(mocks.rows[0]!.collectorContext);
     expect(stored.savedAt).toBe(now);
     expect(stored.expiresAt).toBe(context().expiresAt);

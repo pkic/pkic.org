@@ -1,5 +1,8 @@
 /** Warm both camera decoders under the public-code cache, including phones that prefer native QR decoding. */
-export async function prepareScannerDecoder(signal: AbortSignal): Promise<boolean> {
+export async function prepareScannerDecoder(
+  signal: AbortSignal,
+  prepareView?: () => Promise<unknown>,
+): Promise<boolean> {
   if (!("serviceWorker" in navigator) || signal.aborted) return false;
   const preparation = new AbortController();
   const abort = () => preparation.abort();
@@ -31,7 +34,7 @@ export async function prepareScannerDecoder(signal: AbortSignal): Promise<boolea
       void Promise.all([
         import("qr-scanner"),
         import("qr-scanner/qr-scanner-worker.min.js"),
-        import("./OfflineScannerBootstrap"),
+        ...(prepareView ? [prepareView()] : []),
       ])
         .then(() => resolve(!preparation.signal.aborted))
         .catch(reject)

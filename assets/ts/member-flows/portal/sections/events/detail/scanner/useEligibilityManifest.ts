@@ -2,7 +2,8 @@ import { saveScannerOfflineContext } from "./scanner-offline-context";
 import type { EventScanRequest } from "../../../../../../../shared/schemas/event-participation-scanning";
 import type { PortalSession } from "../../../../types";
 import type { ScannerEpoch } from "./scanner-device-ledger";
-import { useEffect, useRef, useState } from "preact/hooks";
+import { useContext, useEffect, useRef, useState } from "preact/hooks";
+import { ScannerCodePreparation } from "./scanner-code-preparation";
 import { prepareEligibilityManifest, type EligibilityManifest } from "./eligibility-manifest";
 
 /** Prepares and refreshes scoped IDs-only data outside the camera path. */
@@ -91,12 +92,19 @@ export function useScannerOfflinePreparation(
   slug: string,
   action: EventScanRequest["action"],
 ) {
+  const prepareCode = useContext(ScannerCodePreparation);
   useEffect(() => {
     const controller = new AbortController();
-    if (session && epoch && manifest)
-      void saveScannerOfflineContext({ slug, session, epoch, manifest, action, signal: controller.signal }).catch(
-        () => {},
-      );
+    if (prepareCode && session && epoch && manifest)
+      void saveScannerOfflineContext({
+        slug,
+        session,
+        epoch,
+        manifest,
+        action,
+        signal: controller.signal,
+        prepareCode,
+      }).catch(() => {});
     return () => controller.abort();
-  }, [slug, action, session, epoch?.epochId, epoch?.state, manifest]);
+  }, [slug, action, session, epoch?.epochId, epoch?.state, manifest, prepareCode]);
 }

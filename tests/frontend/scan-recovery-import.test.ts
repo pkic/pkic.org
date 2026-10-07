@@ -342,14 +342,12 @@ describe("downloaded scanner recovery import", () => {
       ...pending,
       scan: { ...pending.scan, operationId: id("5"), scannerSession: { epochId: epoch.epochId, sequence: 2 } },
     };
-    tables
-      .get("scans")!
-      .set(extra.scan.operationId, {
-        ...extra,
-        scan: { ...extra.scan, badgeId: "23456789ABCDEFGH" },
-        owner: null,
-        leaseUntil: 0,
-      });
+    tables.get("scans")!.set(extra.scan.operationId, {
+      ...extra,
+      scan: { ...extra.scan, badgeId: "23456789ABCDEFGH" },
+      owner: null,
+      leaseUntil: 0,
+    });
     const before = structuredClone(tables);
     await expect(importBackup({ ...backup(), pending: [pending, extra] })).rejects.toThrow("conflicts");
     expect(tables).toEqual(before);
