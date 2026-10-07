@@ -103,6 +103,8 @@ WEBAUTHN_ORIGIN=http://localhost:${E2E_PORT}
 EMAIL_BADGE_DELAY_SECONDS=0
 DEFAULT_MIN_PROPOSAL_REVIEWS=0
 EOF
+chmod 600 "$E2E_ENV_FILE"
+node scripts/local-badge-print-keyring.mjs "$STATE_DIR" "$E2E_ENV_FILE"
 
 # ── Why localhost rather than 127.0.0.1 ────────────────────────────────────
 # WebAuthn requires the relying-party id to be a registrable domain suffix of

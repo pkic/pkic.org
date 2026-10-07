@@ -146,6 +146,10 @@ export const sessionMaterialSchema = z
     approvedAt: utcInstantSchema.nullable(),
     approvalNonce: z.uuid().nullable().optional(),
   })
+  .refine((material) => material.kind === "presentation" || material.presentationVersionId === null, {
+    path: ["presentationVersionId"],
+    message: "Uploaded presentation versions can only bind presentations.",
+  })
   .refine(
     (material) =>
       material.url !== "" ||

@@ -6,6 +6,7 @@ import {
 } from "../../assets/shared/schemas/event-session-history";
 // @vitest-environment jsdom
 import { render } from "preact";
+import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { SessionHistoryEditor } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/SessionHistoryEditor";
@@ -51,6 +52,64 @@ const snapshot = agendaSnapshotSchema.parse({
   ],
 });
 describe("session archive correction", () => {
+  it.each(["recording", "transcript", "captions"] as const)(
+    "clears uploaded PDF bindings when changing to %s while preserving the supplied external URL",
+    async (kind) => {
+      mockGetJson({ versions: [], page: { limit: 200, offset: 0, total: 0, hasMore: false } });
+      const externalUrl = `https://media.example.test/${kind}`;
+      const initial = sessionMaterialSchema.parse({
+        id: "release",
+        kind: "presentation",
+        title: "Material",
+        url: externalUrl,
+        presentationSource: "session",
+        presentationVersionId: "uploaded-version",
+        version: 1,
+        legacyDownloadUrl: "/events/event/slides.pdf",
+        rightsConfirmed: false,
+        consentConfirmed: false,
+        validated: false,
+        status: "draft",
+        approvedAt: null,
+      });
+      const changed = vi.fn();
+      function ControlledMaterials() {
+        const [materials, setMaterials] = useState([initial]);
+        return (
+          <MaterialFields
+            slug="event"
+            occurrenceId="session"
+            materials={materials}
+            onChange={(next) => {
+              changed(next);
+              setMaterials(next);
+            }}
+          />
+        );
+      }
+      await act(() => render(<ControlledMaterials />, host));
+      expect(controlFor(host, "Uploaded presentation version")).toBeDefined();
+      await chooseOption(controlFor(host, "Material type"), kind);
+      const result = sessionMaterialSchema.parse(changed.mock.calls[0]![0][0]);
+      expect(result).toMatchObject({
+        kind,
+        url: externalUrl,
+        presentationVersionId: null,
+        presentationSource: "proposal",
+        legacyDownloadUrl: null,
+        status: "draft",
+        approvedAt: null,
+      });
+      expect(controlFor<HTMLInputElement>(host, "Public delivery URL").value).toBe(externalUrl);
+      expect([...host.querySelectorAll("label")].map((label) => label.textContent)).not.toContain(
+        "Uploaded presentation version",
+      );
+      expect(host.textContent).not.toContain("The public delivery URL is generated from this uploaded version.");
+      expect(initial.presentationVersionId).toBe("uploaded-version");
+      expect(initial.kind).toBe("presentation");
+    },
+  );
+
   it("keeps all archive actions in the shared menu and closes through its existing callback", async () => {
     mockGetJson({
       identities: [],

@@ -1,4 +1,5 @@
 import path from "node:path";
+import { localBadgePrintKeyring, localBadgePrintEnvValue } from "../local-badge-print-keyring.mjs";
 import { randomBytes } from "node:crypto";
 import ts from "typescript";
 import fs from "node:fs";
@@ -10,6 +11,7 @@ const REHEARSAL_CONTROLLED_VAR_NAMES = new Set([
   "WEBAUTHN_RP_NAME",
   "INTERNAL_SIGNING_SECRET",
   "MEETING_PROVIDER_ENCRYPTION_KEY",
+  "BADGE_PRINT_ENCRYPTION_KEYS",
   "SENDGRID_API_BASE",
   "SENDGRID_API_KEY",
   "TURNSTILE_ENABLED",
@@ -48,6 +50,7 @@ export function rehearsalConfig(root, state, port, inboxPort, signingSecret) {
       WEBAUTHN_RP_ID: "localhost",
       WEBAUTHN_RP_NAME: "PKIC local rehearsal",
       INTERNAL_SIGNING_SECRET: signingSecret,
+      BADGE_PRINT_ENCRYPTION_KEYS: localBadgePrintKeyring(state),
       MEETING_PROVIDER_ENCRYPTION_KEY: randomBytes(32).toString("hex"),
       SENDGRID_API_BASE: `http://127.0.0.1:${inboxPort}`,
       SENDGRID_API_KEY: "local-capture-only-not-a-real-key",
@@ -68,7 +71,10 @@ export function serializeRehearsalVars(vars) {
     "# Rehearsal-controlled values override .dev.vars to keep email and local identity isolated.",
     ...Object.entries(vars)
       .filter(([key]) => REHEARSAL_CONTROLLED_VAR_NAMES.has(key))
-      .map(([key, value]) => `${key}=${JSON.stringify(value)}`),
+      .map(
+        ([key, value]) =>
+          `${key}=${key === "BADGE_PRINT_ENCRYPTION_KEYS" ? localBadgePrintEnvValue(value) : JSON.stringify(value)}`,
+      ),
     "",
   ].join("\n");
 }

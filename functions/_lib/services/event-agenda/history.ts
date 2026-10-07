@@ -39,7 +39,13 @@ export async function saveSessionHistory(
   actorUserId: string,
   publicationBucket?: R2Bucket,
 ) {
-  metadata = { ...metadata, materials: metadata.materials.map((material) => ({ ...material })) };
+  const validated = sessionHistoryMetadataSchema.safeParse(metadata);
+  if (!validated.success) {
+    const fieldErrors: Record<string, string[]> = {};
+    for (const issue of validated.error.issues) (fieldErrors[issue.path.join(".")] ??= []).push(issue.message);
+    throw new AppError(400, "VALIDATION_ERROR", "Check the session history fields", { fieldErrors });
+  }
+  metadata = validated.data;
   const session = await getAgendaOccurrence(db, eventId, occurrenceId);
   for (const material of metadata.materials) {
     const previous = session.history?.materials.find((item) => item.id === material.id);

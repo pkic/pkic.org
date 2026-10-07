@@ -343,7 +343,9 @@ export function MaterialFields({
                   onChange={(e) =>
                     update(index, {
                       kind: sessionMaterialSchema.shape.kind.parse(e.currentTarget.value),
-                      ...(e.currentTarget.value !== "presentation" ? { legacyDownloadUrl: null } : {}),
+                      ...(e.currentTarget.value !== "presentation"
+                        ? { presentationVersionId: null, presentationSource: "proposal", legacyDownloadUrl: null }
+                        : {}),
                     })
                   }
                 >
@@ -372,51 +374,53 @@ export function MaterialFields({
               )}
             </Field>
           )}
-          <Field
-            label="Uploaded presentation version"
-            help="Choose a session upload. Release requires an approved upload review. Session uploads receive a generated public delivery URL."
-          >
-            {(control) => (
-              <Select
-                {...control}
-                value={
-                  material.presentationVersionId
-                    ? `${material.presentationSource}:${material.presentationVersionId}`
-                    : ""
-                }
-                onChange={(event) => {
-                  const version = catalog.data?.versions.find(
-                    (value) => `${value.source}:${value.id}` === event.currentTarget.value,
-                  );
-                  update(index, {
-                    legacyDownloadUrl: null,
-                    presentationVersionId: version?.id ?? null,
-                    presentationSource: version?.source ?? "proposal",
-                    ...(version ? { version: version.version } : {}),
-                    ...(version?.source === "session" ? { url: "" } : {}),
-                  });
-                }}
-              >
-                <option value="">External material / no uploaded version</option>
-                {catalog.data?.versions.map((version) => (
-                  <option value={`${version.source}:${version.id}`}>
-                    {version.source === "session" ? "Session upload" : "Proposal upload"} ·{" "}
-                    {version.fileName ?? version.title} · version {version.version} ·{" "}
-                    {version.reviewStatus ?? "awaiting review"}
-                  </option>
-                ))}
-                {material.presentationVersionId &&
-                  !catalog.data?.versions.some(
-                    (version) =>
-                      version.id === material.presentationVersionId && version.source === material.presentationSource,
-                  ) && (
-                    <option value={`${material.presentationSource}:${material.presentationVersionId}`}>
-                      Saved {material.presentationSource} upload · version {material.version}
+          {material.kind === "presentation" && (
+            <Field
+              label="Uploaded presentation version"
+              help="Choose a session upload. Release requires an approved upload review. Session uploads receive a generated public delivery URL."
+            >
+              {(control) => (
+                <Select
+                  {...control}
+                  value={
+                    material.presentationVersionId
+                      ? `${material.presentationSource}:${material.presentationVersionId}`
+                      : ""
+                  }
+                  onChange={(event) => {
+                    const version = catalog.data?.versions.find(
+                      (value) => `${value.source}:${value.id}` === event.currentTarget.value,
+                    );
+                    update(index, {
+                      legacyDownloadUrl: null,
+                      presentationVersionId: version?.id ?? null,
+                      presentationSource: version?.source ?? "proposal",
+                      ...(version ? { version: version.version } : {}),
+                      ...(version?.source === "session" ? { url: "" } : {}),
+                    });
+                  }}
+                >
+                  <option value="">External material / no uploaded version</option>
+                  {catalog.data?.versions.map((version) => (
+                    <option value={`${version.source}:${version.id}`}>
+                      {version.source === "session" ? "Session upload" : "Proposal upload"} ·{" "}
+                      {version.fileName ?? version.title} · version {version.version} ·{" "}
+                      {version.reviewStatus ?? "awaiting review"}
                     </option>
-                  )}
-              </Select>
-            )}
-          </Field>
+                  ))}
+                  {material.presentationVersionId &&
+                    !catalog.data?.versions.some(
+                      (version) =>
+                        version.id === material.presentationVersionId && version.source === material.presentationSource,
+                    ) && (
+                      <option value={`${material.presentationSource}:${material.presentationVersionId}`}>
+                        Saved {material.presentationSource} upload · version {material.version}
+                      </option>
+                    )}
+                </Select>
+              )}
+            </Field>
+          )}
           {material.kind === "presentation" &&
             material.presentationSource === "session" &&
             material.presentationVersionId && (
