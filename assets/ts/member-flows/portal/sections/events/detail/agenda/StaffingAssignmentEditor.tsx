@@ -37,7 +37,7 @@ export function StaffingAssignmentEditor({
   if (userId)
     assignments.push({
       positionId,
-      blockId: requirement.blockId,
+      shiftId: requirement.shiftId,
       role: requirement.roleId,
       postId: requirement.postId,
       userId,
@@ -46,7 +46,7 @@ export function StaffingAssignmentEditor({
     });
   const form = useContractForm(agendaStaffingSchema, {
     expectedRevision: snapshot.revision,
-    blocks: snapshot.blocks,
+    shifts: snapshot.shifts,
     roleMembers: snapshot.roleMembers,
     assignments,
     staffingRoles: snapshot.staffingRoles,
@@ -87,7 +87,7 @@ export function StaffingAssignmentEditor({
       <PanelBody>
         <DescriptionList
           items={[
-            { term: "Block", value: snapshot.blocks.find((row) => row.id === requirement.blockId)?.name },
+            { term: "Shift", value: snapshot.shifts.find((row) => row.id === requirement.shiftId)?.name },
             { term: "Role", value: snapshot.staffingRoles.find((row) => row.id === requirement.roleId)?.name },
             {
               term: "Post",

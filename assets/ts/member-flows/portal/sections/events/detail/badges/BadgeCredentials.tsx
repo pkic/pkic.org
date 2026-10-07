@@ -17,9 +17,11 @@ import { deleteJson, getJson } from "../../../../../../shared/api-client";
 import { DescriptionList } from "../../../../../../ui/DescriptionList";
 import { PageHeader } from "../../../../../../ui/PageHeader";
 import { Menu } from "../../../../../../ui/Menu";
+import { RowActions } from "../../../../../../ui/RowActions";
 import { EmptyState } from "../../../../../../ui/RecordEmptyState";
 import { usePortalHashLocation } from "../../../../hash-location";
 import { BadgeIssuance } from "../scanner/BadgeIssuance";
+import { BadgeCredentialPrint } from "./BadgeCredentialPrint";
 
 export function BadgeCredentials({
   slug,
@@ -50,6 +52,15 @@ export function BadgeCredentials({
         userId={scopedUserId}
         onBack={() => navigate(`${basePath}${scopeQuery}`)}
         onRecord={(id) => navigate(recordPath(id))}
+      />
+    );
+  if (credentialId && segment === "print")
+    return (
+      <BadgeCredentialPrint
+        key={credentialId}
+        slug={slug}
+        credentialId={credentialId}
+        onBack={() => navigate(recordPath(credentialId))}
       />
     );
   if (credentialId)
@@ -113,6 +124,24 @@ export function BadgeCredentials({
           width: "fit",
           sort: { asc: "expiresAt", desc: "-expiresAt" },
           cell: (badge) => formatDateTime(badge.expiresAt),
+        },
+        {
+          header: "Actions",
+          width: "fit",
+          cell: (badge) => (
+            <RowActions
+              subject={badge.displayName ?? badge.id}
+              actions={[
+                { id: "record", label: "View credential", onSelect: () => navigate(recordPath(badge.id)) },
+                {
+                  id: "print",
+                  label: "Reprint badge",
+                  disabled: badge.status !== "active" || !badge.reprintAvailable,
+                  onSelect: () => navigate(`${recordPath(badge.id)}/print`),
+                },
+              ]}
+            />
+          ),
         },
       ]}
       empty={<EmptyState title="No badge credentials" body="Create a badge for a registered attendee." />}
@@ -183,6 +212,12 @@ function BadgeCredentialRecord({
             label="Record actions"
             items={[
               {
+                id: "print",
+                label: "Reprint badge",
+                disabled: busy || badge.status !== "active" || !badge.reprintAvailable,
+                onSelect: () => navigate(`${path}/print`),
+              },
+              {
                 id: "replace",
                 label: "Replace credential",
                 disabled: busy || badge.status === "revoked",
@@ -210,8 +245,10 @@ function BadgeCredentialRecord({
         ]}
       />
       <p>
-        This record stores a credential reference, not its QR code. Reprint a saved HTML or SVG file from issuance, or
-        explicitly replace this selected credential to create a new code. Replacement revokes only this code.
+        {badge.reprintAvailable
+          ? "Reprint this active badge without changing its code."
+          : "Reprinting is unavailable for this credential. You can print a previously saved file."}{" "}
+        Explicit replacement creates a new code and revokes only this credential.
       </p>
       {(error || record.error) && <ErrorAlert error={error || record.error} />}
     </div>

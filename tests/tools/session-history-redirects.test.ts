@@ -43,7 +43,7 @@ describe("archive release redirects", () => {
       revision: 1,
       publishedRevision: 1,
       rooms: [],
-      blocks: [],
+      shifts: [],
       roleMembers: [],
       assignments: [],
       occurrences: [

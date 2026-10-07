@@ -59,7 +59,7 @@ describe("individual placement scheduling", () => {
       publishedRevision: null,
       rooms: [],
       occurrences: [first, second],
-      blocks: [],
+      shifts: [],
       assignments: [],
       roleMembers: [],
     });

@@ -13,9 +13,9 @@ const snapshot = agendaSnapshotSchema.parse({
   publishedRevision: null,
   rooms: [{ id: "hall", name: "Main hall", capacity: 20 }],
   occurrences: [],
-  blocks: [
+  shifts: [
     {
-      id: "block",
+      id: "shift",
       name: "Program duties",
       startAt: "2026-12-01T10:00:00.000Z",
       endAt: "2026-12-01T11:00:00.000Z",
@@ -62,7 +62,7 @@ async function mount() {
   document.body.append(host);
   await act(() =>
     render(
-      <StaffingSetup snapshot={snapshot} kind="block" editId="block" onSaved={() => {}} onClose={() => {}} />,
+      <StaffingSetup snapshot={snapshot} kind="shift" editId="shift" onSaved={() => {}} onClose={() => {}} />,
       host,
     ),
   );
@@ -82,7 +82,7 @@ it("selects an existing event track while preserving the location intersection",
   await chooseComboboxOption(host, "Track", "Operations");
   await save();
   const body = agendaStaffingSchema.parse(bodies[0]);
-  expect(body.blocks[0]).toMatchObject({ id: "block", roomId: "hall", track: "Operations" });
+  expect(body.shifts[0]).toMatchObject({ id: "shift", roomId: "hall", track: "Operations" });
   expect(
     requests.some(
       (url) =>
@@ -97,11 +97,11 @@ it("clears track scope without clearing the selected physical location", async (
   await openCombobox(host, "Track");
   await chooseComboboxOption(host, "Track", "");
   await save();
-  expect(agendaStaffingSchema.parse(bodies[0]).blocks[0]).toMatchObject({ roomId: "hall", track: null });
+  expect(agendaStaffingSchema.parse(bodies[0]).shifts[0]).toMatchObject({ roomId: "hall", track: null });
 });
 it("keeps track scope across all locations", async () => {
   const { bodies } = await mount();
   await chooseOption(controlFor(host, "Location"), "");
   await save();
-  expect(agendaStaffingSchema.parse(bodies[0]).blocks[0]).toMatchObject({ roomId: null, track: "Cryptography" });
+  expect(agendaStaffingSchema.parse(bodies[0]).shifts[0]).toMatchObject({ roomId: null, track: "Cryptography" });
 });

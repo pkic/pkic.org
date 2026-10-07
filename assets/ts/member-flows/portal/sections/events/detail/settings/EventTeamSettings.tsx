@@ -82,7 +82,7 @@ function StaffingPeople({
     return <ErrorAlert error="Eligible person not found." />;
   return (
     <>
-      <ButtonLink href={usePortalHashLocation.hrefs(staffingPath)}>Back to staffing blocks and assignments</ButtonLink>
+      <ButtonLink href={usePortalHashLocation.hrefs(staffingPath)}>Back to staffing shifts and assignments</ButtonLink>
       {personId ? (
         <StaffingSetup
           key={personId}

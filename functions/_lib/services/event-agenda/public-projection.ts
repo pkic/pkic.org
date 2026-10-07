@@ -38,7 +38,7 @@ export function publicAgendaProjection(approved: AgendaSnapshot, basePath: strin
           : undefined,
       })),
     staffingReport: undefined,
-    blocks: [],
+    shifts: [],
     assignments: [],
     roleMembers: [],
   };

@@ -12,6 +12,6 @@ export async function getAgendaStaffingReport(db: DatabaseLike, eventId: string,
     : [];
   return agendaStaffingReport(
     snapshot,
-    new Set(unavailable.map(({ blockId, userId }) => JSON.stringify([blockId, userId]))),
+    new Set(unavailable.map(({ shiftId, userId }) => JSON.stringify([shiftId, userId]))),
   );
 }

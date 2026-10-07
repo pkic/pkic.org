@@ -1,5 +1,5 @@
 import { z } from "zod";
-/** Staffing retains intentional natural IDs for existing blocks and configurable roles. */
+/** Staffing retains intentional natural IDs for existing shifts and configurable roles. */
 export const agendaStaffingResourceIdSchema = z.string().trim().min(1).max(200);
 const id = agendaStaffingResourceIdSchema;
 export const agendaStaffingRoleSchema = z.object({
@@ -14,7 +14,7 @@ export const agendaStaffingPostSchema = z.object({
 });
 export const agendaStaffingRequirementSchema = z.object({
   id,
-  blockId: id,
+  shiftId: id,
   roleId: id,
   postId: id.nullable(),
   idealCount: z.number().int().min(1).max(50),
@@ -29,7 +29,7 @@ export const agendaStaffingAssignmentFieldsSchema = z.object({
 });
 export const agendaStaffingPositionAssignmentSchema = agendaStaffingAssignmentFieldsSchema.extend({
   positionId: id,
-  blockId: id,
+  shiftId: id,
   role: id,
   postId: id.nullable(),
 });
@@ -42,6 +42,18 @@ export const agendaStaffingPositionPlanSchema = z
     assignments: z.array(agendaStaffingPositionAssignmentSchema).max(2000),
   })
   .superRefine((plan, context) => {
+    for (const field of ["roles", "posts"] as const) {
+      const names = new Set<string>();
+      for (const [index, row] of plan[field].entries()) {
+        if (names.has(row.name))
+          context.addIssue({
+            code: "custom",
+            path: [field, index, "name"],
+            message: `Choose a unique ${field === "roles" ? "role" : "post"} name within this event`,
+          });
+        names.add(row.name);
+      }
+    }
     for (const field of ["roles", "posts", "requirements", "positions"] as const)
       if (new Set(plan[field].map((row) => row.id)).size !== plan[field].length)
         context.addIssue({
@@ -94,14 +106,14 @@ export const agendaStaffingPositionPlanSchema = z
       const requirement = plan.requirements.find((row) => row.id === position?.requirementId);
       if (
         requirement &&
-        (assignment.blockId !== requirement.blockId ||
+        (assignment.shiftId !== requirement.shiftId ||
           assignment.role !== requirement.roleId ||
           assignment.postId !== requirement.postId)
       )
         context.addIssue({
           code: "custom",
           path: ["assignments", index],
-          message: "Assignment must match its position's block, role and post",
+          message: "Assignment must match its position's shift, role and post",
         });
     }
   });

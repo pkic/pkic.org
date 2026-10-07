@@ -35,7 +35,7 @@ const snapshot = agendaSnapshotSchema.parse({
   revision: 7,
   publishedRevision: 6,
   rooms: [],
-  blocks: [],
+  shifts: [],
   roleMembers: [],
   assignments: [],
   occurrences: [

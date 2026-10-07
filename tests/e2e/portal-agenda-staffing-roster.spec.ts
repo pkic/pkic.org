@@ -57,9 +57,9 @@ test("a real multi-day team keeps a senior pin and reports door staffing shortag
     name,
     roomId: null,
   }));
-  const blocks = ["2026-12-01", "2026-12-02"].flatMap((date, day) =>
+  const shifts = ["2026-12-01", "2026-12-02"].flatMap((date, day) =>
     [9, 11].map((hour, index) => ({
-      id: `${prefix}-block-${day}-${index}`,
+      id: `${prefix}-shift-${day}-${index}`,
       name: `Day ${day + 1} ${index ? "late morning" : "opening"}`,
       startAt: `${date}T${String(hour - 1).padStart(2, "0")}:00:00.000Z`,
       endAt: `${date}T${String(hour - 1).padStart(2, "0")}:30:00.000Z`,
@@ -69,10 +69,10 @@ test("a real multi-day team keeps a senior pin and reports door staffing shortag
       roleRequirements: [],
     })),
   );
-  const requirements = blocks.flatMap((block) => [
+  const requirements = shifts.flatMap((shift) => [
     {
-      id: `${block.id}-mc`,
-      blockId: block.id,
+      id: `${shift.id}-mc`,
+      shiftId: shift.id,
       roleId: roles[0]!.id,
       postId: null,
       idealCount: 1,
@@ -80,8 +80,8 @@ test("a real multi-day team keeps a senior pin and reports door staffing shortag
       attendanceMode: "physical",
     },
     {
-      id: `${block.id}-questions`,
-      blockId: block.id,
+      id: `${shift.id}-questions`,
+      shiftId: shift.id,
       roleId: roles[1]!.id,
       postId: null,
       idealCount: 1,
@@ -89,8 +89,8 @@ test("a real multi-day team keeps a senior pin and reports door staffing shortag
       attendanceMode: "remote",
     },
     ...posts.map((post) => ({
-      id: `${block.id}-${post.id}`,
-      blockId: block.id,
+      id: `${shift.id}-${post.id}`,
+      shiftId: shift.id,
       roleId: roles[2]!.id,
       postId: post.id,
       idealCount: 2,
@@ -100,7 +100,7 @@ test("a real multi-day team keeps a senior pin and reports door staffing shortag
   ]);
   const body = agendaStaffingSchema.parse({
     expectedRevision: before.revision,
-    blocks,
+    shifts,
     staffingRoles: roles,
     staffingPosts: posts,
     staffingRequirements: requirements,
@@ -127,7 +127,7 @@ test("a real multi-day team keeps a senior pin and reports door staffing shortag
   expect(configured.ok(), await configured.text()).toBe(true);
   agendaSnapshotSchema.parse(await configured.json());
   await page.goto(`/portal/#/events/${slug}/agenda`);
-  await page.getByRole("tab", { name: "Block roles", exact: true }).click();
+  await page.getByRole("tab", { name: "Shift roles", exact: true }).click();
   await page.getByRole("button", { name: "Actions for Day 1 opening", exact: true }).click();
   await page.getByRole("menuitem", { name: "Review staffing", exact: true }).click();
   await page.getByRole("button", { name: "Actions for MC · Event", exact: true }).click();
@@ -141,7 +141,7 @@ test("a real multi-day team keeps a senior pin and reports door staffing shortag
   const pinned = (await read()).assignments.find((item) => item.pinned)!;
   expect(pinned.userId).toBe(roster[0]!.id);
   expect(pinned.role).toBe(roles[0]!.id);
-  expect(pinned.blockId).toBe(blocks[0]!.id);
+  expect(pinned.shiftId).toBe(shifts[0]!.id);
   await page.getByRole("button", { name: "Actions for Event staffing", exact: true }).click();
   await page.getByRole("menuitem", { name: "Configure rotation", exact: true }).click();
   await page.getByLabel("Rotation seed", { exact: true }).fill("staffed-multiday-seed");
@@ -152,8 +152,8 @@ test("a real multi-day team keeps a senior pin and reports door staffing shortag
   expect(generated.staffingReport!.coverage.filter((item) => item.postId)).toHaveLength(8);
   expect(generated.staffingReport!.uncovered.length).toBeGreaterThan(0);
   expect(generated.assignments.filter((item) => item.role === roles[1]!.id)).toHaveLength(4);
-  for (const block of blocks) {
-    const assigned = generated.assignments.filter((item) => item.blockId === block.id);
+  for (const shift of shifts) {
+    const assigned = generated.assignments.filter((item) => item.shiftId === shift.id);
     expect(new Set(assigned.map((item) => item.userId)).size).toBe(assigned.length);
   }
   const physicalMinutes = generated
@@ -164,7 +164,7 @@ test("a real multi-day team keeps a senior pin and reports door staffing shortag
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: `${artifacts}/staffed-multiday-overview-desktop.png`, fullPage: true });
   const shortage = generated.staffingReport!.uncovered.find((item) => item.postId)!;
-  const shortageBlock = generated.blocks.find((item) => item.id === shortage.blockId)!;
+  const shortageBlock = generated.shifts.find((item) => item.id === shortage.shiftId)!;
   const shortageRole = generated.staffingRoles.find((item) => item.id === shortage.role)!;
   const shortagePost = generated.staffingPosts.find((item) => item.id === shortage.postId)!;
   await page.getByRole("button", { name: `Actions for ${shortageBlock.name}`, exact: true }).click();

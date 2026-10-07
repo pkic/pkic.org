@@ -14,8 +14,8 @@ const room = "22222222-2222-4222-8222-222222222222";
 const block = "33333333-3333-4333-8333-333333333333";
 const operator = "44444444-4444-4444-8444-444444444444";
 const candidate: ScannerSuggestion = {
-  blockId: block,
-  blockName: "Morning",
+  shiftId: block,
+  shiftName: "Morning",
   roles: ["MC"],
   startAt: "2026-12-01T10:00:00.000Z",
   endAt: "2026-12-01T11:00:00.000Z",
@@ -282,7 +282,7 @@ describe("assigned scanner setup", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () =>
-        response([candidate, { ...candidate, blockId: crypto.randomUUID(), roles: ["Remote questions"] }]),
+        response([candidate, { ...candidate, shiftId: crypto.randomUUID(), roles: ["Remote questions"] }]),
       ),
     );
     await mount();

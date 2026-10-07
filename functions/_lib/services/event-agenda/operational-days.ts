@@ -31,7 +31,7 @@ export function operationalIntervalDays(start: string, end: string, timeZone: st
   }
   return dates;
 }
-/** Event-day capacity includes standalone staff blocks, independently of linked sessions or attendee registration. */
+/** Event-day capacity includes standalone staff shifts, independently of linked sessions or attendee registration. */
 export function operationalDays(snapshot: AgendaSnapshot): OperationalDayPerson[] {
   const people = new Map<string, OperationalDayPerson>();
   const add = (userId: string, start: string, end: string, source: string) => {
@@ -48,14 +48,14 @@ export function operationalDays(snapshot: AgendaSnapshot): OperationalDayPerson[
         if (speaker.role !== "proposer" && (speaker.attendanceMode ?? "physical") === "physical")
           add(speaker.userId, session.startAt, session.endAt, `credit:${session.id}:${speaker.role ?? "speaker"}`);
   const members = new Map(snapshot.roleMembers.map((member) => [member.userId, member]));
-  const blocks = new Map(snapshot.blocks.map((block) => [block.id, block]));
+  const shifts = new Map(snapshot.shifts.map((shift) => [shift.id, shift]));
   for (const assignment of snapshot.assignments) {
     const member = members.get(assignment.userId),
-      block = blocks.get(assignment.blockId);
-    if (!member || !block)
-      throw new AppError(409, "AGENDA_STAFF_MEMBER_MISSING", "An assigned staff member or block is missing.");
+      shift = shifts.get(assignment.shiftId);
+    if (!member || !shift)
+      throw new AppError(409, "AGENDA_STAFF_MEMBER_MISSING", "An assigned staff member or shift is missing.");
     if (member.attendanceMode === "physical")
-      add(member.userId, block.startAt, block.endAt, `block:${block.id}:${assignment.role}`);
+      add(member.userId, shift.startAt, shift.endAt, `shift:${shift.id}:${assignment.role}`);
   }
   return [...people.values()];
 }

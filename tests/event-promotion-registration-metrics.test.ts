@@ -251,10 +251,16 @@ describe("promotion confirmed registration metrics", () => {
       attendanceMode: "remote",
     });
     expect(reservation.status).toBe("reserved");
-    const badge = await issueBadge(env.DB, fixture.eventId, fixture.admin.id, {
-      userId: attendee.user.id,
-      operationId: crypto.randomUUID(),
-    });
+    const badge = await issueBadge(
+      env.DB,
+      fixture.eventId,
+      fixture.admin.id,
+      {
+        userId: attendee.user.id,
+        operationId: crypto.randomUUID(),
+      },
+      env,
+    );
     const receipt = await recordScan(
       env.DB,
       fixture.eventId,

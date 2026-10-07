@@ -10,7 +10,7 @@ export const approvedAgendaSnapshot = agendaSnapshotSchema.parse({
   publishedRevision: 3,
   approvedAt: approvedAgendaInstant,
   rooms: [{ id: "hall", name: "Main hall", capacity: 100 }],
-  blocks: [],
+  shifts: [],
   assignments: [],
   roleMembers: [],
   occurrences: [

@@ -1,4 +1,4 @@
-import { useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { Button } from "../../ui/Button";
 import { Field } from "../../ui/Field";
 import { Select } from "../../ui/TextControl";
@@ -10,19 +10,55 @@ import {
   downloadBadgeArtifact,
   type BadgePrintLayout,
   type FreshBadgePrint,
+  type PrintableBadgePrint,
 } from "./badge-print-artifacts";
 import "./BadgePrintPreview.css";
 
-export function BadgePrintPreview({ badges }: { badges: readonly FreshBadgePrint[] }) {
+export function BadgePrintPreview({
+  badges,
+  beforeRelease,
+}: {
+  badges: readonly PrintableBadgePrint[];
+  /** Reprints recheck live metadata before releasing any private print file. */
+  beforeRelease?: () => Promise<boolean>;
+}) {
   const [layout, setLayout] = useState<BadgePrintLayout>("a6");
   const [ready, setReady] = useState(false);
   const frame = useRef<HTMLIFrameElement>(null);
+  const live = useRef(true);
+  const checking = useRef(false);
+  const [busy, setBusy] = useState(false);
+  useEffect(
+    () => () => {
+      live.current = false;
+    },
+    [],
+  );
+  const fresh = badges.filter(
+    (badge): badge is FreshBadgePrint => "credential" in badge && typeof badge.credential === "string",
+  );
+  async function release(action: () => void) {
+    if (checking.current) return;
+    if (!beforeRelease) {
+      action();
+      return;
+    }
+    checking.current = true;
+    setBusy(true);
+    try {
+      if ((await beforeRelease()) && live.current) action();
+    } finally {
+      checking.current = false;
+      if (live.current) setBusy(false);
+    }
+  }
   const html = badgePrintHtml(badges, layout);
   return (
     <div class="pk-stack">
       <Alert tone="info">
-        Save a print file before leaving this page. Downloaded HTML can be reopened and printed again; the server cannot
-        recover these QR codes. Print files and printing CSV contain access codes: keep them private.
+        Downloaded HTML can be reopened and printed again. Print files contain access codes: keep them private.
+        Reprinting an active badge is available only while authorized; some older credentials require a saved file or
+        replacement.
       </Alert>
       <div class="pk-cluster">
         <Field label="Paper layout">
@@ -40,7 +76,7 @@ export function BadgePrintPreview({ badges }: { badges: readonly FreshBadgePrint
             </Select>
           )}
         </Field>
-        <Button disabled={!ready} onClick={() => frame.current?.contentWindow?.print()}>
+        <Button disabled={!ready || busy} onClick={() => void release(() => frame.current?.contentWindow?.print())}>
           Print / save PDF
         </Button>
         <Menu
@@ -49,20 +85,37 @@ export function BadgePrintPreview({ badges }: { badges: readonly FreshBadgePrint
             {
               id: "html",
               label: "Reusable HTML print file",
-              onSelect: () => downloadBadgeArtifact(html, "text/html;charset=utf-8", "attendee-badges.html"),
-            },
-            {
-              id: "csv",
-              label: "Printing CSV with QR codes",
+              disabled: busy,
               onSelect: () =>
-                downloadBadgeArtifact(badgePrintCsv(badges), "text/csv;charset=utf-8", "attendee-badges-print.csv"),
+                void release(() => downloadBadgeArtifact(html, "text/html;charset=utf-8", "attendee-badges.html")),
             },
+            ...(fresh.length === badges.length && fresh.length > 0
+              ? [
+                  {
+                    id: "csv",
+                    label: "Printing CSV with QR codes",
+                    disabled: busy,
+                    onSelect: () =>
+                      void release(() =>
+                        downloadBadgeArtifact(
+                          badgePrintCsv(fresh),
+                          "text/csv;charset=utf-8",
+                          "attendee-badges-print.csv",
+                        ),
+                      ),
+                  },
+                ]
+              : []),
             ...(badges.length === 1
               ? [
                   {
                     id: "svg",
                     label: "QR code (SVG)",
-                    onSelect: () => downloadBadgeArtifact(badges[0].svg, "image/svg+xml", "attendee-badge-qr.svg"),
+                    disabled: busy,
+                    onSelect: () =>
+                      void release(() =>
+                        downloadBadgeArtifact(badges[0].svg, "image/svg+xml", "attendee-badge-qr.svg"),
+                      ),
                   },
                 ]
               : []),

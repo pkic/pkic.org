@@ -1,4 +1,4 @@
-import { agendaSnapshotSchema } from "../../../assets/shared/schemas/event-agenda";
+import { storedAgendaSnapshotSchema } from "../../../assets/shared/schemas/event-agenda-stored";
 import { all } from "../db/queries";
 import { prepareAuthorizationGuard } from "../db/authorization-guard";
 import type { DatabaseLike, StatementLike } from "../types";
@@ -36,7 +36,7 @@ export async function prepareSiteAgendaActivationGuards(db: DatabaseLike): Promi
       }),
     );
     for (const row of page) {
-      const snapshot = agendaSnapshotSchema.parse(JSON.parse(row.snapshotJson));
+      const snapshot = storedAgendaSnapshotSchema.parse(JSON.parse(row.snapshotJson));
       if (
         snapshot.eventSlug !== row.slug ||
         snapshot.revision !== row.revision ||

@@ -131,7 +131,7 @@ function boundSelection() {
         publishedRevision: 1,
         revision: 1,
         rooms: [],
-        blocks: [],
+        shifts: [],
         roleMembers: [],
         assignments: [],
         occurrences: [

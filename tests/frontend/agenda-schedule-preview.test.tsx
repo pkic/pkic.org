@@ -24,7 +24,7 @@ const snapshot = agendaSnapshotSchema.parse({
   revision: 3,
   publishedRevision: null,
   rooms: [{ id: "room", name: "Main", capacity: 100 }],
-  blocks: [],
+  shifts: [],
   roleMembers: [],
   assignments: [],
   occurrences: [10, 11, 12].map((hour) => ({

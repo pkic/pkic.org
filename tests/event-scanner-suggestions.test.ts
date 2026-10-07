@@ -11,7 +11,7 @@ const eventId = crypto.randomUUID(),
 const roomA = crypto.randomUUID(),
   roomB = crypto.randomUUID(),
   sessionId = crypto.randomUUID(),
-  blockId = crypto.randomUUID();
+  shiftId = crypto.randomUUID();
 const now = new Date("2026-10-04T10:00:00.000Z");
 let snapshot: Record<string, unknown>;
 async function publish() {
@@ -43,9 +43,9 @@ describe("Approved own-duty scanner suggestions", () => {
         { id: roomA, name: "Room A" },
         { id: roomB, name: "Room B" },
       ],
-      blocks: [
+      shifts: [
         {
-          id: blockId,
+          id: shiftId,
           name: "Morning",
           startAt: "2026-10-04T09:00:00.000Z",
           endAt: "2026-10-04T12:00:00.000Z",
@@ -53,9 +53,9 @@ describe("Approved own-duty scanner suggestions", () => {
         },
       ],
       assignments: [
-        { blockId, role: "mc", userId: operatorId },
-        { blockId, role: "remote-questions", userId: operatorId },
-        { blockId, role: "room-questions", userId: otherId },
+        { shiftId, role: "mc", userId: operatorId },
+        { shiftId, role: "remote-questions", userId: operatorId },
+        { shiftId, role: "room-questions", userId: otherId },
       ],
       occurrences: [
         {
@@ -74,9 +74,39 @@ describe("Approved own-duty scanner suggestions", () => {
       .bind(crypto.randomUUID(), eventId, JSON.stringify(snapshot), operatorId, now.toISOString())
       .run();
   });
+  it("reads historical approved duties with identical hints and leaves the stored approval untouched", async () => {
+    const current = await scannerSuggestions(env.DB, eventId, operatorId, now);
+    const { shifts, ...rest } = snapshot;
+    const assignments = snapshot.assignments as Array<{ shiftId: string; role: string; userId: string }>;
+    const legacy = {
+      ...rest,
+      blocks: shifts,
+      assignments: assignments.map(({ shiftId, ...assignment }) => ({ ...assignment, blockId: shiftId })),
+    };
+    const bytes = JSON.stringify(legacy);
+    await env.DB.prepare("UPDATE event_agenda_publications SET snapshot_json=? WHERE event_id=?")
+      .bind(bytes, eventId)
+      .run();
+    const result = await scannerSuggestions(env.DB, eventId, operatorId, now);
+    expect(result).toEqual(current);
+    expect(result.suggestions).toHaveLength(1);
+    expect(result.suggestions[0]).toMatchObject({
+      shiftId,
+      shiftName: "Morning",
+      roles: expect.arrayContaining(["mc", "remote-questions"]),
+    });
+    const stored = await env.DB.prepare("SELECT snapshot_json FROM event_agenda_publications WHERE event_id=?")
+      .bind(eventId)
+      .first<{ snapshot_json: string }>();
+    expect(stored?.snapshot_json).toBe(bytes);
+    await env.DB.prepare("UPDATE event_agenda_publications SET snapshot_json=? WHERE event_id=?")
+      .bind(JSON.stringify({ ...legacy, shifts }), eventId)
+      .run();
+    expect((await scannerSuggestions(env.DB, eventId, operatorId, now)).suggestions).toEqual([]);
+  });
   it("returns only the operator's approved duties, deduplicating roles and matching additional rooms", async () => {
     await env.DB.prepare("UPDATE events SET timezone='Europe/Amsterdam' WHERE id=?").bind(eventId).run();
-    (snapshot.blocks as Array<Record<string, unknown>>)[0]!.roomId = roomB;
+    (snapshot.shifts as Array<Record<string, unknown>>)[0]!.roomId = roomB;
     await publish();
     const result = await scannerSuggestions(env.DB, eventId, operatorId, now);
     expect(result.publishedRevision).toBe(1);
@@ -89,12 +119,12 @@ describe("Approved own-duty scanner suggestions", () => {
     expect(JSON.stringify(result)).not.toContain(otherId);
   });
   it("does not infer a room for a global duty covering multiple rooms", async () => {
-    (snapshot.blocks as Array<Record<string, unknown>>)[0]!.roomId = null;
+    (snapshot.shifts as Array<Record<string, unknown>>)[0]!.roomId = null;
     await publish();
     expect((await scannerSuggestions(env.DB, eventId, operatorId, now)).suggestions[0]!.suggestedRoomId).toBeNull();
   });
   it("labels a future duty as upcoming even when its overlapping session has started", async () => {
-    (snapshot.blocks as Array<Record<string, unknown>>)[0]!.startAt = "2026-10-04T10:15:00.000Z";
+    (snapshot.shifts as Array<Record<string, unknown>>)[0]!.startAt = "2026-10-04T10:15:00.000Z";
     await publish();
     const result = await scannerSuggestions(env.DB, eventId, operatorId, now);
     expect(result.suggestions).toHaveLength(1);

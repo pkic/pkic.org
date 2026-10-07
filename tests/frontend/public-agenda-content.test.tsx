@@ -310,7 +310,7 @@ describe("shared public agenda content", () => {
         { id: "mc", name: "MC", showOnAgenda: true },
         { id: "scan", name: "Badge scanning", showOnAgenda: false },
       ],
-      blocks: [
+      shifts: [
         {
           id: "block",
           name: "Morning",
@@ -332,7 +332,7 @@ describe("shared public agenda content", () => {
       ],
       assignments: ["mc", "scan"].map((role) => ({
         positionId: role,
-        blockId: "block",
+        shiftId: "block",
         role,
         postId: null,
         userId: "staff",

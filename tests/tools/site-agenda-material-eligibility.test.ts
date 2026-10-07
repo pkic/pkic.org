@@ -31,7 +31,7 @@ function snapshot() {
     publishedRevision: 2,
     timeZone: "UTC",
     rooms: [],
-    blocks: [],
+    shifts: [],
     roleMembers: [],
     assignments: [],
     occurrences: Array.from({ length: 3 }, (_, index) => ({

@@ -72,7 +72,8 @@ export function createEventScannerFixture() {
     )
       .bind(crypto.randomUUID(), eventId, JSON.stringify(snapshot), operatorId, now)
       .run();
-    badgeId = (await issueBadge(env.DB, eventId, operatorId, { userId, operationId: crypto.randomUUID() })).credential!;
+    badgeId = (await issueBadge(env.DB, eventId, operatorId, { userId, operationId: crypto.randomUUID() }, env))
+      .credential!;
     token = await createAdminSession(env.DB, operatorId, crypto.randomUUID());
     epochId = (await enrollScannerDevice(env.DB, eventId, operatorId, { operationId: crypto.randomUUID(), deviceId }))
       .epochId;

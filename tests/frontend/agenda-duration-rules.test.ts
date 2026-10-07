@@ -40,7 +40,7 @@ describe("event agenda duration rules", () => {
       publishedRevision: null,
       rooms: [],
       occurrences: [],
-      blocks: [],
+      shifts: [],
       roleMembers: [],
       assignments: [],
       durationRules: { defaultMinutes: 40, quickMinutes: [20, 40, 80] },

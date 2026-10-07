@@ -242,7 +242,7 @@ describe("versioned recurring meeting agendas", () => {
         "pqc-2026",
         staffingFixture({
           expectedRevision: 0,
-          blocks: [{ id: "mc-block", name: "Room host", startAt: start, endAt: end, roomId: null, roles: ["mc"] }],
+          shifts: [{ id: "mc-block", name: "Room host", startAt: start, endAt: end, roomId: null, roles: ["mc"] }],
           roleMembers: [
             {
               userId: admin!.id,
@@ -253,14 +253,14 @@ describe("versioned recurring meeting agendas", () => {
               maxMinutes: null,
             },
           ],
-          assignments: [{ blockId: "mc-block", role: "mc", userId: admin!.id, pinned: true }],
+          assignments: [{ shiftId: "mc-block", role: "mc", userId: admin!.id, pinned: true }],
         }),
       ),
     ).rejects.toMatchObject({ status: 409, code: "AGENDA_SCHEDULE_CONFLICT" });
     expect(
       await env.DB.prepare("SELECT 1 FROM event_agenda_occurrences WHERE event_id=?").bind(eventId).first(),
     ).toBeNull();
-    expect(await env.DB.prepare("SELECT 1 FROM event_agenda_blocks WHERE event_id=?").bind(eventId).first()).toBeNull();
+    expect(await env.DB.prepare("SELECT 1 FROM event_agenda_shifts WHERE event_id=?").bind(eventId).first()).toBeNull();
     await createAgendaOccurrence(
       env.DB,
       eventId,

@@ -165,7 +165,7 @@ describe("Live organizer session demand projection", () => {
       "POST",
       agendaStaffingSchema.parse({
         expectedRevision: revision,
-        blocks: [
+        shifts: [
           {
             id: "authored-opening",
             name: "Senior door duty",
@@ -180,7 +180,7 @@ describe("Live organizer session demand projection", () => {
         staffingRequirements: [
           {
             id: "senior-door",
-            blockId: "authored-opening",
+            shiftId: "authored-opening",
             roleId: "door",
             postId: "north-door",
             idealCount: 1,
@@ -204,7 +204,7 @@ describe("Live organizer session demand projection", () => {
         assignments: [
           {
             positionId: "senior-door-position",
-            blockId: "authored-opening",
+            shiftId: "authored-opening",
             role: "door",
             postId: "north-door",
             userId: adminId,

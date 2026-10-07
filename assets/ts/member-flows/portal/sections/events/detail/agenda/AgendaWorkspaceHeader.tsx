@@ -9,7 +9,7 @@ const labels: Record<AgendaWorkspaceView, string> = {
   sessions: "Schedule",
   locations: "Locations",
   library: "Reuse a session",
-  staffing: "Block roles",
+  staffing: "Shifts",
 };
 const tabPrefix = "agenda-workspace-tab";
 const panelId = (view: AgendaWorkspaceView) => `agenda-workspace-panel-${view}`;

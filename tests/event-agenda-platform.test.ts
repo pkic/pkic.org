@@ -104,7 +104,7 @@ describe("agenda platform", () => {
     });
     expect(snapshot.occurrences[0].publicationStatus).toBe("changed");
   });
-  it("freezes only public block duty display while retaining private allocation controls in the portal", async () => {
+  it("freezes only public shift duty display while retaining private allocation controls in the portal", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email='admin@pkic.org'");
     await env.DB.prepare("UPDATE users SET preferred_name=? WHERE id=?").bind("Synthetic Host", admin.id).run();
@@ -116,11 +116,11 @@ describe("agenda platform", () => {
       "pqc-2026",
       agendaOccurrenceCreateSchema.parse({ expectedRevision: 0, title: "Public talk", startAt, endAt, roomId: null }),
     );
-    const blockId = crypto.randomUUID();
+    const shiftId = crypto.randomUUID();
     const staffing = staffingFixture({
       expectedRevision: 1,
-      blocks: [
-        { id: blockId, name: "Morning block", startAt, endAt, roomId: null, roles: ["mc"], roleRequirements: [] },
+      shifts: [
+        { id: shiftId, name: "Morning block", startAt, endAt, roomId: null, roles: ["mc"], roleRequirements: [] },
       ],
       roleMembers: [
         {
@@ -134,7 +134,7 @@ describe("agenda platform", () => {
           attendanceMode: "physical",
         },
       ],
-      assignments: [{ blockId, role: "mc", userId: admin.id, pinned: true }],
+      assignments: [{ shiftId, role: "mc", userId: admin.id, pinned: true }],
     });
     staffing.staffingRoles[0].showOnAgenda = true;
     await saveAgendaStaffing(env.DB, eventId, "pqc-2026", staffing, admin.id);
@@ -152,10 +152,10 @@ describe("agenda platform", () => {
     expect(approved.roleMembers).toEqual([]);
     expect(JSON.stringify(approved.displayRoles)).not.toMatch(/pinned|maxMinutes|userId/);
   });
-  it("regenerates selected blocks through the API without filling or pinning other blocks", async () => {
+  it("regenerates selected shifts through the API without filling or pinning other shifts", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email='admin@pkic.org'");
-    const blocks = [9, 10, 11].map((hour) => ({
+    const shifts = [9, 10, 11].map((hour) => ({
       id: crypto.randomUUID(),
       name: `Block ${hour}`,
       startAt: `2026-12-01T${String(hour).padStart(2, "0")}:00:00.000Z`,
@@ -170,7 +170,7 @@ describe("agenda platform", () => {
       "pqc-2026",
       staffingFixture({
         expectedRevision: 0,
-        blocks,
+        shifts,
         roleMembers: [
           {
             userId: admin.id,
@@ -183,7 +183,7 @@ describe("agenda platform", () => {
             attendanceMode: "physical",
           },
         ],
-        assignments: [{ blockId: blocks[0].id, role: "mc", userId: admin.id, pinned: false }],
+        assignments: [{ shiftId: shifts[0].id, role: "mc", userId: admin.id, pinned: false }],
       }),
       admin.id,
     );
@@ -192,16 +192,16 @@ describe("agenda platform", () => {
     const response = await callApi(env, "/api/v1/events/pqc-2026/agenda/allocations", {
       method: "POST",
       headers,
-      body: JSON.stringify({ expectedRevision: 1, seed: "selected", strategy: "balanced", blockIds: [blocks[1].id] }),
+      body: JSON.stringify({ expectedRevision: 1, seed: "selected", strategy: "balanced", shiftIds: [shifts[1].id] }),
     });
     expect(response.status).toBe(200);
     const snapshot = (await response.json()) as {
       revision: number;
-      assignments: Array<{ blockId: string; pinned: boolean }>;
+      assignments: Array<{ shiftId: string; pinned: boolean }>;
     };
     expect(snapshot.assignments).toHaveLength(2);
-    expect(snapshot.assignments.find((assignment) => assignment.blockId === blocks[0].id)?.pinned).toBe(false);
-    expect(snapshot.assignments.some((assignment) => assignment.blockId === blocks[2].id)).toBe(false);
+    expect(snapshot.assignments.find((assignment) => assignment.shiftId === shifts[0].id)?.pinned).toBe(false);
+    expect(snapshot.assignments.some((assignment) => assignment.shiftId === shifts[2].id)).toBe(false);
     const [audit] = await queryAll<{ details_json: string }>(
       env.DB,
       "SELECT details_json FROM audit_log WHERE action='agenda.staffing.generated' AND entity_id=?",
@@ -216,7 +216,7 @@ describe("agenda platform", () => {
     expect(recorded).toMatchObject({
       seed: "selected",
       strategy: "balanced",
-      selectedBlockIds: [blocks[1].id],
+      selectedShiftIds: [shifts[1].id],
       fromRevision: 1,
       toRevision: 2,
     });
@@ -227,7 +227,7 @@ describe("agenda platform", () => {
     const unknown = await callApi(env, "/api/v1/events/pqc-2026/agenda/allocations", {
       method: "POST",
       headers,
-      body: JSON.stringify({ expectedRevision: snapshot.revision, seed: "selected", blockIds: [crypto.randomUUID()] }),
+      body: JSON.stringify({ expectedRevision: snapshot.revision, seed: "selected", shiftIds: [crypto.randomUUID()] }),
     });
     expect(unknown.status).toBe(400);
   });
@@ -841,7 +841,7 @@ describe("agenda platform", () => {
       "pqc-2026",
       staffingFixture({
         expectedRevision: 0,
-        blocks: [
+        shifts: [
           {
             id: "opening",
             name: "Opening",
@@ -864,7 +864,7 @@ describe("agenda platform", () => {
             attendanceMode: "physical" as const,
           },
         ],
-        assignments: [{ blockId: "opening", role: "mc", userId: admin.id, pinned: true }],
+        assignments: [{ shiftId: "opening", role: "mc", userId: admin.id, pinned: true }],
       }),
     );
     await expect(
@@ -942,7 +942,7 @@ describe("agenda platform", () => {
     expect(allocateAgendaRoles([block], members, [], [], "fair", "random").assignments[0]?.userId).toBe("senior");
   });
   it("allocates reproducibly around pins and balances duration", () => {
-    const blocks = [
+    const shifts = [
       {
         id: "a",
         name: "Opening",
@@ -972,12 +972,12 @@ describe("agenda platform", () => {
       seniority: "junior" as const,
       attendanceMode: "physical" as const,
     }));
-    const pinned = [{ blockId: "a", role: "mc", userId: "one", pinned: true }];
-    const result = allocateAgendaRoles(blocks, members, pinned, [], "seed", "balanced");
+    const pinned = [{ shiftId: "a", role: "mc", userId: "one", pinned: true }];
+    const result = allocateAgendaRoles(shifts, members, pinned, [], "seed", "balanced");
     expect(result.assignments).toEqual([
       ...pinned,
-      { blockId: "b", role: "mc", userId: "two", pinned: false, origin: "generated" },
+      { shiftId: "b", role: "mc", userId: "two", pinned: false, origin: "generated" },
     ]);
-    expect(result).toEqual(allocateAgendaRoles(blocks, members, pinned, [], "seed", "balanced"));
+    expect(result).toEqual(allocateAgendaRoles(shifts, members, pinned, [], "seed", "balanced"));
   });
 });

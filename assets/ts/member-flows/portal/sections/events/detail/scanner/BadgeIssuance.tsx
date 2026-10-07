@@ -113,8 +113,8 @@ export function BadgeIssuance({
         />
         {result.result === "replayed" ? (
           <Alert tone="info">
-            This request was already completed. The printable code is available only when a badge is first issued. Open
-            its record and explicitly replace it if you need a new printable code.
+            This request was already completed. Open View credential to reprint this active badge where available,
+            without changing its code. Older badges may require a previously saved print file or explicit replacement.
           </Alert>
         ) : printable ? (
           <BadgePrintPreview badges={[printable]} />

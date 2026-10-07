@@ -1,3 +1,6 @@
+import { createHash } from "node:crypto";
+import { storedAgendaSnapshotSchema } from "../assets/shared/schemas/event-agenda-stored";
+import { previewAgenda } from "../functions/_lib/services/event-agenda/preview";
 import { allocateAgendaStaffingPositions } from "../assets/shared/event-agenda-staffing-positions";
 import { z } from "zod";
 import { staffingFixture } from "./helpers/agenda-staffing";
@@ -13,7 +16,7 @@ import {
 } from "../functions/_lib/services/event-agenda/mutations";
 import {
   agendaOccurrenceCreateSchema,
-  agendaBlockSchema,
+  agendaShiftSchema,
   agendaRoleMemberSchema,
   agendaSpeakerSchema,
 } from "../assets/shared/schemas/event-agenda";
@@ -41,8 +44,8 @@ async function staffPeople(count: number) {
     }),
   );
 }
-const block = agendaBlockSchema.parse({
-  id: "staffing-block",
+const shift = agendaShiftSchema.parse({
+  id: "staffing-shift",
   name: "Opening",
   startAt: "2026-12-01T09:00:00.000Z",
   endAt: "2026-12-01T10:00:00.000Z",
@@ -53,12 +56,12 @@ const block = agendaBlockSchema.parse({
 function input(revision = 0) {
   return staffingFixture({
     expectedRevision: revision,
-    blocks: [block],
+    shifts: [shift],
     roleMembers: [
       {
         userId: person,
         displayName: "Synthetic",
-        roles: block.roles,
+        roles: shift.roles,
         availableFrom: null,
         availableUntil: null,
         maxMinutes: 120,
@@ -66,8 +69,8 @@ function input(revision = 0) {
         attendanceMode: "physical",
       },
     ],
-    assignments: block.roles.map((role) => ({
-      blockId: block.id,
+    assignments: shift.roles.map((role) => ({
+      shiftId: shift.id,
       role,
       userId: person,
       pinned: true,
@@ -81,13 +84,79 @@ describe("Staffing policy persistence and review", () => {
     ({ eventId } = await seedEventAndAdmin(env.DB));
     person = (await env.DB.prepare("SELECT id FROM users WHERE email='admin@pkic.org'").first<{ id: string }>())!.id;
   });
+  it("reads historical staffing names without changing approved bytes, IDs, pins or source digest", async () => {
+    const saved = await saveAgendaStaffing(env.DB, eventId, "pqc-2026", input(), person);
+    const legacyReference = <T extends { shiftId: string }>(entry: T) => {
+      const { shiftId, ...rest } = entry;
+      return { ...rest, blockId: shiftId };
+    };
+    const { shifts, ...original } = saved;
+    const legacy = {
+      ...original,
+      blocks: shifts,
+      approvedAt: "2026-10-07T06:00:00.000Z",
+      publishedRevision: saved.revision,
+      assignments: saved.assignments.map(legacyReference),
+      staffingRequirements: saved.staffingRequirements.map(legacyReference),
+      staffingReport: saved.staffingReport
+        ? {
+            ...saved.staffingReport,
+            coverage: saved.staffingReport.coverage.map(legacyReference),
+            uncovered: saved.staffingReport.uncovered.map(legacyReference),
+            boundaryChanges: saved.staffingReport.boundaryChanges.map(legacyReference),
+          }
+        : undefined,
+    };
+    const bytes = JSON.stringify(legacy);
+    const sourceDigest = createHash("sha256").update(bytes).digest("hex");
+    await env.DB.prepare(
+      "INSERT INTO event_agenda_publications(id,event_id,revision,snapshot_json,created_by,created_at) VALUES(?,?,?,?,?,?)",
+    )
+      .bind(crypto.randomUUID(), eventId, saved.revision, bytes, person, legacy.approvedAt)
+      .run();
+    await env.DB.prepare("UPDATE event_agenda_state SET published_revision=? WHERE event_id=?")
+      .bind(saved.revision, eventId)
+      .run();
+    const decoded = storedAgendaSnapshotSchema.parse(JSON.parse(bytes));
+    expect(decoded.shifts).toEqual(saved.shifts);
+    expect(decoded.assignments).toEqual(saved.assignments);
+    expect(decoded.staffingRequirements).toEqual(saved.staffingRequirements);
+    expect(decoded.staffingReport).toEqual(saved.staffingReport);
+    expect(decoded).not.toHaveProperty("blocks");
+    const approved = await previewAgenda(env.DB, eventId, "pqc-2026", "approved");
+    expect(approved.revision).toBe(saved.revision);
+    expect(approved.shifts).toEqual([]);
+    expect(approved.assignments).toEqual([]);
+    const persisted = await env.DB.prepare(
+      "SELECT snapshot_json FROM event_agenda_publications WHERE event_id=? AND revision=?",
+    )
+      .bind(eventId, saved.revision)
+      .first<{ snapshot_json: string }>();
+    expect(persisted?.snapshot_json).toBe(bytes);
+    expect(createHash("sha256").update(persisted!.snapshot_json).digest("hex")).toBe(sourceDigest);
+    expect(await getAgenda(env.DB, eventId, "pqc-2026")).toEqual({ ...saved, publishedRevision: saved.revision });
+  });
+  it("rejects ambiguous historical shift and assignment keys without touching the source", async () => {
+    const saved = await saveAgendaStaffing(env.DB, eventId, "pqc-2026", input(), person);
+    const dual = { ...saved, blocks: saved.shifts };
+    const bytes = JSON.stringify(dual);
+    expect(storedAgendaSnapshotSchema.safeParse(dual).success).toBe(false);
+    expect(JSON.stringify(dual)).toBe(bytes);
+    expect(
+      storedAgendaSnapshotSchema.safeParse({
+        ...saved,
+        assignments: saved.assignments.map((entry) => ({ ...entry, blockId: entry.shiftId })),
+      }).success,
+    ).toBe(false);
+    expect(await getAgenda(env.DB, eventId, "pqc-2026")).toEqual(saved);
+  });
   it("persists explicitly compatible duties, pins and provenance while refusing overlap or excess workload atomically", async () => {
     const saved = await saveAgendaStaffing(env.DB, eventId, "pqc-2026", input(), person);
-    expect(saved.blocks[0].compatibleRolePairs).toEqual([["mc", "questions"]]);
+    expect(saved.shifts[0].compatibleRolePairs).toEqual([["mc", "questions"]]);
     expect(saved.assignments).toHaveLength(2);
     expect(saved.staffingReport?.people[0]).toMatchObject({ minutes: 120, pinnedCount: 2, manualCount: 2 });
     const incompatible = input(1);
-    incompatible.blocks[0].compatibleRolePairs = [];
+    incompatible.shifts[0].compatibleRolePairs = [];
     await expect(saveAgendaStaffing(env.DB, eventId, "pqc-2026", incompatible, person)).rejects.toMatchObject({
       code: "AGENDA_ASSIGNMENT_OVERLAP",
     });
@@ -116,7 +185,7 @@ describe("Staffing policy persistence and review", () => {
       person,
     );
     const body = input(1);
-    body.blocks[0].boundaries = { endOccurrenceId: agenda.occurrences[0].id };
+    body.shifts[0].boundaries = { endOccurrenceId: agenda.occurrences[0].id };
     const saved = await saveAgendaStaffing(env.DB, eventId, "pqc-2026", body, person);
     expect(saved.staffingReport?.boundaryChanges).toEqual([]);
     const moved = await patchAgendaOccurrence(
@@ -128,10 +197,10 @@ describe("Staffing policy persistence and review", () => {
       person,
     );
     expect(moved.staffingReport?.boundaryChanges).toEqual([
-      { blockId: block.id, boundary: "end", occurrenceId: agenda.occurrences[0].id },
+      { shiftId: shift.id, boundary: "end", occurrenceId: agenda.occurrences[0].id },
     ]);
   });
-  it("balances unequal multi-day parallel duties, retains senior pins, and reproduces selected-block generation", async () => {
+  it("balances unequal multi-day parallel duties, retains senior pins, and reproduces selected-shift generation", async () => {
     const people = await staffPeople(4);
     let agenda = await createAgendaRoom(env.DB, eventId, "pqc-2026", {
       expectedRevision: 0,
@@ -147,27 +216,27 @@ describe("Staffing policy persistence and review", () => {
       setupMinutes: 0,
     });
     const parallel = agenda.rooms.find((room) => room.name === "Parallel")!.id;
-    const blocks = [
+    const shifts = [
       {
-        ...block,
+        ...shift,
         id: "long-opening",
         roomId: main,
         endAt: "2026-12-01T10:30:00.000Z",
         compatibleRolePairs: [],
         roleRequirements: [{ role: "mc", seniority: "senior" }],
       },
-      { ...block, id: "parallel-short", roomId: parallel, endAt: "2026-12-01T09:45:00.000Z", compatibleRolePairs: [] },
+      { ...shift, id: "parallel-short", roomId: parallel, endAt: "2026-12-01T09:45:00.000Z", compatibleRolePairs: [] },
       {
-        ...block,
+        ...shift,
         id: "second-day",
         roomId: main,
         startAt: "2026-12-02T09:00:00.000Z",
         endAt: "2026-12-02T10:00:00.000Z",
         compatibleRolePairs: [],
       },
-    ].map((item) => agendaBlockSchema.parse(item));
+    ].map((item) => agendaShiftSchema.parse(item));
     const pin = {
-      blockId: blocks[0].id,
+      shiftId: shifts[0].id,
       role: "mc",
       userId: people[0].userId,
       pinned: true,
@@ -177,14 +246,14 @@ describe("Staffing policy persistence and review", () => {
       env.DB,
       eventId,
       "pqc-2026",
-      staffingFixture({ expectedRevision: 2, blocks, roleMembers: people, assignments: [pin] }),
+      staffingFixture({ expectedRevision: 2, shifts, roleMembers: people, assignments: [pin] }),
       person,
     );
     const generated = await allocateStaffing(env.DB, eventId, "pqc-2026", 3, "multi-day-239", "random", person);
     expect(generated.assignments).toHaveLength(6);
-    expect(generated.assignments).toContainEqual({ ...pin, positionId: `${blocks[0].id}:mc:position`, postId: null });
+    expect(generated.assignments).toContainEqual({ ...pin, positionId: `${shifts[0].id}:mc:position`, postId: null });
     // Both rooms run concurrently: nobody can cover two incompatible duties.
-    const opening = generated.assignments.filter((item) => item.blockId !== "second-day");
+    const opening = generated.assignments.filter((item) => item.shiftId !== "second-day");
     expect(new Set(opening.map((item) => item.userId)).size).toBe(4);
     const minutes = generated.staffingReport!.people.map((item) => item.minutes);
     expect(minutes.reduce((total, value) => total + value, 0)).toBe(390);
@@ -195,8 +264,8 @@ describe("Staffing policy persistence and review", () => {
     const selected = await allocateStaffing(env.DB, eventId, "pqc-2026", 5, "new-day-seed", "random", person, [
       "second-day",
     ]);
-    expect(selected.assignments.filter((item) => item.blockId !== "second-day")).toEqual(opening);
-    expect(selected.assignments).toContainEqual({ ...pin, positionId: `${blocks[0].id}:mc:position`, postId: null });
+    expect(selected.assignments.filter((item) => item.shiftId !== "second-day")).toEqual(opening);
+    expect(selected.assignments).toContainEqual({ ...pin, positionId: `${shifts[0].id}:mc:position`, postId: null });
   });
   it("excludes a speaking senior and persists advisory coverage shortfalls without weakening eligibility", async () => {
     const people = await staffPeople(2);
@@ -208,8 +277,8 @@ describe("Staffing policy persistence and review", () => {
       agendaOccurrenceCreateSchema.parse({
         expectedRevision: 0,
         title: "Speaker conflict",
-        startAt: block.startAt,
-        endAt: block.endAt,
+        startAt: shift.startAt,
+        endAt: shift.endAt,
         roomId: null,
         speakerUserIds: [people[0].userId],
         speakerPlacements: { [people[0].userId]: { attendanceMode: "physical", roomId: null } },
@@ -222,7 +291,7 @@ describe("Staffing policy persistence and review", () => {
       "pqc-2026",
       staffingFixture({
         expectedRevision: agenda.revision,
-        blocks: [{ ...block, compatibleRolePairs: [], roleRequirements: [{ role: "mc", seniority: "senior" }] }],
+        shifts: [{ ...shift, compatibleRolePairs: [], roleRequirements: [{ role: "mc", seniority: "senior" }] }],
         roleMembers: people,
         assignments: [],
       }),
@@ -241,7 +310,7 @@ describe("Staffing policy persistence and review", () => {
       "random",
       person,
     );
-    expect(after.staffingReport?.uncovered).toEqual([expect.objectContaining({ blockId: block.id, role: "mc" })]);
+    expect(after.staffingReport?.uncovered).toEqual([expect.objectContaining({ shiftId: shift.id, role: "mc" })]);
     expect(after.staffingReport?.uncovered[0].eligiblePeople).toBe(0);
     expect(after.staffingReport?.uncovered[0].reasons).toEqual(
       expect.arrayContaining([
@@ -278,8 +347,8 @@ describe("Staffing policy persistence and review", () => {
     expect(provenance.speakingIntervals.to).toEqual([
       {
         id: agenda.occurrences[0].id,
-        startAt: block.startAt,
-        endAt: block.endAt,
+        startAt: shift.startAt,
+        endAt: shift.endAt,
         roomId: null,
         speakers: [{ userId: people[0].userId, attendanceMode: "physical", roomId: null }],
       },
@@ -290,7 +359,7 @@ describe("Staffing policy persistence and review", () => {
       posts: before.staffingPosts,
       requirements: before.staffingRequirements,
       positions: before.staffingPositions,
-      blocks: before.blocks,
+      shifts: before.shifts,
       members: before.roleMembers,
       assignments: before.assignments,
       travelMinutes: before.travelMinutes,
@@ -312,8 +381,8 @@ describe("Staffing policy persistence and review", () => {
 
     const unavailable = staffingFixture({
       expectedRevision: after.revision,
-      blocks: [{ ...block, compatibleRolePairs: [] }],
-      roleMembers: people.map((member) => ({ ...member, availableUntil: block.startAt })),
+      shifts: [{ ...shift, compatibleRolePairs: [] }],
+      roleMembers: people.map((member) => ({ ...member, availableUntil: shift.startAt })),
       assignments: [],
     });
     const limited = await saveAgendaStaffing(env.DB, eventId, "pqc-2026", unavailable, person);
@@ -327,7 +396,7 @@ describe("Staffing policy persistence and review", () => {
       person,
     );
     expect(shortfall.staffingReport?.uncovered).toEqual(
-      expect.arrayContaining(block.roles.map((role) => expect.objectContaining({ blockId: block.id, role }))),
+      expect.arrayContaining(shift.roles.map((role) => expect.objectContaining({ shiftId: shift.id, role }))),
     );
     expect(shortfall.assignments).toEqual([]);
   });

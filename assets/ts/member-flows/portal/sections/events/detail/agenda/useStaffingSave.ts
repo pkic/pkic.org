@@ -8,7 +8,7 @@ import {
 import type { ContractForm } from "../../../../../../hooks/useContractForm";
 import { postJson } from "../../../../../../shared/api-client";
 
-/** Catalog and block requirements share one validated staffing save lifecycle. */
+/** Catalog and shift requirements share one validated staffing save lifecycle. */
 export function useStaffingSave(
   eventSlug: string,
   form: ContractForm<z.output<typeof agendaStaffingSchema>>,

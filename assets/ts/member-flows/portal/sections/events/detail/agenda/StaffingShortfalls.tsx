@@ -7,7 +7,7 @@ export function StaffingShortfalls({ snapshot, requirementId }: { snapshot: Agen
   const uncovered = (snapshot.staffingReport?.uncovered ?? []).filter(
     (row) =>
       !requirement ||
-      (row.blockId === requirement.blockId && row.role === requirement.roleId && row.postId === requirement.postId),
+      (row.shiftId === requirement.shiftId && row.role === requirement.roleId && row.postId === requirement.postId),
   );
   return (
     <section class="pk-stack" aria-label="Unfilled staffing duties">
@@ -20,9 +20,9 @@ export function StaffingShortfalls({ snapshot, requirementId }: { snapshot: Agen
           </p>
           <ul class="pk-stack">
             {uncovered.map((item) => (
-              <li key={item.positionId ?? `${item.blockId}:${item.role}`}>
+              <li key={item.positionId ?? `${item.shiftId}:${item.role}`}>
                 <strong>
-                  {snapshot.blocks.find((block) => block.id === item.blockId)?.name} ·{" "}
+                  {snapshot.shifts.find((shift) => shift.id === item.shiftId)?.name} ·{" "}
                   {snapshot.staffingRoles.find((role) => role.id === item.role)?.name ?? item.role}
                   {item.postId &&
                     ` · ${snapshot.staffingPosts.find((post) => post.id === item.postId)?.name ?? item.postId}`}

@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { agendaBlocksQuerySchema, agendaBlocksListSchema } from "../../assets/shared/schemas/event-agenda-block-list";
+import { agendaShiftsQuerySchema, agendaShiftsListSchema } from "../../assets/shared/schemas/event-agenda-shift-list";
 import { buildPageInfo } from "../../assets/shared/schemas/pagination";
 import { render } from "preact";
 import { act } from "preact/test-utils";
@@ -35,9 +35,9 @@ const snapshot = agendaSnapshotSchema.parse({
   publishedRevision: null,
   rooms: [],
   occurrences: [],
-  blocks: [
+  shifts: [
     {
-      id: "block",
+      id: "shift",
       name: "Opening to coffee",
       startAt: "2026-12-01T10:00:00.000Z",
       endAt: "2026-12-01T11:00:00.000Z",
@@ -65,11 +65,11 @@ const snapshot = agendaSnapshotSchema.parse({
   ],
   staffingRoles: [{ id: "mc", name: "Master of ceremonies" }],
   staffingPosts: [{ id: "door", name: "Main door", roomId: null }],
-  staffingRequirements: [{ id: "need", blockId: "block", roleId: "mc", postId: "door", idealCount: 3 }],
+  staffingRequirements: [{ id: "need", shiftId: "shift", roleId: "mc", postId: "door", idealCount: 3 }],
   staffingPositions: [1, 2, 3].map((index) => ({ id: `position-${index}`, requirementId: "need", index })),
   assignments: [
-    { positionId: "position-1", blockId: "block", role: "mc", postId: "door", userId: "senior", pinned: true },
-    { positionId: "position-2", blockId: "block", role: "mc", postId: "door", userId: "second", pinned: true },
+    { positionId: "position-1", shiftId: "shift", role: "mc", postId: "door", userId: "senior", pinned: true },
+    { positionId: "position-2", shiftId: "shift", role: "mc", postId: "door", userId: "second", pinned: true },
   ],
 });
 let host: HTMLElement;
@@ -84,12 +84,12 @@ async function mount(canEdit = true) {
     "fetch",
     vi.fn(async (url: RequestInfo | URL, init?: RequestInit) => {
       const source = new URL(String(url), "https://pkic.org");
-      if (source.pathname === "/api/v1/events/synthetic/agenda/blocks") {
-        const query = agendaBlocksQuerySchema.parse(Object.fromEntries(source.searchParams));
+      if (source.pathname === "/api/v1/events/synthetic/agenda/shifts") {
+        const query = agendaShiftsQuerySchema.parse(Object.fromEntries(source.searchParams));
         return Response.json(
-          agendaBlocksListSchema.parse({
-            blocks: snapshot.blocks,
-            page: buildPageInfo(query.limit, query.offset, snapshot.blocks.length, snapshot.blocks.length),
+          agendaShiftsListSchema.parse({
+            shifts: snapshot.shifts,
+            page: buildPageInfo(query.limit, query.offset, snapshot.shifts.length, snapshot.shifts.length),
           }),
         );
       }
@@ -136,7 +136,7 @@ describe("staffing canonical actions", () => {
         boundaryChanges: [],
         uncovered: [
           {
-            blockId: "block",
+            shiftId: "shift",
             role: "mc",
             postId: "door",
             positionId: "position-3",
@@ -254,7 +254,7 @@ describe("staffing canonical actions", () => {
     expect(host.querySelectorAll('select,input:not([type="search"]):not([type="checkbox"])')).toHaveLength(0);
     expect(bodies).toHaveLength(0);
   });
-  it("unpins a senior assignment without changing its person or block", async () => {
+  it("unpins a senior assignment without changing its person or shift", async () => {
     const bodies = capture();
     await mount();
     await openPositions();
@@ -268,7 +268,7 @@ describe("staffing canonical actions", () => {
     expect(body.assignments.find((row) => row.positionId === "position-1")).toMatchObject({
       pinned: false,
       userId: "senior",
-      blockId: "block",
+      shiftId: "shift",
       postId: "door",
     });
     expect(body.assignments.find((row) => row.positionId === "position-2")).toEqual(snapshot.assignments[1]);
@@ -320,17 +320,17 @@ describe("staffing canonical actions", () => {
     expect(body.staffingRoles[0]).toEqual({ id: "mc", name: "Public host", showOnAgenda: true });
     expect(body.assignments).toEqual(snapshot.assignments);
   });
-  it("saves an empty planning block before configuring its ideal staffing needs", async () => {
+  it("saves an empty planning shift before configuring its ideal staffing needs", async () => {
     const bodies = capture();
     await mount();
-    const toolbar = host.querySelector('[role="toolbar"][aria-label="Staffing blocks controls"]');
+    const toolbar = host.querySelector('[role="toolbar"][aria-label="Staffing shifts controls"]');
     expect(toolbar).not.toBeNull();
-    const create = toolbar!.querySelector<HTMLButtonElement>('button[aria-label="New block"]');
+    const create = toolbar!.querySelector<HTMLButtonElement>('button[aria-label="New shift"]');
     expect(create).not.toBeNull();
     expect(create?.disabled).toBe(false);
     await act(() => create!.click());
     for (const [name, value] of [
-      ["blocks.1.name", "Afternoon door coverage"],
+      ["shifts.1.name", "Afternoon door coverage"],
       ["startAt", "2026-12-01T14:00"],
       ["endAt", "2026-12-01T15:00"],
     ]) {
@@ -345,7 +345,7 @@ describe("staffing canonical actions", () => {
     });
     expect(bodies).toHaveLength(1);
     const body = agendaStaffingSchema.parse(bodies[0]);
-    expect(body.blocks[1]).toMatchObject({
+    expect(body.shifts[1]).toMatchObject({
       name: "Afternoon door coverage",
       roles: [],
       startAt: "2026-12-01T13:00:00.000Z",
@@ -355,12 +355,12 @@ describe("staffing canonical actions", () => {
     expect(body.staffingPositions).toEqual(snapshot.staffingPositions);
     expect(body.assignments).toEqual(snapshot.assignments);
   });
-  it("edits a saved block without changing its stable ID or pinned assignments", async () => {
+  it("edits a saved shift without changing its stable ID or pinned assignments", async () => {
     const bodies = capture();
     await mount();
-    await runRowAction(host, "Opening to coffee", "Edit block");
+    await runRowAction(host, "Opening to coffee", "Edit shift");
     await act(() => {
-      const input = host.querySelector<HTMLInputElement>('[name="blocks.0.name"]')!;
+      const input = host.querySelector<HTMLInputElement>('[name="shifts.0.name"]')!;
       input.value = "Coffee to lunch";
       input.dispatchEvent(new Event("input", { bubbles: true }));
     });
@@ -369,11 +369,11 @@ describe("staffing canonical actions", () => {
       await Promise.resolve();
     });
     const body = agendaStaffingSchema.parse(bodies[0]);
-    expect(body.blocks[0]).toMatchObject({
-      id: "block",
+    expect(body.shifts[0]).toMatchObject({
+      id: "shift",
       name: "Coffee to lunch",
-      startAt: snapshot.blocks[0].startAt,
-      endAt: snapshot.blocks[0].endAt,
+      startAt: snapshot.shifts[0].startAt,
+      endAt: snapshot.shifts[0].endAt,
     });
     expect(body.assignments).toEqual(snapshot.assignments);
   });

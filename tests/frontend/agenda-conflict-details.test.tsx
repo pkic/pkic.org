@@ -17,7 +17,7 @@ const snapshot = agendaSnapshotSchema.parse({
   revision: 3,
   publishedRevision: null,
   rooms: [{ id: "main", name: "Main hall", capacity: 100 }],
-  blocks: [],
+  shifts: [],
   roleMembers: [],
   assignments: [],
   occurrences: [

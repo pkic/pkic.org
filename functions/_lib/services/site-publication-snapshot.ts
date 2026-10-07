@@ -1,7 +1,7 @@
+import { storedAgendaSnapshotSchema } from "../../../assets/shared/schemas/event-agenda-stored";
 import { readPublicAgendaCalendars } from "./site-publication-agenda-calendars";
 import { publicAgendaProjection } from "./event-agenda/public-projection";
 import { projectLiveAgendaMaterialBatch } from "./site-agenda-material-eligibility";
-import { agendaSnapshotSchema } from "../../../assets/shared/schemas/event-agenda";
 import { listPublicVotes } from "./votes/public";
 import { publicVotesListQuerySchema } from "../../../assets/shared/schemas/votes";
 import { all, first } from "../db/queries";
@@ -228,7 +228,7 @@ export async function readSitePublicationSnapshot(
       db,
       agendas.map((row) => ({
         eventId: row.event_id,
-        snapshot: agendaSnapshotSchema.parse(JSON.parse(row.snapshot_json)),
+        snapshot: storedAgendaSnapshotSchema.parse(JSON.parse(row.snapshot_json)),
       })),
     );
     for (const [index, row] of agendas.entries()) {

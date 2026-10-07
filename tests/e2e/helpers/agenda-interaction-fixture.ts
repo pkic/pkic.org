@@ -92,17 +92,17 @@ export async function prepareMatrixStaffing(
 ) {
   const before = await fixture.read();
   const prefix = crypto.randomUUID();
-  const blockId = `${prefix}-block`;
+  const shiftId = `${prefix}-block`;
   const roleId = `${prefix}-mc`;
   const requirementId = `${prefix}-need`;
-  const blockName = "Matrix afternoon panel staffing";
+  const shiftName = "Matrix afternoon panel staffing";
   const response = await page.request.post(`${fixture.endpoint}/staffing`, {
     data: agendaStaffingSchema.parse({
       expectedRevision: before.revision,
-      blocks: [
+      shifts: [
         {
-          id: blockId,
-          name: blockName,
+          id: shiftId,
+          name: shiftName,
           startAt: "2027-09-10T13:00:00.000Z",
           endAt: "2027-09-10T13:30:00.000Z",
           roomId: null,
@@ -116,7 +116,7 @@ export async function prepareMatrixStaffing(
       staffingRequirements: [
         {
           id: requirementId,
-          blockId,
+          shiftId,
           roleId,
           postId: null,
           idealCount: 2,
@@ -142,5 +142,5 @@ export async function prepareMatrixStaffing(
   });
   expect(response.status()).toBe(200);
   const configured = agendaSnapshotSchema.parse(await response.json());
-  return { configured, blockId, roleId, blockName, positionId: `${prefix}-position-1` };
+  return { configured, shiftId, roleId, shiftName, positionId: `${prefix}-position-1` };
 }

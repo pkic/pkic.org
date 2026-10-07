@@ -10,7 +10,7 @@ import { physicalOccupiedSql } from "../functions/_lib/services/event-participat
 import { offlineEligibility } from "../functions/_lib/services/event-participation/offline-eligibility";
 import { eventScanRequestSchema } from "../assets/shared/schemas/event-participation-scanning";
 import { agendaRoomsListSchema } from "../assets/shared/schemas/event-agenda-room-list";
-import { agendaBlocksListSchema } from "../assets/shared/schemas/event-agenda-block-list";
+import { agendaShiftsListSchema } from "../assets/shared/schemas/event-agenda-shift-list";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 let eventId: string, operatorId: string, occurrenceId: string, rooms: string[], users: string[], badges: string[];
@@ -103,7 +103,8 @@ describe("Multi-room registration and advisory scan reporting", () => {
         .bind(crypto.randomUUID(), eventId, user, crypto.randomUUID(), now, now)
         .run();
       badges.push(
-        (await issueBadge(env.DB, eventId, operatorId, { userId: user, operationId: crypto.randomUUID() })).credential!,
+        (await issueBadge(env.DB, eventId, operatorId, { userId: user, operationId: crypto.randomUUID() }, env))
+          .credential!,
       );
     }
   });
@@ -154,14 +155,14 @@ describe("Multi-room registration and advisory scan reporting", () => {
     ).toBe(0);
   });
 
-  it("lists canonical staffing block configuration with paginated search, time sorting and room scope", async () => {
-    const blockIds = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+  it("lists canonical staffing shift configuration with paginated search, time sorting and room scope", async () => {
+    const shiftIds = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
     for (const [index, name] of ["Morning staffing", "Afternoon staffing", "Evening staffing"].entries())
       await env.DB.prepare(
-        "INSERT INTO event_agenda_blocks(id,event_id,name,start_at,end_at,room_id,roles_json) VALUES(?,?,?,?,?,?,'[]')",
+        "INSERT INTO event_agenda_shifts(id,event_id,name,start_at,end_at,room_id,roles_json) VALUES(?,?,?,?,?,?,'[]')",
       )
         .bind(
-          blockIds[index],
+          shiftIds[index],
           eventId,
           name,
           `2026-12-01T${String(9 + index).padStart(2, "0")}:00:00.000Z`,
@@ -171,7 +172,7 @@ describe("Multi-room registration and advisory scan reporting", () => {
         .run();
     const foreign = await foreignAgendaEvent();
     await env.DB.prepare(
-      "INSERT INTO event_agenda_blocks(id,event_id,name,start_at,end_at,roles_json) VALUES(?,?,'Foreign staffing','2026-12-01T09:00:00.000Z','2026-12-01T10:00:00.000Z','[]')",
+      "INSERT INTO event_agenda_shifts(id,event_id,name,start_at,end_at,roles_json) VALUES(?,?,'Foreign staffing','2026-12-01T09:00:00.000Z','2026-12-01T10:00:00.000Z','[]')",
     )
       .bind(crypto.randomUUID(), foreign)
       .run();
@@ -179,15 +180,15 @@ describe("Multi-room registration and advisory scan reporting", () => {
     const read = async (query: Record<string, string>) => {
       const response = await callApi(
         env,
-        `/api/v1/events/multi-room-test/agenda/blocks?${new URLSearchParams(query)}`,
+        `/api/v1/events/multi-room-test/agenda/shifts?${new URLSearchParams(query)}`,
         { headers: { authorization: `Bearer ${token}` } },
       );
       expect(response.status).toBe(200);
-      return agendaBlocksListSchema.parse(await response.json());
+      return agendaShiftsListSchema.parse(await response.json());
     };
     const page = await read({ q: "STAFFING", sort: "-startAt", limit: "1", offset: "1", roomId: rooms[1]! });
-    expect(page.blocks.map((block) => block.id)).toEqual([blockIds[1]]);
-    expect(page.blocks[0]).toMatchObject({
+    expect(page.shifts.map((block) => block.id)).toEqual([shiftIds[1]]);
+    expect(page.shifts[0]).toMatchObject({
       roomId: rooms[1],
       roles: [],
       roleRequirements: [],
@@ -197,7 +198,7 @@ describe("Multi-room registration and advisory scan reporting", () => {
     expect(page.page).toEqual({ limit: 1, offset: 1, total: 2, hasMore: false });
     expect((await read({ q: "staffing" })).page.total).toBe(3);
     expect((await read({ q: "staffing", roomId: crypto.randomUUID() })).page.total).toBe(0);
-    expect((await read({ q: "' OR 1=1 --" })).blocks).toEqual([]);
+    expect((await read({ q: "' OR 1=1 --" })).shifts).toEqual([]);
   });
 
   it("requires live exact-event agenda read authority and canonical queries for both lists", async () => {
@@ -211,21 +212,21 @@ describe("Multi-room registration and advisory scan reporting", () => {
       .run();
     const token = await createAdminSession(env.DB, users[0]!, crypto.randomUUID());
     const headers = { authorization: `Bearer ${token}` };
-    for (const collection of ["rooms", "blocks"]) {
+    for (const collection of ["rooms", "shifts"]) {
       const path = `/api/v1/events/multi-room-test/agenda/${collection}`;
       expect((await callApi(env, path)).status).toBe(401);
       expect((await callApi(env, path, { headers })).status).toBe(403);
       expect((await callApi(env, `/api/v1/events/${foreign}/agenda/${collection}`, { headers })).status).toBe(200);
     }
     await env.DB.prepare("UPDATE permission_grants SET context_id=? WHERE id=?").bind(eventId, grantId).run();
-    for (const collection of ["rooms", "blocks"]) {
+    for (const collection of ["rooms", "shifts"]) {
       const path = `/api/v1/events/multi-room-test/agenda/${collection}`;
       expect((await callApi(env, `${path}?sort=not_a_column`, { headers })).status).toBe(400);
       expect((await callApi(env, `${path}?limit=201`, { headers })).status).toBe(400);
       expect((await callApi(env, path, { headers })).status).toBe(200);
     }
     await env.DB.prepare("UPDATE sessions SET revoked_at=? WHERE user_id=?").bind(now, users[0]).run();
-    for (const collection of ["rooms", "blocks"])
+    for (const collection of ["rooms", "shifts"])
       expect((await callApi(env, `/api/v1/events/multi-room-test/agenda/${collection}`, { headers })).status).toBe(401);
   });
   it("reports missing room context and records valid scans without consuming room places", async () => {

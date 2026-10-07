@@ -39,9 +39,9 @@ CREATE INDEX event_agenda_occurrences_track ON event_agenda_occurrences(event_id
 CREATE INDEX event_agenda_occurrences_room ON event_agenda_occurrences(event_id,room_id,start_at,end_at);
 CREATE TABLE event_agenda_occurrence_speakers (occurrence_id TEXT NOT NULL REFERENCES event_agenda_occurrences(id) ON DELETE CASCADE,user_id TEXT NOT NULL REFERENCES users(id), PRIMARY KEY(occurrence_id,user_id));
 CREATE INDEX event_agenda_speaker_schedule ON event_agenda_occurrence_speakers(user_id,occurrence_id);
-CREATE TABLE event_agenda_blocks (id TEXT PRIMARY KEY,event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,name TEXT NOT NULL,start_at TEXT NOT NULL,end_at TEXT NOT NULL,room_id TEXT REFERENCES event_agenda_rooms(id),track TEXT,roles_json TEXT NOT NULL,role_requirements_json TEXT NOT NULL DEFAULT '[]',CHECK(end_at > start_at));
+CREATE TABLE event_agenda_shifts (id TEXT PRIMARY KEY,event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,name TEXT NOT NULL,start_at TEXT NOT NULL,end_at TEXT NOT NULL,room_id TEXT REFERENCES event_agenda_rooms(id),track TEXT,roles_json TEXT NOT NULL,role_requirements_json TEXT NOT NULL DEFAULT '[]',CHECK(end_at > start_at));
 CREATE TABLE event_agenda_role_members (event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,user_id TEXT NOT NULL REFERENCES users(id),roles_json TEXT NOT NULL,seniority TEXT NOT NULL DEFAULT 'junior',attendance_mode TEXT NOT NULL DEFAULT 'physical',available_from TEXT,available_until TEXT,max_minutes INTEGER CHECK(max_minutes > 0),PRIMARY KEY(event_id,user_id));
-CREATE UNIQUE INDEX event_agenda_blocks_event_identity ON event_agenda_blocks(event_id,id);
+CREATE UNIQUE INDEX event_agenda_shifts_event_identity ON event_agenda_shifts(event_id,id);
 CREATE UNIQUE INDEX event_agenda_rooms_event_identity ON event_agenda_rooms(event_id,id);
 CREATE TABLE event_agenda_staffing_roles (
   id TEXT NOT NULL,event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,name TEXT NOT NULL,
@@ -54,16 +54,16 @@ CREATE TABLE event_agenda_staffing_posts (
   FOREIGN KEY(event_id,room_id) REFERENCES event_agenda_rooms(event_id,id)
 );
 CREATE TABLE event_agenda_staffing_requirements (
-  id TEXT NOT NULL,event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,block_id TEXT NOT NULL,
+  id TEXT NOT NULL,event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,shift_id TEXT NOT NULL,
   role_id TEXT NOT NULL,post_id TEXT,ideal_count INTEGER NOT NULL CHECK(ideal_count > 0),
   seniority TEXT NOT NULL,
   attendance_mode TEXT NOT NULL,
-  PRIMARY KEY(event_id,id),UNIQUE(event_id,id,block_id,role_id),
-  FOREIGN KEY(event_id,block_id) REFERENCES event_agenda_blocks(event_id,id) ON DELETE CASCADE,
+  PRIMARY KEY(event_id,id),UNIQUE(event_id,id,shift_id,role_id),
+  FOREIGN KEY(event_id,shift_id) REFERENCES event_agenda_shifts(event_id,id) ON DELETE CASCADE,
   FOREIGN KEY(event_id,role_id) REFERENCES event_agenda_staffing_roles(event_id,id),
   FOREIGN KEY(event_id,post_id) REFERENCES event_agenda_staffing_posts(event_id,id)
 );
-CREATE UNIQUE INDEX event_agenda_staffing_requirement_scope ON event_agenda_staffing_requirements(event_id,block_id,role_id,COALESCE(post_id,''));
+CREATE UNIQUE INDEX event_agenda_staffing_requirement_scope ON event_agenda_staffing_requirements(event_id,shift_id,role_id,COALESCE(post_id,''));
 CREATE TABLE event_agenda_staffing_positions (
   id TEXT NOT NULL,event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,requirement_id TEXT NOT NULL,
   position_index INTEGER NOT NULL CHECK(position_index > 0),
@@ -72,28 +72,28 @@ CREATE TABLE event_agenda_staffing_positions (
 );
 CREATE TABLE event_agenda_assignments (
   position_id TEXT NOT NULL,event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,
-  block_id TEXT NOT NULL,role TEXT NOT NULL,post_id TEXT,
+  shift_id TEXT NOT NULL,role TEXT NOT NULL,post_id TEXT,
   user_id TEXT NOT NULL REFERENCES users(id),pinned INTEGER NOT NULL DEFAULT 0 CHECK(pinned IN(0,1)),
   PRIMARY KEY(event_id,position_id),
   FOREIGN KEY(event_id,position_id) REFERENCES event_agenda_staffing_positions(event_id,id) ON DELETE CASCADE,
-  FOREIGN KEY(event_id,block_id) REFERENCES event_agenda_blocks(event_id,id),
+  FOREIGN KEY(event_id,shift_id) REFERENCES event_agenda_shifts(event_id,id),
   FOREIGN KEY(event_id,role) REFERENCES event_agenda_staffing_roles(event_id,id),
   FOREIGN KEY(event_id,post_id) REFERENCES event_agenda_staffing_posts(event_id,id)
 );
 CREATE TRIGGER event_agenda_assignment_position_binding_insert BEFORE INSERT ON event_agenda_assignments
 WHEN NOT EXISTS(SELECT 1 FROM event_agenda_staffing_positions position JOIN event_agenda_staffing_requirements requirement ON requirement.id=position.requirement_id AND requirement.event_id=position.event_id
-  WHERE position.id=NEW.position_id AND position.event_id=NEW.event_id AND requirement.block_id=NEW.block_id AND requirement.role_id=NEW.role AND requirement.post_id IS NEW.post_id)
+  WHERE position.id=NEW.position_id AND position.event_id=NEW.event_id AND requirement.shift_id=NEW.shift_id AND requirement.role_id=NEW.role AND requirement.post_id IS NEW.post_id)
 BEGIN SELECT RAISE(ABORT,'AGENDA_ASSIGNMENT_POSITION_MISMATCH'); END;
 CREATE TRIGGER event_agenda_assignment_position_binding_update BEFORE UPDATE ON event_agenda_assignments
 WHEN NOT EXISTS(SELECT 1 FROM event_agenda_staffing_positions position JOIN event_agenda_staffing_requirements requirement ON requirement.id=position.requirement_id AND requirement.event_id=position.event_id
-  WHERE position.id=NEW.position_id AND position.event_id=NEW.event_id AND requirement.block_id=NEW.block_id AND requirement.role_id=NEW.role AND requirement.post_id IS NEW.post_id)
+  WHERE position.id=NEW.position_id AND position.event_id=NEW.event_id AND requirement.shift_id=NEW.shift_id AND requirement.role_id=NEW.role AND requirement.post_id IS NEW.post_id)
 BEGIN SELECT RAISE(ABORT,'AGENDA_ASSIGNMENT_POSITION_MISMATCH'); END;
-CREATE INDEX event_agenda_assignments_person ON event_agenda_assignments(user_id,block_id);
+CREATE INDEX event_agenda_assignments_person ON event_agenda_assignments(user_id,shift_id);
 CREATE TABLE event_agenda_schedule_guards (id TEXT PRIMARY KEY,event_id TEXT NOT NULL REFERENCES events(id),valid INTEGER NOT NULL,CONSTRAINT agenda_schedule_valid CHECK(valid=1));
 CREATE TABLE event_agenda_publications (id TEXT PRIMARY KEY,event_id TEXT NOT NULL REFERENCES events(id) ON DELETE CASCADE,revision INTEGER NOT NULL,snapshot_json TEXT NOT NULL,created_by TEXT NOT NULL REFERENCES users(id),created_at TEXT NOT NULL,UNIQUE(event_id,revision));
 CREATE TABLE agenda_session_participations (id TEXT PRIMARY KEY,event_id TEXT NOT NULL REFERENCES events(id),occurrence_id TEXT NOT NULL REFERENCES event_agenda_occurrences(id),user_id TEXT NOT NULL REFERENCES users(id),attendance_mode TEXT NOT NULL,status TEXT NOT NULL,created_at TEXT NOT NULL,updated_at TEXT NOT NULL,UNIQUE(occurrence_id,user_id));
 CREATE INDEX agenda_participation_capacity ON agenda_session_participations(occurrence_id,status,attendance_mode);
-CREATE TABLE event_badge_credentials (id TEXT PRIMARY KEY,event_id TEXT NOT NULL REFERENCES events(id),user_id TEXT NOT NULL REFERENCES users(id),credential_hash TEXT NOT NULL UNIQUE,revoked_at TEXT,created_at TEXT NOT NULL);
+CREATE TABLE event_badge_credentials (id TEXT PRIMARY KEY,event_id TEXT NOT NULL REFERENCES events(id),user_id TEXT NOT NULL REFERENCES users(id),credential_hash TEXT NOT NULL UNIQUE,print_credential_json TEXT,revoked_at TEXT,created_at TEXT NOT NULL);
 CREATE INDEX event_badge_users ON event_badge_credentials(event_id,user_id);
 CREATE INDEX event_badge_manifest ON event_badge_credentials(event_id,id);
 CREATE TABLE event_scan_attempts (id TEXT PRIMARY KEY,event_id TEXT NOT NULL REFERENCES events(id),occurrence_id TEXT REFERENCES event_agenda_occurrences(id),badge_id TEXT REFERENCES event_badge_credentials(id),sponsor_id TEXT REFERENCES sponsorships(id),user_id TEXT REFERENCES users(id),operator_user_id TEXT NOT NULL REFERENCES users(id),device_id TEXT NOT NULL,operation_id TEXT NOT NULL UNIQUE,request_hash TEXT NOT NULL,outcome TEXT NOT NULL,reason TEXT NOT NULL,exception_reason TEXT,action TEXT NOT NULL,observed_at TEXT NOT NULL,created_at TEXT NOT NULL);
@@ -441,8 +441,8 @@ CREATE TRIGGER event_agenda_occurrence_content_scope_update BEFORE UPDATE OF con
 ALTER TABLE event_agenda_contents ADD COLUMN speaker_roles_json TEXT NOT NULL DEFAULT '{}';
 ALTER TABLE event_agenda_occurrence_speakers ADD COLUMN role TEXT NOT NULL DEFAULT 'speaker';
 
-ALTER TABLE event_agenda_blocks ADD COLUMN compatible_roles_json TEXT NOT NULL DEFAULT '[]';
-ALTER TABLE event_agenda_blocks ADD COLUMN boundaries_json TEXT NOT NULL DEFAULT '{}';
+ALTER TABLE event_agenda_shifts ADD COLUMN compatible_roles_json TEXT NOT NULL DEFAULT '[]';
+ALTER TABLE event_agenda_shifts ADD COLUMN boundaries_json TEXT NOT NULL DEFAULT '{}';
 ALTER TABLE event_agenda_assignments ADD COLUMN origin TEXT NOT NULL DEFAULT 'manual';
 
 -- Private immutable capacity authority; never part of the public publication JSON.

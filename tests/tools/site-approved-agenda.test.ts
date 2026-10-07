@@ -25,7 +25,7 @@ describe("approved agenda static projection", () => {
         { id: "hall", name: "Main hall", capacity: 500 },
         { id: "overflow", name: "Overflow room", capacity: 100 },
       ],
-      blocks: [],
+      shifts: [],
       assignments: [],
       roleMembers: [],
       occurrences: [

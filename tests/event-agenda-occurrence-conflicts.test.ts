@@ -97,11 +97,11 @@ describe("Bounded canonical session conflict indicators", () => {
       .run();
     const block = crypto.randomUUID();
     await env.DB.prepare(
-      "INSERT INTO event_agenda_blocks(id,event_id,name,start_at,end_at,room_id,roles_json) VALUES(?,?,'Duty',?,?,?,'[\"mc\"]')",
+      "INSERT INTO event_agenda_shifts(id,event_id,name,start_at,end_at,room_id,roles_json) VALUES(?,?,'Duty',?,?,?,'[\"mc\"]')",
     )
       .bind(block, eventId, time(10), time(11), roomB)
       .run();
-    await seedStaffingPositionAssignment(env.DB, { eventId, blockId: block, role: "mc", userId });
+    await seedStaffingPositionAssignment(env.DB, { eventId, shiftId: block, role: "mc", userId });
     expect((await list()).occurrences[0].conflicts.hasConflict).toBe(false);
     await env.DB.prepare(
       "INSERT INTO event_agenda_state(event_id,travel_minutes,updated_at) VALUES(?,10,?) ON CONFLICT(event_id) DO UPDATE SET travel_minutes=10",

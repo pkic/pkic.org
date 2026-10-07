@@ -23,26 +23,26 @@ const attendanceLabels: Record<z.infer<typeof agendaStaffingRequirementSchema>["
 
 export function StaffingRequirements({
   snapshot,
-  blockId,
+  shiftId,
   onSaved,
   onClose,
 }: {
   snapshot: AgendaSnapshot;
-  blockId: string;
+  shiftId: string;
   onSaved: (next: AgendaSnapshot) => void;
   onClose: () => void;
 }) {
   const [requirements, setRequirements] = useState(
-    snapshot.staffingRequirements.filter((row) => row.blockId === blockId),
+    snapshot.staffingRequirements.filter((row) => row.shiftId === shiftId),
   );
   const [positions, setPositions] = useState(snapshot.staffingPositions);
-  const other = snapshot.staffingRequirements.filter((row) => row.blockId !== blockId);
+  const other = snapshot.staffingRequirements.filter((row) => row.shiftId !== shiftId);
   const all = [...other, ...requirements];
   const kept = new Set(positions.map((row) => row.id));
   const body = {
     expectedRevision: snapshot.revision,
-    blocks: snapshot.blocks.map((block) =>
-      block.id === blockId ? { ...block, roles: [...new Set(requirements.map((row) => row.roleId))] } : block,
+    shifts: snapshot.shifts.map((shift) =>
+      shift.id === shiftId ? { ...shift, roles: [...new Set(requirements.map((row) => row.roleId))] } : shift,
     ),
     roleMembers: snapshot.roleMembers,
     assignments: snapshot.assignments
@@ -51,7 +51,7 @@ export function StaffingRequirements({
         const position = positions.find((item) => item.id === row.positionId);
         const requirement = all.find((item) => item.id === position?.requirementId);
         return requirement
-          ? { ...row, blockId: requirement.blockId, role: requirement.roleId, postId: requirement.postId }
+          ? { ...row, shiftId: requirement.shiftId, role: requirement.roleId, postId: requirement.postId }
           : row;
       }),
     staffingRoles: snapshot.staffingRoles,
@@ -85,7 +85,7 @@ export function StaffingRequirements({
   return (
     <Panel>
       <PanelHeader
-        title={`Staffing needs · ${snapshot.blocks.find((block) => block.id === blockId)?.name ?? "Block"}`}
+        title={`Staffing needs · ${snapshot.shifts.find((shift) => shift.id === shiftId)?.name ?? "Shift"}`}
       />
       <PanelBody>
         <p>
@@ -120,7 +120,7 @@ export function StaffingRequirements({
                       value={row.postId ?? ""}
                       onChange={(event) => update(row.id, { postId: event.currentTarget.value || null })}
                     >
-                      <option value="">Block location</option>
+                      <option value="">Shift location</option>
                       {snapshot.staffingPosts.map((post) => (
                         <option value={post.id}>{post.name}</option>
                       ))}
@@ -199,7 +199,7 @@ export function StaffingRequirements({
                 ...requirements,
                 {
                   id,
-                  blockId,
+                  shiftId,
                   roleId: snapshot.staffingRoles[0]!.id,
                   postId: null,
                   idealCount: 1,

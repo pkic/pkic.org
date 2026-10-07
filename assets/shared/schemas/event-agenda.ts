@@ -116,7 +116,7 @@ export const agendaRoleMemberSchema = z.object({
   attendanceMode: z.enum(["physical", "remote"]).default("physical"),
 });
 export const agendaAssignmentSchema = agendaStaffingPositionAssignmentSchema;
-export const agendaBlockSchema = z
+export const agendaShiftSchema = z
   .object({
     id,
     name: z.string().min(1).max(160),
@@ -143,17 +143,17 @@ export const agendaBlockSchema = z
       .max(10)
       .default([]),
   })
-  .superRefine((block, context) => {
-    if (new Set(block.roles).size !== block.roles.length)
+  .superRefine((shift, context) => {
+    if (new Set(shift.roles).size !== shift.roles.length)
       context.addIssue({ code: "custom", path: ["roles"], message: "Choose each duty once" });
     const pairs = new Set<string>();
-    for (const [index, pair] of (block.compatibleRolePairs ?? []).entries()) {
+    for (const [index, pair] of (shift.compatibleRolePairs ?? []).entries()) {
       const key = JSON.stringify([...pair].sort());
-      if (pair[0] === pair[1] || pair.some((role) => !block.roles.includes(role)) || pairs.has(key))
+      if (pair[0] === pair[1] || pair.some((role) => !shift.roles.includes(role)) || pairs.has(key))
         context.addIssue({
           code: "custom",
           path: ["compatibleRolePairs", index],
-          message: "Choose one unique pair of different duties in this block",
+          message: "Choose one unique pair of different duties in this shift",
         });
       pairs.add(key);
     }
@@ -177,7 +177,7 @@ export const agendaStaffingReportSchema = z.object({
     .array(
       z.object({
         requirementId: id,
-        blockId: id,
+        shiftId: id,
         role: id,
         postId: id.nullable(),
         idealCount: z.number().int(),
@@ -188,7 +188,7 @@ export const agendaStaffingReportSchema = z.object({
     .default([]),
   uncovered: z.array(
     z.object({
-      blockId: id,
+      shiftId: id,
       role: id,
       positionId: id.optional(),
       postId: id.nullable().optional(),
@@ -196,9 +196,9 @@ export const agendaStaffingReportSchema = z.object({
       eligiblePeople: z.number().int().min(0).default(0),
     }),
   ),
-  boundaryChanges: z.array(z.object({ blockId: id, boundary: z.enum(["start", "end"]), occurrenceId: id })),
+  boundaryChanges: z.array(z.object({ shiftId: id, boundary: z.enum(["start", "end"]), occurrenceId: id })),
 });
-export const agendaDisplayRoleBlockSchema = z.object({
+export const agendaDisplayRoleShiftSchema = z.object({
   id,
   name: z.string(),
   startAt: utcInstantSchema,
@@ -214,7 +214,7 @@ export const agendaSnapshotSchema = z.object({
   /** Captured by approval from owning-event visibility, never an authoring input. */
   calendarPublic: z.boolean().optional(),
   publicAgendaPath: sameOriginPathSchema.optional(),
-  displayRoles: z.array(agendaDisplayRoleBlockSchema).optional(),
+  displayRoles: z.array(agendaDisplayRoleShiftSchema).optional(),
   timeZone: z.string(),
   eventStartsAt: utcInstantSchema.nullable().optional(),
   eventEndsAt: utcInstantSchema.nullable().optional(),
@@ -224,7 +224,7 @@ export const agendaSnapshotSchema = z.object({
   publishedRevision: z.number().int().nullable(),
   rooms: z.array(agendaRoomSchema),
   occurrences: z.array(agendaOccurrenceSchema),
-  blocks: z.array(agendaBlockSchema),
+  shifts: z.array(agendaShiftSchema),
   roleMembers: z.array(agendaRoleMemberSchema),
   staffingRoles: z.array(agendaStaffingRoleSchema).max(100).default([]),
   staffingPosts: z.array(agendaStaffingPostSchema).max(200).default([]),
@@ -264,7 +264,7 @@ export const agendaOccurrencePatchSchema = agendaOccurrenceFieldsSchema.partial(
 });
 export const agendaStaffingSchema = agendaRevisionSchema
   .extend({
-    blocks: z.array(agendaBlockSchema).max(200),
+    shifts: z.array(agendaShiftSchema).max(200),
     roleMembers: z.array(agendaRoleMemberSchema).max(200),
     staffingRoles: z.array(agendaStaffingRoleSchema).max(100).default([]),
     staffingPosts: z.array(agendaStaffingPostSchema).max(200).default([]),
@@ -280,32 +280,48 @@ export const agendaStaffingSchema = agendaRevisionSchema
       positions: input.staffingPositions,
       assignments: input.assignments,
     });
-    if (!parsed.success)
-      for (const issue of parsed.error.issues)
-        context.addIssue({ code: "custom", path: issue.path, message: issue.message });
+    if (!parsed.success) {
+      const fields = {
+        roles: "staffingRoles",
+        posts: "staffingPosts",
+        requirements: "staffingRequirements",
+        positions: "staffingPositions",
+        assignments: "assignments",
+      };
+      for (const issue of parsed.error.issues) {
+        const [first, ...remaining] = issue.path;
+        const field =
+          typeof first === "string" && Object.hasOwn(fields, first) ? fields[first as keyof typeof fields] : first;
+        context.addIssue({
+          code: "custom",
+          path: field === undefined ? [] : [field, ...remaining],
+          message: issue.message,
+        });
+      }
+    }
     for (const requirement of input.staffingRequirements)
-      if (!input.blocks.some((block) => block.id === requirement.blockId))
+      if (!input.shifts.some((shift) => shift.id === requirement.shiftId))
         context.addIssue({
           code: "custom",
           path: ["staffingRequirements"],
-          message: "Choose a staffing block in this event",
+          message: "Choose a staffing shift in this event",
         });
   });
 export const agendaAllocationDiagnosticsSchema = z.object({
   uncovered: z.array(
     z.object({
-      blockId: id,
+      shiftId: id,
       role: id,
       reasons: z.array(agendaStaffingReasonCountSchema),
     }),
   ),
 });
 export const agendaAllocationSchema = agendaRevisionSchema.extend({
-  blockIds: z
+  shiftIds: z
     .array(id)
     .min(1)
     .max(200)
-    .refine((values) => new Set(values).size === values.length, "Choose each block once")
+    .refine((values) => new Set(values).size === values.length, "Choose each shift once")
     .optional(),
   seed: z.string().min(1).max(100),
   strategy: z.enum(["balanced", "random"]).default("balanced"),
@@ -342,7 +358,7 @@ export const agendaOccurrenceListItemSchema = agendaOccurrenceSchema.extend({
 export const agendaOccurrenceListSchema = paginatedResponseSchema("occurrences", agendaOccurrenceListItemSchema);
 export type AgendaSnapshot = z.infer<typeof agendaSnapshotSchema>;
 export type AgendaOccurrence = z.infer<typeof agendaOccurrenceSchema>;
-export type AgendaBlock = z.infer<typeof agendaBlockSchema>;
+export type AgendaShift = z.infer<typeof agendaShiftSchema>;
 export type AgendaAssignment = z.infer<typeof agendaAssignmentSchema>;
 export type AgendaRoleMember = z.infer<typeof agendaRoleMemberSchema>;
 export const agendaPlacementFingerprintSchema = z.string().regex(/^[a-f0-9]{64}$/u);

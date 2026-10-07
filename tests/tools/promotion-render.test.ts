@@ -20,7 +20,7 @@ const agenda = agendaSnapshotSchema.parse({
   revision: 2,
   publishedRevision: 2,
   rooms: [],
-  blocks: [],
+  shifts: [],
   assignments: [],
   roleMembers: [],
   occurrences: [

@@ -38,7 +38,7 @@ const badgeIssueResultSchema = z.object({
   expiresAt: utcInstantSchema,
   replacedBadgeId: databaseIdSchema.nullable(),
 });
-/** Completed retries return metadata only; printable bearers are never recoverable from storage. */
+/** Issuance retries remain metadata-only; explicit authorized printing is a separate action. */
 export const badgeIssueResponseSchema = z.discriminatedUnion("result", [
   badgeIssueResultSchema.extend({ result: z.literal("issued"), credential: databaseIdSchema }).strict(),
   badgeIssueResultSchema.extend({ result: z.literal("replayed"), credential: z.null() }).strict(),
@@ -55,6 +55,7 @@ export const badgeCredentialMetadataSchema = z
     expiresAt: utcInstantSchema.nullable(),
     revokedAt: utcInstantSchema.nullable(),
     status: badgeCredentialStatusSchema,
+    reprintAvailable: z.boolean().default(false),
   })
   .strict();
 export type BadgeCredentialMetadata = z.infer<typeof badgeCredentialMetadataSchema>;
@@ -119,5 +120,36 @@ export const badgeRevokeRouteSchema = {
     "403": jsonErrorResponse("Event management permission required"),
     "404": jsonErrorResponse("Badge unavailable"),
     "409": jsonErrorResponse("Badge changed or capture closed"),
+  },
+};
+
+/** Printing never issues, replaces, or extends a credential. */
+export const badgePrintRequestSchema = z.object({ operationId: databaseIdSchema }).strict();
+export type BadgePrintRequest = z.infer<typeof badgePrintRequestSchema>;
+export const badgePrintResponseSchema = z
+  .object({
+    id: databaseIdSchema,
+    svg: z.string().min(1).max(100000),
+    displayName: badgeCredentialMetadataSchema.shape.displayName,
+    expiresAt: utcInstantSchema,
+  })
+  .strict();
+export const badgePrintRouteSchema = {
+  ...requiresPermissions("events:manage"),
+  tags: ["Events"],
+  summary: "Prepare an existing active badge for printing without replacement",
+  request: {
+    params: eventSlugParamsSchema.extend({ badgeId: databaseIdSchema }),
+    body: { content: { "application/json": { schema: badgePrintRequestSchema } }, required: true },
+  },
+  responses: {
+    "200": {
+      description: "Transient authenticated print artifact",
+      content: { "application/json": { schema: badgePrintResponseSchema } },
+    },
+    "403": jsonErrorResponse("Event management permission required or changed"),
+    "404": jsonErrorResponse("Badge unavailable"),
+    "409": jsonErrorResponse("Badge inactive, changed, or has no recoverable print artifact"),
+    "503": jsonErrorResponse("Badge print encryption is unavailable"),
   },
 };

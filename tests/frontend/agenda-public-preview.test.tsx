@@ -23,7 +23,7 @@ it("switches server-projected revisions without editing or publication writes an
     publishedRevision: null,
     rooms: [],
     occurrences: [],
-    blocks: [],
+    shifts: [],
     roleMembers: [],
     assignments: [],
   });

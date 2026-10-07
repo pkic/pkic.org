@@ -68,7 +68,7 @@ export const AgendaAllocation = openApiRoute(contracts.agendaAllocationRouteSche
       data.body.seed,
       data.body.strategy,
       actor.id,
-      data.body.blockIds,
+      data.body.shiftIds,
     ),
   );
 });

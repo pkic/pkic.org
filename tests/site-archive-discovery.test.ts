@@ -46,7 +46,7 @@ const agenda = (eventSlug: string, approvedAt: string, occurrences: ReturnType<t
     publishedRevision: 1,
     rooms: [],
     occurrences,
-    blocks: [],
+    shifts: [],
     roleMembers: [],
     assignments: [],
   });

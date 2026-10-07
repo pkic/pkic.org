@@ -6,7 +6,7 @@ import { agendaDisplayRoles } from "../../assets/shared/event-agenda-display-rol
 import { agendaPresenter } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/presenter";
 import { ContentAgenda } from "../../assets/ts/site/ContentAgenda";
 
-describe("shared block duty display", () => {
+describe("shared shift duty display", () => {
   it("shows scoped duties and freezes only public display fields", () => {
     const startAt = "2026-12-01T09:00:00.000Z",
       endAt = "2026-12-01T10:00:00.000Z";
@@ -20,7 +20,7 @@ describe("shared block duty display", () => {
         { id: "private", name: "Private room", capacity: 5 },
       ],
       occurrences: [{ id: "talk", title: "Public talk", startAt, endAt, roomId: "hall", speakers: [] }],
-      blocks: ["hall", "private"].map((roomId) => ({
+      shifts: ["hall", "private"].map((roomId) => ({
         id: roomId,
         name: `${roomId} opening`,
         startAt,
@@ -39,10 +39,10 @@ describe("shared block duty display", () => {
         },
       ],
       staffingRoles: [{ id: "mc", name: "Conference host", showOnAgenda: true }],
-      assignments: ["hall", "private"].map((blockId) => ({
-        positionId: `${blockId}-mc`,
+      assignments: ["hall", "private"].map((shiftId) => ({
+        positionId: `${shiftId}-mc`,
         postId: null,
-        blockId,
+        shiftId,
         role: "mc",
         userId: "person",
         pinned: true,
@@ -52,10 +52,10 @@ describe("shared block duty display", () => {
     expect(publicRoles).toHaveLength(1);
     expect(publicRoles[0].duties).toEqual([{ role: "Conference host", displayName: "Synthetic Host" }]);
     expect(JSON.stringify(publicRoles)).not.toMatch(/pinned|userId|maxMinutes|seniority/);
-    const approved = { ...snapshot, displayRoles: publicRoles, blocks: [], roleMembers: [], assignments: [] };
+    const approved = { ...snapshot, displayRoles: publicRoles, shifts: [], roleMembers: [], assignments: [] };
     expect(agendaDisplayRoles(approved, "2026-12-01", true)).toEqual(publicRoles);
     const html = render(<ContentAgenda days={agendaPresenter(snapshot)} speakers={[]} timeZone={snapshot.timeZone} />);
-    expect(html).toContain("Block hosts and question support");
+    expect(html).toContain("Shift hosts and question support");
     expect(html).toContain("Synthetic Host");
     expect(html).toContain("10:00");
     expect(html).not.toContain("pinned");
@@ -70,7 +70,7 @@ describe("shared block duty display", () => {
       publishedRevision: null,
       rooms: [],
       occurrences: [{ id: "session", title: "Public session", startAt, endAt, roomId: null, speakers: [] }],
-      blocks: [
+      shifts: [
         {
           id: "opening",
           name: "Opening",
@@ -96,7 +96,7 @@ describe("shared block duty display", () => {
       assignments: ["host", "scanner", "door"].map((userId, index) => ({
         positionId: `secret-position-${index}`,
         postId: index ? `secret-door-${index}` : null,
-        blockId: "opening",
+        shiftId: "opening",
         role: ["host-id", "scanner-id", "private-door-id"][index],
         userId,
         pinned: true,

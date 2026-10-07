@@ -359,7 +359,7 @@ it("promotes an existing additional room with a room-only PATCH without losing r
   ).toMatchObject({ roomId: overflow, additionalRoomIds: [occurrence.roomId] });
 });
 
-it("does not invent physical travel for a remote block duty and still refuses overlapping commitments", async () => {
+it("does not invent physical travel for a remote shift duty and still refuses overlapping commitments", async () => {
   const before = await getAgenda(env.DB, eventId, "pqc-2026");
   const snapshot = await createAgendaRoom(env.DB, eventId, "pqc-2026", {
     expectedRevision: before.revision,
@@ -375,18 +375,18 @@ it("does not invent physical travel for a remote block duty and still refuses ov
   )
     .bind(occurrence.id, adminId, occurrence.roomId)
     .run();
-  const blockId = crypto.randomUUID();
+  const shiftId = crypto.randomUUID();
   await env.DB.prepare(
-    "INSERT INTO event_agenda_blocks(id,event_id,name,start_at,end_at,room_id,roles_json) VALUES(?,?,'Remote questions','2026-12-01T09:25:00.000Z','2026-12-01T09:55:00.000Z',?,'[\"questions\"]')",
+    "INSERT INTO event_agenda_shifts(id,event_id,name,start_at,end_at,room_id,roles_json) VALUES(?,?,'Remote questions','2026-12-01T09:25:00.000Z','2026-12-01T09:55:00.000Z',?,'[\"questions\"]')",
   )
-    .bind(blockId, eventId, otherRoom)
+    .bind(shiftId, eventId, otherRoom)
     .run();
   await env.DB.prepare(
     "INSERT INTO event_agenda_role_members(event_id,user_id,roles_json,attendance_mode) VALUES(?,?,'[\"questions\"]','remote')",
   )
     .bind(eventId, adminId)
     .run();
-  await seedStaffingPositionAssignment(env.DB, { eventId, blockId, role: "questions", userId: adminId });
+  await seedStaffingPositionAssignment(env.DB, { eventId, shiftId, role: "questions", userId: adminId });
   const move = {
     expectedRevision: snapshot.revision,
     changes: [

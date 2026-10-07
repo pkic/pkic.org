@@ -29,7 +29,7 @@ const snapshot = agendaSnapshotSchema.parse({
       track: "Cryptography",
     },
   ],
-  blocks: [],
+  shifts: [],
   roleMembers: [],
   assignments: [],
 });

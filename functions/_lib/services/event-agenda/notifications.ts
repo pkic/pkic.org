@@ -1,3 +1,4 @@
+import { storedAgendaSnapshotSchema } from "../../../../assets/shared/schemas/event-agenda-stored";
 import type { AgendaSnapshot } from "../../../../assets/shared/schemas/event-agenda";
 import { agendaOccurrenceRoomIds } from "../../../../assets/shared/event-agenda-rooms";
 import { first } from "../../db/queries";
@@ -18,7 +19,7 @@ export async function prepareAgendaChangeNotifications(
     [eventId],
   );
   if (!prior) return [];
-  const previous = JSON.parse(prior.snapshot_json) as AgendaSnapshot;
+  const previous = storedAgendaSnapshotSchema.parse(JSON.parse(prior.snapshot_json));
   const changed = previous.occurrences
     .filter((item) => {
       const next = snapshot.occurrences.find((candidate) => candidate.id === item.id);

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { agendaBlockSchema, agendaRoleMemberSchema } from "../../assets/shared/schemas/event-agenda";
+import { agendaShiftSchema, agendaRoleMemberSchema } from "../../assets/shared/schemas/event-agenda";
 import { agendaStaffingPositionPlanSchema } from "../../assets/shared/schemas/event-agenda-staffing-positions";
 import {
   allocateAgendaStaffingPositions,
@@ -8,8 +8,8 @@ import {
   validateAgendaStaffingPositionAssignments,
 } from "../../assets/shared/event-agenda-staffing-positions";
 function fixture() {
-  const blocks = [
-    agendaBlockSchema.parse({
+  const shifts = [
+    agendaShiftSchema.parse({
       id: "morning",
       name: "Morning",
       startAt: "2027-01-01T09:00:00.000Z",
@@ -37,7 +37,7 @@ function fixture() {
       ],
       requirements: ["north", "south"].map((postId) => ({
         id: postId,
-        blockId: "morning",
+        shiftId: "morning",
         roleId: "badge-scanner",
         postId,
         idealCount: 2,
@@ -48,7 +48,7 @@ function fixture() {
       ),
       assignments: [],
     }),
-    blocks,
+    shifts,
     members,
     occurrences: [],
     seed: "same-seed",
@@ -84,8 +84,8 @@ describe("event-defined staffing positions", () => {
     input.members = input.members.slice(0, 1);
     input.roles.push({ id: "room-questions", name: "Room questions", showOnAgenda: false });
     input.members[0].roles.push("room-questions");
-    input.blocks[0].roles.push("room-questions");
-    input.blocks[0].compatibleRolePairs = [["badge-scanner", "room-questions"]];
+    input.shifts[0].roles.push("room-questions");
+    input.shifts[0].compatibleRolePairs = [["badge-scanner", "room-questions"]];
     input.requirements.forEach((row) => (row.idealCount = 1));
     input.positions = input.positions.filter((row) => row.index === 1);
     input.requirements[1].roleId = "room-questions";
@@ -122,7 +122,7 @@ describe("event-defined staffing positions", () => {
     input.assignments = [
       {
         positionId: "north-1",
-        blockId: "morning",
+        shiftId: "morning",
         role: "welcome-desk",
         postId: "north",
         userId: input.members[0].userId,
@@ -149,7 +149,7 @@ describe("event-defined staffing positions", () => {
     const input = fixture();
     input.assignments = ["north-1", "south-1"].map((positionId) => ({
       positionId,
-      blockId: "morning",
+      shiftId: "morning",
       role: "badge-scanner",
       postId: positionId.startsWith("north") ? "north" : "south",
       userId: input.members[0].userId,
@@ -174,16 +174,16 @@ describe("event-defined staffing positions", () => {
     expect(result.uncovered).toHaveLength(2);
     expect(result.uncovered[0].reasons).toContainEqual({ reason: "attendance", people: 1 });
   });
-  it("balances duty minutes across consecutive blocks while preserving position pins", () => {
+  it("balances duty minutes across consecutive shifts while preserving position pins", () => {
     const input = fixture();
     const afternoon = {
-      ...input.blocks[0],
+      ...input.shifts[0],
       id: "afternoon",
       startAt: "2027-01-01T11:00:00.000Z",
       endAt: "2027-01-01T12:00:00.000Z",
     };
-    input.blocks.push(afternoon);
-    const requirements = input.requirements.map((row) => ({ ...row, id: `${row.id}-later`, blockId: afternoon.id }));
+    input.shifts.push(afternoon);
+    const requirements = input.requirements.map((row) => ({ ...row, id: `${row.id}-later`, shiftId: afternoon.id }));
     input.requirements.push(...requirements);
     input.positions.push(
       ...requirements.flatMap((row) =>
@@ -193,7 +193,7 @@ describe("event-defined staffing positions", () => {
     input.assignments = [
       {
         positionId: "north-1",
-        blockId: "morning",
+        shiftId: "morning",
         role: "badge-scanner",
         postId: "north",
         userId: "person-0",
@@ -219,7 +219,7 @@ describe("event-defined staffing positions", () => {
         assignments: [
           {
             positionId: "north-1",
-            blockId: "morning",
+            shiftId: "morning",
             role: "badge-scanner",
             postId: "south",
             userId: "person-0",

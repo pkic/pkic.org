@@ -341,7 +341,7 @@ describe("Static selected public PDF with private terminal authority", () => {
           history: { materials: [material] },
         },
       ],
-      blocks: [],
+      shifts: [],
       roleMembers: [],
       assignments: [],
     });

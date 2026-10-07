@@ -15,7 +15,7 @@ export function ContentLibrary(props: ComponentProps<typeof Library>) {
 }
 export function StaffingEditor(props: ComponentProps<typeof Staffing>) {
   return (
-    <Suspense fallback={<Spinner label="Loading block roles…" />}>
+    <Suspense fallback={<Spinner label="Loading shifts…" />}>
       <Staffing {...props} />
     </Suspense>
   );

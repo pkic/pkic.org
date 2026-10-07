@@ -1,9 +1,11 @@
 /** Printable bearers remain transient; only an explicit download saves them. */
-export interface FreshBadgePrint {
+export interface PrintableBadgePrint {
   id: string;
-  credential: string;
   displayName: string;
   svg: string;
+}
+export interface FreshBadgePrint extends PrintableBadgePrint {
+  credential: string;
 }
 export type BadgePrintLayout = "a6" | "label";
 
@@ -14,7 +16,7 @@ function escapeHtml(value: string): string {
   );
 }
 
-export function badgePrintHtml(badges: readonly FreshBadgePrint[], layout: BadgePrintLayout): string {
+export function badgePrintHtml(badges: readonly PrintableBadgePrint[], layout: BadgePrintLayout): string {
   const width = layout === "a6" ? 105 : 100;
   const height = layout === "a6" ? 148 : 50;
   const qr = layout === "a6" ? 72 : 36;

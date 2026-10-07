@@ -71,7 +71,7 @@ export const agendaOccurrencePatchRouteSchema = {
 };
 export const agendaStaffingRouteSchema = {
   ...common,
-  summary: "Save blocks and pinned duties",
+  summary: "Save shifts and pinned duties",
   request: {
     params: eventSlugParamsSchema,
     body: { content: { "application/json": { schema: agendaStaffingSchema } } },
@@ -79,7 +79,7 @@ export const agendaStaffingRouteSchema = {
 };
 export const agendaAllocationRouteSchema = {
   ...common,
-  summary: "Allocate block duties",
+  summary: "Allocate shift duties",
   request: {
     params: eventSlugParamsSchema,
     body: { content: { "application/json": { schema: agendaAllocationSchema } } },

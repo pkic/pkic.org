@@ -208,19 +208,19 @@ export function ContentAgenda({
               ))}
             </div>
             {Boolean(day.staffing?.length) && (
-              <div class="pk-content-agenda__staffing" aria-label="Block hosts and question support">
-                {day.staffing!.map((block) => (
-                  <section class="pk-content-agenda__staffing-block" key={block.id}>
-                    <strong>{block.name}</strong>
+              <div class="pk-content-agenda__staffing" aria-label="Shift hosts and question support">
+                {day.staffing!.map((shift) => (
+                  <section class="pk-content-agenda__staffing-shift" key={shift.id}>
+                    <strong>{shift.name}</strong>
                     <small>
-                      {formatTimeRangeInZone(block.startAt, block.endAt, timeZone)}
-                      {block.locationId
-                        ? ` · ${day.locations.find((room) => room.id === block.locationId)?.label ?? ""}`
+                      {formatTimeRangeInZone(shift.startAt, shift.endAt, timeZone)}
+                      {shift.locationId
+                        ? ` · ${day.locations.find((room) => room.id === shift.locationId)?.label ?? ""}`
                         : ""}
-                      {block.track ? ` · Track: ${block.track}` : ""}
+                      {shift.track ? ` · Track: ${shift.track}` : ""}
                     </small>
                     <ul>
-                      {block.duties.map((duty) => (
+                      {shift.duties.map((duty) => (
                         <li key={`${duty.role}:${duty.displayName}`}>
                           <span>
                             {duty.role === "mc"

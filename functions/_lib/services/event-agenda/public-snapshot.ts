@@ -25,7 +25,7 @@ export function preparePublicAgendaSnapshot(
         speakers: item.speakers.map(({ profileCandidate: _candidate, ...speaker }) => speaker),
       })),
     displayRoles: [
-      ...new Set(snapshot.blocks.map((block) => instantToDateTimeLocal(block.startAt, snapshot.timeZone).slice(0, 10))),
+      ...new Set(snapshot.shifts.map((shift) => instantToDateTimeLocal(shift.startAt, snapshot.timeZone).slice(0, 10))),
     ].flatMap((date) => agendaDisplayRoles(snapshot, date, true)),
     staffingReport: undefined,
     staffingRoles: [],
@@ -34,6 +34,6 @@ export function preparePublicAgendaSnapshot(
     staffingPositions: [],
     roleMembers: [],
     assignments: [],
-    blocks: [],
+    shifts: [],
   };
 }

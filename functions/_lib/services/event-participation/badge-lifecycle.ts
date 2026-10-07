@@ -10,6 +10,7 @@ import { nowIso } from "../../utils/time";
 import { prepareOneTimeAuditLog, prepareScopedAuditLogAfterOneChange, isAuditChangeGuardFailure } from "../audit";
 import { hashBadgeCredential } from "./badge-hash";
 import { resolveBadgeExpiry } from "./badge-expiry";
+import { sealBadgeCredential, type BadgePrintEnvironment } from "./badge-print-protection";
 
 type OwnedBadge = {
   id: string;
@@ -81,6 +82,7 @@ export async function issueBadge(
   eventId: string,
   actorId: string,
   input: BadgeIssueRequest,
+  environment: BadgePrintEnvironment,
 ): Promise<BadgeIssueResponse> {
   const requestDigest = await hashBadgeCredential(
     JSON.stringify({
@@ -115,6 +117,12 @@ export async function issueBadge(
     expiresAt = resolveBadgeExpiry(now, event.ends_at, input.expiresAt),
     id = crypto.randomUUID(),
     credential = crypto.randomUUID();
+  const credentialHash = await hashBadgeCredential(credential);
+  const printCredentialJson = await sealBadgeCredential(
+    environment,
+    { eventId, id, userId: input.userId, credentialHash },
+    credential,
+  );
   const scope = { type: "event", id: eventId };
   const statements = [
     prepareOneTimeAuditLog(
@@ -153,15 +161,16 @@ export async function issueBadge(
   statements.push(
     db
       .prepare(
-        "INSERT INTO event_badge_credentials(id,event_id,user_id,credential_hash,created_at,expires_at) SELECT ?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM registrations WHERE event_id=? AND user_id=?) AND EXISTS(SELECT 1 FROM events WHERE id=? AND ends_at IS ?)",
+        "INSERT INTO event_badge_credentials(id,event_id,user_id,credential_hash,created_at,expires_at,print_credential_json) SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM registrations WHERE event_id=? AND user_id=?) AND EXISTS(SELECT 1 FROM events WHERE id=? AND ends_at IS ?)",
       )
       .bind(
         id,
         eventId,
         input.userId,
-        await hashBadgeCredential(credential),
+        credentialHash,
         now,
         expiresAt,
+        printCredentialJson,
         eventId,
         input.userId,
         eventId,

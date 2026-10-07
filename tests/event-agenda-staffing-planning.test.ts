@@ -7,13 +7,13 @@ import { seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 
 beforeEach(resetDb);
-it("saves an empty planning block before configuring positions and keeps roster eligibility required", async () => {
+it("saves an empty planning shift before configuring positions and keeps roster eligibility required", async () => {
   await seedEventAndAdmin(env.DB);
   const admin = (await env.DB.prepare("SELECT id FROM users WHERE email='admin@pkic.org'").first<{ id: string }>())!;
   const token = await createAdminSession(env.DB, admin.id, "staffing-planning");
   const input = agendaStaffingSchema.parse({
     expectedRevision: 0,
-    blocks: [
+    shifts: [
       {
         id: "planning",
         name: "Opening doors",
@@ -38,8 +38,8 @@ it("saves an empty planning block before configuring positions and keeps roster 
   expect(response.status).toBe(200);
   const saved = agendaSnapshotSchema.parse(await response.json());
   expect(saved.revision).toBe(1);
-  expect(saved.blocks).toHaveLength(1);
-  expect(saved.blocks[0].roles).toEqual([]);
+  expect(saved.shifts).toHaveLength(1);
+  expect(saved.shifts[0].roles).toEqual([]);
   expect(saved.staffingRequirements).toEqual([]);
   expect(saved.staffingPositions).toEqual([]);
   expect(saved.assignments).toEqual([]);

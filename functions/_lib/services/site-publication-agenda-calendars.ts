@@ -1,6 +1,7 @@
+import { storedAgendaSnapshotSchema } from "../../../assets/shared/schemas/event-agenda-stored";
 import { all } from "../db/queries";
 import type { DatabaseLike } from "../types";
-import { agendaSnapshotSchema, type AgendaSnapshot } from "../../../assets/shared/schemas/event-agenda";
+import { type AgendaSnapshot } from "../../../assets/shared/schemas/event-agenda";
 import { eventVisibilitySchema } from "../../../assets/shared/schemas/event-series";
 import { utcInstantSchema } from "../../../assets/shared/schemas/api-common";
 import type { PublicAgendaCalendar } from "../../../assets/shared/schemas/site-agenda-calendar";
@@ -125,7 +126,7 @@ export async function readPublicAgendaCalendars(
               : `/events/${encodeURIComponent(row.slug)}`) + "/agenda/",
         };
       }
-      const snapshot = agendaSnapshotSchema.parse(JSON.parse(row.snapshot_json));
+      const snapshot = storedAgendaSnapshotSchema.parse(JSON.parse(row.snapshot_json));
       if (snapshot.revision !== row.revision || snapshot.publishedRevision !== row.revision)
         throw new Error("PUBLIC_CALENDAR_APPROVAL_BASIS_INVALID");
       const approvedAt = utcInstantSchema.parse(snapshot.approvedAt ?? row.created_at);

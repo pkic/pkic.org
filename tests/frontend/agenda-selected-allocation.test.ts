@@ -11,7 +11,7 @@ describe("selected block rotation", () => {
       publishedRevision: null,
       rooms: [],
       assignments: [],
-      blocks: [
+      shifts: [
         {
           id: "block",
           name: "Next block",
@@ -41,7 +41,7 @@ describe("selected block rotation", () => {
       ],
     });
     const result = allocateAgendaRoles(
-      snapshot.blocks,
+      snapshot.shifts,
       snapshot.roleMembers,
       [],
       snapshot.occurrences,
@@ -51,10 +51,10 @@ describe("selected block rotation", () => {
       10,
     );
     expect(result.assignments[0]?.userId).toBe("two");
-    snapshot.blocks[0].roomId = "a";
+    snapshot.shifts[0].roomId = "a";
     expect(
       allocateAgendaRoles(
-        snapshot.blocks,
+        snapshot.shifts,
         snapshot.roleMembers,
         [],
         snapshot.occurrences,
@@ -65,7 +65,7 @@ describe("selected block rotation", () => {
       ).assignments[0]?.userId,
     ).toBe("one");
   });
-  it("accounts for preserved workload and does not allocate outside the selected blocks", () => {
+  it("accounts for preserved workload and does not allocate outside the selected shifts", () => {
     const snapshot = agendaSnapshotSchema.parse({
       eventSlug: "synthetic",
       timeZone: "UTC",
@@ -73,7 +73,7 @@ describe("selected block rotation", () => {
       publishedRevision: null,
       rooms: [],
       occurrences: [],
-      blocks: ["a", "b", "c"].map((id, index) => ({
+      shifts: ["a", "b", "c"].map((id, index) => ({
         id,
         name: id,
         startAt: `2026-12-01T${String(9 + index).padStart(2, "0")}:00:00.000Z`,
@@ -91,9 +91,9 @@ describe("selected block rotation", () => {
       })),
       assignments: [],
     });
-    const fixed = { blockId: "a", role: "mc", userId: "one", pinned: true };
+    const fixed = { shiftId: "a", role: "mc", userId: "one", pinned: true };
     const result = allocateAgendaRoles(
-      snapshot.blocks,
+      snapshot.shifts,
       snapshot.roleMembers,
       [fixed],
       [],
@@ -103,9 +103,9 @@ describe("selected block rotation", () => {
     );
     expect(result.assignments).toEqual([
       fixed,
-      { blockId: "b", role: "mc", userId: "two", pinned: false, origin: "generated" },
+      { shiftId: "b", role: "mc", userId: "two", pinned: false, origin: "generated" },
     ]);
     expect(result.uncovered).toEqual([]);
-    expect(result.assignments.some((assignment) => assignment.blockId === "c")).toBe(false);
+    expect(result.assignments.some((assignment) => assignment.shiftId === "c")).toBe(false);
   });
 });

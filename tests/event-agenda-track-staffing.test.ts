@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { z } from "zod";
 import {
-  agendaBlockSchema,
+  agendaShiftSchema,
   agendaOccurrenceListSchema,
   agendaOccurrencePatchSchema,
   agendaSnapshotSchema,
@@ -40,7 +40,7 @@ function input(
 ) {
   return staffingFixture({
     expectedRevision: options.revision ?? 0,
-    blocks: [
+    shifts: [
       {
         id: "track-host",
         name: "Track host",
@@ -64,7 +64,7 @@ function input(
       },
     ],
     assignments: options.pin
-      ? [{ blockId: "track-host", role: "mc", userId: person, pinned: true, origin: "manual" }]
+      ? [{ shiftId: "track-host", role: "mc", userId: person, pinned: true, origin: "manual" }]
       : [],
   });
 }
@@ -129,9 +129,9 @@ beforeEach(async () => {
 describe("Authored track-scoped staffing", () => {
   it("saves, regenerates and audits a track-only duty across rooms without counting unrelated occurrences", async () => {
     const body = input();
-    body.blocks[0].track = ` ${track} `;
+    body.shifts[0].track = ` ${track} `;
     const saved = await save(body);
-    expect(saved.blocks[0]).toMatchObject({ roomId: null, track });
+    expect(saved.shifts[0]).toMatchObject({ roomId: null, track });
     const allocated = await generate(saved.revision);
     expect(allocated.assignments).toHaveLength(1);
     expect(allocated.assignments[0]).toMatchObject({ userId: person, origin: "generated", pinned: false });
@@ -161,14 +161,14 @@ describe("Authored track-scoped staffing", () => {
       .first<{ details_json: string }>();
     const provenance = z
       .object({
-        blocks: z.object({
+        shifts: z.object({
           to: z.array(
-            z.object(agendaBlockSchema.shape).pick({ id: true, startAt: true, endAt: true, roomId: true, track: true }),
+            z.object(agendaShiftSchema.shape).pick({ id: true, startAt: true, endAt: true, roomId: true, track: true }),
           ),
         }),
       })
       .parse(JSON.parse(audit!.details_json));
-    expect(provenance.blocks.to[0]).toMatchObject({ id: "track-host", roomId: null, track });
+    expect(provenance.shifts.to[0]).toMatchObject({ id: "track-host", roomId: null, track });
     const grants = await env.DB.prepare(
       "SELECT COUNT(*) AS count FROM permission_grants WHERE user_id=? AND context_type='event' AND context_id=?",
     )
@@ -198,7 +198,7 @@ describe("Authored track-scoped staffing", () => {
       ),
     };
     expect(agendaDisplayRoles(privateOnly, day, true)).toEqual([]);
-    const roomAOnly = { ...saved, blocks: saved.blocks.map((block) => ({ ...block, roomId: roomA })) };
+    const roomAOnly = { ...saved, shifts: saved.shifts.map((shift) => ({ ...shift, roomId: roomA })) };
     expect(operationalPeople(roomAOnly).map((row) => row.occurrence_id)).toEqual([first]);
   });
 
@@ -216,26 +216,26 @@ describe("Authored track-scoped staffing", () => {
 
   it("keeps missing and null scope unfiltered, and rejects unknown or malformed authored tracks without writing", async () => {
     const malformed = input();
-    malformed.blocks[0].track = " ";
+    malformed.shifts[0].track = " ";
     expect((await request("/staffing", malformed)).status).toBe(400);
     const unknown = input();
-    unknown.blocks[0].track = "Another event's track";
+    unknown.shifts[0].track = "Another event's track";
     const response = await request("/staffing", unknown);
     expect(response.status).toBe(422);
-    expect(apiErrorPayloadSchema.parse(await response.json()).error.code).toBe("AGENDA_BLOCK_TRACK");
+    expect(apiErrorPayloadSchema.parse(await response.json()).error.code).toBe("AGENDA_SHIFT_TRACK");
     expect((await current()).revision).toBe(0);
-    expect((await current()).blocks).toEqual([]);
+    expect((await current()).shifts).toEqual([]);
     const allTracks = input({ mode: "remote", pin: true });
-    delete allTracks.blocks[0].track;
+    delete allTracks.shifts[0].track;
     let saved = await save(allTracks);
-    expect(saved.blocks[0].track).toBeUndefined();
+    expect(saved.shifts[0].track).toBeUndefined();
     expect(
       operationalPeople(saved)
         .map((row) => row.occurrence_id)
         .sort(),
     ).toEqual([first, second, otherTrack, untracked].sort());
     allTracks.expectedRevision = saved.revision;
-    allTracks.blocks[0].track = null;
+    allTracks.shifts[0].track = null;
     saved = await save(allTracks);
     expect(operationalPeople(saved)).toHaveLength(4);
   });
@@ -261,7 +261,7 @@ describe("Authored track-scoped staffing", () => {
     expect((await current()).revision).toBe(allocated.revision);
     const remote = await save(input({ revision: allocated.revision, mode: "remote", pin: true }));
     expect(operationalPeople(remote).map((row) => row.room_id)).toEqual([null, null]);
-    // Another track cannot erase whole-block talk conflicts, even for a remote host.
+    // Another track cannot erase whole-shift talk conflicts, even for a remote host.
     await env.DB.prepare(
       "INSERT INTO event_agenda_occurrence_speakers(occurrence_id,user_id,role,attendance_mode) VALUES(?,?,'speaker','remote')",
     )
@@ -331,15 +331,15 @@ describe("Authored track-scoped staffing", () => {
       .bind(coffee, eventId, at("10:30"), at("10:45"))
       .run();
     const body = input({ pin: true });
-    body.blocks[0].boundaries = { endOccurrenceId: coffee };
+    body.shifts[0].boundaries = { endOccurrenceId: coffee };
     const saved = await save(body);
     expect(saved.staffingReport?.boundaryChanges).toEqual([]);
     const moved = await patch(coffee, { expectedRevision: saved.revision, startAt: at("10:45"), endAt: at("11:00") });
     expect(moved.status).toBe(200);
     const after = agendaSnapshotSchema.parse(await moved.json());
-    expect(after.blocks[0]).toMatchObject({ track, endAt: at("10:30") });
+    expect(after.shifts[0]).toMatchObject({ track, endAt: at("10:30") });
     expect(after.staffingReport?.boundaryChanges).toEqual([
-      { blockId: "track-host", boundary: "end", occurrenceId: coffee },
+      { shiftId: "track-host", boundary: "end", occurrenceId: coffee },
     ]);
   });
 });

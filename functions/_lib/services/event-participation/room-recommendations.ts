@@ -35,7 +35,7 @@ export async function roomRecommendations(db: DatabaseLike, eventId: string, eve
     [occurrenceId, eventId],
   );
   const session = snapshot.occurrences.find((item) => item.id === occurrenceId)!;
-  const candidateBlocks =
+  const candidateShifts =
     session.startAt && session.endAt
       ? snapshot.rooms.map((room) => ({
           id: room.id,
@@ -49,18 +49,18 @@ export async function roomRecommendations(db: DatabaseLike, eventId: string, eve
       : [];
   const crossSnapshot = {
     ...snapshot,
-    blocks: candidateBlocks,
+    shifts: candidateShifts,
     staffingPosts: [],
-    staffingRequirements: candidateBlocks.map((block) => ({
-      id: block.id,
-      blockId: block.id,
+    staffingRequirements: candidateShifts.map((shift) => ({
+      id: shift.id,
+      shiftId: shift.id,
       roleId: "speaker",
       postId: null,
       idealCount: 1,
       seniority: "any" as const,
       attendanceMode: "any" as const,
     })),
-    staffingPositions: candidateBlocks.map((block) => ({ id: block.id, requirementId: block.id, index: 1 })),
+    staffingPositions: candidateShifts.map((shift) => ({ id: shift.id, requirementId: shift.id, index: 1 })),
     roleMembers: session.speakers.map((person) => ({
       userId: person.userId,
       displayName: person.displayName,
@@ -95,7 +95,7 @@ export async function roomRecommendations(db: DatabaseLike, eventId: string, eve
       physicalDemand,
       Number(occupancy?.unallocated ?? 0),
       Object.fromEntries(roomRows.map((room) => [room.id, Number(room.occupied)])),
-      [...new Set(unavailable.map((pair) => pair.blockId))],
+      [...new Set(unavailable.map((pair) => pair.shiftId))],
     ),
   });
 }

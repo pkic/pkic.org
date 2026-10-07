@@ -34,31 +34,31 @@ export function StaffingSetup({
   snapshot: AgendaSnapshot;
   onSaved: (value: AgendaSnapshot) => void;
   onClose: () => void;
-  kind: "block" | "person";
+  kind: "shift" | "person";
   editId?: string;
 }) {
   const focus = useEditorFocus();
-  const existingBlock = kind === "block" ? snapshot.blocks.find((item) => item.id === editId) : undefined;
+  const existingShift = kind === "shift" ? snapshot.shifts.find((item) => item.id === editId) : undefined;
   const existingPerson = kind === "person" ? snapshot.roleMembers.find((item) => item.userId === editId) : undefined;
-  const [compatible, setCompatible] = useState<Array<[string, string]>>(existingBlock?.compatibleRolePairs ?? []);
-  const [startBoundary, setStartBoundary] = useState(existingBlock?.boundaries?.startOccurrenceId ?? "");
-  const [endBoundary, setEndBoundary] = useState(existingBlock?.boundaries?.endOccurrenceId ?? "");
+  const [compatible, setCompatible] = useState<Array<[string, string]>>(existingShift?.compatibleRolePairs ?? []);
+  const [startBoundary, setStartBoundary] = useState(existingShift?.boundaries?.startOccurrenceId ?? "");
+  const [endBoundary, setEndBoundary] = useState(existingShift?.boundaries?.endOccurrenceId ?? "");
   const [seniority, setSeniority] = useState<"junior" | "senior">(existingPerson?.seniority ?? "junior");
   const [attendanceMode, setAttendanceMode] = useState<"physical" | "remote">(
     existingPerson?.attendanceMode ?? "physical",
   );
   const [maximum, setMaximum] = useState(existingPerson?.maxMinutes?.toString() ?? "");
-  const [name, setName] = useState(existingBlock?.name ?? "");
-  const [roles, setRoles] = useState((existingBlock?.roles ?? existingPerson?.roles)?.join(", ") ?? "");
+  const [name, setName] = useState(existingShift?.name ?? "");
+  const [roles, setRoles] = useState((existingShift?.roles ?? existingPerson?.roles)?.join(", ") ?? "");
   const [start, setStart] = useState(() => {
-    const value = existingBlock?.startAt ?? existingPerson?.availableFrom;
+    const value = existingShift?.startAt ?? existingPerson?.availableFrom;
     return value ? instantToDateTimeLocal(value, snapshot.timeZone) : "";
   });
   const [end, setEnd] = useState(() => {
-    const value = existingBlock?.endAt ?? existingPerson?.availableUntil;
+    const value = existingShift?.endAt ?? existingPerson?.availableUntil;
     return value ? instantToDateTimeLocal(value, snapshot.timeZone) : "";
   });
-  const [track, setTrack] = useState(existingBlock?.track ?? null);
+  const [track, setTrack] = useState(existingShift?.track ?? null);
   const trackCatalog = useMemo(
     () => ({
       endpoint: `/api/v1/events/${encodeURIComponent(snapshot.eventSlug)}/agenda/occurrences/filters`,
@@ -72,13 +72,13 @@ export function StaffingSetup({
     }),
     [snapshot.eventSlug],
   );
-  const [room, setRoom] = useState(existingBlock?.roomId ?? "");
+  const [room, setRoom] = useState(existingShift?.roomId ?? "");
   const [person, setPerson] = useState<PickedUser | null>(
     existingPerson ? { id: existingPerson.userId, email: "", firstName: existingPerson.displayName } : null,
   );
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  const [id] = useState(() => existingBlock?.id ?? crypto.randomUUID());
+  const [id] = useState(() => existingShift?.id ?? crypto.randomUUID());
   function instant(value: string) {
     try {
       return dateTimeLocalToIso(value, snapshot.timeZone);
@@ -86,19 +86,19 @@ export function StaffingSetup({
       return value;
     }
   }
-  const blockIndex = snapshot.blocks.filter((item) => item.id !== editId).length;
+  const shiftIndex = snapshot.shifts.filter((item) => item.id !== editId).length;
   const personIndex = snapshot.roleMembers.filter((item) => item.userId !== editId).length;
-  const prefix = kind === "block" ? `blocks.${blockIndex}` : `roleMembers.${personIndex}`;
+  const prefix = kind === "shift" ? `shifts.${shiftIndex}` : `roleMembers.${personIndex}`;
   const eligibleRoles = roles
     .split(",")
     .map((role) => role.trim())
     .filter(Boolean);
   const body = {
     expectedRevision: snapshot.revision,
-    blocks:
-      kind === "block"
+    shifts:
+      kind === "shift"
         ? [
-            ...snapshot.blocks.filter((item) => item.id !== editId),
+            ...snapshot.shifts.filter((item) => item.id !== editId),
             {
               id,
               name,
@@ -109,10 +109,10 @@ export function StaffingSetup({
               roles: eligibleRoles,
               compatibleRolePairs: compatible.filter((pair) => pair.every((role) => eligibleRoles.includes(role))),
               boundaries: { startOccurrenceId: startBoundary || null, endOccurrenceId: endBoundary || null },
-              roleRequirements: existingBlock?.roleRequirements ?? [],
+              roleRequirements: existingShift?.roleRequirements ?? [],
             },
           ]
-        : snapshot.blocks,
+        : snapshot.shifts,
     roleMembers:
       kind === "person"
         ? [
@@ -164,23 +164,23 @@ export function StaffingSetup({
       <PanelHeader
         title={
           editId
-            ? kind === "block"
-              ? "Edit staffing block"
+            ? kind === "shift"
+              ? "Edit staffing shift"
               : "Edit eligible person"
-            : kind === "block"
-              ? "New staffing block"
+            : kind === "shift"
+              ? "New staffing shift"
               : "Add eligible person"
         }
       />
       <PanelBody>
         {error && <ErrorAlert error={error} />}
         <form ref={focus} noValidate {...form.handlers} class="pk-stack" onSubmit={(event) => void save(event)}>
-          {kind === "block" ? (
-            <Field label="Block name" required {...form.of(`blocks.${blockIndex}.name`)}>
+          {kind === "shift" ? (
+            <Field label="Shift name" required {...form.of(`shifts.${shiftIndex}.name`)}>
               {(control) => (
                 <TextInput
                   {...control}
-                  name={`blocks.${blockIndex}.name`}
+                  name={`shifts.${shiftIndex}.name`}
                   value={name}
                   onInput={(event) => setName(event.currentTarget.value)}
                 />
@@ -225,8 +225,8 @@ export function StaffingSetup({
             </Field>
           )}
           <Field
-            label={kind === "block" ? "Block starts" : "Available from"}
-            {...form.of(`${prefix}.${kind === "block" ? "startAt" : "availableFrom"}`)}
+            label={kind === "shift" ? "Shift starts" : "Available from"}
+            {...form.of(`${prefix}.${kind === "shift" ? "startAt" : "availableFrom"}`)}
             help={`Times in ${snapshot.timeZone}`}
           >
             {(control) => (
@@ -240,8 +240,8 @@ export function StaffingSetup({
             )}
           </Field>
           <Field
-            label={kind === "block" ? "Block ends" : "Available until"}
-            {...form.of(`${prefix}.${kind === "block" ? "endAt" : "availableUntil"}`)}
+            label={kind === "shift" ? "Shift ends" : "Available until"}
+            {...form.of(`${prefix}.${kind === "shift" ? "endAt" : "availableUntil"}`)}
           >
             {(control) => (
               <TextInput
@@ -291,7 +291,7 @@ export function StaffingSetup({
               </Field>
             </div>
           )}
-          {kind === "block" && (
+          {kind === "shift" && (
             <>
               <Field label="Start after break or lunch" {...form.of(`${prefix}.boundaries.startOccurrenceId`)}>
                 {(control) => (
@@ -339,7 +339,7 @@ export function StaffingSetup({
               </Field>
               <Field
                 label="Compatible duties"
-                help="Only explicitly selected pairs can be assigned to one person in this same block. Each duty counts toward their workload."
+                help="Only explicitly selected pairs can be assigned to one person in this same shift. Each duty counts toward their workload."
                 {...form.of(`${prefix}.compatibleRolePairs`)}
                 group
               >
@@ -385,10 +385,10 @@ export function StaffingSetup({
               )}
             </Field>
           )}
-          {kind === "block" && (
+          {kind === "shift" && (
             <Field
               label="Track"
-              help="Limit this block to the chosen program track. When a location is also selected, both must match."
+              help="Limit this shift to the chosen program track. When a location is also selected, both must match."
               {...form.of(`${prefix}.track`)}
             >
               {(control) => (
@@ -404,7 +404,7 @@ export function StaffingSetup({
               )}
             </Field>
           )}
-          {kind === "block" && (
+          {kind === "shift" && (
             <Field label="Location" {...form.of(`${prefix}.roomId`)}>
               {(control) => (
                 <Select
@@ -424,7 +424,7 @@ export function StaffingSetup({
           <div class="pk-cluster pk-cluster--end">
             <Button onClick={onClose}>Cancel</Button>
             <Button type="submit" variant="primary" disabled={busy}>
-              Save {kind === "block" ? "block" : "person"}
+              Save {kind === "shift" ? "shift" : "person"}
             </Button>
           </div>
         </form>

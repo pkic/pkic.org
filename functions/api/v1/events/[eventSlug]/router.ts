@@ -99,7 +99,14 @@ import {
   SessionHoldsGet,
   SessionHoldDelete,
 } from "./participation";
-import { EventBadgeCreate, EventBadgeDelete, EventBadgeAttendeesGet, EventBadgesGet, EventBadgeGet } from "./badges";
+import {
+  EventBadgeCreate,
+  EventBadgeDelete,
+  EventBadgeAttendeesGet,
+  EventBadgesGet,
+  EventBadgeGet,
+  EventBadgePrint,
+} from "./badges";
 import { EventScanCreate, ScannerTargetsGet } from "./scans";
 import { ScannerSuggestionsGet } from "./scanner-suggestions";
 import {
@@ -240,6 +247,7 @@ openapi.get("/badges", EventBadgesGet);
 openapi.get("/badges/:badgeId", EventBadgeGet);
 openapi.post("/badges", EventBadgeCreate);
 openapi.delete("/badges/:badgeId", EventBadgeDelete);
+openapi.post("/badges/:badgeId/print", EventBadgePrint);
 openapi.get("/agenda/:occurrenceId/participation", SessionBookingsGet);
 openapi.get("/agenda/:occurrenceId/attendance", SessionAttendancePeopleGet);
 openapi.put("/agenda/:occurrenceId/participation", SessionParticipationPut);

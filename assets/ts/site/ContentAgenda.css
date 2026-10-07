@@ -765,26 +765,26 @@
     gap: var(--pk-3);
     margin-block: var(--pk-4);
   }
-  .pk-content-agenda__staffing-block {
+  .pk-content-agenda__staffing-shift {
     flex: 1 1 15rem;
     padding: var(--pk-3);
     border: 1px solid var(--pk-line);
     border-radius: var(--pk-radius);
     background: var(--pk-surface);
   }
-  .pk-content-agenda__staffing-block small {
+  .pk-content-agenda__staffing-shift small {
     display: block;
     color: var(--pk-muted);
   }
-  .pk-content-agenda__staffing-block ul {
+  .pk-content-agenda__staffing-shift ul {
     list-style: none;
     margin: var(--pk-2) 0 0;
     padding: 0;
   }
-  .pk-content-agenda__staffing-block li {
+  .pk-content-agenda__staffing-shift li {
     overflow-wrap: anywhere;
   }
-  .pk-content-agenda__staffing-block li span {
+  .pk-content-agenda__staffing-shift li span {
     font-weight: 600;
   }
 }

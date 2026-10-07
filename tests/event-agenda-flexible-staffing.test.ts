@@ -17,7 +17,7 @@ function body(expectedRevision = 0) {
   const requirements = [
     {
       id: "north-scanners",
-      blockId: "opening",
+      shiftId: "opening",
       roleId: "scanner",
       postId: "north-door",
       idealCount: 2,
@@ -25,17 +25,17 @@ function body(expectedRevision = 0) {
     },
     {
       id: "south-scanners",
-      blockId: "opening",
+      shiftId: "opening",
       roleId: "scanner",
       postId: "south-door",
       idealCount: 2,
       attendanceMode: "physical",
     },
-    { id: "opening-mc", blockId: "opening", roleId: "mc", postId: null, idealCount: 1, seniority: "senior" },
+    { id: "opening-mc", shiftId: "opening", roleId: "mc", postId: null, idealCount: 1, seniority: "senior" },
   ];
   return agendaStaffingSchema.parse({
     expectedRevision,
-    blocks: [
+    shifts: [
       {
         id: "opening",
         name: "Doors and opening",
@@ -71,7 +71,7 @@ function body(expectedRevision = 0) {
     assignments: [
       {
         positionId: "opening-mc-1",
-        blockId: "opening",
+        shiftId: "opening",
         role: "mc",
         postId: null,
         userId: people[0],
@@ -162,7 +162,7 @@ describe("Normalized staffing roles and multi-person posts", () => {
         ...allocated.assignments,
         {
           positionId: allocated.staffingReport!.uncovered[0].positionId,
-          blockId: "opening",
+          shiftId: "opening",
           role: "scanner",
           postId: allocated.staffingReport!.uncovered[0].postId,
           userId: people[4],

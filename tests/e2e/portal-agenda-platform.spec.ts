@@ -213,9 +213,9 @@ test("organizers build the shared agenda and browse a compact session table on d
   await page.getByRole("tab", { name: "Agenda", exact: true }).click();
   await expect(page.getByRole("button", { name: /Move selected session at/ }).first()).toBeVisible();
   await page.getByRole("button", { name: "Cancel selection", exact: true }).click();
-  await page.getByRole("tab", { name: "Block roles", exact: true }).click();
-  const blockRoles = page.getByRole("tabpanel", { name: "Block roles", exact: true });
-  const newBlock = blockRoles.getByRole("button", { name: "New block", exact: true });
+  await page.getByRole("tab", { name: "Shifts", exact: true }).click();
+  const blockRoles = page.getByRole("tabpanel", { name: "Shifts", exact: true });
+  const newBlock = blockRoles.getByRole("button", { name: "New shift", exact: true });
   await expect(newBlock).toBeVisible();
   await expect(newBlock).toBeEnabled();
   await page.keyboard.press("Escape");

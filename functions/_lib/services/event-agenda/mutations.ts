@@ -166,7 +166,7 @@ export async function createAgendaOccurrence(
 export function validateAgendaSchedule(
   snapshot: Pick<
     AgendaSnapshot,
-    "travelMinutes" | "rooms" | "eventStartsAt" | "eventEndsAt" | "blocks" | "assignments"
+    "travelMinutes" | "rooms" | "eventStartsAt" | "eventEndsAt" | "shifts" | "assignments"
   >,
   items: AgendaSnapshot["occurrences"],
   conflictProposal?: AgendaScheduleConflictProposal,
@@ -206,25 +206,25 @@ export function validateAgendaSchedule(
         conflicts.push(`${item.title}: session capacity exceeds room capacity`);
     }
   }
-  for (const block of snapshot.blocks) {
-    const room = snapshot.rooms.find((candidate) => candidate.id === block.roomId);
-    if (room && !agendaRoomIsAvailable(room, block.startAt, block.endAt, false))
-      conflicts.push(`${block.name}: ${room.name} is unavailable for this staffing block`);
+  for (const shift of snapshot.shifts) {
+    const room = snapshot.rooms.find((candidate) => candidate.id === shift.roomId);
+    if (room && !agendaRoomIsAvailable(room, shift.startAt, shift.endAt, false))
+      conflicts.push(`${shift.name}: ${room.name} is unavailable for this staffing shift`);
   }
   for (const assignment of snapshot.assignments) {
-    const block = snapshot.blocks.find((item) => item.id === assignment.blockId);
+    const shift = snapshot.shifts.find((item) => item.id === assignment.shiftId);
     if (
-      block &&
+      shift &&
       items.some(
         (item) =>
           item.startAt &&
           item.endAt &&
-          item.startAt < block.endAt &&
-          block.startAt < item.endAt &&
+          item.startAt < shift.endAt &&
+          shift.startAt < item.endAt &&
           item.speakers.some((speaker) => speaker.userId === assignment.userId),
       )
     )
-      conflicts.push("A speaker has an overlapping block duty");
+      conflicts.push("A speaker has an overlapping shift duty");
   }
   if (conflicts.length)
     throw new AppError(

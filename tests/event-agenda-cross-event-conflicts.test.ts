@@ -96,7 +96,7 @@ describe("canonical person availability across event agendas", () => {
           "staffing",
           staffingFixture({
             expectedRevision: 0,
-            blocks: [block],
+            shifts: [block],
             roleMembers: [member(person.id)],
             assignments: [],
           }),
@@ -121,7 +121,7 @@ describe("canonical person availability across event agendas", () => {
           "staffing",
           staffingFixture({
             expectedRevision: 2,
-            blocks: [block],
+            shifts: [block],
             roleMembers: [member(person.id), member(alternate)],
             assignments: [],
           }),
@@ -135,7 +135,7 @@ describe("canonical person availability across event agendas", () => {
     });
     expect(generated.status).toBe(200);
     expect(await generated.json()).toMatchObject({
-      assignments: [{ blockId: block.id, userId: alternate, role: "mc" }],
+      assignments: [{ shiftId: block.id, userId: alternate, role: "mc" }],
     });
   });
   it("rejects simultaneous saves across independent revisions atomically", async () => {
@@ -242,7 +242,7 @@ describe("canonical person availability across event agendas", () => {
       "staffing",
       staffingFixture({
         expectedRevision: 0,
-        blocks: [
+        shifts: [
           {
             id: "private-opening",
             name: "Opening",
@@ -262,12 +262,12 @@ describe("canonical person availability across event agendas", () => {
             maxMinutes: null,
           },
         ],
-        assignments: [{ blockId: "private-opening", role: "mc", userId: person.id, pinned: true }],
+        assignments: [{ shiftId: "private-opening", role: "mc", userId: person.id, pinned: true }],
       }),
     );
     expect(response.status).toBe(409);
     expect(await response.text()).toContain("AGENDA_SCHEDULE_CONFLICT");
-    expect(await queryAll(env.DB, "SELECT id FROM event_agenda_blocks WHERE event_id=?", otherId)).toEqual([]);
+    expect(await queryAll(env.DB, "SELECT id FROM event_agenda_shifts WHERE event_id=?", otherId)).toEqual([]);
     expect(await queryAll(env.DB, "SELECT event_id FROM event_agenda_state WHERE event_id=?", otherId)).toEqual([]);
   });
 

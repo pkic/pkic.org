@@ -34,7 +34,7 @@ test("organizers configure two doors and generate an advisory staffing plan", as
   expect(created.status()).toBe(201);
   groupEventDetailResponseSchema.parse(await created.json());
   await page.goto(`/portal/#/events/${slug}/agenda`);
-  await page.getByRole("tab", { name: "Block roles", exact: true }).click();
+  await page.getByRole("tab", { name: "Shift roles", exact: true }).click();
   await page.getByRole("button", { name: "Actions for Event staffing", exact: true }).click();
   await page.getByRole("menuitem", { name: "Roles and posts", exact: true }).click();
   await page.getByRole("button", { name: "Add role", exact: true }).click();
@@ -46,13 +46,13 @@ test("organizers configure two doors and generate an advisory staffing plan", as
   }
   await page.getByRole("button", { name: "Save roles and posts", exact: true }).click();
   await expect(page.getByRole("heading", { name: "Event roles and posts", exact: true })).toHaveCount(0);
-  await page.getByRole("button", { name: "New block", exact: true }).click();
-  await page.getByLabel(/^Block name/).fill("Morning arrivals");
-  await page.getByLabel(/^Block starts/).fill("2026-12-01T09:00");
-  await page.getByLabel(/^Block ends/).fill("2026-12-01T10:00");
-  await page.getByRole("button", { name: "Save block", exact: true }).click();
+  await page.getByRole("button", { name: "New shift", exact: true }).click();
+  await page.getByLabel(/^Shift name/).fill("Morning arrivals");
+  await page.getByLabel(/^Shift starts/).fill("2026-12-01T09:00");
+  await page.getByLabel(/^Shift ends/).fill("2026-12-01T10:00");
+  await page.getByRole("button", { name: "Save shift", exact: true }).click();
   const blockRow = page
-    .getByRole("table", { name: "Staffing blocks", exact: true })
+    .getByRole("table", { name: "Staffing shifts", exact: true })
     .getByRole("row")
     .filter({ hasText: "Morning arrivals" });
   await runRowAction(page, blockRow, "Staffing needs");
@@ -67,7 +67,7 @@ test("organizers configure two doors and generate an advisory staffing plan", as
   async function reviewNeeds() {
     await expect(blockRow.getByRole("cell", { name: "4 unfilled", exact: true })).toBeVisible();
     await runRowAction(page, blockRow, "Review staffing");
-    const needs = page.getByRole("table", { name: "Block staffing needs", exact: true });
+    const needs = page.getByRole("table", { name: "Shift staffing needs", exact: true });
     await expect(needs.getByRole("row")).toHaveCount(3);
     for (const door of ["North entrance", "South entrance"]) {
       const row = needs.getByRole("row").filter({ hasText: door });
@@ -84,8 +84,8 @@ test("organizers configure two doors and generate an advisory staffing plan", as
   const read = async () =>
     agendaSnapshotSchema.parse(await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json());
   const before = await read();
-  const block = before.blocks.find((row) => row.name === "Morning arrivals")!;
-  const requirements = before.staffingRequirements.filter((row) => row.blockId === block.id);
+  const shift = before.shifts.find((row) => row.name === "Morning arrivals")!;
+  const requirements = before.staffingRequirements.filter((row) => row.shiftId === shift.id);
   expect(requirements).toHaveLength(2);
   expect(
     before.staffingPositions.filter((row) => requirements.some((need) => need.id === row.requirementId)),
@@ -98,7 +98,7 @@ test("organizers configure two doors and generate an advisory staffing plan", as
   const after = await read();
   expect(after.staffingPositions).toEqual(before.staffingPositions);
   expect(after.roleMembers).toEqual(before.roleMembers);
-  expect(after.assignments.filter((row) => row.blockId === block.id)).toHaveLength(0);
+  expect(after.assignments.filter((row) => row.shiftId === shift.id)).toHaveLength(0);
   await reviewNeeds();
   await page.screenshot({ path: `${artifacts}/staffing-two-doors-desktop.png`, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });

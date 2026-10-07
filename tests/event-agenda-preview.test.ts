@@ -294,7 +294,7 @@ describe("authenticated public agenda preview", () => {
     expect(preview).toMatchObject({
       revision,
       publishedRevision: null,
-      blocks: [],
+      shifts: [],
       assignments: [],
       roleMembers: [],
       staffingPositions: [],

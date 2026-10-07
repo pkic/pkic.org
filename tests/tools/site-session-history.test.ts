@@ -42,7 +42,7 @@ const agenda = (eventSlug: string, organization: string) =>
     revision: 1,
     publishedRevision: 1,
     rooms: [],
-    blocks: [],
+    shifts: [],
     roleMembers: [],
     assignments: [],
     occurrences: [

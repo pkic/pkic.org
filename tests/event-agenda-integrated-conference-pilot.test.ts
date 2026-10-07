@@ -199,7 +199,7 @@ it("joins portable parallel/multi-day import, edit, pinned staffing, publication
     agendaSnapshotSchema,
     staffingFixture({
       expectedRevision: state.revision,
-      blocks: [block, secondBlock],
+      shifts: [block, secondBlock],
       roleMembers: [
         {
           userId: pilot.operatorId,
@@ -218,7 +218,7 @@ it("joins portable parallel/multi-day import, edit, pinned staffing, publication
           maxMinutes: 60,
         },
       ],
-      assignments: [{ blockId: block.id, role: "mc", userId: pilot.operatorId, pinned: true }],
+      assignments: [{ shiftId: block.id, role: "mc", userId: pilot.operatorId, pinned: true }],
     }),
   );
   const pinned = state.assignments[0]!;
@@ -228,7 +228,7 @@ it("joins portable parallel/multi-day import, edit, pinned staffing, publication
     agendaAllocationSchema.parse({ expectedRevision: state.revision, seed: "parallel-pilot", strategy: "balanced" }),
   );
   expect(state.assignments).toContainEqual(pinned);
-  expect(state.assignments.find((assignment) => assignment.blockId === secondBlock.id)?.userId).toBe(
+  expect(state.assignments.find((assignment) => assignment.shiftId === secondBlock.id)?.userId).toBe(
     pilot.person.userId,
   );
   state = await pilot.api(

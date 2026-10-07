@@ -1,4 +1,4 @@
-import { agendaStaffingBlockAppliesToOccurrence } from "../../../../assets/shared/event-agenda-staffing-scope";
+import { agendaStaffingShiftAppliesToOccurrence } from "../../../../assets/shared/event-agenda-staffing-scope";
 import type { AgendaSnapshot } from "../../../../assets/shared/schemas/event-agenda";
 import { agendaOccurrenceRoomIds } from "../../../../assets/shared/event-agenda-rooms";
 import { AppError } from "../../errors";
@@ -61,15 +61,15 @@ export function operationalPeople(snapshot: AgendaSnapshot): OperationalPerson[]
           speaker.roomId,
           `credit:${speaker.role ?? "speaker"}`,
         );
-    for (const block of snapshot.blocks) {
-      if (!agendaStaffingBlockAppliesToOccurrence(block, session)) continue;
+    for (const shift of snapshot.shifts) {
+      if (!agendaStaffingShiftAppliesToOccurrence(shift, session)) continue;
 
-      for (const assignment of snapshot.assignments.filter((item) => item.blockId === block.id)) {
+      for (const assignment of snapshot.assignments.filter((item) => item.shiftId === shift.id)) {
         const member = snapshot.roleMembers.find((item) => item.userId === assignment.userId);
         if (!member)
           throw new AppError(409, "AGENDA_STAFF_MEMBER_MISSING", "An assigned staff member has no attendance mode.");
         const post = snapshot.staffingPosts.find((candidate) => candidate.id === assignment.postId);
-        const roomId = post ? post.roomId : block.roomId;
+        const roomId = post ? post.roomId : shift.roomId;
         if (roomId && !rooms.includes(roomId)) continue;
         add(member.userId, member.attendanceMode, roomId, `position:${assignment.positionId}:${assignment.role}`);
       }

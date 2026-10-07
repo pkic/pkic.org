@@ -86,6 +86,7 @@ import {
   GroupEventRegistrationDetailGet,
   GroupEventRegistrationsList,
 } from "./[groupId]/events/[eventId]/registrations";
+import { GroupEventBadgePrintPopulation } from "./[groupId]/events/[eventId]/registrations/badges";
 import { GroupEventRegistrationConfigGet } from "./[groupId]/events/[eventId]/registration-config";
 import { GroupEventDaysGet, GroupEventDaysPut } from "./[groupId]/events/[eventId]/days";
 import { GroupEventTermsGet, GroupEventTermsPut } from "./[groupId]/events/[eventId]/terms";
@@ -182,6 +183,7 @@ openapi.patch("/:groupId/events/:eventId/settings", GroupEventSettingsPatch);
 registerGroupEventEmailCampaignRoutes(openapi);
 openapi.get("/:groupId/events/:eventId/proposals", GroupEventProposalsList);
 openapi.get("/:groupId/events/:eventId/registrations", GroupEventRegistrationsList);
+openapi.get("/:groupId/events/:eventId/registrations/badges/population", GroupEventBadgePrintPopulation);
 openapi.post("/:groupId/events/:eventId/registrations/promotions", GroupEventRegistrationPromotionsCreate);
 openapi.get("/:groupId/events/:eventId/registrations/exports", GroupEventRegistrationExportGet);
 openapi.get("/:groupId/events/:eventId/registrations/:registrationId", GroupEventRegistrationDetailGet);

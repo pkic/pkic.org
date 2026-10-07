@@ -1,22 +1,22 @@
 import { agendaStaffingTrackLocationConflict } from "./event-agenda-staffing-scope";
 import { agendaSpeakerPhysicalRoom } from "./event-agenda-rooms";
-import type { AgendaAssignment, AgendaBlock, AgendaRoleMember, AgendaOccurrence } from "./schemas/event-agenda";
+import type { AgendaAssignment, AgendaShift, AgendaRoleMember, AgendaOccurrence } from "./schemas/event-agenda";
 import { agendaDutyIntervalsConflict } from "./event-agenda-intervals";
 export const agendaStaffingReasonLabels = {
   role: "Role is outside this person's eligible roles",
   experience: "Senior experience is required",
   attendance: "Attendance mode does not match",
-  availability: "Person is unavailable for the complete block",
+  availability: "Person is unavailable for the complete shift",
   workload: "Maximum duty minutes would be exceeded",
   conflict: "Another duty or talk conflicts, including travel",
   external_conflict: "A duty or talk in another event conflicts",
 } as const;
-export function agendaDutiesCompatible(block: AgendaBlock, firstRole: string, other: AgendaBlock, secondRole: string) {
+export function agendaDutiesCompatible(shift: AgendaShift, firstRole: string, other: AgendaShift, secondRole: string) {
   return (
-    block.id === other.id &&
+    shift.id === other.id &&
     firstRole !== secondRole &&
     Boolean(
-      block.compatibleRolePairs?.some(
+      shift.compatibleRolePairs?.some(
         ([a, b]) => (a === firstRole && b === secondRole) || (b === firstRole && a === secondRole),
       ),
     )
@@ -24,43 +24,43 @@ export function agendaDutiesCompatible(block: AgendaBlock, firstRole: string, ot
 }
 export function agendaStaffingEligibility(
   member: AgendaRoleMember,
-  block: AgendaBlock,
+  shift: AgendaShift,
   role: string,
-  blocks: AgendaBlock[],
+  shifts: AgendaShift[],
   assignments: Omit<AgendaAssignment, "positionId" | "postId">[],
   occurrences: AgendaOccurrence[],
   travelMinutes = 0,
   unavailablePairs: ReadonlySet<string> = new Set(),
   compatible: typeof agendaDutiesCompatible = agendaDutiesCompatible,
-  authoredScope: AgendaBlock = block,
+  authoredScope: AgendaShift = shift,
 ) {
   const reasons: Array<keyof typeof agendaStaffingReasonLabels> = [];
   if (!member.roles.includes(role)) reasons.push("role");
-  const requirement = block.roleRequirements.find((item) => item.role === role);
+  const requirement = shift.roleRequirements.find((item) => item.role === role);
   if (requirement?.seniority === "senior" && member.seniority !== "senior") reasons.push("experience");
   if (requirement && requirement.attendanceMode !== "any" && requirement.attendanceMode !== member.attendanceMode)
     reasons.push("attendance");
   if (
-    (member.availableFrom && member.availableFrom > block.startAt) ||
-    (member.availableUntil && member.availableUntil < block.endAt)
+    (member.availableFrom && member.availableFrom > shift.startAt) ||
+    (member.availableUntil && member.availableUntil < shift.endAt)
   )
     reasons.push("availability");
   const assigned = assignments.filter((item) => item.userId === member.userId);
   const minutes = assigned.reduce(
-    (total, item) => total + agendaBlockMinutes(blocks.find((b) => b.id === item.blockId)),
+    (total, item) => total + agendaShiftMinutes(shifts.find((b) => b.id === item.shiftId)),
     0,
   );
-  if (member.maxMinutes !== null && minutes + agendaBlockMinutes(block) > member.maxMinutes) reasons.push("workload");
-  if (unavailablePairs.has(JSON.stringify([block.id, member.userId]))) reasons.push("external_conflict");
+  if (member.maxMinutes !== null && minutes + agendaShiftMinutes(shift) > member.maxMinutes) reasons.push("workload");
+  if (unavailablePairs.has(JSON.stringify([shift.id, member.userId]))) reasons.push("external_conflict");
   if (
     (member.attendanceMode === "physical" &&
-      agendaStaffingTrackLocationConflict(block, occurrences, travelMinutes, authoredScope)) ||
+      agendaStaffingTrackLocationConflict(shift, occurrences, travelMinutes, authoredScope)) ||
     assigned.some((item) => {
-      const other = blocks.find((b) => b.id === item.blockId);
+      const other = shifts.find((b) => b.id === item.shiftId);
       return (
         other &&
-        !compatible(block, role, other, item.role) &&
-        agendaDutyIntervalsConflict(block, other, member.attendanceMode === "remote" ? 0 : travelMinutes)
+        !compatible(shift, role, other, item.role) &&
+        agendaDutyIntervalsConflict(shift, other, member.attendanceMode === "remote" ? 0 : travelMinutes)
       );
     }) ||
     occurrences.some(
@@ -71,7 +71,7 @@ export function agendaStaffingEligibility(
           (speaker) =>
             speaker.userId === member.userId &&
             agendaDutyIntervalsConflict(
-              block,
+              shift,
               { startAt: item.startAt!, endAt: item.endAt!, roomId: agendaSpeakerPhysicalRoom(item, speaker) },
               speaker.attendanceMode === "remote" || member.attendanceMode === "remote" ? 0 : travelMinutes,
             ),
@@ -81,6 +81,6 @@ export function agendaStaffingEligibility(
     reasons.push("conflict");
   return reasons;
 }
-export function agendaBlockMinutes(block?: AgendaBlock) {
-  return block ? (Date.parse(block.endAt) - Date.parse(block.startAt)) / 60000 : 0;
+export function agendaShiftMinutes(shift?: AgendaShift) {
+  return shift ? (Date.parse(shift.endAt) - Date.parse(shift.startAt)) / 60000 : 0;
 }

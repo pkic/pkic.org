@@ -12,7 +12,7 @@ const snapshot = agendaSnapshotSchema.parse({
   revision: 7,
   publishedRevision: 6,
   rooms: [{ id: "room", name: "Main hall", capacity: 80 }],
-  blocks: [],
+  shifts: [],
   roleMembers: [],
   assignments: [],
   occurrences: [

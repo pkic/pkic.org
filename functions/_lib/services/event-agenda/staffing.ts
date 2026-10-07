@@ -22,58 +22,65 @@ export async function saveAgendaStaffing(
   generation?: {
     seed: string;
     strategy: "balanced" | "random";
-    selectedBlockIds?: string[];
-    unavailablePairs?: Array<{ blockId: string; userId: string }>;
+    selectedShiftIds?: string[];
+    unavailablePairs?: Array<{ shiftId: string; userId: string }>;
     uncovered?: ReturnType<typeof allocateAgendaStaffingPositions>["uncovered"];
   },
 ) {
+  const validated = agendaStaffingSchema.safeParse(input);
+  if (!validated.success) {
+    const fieldErrors: Record<string, string[]> = {};
+    for (const issue of validated.error.issues) (fieldErrors[issue.path.join(".")] ??= []).push(issue.message);
+    throw new AppError(400, "VALIDATION_ERROR", "Check the staffing fields", { fieldErrors });
+  }
+  input = validated.data;
   const snapshot = await getAgenda(db, eventId, eventSlug);
   input = {
     ...input,
-    blocks: input.blocks.map((block) => ({
-      ...block,
+    shifts: input.shifts.map((shift) => ({
+      ...shift,
       roles: [
         ...new Set(
           input.staffingRequirements
-            .filter((requirement) => requirement.blockId === block.id)
+            .filter((requirement) => requirement.shiftId === shift.id)
             .map((requirement) => requirement.roleId),
         ),
       ],
       roleRequirements: [],
     })),
   };
-  for (const block of input.blocks) {
-    const room = snapshot.rooms.find((candidate) => candidate.id === block.roomId);
-    if (room && !agendaRoomIsAvailable(room, block.startAt, block.endAt, false))
-      throw new AppError(409, "AGENDA_ROOM_UNAVAILABLE", "Location is unavailable for this staffing block");
-    if (block.endAt <= block.startAt) throw new AppError(422, "AGENDA_BLOCK_TIME", "Block end must follow start");
+  for (const shift of input.shifts) {
+    const room = snapshot.rooms.find((candidate) => candidate.id === shift.roomId);
+    if (room && !agendaRoomIsAvailable(room, shift.startAt, shift.endAt, false))
+      throw new AppError(409, "AGENDA_ROOM_UNAVAILABLE", "Location is unavailable for this staffing shift");
+    if (shift.endAt <= shift.startAt) throw new AppError(422, "AGENDA_SHIFT_TIME", "Shift end must follow start");
     if (
-      (snapshot.eventStartsAt && block.startAt < snapshot.eventStartsAt) ||
-      (snapshot.eventEndsAt && block.endAt > snapshot.eventEndsAt)
+      (snapshot.eventStartsAt && shift.startAt < snapshot.eventStartsAt) ||
+      (snapshot.eventEndsAt && shift.endAt > snapshot.eventEndsAt)
     )
-      throw new AppError(422, "AGENDA_BLOCK_EVENT_BOUNDS", "Staffing block must fit within the event dates");
+      throw new AppError(422, "AGENDA_SHIFT_EVENT_BOUNDS", "Staffing shift must fit within the event dates");
     if (
-      (block.compatibleRolePairs ?? []).some(
-        ([first, second]) => first === second || !block.roles.includes(first) || !block.roles.includes(second),
+      (shift.compatibleRolePairs ?? []).some(
+        ([first, second]) => first === second || !shift.roles.includes(first) || !shift.roles.includes(second),
       )
     )
       throw new AppError(
         422,
         "AGENDA_ROLE_COMPATIBILITY",
-        "Compatible duties must be distinct roles in the same block",
+        "Compatible duties must be distinct roles in the same shift",
       );
-    for (const occurrenceId of [block.boundaries?.startOccurrenceId, block.boundaries?.endOccurrenceId])
+    for (const occurrenceId of [shift.boundaries?.startOccurrenceId, shift.boundaries?.endOccurrenceId])
       if (
         occurrenceId &&
         !snapshot.occurrences.some((occurrence) => occurrence.id === occurrenceId && occurrence.kind === "break")
       )
-        throw new AppError(422, "AGENDA_BLOCK_BOUNDARY", "Block boundaries must refer to breaks in this event");
-    if (block.roleRequirements.some((requirement) => !block.roles.includes(requirement.role)))
-      throw new AppError(422, "AGENDA_BLOCK_ROLE_REQUIREMENT", "Role requirements must refer to roles in this block");
-    if (block.roomId && !snapshot.rooms.some((room) => room.id === block.roomId))
-      throw new AppError(422, "AGENDA_BLOCK_ROOM", "Block room is outside this event");
-    if (block.track && !snapshot.occurrences.some((occurrence) => occurrence.track === block.track))
-      throw new AppError(422, "AGENDA_BLOCK_TRACK", "Choose an authored track in this event");
+        throw new AppError(422, "AGENDA_SHIFT_BOUNDARY", "Shift boundaries must refer to breaks in this event");
+    if (shift.roleRequirements.some((requirement) => !shift.roles.includes(requirement.role)))
+      throw new AppError(422, "AGENDA_SHIFT_ROLE_REQUIREMENT", "Role requirements must refer to roles in this shift");
+    if (shift.roomId && !snapshot.rooms.some((room) => room.id === shift.roomId))
+      throw new AppError(422, "AGENDA_SHIFT_ROOM", "Shift room is outside this event");
+    if (shift.track && !snapshot.occurrences.some((occurrence) => occurrence.track === shift.track))
+      throw new AppError(422, "AGENDA_SHIFT_TRACK", "Choose an authored track in this event");
   }
   const plan = agendaStaffingPositionPlanSchema.parse({
     roles: input.staffingRoles,
@@ -83,25 +90,25 @@ export async function saveAgendaStaffing(
     assignments: input.assignments,
   });
   if (
-    plan.requirements.some((requirement) => !input.blocks.some((block) => block.id === requirement.blockId)) ||
+    plan.requirements.some((requirement) => !input.shifts.some((shift) => shift.id === requirement.shiftId)) ||
     plan.posts.some((post) => post.roomId && !snapshot.rooms.some((room) => room.id === post.roomId)) ||
     input.roleMembers.some((member) =>
       member.roles.some((role) => !plan.roles.some((candidate) => candidate.id === role)),
     )
   )
-    throw new AppError(422, "AGENDA_STAFFING_SCOPE", "Choose roles, posts and blocks within this event");
+    throw new AppError(422, "AGENDA_STAFFING_SCOPE", "Choose roles, posts and shifts within this event");
   for (const requirement of plan.requirements) {
-    const block = input.blocks.find((candidate) => candidate.id === requirement.blockId)!;
+    const shift = input.shifts.find((candidate) => candidate.id === requirement.shiftId)!;
     const post = plan.posts.find((candidate) => candidate.id === requirement.postId);
-    const room = snapshot.rooms.find((candidate) => candidate.id === (post ? post.roomId : block.roomId));
-    if (room && !agendaRoomIsAvailable(room, block.startAt, block.endAt, false))
-      throw new AppError(409, "AGENDA_ROOM_UNAVAILABLE", "Staffing post location is unavailable for this block");
+    const room = snapshot.rooms.find((candidate) => candidate.id === (post ? post.roomId : shift.roomId));
+    if (room && !agendaRoomIsAvailable(room, shift.startAt, shift.endAt, false))
+      throw new AppError(409, "AGENDA_ROOM_UNAVAILABLE", "Staffing post location is unavailable for this shift");
   }
   if (plan.assignments.some((assignment) => !input.roleMembers.some((member) => member.userId === assignment.userId)))
     throw new AppError(422, "AGENDA_ASSIGNMENT_INELIGIBLE", "Choose a person from the staffing roster");
   const invalid = validateAgendaStaffingPositionAssignments({
     ...plan,
-    blocks: input.blocks,
+    shifts: input.shifts,
     members: input.roleMembers,
     occurrences: snapshot.occurrences,
     travelMinutes: snapshot.travelMinutes,
@@ -122,34 +129,34 @@ export async function saveAgendaStaffing(
   const statements = [
     db
       .prepare(
-        "DELETE FROM event_agenda_assignments WHERE block_id IN(SELECT id FROM event_agenda_blocks WHERE event_id=?)",
+        "DELETE FROM event_agenda_assignments WHERE shift_id IN(SELECT id FROM event_agenda_shifts WHERE event_id=?)",
       )
       .bind(eventId),
     db.prepare("DELETE FROM event_agenda_staffing_positions WHERE event_id=?").bind(eventId),
     db.prepare("DELETE FROM event_agenda_staffing_requirements WHERE event_id=?").bind(eventId),
     db.prepare("DELETE FROM event_agenda_staffing_posts WHERE event_id=?").bind(eventId),
     db.prepare("DELETE FROM event_agenda_staffing_roles WHERE event_id=?").bind(eventId),
-    db.prepare("DELETE FROM event_agenda_blocks WHERE event_id=?").bind(eventId),
+    db.prepare("DELETE FROM event_agenda_shifts WHERE event_id=?").bind(eventId),
     db.prepare("DELETE FROM event_agenda_role_members WHERE event_id=?").bind(eventId),
   ];
   statements.push(
-    ...input.blocks.map((block) =>
+    ...input.shifts.map((shift) =>
       db
         .prepare(
-          "INSERT INTO event_agenda_blocks(id,event_id,name,start_at,end_at,room_id,track,roles_json,role_requirements_json,compatible_roles_json,boundaries_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
+          "INSERT INTO event_agenda_shifts(id,event_id,name,start_at,end_at,room_id,track,roles_json,role_requirements_json,compatible_roles_json,boundaries_json) VALUES(?,?,?,?,?,?,?,?,?,?,?)",
         )
         .bind(
-          block.id,
+          shift.id,
           eventId,
-          block.name,
-          block.startAt,
-          block.endAt,
-          block.roomId,
-          block.track ?? null,
-          JSON.stringify(block.roles),
-          JSON.stringify(block.roleRequirements),
-          JSON.stringify(block.compatibleRolePairs ?? []),
-          JSON.stringify(block.boundaries ?? {}),
+          shift.name,
+          shift.startAt,
+          shift.endAt,
+          shift.roomId,
+          shift.track ?? null,
+          JSON.stringify(shift.roles),
+          JSON.stringify(shift.roleRequirements),
+          JSON.stringify(shift.compatibleRolePairs ?? []),
+          JSON.stringify(shift.boundaries ?? {}),
         ),
     ),
   );
@@ -185,12 +192,12 @@ export async function saveAgendaStaffing(
     ...plan.requirements.map((requirement) =>
       db
         .prepare(
-          "INSERT INTO event_agenda_staffing_requirements(event_id,id,block_id,role_id,post_id,ideal_count,seniority,attendance_mode) VALUES(?,?,?,?,?,?,?,?)",
+          "INSERT INTO event_agenda_staffing_requirements(event_id,id,shift_id,role_id,post_id,ideal_count,seniority,attendance_mode) VALUES(?,?,?,?,?,?,?,?)",
         )
         .bind(
           eventId,
           requirement.id,
-          requirement.blockId,
+          requirement.shiftId,
           requirement.roleId,
           requirement.postId,
           requirement.idealCount,
@@ -210,12 +217,12 @@ export async function saveAgendaStaffing(
     ...input.assignments.map((assignment) =>
       db
         .prepare(
-          "INSERT INTO event_agenda_assignments(event_id,position_id,block_id,role,post_id,user_id,pinned,origin) VALUES(?,?,?,?,?,?,?,?)",
+          "INSERT INTO event_agenda_assignments(event_id,position_id,shift_id,role,post_id,user_id,pinned,origin) VALUES(?,?,?,?,?,?,?,?)",
         )
         .bind(
           eventId,
           assignment.positionId,
-          assignment.blockId,
+          assignment.shiftId,
           assignment.role,
           assignment.postId,
           assignment.userId,
@@ -243,7 +250,7 @@ export async function saveAgendaStaffing(
           fromRevision: input.expectedRevision,
           toRevision: input.expectedRevision + 1,
           travelMinutes: snapshot.travelMinutes,
-          blocks: input.blocks.map(
+          shifts: input.shifts.map(
             ({ id, startAt, endAt, roomId, track, roles, roleRequirements, compatibleRolePairs, boundaries }) => ({
               id,
               startAt,
@@ -280,7 +287,34 @@ export async function saveAgendaStaffing(
         },
       ),
     );
-  await commitAgendaRevision(db, eventId, input.expectedRevision, statements, actorUserId);
+  try {
+    await commitAgendaRevision(db, eventId, input.expectedRevision, statements, actorUserId);
+  } catch (error) {
+    const constraint =
+      error instanceof Error &&
+      /UNIQUE constraint failed: (event_agenda_staffing_(roles|posts))\.event_id, \1\.name(?:\s|:|$)/.exec(
+        error.message,
+      );
+    if (!constraint) throw error;
+    const field = constraint[2] === "roles" ? "staffingRoles" : "staffingPosts";
+    const conflicts = await db
+      .prepare(
+        `SELECT incoming.key AS row_index FROM json_each(?) incoming
+       JOIN ${constraint[1]} stored ON stored.event_id=?
+       AND stored.name=json_extract(incoming.value,'$.name')
+       AND stored.id<>json_extract(incoming.value,'$.id')`,
+      )
+      .bind(JSON.stringify(input[field]), eventId)
+      .all<{ row_index: number }>();
+    const message = `Choose a unique ${field === "staffingRoles" ? "role" : "post"} name within this event`;
+    const fieldErrors = Object.fromEntries(
+      (conflicts.results ?? []).map(({ row_index }) => [`${field}.${row_index}.name`, [message]]),
+    );
+    throw new AppError(409, "AGENDA_STAFFING_NAME_CONFLICT", message, {
+      fieldErrors,
+      formErrors: Object.keys(fieldErrors).length ? [] : [message],
+    });
+  }
   return getAgenda(db, eventId, eventSlug);
 }
 export async function allocateStaffing(
@@ -291,36 +325,36 @@ export async function allocateStaffing(
   seed: string,
   strategy: "balanced" | "random",
   actorUserId: string | null = null,
-  selectedBlockIds?: string[],
+  selectedShiftIds?: string[],
 ) {
   const snapshot = await getAgenda(db, eventId, eventSlug);
-  const selected = selectedBlockIds ? new Set(selectedBlockIds) : null;
+  const selected = selectedShiftIds ? new Set(selectedShiftIds) : null;
   if (
     selected &&
-    (selected.size === 0 || [...selected].some((id) => !snapshot.blocks.some((block) => block.id === id)))
+    (selected.size === 0 || [...selected].some((id) => !snapshot.shifts.some((shift) => shift.id === id)))
   )
-    throw new AppError(400, "AGENDA_ALLOCATION_BLOCK_UNKNOWN", "Choose existing staffing blocks");
-  const preserved = snapshot.assignments.filter((assignment) => selected && !selected.has(assignment.blockId));
+    throw new AppError(400, "AGENDA_ALLOCATION_SHIFT_UNKNOWN", "Choose existing staffing shifts");
+  const preserved = snapshot.assignments.filter((assignment) => selected && !selected.has(assignment.shiftId));
   const unavailablePairs = await getStaffingUnavailablePairs(db, eventId, snapshot);
   const result = allocateAgendaStaffingPositions({
     roles: snapshot.staffingRoles,
     posts: snapshot.staffingPosts,
     requirements: snapshot.staffingRequirements,
     positions: snapshot.staffingPositions,
-    blocks: snapshot.blocks,
+    shifts: snapshot.shifts,
     members: snapshot.roleMembers,
     occurrences: snapshot.occurrences,
     assignments: [
       ...snapshot.assignments.filter(
-        (assignment) => assignment.pinned && (!selected || selected.has(assignment.blockId)),
+        (assignment) => assignment.pinned && (!selected || selected.has(assignment.shiftId)),
       ),
       ...preserved.map((assignment) => ({ ...assignment, pinned: true })),
     ],
     seed,
     strategy,
-    selectedBlockIds: selected ?? undefined,
+    selectedShiftIds: selected ?? undefined,
     travelMinutes: snapshot.travelMinutes,
-    unavailablePairs: new Set(unavailablePairs.map(({ blockId, userId }) => JSON.stringify([blockId, userId]))),
+    unavailablePairs: new Set(unavailablePairs.map(({ shiftId, userId }) => JSON.stringify([shiftId, userId]))),
   });
   return saveAgendaStaffing(
     db,
@@ -328,7 +362,7 @@ export async function allocateStaffing(
     eventSlug,
     {
       expectedRevision: revision,
-      blocks: snapshot.blocks,
+      shifts: snapshot.shifts,
       roleMembers: snapshot.roleMembers,
       staffingRoles: snapshot.staffingRoles,
       staffingPosts: snapshot.staffingPosts,
@@ -339,6 +373,6 @@ export async function allocateStaffing(
       ),
     },
     actorUserId,
-    { seed, strategy, selectedBlockIds, unavailablePairs, uncovered: result.uncovered },
+    { seed, strategy, selectedShiftIds, unavailablePairs, uncovered: result.uncovered },
   );
 }

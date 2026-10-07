@@ -300,7 +300,7 @@ async function approvedActivationAgenda(standaloneStaff = false) {
       "/staffing",
       staffingFixture({
         expectedRevision: revision,
-        blocks: [
+        shifts: [
           {
             id: "operations",
             name: "Operations duty",
@@ -320,7 +320,7 @@ async function approvedActivationAgenda(standaloneStaff = false) {
             maxMinutes: null,
           },
         ],
-        assignments: [{ blockId: "operations", role: "operator", userId: staff, pinned: true }],
+        assignments: [{ shiftId: "operations", role: "operator", userId: staff, pinned: true }],
       }),
     );
     approved = await command("/publications", { expectedRevision: revision });

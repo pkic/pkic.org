@@ -5,10 +5,13 @@ import {
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { all, first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
+/** Eligibility shared by attendee selection and the all-matching print population. */
+export function badgeAttendeeEligibilitySql(registrationAlias: string, userAlias: string): string {
+  return `${registrationAlias}.status='registered' AND ${userAlias}.active=1`;
+}
 export async function badgeAttendees(db: DatabaseLike, eventId: string, raw: unknown) {
   const query = badgeAttendeeQuerySchema.parse(raw);
-  const from =
-    "FROM registrations reg JOIN users u ON u.id=reg.user_id WHERE reg.event_id=? AND reg.status='registered' AND u.active=1 AND INSTR(LOWER(COALESCE(u.email,'')||' '||COALESCE(u.first_name,'')||' '||COALESCE(u.last_name,'')),LOWER(?))>0";
+  const from = `FROM registrations reg JOIN users u ON u.id=reg.user_id WHERE reg.event_id=? AND ${badgeAttendeeEligibilitySql("reg", "u")} AND INSTR(LOWER(COALESCE(u.email,'')||' '||COALESCE(u.first_name,'')||' '||COALESCE(u.last_name,'')),LOWER(?))>0`;
   const bindings = [eventId, query.q ?? ""];
   const count = await first<{ total: number }>(db, `SELECT COUNT(*) AS total ${from}`, bindings);
   const users = await all(

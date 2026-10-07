@@ -1,3 +1,4 @@
+import { storedAgendaSnapshotSchema } from "../../../../assets/shared/schemas/event-agenda-stored";
 import { agendaSnapshotSchema, type AgendaSnapshot } from "../../../../assets/shared/schemas/event-agenda";
 import type { DatabaseLike } from "../../types";
 import { first } from "../../db/queries";
@@ -24,7 +25,7 @@ export async function previewAgenda(
     );
     if (!frozen)
       throw new AppError(404, "AGENDA_APPROVED_REVISION_NOT_FOUND", "No agenda revision has been approved yet");
-    snapshot = agendaSnapshotSchema.parse(JSON.parse(frozen.snapshot_json));
+    snapshot = storedAgendaSnapshotSchema.parse(JSON.parse(frozen.snapshot_json));
   } else {
     const draft = await getAgenda(db, eventId, eventSlug);
     snapshot = { ...preparePublicAgendaSnapshot(draft, draft.revision), publishedRevision: draft.publishedRevision };

@@ -6,8 +6,8 @@ import { requiresAnyPermissions } from "./route-contract";
 import { timeZoneSchema } from "./event-series";
 export const scannerSuggestionSchema = z
   .object({
-    blockId: databaseIdSchema,
-    blockName: z.string(),
+    shiftId: databaseIdSchema,
+    shiftName: z.string(),
     roles: z.array(z.string()).max(10),
     startAt: utcInstantSchema,
     endAt: utcInstantSchema,

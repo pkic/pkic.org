@@ -30,6 +30,10 @@ export default defineConfig(async () => {
         PKIC_SCANNER_BENCHMARK_RATE: process.env.PKIC_SCANNER_BENCHMARK_RATE ?? "",
         PKIC_SCANNER_BENCHMARK_CONCURRENCY: process.env.PKIC_SCANNER_BENCHMARK_CONCURRENCY ?? "32",
         INTERNAL_SIGNING_SECRET: "test-signing-secret",
+        BADGE_PRINT_ENCRYPTION_KEYS: JSON.stringify({
+          activeKeyId: "synthetic-test-v1",
+          keys: { "synthetic-test-v1": "synthetic-test-only-badge-print-key-at-least-32-characters" },
+        }),
         SENDGRID_API_KEY: "test-key",
         FEEDBACK_IDENTITY_SECRET_V1: "feedback-secret",
         ADMIN_API_KEY: "test-admin-key",

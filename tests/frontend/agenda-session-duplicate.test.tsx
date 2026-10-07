@@ -13,7 +13,7 @@ const source = agendaSnapshotSchema.parse({
   revision: 3,
   publishedRevision: 2,
   rooms: [],
-  blocks: [],
+  shifts: [],
   roleMembers: [],
   assignments: [],
   occurrences: [

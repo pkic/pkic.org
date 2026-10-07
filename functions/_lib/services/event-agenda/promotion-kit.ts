@@ -1,7 +1,7 @@
+import { storedAgendaSnapshotSchema } from "../../../../assets/shared/schemas/event-agenda-stored";
 import { PROMOTION_TEMPLATE_VERSION } from "../../../../assets/shared/schemas/event-promotion-kit";
 import { registrationPageUrl } from "../frontend-links";
 import { getEventBySlug } from "../events";
-import { agendaSnapshotSchema } from "../../../../assets/shared/schemas/event-agenda";
 import {
   promotionFormatSchema,
   promotionKitSchema,
@@ -53,7 +53,7 @@ export async function getPromotionKit(
   );
   if (!row)
     throw new AppError(409, "AGENDA_NOT_PUBLISHED", "Approve this event agenda before generating promotion materials.");
-  const agenda = agendaSnapshotSchema.parse(JSON.parse(row.snapshot_json));
+  const agenda = storedAgendaSnapshotSchema.parse(JSON.parse(row.snapshot_json));
   const occurrence = agenda.occurrences.find(
     (item) => item.id === occurrenceId && item.visibility === "public" && item.kind !== "break",
   );

@@ -309,7 +309,7 @@ describe("Event agenda scan evidence", () => {
         .bind(crypto.randomUUID(), eventId, second, crypto.randomUUID(), now, now)
         .run();
       const credential = (
-        await issueBadge(env.DB, eventId, operatorId, { userId: second, operationId: crypto.randomUUID() })
+        await issueBadge(env.DB, eventId, operatorId, { userId: second, operationId: crypto.randomUUID() }, env)
       ).credential!;
       expect(
         await (

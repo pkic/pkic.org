@@ -5,7 +5,7 @@ import type { AgendaMediaCapabilities } from "./event-agenda-media";
 export interface ContentAgendaDay {
   legacyFragments?: ContentAgendaDayFragment[];
   date: string;
-  staffing?: ContentAgendaStaffingBlock[];
+  staffing?: ContentAgendaStaffingShift[];
   locations: ContentAgendaLocation[];
   slots: Array<{
     durationMinutes?: number;
@@ -74,7 +74,7 @@ export interface ContentAgendaSpeaker {
   title?: string;
 }
 
-export interface ContentAgendaStaffingBlock {
+export interface ContentAgendaStaffingShift {
   id: string;
   name: string;
   startAt: string;

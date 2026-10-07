@@ -19,7 +19,7 @@ const snapshot = agendaSnapshotSchema.parse({
     },
   ],
   occurrences: [],
-  blocks: [],
+  shifts: [],
   roleMembers: [],
   assignments: [],
 });

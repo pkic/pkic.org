@@ -40,20 +40,20 @@ export function StaffingEditor({
   const [rotation, setRotation] = useState(false);
   const [message, setMessage] = useState("");
   const [needs, setNeeds] = useState<string | null>(null);
-  const [setup, setSetup] = useState<{ kind: "block" | "person"; editId?: string } | null>(null);
+  const [setup, setSetup] = useState<{ kind: "shift" | "person"; editId?: string } | null>(null);
   const [diagnostics, setDiagnostics] = useState<import("zod").infer<typeof agendaAllocationDiagnosticsSchema> | null>(
     null,
   );
   const [seed, setSeed] = useState("");
   const [strategy, setStrategy] = useState<"balanced" | "random">("balanced");
-  const [selectedBlockIds, setSelectedBlocks] = useState<string[] | null>(null);
+  const [selectedShiftIds, setSelectedBlocks] = useState<string[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const form = useContractForm(agendaAllocationSchema, {
     expectedRevision: snapshot.revision,
     seed,
     strategy,
-    blockIds: selectedBlockIds ?? undefined,
+    shiftIds: selectedShiftIds ?? undefined,
   });
   async function allocate(event: Event) {
     event.preventDefault();
@@ -87,7 +87,7 @@ export function StaffingEditor({
     <ul>
       {diagnostics.uncovered.map((item) => (
         <li>
-          {snapshot.blocks.find((block) => block.id === item.blockId)?.name} ·{" "}
+          {snapshot.shifts.find((shift) => shift.id === item.shiftId)?.name} ·{" "}
           {snapshot.staffingRoles.find((role) => role.id === item.role)?.name ?? item.role}:{" "}
           {item.reasons.length
             ? item.reasons
@@ -111,9 +111,9 @@ export function StaffingEditor({
   if (catalog) return <StaffingCatalog snapshot={snapshot} onSaved={onSaved} onClose={() => setCatalog(false)} />;
   if (needs)
     return (
-      <StaffingRequirements snapshot={snapshot} blockId={needs} onSaved={onSaved} onClose={() => setNeeds(null)} />
+      <StaffingRequirements snapshot={snapshot} shiftId={needs} onSaved={onSaved} onClose={() => setNeeds(null)} />
     );
-  if (setup && (setup.kind === "block" || !teamEligibilityPath))
+  if (setup && (setup.kind === "shift" || !teamEligibilityPath))
     return (
       <StaffingSetup
         key={`${setup.kind}:${setup.editId ?? "new"}`}
@@ -130,7 +130,7 @@ export function StaffingEditor({
         <PanelHeader title="Configure rotation" />
         <PanelBody>
           <p>
-            Choose a repeatable rotation and the blocks to regenerate. Generating applies the new assignments to the
+            Choose a repeatable rotation and the shifts to regenerate. Generating applies the new assignments to the
             staffing plan.
           </p>
           {error && <ErrorAlert error={error} />}
@@ -175,17 +175,17 @@ export function StaffingEditor({
               )}
             </Field>
             <fieldset>
-              <legend>Blocks to regenerate</legend>
-              <p>Pinned assignments stay fixed. Other blocks retain their current assignments.</p>
-              {snapshot.blocks.map((block) => (
+              <legend>Shifts to regenerate</legend>
+              <p>Pinned assignments stay fixed. Other shifts retain their current assignments.</p>
+              {snapshot.shifts.map((shift) => (
                 <Checkbox
-                  label={`Regenerate ${block.name}`}
-                  checked={selectedBlockIds === null || selectedBlockIds.includes(block.id)}
+                  label={`Regenerate ${shift.name}`}
+                  checked={selectedShiftIds === null || selectedShiftIds.includes(shift.id)}
                   disabled={busy}
                   onChange={(event) => {
-                    const current = selectedBlockIds ?? snapshot.blocks.map((value) => value.id);
+                    const current = selectedShiftIds ?? snapshot.shifts.map((value) => value.id);
                     setSelectedBlocks(
-                      event.currentTarget.checked ? [...current, block.id] : current.filter((id) => id !== block.id),
+                      event.currentTarget.checked ? [...current, shift.id] : current.filter((id) => id !== shift.id),
                     );
                   }}
                 />
@@ -236,7 +236,7 @@ export function StaffingEditor({
         <StaffingOverview
           snapshot={snapshot}
           canEdit={canEdit}
-          editBlock={(editId) => setSetup({ kind: "block", editId })}
+          editShift={(editId) => setSetup({ kind: "shift", editId })}
           editPerson={(editId) =>
             teamEligibilityPath
               ? navigate(`${teamEligibilityPath}/${encodeURIComponent(editId)}`)
@@ -244,7 +244,7 @@ export function StaffingEditor({
           }
           editNeeds={setNeeds}
           editAssignment={setAssignment}
-          createBlock={() => setSetup({ kind: "block" })}
+          createShift={() => setSetup({ kind: "shift" })}
           createPerson={() =>
             teamEligibilityPath ? navigate(`${teamEligibilityPath}/new`) : setSetup({ kind: "person" })
           }

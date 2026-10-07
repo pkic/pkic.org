@@ -241,9 +241,9 @@ for (const mode of ["keyboard", "touch", "pointer"] as const) {
           }
         };
         await page.goto(`/portal/#/events/${fixture.slug}/agenda`);
-        await activate(page.getByRole("tab", { name: "Block roles", exact: true }));
-        await expect(page.getByText(staffing.blockName, { exact: true })).toBeVisible();
-        const blockMenu = page.getByRole("button", { name: `Actions for ${staffing.blockName}`, exact: true });
+        await activate(page.getByRole("tab", { name: "Shifts", exact: true }));
+        await expect(page.getByText(staffing.shiftName, { exact: true })).toBeVisible();
+        const blockMenu = page.getByRole("button", { name: `Actions for ${staffing.shiftName}`, exact: true });
         if (mode === "keyboard") {
           await blockMenu.focus();
           await blockMenu.press("ArrowDown");

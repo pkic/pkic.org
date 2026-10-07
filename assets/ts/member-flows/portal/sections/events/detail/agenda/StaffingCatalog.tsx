@@ -24,7 +24,7 @@ export function StaffingCatalog({
   const [posts, setPosts] = useState(snapshot.staffingPosts);
   const form = useContractForm(agendaStaffingSchema, {
     expectedRevision: snapshot.revision,
-    blocks: snapshot.blocks,
+    shifts: snapshot.shifts,
     roleMembers: snapshot.roleMembers,
     assignments: snapshot.assignments,
     staffingRoles: roles,

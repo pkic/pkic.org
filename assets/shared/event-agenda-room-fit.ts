@@ -52,11 +52,11 @@ export function evaluateRoomFits(
         for (const other of snapshot.occurrences)
           if (other.id !== session.id)
             reasons.push(...agendaConflicts([candidate, other], snapshot.travelMinutes, snapshot.rooms));
-        for (const block of snapshot.blocks)
+        for (const shift of snapshot.shifts)
           if (
             snapshot.assignments.some(
               (assignment) =>
-                assignment.blockId === block.id &&
+                assignment.shiftId === shift.id &&
                 candidate.speakers.some(
                   (speaker) =>
                     speaker.userId === assignment.userId &&
@@ -66,7 +66,7 @@ export function evaluateRoomFits(
                         endAt: session.endAt!,
                         roomId: agendaSpeakerPhysicalRoom(candidate, speaker),
                       },
-                      block,
+                      shift,
                       speaker.attendanceMode === "remote" ||
                         snapshot.roleMembers.find((member) => member.userId === assignment.userId)?.attendanceMode ===
                           "remote"

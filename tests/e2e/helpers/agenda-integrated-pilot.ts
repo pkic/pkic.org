@@ -415,7 +415,7 @@ export async function staffPilot(staff: Page, seniorUserId: string, info: TestIn
     name,
     roomId: null,
   }));
-  const blocks = ["2026-12-01", "2026-12-02"].map((day, index) => ({
+  const shifts = ["2026-12-01", "2026-12-02"].map((day, index) => ({
     id: `${prefix}-block-${index}`,
     name: `Pilot day ${index + 1} opening`,
     startAt: dateTimeLocalToIso(`${day}T10:00`, snapshot.timeZone),
@@ -425,10 +425,10 @@ export async function staffPilot(staff: Page, seniorUserId: string, info: TestIn
     compatibleRolePairs: [],
     roleRequirements: [],
   }));
-  const requirements = blocks.flatMap((block) => [
+  const requirements = shifts.flatMap((block) => [
     {
       id: `${block.id}-mc`,
-      blockId: block.id,
+      shiftId: block.id,
       roleId: roles[0]!.id,
       postId: null,
       idealCount: 1,
@@ -437,7 +437,7 @@ export async function staffPilot(staff: Page, seniorUserId: string, info: TestIn
     },
     ...posts.map((post) => ({
       id: `${block.id}-${post.id}`,
-      blockId: block.id,
+      shiftId: block.id,
       roleId: roles[1]!.id,
       postId: post.id,
       idealCount: 1,
@@ -448,7 +448,7 @@ export async function staffPilot(staff: Page, seniorUserId: string, info: TestIn
   const configured = await staff.request.post(`${pilotAgendaApi}/staffing`, {
     data: agendaStaffingSchema.parse({
       expectedRevision: snapshot.revision,
-      blocks,
+      shifts,
       staffingRoles: roles,
       staffingPosts: posts,
       staffingRequirements: requirements,
@@ -468,7 +468,7 @@ export async function staffPilot(staff: Page, seniorUserId: string, info: TestIn
   });
   expect(configured.status(), await configured.text()).toBe(200);
   await staff.goto(pilotAgendaPage);
-  await staff.getByRole("tab", { name: "Block roles", exact: true }).click();
+  await staff.getByRole("tab", { name: "Shifts", exact: true }).click();
   for (const [menu, action] of [
     ["Pilot day 1 opening", "Review staffing"],
     ["Pilot MC · Event", "Review positions"],

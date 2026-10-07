@@ -25,7 +25,7 @@ const snapshot = (revision: number) => ({
   publishedRevision: null,
   rooms: [],
   occurrences: [],
-  blocks: [],
+  shifts: [],
   roleMembers: [],
   assignments: [],
 });

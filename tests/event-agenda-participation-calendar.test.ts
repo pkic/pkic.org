@@ -312,7 +312,7 @@ describe("Participation capacity and private calendar lifecycle", () => {
     const snapshot = await getAgenda(env.DB, eventId, "calendar-test"),
       session = snapshot.occurrences[0]!;
     session.speakers = [{ userId: firstUser, displayName: "Presenter", attendanceMode: "physical" }];
-    snapshot.blocks = [
+    snapshot.shifts = [
       {
         id: "block",
         name: "MC",
@@ -339,9 +339,9 @@ describe("Participation capacity and private calendar lifecycle", () => {
       snapshot,
       staffingFixture({
         expectedRevision: snapshot.revision,
-        blocks: snapshot.blocks,
+        shifts: snapshot.shifts,
         roleMembers: snapshot.roleMembers,
-        assignments: [{ blockId: "block", role: "mc", userId: firstUser, pinned: true }],
+        assignments: [{ shiftId: "block", role: "mc", userId: firstUser, pinned: true }],
       }),
     );
     expect(() => operationalPeople(snapshot)).toThrow("conflicting attendance modes");

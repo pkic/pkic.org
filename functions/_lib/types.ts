@@ -39,6 +39,8 @@ export interface Env {
   VAPID_SUBJECT?: string;
   /** Server-only at-rest key for owned push subscriptions. */
   WEB_PUSH_ENCRYPTION_KEY?: string;
+  /** Server-only active and retained keys for opaque badge print recovery. */
+  BADGE_PRINT_ENCRYPTION_KEYS?: string;
   /** Explicit approved publication ownership; absent keeps automatic release dispatch disabled. */
   SITE_PUBLICATION_COORDINATOR_CONFIG?: string;
   /** Server-only provider credential. Never included in request ledger or build artifacts. */

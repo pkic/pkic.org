@@ -182,7 +182,7 @@ export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: st
   const items = await occurrences(db, eventId);
   if (items.length > 2000)
     throw new AppError(422, "AGENDA_TOO_LARGE", "Agenda exceeds the 2,000 occurrence editing limit");
-  const blocks = await all<{
+  const shifts = await all<{
     id: string;
     name: string;
     start_at: string;
@@ -195,7 +195,7 @@ export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: st
     boundaries_json: string;
   }>(
     db,
-    "SELECT id,name,start_at,end_at,room_id,track,roles_json,role_requirements_json,compatible_roles_json,boundaries_json FROM event_agenda_blocks WHERE event_id = ? ORDER BY start_at,id LIMIT 200",
+    "SELECT id,name,start_at,end_at,room_id,track,roles_json,role_requirements_json,compatible_roles_json,boundaries_json FROM event_agenda_shifts WHERE event_id = ? ORDER BY start_at,id LIMIT 200",
     [eventId],
   );
   const members = await all<{
@@ -224,7 +224,7 @@ export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: st
   );
   const staffingRequirements = await all<{
     id: string;
-    blockId: string;
+    shiftId: string;
     roleId: string;
     postId: string | null;
     idealCount: number;
@@ -232,7 +232,7 @@ export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: st
     attendanceMode: string;
   }>(
     db,
-    "SELECT id,block_id AS blockId,role_id AS roleId,post_id AS postId,ideal_count AS idealCount,seniority,attendance_mode AS attendanceMode FROM event_agenda_staffing_requirements WHERE event_id=? ORDER BY id LIMIT 1000",
+    "SELECT id,shift_id AS shiftId,role_id AS roleId,post_id AS postId,ideal_count AS idealCount,seniority,attendance_mode AS attendanceMode FROM event_agenda_staffing_requirements WHERE event_id=? ORDER BY id LIMIT 1000",
     [eventId],
   );
   const staffingPositions = await all<{ id: string; requirementId: string; index: number }>(
@@ -243,14 +243,14 @@ export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: st
   const assignments = await all<{
     position_id: string;
     post_id: string | null;
-    block_id: string;
+    shift_id: string;
     role: string;
     user_id: string;
     pinned: number;
     origin: "manual" | "generated";
   }>(
     db,
-    "SELECT assignment.position_id,assignment.post_id,assignment.block_id,assignment.role,assignment.user_id,assignment.pinned,assignment.origin FROM event_agenda_assignments assignment JOIN event_agenda_blocks block ON block.id=assignment.block_id WHERE block.event_id = ? ORDER BY assignment.position_id LIMIT 2000",
+    "SELECT assignment.position_id,assignment.post_id,assignment.shift_id,assignment.role,assignment.user_id,assignment.pinned,assignment.origin FROM event_agenda_assignments assignment JOIN event_agenda_shifts shift ON shift.id=assignment.shift_id WHERE shift.event_id = ? ORDER BY assignment.position_id LIMIT 2000",
     [eventId],
   );
   const snapshot = agendaSnapshotSchema.parse({
@@ -274,17 +274,17 @@ export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: st
     travelMinutes: state?.travel_minutes ?? 0,
     durationRules: readAgendaDurationRules(event.settings_json),
     occurrences: items,
-    blocks: blocks.map((block) => ({
-      id: block.id,
-      name: block.name,
-      startAt: block.start_at,
-      endAt: block.end_at,
-      roomId: block.room_id,
-      track: block.track ?? undefined,
-      roles: JSON.parse(block.roles_json),
-      roleRequirements: JSON.parse(block.role_requirements_json),
-      compatibleRolePairs: JSON.parse(block.compatible_roles_json),
-      boundaries: JSON.parse(block.boundaries_json),
+    shifts: shifts.map((shift) => ({
+      id: shift.id,
+      name: shift.name,
+      startAt: shift.start_at,
+      endAt: shift.end_at,
+      roomId: shift.room_id,
+      track: shift.track ?? undefined,
+      roles: JSON.parse(shift.roles_json),
+      roleRequirements: JSON.parse(shift.role_requirements_json),
+      compatibleRolePairs: JSON.parse(shift.compatible_roles_json),
+      boundaries: JSON.parse(shift.boundaries_json),
     })),
     roleMembers: members.map((member) => ({
       userId: member.user_id,
@@ -303,7 +303,7 @@ export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: st
     assignments: assignments.map((assignment) => ({
       positionId: assignment.position_id,
       postId: assignment.post_id,
-      blockId: assignment.block_id,
+      shiftId: assignment.shift_id,
       role: assignment.role,
       userId: assignment.user_id,
       pinned: assignment.pinned === 1,

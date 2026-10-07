@@ -34,7 +34,7 @@ function approval(revision: number, change?: (value: AgendaSnapshot) => void) {
     approvedAt: dates[Math.min(revision - 1, 2)],
     calendarPublic: true,
     rooms: [{ id: "hall", name: "Hall", capacity: 20 }],
-    blocks: [],
+    shifts: [],
     assignments: [],
     roleMembers: [],
     occurrences: [

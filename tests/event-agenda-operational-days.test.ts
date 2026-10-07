@@ -59,9 +59,9 @@ describe("Private approved event-day operational capacity", () => {
       ["2026-03-28", "2026-03-29"],
     );
   });
-  it("counts standalone physical MC blocks without creating registrations and deduplicates later registration", async () => {
+  it("counts standalone physical MC shifts without creating registrations and deduplicates later registration", async () => {
     await env.DB.prepare(
-      "INSERT INTO event_agenda_blocks(id,event_id,name,start_at,end_at,roles_json) VALUES('standalone',?,'Morning MC',?,?,'[\"mc\"]')",
+      "INSERT INTO event_agenda_shifts(id,event_id,name,start_at,end_at,roles_json) VALUES('standalone',?,'Morning MC',?,?,'[\"mc\"]')",
     )
       .bind(eventId, "2027-01-20T07:00:00.000Z", "2027-01-20T08:00:00.000Z")
       .run();
@@ -73,13 +73,13 @@ describe("Private approved event-day operational capacity", () => {
     await env.DB.batch([
       env.DB.prepare("INSERT INTO event_agenda_staffing_roles(event_id,id,name) VALUES(?,'mc','MC')").bind(eventId),
       env.DB.prepare(
-        "INSERT INTO event_agenda_staffing_requirements(event_id,id,block_id,role_id,ideal_count,seniority,attendance_mode) VALUES(?,'mc-need','standalone','mc',1,'any','physical')",
+        "INSERT INTO event_agenda_staffing_requirements(event_id,id,shift_id,role_id,ideal_count,seniority,attendance_mode) VALUES(?,'mc-need','standalone','mc',1,'any','physical')",
       ).bind(eventId),
       env.DB.prepare(
         "INSERT INTO event_agenda_staffing_positions(event_id,id,requirement_id,position_index) VALUES(?,'mc-position','mc-need',1)",
       ).bind(eventId),
       env.DB.prepare(
-        "INSERT INTO event_agenda_assignments(event_id,position_id,block_id,role,user_id,pinned) VALUES(?,'mc-position','standalone','mc',?,1)",
+        "INSERT INTO event_agenda_assignments(event_id,position_id,shift_id,role,user_id,pinned) VALUES(?,'mc-position','standalone','mc',?,1)",
       ).bind(eventId, staffId),
     ]);
     await publishAgenda(env.DB, eventId, "operational-days", 0, admin);
@@ -135,7 +135,7 @@ describe("Private approved event-day operational capacity", () => {
       { userId: staffId, displayName: "Physical", attendanceMode: "physical" },
       { userId: attendeeId, displayName: "Remote", attendanceMode: "remote" },
     ];
-    snapshot.blocks = [
+    snapshot.shifts = [
       {
         id: "block",
         name: "MC",
@@ -172,16 +172,16 @@ describe("Private approved event-day operational capacity", () => {
       snapshot,
       staffingFixture({
         expectedRevision: snapshot.revision,
-        blocks: snapshot.blocks,
+        shifts: snapshot.shifts,
         roleMembers: snapshot.roleMembers,
         assignments: [
-          { blockId: "block", role: "mc", userId: staffId, pinned: true },
-          { blockId: "block", role: "remote_qa", userId: attendeeId, pinned: true },
+          { shiftId: "block", role: "mc", userId: staffId, pinned: true },
+          { shiftId: "block", role: "remote_qa", userId: attendeeId, pinned: true },
         ],
       }),
     );
     expect(operationalDays(snapshot)).toEqual([
-      { day_date: "2027-01-20", user_id: staffId, sources: [`credit:${sessionId}:speaker`, "block:block:mc"] },
+      { day_date: "2027-01-20", user_id: staffId, sources: [`credit:${sessionId}:speaker`, "shift:block:mc"] },
     ]);
   });
 });

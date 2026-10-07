@@ -1,4 +1,4 @@
-import { agendaSnapshotSchema } from "../../../assets/shared/schemas/event-agenda";
+import { storedAgendaSnapshotSchema } from "../../../assets/shared/schemas/event-agenda-stored";
 import {
   SITE_PUBLICATION_FULL_REPAIR_PREFIX,
   SITE_PUBLICATION_REPAIR_INTERVAL_SECONDS,
@@ -22,7 +22,7 @@ const approvedSource = `FROM event_agenda_state state JOIN events event ON event
   AND publication.revision=state.published_revision`;
 function assertApprovedBasis(rows: ApprovedBasis[]): void {
   for (const row of rows) {
-    const snapshot = agendaSnapshotSchema.parse(JSON.parse(row.snapshotJson));
+    const snapshot = storedAgendaSnapshotSchema.parse(JSON.parse(row.snapshotJson));
     utcInstantSchema.parse(snapshot.approvedAt);
     if (
       snapshot.revision !== row.revision ||

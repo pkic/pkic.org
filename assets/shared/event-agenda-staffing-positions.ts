@@ -1,16 +1,16 @@
-import type { AgendaBlock, AgendaRoleMember, AgendaOccurrence } from "./schemas/event-agenda";
+import type { AgendaShift, AgendaRoleMember, AgendaOccurrence } from "./schemas/event-agenda";
 import {
   agendaStaffingPositionPlanSchema,
   type AgendaStaffingPositionPlan,
 } from "./schemas/event-agenda-staffing-positions";
 import {
-  agendaBlockMinutes,
+  agendaShiftMinutes,
   agendaDutiesCompatible,
   agendaStaffingEligibility,
   agendaStaffingReasonLabels,
 } from "./event-agenda-staffing-eligibility";
 export type AgendaStaffingPositionContext = AgendaStaffingPositionPlan & {
-  blocks: AgendaBlock[];
+  shifts: AgendaShift[];
   members: AgendaRoleMember[];
   occurrences: AgendaOccurrence[];
   travelMinutes?: number;
@@ -21,14 +21,14 @@ function positionContext(input: AgendaStaffingPositionContext) {
   const plan = agendaStaffingPositionPlanSchema.parse(input);
   const duties = plan.positions.map((position) => {
     const requirement = plan.requirements.find((row) => row.id === position.requirementId)!;
-    const source = input.blocks.find((block) => block.id === requirement.blockId);
-    if (!source) throw new Error("Staffing position refers to a block outside this event");
+    const source = input.shifts.find((shift) => shift.id === requirement.shiftId);
+    if (!source) throw new Error("Staffing position refers to a shift outside this event");
     const post = plan.posts.find((row) => row.id === requirement.postId);
     return {
       position,
       requirement,
       source,
-      block: {
+      shift: {
         ...source,
         id: position.id,
         roomId: post ? post.roomId : source.roomId,
@@ -53,13 +53,13 @@ function positionContext(input: AgendaStaffingPositionContext) {
       .filter((row) => row.positionId !== positionId)
       .map((row) => ({
         ...row,
-        blockId: row.positionId,
+        shiftId: row.positionId,
       }));
     return agendaStaffingEligibility(
       member,
-      duty.block,
+      duty.shift,
       duty.requirement.roleId,
-      duties.map((row) => row.block),
+      duties.map((row) => row.shift),
       work,
       input.occurrences,
       input.travelMinutes ?? 0,
@@ -94,7 +94,7 @@ export function agendaStaffingPositionShortfalls(input: AgendaStaffingPositionCo
       const evaluated = input.members.map((member) => eligibility(duty.position.id, member.userId, input.assignments));
       return {
         positionId: duty.position.id,
-        blockId: duty.source.id,
+        shiftId: duty.source.id,
         role: duty.requirement.roleId,
         postId: duty.requirement.postId,
         eligiblePeople: evaluated.filter((reasons) => reasons.length === 0).length,
@@ -109,7 +109,7 @@ export function allocateAgendaStaffingPositions(
   input: AgendaStaffingPositionContext & {
     seed: string;
     strategy: "balanced" | "random";
-    selectedBlockIds?: ReadonlySet<string>;
+    selectedShiftIds?: ReadonlySet<string>;
   },
 ) {
   const { plan, duties, eligibility } = positionContext(input);
@@ -130,22 +130,22 @@ export function allocateAgendaStaffingPositions(
   );
   const uncovered: Array<{
     positionId: string;
-    blockId: string;
+    shiftId: string;
     role: string;
     postId: string | null;
     reasons: Array<{ reason: keyof typeof agendaStaffingReasonLabels; people: number }>;
   }> = [];
   const minutes = (assignment: PositionAssignment) =>
-    agendaBlockMinutes(duties.find((duty) => duty.position.id === assignment.positionId)?.block);
+    agendaShiftMinutes(duties.find((duty) => duty.position.id === assignment.positionId)?.shift);
   for (const duty of ordered) {
-    if (input.selectedBlockIds && !input.selectedBlockIds.has(duty.source.id)) continue;
+    if (input.selectedShiftIds && !input.selectedShiftIds.has(duty.source.id)) continue;
     if (assignments.some((assignment) => assignment.positionId === duty.position.id)) continue;
     const evaluated = input.members.map((member) => ({
       member,
       reasons: eligibility(duty.position.id, member.userId, assignments),
     }));
     const previous = ordered
-      .filter((other) => other.source.endAt <= duty.source.startAt && other.block.roomId === duty.block.roomId)
+      .filter((other) => other.source.endAt <= duty.source.startAt && other.shift.roomId === duty.shift.roomId)
       .at(-1);
     const candidates = evaluated
       .filter((item) => !item.reasons.length)
@@ -179,7 +179,7 @@ export function allocateAgendaStaffingPositions(
     if (!candidates.length) {
       uncovered.push({
         positionId: duty.position.id,
-        blockId: duty.source.id,
+        shiftId: duty.source.id,
         role: duty.requirement.roleId,
         postId: duty.requirement.postId,
         reasons: (Object.keys(agendaStaffingReasonLabels) as Array<keyof typeof agendaStaffingReasonLabels>)
@@ -190,7 +190,7 @@ export function allocateAgendaStaffingPositions(
     }
     assignments.push({
       positionId: duty.position.id,
-      blockId: duty.source.id,
+      shiftId: duty.source.id,
       role: duty.requirement.roleId,
       postId: duty.requirement.postId,
       userId: candidates[0].member.userId,
@@ -208,7 +208,7 @@ export function agendaStaffingPositionCoverage(plan: AgendaStaffingPositionPlan)
     ).length;
     return {
       requirementId: requirement.id,
-      blockId: requirement.blockId,
+      shiftId: requirement.shiftId,
       role: requirement.roleId,
       postId: requirement.postId,
       idealCount: requirement.idealCount,
