@@ -8,7 +8,11 @@ import {
   MCP_EXTENSION,
 } from "../functions/_lib/openapi/mcp";
 import type { AuthAdmin } from "../functions/_lib/types";
-import { buildMcpOauthProps, normalizeMcpOauthScopes, parseMcpOauthProps } from "../functions/_lib/mcp/oauth";
+import {
+  buildMcpOauthProps,
+  normalizeMcpOauthScopes,
+  parseMcpOauthProps,
+} from "../functions/_lib/auth/oauth/authorization";
 
 const mcpWriteMetadata = {
   expose: true,
@@ -220,14 +224,23 @@ describe("MCP scope delegation", () => {
       sessionId: "session-1",
       expiresAt: "2099-01-01T00:00:00.000Z",
     };
-    expect(buildMcpOauthProps(userActor, ["admin:read"], "oauth")).toMatchObject({
+    expect(buildMcpOauthProps(userActor, ["admin:read"], "oauth", "2098-12-31T23:00:00.000Z")).toMatchObject({
       identityType: "user",
       id: "user-1",
       authTransport: "oauth",
       sessionId: "session-1",
+      sessionIdleExpiresAt: "2098-12-31T23:00:00.000Z",
     });
-    const userProps = buildMcpOauthProps(userActor, ["admin:read"], "oauth");
+    const userProps = buildMcpOauthProps(userActor, ["admin:read"], "oauth", "2098-12-31T23:00:00.000Z");
     expect(userProps).not.toHaveProperty("role");
+    expect(() => buildMcpOauthProps(userActor, ["admin:read"], "oauth")).toThrowError(
+      expect.objectContaining({ code: "MCP_AUTH_TRANSPORT_INVALID" }),
+    );
+    if (userProps.identityType !== "user") throw new Error("Expected a user-backed OAuth grant");
+    const { sessionIdleExpiresAt: _idleDeadline, ...unboundedProps } = userProps;
+    expect(() => parseMcpOauthProps(unboundedProps)).toThrowError(
+      expect.objectContaining({ code: "MCP_AUTH_PROPS_INVALID" }),
+    );
     expect(() => parseMcpOauthProps({ ...userProps, role: "admin" })).toThrowError(
       expect.objectContaining({ status: 401, code: "MCP_AUTH_PROPS_INVALID" }),
     );

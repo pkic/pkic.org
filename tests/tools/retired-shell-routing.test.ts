@@ -14,7 +14,14 @@ describe("static public routing", () => {
       const rules = environment.assets.run_worker_first;
       const workerFirst = (path: string) =>
         rules.some((rule) => (rule.endsWith("*") ? path.startsWith(rule.slice(0, -1)) : path === rule));
-      for (const path of ["/api/v1/openapi.json", "/r/example", "/donate/r/example"]) {
+      for (const path of [
+        "/api/v1/openapi.json",
+        "/.well-known/oauth-authorization-server",
+        "/.well-known/oauth-protected-resource",
+        "/.well-known/oauth-protected-resource/api/v1/mcp",
+        "/r/example",
+        "/donate/r/example",
+      ]) {
         expect(workerFirst(path), path).toBe(true);
       }
       for (const path of [
@@ -26,6 +33,7 @@ describe("static public routing", () => {
         "/members/example/",
         "/sitemap.xml",
         "/robots.txt",
+        "/.well-known/security.txt",
         "/pagefind/pagefind.js",
         "/_published/media/example.webp",
         "/og/example/og.jpg",

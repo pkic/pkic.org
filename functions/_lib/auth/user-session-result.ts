@@ -18,7 +18,6 @@ export interface UserSessionResult {
   idleExpiresAt: string;
   staff?: UserBackedAuthAdmin;
   staffIdleExpiresAt?: string;
-  staffReauthenticationRequired?: boolean;
   member?: AuthMember;
   sponsors: SponsorCapacity[];
   pendingIdentityCount: number;
