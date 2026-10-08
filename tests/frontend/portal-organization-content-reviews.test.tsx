@@ -2,7 +2,10 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { organizationContentReviewRejectSchema } from "../../assets/shared/schemas/organization-content-reviews";
+import {
+  organizationContentReviewsListQuerySchema,
+  organizationContentReviewRejectSchema,
+} from "../../assets/shared/schemas/organization-content-reviews";
 import { OrganizationContentReviews } from "../../assets/ts/member-flows/portal/sections/OrganizationContentReviews";
 import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
 import { markdownControl, typeMarkdown } from "./helpers/labelled-control";
@@ -268,6 +271,7 @@ describe("portal organization content reviews", () => {
           typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
           location.origin,
         );
+        organizationContentReviewsListQuerySchema.parse(Object.fromEntries(url.searchParams));
         requests.push(url);
         return json({ reviews: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
       }),
@@ -295,11 +299,11 @@ describe("portal organization content reviews", () => {
     // The head says what the column is narrowed to.
     expect(columnFilterSummary(container, "Status")).toBe("Approved");
 
-    // Choosing the open state again drops back to the queue's default.
+    // Choosing Pending restores the explicit default filter.
     await chooseColumnFilter(container, "Status", "Pending");
     await settle();
     expect(requests.at(-1)?.searchParams.get("status")).toBe("pending");
-    expect(columnFilterSummary(container, "Status")).toBeUndefined();
+    expect(columnFilterSummary(container, "Status")).toBe("Pending");
   });
 
   it("renders a server error instead of presenting an empty queue", async () => {

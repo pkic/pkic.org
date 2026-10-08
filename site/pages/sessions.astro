@@ -1,0 +1,21 @@
+---
+import PublicPage from "../layouts/PublicPage.astro";
+import { publication } from "../publication";
+import { publishedSessionHistory } from "../../functions/_lib/services/site-session-history";
+const sessions=publishedSessionHistory(publication);
+const events=[...new Set(sessions.map(item=>item.agenda.eventSlug))];
+const years=[...new Set(sessions.map(item=>item.session.startAt?.slice(0,4)))].filter(Boolean).sort().reverse();
+---
+<PublicPage title="Session archive" description="Explore approved PKI Consortium sessions, speaker histories and released materials.">
+ <section class="pk-section pk-container" data-pagefind-body>
+  <h1>Session archive</h1><p>Explore past and upcoming sessions, credited speakers and approved materials.</p>
+  <form id="session-archive-filter" role="search"><label>Search sessions and speakers <input type="search" name="q" /></label><label>Event <select name="event"><option value="">All events</option>{events.map(slug=><option value={slug}>{sessions.find(item=>item.agenda.eventSlug===slug)?.agenda.eventName??slug}</option>)}</select></label><label>Year <select name="year"><option value="">All years</option>{years.map(year=><option value={year}>{year}</option>)}</select></label></form>
+  <p id="session-archive-count" aria-live="polite">{sessions.length} sessions</p>
+  <ul id="session-archive-results">{sessions.map(item=><li data-event={item.agenda.eventSlug} data-year={item.session.startAt?.slice(0,4)}><h2><a href={item.route}>{item.session.title}</a></h2><p>{item.agenda.eventName} · {item.session.startAt?.slice(0,10)}</p><p>{item.session.speakers.map(speaker=>speaker.displayName).join(" · ")}</p><p>{item.session.description.slice(0,220)}</p></li>)}</ul>
+ </section>
+</PublicPage>
+<script>
+ const form=document.querySelector<HTMLFormElement>("#session-archive-filter");
+ form?.addEventListener("input",()=>{const data=new FormData(form);const q=String(data.get("q")??"").toLocaleLowerCase();const event=String(data.get("event")??"");const year=String(data.get("year")??"");let count=0;for(const row of document.querySelectorAll<HTMLElement>("#session-archive-results > li")){row.hidden=Boolean((q&&!row.textContent?.toLocaleLowerCase().includes(q))||(event&&row.dataset.event!==event)||(year&&row.dataset.year!==year));if(!row.hidden)count++;}const status=document.querySelector("#session-archive-count");if(status)status.textContent=`${count} sessions`;});
+</script>
+<style>form {display:flex;gap:var(--pk-space-4);flex-wrap:wrap;margin-block:var(--pk-space-5)}label{display:grid;gap:var(--pk-space-2)}input,select{font:inherit;padding:var(--pk-space-2);color:var(--pk-ink);background:var(--pk-control-surface);border:1px solid var(--pk-line);border-radius:var(--pk-radius-control)}li {padding-block:var(--pk-space-4);border-bottom:1px solid var(--pk-line)}li[hidden]{display:none}</style>

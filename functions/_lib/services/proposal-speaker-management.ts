@@ -35,6 +35,7 @@ import { requireProposalSpeakerPermission } from "./proposal-speaker-access";
 import { isAuthorizationGuardFailure } from "../db/authorization-guard";
 import { preparePermissionsAuthorizationGuard } from "../auth/permissions";
 import { withProposalWriteContextGuard, type ProposalWriteAuthorization } from "./proposal-write-authorization";
+import { proposalActingIdentityReadModel } from "./proposal-speaker-identity";
 
 interface ProposalRosterRow {
   id: string;
@@ -76,6 +77,7 @@ export function toProposalSpeaker(
         proposalSpeakerHeadshotUrl(appBaseUrl, proposalId, speaker.user_id, speaker.headshot_updated_at))
       : publicUserHeadshotUrl(appBaseUrl, speaker.user_id, speaker.headshot_r2_key, speaker.headshot_updated_at);
   return {
+    ...proposalActingIdentityReadModel(speaker),
     userId: speaker.user_id,
     role: speaker.role,
     status: speaker.status,
@@ -184,6 +186,7 @@ async function getSpeakerEditSnapshot(
   const speaker = await first<SpeakerEditSnapshot>(
     db,
     `SELECT ps.id AS speaker_id, ps.user_id, ps.role, ps.status, ps.manage_link_secret,
+            ps.acting_identity_id, ps.acting_identity_selected_at, ps.acting_identity_snapshot_json,
             ps.confirmed_at, ps.declined_at, ps.terms_accepted_at, ps.decline_reason, ps.created_at,
             u.email,
             ${proposalSpeakerEffectiveProfileExpression("u", "ps", "firstName", "first_name")} AS first_name,

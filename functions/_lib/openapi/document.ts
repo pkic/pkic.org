@@ -50,6 +50,13 @@ export const OPENAPI_TAGS: readonly { name: string; description: string }[] = [
   { name: "Authentication", description: "Session sign-in, sign-out, and the current session." },
   { name: "Passkeys", description: "WebAuthn credential registration and authentication." },
 
+  { name: "Event agenda", description: "Approved schedules, organizer drafts, locations, imports, and staffing." },
+  {
+    name: "Event recordings",
+    description: "Authorized meeting recording discovery, source binding, acquisition, and owned recording versions.",
+  },
+  { name: "Event promotion", description: "Revision-bound session promotion kits and authorized export jobs." },
+  { name: "Meeting agendas", description: "Occurrence agendas and reusable versioned meeting formats." },
   { name: "Events", description: "The event catalogue and one event's configuration." },
   { name: "Event registrations", description: "Attendee registration, attendance days, and waitlists." },
   { name: "Event proposals", description: "Submitted session proposals for an event." },
@@ -60,6 +67,10 @@ export const OPENAPI_TAGS: readonly { name: string; description: string }[] = [
   { name: "Proposal presentations", description: "Uploaded presentation files and their versions." },
   { name: "Proposal programs", description: "Programme membership for a proposal." },
   { name: "Speakers", description: "Speaker records and their profiles." },
+  {
+    name: "Session presentations",
+    description: "Direct session presentation uploads, version reviews, and approved publication delivery.",
+  },
   { name: "Presentations", description: "Presentation files, versions, and archives." },
   { name: "Headshots", description: "Speaker headshot upload and review." },
   { name: "Event invites", description: "Attendee and speaker invitations to an event." },
@@ -113,6 +124,10 @@ export const OPENAPI_TAG_GROUPS: readonly { name: string; tags: string[] }[] = [
     name: "Events and meetings",
     tags: [
       "Events",
+      "Event agenda",
+      "Event recordings",
+      "Event promotion",
+      "Meeting agendas",
       "Event registrations",
       "Event proposals",
       "Proposals",
@@ -122,6 +137,7 @@ export const OPENAPI_TAG_GROUPS: readonly { name: string; tags: string[] }[] = [
       "Proposal presentations",
       "Proposal programs",
       "Speakers",
+      "Session presentations",
       "Presentations",
       "Headshots",
       "Event invites",

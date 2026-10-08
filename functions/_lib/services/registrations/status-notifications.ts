@@ -84,9 +84,8 @@ async function loadRegistrationEmailContext(
     ...storedUser,
     first_name: patch?.firstName === undefined ? storedUser.first_name : (patch.firstName ?? null),
     last_name: patch?.lastName === undefined ? storedUser.last_name : (patch.lastName ?? null),
-    organization_name:
-      patch?.organizationName === undefined ? storedUser.organization_name : (patch.organizationName ?? null),
-    job_title: patch?.jobTitle === undefined ? storedUser.job_title : (patch.jobTitle ?? null),
+    organization_name: registration.registration_organization_name,
+    job_title: registration.registration_job_title,
   };
   const [dayAttendance, dayWaitlist, customAnswerRows, acceptedTermsText] = await Promise.all([
     overrides.dayAttendance ?? getRegistrationDayAttendance(db, registration.id),

@@ -154,6 +154,41 @@ afterEach(() => {
 });
 
 describe("event email campaign UI", () => {
+  it("prefills a planning message without sending or overwriting an authored draft", async () => {
+    const requests = stubCampaignFetch({ previews: () => json(PREVIEW_BODY) });
+    const container = mount(
+      <EventEmailCampaign
+        campaignsPath={CAMPAIGN_PATH}
+        daysPath={`${EVENT_PATH}/days`}
+        initialSubject="Plan your sessions"
+        initialBody="Save favorites to show interest, then register where required."
+      />,
+    );
+    await settle();
+    expect(controlFor<HTMLInputElement>(container, "Subject").value).toBe("Plan your sessions");
+    await inputText(controlFor(container, "Subject"), "My authored message");
+    await typeMarkdown(container, "Message", "My authored body");
+    await act(async () => {
+      render(
+        <EventEmailCampaign
+          campaignsPath={CAMPAIGN_PATH}
+          daysPath={`${EVENT_PATH}/days`}
+          initialSubject="Changed preset"
+          initialBody="Changed preset body"
+        />,
+        container,
+      );
+    });
+    await clickButton(container, "Preview Email");
+    await settle();
+    const preview = eventEmailCampaignPreviewInputSchema.parse(
+      requests.find(({ path }) => path === `${CAMPAIGN_PATH}/previews`)?.body,
+    );
+    expect(preview.subjectOverride).toBe("My authored message");
+    expect(preview.filter).toMatchObject({ audience: "attendees", attendeeStatus: "registered" });
+    expect(requests.some(({ method, path }) => method === "POST" && path === CAMPAIGN_PATH)).toBe(false);
+  });
+
   it("previews and creates a campaign through one canonical nested resource", async () => {
     const requests = stubCampaignFetch({
       previews: () => json(PREVIEW_BODY),

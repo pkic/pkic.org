@@ -13,22 +13,16 @@ import { useContractForm } from "../../../../../hooks/useContractForm";
 import { Field } from "../../../../../ui/Field";
 import { Menu } from "../../../../../ui/Menu";
 import { Button } from "../../../../../ui/Button";
+import { FormSection } from "../../../../../ui/FormSection";
+import { FormActions } from "../../../../../components/FormActions";
+import { formatNumber } from "../../../../../../shared/format-number";
 import { Checkbox } from "../../../../../ui/Checkbox";
 import { DataTable, type DataTableColumn } from "../../../../../ui/DataTable";
 import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
 import { TextInput } from "../../../../../ui/TextControl";
 import { getJson, patchJson } from "../../../../../shared/api-client";
 import { toast } from "../../../ui";
-// The `pk-check` trio below is written as class names rather than reached
-// through a component, so this module names their stylesheet itself. `TextInput`
-// already imports it; saying so here keeps the file honest if it is ever
-// swapped for a plain input.
-import "../../../../../ui/Field.css";
-
 const TIER_CONFIG_ENDPOINT = "/api/v1/sponsors/tiers";
-
-/** The row's edit form, which every control in the row submits through. */
-const formIdFor = (tier: SponsorshipTierConfig) => `sponsorship-tier-${tier.id}`;
 
 export function SponsorshipTierConfig({ canWrite }: { canWrite: boolean }) {
   const [tiers, setTiers] = useState<SponsorshipTierConfig[]>([]);
@@ -83,84 +77,83 @@ export function SponsorshipTierConfig({ canWrite }: { canWrite: boolean }) {
     }
   }
 
+  function cancelEdit() {
+    if (saving) return;
+    setEditingId(null);
+    setError(null);
+    form.reset();
+  }
+  const editing = canWrite ? tiers.find((tier) => tier.id === editingId) : undefined;
+  if (editing)
+    return (
+      <div class="pk pk-stack">
+        <Panel aria-label="Edit sponsorship tier pricing">
+          <PanelHeader title={`Edit ${statusLabel(editing.sponsorType)} ${editing.tier} pricing`}>
+            <Button disabled={saving} onClick={cancelEdit}>
+              Back to pricing
+            </Button>
+          </PanelHeader>
+          <PanelBody>
+            <form noValidate {...form.handlers} onSubmit={(event) => void save(editing, event)} class="pk-form">
+              {error && <ErrorAlert error={error} />}
+              <FormSection title="Pricing">
+                <Field label={`${editing.tier} amount in cents`} {...form.of("amountCents")}>
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      name="amountCents"
+                      type="number"
+                      min="0"
+                      disabled={saving}
+                      value={draft.amountCents}
+                      onInput={(event) => setDraft({ ...draft, amountCents: event.currentTarget.valueAsNumber })}
+                    />
+                  )}
+                </Field>
+                <Field label={`${editing.tier} currency`} {...form.of("currency")}>
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      name="currency"
+                      disabled={saving}
+                      maxLength={3}
+                      value={draft.currency}
+                      onInput={(event) => setDraft({ ...draft, currency: event.currentTarget.value })}
+                    />
+                  )}
+                </Field>
+                <Field label="Availability" {...form.of("active")}>
+                  {(control) => (
+                    <Checkbox
+                      {...control}
+                      name="active"
+                      checked={draft.active}
+                      disabled={saving}
+                      onChange={(event) => setDraft({ ...draft, active: event.currentTarget.checked })}
+                      label={`${editing.tier} active`}
+                    />
+                  )}
+                </Field>
+              </FormSection>
+              <FormActions submitLabel="Save pricing" busyLabel="Saving pricing…" busy={saving} onCancel={cancelEdit} />
+            </form>
+          </PanelBody>
+        </Panel>
+      </div>
+    );
+
   const columns: ReadonlyArray<DataTableColumn<SponsorshipTierConfig>> = [
-    // `statusLabel` is the repository's one string-to-label formatter, so the
-    // type reads as "Consortium" without a `text-capitalize` class deciding it
-    // in CSS — where a screen reader never sees the capitalization anyway.
     { id: "type", header: "Type", cell: (tier) => statusLabel(tier.sponsorType) },
     { id: "tier", header: "Tier", cell: (tier) => tier.tier },
     {
       id: "amount",
       header: "Amount (cents)",
-      cell: (tier) =>
-        canWrite && editingId === tier.id ? (
-          <form id={formIdFor(tier)} noValidate onSubmit={(event) => void save(tier, event)}>
-            <Field label={`${tier.tier} amount in cents`} {...form.of("amountCents")}>
-              {(control) => (
-                <TextInput
-                  {...control}
-                  name="amountCents"
-                  type="number"
-                  min="0"
-                  disabled={saving}
-                  aria-label={`${tier.tier} amount in cents`}
-                  value={draft.amountCents}
-                  onInput={(event) => setDraft({ ...draft, amountCents: event.currentTarget.valueAsNumber })}
-                />
-              )}
-            </Field>
-          </form>
-        ) : (
-          tier.amountCents
-        ),
+      align: "end",
+      width: "fit",
+      cell: (tier) => formatNumber(tier.amountCents),
     },
-    {
-      id: "currency",
-      header: "Currency",
-      cell: (tier) =>
-        canWrite && editingId === tier.id ? (
-          <Field label={`${tier.tier} currency`} {...form.of("currency")}>
-            {(control) => (
-              <TextInput
-                {...control}
-                form={formIdFor(tier)}
-                name="currency"
-                disabled={saving}
-                maxLength={3}
-                value={draft.currency}
-                onInput={(event) => setDraft({ ...draft, currency: event.currentTarget.value })}
-              />
-            )}
-          </Field>
-        ) : (
-          tier.currency
-        ),
-    },
-    {
-      id: "active",
-      header: "Active",
-      cell: (tier) =>
-        canWrite && editingId === tier.id ? (
-          /*
-           * The name comes from real label text rather than an `aria-label`,
-           * so it survives translation and matches what a speech-input user
-           * would say; the text is hidden because the column header already
-           * carries it visually.
-           */
-          <Checkbox
-            form={formIdFor(tier)}
-            name="active"
-            checked={draft.active}
-            disabled={saving}
-            onChange={(event) => setDraft({ ...draft, active: event.currentTarget.checked })}
-            label={<span class="pk-sr-only">{`${tier.tier} active`}</span>}
-          />
-        ) : tier.active ? (
-          "Yes"
-        ) : (
-          "No"
-        ),
-    },
+    { id: "currency", header: "Currency", cell: (tier) => tier.currency },
+    { id: "active", header: "Active", cell: (tier) => (tier.active ? "Yes" : "No") },
     ...(canWrite
       ? [
           {
@@ -168,57 +161,32 @@ export function SponsorshipTierConfig({ canWrite }: { canWrite: boolean }) {
             header: "Actions",
             headerHidden: true,
             align: "end" as const,
-            cell: (tier: SponsorshipTierConfig) =>
-              editingId === tier.id ? (
-                <div class="pk-cluster">
-                  <Button
-                    size="sm"
-                    disabled={saving}
-                    onClick={() => {
-                      setEditingId(null);
+            cell: (tier: SponsorshipTierConfig) => (
+              <Menu
+                label={`${statusLabel(tier.sponsorType)} ${tier.tier} pricing actions`}
+                align="end"
+                items={[
+                  {
+                    id: "edit",
+                    label: "Edit pricing",
+                    disabled: saving,
+                    onSelect: () => {
+                      setDraft({ amountCents: tier.amountCents, currency: tier.currency, active: tier.active });
+                      setEditingId(tier.id);
                       setError(null);
                       form.reset();
-                    }}
-                  >
-                    Cancel
-                  </Button>
-                  <Button
-                    form={formIdFor(tier)}
-                    type="submit"
-                    variant="primary"
-                    size="sm"
-                    loading={saving}
-                    disabled={saving}
-                  >
-                    Save
-                  </Button>
-                </div>
-              ) : (
-                <Menu
-                  label={`${statusLabel(tier.sponsorType)} ${tier.tier} pricing actions`}
-                  align="end"
-                  items={[
-                    {
-                      id: "edit",
-                      label: "Edit pricing",
-                      disabled: saving || editingId !== null,
-                      onSelect: () => {
-                        setDraft({ amountCents: tier.amountCents, currency: tier.currency, active: tier.active });
-                        setEditingId(tier.id);
-                        setError(null);
-                        form.reset();
-                      },
                     },
-                  ]}
-                />
-              ),
+                  },
+                ]}
+              />
+            ),
           },
         ]
       : []),
   ];
 
   return (
-    <div class="pk" {...form.handlers}>
+    <div class="pk">
       <Panel aria-label="Sponsorship tier pricing">
         <PanelHeader title="Sponsorship tier pricing" />
         {loading && (

@@ -1,4 +1,3 @@
-import { eventParticipantSignInEvidence } from "../auth/event-participation";
 /**
  * Passkey (WebAuthn) registration and authentication.
  *
@@ -28,13 +27,8 @@ import {
   type UserSessionResult,
 } from "../auth/user-session";
 import { resolveMemberSessionTtlHours } from "../auth/session-policy";
-import {
-  staffSignInAuthorizationEvidence,
-  memberSignInAuthorizationEvidence,
-  pendingIdentitySignInAuthorizationEvidence,
-} from "../auth/identity-capacities";
-import { prepareAuthorizationGuard } from "../db/authorization-guard";
-import { sponsorUserSignInAuthorizationEvidence } from "../auth/sponsor-capacity";
+import { signInCapacityAuthorizationEvidence } from "../auth/sign-in-capacity-authorization";
+import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 import { sessionExpiresAtToExp } from "../auth/session-engine";
 import { isAuditChangeGuardFailure, prepareAuditLog, prepareAuditLogAfterOneChange } from "./audit";
 import { MAX_PASSKEY_CREDENTIALS_PER_USER } from "../../../assets/shared/constants/passkeys";
@@ -434,12 +428,15 @@ export async function completePasskeyAuthentication(
     resolved.identity.id,
     resolveMemberSessionTtlHours(env.MEMBER_SESSION_TTL_HOURS),
   );
-  const capacities: Array<"admin" | "member" | "sponsor" | "identity_invitation" | "event_participant"> = [
+  const capacities: Array<
+    "admin" | "member" | "sponsor" | "identity_invitation" | "event_participant" | "affiliation"
+  > = [
     ...(resolved.staff ? ["admin" as const] : []),
     ...(resolved.member ? ["member" as const] : []),
     ...(resolved.sponsors.length > 0 ? ["sponsor" as const] : []),
     ...(resolved.pendingIdentityCount > 0 ? ["identity_invitation" as const] : []),
     ...(resolved.eventParticipation ? ["event_participant" as const] : []),
+    ...(resolved.hasActiveAffiliation ? ["affiliation" as const] : []),
   ];
 
   const lastUsedAt = nowIso();
@@ -449,7 +446,7 @@ export async function completePasskeyAuthentication(
     actorId: string;
     auditSessionId: string;
     expiresAt: string;
-    capacities: Array<"admin" | "member" | "sponsor" | "identity_invitation" | "event_participant">;
+    capacities: Array<"admin" | "member" | "sponsor" | "identity_invitation" | "event_participant" | "affiliation">;
   }) => {
     try {
       await db.batch([
@@ -471,55 +468,18 @@ export async function completePasskeyAuthentication(
           { capacities: input.capacities, expiresAt: input.expiresAt },
           lastUsedAt,
         ),
-        ...(resolved.staff
-          ? [
-              prepareAuthorizationGuard(
-                db,
-                staffSignInAuthorizationEvidence(resolved.identity.id, normalizeEmail(resolved.identity.email)),
-              ),
-            ]
-          : []),
-        ...(resolved.member
-          ? [
-              prepareAuthorizationGuard(
-                db,
-                memberSignInAuthorizationEvidence(resolved.identity.id, normalizeEmail(resolved.identity.email)),
-              ),
-            ]
-          : []),
-        ...(resolved.sponsors.length > 0
-          ? [
-              prepareAuthorizationGuard(
-                db,
-                sponsorUserSignInAuthorizationEvidence(resolved.identity.id, normalizeEmail(resolved.identity.email)),
-              ),
-            ]
-          : []),
-        ...(resolved.pendingIdentityCount > 0
-          ? [
-              prepareAuthorizationGuard(
-                db,
-                pendingIdentitySignInAuthorizationEvidence(
-                  resolved.identity.id,
-                  normalizeEmail(resolved.identity.email),
-                ),
-              ),
-            ]
-          : []),
-        ...(resolved.eventParticipation
-          ? [
-              prepareAuthorizationGuard(
-                db,
-                eventParticipantSignInEvidence(resolved.identity.id, normalizeEmail(resolved.identity.email)),
-              ),
-            ]
-          : []),
+        ...signInCapacityAuthorizationEvidence(resolved, normalizeEmail(resolved.identity.email)).map((evidence) =>
+          prepareAuthorizationGuard(db, evidence),
+        ),
         prepared.statement,
         prepareExpiredPasskeyChallengeCleanup(db, lastUsedAt),
       ]);
     } catch (error) {
       if (await wasPasskeyChallengeConsumed(db, challenge.challengeId)) {
         throw passkeyChallengeAlreadyUsedError();
+      }
+      if (isAuthorizationGuardFailure(error)) {
+        throw new AppError(403, "AUTH_FORBIDDEN", "This account's sign-in authority changed while authenticating");
       }
       if (isAuditChangeGuardFailure(error)) {
         throw new AppError(

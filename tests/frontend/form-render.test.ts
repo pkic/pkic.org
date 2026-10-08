@@ -1,7 +1,8 @@
 import { h, render } from "preact";
 // @vitest-environment jsdom
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { act } from "preact/test-utils";
+import type { FormField } from "../../assets/ts/shared/types";
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../../assets/ts/shared/widgets/consents";
 import {
   CustomFieldList,
@@ -165,6 +166,48 @@ describe("frontend field rendering", () => {
     });
     expect(note.value).toBe("Unsaved edit");
     void act(() => render(null, form));
+  });
+
+  it("keeps topic suggestions in place through input, selection, and unrelated form rerenders", () => {
+    const form = document.createElement("form");
+    const field = {
+      ...base("topics", "Topics"),
+      fieldType: "multi_select" as const,
+      options: [option("PKI"), option("PQC"), option("Certificate operations")],
+      validation: { uiWidget: "tags", allowCustom: true },
+    } satisfies FormField;
+    const random = vi.spyOn(Math, "random").mockReturnValue(0);
+    const display = (current = field) => {
+      void act(() => render(h(CustomFieldList, { fields: [current], context: { dayAttendance: [] } }), form));
+    };
+    const chips = () => Array.from(form.querySelectorAll<HTMLButtonElement>("[data-tag-chip]"));
+    const order = () => chips().map((chip) => chip.dataset.value);
+    try {
+      display();
+      const initialOrder = order();
+      const initialChips = chips();
+      random.mockReturnValue(0.99);
+      display({ ...field });
+      expect(order()).toEqual(initialOrder);
+      expect(chips()).toEqual(initialChips);
+      const input = controlFor(form, "Topics");
+      void act(() => {
+        input.value = "Migration";
+        input.dispatchEvent(new Event("input", { bubbles: true }));
+        input.dispatchEvent(new Event("focusout", { bubbles: true }));
+      });
+      expect(order()).toEqual(initialOrder);
+      void act(() => initialChips[0].click());
+      expect(order()).toEqual(initialOrder);
+      expect(initialChips[0].getAttribute("aria-pressed")).toBe("true");
+      expect(readCustomFieldValues(form)).toEqual({ topics: [initialOrder[0]] });
+      display({ ...field, options: [...field.options, option("New topic")] });
+      expect(order()).toEqual(["PKI", "PQC", "Certificate operations", "New topic"]);
+      expect(readCustomFieldValues(form)).toEqual({ topics: [initialOrder[0]] });
+    } finally {
+      random.mockRestore();
+      void act(() => render(null, form));
+    }
   });
 
   it("renders custom widgets and serializes values", () => {

@@ -1,7 +1,8 @@
 import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
-import { Radio, Checkbox } from "../ui/Checkbox";
+import { Checkbox } from "../ui/Checkbox";
 import { Button, ButtonLink } from "../ui/Button";
+import { ParticipationQualifier } from "./ParticipationQualifier";
 
 export interface MembershipDocument {
   key: string;
@@ -49,31 +50,7 @@ export function JoinFlow({ documents }: { documents: MembershipDocument[] }) {
       <div data-join-start>
         <p class="pk-lede">First, tell us whether an organization is connected to your participation.</p>
         <form data-join-start-form class="pk-form needs-validation" noValidate>
-          <Field
-            group
-            label="Are you employed by, or do you own, an organization?"
-            errorSlot="applicantKind"
-            help="If an organization has separately authorized you to act on its behalf, choose Yes even if you are not its employee or owner."
-          >
-            {(control) => (
-              <div class="pk-stack pk-stack--snug">
-                <Radio
-                  name="applicantKind"
-                  value="organization"
-                  required
-                  aria-describedby={control["aria-describedby"]}
-                  label="Yes — I am employed by or own an organization"
-                />
-                <Radio
-                  name="applicantKind"
-                  value="individual"
-                  required
-                  aria-describedby={control["aria-describedby"]}
-                  label="No — I am not employed by and do not own an organization"
-                />
-              </div>
-            )}
-          </Field>
+          <ParticipationQualifier />
           <div data-join-path-details hidden>
             <div data-join-organization-policy class="pk-alert pk-alert--info" hidden>
               You must participate on behalf of that organization. Use an email address belonging to it so we can verify

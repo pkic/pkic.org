@@ -218,14 +218,13 @@
     gap: var(--pk-6);
   }
 
-  .pk-content-faq details {
+  .pk-content-faq article {
     padding: var(--pk-4);
     border-block-end: 1px solid var(--pk-line);
   }
 
-  .pk-content-faq summary {
+  .pk-content-faq h3 {
     color: var(--pk-accent-ink);
-    cursor: pointer;
     font-weight: 700;
   }
 

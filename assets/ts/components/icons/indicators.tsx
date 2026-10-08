@@ -61,6 +61,8 @@ export function IconPeople() {
   );
 }
 
+export { IconRemote } from "../../ui/MediaIcons";
+
 export function IconTools() {
   return (
     <StrokeIcon>

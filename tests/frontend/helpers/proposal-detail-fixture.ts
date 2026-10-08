@@ -6,6 +6,7 @@
  */
 import { act } from "preact/test-utils";
 import { vi } from "vitest";
+import { proposalSpeakersResponseSchema } from "../../../assets/shared/schemas/proposal-speakers";
 
 export const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 export const EVENT_ID = "20000000-0000-4000-8000-000000000001";
@@ -55,6 +56,9 @@ export function speaker(userId: string, role: "proposer" | "speaker" = "speaker"
     userId,
     role,
     status: "confirmed",
+    actingIdentityId: null,
+    actingIdentitySelectedAt: null,
+    actingIdentitySelection: "unrecorded",
     email: `${userId}@example.test`,
     firstName: userId.endsWith("0001") ? "Proposal" : "Second",
     lastName: "Speaker",
@@ -146,21 +150,23 @@ export function stubFetch(
         });
       }
       if (url === `/api/v1/proposals/${PROPOSAL_ID}/speakers`) {
-        return json({
-          proposal: {
-            id: PROPOSAL_ID,
-            title: "Read-only proposal",
-            status: "submitted",
-            presentationDeadline: null,
-            presentationUploaded: false,
-            presentationUploadedAt: null,
-          },
-          summary: { total: 2, confirmed: 2, pending: 0, declined: 0, profileComplete: 0, presentationUploaded: 0 },
-          speakers: [
-            { ...speaker("40000000-0000-4000-8000-000000000001", "proposer"), registrationStatus: null },
-            { ...speaker("40000000-0000-4000-8000-000000000002"), registrationStatus: "registered" },
-          ],
-        });
+        return json(
+          proposalSpeakersResponseSchema.parse({
+            proposal: {
+              id: PROPOSAL_ID,
+              title: "Read-only proposal",
+              status: "submitted",
+              presentationDeadline: null,
+              presentationUploaded: false,
+              presentationUploadedAt: null,
+            },
+            summary: { total: 2, confirmed: 2, pending: 0, declined: 0, profileComplete: 0, presentationUploaded: 0 },
+            speakers: [
+              { ...speaker("40000000-0000-4000-8000-000000000001", "proposer"), registrationStatus: null },
+              { ...speaker("40000000-0000-4000-8000-000000000002"), registrationStatus: "registered" },
+            ],
+          }),
+        );
       }
       if (url.startsWith(`/api/v1/proposals/${PROPOSAL_ID}/audit-log`)) {
         return json({

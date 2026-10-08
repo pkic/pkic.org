@@ -1,6 +1,11 @@
 import { siteFeedItems, siteMapEntries } from "./site-content";
 import { all } from "../db/queries";
 import type { Env } from "../types";
+import type { SiteMapEntry } from "../../../assets/shared/site-content";
+import type { SitePublicationSnapshot } from "../../../assets/shared/schemas/site-publication";
+import { memberProfileHref } from "../../../assets/shared/member-profile-url";
+import { publishedSessionHistory, publishedSpeakerHistory } from "./site-session-history";
+import { publishedEventAgendas } from "./site-published-event-agendas";
 
 const DISCOVERY_PATHS = new Set([
   "/robots.txt",
@@ -38,7 +43,7 @@ function discoveryHeaders(contentType: string): HeadersInit {
   };
 }
 
-async function memberSitemapEntries(env: Env): Promise<Array<{ route: string }>> {
+async function memberSitemapEntries(env: Env): Promise<SiteMapEntry[]> {
   const rows = await all<{ slug: string }>(
     env.DB,
     `SELECT DISTINCT organization.slug
@@ -50,6 +55,23 @@ async function memberSitemapEntries(env: Env): Promise<Array<{ route: string }>>
       ORDER BY organization.slug`,
   );
   return rows.map((row) => ({ route: `/members/${encodeURIComponent(row.slug)}/` }));
+}
+
+/** Build-only discovery derives archive dates from the same approved content as the pages. */
+export function publishedSnapshotSitemapEntries(publication: SitePublicationSnapshot): SiteMapEntry[] {
+  return [
+    { route: "/sessions/" },
+    ...publishedSessionHistory(publication).map(({ route, lastmod }) => ({ route, lastModified: lastmod })),
+    ...publishedSpeakerHistory(publication).map((person) => ({
+      route: person.route,
+      lastModified: person.appearances
+        .flatMap(({ lastmod }) => (lastmod ? [lastmod] : []))
+        .sort()
+        .at(-1),
+    })),
+    ...publication.members.map((member) => ({ route: memberProfileHref(member) })),
+    ...publishedEventAgendas(publication).map(({ route }) => ({ route })),
+  ];
 }
 
 function sitemapIndexResponse(request: Request): Response {
@@ -64,7 +86,7 @@ function sitemapIndexResponse(request: Request): Response {
   });
 }
 
-function sitemapResponse(request: Request, language: "en" | "ms", members: Array<{ route: string }>): Response {
+function sitemapResponse(request: Request, language: "en" | "ms", members: readonly SiteMapEntry[]): Response {
   const origin = new URL(request.url).origin;
   const dynamicEntries = language === "en" ? members : [];
   const entries = new Map(siteMapEntries(language).map((entry) => [entry.route, entry]));
@@ -136,7 +158,7 @@ export function isSiteDiscoveryPath(pathname: string): boolean {
 
 export function renderPublishedDiscovery(
   request: Request,
-  members: Array<{ route: string }>,
+  members: readonly SiteMapEntry[],
   options: { allowIndexing?: boolean } = {},
 ): Response {
   if (request.method !== "GET" && request.method !== "HEAD") {

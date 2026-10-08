@@ -1,3 +1,4 @@
+import { prepareMeetingAgendaSchedule, rethrowMeetingAgendaScheduleFailure } from "./agenda-intervals";
 import { prepareCalendarSchedule, prepareCalendarRevision } from "./calendar-schedule";
 import { prepareSeriesEvent } from "./prepare-series-event";
 import type { z } from "zod";
@@ -335,6 +336,7 @@ export async function createGroupEventSeries(
       }),
     ]);
   } catch (error) {
+    rethrowMeetingAgendaScheduleFailure(error);
     if (isAuthorizationGuardFailure(error)) {
       throw new AppError(
         409,
@@ -487,8 +489,10 @@ export async function updateGroupEventSeries(
           )
         : []),
       ...prepareCalendarRevision(db, seriesId),
+      ...prepareMeetingAgendaSchedule(db, existing.eventId, seriesId),
     ]);
   } catch (error) {
+    rethrowMeetingAgendaScheduleFailure(error);
     if (isAuthorizationGuardFailure(error)) {
       throw new AppError(409, "EVENT_SERIES_CHANGED", "The meeting series changed while the update was being saved");
     }
@@ -575,8 +579,10 @@ export async function cancelGroupEventSeries(
       ),
       ...notifications,
       ...prepareCalendarRevision(db, seriesId),
+      ...prepareMeetingAgendaSchedule(db, existing.eventId, seriesId),
     ]);
   } catch (error) {
+    rethrowMeetingAgendaScheduleFailure(error);
     if (isAuthorizationGuardFailure(error) || isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "EVENT_SERIES_CHANGED", "The meeting series changed while it was being cancelled");
     }

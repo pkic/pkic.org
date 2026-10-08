@@ -15,10 +15,10 @@ import { publicUserHeadshotPath } from "../user-headshot";
 
 interface IdentityReadRow {
   id: string;
-  member_id: string;
+  member_id: string | null;
   organization_id: string | null;
   organization_name: string | null;
-  membership_category: string;
+  membership_category: string | null;
   user_id: string;
   first_name: string | null;
   last_name: string | null;
@@ -120,6 +120,7 @@ async function queryIdentities(
     conditions.push("identity.organization_id = ?");
     bindings.push(query.organizationId);
   }
+  if (query.organizationOnly) conditions.push("identity.organization_id IS NOT NULL");
   if (query.userId) {
     conditions.push("identity.user_id = ?");
     bindings.push(query.userId);
@@ -139,7 +140,7 @@ async function queryIdentities(
     bindings.push(query.source);
   }
   const fromSql = `FROM identities identity
-    JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+    LEFT JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
     JOIN users user ON user.id = identity.user_id
     LEFT JOIN organizations organization ON organization.id = identity.organization_id
     LEFT JOIN user_emails selected_email

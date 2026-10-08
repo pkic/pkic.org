@@ -3,30 +3,32 @@ import { prepareAuthorizationGuard, type AuthorizationEvidence } from "../../db/
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
+import type { AuditScope } from "../audit";
 
 interface IdentityManagementInput {
-  memberId: string;
+  memberId: string | null;
+  organizationId?: string;
   actorUserId: string;
   databaseUserId?: string | null;
+  sessionId?: string;
+  sessionExpiresAt?: string;
   staffAuthorized: boolean;
 }
 
-export function organizationIdentityManagementEvidence(input: IdentityManagementInput): AuthorizationEvidence {
+function organizationIdentityRoleEvidence(input: IdentityManagementInput): AuthorizationEvidence {
   if (input.staffAuthorized) {
     const databaseUserId = input.databaseUserId === undefined ? input.actorUserId : input.databaseUserId;
     if (databaseUserId === null) {
       return {
-        sql: "SELECT 1 FROM members WHERE id = ? AND organization_id IS NOT NULL AND status = 'active'",
-        bindings: [input.memberId],
+        sql: "SELECT 1 FROM organizations WHERE id = COALESCE(?, (SELECT organization_id FROM members WHERE id = ?))",
+        bindings: [input.organizationId ?? null, input.memberId],
       };
     }
     return {
       sql: `SELECT 1
-              FROM members member
+              FROM organizations organization
               JOIN users actor ON actor.id = ? AND actor.active = 1
-             WHERE member.id = ?
-               AND member.organization_id IS NOT NULL
-               AND member.status = 'active'
+             WHERE organization.id = COALESCE(?, (SELECT organization_id FROM members WHERE id = ?))
                AND (
                  EXISTS (
                    SELECT 1
@@ -48,7 +50,7 @@ export function organizationIdentityManagementEvidence(input: IdentityManagement
                       AND (grant_row.expires_at IS NULL OR grant_row.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
                  )
                )`,
-      bindings: [databaseUserId, input.memberId],
+      bindings: [databaseUserId, input.organizationId ?? null, input.memberId],
     };
   }
 
@@ -71,6 +73,7 @@ export function organizationIdentityManagementEvidence(input: IdentityManagement
              AND role.revoked_at IS NULL
              AND (role.expires_at IS NULL OR role.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
            WHERE member.id = ?
+             AND (? IS NULL OR member.organization_id = ?)
              AND member.organization_id IS NOT NULL
              AND member.status = 'active'
            LIMIT 1`,
@@ -79,6 +82,29 @@ export function organizationIdentityManagementEvidence(input: IdentityManagement
       REPRESENTATIVE_ROLE_IDS.primaryContact,
       REPRESENTATIVE_ROLE_IDS.secondaryContact,
       input.memberId,
+      input.organizationId ?? null,
+      input.organizationId ?? null,
+    ],
+  };
+}
+
+/** Rechecks the caller's exact live human session as well as current organization management authority. */
+export function organizationIdentityManagementEvidence(input: IdentityManagementInput): AuthorizationEvidence {
+  const role = organizationIdentityRoleEvidence(input);
+  if (!input.sessionId) return role;
+  return {
+    sql: `SELECT 1 WHERE EXISTS (${role.sql}) AND EXISTS (
+            SELECT 1 FROM sessions session JOIN users actor ON actor.id=session.user_id AND actor.active=1
+             WHERE session.id=? AND session.user_id=? AND session.revoked_at IS NULL
+               AND session.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now')
+               AND (? IS NULL OR ? > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
+          )`,
+    bindings: [
+      ...role.bindings,
+      input.sessionId,
+      input.databaseUserId ?? input.actorUserId,
+      input.sessionExpiresAt ?? null,
+      input.sessionExpiresAt ?? null,
     ],
   };
 }
@@ -131,10 +157,10 @@ export async function requireOrganizationIdentityManagement(
 ): Promise<void> {
   const member = await first<{ id: string }>(
     db,
-    "SELECT id FROM members WHERE id = ? AND organization_id IS NOT NULL AND status = 'active'",
-    [input.memberId],
+    "SELECT id FROM organizations WHERE id = COALESCE(?, (SELECT organization_id FROM members WHERE id = ?))",
+    [input.organizationId ?? null, input.memberId],
   );
-  if (!member) throw new AppError(404, "ORGANIZATION_MEMBERSHIP_NOT_FOUND", "Active organization membership not found");
+  if (!member) throw new AppError(404, "ORGANIZATION_NOT_FOUND", "Organization not found");
   const evidence = organizationIdentityManagementEvidence(input);
   const contact = await first<{ authorized: number }>(db, `SELECT 1 AS authorized WHERE EXISTS (${evidence.sql})`, [
     ...evidence.bindings,
@@ -155,26 +181,20 @@ export async function requireOrganizationIdentityManagement(
   }
 }
 
-export async function resolveOrganizationMemberId(db: DatabaseLike, organizationId: string): Promise<string> {
-  const aggregate = await first<{ id: string | null; status: string | null; category_code: string | null }>(
+/** Membership enriches a canonical organization relationship; it is not an affiliation prerequisite. */
+export async function resolveOrganizationMemberId(db: DatabaseLike, organizationId: string): Promise<string | null> {
+  const organization = await first<{ member_id: string | null }>(
     db,
-    `SELECT member.id, member.status, category.category_code
-       FROM organizations organization
+    `SELECT member.id AS member_id FROM organizations organization
        LEFT JOIN members member ON member.organization_id = organization.id
-       LEFT JOIN member_category_assignments category ON category.member_id = member.id
       WHERE organization.id = ?`,
     [organizationId],
   );
-  if (!aggregate) throw new AppError(404, "ORGANIZATION_NOT_FOUND", "Organization not found");
-  if (!aggregate.id || !aggregate.category_code) {
-    throw new AppError(
-      422,
-      "ORG_CATEGORY_NOT_SET",
-      "Set the organization's membership category before creating identities",
-    );
-  }
-  if (aggregate.status !== "active") {
-    throw new AppError(409, "ORGANIZATION_MEMBERSHIP_INACTIVE", "Organization membership is not active");
-  }
-  return aggregate.id;
+  if (!organization) throw new AppError(404, "ORGANIZATION_NOT_FOUND", "Organization not found");
+  return organization.member_id;
+}
+
+/** Organization audit scopes use membership IDs; nonmember affiliations stay on the canonical person's scope. */
+export function organizationIdentityAuditScope(memberId: string | null, userId: string): AuditScope {
+  return memberId === null ? { type: "user", id: userId } : { type: "organization", id: memberId };
 }

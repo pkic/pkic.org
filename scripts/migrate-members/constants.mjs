@@ -1,3 +1,5 @@
+import { dateTimeLocalToIso } from "../../assets/shared/timezone.ts";
+
 /**
  * Static lookup tables shared across the importer's data-processing
  * modules (organizations.mjs, non-member-sponsors.mjs, build-migration.mjs).
@@ -29,21 +31,27 @@ export const EVENT_NAME_ALIASES = {
     slug: "pqc-conference-amsterdam-nl-2023",
     name: "Post-Quantum Cryptography Conference - Amsterdam 2023",
     timezone: "Europe/Amsterdam",
-    startsAt: "2023-11-07",
-    endsAt: "2023-11-08",
+    // Authored registration opens at 08:30; final networking has no stated end.
+    // content/events/2023/pqc-conference-amsterdam-nl/index.md
+    startsAt: dateTimeLocalToIso("2023-11-07T08:30", "Europe/Amsterdam"),
+    endsAt: null,
   },
   "Post-Quantum Cryptography Conference Austin 2025": {
     slug: "pqc-conference-austin-us-2025",
     name: "Post-Quantum Cryptography Conference - Austin 2025",
     timezone: "America/Chicago",
-    startsAt: "2025-01-15",
-    endsAt: "2025-01-16",
+    // Authored registration and explicit End of Day Two marker.
+    // content/events/2025/pqc-conference-austin-us/index.md
+    startsAt: dateTimeLocalToIso("2025-01-15T08:30", "America/Chicago"),
+    endsAt: dateTimeLocalToIso("2025-01-16T18:00", "America/Chicago"),
   },
   "Post-Quantum Cryptography Conference Kuala Lumpur 2025": {
     slug: "pqc-conference-kuala-lumpur-my-2025",
     name: "Post-Quantum Cryptography Conference - Kuala Lumpur 2025",
     timezone: "Asia/Kuala_Lumpur",
-    startsAt: "2025-10-28",
-    endsAt: "2025-10-30",
+    // Authored registration and explicit End of Day Three marker.
+    // content/events/2025/pqc-conference-kuala-lumpur-my/_index.md
+    startsAt: dateTimeLocalToIso("2025-10-28T08:30", "Asia/Kuala_Lumpur"),
+    endsAt: dateTimeLocalToIso("2025-10-30T17:00", "Asia/Kuala_Lumpur"),
   },
 };

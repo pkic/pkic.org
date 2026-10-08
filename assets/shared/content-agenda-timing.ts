@@ -1,4 +1,5 @@
-import { dateTimeLocalToIso } from "./timezone";
+import { DEFAULT_AGENDA_TRANSITION_MINUTES } from "./event-agenda-transition.ts";
+import { dateTimeLocalToIso } from "./timezone.ts";
 
 export interface ContentAgendaTimingSource {
   time: string;
@@ -13,7 +14,7 @@ export function contentAgendaSlotTiming(
   timeZone: string,
   slot: ContentAgendaTimingSource,
   nextSlot?: ContentAgendaTimingSource,
-  transitionMinutes = 5,
+  transitionMinutes = DEFAULT_AGENDA_TRANSITION_MINUTES,
 ): { startsAt: string; durationMinutes?: number } {
   const instant = (time: string) => dateTimeLocalToIso(`${date}T${time.padStart(5, "0")}`, timeZone);
   const startsAt = instant(slot.time);

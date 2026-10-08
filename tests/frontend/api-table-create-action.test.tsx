@@ -9,6 +9,11 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { pageInfoSchema } from "../../assets/shared/schemas/pagination";
+import {
+  badgeCredentialsQuerySchema,
+  badgeCredentialsResponseSchema,
+} from "../../assets/shared/schemas/route-contracts-event-badges";
+import { chooseColumnFilter } from "./helpers/column-menu";
 import { ApiDataTable } from "../../assets/ts/components/ApiDataTable";
 
 const mounted: HTMLElement[] = [];
@@ -33,6 +38,7 @@ afterEach(() => {
     container.remove();
   }
   vi.unstubAllGlobals();
+  history.replaceState(null, "", location.pathname);
 });
 
 const responseSchema = z.object({
@@ -85,7 +91,7 @@ describe("ApiDataTable createAction", () => {
     const buttons = [...(toolbar?.querySelectorAll("button") ?? [])].map(
       (button) => button.getAttribute("aria-label") ?? button.textContent?.trim(),
     );
-    expect(buttons).toEqual(["Search things", "New thing", "Refresh"]);
+    expect(buttons).toEqual(["Search things", "Refresh", "New thing"]);
     expect(toolbar?.querySelector("input[type=search]")).not.toBeNull();
 
     await act(() => {
@@ -135,4 +141,60 @@ it("keeps loaded rows visible after a transient refresh failure and clears them 
   await act(() => refresh.click());
   await settle();
   expect(container.textContent).not.toContain("Row one");
+});
+
+it("pins caller-owned attendee scope while keeping restored status filters editable", async () => {
+  const owner = "30000000-0000-4000-8000-000000000001";
+  history.replaceState(
+    null,
+    "",
+    "#/records?scoped-badges.f.userId=30000000-0000-4000-8000-000000000099&scoped-badges.f.status=active",
+  );
+  const queries: Array<ReturnType<typeof badgeCredentialsQuerySchema.parse>> = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL) => {
+      const url = new URL(
+        typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+        location.origin,
+      );
+      queries.push(badgeCredentialsQuerySchema.parse(Object.fromEntries(url.searchParams)));
+      return new Response(JSON.stringify({ badges: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } }), {
+        headers: { "content-type": "application/json" },
+      });
+    }),
+  );
+  const container = mount(
+    <ApiDataTable
+      endpoint="/api/v1/events/summit/badges"
+      responseSchema={badgeCredentialsResponseSchema}
+      resolve={(response) => response.badges}
+      resolvePage={(response) => response.page}
+      caption="Scoped badges"
+      params={{ userId: owner }}
+      initialFilters={{ status: "active" }}
+      urlState="scoped-badges"
+      paginate
+      columns={[
+        {
+          header: "Status",
+          cell: (row) => row.status,
+          filter: {
+            param: "status",
+            options: [
+              { value: "active", label: "Active" },
+              { value: "revoked", label: "Revoked" },
+            ],
+          },
+        },
+      ]}
+    />,
+  );
+  await settle();
+  expect(queries[0].userId).toBe(owner);
+  expect(queries[0].status).toBe("active");
+  await chooseColumnFilter(container, "Status", "Revoked");
+  await settle();
+  expect(queries.at(-1)?.userId).toBe(owner);
+  expect(queries.at(-1)?.status).toBe("revoked");
 });

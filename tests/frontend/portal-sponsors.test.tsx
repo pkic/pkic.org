@@ -202,7 +202,7 @@ describe("portal sponsor management", () => {
     });
   });
 
-  it("names the pricing table and every editable cell, and titles the panel it sits in", async () => {
+  it("replaces the read-only pricing table with a labeled dedicated editor and returns on cancel", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(
@@ -217,26 +217,64 @@ describe("portal sponsor management", () => {
     const container = mount(<SponsorshipTierConfig canWrite />);
     await settle();
     expect(container.querySelectorAll("input")).toHaveLength(0);
-    await beginRecordEdit(container, "Event Leader pricing actions", "Edit pricing");
-
-    // A table with no caption is announced as "table"; several on one page are
-    // announced as several tables.
     expect(container.querySelector("caption")?.textContent).toBe("Sponsorship tier pricing");
-    expect(container.querySelector("section.pk-panel")?.getAttribute("aria-label")).toBe("Sponsorship tier pricing");
-
-    // Each cell control is named after the tier it edits, so a column of
-    // identical boxes is distinguishable when listed on its own.
-    const amount = container.querySelector<HTMLInputElement>('input[name="amountCents"]');
-    expect(amount?.getAttribute("aria-label")).toBe("Leader amount in cents");
-    // The active switch is a full check block whose name is real label text,
-    // hidden because the column header already carries it visually.
+    expect([...container.querySelectorAll("th")].map((th) => th.textContent)).toContain("Actions");
+    await beginRecordEdit(container, "Event Leader pricing actions", "Edit pricing");
+    expect(container.querySelector("table")).toBeNull();
+    expect(container.querySelector("section.pk-panel")?.getAttribute("aria-label")).toBe(
+      "Edit sponsorship tier pricing",
+    );
+    const amount = container.querySelector<HTMLInputElement>('input[name="amountCents"]')!;
+    const label = container.querySelector<HTMLLabelElement>(`label[for="${amount.id}"]`);
+    expect(label?.textContent).toContain("Leader amount in cents");
     const active = container.querySelector<HTMLLabelElement>("label.pk-check");
     expect(active?.querySelector("input.pk-check__input")).not.toBeNull();
-    expect(active?.querySelector("span.pk-check__label")?.textContent).toBe("Leader active");
-    expect(active?.querySelector("span.pk-check__label .pk-sr-only")?.textContent).toBe("Leader active");
-    // The actions column is named for assistive technology even though its
-    // header is not drawn.
-    expect([...container.querySelectorAll("th")].map((th) => th.textContent)).toContain("Actions");
+    expect(active?.textContent).toContain("Leader active");
+    expect(container.querySelector("[form]")).toBeNull();
+    await act(async () => {
+      [...container.querySelectorAll<HTMLButtonElement>("button")]
+        .find((button) => button.textContent === "Cancel")!
+        .click();
+    });
+    expect(container.querySelector("caption")?.textContent).toBe("Sponsorship tier pricing");
+    expect(container.querySelector("form")).toBeNull();
+  });
+
+  it("retains the pricing draft after canonical refusal and cancels without another write", async () => {
+    const writes: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PATCH") {
+          writes.push(sponsorshipTierConfigUpdateSchema.parse(JSON.parse(String(init.body))));
+          return Response.json({ error: "Pricing changed; review your draft." }, { status: 409 });
+        }
+        return Response.json(managedSponsorTiersResponseSchema.parse({ tiers, visibility: "all" }));
+      }),
+    );
+    const container = mount(<SponsorshipTierConfig canWrite />);
+    await settle();
+    await beginRecordEdit(container, "Event Leader pricing actions", "Edit pricing");
+    const amount = container.querySelector<HTMLInputElement>('input[name="amountCents"]')!;
+    await act(async () => {
+      amount.value = "75000";
+      amount.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[type="submit"]')!.click();
+      await settle();
+    });
+    expect(writes).toEqual([{ amountCents: 75000, currency: "usd", active: true }]);
+    expect(container.querySelector("[role='alert']")).not.toBeNull();
+    expect(container.querySelector<HTMLInputElement>('input[name="amountCents"]')?.value).toBe("75000");
+    expect(container.querySelector("table")).toBeNull();
+    await act(async () => {
+      [...container.querySelectorAll<HTMLButtonElement>("button")]
+        .find((button) => button.textContent === "Cancel")!
+        .click();
+    });
+    expect(writes).toHaveLength(1);
+    expect(container.querySelector("caption")?.textContent).toBe("Sponsorship tier pricing");
   });
 
   it("says the pricing catalog is empty in an announced region", async () => {

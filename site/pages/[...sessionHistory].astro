@@ -1,0 +1,74 @@
+---
+import { publicationRouteCacheKey, PUBLICATION_SITE_ORIGIN } from "../publication-cache";
+import { publicationPageInputs } from "../publication-page-inputs";
+import { publicSessionCalendarPath } from "../../functions/_lib/services/site-public-agenda-calendar";
+import { agendaSpeakerContent } from "../../assets/shared/public-agenda-content";
+import { eventParticipationLink } from "../../assets/shared/event-participation-link";
+import { publicSessionTiming } from "../../assets/shared/session-public-timing";
+import { sessionHistoryStructuredData } from "../../functions/_lib/services/site-history-structured-data";
+import PublicPage from "../layouts/PublicPage.astro";
+import { Markdown } from "../../assets/ts/ui/Markdown";
+import { Breadcrumb } from "../../assets/ts/ui/Breadcrumb";
+import { AgendaSpeaker } from "../../assets/ts/site/AgendaSpeaker";
+import { publication } from "../publication";
+import { publishedSessionHistory } from "../../functions/_lib/services/site-session-history";
+import { agendaOccurrenceRoomIds } from "../../assets/shared/event-agenda-rooms";
+import { formatDateRange, formatTimeRangeInZone } from "../../assets/shared/format-date";
+import { markdownImageSources } from "../publication-markdown-images";
+
+export async function getStaticPaths() {
+  return Promise.all(publishedSessionHistory(publication).map(async (item) => {
+    const { agenda, session } = item;
+    const timing = publicSessionTiming(session);
+    const agendaPath = agenda.publicAgendaPath ?? `/events/${agenda.eventSlug}/agenda/`;
+    const calendars = publication.eventAgendaCalendars;
+    const calendar = calendars && Object.hasOwn(calendars, agenda.eventSlug) ? calendars[agenda.eventSlug] : undefined;
+    const view = {
+      eventName: agenda.eventName, eventSlug: agenda.eventSlug, agendaPath,
+      title: session.title, description: session.description, timeZone: agenda.timeZone,
+      timing, date: formatDateRange(timing?.startAt, timing?.endAt, agenda.timeZone),
+      times: timing ? formatTimeRangeInZone(timing.startAt, timing.endAt, agenda.timeZone) : "",
+      rooms: agendaOccurrenceRoomIds(session).map((id) => agenda.rooms.find((room) => room.id === id)?.name).filter(Boolean),
+      prerequisites: session.history?.prerequisites,
+      credits: item.credits.map((credit) => {
+        return {
+          speaker: agendaSpeakerContent(session, credit),
+          personPath: "userId" in credit ? `/people/${encodeURIComponent(credit.userId)}/` : undefined,
+        };
+      }),
+      materials: item.materials.map(({ title, url, kind, version }) => ({ title, url, kind, version })),
+      participation: eventParticipationLink(agenda.eventSlug, session.id, session.admissionPolicy, session.accessPolicy),
+      sessionCalendar: calendar?.entries.some((entry) => entry.occurrenceId === session.id && entry.status === "confirmed")
+        ? publicSessionCalendarPath(agendaPath, session.id) : undefined,
+    };
+    const pageInputs = await publicationPageInputs({ route: item.route,
+      title: `${session.title} · ${agenda.eventName ?? "PKI Consortium"}`, description: session.description.slice(0, 180),
+      structuredData: sessionHistoryStructuredData(item, PUBLICATION_SITE_ORIGIN),
+      imageRefs: [
+        ...markdownImageSources([view.description, view.prerequisites, ...view.credits.map((credit) => credit.speaker.bioMarkdown)])
+          .map((source) => ({ source, portrait: false })),
+        ...view.credits.flatMap((credit) => credit.speaker.imageSrc ? [{ source: credit.speaker.imageSrc, portrait: true }] : []),
+      ],
+    });
+    return {
+      params: { sessionHistory: item.route.replace(/^\/|\/$/g, "") }, props: { view, pageInputs },
+      ...(pageInputs.imageInputs.cacheable ? { cacheKey: publicationRouteCacheKey(item.route, { view, pageInputs }) } : {}),
+    };
+  }));
+}
+const { view, pageInputs } = Astro.props;
+---
+<PublicPage title={pageInputs.title} pageInputs={pageInputs}>
+  <article class="pk-section pk-container" data-pagefind-body>
+    <Breadcrumb items={[{ label: `${view.eventName ?? "Event"} agenda`, href: view.agendaPath }, { label: "Session" }]} />
+    <h1>{view.title}</h1>
+    <p><time datetime={view.timing?.startAt}>{view.date}</time> · {view.times}{view.timing?.endNotRecorded && " · End not recorded"} · {view.timeZone}{view.rooms.length > 0 && ` · ${view.rooms.join(" / ")}`}</p>
+    <Markdown className="pk-session-abstract" markdown={view.description} />
+    {view.prerequisites && <section><h2>Before attending</h2><Markdown markdown={view.prerequisites} /></section>}
+    {view.credits.length > 0 && <section><h2>Speakers</h2><div class="pk-content-agenda__speakers">{view.credits.map((credit) => <article><AgendaSpeaker speaker={credit.speaker} personPath={credit.personPath} detail /></article>)}</div></section>}
+    {!view.timing?.endNotRecorded && <section><h2>Attendance</h2><p>{view.participation.policyLabel}</p><p>{view.participation.message}</p><a href={view.participation.url}>{view.participation.label}</a></section>}
+    {view.materials.length > 0 && <section><h2>Session materials</h2><ul>{view.materials.map((material) => <li><a href={material.url} rel="noopener noreferrer">{material.title}</a> · {material.kind} · version {material.version}</li>)}</ul></section>}
+    <p><a href={`${view.agendaPath}calendar.ics`}>Event calendar</a>{view.sessionCalendar && <> · <a href={view.sessionCalendar} download>Download session calendar</a></>} · <a href={view.agendaPath}>Full agenda</a></p>
+  </article>
+</PublicPage>
+<style>article section { margin-block: var(--pk-space-6); }</style>

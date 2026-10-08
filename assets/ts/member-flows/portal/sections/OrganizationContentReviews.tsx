@@ -232,7 +232,7 @@ export function OrganizationContentReviews({ reviewId }: { reviewId?: string }) 
         paginate
         searchPlaceholder="organization, submitter, or note…"
         initialSort="-submittedAt"
-        params={{ status: DEFAULT_QUEUE_STATUS }}
+        initialFilters={{ status: DEFAULT_QUEUE_STATUS }}
         columns={[
           {
             header: "Organization",
@@ -257,7 +257,7 @@ export function OrganizationContentReviews({ reviewId }: { reviewId?: string }) 
             filter: {
               param: "status",
               options: CONTENT_REVIEW_STATUSES.map((value) => ({
-                value: value === DEFAULT_QUEUE_STATUS ? "" : value,
+                value,
                 label: statusLabel(value),
               })),
             },

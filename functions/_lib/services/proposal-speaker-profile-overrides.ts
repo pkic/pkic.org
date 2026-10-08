@@ -34,6 +34,11 @@ export type ProposalProfilePatch = Partial<ProposalProfileValues>;
 
 export interface ProposalProfileOverrideSnapshot extends ProposalSpeakerAuthoritySnapshot {
   expectedProfileOverridesJson: string | null;
+  expectedActingIdentityId?: string | null;
+  expectedActingIdentitySelectedAt?: string | null;
+  expectedActingIdentitySnapshotJson?: string | null;
+  authority?: import("./participant-authority").ParticipantAuthority;
+  expectedManageLinkSecret?: string | null;
 }
 
 export function proposalSpeakerAuthorityCondition(context: ProposalSpeakerAuthoritySnapshot): {
@@ -77,6 +82,7 @@ export function prepareProposalSpeakerProfileAuthorityGuard(
           SET profile_overrides_json = profile_overrides_json
         WHERE id = ? AND proposal_id = ? AND user_id = ? AND status = ? AND invite_generation = ?
           AND profile_overrides_json IS ?
+          AND acting_identity_id IS ? AND acting_identity_selected_at IS ? AND acting_identity_snapshot_json IS ?
           AND EXISTS (
             SELECT 1 FROM session_proposals
              WHERE id = ? AND status = ? AND updated_at = ? AND deleted_at IS NULL
@@ -89,6 +95,9 @@ export function prepareProposalSpeakerProfileAuthorityGuard(
       context.currentStatus,
       context.inviteGeneration,
       context.expectedProfileOverridesJson,
+      context.expectedActingIdentityId ?? null,
+      context.expectedActingIdentitySelectedAt ?? null,
+      context.expectedActingIdentitySnapshotJson ?? null,
       context.proposalId,
       context.proposalStatus,
       context.proposalUpdatedAt,

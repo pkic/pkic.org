@@ -1,0 +1,21 @@
+.pk-agenda-break-sponsors {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pk-space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pk-agenda-break-sponsors li > a,
+.pk-agenda-break-sponsors li > span {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pk-space-1);
+}
+
+.pk-agenda-break-sponsors img {
+  max-inline-size: 5rem;
+  block-size: 1.5rem;
+  object-fit: contain;
+}

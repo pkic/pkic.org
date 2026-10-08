@@ -17,13 +17,14 @@ import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./reg
  */
 
 import { ensureResvgWasm } from "../utils/resvg";
-import { renderBadgeSvg, renderDonationBadgeSvg, type BadgeRole } from "./og-badge";
+import { renderBadgeSvg, renderDonationBadgeSvg } from "./og-badge";
 import { first, all } from "../db/queries";
 import { fetchGravatar } from "./gravatar";
 import type { DatabaseLike, Env } from "../types";
 import { fetchHeroImage, fetchStaticAsset, uint8ToBase64 } from "./og-badge-hero-image";
 import { validateRasterImage } from "../utils/image-format";
 import { STANDARD_HEADSHOT_MAX_BYTES } from "../../../assets/shared/schemas/images";
+import { socialBadgeRoleSchema } from "../../../assets/shared/schemas/participant-roles";
 import {
   proposalSpeakerEffectiveHeadshotExpression,
   proposalSpeakerEffectiveProfileColumns,
@@ -206,7 +207,7 @@ export async function generateBadgePng(code: string, env: BadgeRenderEnv, origin
     svg = renderBadgeSvg({
       firstName: row.first_name ?? "",
       lastName: row.last_name ?? "",
-      role: (row.effective_role as BadgeRole) ?? "attendee",
+      role: socialBadgeRoleSchema.parse(row.effective_role ?? "attendee"),
       eventName: row.event_name,
       startsAt: row.starts_at,
       endsAt: row.ends_at,
@@ -231,7 +232,7 @@ export async function generateBadgePng(code: string, env: BadgeRenderEnv, origin
     svg = renderBadgeSvg({
       firstName: row.first_name ?? "",
       lastName: row.last_name ?? "",
-      role: (row.speaker_role as BadgeRole) ?? "speaker",
+      role: socialBadgeRoleSchema.parse(row.speaker_role ?? "speaker"),
       eventName: row.event_name,
       startsAt: row.starts_at,
       endsAt: row.ends_at,

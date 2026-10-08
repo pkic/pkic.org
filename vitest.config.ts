@@ -24,7 +24,16 @@ export default defineConfig(async () => {
       bindings: {
         TEST_MIGRATIONS: migrations,
         APP_BASE_URL: "https://app.test",
+        PKIC_SCANNER_BENCHMARK_MODE: process.env.PKIC_SCANNER_BENCHMARK_MODE ?? "service",
+        PKIC_SCANNER_BENCHMARK_POPULATION: process.env.PKIC_SCANNER_BENCHMARK_POPULATION ?? "2000",
+        PKIC_SCANNER_BENCHMARK_WORKLOAD: process.env.PKIC_SCANNER_BENCHMARK_WORKLOAD ?? "legacy",
+        PKIC_SCANNER_BENCHMARK_RATE: process.env.PKIC_SCANNER_BENCHMARK_RATE ?? "",
+        PKIC_SCANNER_BENCHMARK_CONCURRENCY: process.env.PKIC_SCANNER_BENCHMARK_CONCURRENCY ?? "32",
         INTERNAL_SIGNING_SECRET: "test-signing-secret",
+        BADGE_PRINT_ENCRYPTION_KEYS: JSON.stringify({
+          activeKeyId: "synthetic-test-v1",
+          keys: { "synthetic-test-v1": "synthetic-test-only-badge-print-key-at-least-32-characters" },
+        }),
         SENDGRID_API_KEY: "test-key",
         FEEDBACK_IDENTITY_SECRET_V1: "feedback-secret",
         ADMIN_API_KEY: "test-admin-key",
@@ -102,6 +111,7 @@ export default defineConfig(async () => {
             exclude: [
               ...NODE_UNIT_TEST_FILES,
               ...workerFetchFiles,
+              "tests/event-agenda-scan-load.test.ts",
               "tests/frontend/**",
               "tests/e2e/**",
               "tests/tools/**",
@@ -109,6 +119,25 @@ export default defineConfig(async () => {
             ],
           },
         },
+        ...(process.env.PKIC_SCANNER_BENCHMARK === "1"
+          ? [
+              {
+                ...siteOptions,
+                plugins: [
+                  ...sitePlugins(),
+                  cloudflareTest({ ...workerOptions, main: "./tests/helpers/d1-test-worker.ts" }),
+                ],
+                test: {
+                  ...testOptions,
+                  name: "scanner-load",
+                  include: ["tests/event-agenda-scan-load.test.ts"],
+                  exclude: ["**/._*"],
+                  maxWorkers: 1,
+                  sequence: { groupOrder: 1 },
+                },
+              },
+            ]
+          : []),
         {
           ...siteOptions,
           plugins: [...sitePlugins(), cloudflareTest({ ...workerOptions, main: "./functions/router.ts" })],

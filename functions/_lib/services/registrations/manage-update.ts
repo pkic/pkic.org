@@ -12,6 +12,7 @@ import { getNormalizedEmailForUser } from "../users";
 import type { z } from "zod";
 import type { RegistrationRecord } from "./types";
 import type { ParticipantAuthority } from "../participant-authority";
+import { withdrawRegistrationSponsorSharing } from "./sponsor-sharing";
 import {
   updateRegistrationByIdWithEmailChange,
   updateRegistrationByIdWithNotification,
@@ -50,6 +51,16 @@ export async function updateManagedRegistration(
   input: ManageRegistrationUpdateInput,
 ): Promise<ManageRegistrationUpdateResult> {
   const { body, registration: current } = input;
+  if (body.action === "withdraw_sponsor_sharing") {
+    if (input.isAdminManageJwt || (input.authenticatedActor && input.authenticatedActor.id !== current.user_id))
+      throw new AppError(
+        403,
+        "REGISTRATION_CONSENT_AUTHORITY_REQUIRED",
+        "Withdraw sharing using your own registration link or session.",
+      );
+    const registration = await withdrawRegistrationSponsorSharing(db, input.manageToken, input.signingSecret, current);
+    return { registration, outboxId: null, outboxIds: [], emailChanged: false };
+  }
   const event = await getEventById(db, current.event_id);
   const attendanceType = body.attendanceType ?? deriveEventAttendanceType(body.dayAttendance) ?? undefined;
   if (current.registration_identity_id && body.action === "update") {

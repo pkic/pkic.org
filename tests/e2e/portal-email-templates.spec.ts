@@ -6,6 +6,7 @@ import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { emailTemplatePreviewSchema } from "../../assets/shared/schemas/email-templates";
+import { expectPortalEmailPreviewPolicy } from "./helpers/email-preview";
 
 const EMAIL_TEMPLATES_API = "/api/v1/email/templates";
 const REMOVED_ADMIN_TEMPLATES_API = "/api/v1/admin/email-templates";
@@ -32,6 +33,8 @@ test("permitted staff create, preview, activate, and reopen an email template th
 
   await signInToPortal(page, e2eAdminEmail("portal-email-templates"));
   await page.goto("/portal/#/settings/email-templates");
+  // Hash navigation may reuse the document; reload inspects the real native shell response.
+  expectPortalEmailPreviewPolicy(await page.reload());
 
   await expect(page.getByRole("link", { name: "Email templates" })).toBeVisible();
   await expect(page.getByRole("button", { name: "New Template", exact: false })).toBeVisible();

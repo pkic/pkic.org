@@ -1,0 +1,12 @@
+/* GENERATED FILE — source: assets/design/tokens.ts. */
+@layer legacy, tokens, base, components, utilities;
+@layer tokens {
+  :root {
+    --pk-agenda-location-1: #2f8fcb;
+    --pk-agenda-location-2: #f2782c;
+    --pk-agenda-location-3: #df3447;
+    --pk-agenda-location-4: #6c36bd;
+    --pk-agenda-location-5: #10a884;
+    --pk-agenda-location-6: #5c76d8;
+  }
+}

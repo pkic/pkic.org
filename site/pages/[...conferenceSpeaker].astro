@@ -1,18 +1,27 @@
 ---
+import { publicationImageInputs, publicationRouteCacheKey } from "../publication-cache";
+import { publication } from "../publication";
 import { siteConferencePrograms } from "../../functions/_lib/services/site-content";
 import { formatDateRange } from "../../assets/shared/format-date";
 import "../../assets/scss/conference-speaker-card.scss";
-
 export function getStaticPaths() {
-  return siteConferencePrograms().flatMap((event) => event.outputs
+  return siteConferencePrograms(publication).flatMap((event) => event.outputs
     .filter((output) => output === "event-speakers" || output === "event-speakers2")
-    .map((variant) => ({ params: { conferenceSpeaker: `${event.route}${variant}`.replace(/^\//, "") }, props: { event, variant } })));
+    .map((variant) => {
+      const slots = Object.values(event.program.agenda).flat();
+      const display = {
+        route: event.route, title: event.title, name: event.program.name, timeZone: event.program.timezone, variant,
+        dates: formatDateRange(slots[0]?.startsAt, slots.at(-1)?.startsAt, event.program.timezone),
+      };
+      const imageInputs = publicationImageInputs([]);
+      return {
+        params: { conferenceSpeaker: `${event.route}${variant}`.replace(/^\//, "") },
+        props: { display },
+        ...(imageInputs.cacheable ? { cacheKey: publicationRouteCacheKey(`${event.route}${variant}/`, { display, imageInputs }) } : {}),
+      };
+    }));
 }
-const { event, variant } = Astro.props;
-const slots = Object.values(event.program.agenda).flat();
-const first = slots[0]?.startsAt;
-const last = slots.at(-1)?.startsAt;
-const dates = formatDateRange(first, last, event.program.timezone);
+const { display } = Astro.props;
 ---
 <!doctype html>
 <html lang="en">
@@ -20,16 +29,16 @@ const dates = formatDateRange(first, last, event.program.timezone);
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow, noarchive" />
-    <title>{event.title} — Speaker card</title>
+    <title>{display.title} — Speaker card</title>
   </head>
-  <body data-conference-data={`${event.route}event-data.json`} data-conference-title={event.program.name}>
+  <body data-conference-data={`${display.route}event-data.json`} data-conference-title={display.name}>
     <div id="speaker-card">
       <div class="speaker-card-container">
         <div class="speaker-card-content">
           <div class="speaker-card-header">
             <div class="speaker-card-event-info">
-              <div class="white-orange">{event.program.name}</div>
-              <div class="event-details">{dates}</div>
+              <div class="white-orange">{display.name}</div>
+              <div class="event-details">{display.dates}</div>
             </div>
             <img src="/img/logo-color-black.svg" class="speaker-card-logo" alt="PKI Consortium" />
           </div>
@@ -39,15 +48,15 @@ const dates = formatDateRange(first, last, event.program.timezone);
               <div class="speaker-label">SPEAKER</div>
             </div>
             <div class="speaker-info">
-              <div class="speaker-intro">{variant === "event-speakers2" ? "Speaking at the" : "I'm speaking at the"}</div>
-              <div class="speaker-event-name">{event.program.name}</div>
+              <div class="speaker-intro">{display.variant === "event-speakers2" ? "Speaking at the" : "I'm speaking at the"}</div>
+              <div class="speaker-event-name">{display.name}</div>
               <div id="speaker-name" class="speaker-name"></div>
               <div id="speaker-title" class="speaker-title"></div>
-              <div class="speaker-cta">{variant === "event-speakers2" ? "Join me for free at" : "Join me at"} <a href={event.route}>pkic.org</a></div>
+              <div class="speaker-cta">{display.variant === "event-speakers2" ? "Join me for free at" : "Join me at"} <a href={display.route}>pkic.org</a></div>
             </div>
           </div>
           <div class="speaker-card-footer">
-            {variant === "event-speakers" && <div class="yellow-black">Join us: <a href={event.route}>pkic.org</a></div>}
+            {display.variant === "event-speakers" && <div class="yellow-black">Join us: <a href={display.route}>pkic.org</a></div>}
             <img src="/img/logo-black.svg" class="speaker-card-footer-logo" alt="PKI Consortium" />
           </div>
         </div>

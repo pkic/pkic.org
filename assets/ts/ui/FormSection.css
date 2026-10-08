@@ -64,6 +64,16 @@
     padding-block-start: var(--pk-3);
   }
 
+  .pk-form-section__fields--stack {
+    grid-template-columns: minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .pk-form-section__fields--stack > .pk-btn {
+    justify-self: start;
+    align-self: start;
+  }
+
   /*
    * A group of controls takes the row.
    *
@@ -73,6 +83,11 @@
    * loses the boundary the group exists to draw.
    */
   .pk-form-section__fields > fieldset {
+    grid-column: 1 / -1;
+  }
+
+  /* A disclosure groups several fields and keeps the full form width. */
+  .pk-form-section__fields > .pk-panel {
     grid-column: 1 / -1;
   }
 

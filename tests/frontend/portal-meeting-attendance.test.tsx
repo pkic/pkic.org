@@ -248,9 +248,8 @@ describe("meeting occurrence attendance", () => {
     // The record heads itself with the occurrence, not the series (#126).
     expect(container.querySelector("h3")?.textContent).toContain("2026");
     expect(container.textContent).not.toContain("Personal invitations and calendar replies belong to their recipient");
-    // A reader who may only take attendance gets that facet alone — one
-    // section, no tab strip, and calendar download without management commands.
-    expect(container.querySelector('[aria-label="Occurrence sections"]')).toBeNull();
+    // Attendance staff land on attendance and can also read the approved agenda.
+    expect(container.querySelector('[aria-label="Occurrence sections"]')?.textContent).toContain("Agenda");
     expect(container.querySelector('section[aria-label="Occurrence attendance"] caption')?.textContent).toBe(
       "Meeting attendance",
     );

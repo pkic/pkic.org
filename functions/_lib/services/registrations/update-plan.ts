@@ -1,3 +1,4 @@
+import { prepareParticipationReconciliation } from "../event-participation/reconciliation";
 import { assertRegistrationRestorationAllowed } from "./restoration";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
@@ -131,6 +132,7 @@ export async function buildRegistrationUpdate(
       }),
       prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now),
     ];
+    statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
     const audit = prepareRegistrationUpdateAudit(db, registration, cancelled, payload);
     if (audit) statements.push(audit);
     return {
@@ -156,6 +158,8 @@ export async function buildRegistrationUpdate(
       status: "cancelled",
       cancellation_reason_code: "unauthorized_registration",
       custom_answers_json: null,
+      registration_organization_name: null,
+      registration_job_title: null,
       manage_link_secret: manageLinkSecret,
       confirmation_link_secret: null,
       pending_confirmation_deadline_at: null,
@@ -182,6 +186,8 @@ export async function buildRegistrationUpdate(
       }),
       prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now),
     ];
+    statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
+    statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
     const audit = prepareRegistrationUpdateAudit(db, registration, updated, payload);
     if (audit) statements.push(audit);
     return {
@@ -270,6 +276,14 @@ export async function buildRegistrationUpdate(
     isCancelled && newStatus === "pending_email_confirmation"
       ? newCapabilityLinkSecret()
       : registration.confirmation_link_secret;
+  const organizationName =
+    registration.registration_identity_id || payload.profilePatch?.organizationName === undefined
+      ? registration.registration_organization_name
+      : payload.profilePatch.organizationName;
+  const jobTitle =
+    registration.registration_identity_id || payload.profilePatch?.jobTitle === undefined
+      ? registration.registration_job_title
+      : payload.profilePatch.jobTitle;
   const statements: StatementLike[] = [
     ...(payload.customAnswersJson !== undefined && payload.formRevisionGuard && !payload.formSubmissionStatements
       ? [payload.formRevisionGuard]
@@ -279,6 +293,7 @@ export async function buildRegistrationUpdate(
       .prepare(
         `UPDATE registrations
          SET attendance_type = ?, status = ?, confirmation_link_secret = ?, cancellation_reason_code = NULL,
+             registration_organization_name = ?, registration_job_title = ?,
              custom_answers_json = CASE WHEN ? = 1 THEN ? ELSE custom_answers_json END,
              form_placement_id = CASE WHEN ? = 1 THEN ? ELSE form_placement_id END,
              source_ref = CASE WHEN ? = 1 THEN ? ELSE source_ref END,
@@ -289,6 +304,8 @@ export async function buildRegistrationUpdate(
         effectiveAttendanceType,
         newStatus,
         confirmationLinkSecret,
+        organizationName,
+        jobTitle,
         payload.customAnswersJson !== undefined ? 1 : 0,
         payload.customAnswersJson ?? null,
         payload.customAnswersJson !== undefined ? 1 : 0,
@@ -357,6 +374,8 @@ export async function buildRegistrationUpdate(
     confirmation_link_secret: confirmationLinkSecret,
     attendance_type: effectiveAttendanceType,
     cancellation_reason_code: null,
+    registration_organization_name: organizationName,
+    registration_job_title: jobTitle,
     custom_answers_json:
       payload.customAnswersJson === undefined ? registration.custom_answers_json : payload.customAnswersJson,
     form_placement_id:
@@ -372,6 +391,8 @@ export async function buildRegistrationUpdate(
     registration.custom_answers_json !== updated.custom_answers_json ||
     registration.form_placement_id !== updated.form_placement_id ||
     registration.source_ref !== updated.source_ref ||
+    registration.registration_organization_name !== updated.registration_organization_name ||
+    registration.registration_job_title !== updated.registration_job_title ||
     registration.cancelled_at !== updated.cancelled_at;
   const profileChanged = payload.profilePatch
     ? await userProfilePatchWouldChange(db, updated.user_id, payload.profilePatch)
@@ -380,6 +401,7 @@ export async function buildRegistrationUpdate(
     statements.push(prepareUserProfileStatement(db, updated.user_id, payload.profilePatch));
   }
   const notificationChanged = scalarChanged || dayAttendanceChanged || waitlistChanged || profileChanged;
+  statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
   const audit = prepareRegistrationUpdateAudit(db, registration, updated, payload);
   if (audit && notificationChanged) statements.push(audit);
   return {

@@ -101,11 +101,9 @@ describe("renaming an organization against changing employer", () => {
   });
 
   /*
-   * An organization identity cannot exist at an organization the consortium
-   * does not know as a Member: a trigger refuses one whose organization has no
-   * member aggregate. So "leaving for a company that is not a member" is not a
-   * move at all — it is an ending, with nothing to arrive at, and the person
-   * holds no organization identity until that company becomes a Member.
+   * A person can retain a canonical affiliation with a nonmember organization.
+   * Member capacity derives from that organization's actual membership;
+   * changing employers does not carry the former employer's capacity across.
    */
   it("re-derives the membership capacity from the new employer rather than carrying the old one", async () => {
     const mover = await insertOrgRepresentative(env.DB, { email: "carrier@member-co.example" });

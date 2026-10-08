@@ -4,7 +4,8 @@
 import { expect, test, type Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { openRow } from "./helpers/data-table";
-import { signInToPortal } from "./helpers/portal-auth";
+import { clientIpForIdentity, signInToPortal } from "./helpers/portal-auth";
+import { submitProposal } from "./helpers/proposals";
 import { tab } from "./helpers/tabs";
 
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
@@ -38,7 +39,10 @@ function expectStatus(result: ApiResult, status: number): Record<string, unknown
   return result.body as Record<string, unknown>;
 }
 
-test("portal proposal detail registers accepted speakers through canonical resources", async ({ page }, testInfo) => {
+test("portal proposal detail registers accepted speakers through canonical resources", async ({
+  page,
+  browser,
+}, testInfo) => {
   await signInToPortal(page, e2eAdminEmail("portal-event-proposals"));
   const unique = `${Date.now()}-${test.info().workerIndex}`;
   const createdEvent = expectStatus(
@@ -94,26 +98,30 @@ test("portal proposal detail registers accepted speakers through canonical resou
     200,
   );
 
-  const created = expectStatus(
-    await api(page, `/api/v1/events/${event.slug}/proposals`, "POST", {
-      proposer: {
-        firstName: "Portal",
-        lastName: "Proposer",
-        email: `portal-proposer-${unique}@pkic.org`,
-        organizationName: "E2E Organization",
-        jobTitle: "Engineer",
-      },
-      proposal: {
-        type: "talk",
-        title: "Canonical portal proposal journey",
-        abstract:
-          "A sufficiently detailed proposal abstract for verifying the real Worker and D1 portal proposal journey.",
-      },
-      consents: [{ termKey: "e2e-proposal-terms", version: "1.0" }],
-    }),
-    200,
-  );
-  const proposalId = created.proposalId as string;
+  const proposerEmail = `portal-proposer-${unique}@gmail.com`;
+  const proposerContext = await browser.newContext({
+    baseURL: new URL(page.url()).origin,
+    extraHTTPHeaders: { "cf-connecting-ip": clientIpForIdentity(proposerEmail) },
+  });
+  let proposalId: string;
+  try {
+    // The submitter proves their own mailbox independently of the organizer's session.
+    const proposerPage = await proposerContext.newPage();
+    await proposerPage.goto(new URL("/", page.url()).href);
+    const created = await submitProposal(proposerPage, {
+      eventSlug: event.slug,
+      proposerEmail,
+      unaffiliatedAttestation: true,
+      firstName: "Portal",
+      lastName: "Proposer",
+      title: "Canonical portal proposal journey",
+      abstract:
+        "A sufficiently detailed proposal abstract for verifying the real Worker and D1 portal proposal journey.",
+    });
+    proposalId = created.proposalId;
+  } finally {
+    await proposerContext.close();
+  }
   expect(proposalId).toBeTruthy();
 
   const adminRequests: string[] = [];
@@ -228,7 +236,7 @@ test("portal proposal detail registers accepted speakers through canonical resou
   const title = acceptedRow.getByText("Canonical portal proposal journey", { exact: true });
   await expect(title).toHaveCSS("white-space", "nowrap");
   await expect(acceptedRow.getByRole("cell", { name: "Portal Proposer", exact: true })).toBeVisible();
-  await expect(acceptedRow).not.toContainText(`portal-proposer-${unique}@pkic.org`);
+  await expect(acceptedRow).not.toContainText(proposerEmail);
   // The shared row link forwards each icon's hover label through its overlay.
   await acceptedRow.getByRole("img", { name: "Accepted", exact: true }).hover({ force: true });
   await expect(acceptedRow.getByRole("link", { name: "Open Canonical portal proposal journey" })).toHaveAttribute(

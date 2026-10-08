@@ -8,6 +8,7 @@ import * as contracts from "../../../../../../assets/shared/schemas/route-contra
 import { onRequestGet, onRequestParticipationPatch, onRequestProfilePatch } from "../../speakers/access/[token]";
 import * as photo from "../../speakers/access/[token]/headshot";
 import * as presentation from "../../speakers/access/[token]/presentation";
+import { onRequestGet as listIdentities } from "../../speakers/access/[token]/identities";
 
 const app = new Hono<RequestDbContext>();
 const routes = fromHono(app);
@@ -16,6 +17,14 @@ async function params(c: AdminContext, proposalId: string) {
   return { token: await requireParticipantAuthority(c, proposalId) };
 }
 
+routes.get(
+  "/identities",
+  openApiRoute(
+    contracts.participantIdentities,
+    async (c: AdminContext, data) => listIdentities(c, { ...data, params: await params(c, data.params.proposalId) }),
+    markResponseSensitive,
+  ),
+);
 routes.get(
   "/",
   openApiRoute(

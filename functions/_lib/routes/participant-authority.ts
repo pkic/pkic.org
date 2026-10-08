@@ -14,5 +14,5 @@ export type ParticipantRouteData<Schema extends { request: { params: z.ZodObject
 
 export async function requireParticipantAuthority(c: AdminContext, resourceId: string) {
   const identity = await requireIdentityFromRequest(requestDb(c), c.req.raw, c.env);
-  return { resourceId, userId: identity.userId };
+  return { resourceId, userId: identity.userId, sessionId: identity.sessionId };
 }

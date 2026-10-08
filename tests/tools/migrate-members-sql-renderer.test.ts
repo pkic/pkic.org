@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { DatabaseSync } from "node:sqlite";
+import { EVENT_NAME_ALIASES } from "../../scripts/migrate-members/constants.mjs";
+import { utcInstantSchema } from "../../assets/shared/schemas/api-common";
 import { unstable_splitSqlQuery } from "wrangler";
 import {
   sqlString,
@@ -249,6 +252,36 @@ describe("buildGroupMembershipStatement", () => {
 });
 
 describe("event sponsorship SQL", () => {
+  it.each([
+    ["Post-Quantum Cryptography Conference Amsterdam 2023", "2023-11-07T07:30:00.000Z", null],
+    ["Post-Quantum Cryptography Conference Austin 2025", "2025-01-15T14:30:00.000Z", "2025-01-17T00:00:00.000Z"],
+    ["Post-Quantum Cryptography Conference Kuala Lumpur 2025", "2025-10-28T00:30:00.000Z", "2025-10-30T09:00:00.000Z"],
+  ])(
+    "persists authored UTC bounds and unknown ends for %s through both sponsor renderers",
+    (name, startsAt, endsAt) => {
+      const alias = EVENT_NAME_ALIASES[name as keyof typeof EVENT_NAME_ALIASES];
+      const db = new DatabaseSync(":memory:");
+      try {
+        db.exec(`CREATE TABLE events (
+        id TEXT PRIMARY KEY, slug TEXT UNIQUE, name TEXT, timezone TEXT,
+        starts_at TEXT, ends_at TEXT, created_at TEXT, updated_at TEXT
+      )`);
+        for (const statements of [
+          buildEventSponsorshipStatements("acme", alias, "Leader"),
+          buildNonMemberEventSponsorshipStatements("Venue", null, null, alias, "Ambassador"),
+        ]) {
+          db.exec(statements[0]);
+          const row = db.prepare("SELECT starts_at, ends_at FROM events WHERE slug = ?").get(alias.slug)!;
+          expect(utcInstantSchema.parse(row.starts_at)).toBe(startsAt);
+          expect(utcInstantSchema.nullable().parse(row.ends_at)).toBe(endsAt);
+          db.exec("DELETE FROM events");
+        }
+      } finally {
+        db.close();
+      }
+    },
+  );
+
   it("uses the same idempotent event upsert for member and non-member sponsors", () => {
     const alias = {
       slug: "example-event",

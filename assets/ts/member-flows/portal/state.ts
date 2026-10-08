@@ -25,6 +25,7 @@ export const isAuthed = computed(() => authStatus.value === "authenticated" && B
  * which is right — the offer belongs to the sign-in, not to the account.
  */
 export const signedInWithLink = signal(false);
+export const logoutNotice = signal<string | null>(null);
 
 export function setAuthChecking(): void {
   authStatus.value = "loading";
@@ -40,7 +41,11 @@ export function clearMemberProfile(): void {
 
 function hasNonStaffCapacity(session: PortalSession): boolean {
   return Boolean(
-    session.member || session.sponsors.length > 0 || session.pendingIdentityCount > 0 || session.eventParticipation,
+    session.member ||
+    session.sponsors.length > 0 ||
+    session.pendingIdentityCount > 0 ||
+    session.eventParticipation ||
+    session.hasActiveAffiliation,
   );
 }
 
@@ -114,6 +119,10 @@ function clearSessionStorage(key: string): void {
   } catch {
     // ignore — sessionStorage unavailable
   }
+}
+
+export function clearSignOutReturnPath(): void {
+  clearSessionStorage(RETURN_PATH_KEY);
 }
 
 /** Records the current hash location so it survives a forced sign-out. */

@@ -1,3 +1,4 @@
+import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
 /**
  * Bounded, set-based event-registration read model. Both the retiring admin
  * routes and group-context routes consume this one query and projection.
@@ -6,7 +7,7 @@ import { all, first } from "../../db/queries";
 import { publicUserHeadshotPath } from "../user-headshot";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
-import { buildD1JsonMembershipFilter } from "../../db/json-membership";
+import { loadRegistrationAttendanceChanges } from "./attendance-history";
 import { getAttendanceStatusByType } from "./attendance-statistics";
 import { activeDayWaitlistExistsSql, loadRegistrationDayStates } from "./day-states";
 import { firstReferralCodeForOwnerSql } from "../referral-code-projection";
@@ -20,6 +21,7 @@ import {
 import type { DatabaseLike } from "../../types";
 import { aggregateEventRegistrationStats, type EventRegistrationStatsRow } from "./event-registration-stats";
 import { resolveEventRegistrationOrderBy } from "./event-registration-sort";
+import { sponsorConsentSql } from "../event-participation/sponsor-consent";
 
 interface RegistrationRow {
   id: string;
@@ -41,16 +43,6 @@ interface RegistrationRow {
   custom_answers_json: string | null;
 }
 
-interface AttendanceChangeRow {
-  registration_id: string;
-  changed_at: string;
-  from_type: string;
-  to_type: string;
-  day_date: string;
-  day_label: string | null;
-}
-
-type AttendanceChangeHistoryEntry = EventRegistrationSummary["attendanceChangeHistory"][number];
 export interface EventRegistrationsListResult {
   registrations: EventRegistrationSummary[];
   total: number;
@@ -87,13 +79,9 @@ export function buildEventRegistrationsPageQuery(eventId: string, params: EventR
   else if (params.waitlisted === "false") conditions.push(`NOT ${activeDayWaitlistExistsSql("r")}`);
 
   if (params.consent === "true") {
-    conditions.push(
-      "EXISTS(SELECT 1 FROM consent_acceptances ca WHERE ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing')",
-    );
+    conditions.push(sponsorConsentSql("r"));
   } else if (params.consent === "false") {
-    conditions.push(
-      "NOT EXISTS(SELECT 1 FROM consent_acceptances ca WHERE ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing')",
-    );
+    conditions.push(`NOT ${sponsorConsentSql("r")}`);
   }
 
   const hasAttendanceChange = (transition = "") => `EXISTS (
@@ -148,11 +136,10 @@ export function buildEventRegistrationsPageQuery(eventId: string, params: EventR
               u.email AS user_email,
               COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
               u.headshot_r2_key AS headshot_r2_key,
-              u.organization_name AS organization_name, u.job_title AS job_title,
+              ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title,
               ${registrationReferralCodeSql} AS referral_code,
               COALESCE(${latestOutboxStatusForRegistrationSql} = 'bounced', 0) AS has_bounced,
-              EXISTS(SELECT 1 FROM consent_acceptances ca
-                     WHERE ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing') AS sponsor_consent,
+              ${sponsorConsentSql("r")} AS sponsor_consent,
                    r.custom_answers_json,
               (SELECT JSON_GROUP_ARRAY(JSON_OBJECT(
                   'event_day_id', event_day_id,
@@ -204,49 +191,10 @@ export async function listEventRegistrations(
   );
 
   const registrationIds = registrationRows.map((row) => row.id);
-  const historyRegistrationFilter = buildD1JsonMembershipFilter("h.registration_id", registrationIds);
-  const [dayStates, attendanceChangeRows] =
-    registrationIds.length > 0
-      ? await Promise.all([
-          loadRegistrationDayStates(db, registrationIds),
-          all<AttendanceChangeRow>(
-            db,
-            `SELECT h.registration_id,
-                    h.changed_at,
-                    COALESCE(h.from_type, 'not_attending') AS from_type,
-                    COALESCE(h.to_type, 'not_attending') AS to_type,
-                    ed.day_date,
-                    COALESCE(ed.label, ed.day_date) AS day_label
-             FROM registration_attendance_history h
-             JOIN event_days ed ON ed.id = h.event_day_id
-             WHERE ${historyRegistrationFilter.sql}
-               AND h.changed_by <> 'system'
-               AND COALESCE(h.from_type, '') <> COALESCE(h.to_type, '')
-             ORDER BY h.registration_id ASC, h.changed_at ASC, ed.sort_order ASC, ed.day_date ASC`,
-            historyRegistrationFilter.bindings,
-          ),
-        ])
-      : [new Map(), []];
-
-  const attendanceChangesByRegistrationId = new Map<string, AttendanceChangeHistoryEntry[]>();
-  for (const row of attendanceChangeRows) {
-    let history = attendanceChangesByRegistrationId.get(row.registration_id);
-    if (!history) {
-      history = [];
-      attendanceChangesByRegistrationId.set(row.registration_id, history);
-    }
-    let change = history.at(-1);
-    if (!change || change.changedAt !== row.changed_at) {
-      change = { changedAt: row.changed_at, transitions: [] };
-      history.push(change);
-    }
-    let transition = change.transitions.find((item) => item.fromType === row.from_type && item.toType === row.to_type);
-    if (!transition) {
-      transition = { fromType: row.from_type, toType: row.to_type, days: [] };
-      change.transitions.push(transition);
-    }
-    transition.days.push({ dayDate: row.day_date, label: row.day_label });
-  }
+  const [dayStates, attendanceChangesByRegistrationId] = await Promise.all([
+    registrationIds.length > 0 ? loadRegistrationDayStates(db, registrationIds) : new Map(),
+    loadRegistrationAttendanceChanges(db, eventId, registrationIds),
+  ]);
 
   const registrations = registrationRows.map((row) => {
     const attendanceChangeHistory = attendanceChangesByRegistrationId.get(row.id) ?? [];
@@ -279,9 +227,8 @@ export async function listEventRegistrations(
     ),
     first<{ consent_count: number }>(
       db,
-      `SELECT COUNT(DISTINCT registration_id) AS consent_count
-       FROM consent_acceptances
-       WHERE event_id = ? AND term_key = 'sponsor-data-sharing'`,
+      `SELECT COUNT(*) AS consent_count FROM registrations r
+       WHERE r.event_id = ? AND ${sponsorConsentSql("r")}`,
       [eventId],
     ),
     getAttendanceStatusByType(db, eventId),

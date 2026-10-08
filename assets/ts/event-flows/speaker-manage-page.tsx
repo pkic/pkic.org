@@ -15,10 +15,21 @@ import { loadSpeakerPageData } from "./speaker-link-recovery";
 import {
   speakerSelfServiceReadResponseSchema,
   speakerParticipationResponseSchema,
+  speakerProfileUpdateResponseSchema,
   type SpeakerSelfServiceReadResponse,
 } from "../../shared/schemas/speaker-self-service";
-import { successResponseSchema } from "../../shared/schemas/api-common";
-import { speakerProfilePatchSchema, speakerParticipationPatchSchema } from "../../shared/schemas/proposal-management";
+import { SpeakerParticipationIdentity } from "../components/SpeakerParticipationIdentity";
+import {
+  eventProposalProofIdentityPatchSchema,
+  eventProposalProofIdentityPatchResponseSchema,
+} from "../../shared/schemas/event-proposal-proof";
+import type { RepresentationRolePatch } from "../components/ParticipationRepresentation";
+import type { PersonalNamePatch } from "../components/ParticipationPersonalDetails";
+import type { ParticipationPerson, ProposalEntrySelection } from "../components/useProposalEntryIdentity";
+import {
+  speakerSelfProfilePatchSchema,
+  speakerParticipationPatchSchema,
+} from "../../shared/schemas/proposal-management";
 import { proposalSpeakerAccessPath } from "../../shared/proposal-access-paths";
 
 async function main(): Promise<void> {
@@ -53,6 +64,7 @@ async function main(): Promise<void> {
   // Participation section
   const speakerStatusBadge = boot.root.querySelector<HTMLElement>("[data-speaker-status-badge]");
   const confirmPanel = boot.root.querySelector<HTMLElement>("[data-confirm-panel]");
+  const participationActions = boot.root.querySelector<HTMLElement>("[data-participation-actions]");
   const declinePanel = boot.root.querySelector<HTMLElement>("[data-decline-panel]");
   const confirmedMsg = boot.root.querySelector<HTMLElement>("[data-confirmed-msg]");
   const declinedMsg = boot.root.querySelector<HTMLElement>("[data-declined-msg]");
@@ -79,6 +91,7 @@ async function main(): Promise<void> {
 
   if (data.speaker.status === "invited") {
     if (confirmPanel) confirmPanel.hidden = false;
+    if (participationActions) participationActions.hidden = false;
     toggleEditableSections(false);
   } else if (data.speaker.status === "confirmed") {
     if (confirmedMsg) confirmedMsg.hidden = false;
@@ -97,20 +110,37 @@ async function main(): Promise<void> {
   const confirmForm = boot.root.querySelector<HTMLFormElement>("[data-confirm-form]");
   const consentContainer = boot.root.querySelector<HTMLElement>("[data-speaker-consents]");
   let speakerTerms: RequiredTerm[] = [];
+  let speakerTermsLoaded = false;
+  let representationSaved = data.profile.actingIdentitySelection !== "unrecorded";
+  const confirmationButton = boot.root.querySelector<HTMLButtonElement>("[data-confirm-participation]");
+  const representationNotice = document.createElement("div");
+  confirmForm?.before(representationNotice);
+  function syncRepresentationConfirmation(): void {
+    if (confirmationButton) confirmationButton.disabled = !speakerTermsLoaded || !representationSaved;
+    render(
+      representationSaved ? null : (
+        <Alert tone="warn">Confirm and save your speaker identity before confirming participation.</Alert>
+      ),
+      representationNotice,
+    );
+  }
+  syncRepresentationConfirmation();
 
-  if (confirmForm && consentContainer && data.speaker.status === "invited") {
+  if (confirmForm && consentContainer) {
     try {
       const termsResponse = await getJson(
         `${boot.apiBase}/events/${encodeURIComponent(boot.eventSlug)}/terms?audience=speaker`,
         eventTermsResponseSchema,
       );
       speakerTerms = termsResponse.terms ?? [];
-      renderConsentInputs(consentContainer, speakerTerms);
+      speakerTermsLoaded = true;
+      if (data.speaker.status === "invited") renderConsentInputs(consentContainer, speakerTerms);
     } catch (error) {
       console.error("Failed to load speaker terms", error);
       render(<Alert tone="danger">Could not load required terms right now.</Alert>, consentContainer);
     }
   }
+  syncRepresentationConfirmation();
 
   confirmForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -126,8 +156,12 @@ async function main(): Promise<void> {
       setStatus(boot.statusEl, "Please accept all required speaker terms to continue.", true);
       return;
     }
+    if (!representationSaved) {
+      setStatus(boot.statusEl, "Confirm and save your speaker identity before confirming participation.", true);
+      return;
+    }
 
-    await withLoadingButton(findSubmitButton(confirmForm), async () => {
+    await withLoadingButton(confirmationButton, async () => {
       try {
         await patchJson(
           proposalSpeakerAccessPath(boot.apiBase, token, "participation"),
@@ -177,10 +211,6 @@ async function main(): Promise<void> {
   const profileFormWrap = boot.root.querySelector<HTMLElement>("[data-profile-form-wrap]");
   const profileSavedState = boot.root.querySelector<HTMLElement>("[data-profile-saved-state]");
   const profileEditButton = boot.root.querySelector<HTMLButtonElement>("[data-profile-edit]");
-  const firstNameField = profileForm?.querySelector<HTMLInputElement>('input[name="firstName"]');
-  const lastNameField = profileForm?.querySelector<HTMLInputElement>('input[name="lastName"]');
-  const organizationField = profileForm?.querySelector<HTMLInputElement>('input[name="organizationName"]');
-  const jobTitleField = profileForm?.querySelector<HTMLInputElement>('input[name="jobTitle"]');
   const bioField = profileForm?.querySelector<HTMLTextAreaElement>("#speaker-bio");
   const linksContainer = boot.root.querySelector<HTMLElement>("[data-profile-links-container]");
   let linksWidget: ProfileLinksWidget | null = null;
@@ -188,7 +218,7 @@ async function main(): Promise<void> {
   function showProfileEditForm(): void {
     if (profileSavedState) profileSavedState.hidden = true;
     if (profileFormWrap) profileFormWrap.hidden = false;
-    firstNameField?.focus();
+    bioField?.focus();
   }
 
   function showProfileSavedState(): void {
@@ -198,35 +228,129 @@ async function main(): Promise<void> {
 
   profileEditButton?.addEventListener("click", showProfileEditForm);
 
-  if (firstNameField) firstNameField.value = data.profile.firstName ?? "";
-  if (lastNameField) lastNameField.value = data.profile.lastName ?? "";
-  if (organizationField) organizationField.value = data.profile.organizationName ?? "";
-  if (jobTitleField) jobTitleField.value = data.profile.jobTitle ?? "";
   if (bioField) bioField.value = data.profile.biography ?? "";
-  await mountMarkdownField(bioField ?? null, "Biography", speakerProfilePatchSchema.shape.biography);
+  await mountMarkdownField(bioField ?? null, "Biography", speakerSelfProfilePatchSchema.shape.biography);
   if (linksContainer) {
     linksWidget = renderProfileLinks(linksContainer, "links", { max: 10 });
     linksWidget.setLinks(normalizeProfileLinks(data.profile.links));
   }
 
+  let entry: ProposalEntrySelection | null = null;
+  let identityChanged = false;
+  let identityRevision = 0;
+  let identityViewRevision = 0;
+  const identityContainer = profileForm?.querySelector<HTMLElement>("[data-speaker-identity]");
+  const invited = data.speaker.status === "invited";
+  const acceptedConsents = () => readConsentValues(invited ? confirmForm! : profileForm!);
+  const updateEntry = (selection: ProposalEntrySelection | null): void => {
+    if (selection !== entry) {
+      identityRevision += 1;
+      identityChanged = true;
+      representationSaved = false;
+      syncRepresentationConfirmation();
+    }
+    entry = selection;
+  };
+  const editIdentity = (): void => {
+    identityChanged = true;
+    identityRevision += 1;
+    representationSaved = false;
+    syncRepresentationConfirmation();
+  };
+  async function savePersonalDetails(names: PersonalNamePatch): Promise<ParticipationPerson> {
+    await patchJson(
+      proposalSpeakerAccessPath(boot.apiBase, token, "profile"),
+      speakerSelfProfilePatchSchema.parse(names),
+      speakerProfileUpdateResponseSchema,
+    );
+    const saved = await getJson(proposalSpeakerAccessPath(boot.apiBase, token), speakerSelfServiceReadResponseSchema);
+    data.profile.firstName = saved.profile.firstName;
+    data.profile.lastName = saved.profile.lastName;
+    return { ...saved.profile, bio: saved.profile.biography };
+  }
+  async function saveRepresentation(identityId: string, role: RepresentationRolePatch) {
+    const saved = await patchJson(
+      `${boot.apiBase}/events/${encodeURIComponent(boot.eventSlug)}/proposals/proof/identities/${encodeURIComponent(identityId)}`,
+      eventProposalProofIdentityPatchSchema.parse({ ...role, speakerManagementToken: token }),
+      eventProposalProofIdentityPatchResponseSchema,
+    );
+    if (saved.identityId !== identityId) throw new Error("The representation response did not match your selection.");
+    if (data.currentRepresentation?.actingIdentityId === saved.identityId) {
+      data.currentRepresentation = { ...data.currentRepresentation, jobTitle: saved.jobTitle };
+    }
+    return saved;
+  }
+  function renderIdentity(): void {
+    if (!identityContainer) return;
+    const selected = acceptedConsents();
+    const accepted = speakerTerms.every(
+      (term) =>
+        !term.required ||
+        selected.some((consent) => consent.termKey === term.termKey && consent.version === term.version),
+    );
+    render(
+      <SpeakerParticipationIdentity
+        key={identityViewRevision}
+        data={data}
+        eventSlug={boot.eventSlug}
+        token={token}
+        terms={speakerTerms}
+        termsAccepted={accepted}
+        termsReady={speakerTermsLoaded}
+        consents={acceptedConsents}
+        onChange={updateEntry}
+        onEditing={editIdentity}
+        savePersonalDetails={savePersonalDetails}
+        saveRepresentation={saveRepresentation}
+      />,
+      identityContainer,
+    );
+  }
+  renderIdentity();
+  confirmForm?.addEventListener("change", renderIdentity);
+
   profileForm?.addEventListener("submit", async (event) => {
     event.preventDefault();
+    if (identityChanged && !entry) {
+      setStatus(boot.statusEl, "Confirm your identity and email before saving your profile.", true);
+      return;
+    }
+    const submittedEntry = identityChanged ? entry : null;
     await withLoadingButton(findSubmitButton(profileForm), async () => {
+      const submittedIdentityRevision = identityRevision;
       try {
-        await patchJson(
+        const saved = await patchJson(
           proposalSpeakerAccessPath(boot.apiBase, token, "profile"),
-          speakerProfilePatchSchema.parse({
-            firstName: firstNameField?.value.trim() || null,
-            lastName: lastNameField?.value.trim() || null,
-            organizationName: organizationField?.value.trim() || null,
-            jobTitle: jobTitleField?.value.trim() || null,
+          speakerSelfProfilePatchSchema.parse({
+            ...(submittedEntry
+              ? {
+                  actingIdentityId: submittedEntry.actingIdentityId,
+                  continuationToken: submittedEntry.continuationToken,
+                  unaffiliatedAttestation: submittedEntry.unaffiliatedAttestation,
+                  consents: acceptedConsents(),
+                  ...submittedEntry.missingDetails,
+                }
+              : {}),
             biography: readField(profileForm!, "biography"),
             links: linksWidget?.getLinks() ?? [],
           }),
-          successResponseSchema,
+          speakerProfileUpdateResponseSchema,
         );
+        data.profile = saved.profile;
+        data.currentRepresentation = saved.currentRepresentation;
+        if (identityRevision === submittedIdentityRevision) identityChanged = false;
+        if (submittedEntry && !identityChanged) {
+          representationSaved = true;
+          history.replaceState({}, "", `${location.pathname}${location.search}`);
+        }
+        if (!identityChanged) {
+          identityViewRevision += 1;
+          renderIdentity();
+        }
+        syncRepresentationConfirmation();
         setStatus(boot.statusEl, "Profile updated.");
-        showProfileSavedState();
+        if (identityChanged) showProfileEditForm();
+        else showProfileSavedState();
       } catch (error) {
         const normalized = normalizeValidation(error);
         setStatus(boot.statusEl, normalized.globalMessage, true);

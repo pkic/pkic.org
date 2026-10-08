@@ -15,5 +15,5 @@
     "forceConsistentCasingInFileNames": true,
     "verbatimModuleSyntax": true
   },
-  "include": ["*.config.ts", "tests/tools/**/*.ts"]
+  "include": ["*.config.ts", "scripts/**/*.ts", "tests/tools/**/*.ts", "functions/wasm.d.ts"]
 }

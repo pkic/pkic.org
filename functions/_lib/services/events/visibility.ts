@@ -1,22 +1,25 @@
 import {
+  anyPermissionAuthorizationEvidenceForResource,
   guardPermissionDatabase,
-  permissionAuthorizationEvidenceForResource,
   permissionsAuthorizationEvidence,
   type PermissionContext,
 } from "../../auth/permissions";
+import { scannerCapabilities } from "../../../../assets/shared/event-scanner-permissions";
 import type { UserSessionResult } from "../../auth/user-session";
 import { activeEffectiveInviteExpirySql, effectiveInviteExpirySql } from "../../invite-validity";
-import type { AuthAdmin, DatabaseLike } from "../../types";
+import type { AuthAdmin, DatabaseLike, PermissionGrant } from "../../types";
 import { AppError } from "../../errors";
 
 export interface EventAudienceViewer {
   userId: string | null;
+  scannerGrants?: readonly PermissionGrant[];
   admin?: AuthAdmin;
 }
 
 export function eventAudienceViewer(session: UserSessionResult | null): EventAudienceViewer {
   return {
     userId: session?.identity.id ?? null,
+    scannerGrants: session?.staff?.grants ?? [],
     admin: session?.staff,
   };
 }
@@ -49,9 +52,28 @@ export function buildEventAudiencePredicate(
       sql: `(EXISTS (${globalRead.sql}) OR ${eventAlias}.visibility = 'public')`,
       bindings: [...globalRead.bindings],
     };
-  const eventRead = permissionAuthorizationEvidenceForResource(actor, "events:read", {
-    type: "event",
-    idSql: `${eventAlias}.id`,
+  const leadPermissions = ["agenda:leads_capture", "agenda:leads_view", "agenda:leads_export"] as const;
+  const eventRead = anyPermissionAuthorizationEvidenceForResource(
+    actor,
+    [
+      "events:read",
+      "agenda:read",
+      "agenda:scan",
+      ...scannerCapabilities,
+      "agenda:attendance_read",
+      "agenda:attendance_correct",
+      "agenda:attendance_import",
+      "agenda:appearance_approve",
+      ...leadPermissions,
+    ],
+    {
+      type: "event",
+      idSql: `${eventAlias}.id`,
+    },
+  );
+  const sponsorRead = anyPermissionAuthorizationEvidenceForResource(actor, leadPermissions, {
+    type: "event_sponsor",
+    idSql: "sponsor_scope.id",
   });
 
   return {
@@ -135,6 +157,9 @@ export function buildEventAudiencePredicate(
           AND (own_proposal.proposer_user_id = ? OR EXISTS (
             SELECT 1 FROM proposal_speakers own_speaker WHERE own_speaker.proposal_id = own_proposal.id AND own_speaker.user_id = ?)))
       OR EXISTS (${eventRead.sql})
+      OR EXISTS (SELECT 1 FROM sponsorships sponsor_scope
+        WHERE sponsor_scope.event_id=${eventAlias}.id AND sponsor_scope.sponsor_type='event'
+          AND sponsor_scope.pipeline_stage='active' AND EXISTS (${sponsorRead.sql}))
     )`,
     bindings: [
       ...globalRead.bindings,
@@ -148,6 +173,7 @@ export function buildEventAudiencePredicate(
       viewer.userId,
       viewer.userId,
       ...eventRead.bindings,
+      ...sponsorRead.bindings,
     ],
   };
 }

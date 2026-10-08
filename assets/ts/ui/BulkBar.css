@@ -9,6 +9,7 @@
 @layer components {
   .pk-bulk-bar {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--pk-4);
     padding: var(--pk-control-y) var(--pk-control-x);
@@ -26,6 +27,7 @@
 
   .pk-bulk-bar__actions {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     gap: var(--pk-3);
     margin-left: auto;

@@ -109,6 +109,13 @@ export function proposalManagePageUrl(appBaseUrl: string, event: EventRouteSourc
   });
 }
 
+export function speakerParticipationPageUrl(appBaseUrl: string, event: EventRouteSource, proposalId: string): string {
+  return new URL(
+    `/portal/#/events/${encodeURIComponent(event.slug)}/proposals/${encodeURIComponent(proposalId)}/participation`,
+    appBaseUrl,
+  ).toString();
+}
+
 export function speakerManagePageUrl(appBaseUrl: string, event: EventRouteSource, token: string): string {
   const routes = routesForEvent(event);
   return buildUrl(appBaseUrl, routes.speakerManagePath, {

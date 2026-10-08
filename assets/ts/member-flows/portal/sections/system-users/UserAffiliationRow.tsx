@@ -9,15 +9,15 @@ import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCate
  * to check the two agreed. There is one statement now, and the controls that
  * change it hang off it.
  *
- * The tie's own facts — category, status, whether it shows on the
- * organization's page — belong to the identity, not to the account, which is
- * why they read from `membership` rather than from the user.
+ * Profile and visibility belong to the identity. Category and status come
+ * from its member capacity, when one exists; an organization affiliation
+ * alone does not establish membership.
  */
 import { useId, useState } from "preact/hooks";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";
 import { memberCapacityMutationResponseSchema } from "../../../../../shared/schemas/membership-management";
-import { MEMBER_STATUSES } from "../../../../../shared/schemas/membership-categories";
+import { MEMBER_STATUSES, memberStatusSchema } from "../../../../../shared/schemas/membership-categories";
 import { deleteJson, patchJson } from "../../../../shared/api-client";
 import { successResponseSchema } from "../../../../../shared/schemas/api-common";
 import { identityMutationResponseSchema } from "../../../../../shared/schemas/identity";
@@ -58,8 +58,8 @@ export function UserAffiliationRow({
   const [editingMembership, setEditingMembership] = useState(false);
   // The membership editor is a draft: nothing is written until Save, so a
   // stray change to a select changes nothing (#91).
-  const [draftCategory, setDraftCategory] = useState<string>(membership.membershipCategory);
-  const [draftStatus, setDraftStatus] = useState<string>(membership.status);
+  const [draftCategory, setDraftCategory] = useState(membership.membershipCategory);
+  const [draftStatus, setDraftStatus] = useState(membership.status);
   const [jobTitle, setJobTitle] = useState(membership.jobTitle ?? "");
   const [biography, setBiography] = useState(membership.biography ?? "");
   const [links, setLinks] = useState(membership.links);
@@ -67,15 +67,21 @@ export function UserAffiliationRow({
 
   // An organization-tied identity takes its category and status from the
   // organization, so only an individual capacity is editable here.
-  const categoryEditable = !membership.organizationId && canManage;
-  const statusEditable = !membership.organizationId;
-  const organizationName = membership.organizationName ?? "Individual member";
+  const hasMembership = membership.memberId !== null;
+  const hasProfileTarget = Boolean(membership.organizationId) || hasMembership;
+  const categoryEditable =
+    hasMembership && membership.membershipCategory !== null && !membership.organizationId && canManage;
+  const statusEditable = hasMembership && membership.status !== null && !membership.organizationId && canManage;
+  const organizationName =
+    membership.organizationName ??
+    (membership.organizationId ? "Organization" : hasMembership ? "Individual member" : "Identity");
   // The editor's fields name the tie they belong to: the organization, or
   // for an individual capacity the membership itself.
   const organizationLabel =
     membership.organizationName ?? (membership.organizationId ? "this organization" : "this membership");
 
   async function patchMember(body: Record<string, unknown>): Promise<boolean> {
+    if (!canManage || !hasMembership) return false;
     setBusy(true);
     try {
       await patchJson(
@@ -95,10 +101,11 @@ export function UserAffiliationRow({
   }
 
   async function patchIdentity(body: Record<string, unknown>, message: string) {
+    if (!canManage || !membership.organizationId) return false;
     setBusy(true);
     try {
       await patchJson(
-        `/api/v1/organizations/${encodeURIComponent(membership.organizationId ?? "")}/identities/${encodeURIComponent(membership.identityId)}`,
+        `/api/v1/organizations/${encodeURIComponent(membership.organizationId)}/identities/${encodeURIComponent(membership.identityId)}`,
         body,
         identityMutationResponseSchema,
       );
@@ -114,6 +121,7 @@ export function UserAffiliationRow({
   }
 
   async function endIdentity() {
+    if (!canManage || !hasProfileTarget) return;
     const target = membership.organizationName ?? "this individual identity";
     const confirmed = await confirmAction({
       title: `End the identity for ${target}?`,
@@ -154,15 +162,18 @@ export function UserAffiliationRow({
   }
 
   function openMembershipEditor() {
+    if (!categoryEditable && !statusEditable) return;
     setDraftCategory(membership.membershipCategory);
     setDraftStatus(membership.status);
     setEditingMembership(true);
   }
 
   async function saveMembership() {
+    if (!canManage || !hasMembership) return;
     const body: Record<string, unknown> = {};
-    if (categoryEditable && draftCategory !== membership.membershipCategory) body.membershipCategory = draftCategory;
-    if (statusEditable && draftStatus !== membership.status) body.status = draftStatus;
+    if (categoryEditable && draftCategory !== null && draftCategory !== membership.membershipCategory)
+      body.membershipCategory = draftCategory;
+    if (statusEditable && draftStatus !== null && draftStatus !== membership.status) body.status = draftStatus;
     // Nothing changed is not a refusal: the editor simply closes.
     if (Object.keys(body).length === 0) {
       setEditingMembership(false);
@@ -211,12 +222,13 @@ export function UserAffiliationRow({
    * is in.
    */
   const rowActions: MenuItem[] = [];
-  rowActions.push({
-    id: "profile",
-    label: editingProfile ? "Close identity editor" : "Edit identity profile…",
-    disabled: busy,
-    onSelect: toggleIdentityEditor,
-  });
+  if (hasProfileTarget)
+    rowActions.push({
+      id: "profile",
+      label: editingProfile ? "Close identity editor" : "Edit identity profile…",
+      disabled: busy,
+      onSelect: toggleIdentityEditor,
+    });
   if (membership.organizationId) {
     rowActions.push({
       id: "visibility",
@@ -246,14 +258,15 @@ export function UserAffiliationRow({
       onSelect: () => (editingMembership ? setEditingMembership(false) : openMembershipEditor()),
     });
   }
-  rowActions.push({
-    id: "end",
-    label: "End identity…",
-    danger: true,
-    separatorBefore: rowActions.length > 0,
-    disabled: busy,
-    onSelect: () => void endIdentity(),
-  });
+  if (hasProfileTarget)
+    rowActions.push({
+      id: "end",
+      label: "End identity…",
+      danger: true,
+      separatorBefore: rowActions.length > 0,
+      disabled: busy,
+      onSelect: () => void endIdentity(),
+    });
 
   return (
     <AffiliationRow
@@ -277,8 +290,10 @@ export function UserAffiliationRow({
        */
       marker={
         <span class="pk-cluster">
-          <span class="pk-small pk-muted">{categories.label(membership.membershipCategory)}</span>
-          <Badge status={membership.status} />
+          {hasMembership && membership.membershipCategory !== null && (
+            <span class="pk-small pk-muted">{categories.label(membership.membershipCategory)}</span>
+          )}
+          {hasMembership && membership.status !== null && <Badge status={membership.status} />}
           {membership.organizationId && membership.showOnOrgProfile && (
             <span class="pk-small pk-muted">Shown on the organization page</span>
           )}
@@ -298,7 +313,7 @@ export function UserAffiliationRow({
                     {(control) => (
                       <Select
                         {...control}
-                        value={draftCategory}
+                        value={draftCategory ?? undefined}
                         disabled={busy}
                         onChange={(event) => setDraftCategory((event.target as HTMLSelectElement).value)}
                       >
@@ -318,9 +333,9 @@ export function UserAffiliationRow({
                     {(control) => (
                       <Select
                         {...control}
-                        value={draftStatus}
+                        value={draftStatus ?? undefined}
                         disabled={busy || !canManage}
-                        onChange={(event) => setDraftStatus((event.target as HTMLSelectElement).value)}
+                        onChange={(event) => setDraftStatus(memberStatusSchema.parse(event.currentTarget.value))}
                       >
                         {MEMBER_STATUSES.map((status) => (
                           <option key={status} value={status}>

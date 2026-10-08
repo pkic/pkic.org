@@ -14,7 +14,9 @@
  * the hash on route changes, so state naturally drops when leaving the
  * page, while earlier history entries keep theirs — which is what makes the
  * back button restore a list exactly. An unmount cleanup still removes the
- * namespace's own keys for non-router hash changes.
+ * namespace's own keys for non-router hash changes. A workspace can own
+ * that cleanup by calling this hook without defaults, while its transient
+ * tables opt out of cleanup and restore the same URL state when remounted.
  */
 import { useEffect, useMemo, useRef } from "preact/hooks";
 import { splitHash } from "../shared/hash-query";
@@ -53,7 +55,7 @@ function readParams(namespace: string): Partial<UrlTableState> {
   };
 }
 
-function writeParams(namespace: string, state: UrlTableState | null, defaults: UrlTableState): void {
+function writeParams(namespace: string, state: UrlTableState | null, defaults?: UrlTableState): void {
   const { path, params } = splitHash();
   for (const key of KEYS) params.delete(`${namespace}.${key}`);
   for (const key of [...params.keys()]) {
@@ -64,9 +66,9 @@ function writeParams(namespace: string, state: UrlTableState | null, defaults: U
       if (value) params.set(`${namespace}.f.${param}`, value);
     }
     if (state.q) params.set(`${namespace}.q`, state.q);
-    if (state.sort && state.sort !== defaults.sort) params.set(`${namespace}.sort`, state.sort);
+    if (state.sort && state.sort !== defaults?.sort) params.set(`${namespace}.sort`, state.sort);
     if (state.offset > 0) params.set(`${namespace}.offset`, String(state.offset));
-    if (state.pageSize !== defaults.pageSize) params.set(`${namespace}.size`, String(state.pageSize));
+    if (state.pageSize !== defaults?.pageSize) params.set(`${namespace}.size`, String(state.pageSize));
   }
   const query = params.toString();
   const url = new URL(window.location.href);
@@ -74,22 +76,27 @@ function writeParams(namespace: string, state: UrlTableState | null, defaults: U
   history.replaceState(history.state, "", url);
 }
 
+/** Namespace-only use owns cleanup without mounting a table or making requests. */
+export function useUrlTableState(namespace: string | undefined): void;
 export function useUrlTableState(
   namespace: string | undefined,
   defaults: UrlTableState,
-): { initial: UrlTableState; mirror: (state: UrlTableState) => void } {
-  const initial = useMemo<UrlTableState>(
-    () => (namespace ? { ...defaults, ...readParams(namespace) } : defaults),
+  retainOnUnmount?: boolean,
+): { initial: UrlTableState; mirror: (state: UrlTableState) => void };
+export function useUrlTableState(namespace: string | undefined, defaults?: UrlTableState, retainOnUnmount = false) {
+  const initial = useMemo(
+    () => (defaults ? (namespace ? { ...defaults, ...readParams(namespace) } : defaults) : undefined),
     // The URL is only a mount-time input; defaults are stable per surface.
     [namespace],
   );
   const defaultsRef = useRef(defaults);
 
   useEffect(() => {
-    if (!namespace) return;
+    if (!namespace || retainOnUnmount) return;
     return () => writeParams(namespace, null, defaultsRef.current);
-  }, [namespace]);
+  }, [namespace, retainOnUnmount]);
 
+  if (!initial) return;
   return {
     initial,
     mirror: (state: UrlTableState) => {

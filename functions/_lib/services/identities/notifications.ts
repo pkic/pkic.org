@@ -14,7 +14,7 @@ export const IDENTITY_INVITATION_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 export async function loadIdentityNotificationContext(
   db: DatabaseLike,
-  memberId: string,
+  organizationId: string,
   userId: string,
   requireActiveUser: boolean,
 ): Promise<IdentityNotificationContext> {
@@ -24,10 +24,9 @@ export async function loadIdentityNotificationContext(
             trim(COALESCE(user.first_name, '') || ' ' || COALESCE(user.last_name, '')) AS recipient_name,
             organization.name AS organization_name
        FROM users user
-       JOIN members member ON member.id = ? AND member.organization_id IS NOT NULL
-       JOIN organizations organization ON organization.id = member.organization_id
+       JOIN organizations organization ON organization.id = ?
       WHERE user.id = ? AND (? = 0 OR user.active = 1)`,
-    [memberId, userId, requireActiveUser ? 1 : 0],
+    [organizationId, userId, requireActiveUser ? 1 : 0],
   );
   if (!context) throw new AppError(404, "USER_NOT_FOUND", "Active user not found");
   return context;

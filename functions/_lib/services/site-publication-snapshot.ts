@@ -1,7 +1,15 @@
+import { resolveAuthoredAgendaRouteOwners } from "./site-publication-agenda-routes";
+import { publicationAuthoredAgendaRoutes } from "../../../assets/shared/publication-agenda-routes";
+import type { AuthoredAgendaSource } from "../../../assets/shared/schemas/site-publication-agenda-routes";
+import { storedAgendaSnapshotSchema } from "../../../assets/shared/schemas/event-agenda-stored";
+import { readPublicAgendaCalendars } from "./site-publication-agenda-calendars";
+import { publicAgendaProjection } from "./event-agenda/public-projection";
+import { projectLiveAgendaMaterialBatch } from "./site-agenda-material-eligibility";
 import { listPublicVotes } from "./votes/public";
 import { publicVotesListQuerySchema } from "../../../assets/shared/schemas/votes";
-import { all } from "../db/queries";
-import { sha256Hex } from "../utils/crypto";
+import { all, first } from "../db/queries";
+import { createSitePublicationSnapshot } from "./site-publication-snapshot-identity";
+export { createSitePublicationSnapshot } from "./site-publication-snapshot-identity";
 import { readMemberNews, readSponsorNews } from "./member-news/read";
 import { memberNewsQuerySchema } from "../../../assets/shared/schemas/member-news";
 import type { DatabaseLike } from "../types";
@@ -19,16 +27,28 @@ import { parseEventFlowPath } from "../../../assets/shared/event-flow-paths";
 import { z } from "zod";
 import { membersListQuerySchema } from "../../../assets/shared/schemas/members-directory";
 import {
-  sitePublicationSnapshotSchema,
   sitePublicationContentSchema,
   type SitePublicationSnapshot,
 } from "../../../assets/shared/schemas/site-publication";
 import { sponsorPublicationKey, sponsorPublicationQuery } from "../../../assets/shared/sponsor-publication-query";
 
-/** Identify the validated public content, excluding operational timestamps and private source keys. */
-export async function createSitePublicationSnapshot(value: unknown): Promise<SitePublicationSnapshot> {
-  const content = sitePublicationContentSchema.parse(value);
-  return sitePublicationSnapshotSchema.parse({ ...content, snapshotId: await sha256Hex(JSON.stringify(content)) });
+async function publicationHighwater(db: DatabaseLike): Promise<number | null> {
+  const tables = await first<{ count: number }>(
+    db,
+    "SELECT COUNT(*) AS count FROM sqlite_master WHERE type='table' AND name IN ('site_publication_requests','site_publication_delivery_state')",
+    [],
+  );
+  // Explicit pre-ledger extraction compatibility; remote assembly refuses
+  // to treat a snapshot without a tracked highwater as proven publication.
+  if (tables?.count === 0) return null;
+  if (tables?.count !== 2) throw new Error("Site publication provenance schema is incomplete");
+  const state = await first<{ sequence: number }>(
+    db,
+    "SELECT COALESCE((SELECT desired_sequence FROM site_publication_delivery_state WHERE id=1),(SELECT MAX(sequence) FROM site_publication_requests),0) AS sequence",
+    [],
+  );
+  if (!state) throw new Error("Site publication highwater is unavailable");
+  return state.sequence;
 }
 
 /** Export only approved, publicly visible projections through native D1 bindings. */
@@ -36,7 +56,9 @@ export async function readSitePublicationSnapshot(
   db: DatabaseLike,
   sponsorSelections: Array<Record<string, string | undefined>>,
   authoredEventSlugs: readonly string[] = [],
+  authoredAgendaSources: readonly AuthoredAgendaSource[] = [],
 ): Promise<SitePublicationSnapshot> {
+  const sourceSequence = await publicationHighwater(db);
   const snapshot: z.infer<typeof sitePublicationContentSchema> = {
     version: 1,
     votes: [],
@@ -137,13 +159,15 @@ export async function readSitePublicationSnapshot(
   snapshot.publicResources["/api/v1/members/applications/form"] = z
     .json()
     .parse(await getPublicMembershipApplicationForm(db));
-  snapshot.publicResources["/api/v1/sponsors/tiers?sponsorType=consortium"] = z.json().parse(
-    publicSponsorTiersResponseSchema.parse({
-      visibility: "public",
-      sponsorType: "consortium",
-      tiers: (await listActiveSponsorshipTierNames(db, "consortium")).map((tier) => ({ tier })),
-    }),
-  );
+  for (const sponsorType of ["consortium", "event"] as const) {
+    snapshot.publicResources[`/api/v1/sponsors/tiers?sponsorType=${sponsorType}`] = z.json().parse(
+      publicSponsorTiersResponseSchema.parse({
+        visibility: "public",
+        sponsorType,
+        tiers: (await listActiveSponsorshipTierNames(db, sponsorType)).map((tier) => ({ tier })),
+      }),
+    );
+  }
   async function publishEventForms(slug: string) {
     const key = `/api/v1/events/${encodeURIComponent(slug)}/forms/placements/`;
     if (`${key}event_registration` in snapshot.publicResources) return;
@@ -185,5 +209,46 @@ export async function readSitePublicationSnapshot(
     for (const row of events) await publishEventForms(row.slug);
     eventAfter = events[events.length - 1]!.slug;
   }
-  return createSitePublicationSnapshot(snapshot);
+  snapshot.eventAgendas = {};
+  snapshot.authoredAgendaRoutes = [];
+  const agendaTables = await all<{ name: string }>(
+    db,
+    "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('event_agenda_publications','event_agenda_state')",
+  );
+  // Preview builds may run against the baseline database before additive migration 0038.
+  // Only the entirely absent feature schema falls back; partial migrations and query failures remain fatal.
+  if (!agendaTables.length) return createSitePublicationSnapshot(snapshot);
+  if (agendaTables.length !== 2) throw new Error("Event agenda publication schema is incomplete; apply migration 0038");
+  let agendaAfter = "";
+  for (;;) {
+    const agendas = await all<{ event_id: string; slug: string; base_path: string | null; snapshot_json: string }>(
+      db,
+      `SELECT e.id AS event_id,e.slug, e.base_path, p.snapshot_json FROM event_agenda_publications p
+       JOIN event_agenda_state s ON s.event_id = p.event_id AND s.published_revision = p.revision
+       JOIN events e ON e.id = p.event_id WHERE e.visibility = 'public' AND e.slug > ? ORDER BY e.slug LIMIT 100`,
+      [agendaAfter],
+    );
+    if (!agendas.length) break;
+    const projected = await projectLiveAgendaMaterialBatch(
+      db,
+      agendas.map((row) => ({
+        eventId: row.event_id,
+        snapshot: storedAgendaSnapshotSchema.parse(JSON.parse(row.snapshot_json)),
+      })),
+    );
+    for (const [index, row] of agendas.entries()) {
+      const approved = projected[index]!;
+      const publicAgenda = publicAgendaProjection(approved, row.base_path);
+      snapshot.eventAgendas[row.slug] = publicAgenda;
+      snapshot.authoredAgendaRoutes.push(
+        ...(await resolveAuthoredAgendaRouteOwners(db, row.event_id, approved, authoredAgendaSources)),
+      );
+    }
+    agendaAfter = agendas[agendas.length - 1]!.slug;
+  }
+  snapshot.authoredAgendaRoutes = publicationAuthoredAgendaRoutes(snapshot);
+  snapshot.eventAgendaCalendars = await readPublicAgendaCalendars(db, new Date().toISOString());
+  if ((await publicationHighwater(db)) !== sourceSequence)
+    throw new Error("Site publication source changed during extraction; rebuild from the newest requested state");
+  return createSitePublicationSnapshot(snapshot, sourceSequence);
 }

@@ -265,6 +265,63 @@ describe("UserAffiliationRow", () => {
     expect(container.textContent).toContain("Save identity profile");
   });
 
+  it("edits a nonmember organization affiliation without exposing or mutating membership", async () => {
+    const requests = stubFetch(() => identityMutation("active"));
+    const nonmember = membership({ memberId: null, membershipCategory: null, status: null });
+    const container = mount();
+    void act(() => render(<UserAffiliationRow membership={nonmember} onChanged={vi.fn()} canManage />, container));
+
+    expect(container.textContent).toContain("Organization A");
+    expect(container.querySelector(`a[href*="/organizations/${ORGANIZATION_ID}"]`)).not.toBeNull();
+    expect(container.querySelector(".pk-badge")).toBeNull();
+    expect(container.textContent).not.toContain("Category");
+    void act(() => menuTrigger(container, "Actions for Organization A").click());
+    expect(menuItemNamed(container, "Edit membership…")).toBeNull();
+    expect(menuItemNamed(container, "Edit identity profile…")).not.toBeNull();
+    expect(menuItemNamed(container, "End identity…")).not.toBeNull();
+    void act(() => menuItemNamed(container, "Edit identity profile…")!.click());
+    expect(container.querySelectorAll("select")).toHaveLength(0);
+    await typeInto(controlFor(container, "Job title for Organization A"), "Independent standards lead");
+    await press(container, "Save identity profile");
+
+    const profilePatch = requests.find((request) => request.method === "PATCH");
+    expect(profilePatch?.pathname).toBe(`/api/v1/organizations/${ORGANIZATION_ID}/identities/${IDENTITY_ID}`);
+    expect(identityUpdateSchema.parse(profilePatch?.body)).toEqual({
+      profile: { jobTitle: "Independent standards lead", biography: null, links: [] },
+    });
+    runRowMenuAction(container, "Organization A", "Hide from Organization A's public profile");
+    await settle();
+    const patches = requests.filter((request) => request.method === "PATCH");
+    expect(patches).toHaveLength(2);
+    expect(identityUpdateSchema.parse(patches[1].body)).toEqual({ profile: { showOnOrganizationProfile: false } });
+    expect(requests.some((request) => request.pathname.startsWith("/api/v1/members/"))).toBe(false);
+  });
+
+  it("ends a nonmember organization identity through its canonical organization route", async () => {
+    const requests = stubFetch(() => identityMutation("ended"));
+    const nonmember = membership({ memberId: null, membershipCategory: null, status: null });
+    const container = mount();
+    void act(() =>
+      render(
+        <>
+          <ConfirmDialogHost />
+          <UserAffiliationRow membership={nonmember} onChanged={vi.fn()} canManage />
+        </>,
+        container,
+      ),
+    );
+
+    runRowMenuAction(container, "Organization A", "End identity…");
+    await press(container, "End identity");
+    const mutations = requests.filter((request) => request.method !== "GET");
+    expect(mutations).toHaveLength(1);
+    expect(mutations[0].pathname).toBe(`/api/v1/organizations/${ORGANIZATION_ID}/identities/${IDENTITY_ID}`);
+    expect(identityUpdateSchema.parse(mutations[0].body)).toEqual({
+      transition: { state: "ended", reason: "Ended from System Users" },
+    });
+    expect(requests.some((request) => request.pathname.startsWith("/api/v1/members/"))).toBe(false);
+  });
+
   it("only removes a membership through the confirm dialog when the removal is confirmed", async () => {
     const requests = stubFetch(() => identityMutation("ended"));
     const container = mount();

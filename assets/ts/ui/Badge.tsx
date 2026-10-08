@@ -8,6 +8,7 @@
  */
 
 import type { ComponentChildren } from "preact";
+import { formatNumber } from "../../shared/format-number";
 
 import "./Badge.css";
 
@@ -47,7 +48,7 @@ export function IconBadge({
   return (
     <Badge tone={tone} dot={false} label={label}>
       {icon}
-      {count !== undefined && <span aria-hidden="true">{count}</span>}
+      {count !== undefined && <span aria-hidden="true">{formatNumber(count)}</span>}
     </Badge>
   );
 }

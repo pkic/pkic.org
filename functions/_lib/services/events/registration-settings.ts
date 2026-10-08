@@ -61,9 +61,11 @@ function configurableEvent(
   eventId: string,
 ): Promise<{ event: ConfigurableEvent; context: EventResourceManagementContext }> {
   return (async () => {
-    const event = await first<ConfigurableEvent>(db, `SELECT ${EVENT_COLUMNS}, updated_at FROM events WHERE id = ?`, [
-      eventId,
-    ]);
+    const event = await first<ConfigurableEvent>(
+      db,
+      `SELECT ${EVENT_COLUMNS}, strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) AS updated_at FROM events WHERE id = ?`,
+      [eventId],
+    );
     if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
     if (event.profile_key === "meeting" || event.profile_key === "board_meeting") {
       throw new AppError(
@@ -112,7 +114,9 @@ export async function replaceGroupEventRegistrationSettings(
   const updatedAt = now;
   statements.push(
     db
-      .prepare("UPDATE events SET registration_mode = ?, updated_at = ? WHERE id = ? AND updated_at = ?")
+      .prepare(
+        "UPDATE events SET registration_mode = ?, updated_at = ? WHERE id = ? AND strftime('%Y-%m-%dT%H:%M:%fZ', updated_at) = strftime('%Y-%m-%dT%H:%M:%fZ', ?)",
+      )
       .bind(registrationPolicy, updatedAt, event.id, expectedUpdatedAt),
     prepareScopedAuditLogAfterOneChange(
       db,

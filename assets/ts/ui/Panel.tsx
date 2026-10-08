@@ -75,11 +75,20 @@ export interface PanelBodyProps extends JSX.HTMLAttributes<HTMLDivElement> {
    * so a reader who cannot see the tint loses nothing.
    */
   tone?: PanelBodyTone;
+  /** Tables share the card edge; forms and ordinary content retain padded bodies. */
+  flush?: boolean;
   children?: ComponentChildren;
 }
 
-export function PanelBody({ tone, class: className, children, ...rest }: PanelBodyProps) {
-  const classes = ["pk-panel__body", tone ? `pk-panel__body--${tone}` : null, className].filter(Boolean).join(" ");
+export function PanelBody({ tone, flush = false, class: className, children, ...rest }: PanelBodyProps) {
+  const classes = [
+    "pk-panel__body",
+    flush ? "pk-panel__body--flush" : null,
+    tone ? `pk-panel__body--${tone}` : null,
+    className,
+  ]
+    .filter(Boolean)
+    .join(" ");
   return (
     <div class={classes} {...rest}>
       {children}

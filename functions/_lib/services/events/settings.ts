@@ -4,6 +4,7 @@ import {
   type EventSettingsInput,
   type EventSettingsUpdateInput,
 } from "../../../../assets/shared/schemas/event-management";
+import { BADGE_TEMPLATE_SETTINGS_MAX_BYTES } from "../../../../assets/shared/schemas/event-badge-template";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { AppError } from "../../errors";
 import { parseJsonSafe, stringifyJson } from "../../utils/json";
@@ -63,6 +64,7 @@ function mergeEventSettings(
     else settings[key] = value;
   };
   assignNullable("venue", input.venue);
+  assignNullable("badgeTemplate", input.badgeTemplate);
   assignNullable("virtualUrl", input.virtualUrl);
   assignNullable("location", input.location);
   if (input.heroImageUrl !== undefined) {
@@ -121,6 +123,35 @@ export function buildEventSettingsMutationStatements(
     input.appBaseUrl,
     input.allowedHeroImageHosts,
   );
+  const settingsJson = stringifyJson(mergedSettings);
+  if (
+    (input.settings.badgeTemplate !== undefined || mergedSettings.badgeTemplate !== undefined) &&
+    new TextEncoder().encode(settingsJson).byteLength > BADGE_TEMPLATE_SETTINGS_MAX_BYTES
+  ) {
+    throw new AppError(
+      422,
+      "BADGE_TEMPLATE_SETTINGS_TOO_LARGE",
+      "The complete event settings with this template must fit within 1 MiB.",
+    );
+  }
+  const auditSource = input.auditDetails ?? input.settings;
+  const auditDetails =
+    input.settings.badgeTemplate === undefined
+      ? auditSource
+      : {
+          ...(auditSource && typeof auditSource === "object" && !Array.isArray(auditSource)
+            ? auditSource
+            : { details: auditSource }),
+          badgeTemplate:
+            input.settings.badgeTemplate === null
+              ? null
+              : {
+                  version: input.settings.badgeTemplate.version,
+                  name: input.settings.badgeTemplate.name,
+                  assetCount: Object.keys(input.settings.badgeTemplate.assets).length,
+                  bytes: new TextEncoder().encode(stringifyJson(input.settings.badgeTemplate)).byteLength,
+                },
+        };
   const statements: StatementLike[] = [
     ...(input.authorizationGuards ?? []),
     db
@@ -149,7 +180,7 @@ export function buildEventSettingsMutationStatements(
         input.links === undefined ? 0 : 1,
         input.links === undefined ? null : stringifyJson(input.links),
         input.settings.inviteLimitAttendee ?? null,
-        stringifyJson(mergedSettings),
+        settingsJson,
         at,
         event.id,
         input.expectedUpdatedAt ?? null,
@@ -166,7 +197,7 @@ export function buildEventSettingsMutationStatements(
         "event_settings_updated",
         "event",
         event.id,
-        input.auditDetails ?? input.settings,
+        auditDetails,
         at,
       ),
     );
@@ -193,7 +224,7 @@ export function buildEventSettingsMutationStatements(
         "event_settings_updated",
         "event",
         event.id,
-        input.auditDetails ?? input.settings,
+        auditDetails,
         at,
         null,
         input.auditScope,

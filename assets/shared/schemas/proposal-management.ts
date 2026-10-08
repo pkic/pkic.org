@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
-import { defaultedSourceTypeSchema } from "./source";
 import { linksSchema } from "./links";
 import {
   boundedJsonObject,
@@ -19,6 +18,9 @@ import { consentItemSchema, participantProfileSchema, proposerProfileSchema, spe
 import { proposalDecisionStatusSchema, proposalStatusSchema } from "./proposal-status";
 import { addDuplicateStringIssues } from "./refinements";
 import { httpCapabilityUrlSchema, httpUrlSchema } from "./urls";
+import { proposalActingIdentitySchema, proposalActingIdentitySelectionShape } from "./proposal-acting-identity";
+import { eventProposalContinuationTokenSchema } from "./event-proposal-proof";
+import { proposalEntryContextShape } from "./proposal-entry";
 
 /** Event-defined session-type label; allowed values are checked against the event in the service layer. */
 export const proposalTypeSchema = trimmedString(2, 64);
@@ -26,6 +28,7 @@ export type ProposalType = z.infer<typeof proposalTypeSchema>;
 export const proposalSessionTypeSchema = z.object({
   label: proposalTypeSchema,
   requiresPresentation: z.boolean(),
+  durationMinutes: z.number().int().min(1).max(1440).optional(),
 });
 export const proposalSessionTypesSchema = z
   .array(proposalSessionTypeSchema)
@@ -45,16 +48,12 @@ export const MAX_PROPOSAL_PARTICIPANTS = MAX_PROPOSAL_ADDITIONAL_SPEAKERS + 1;
 
 export const proposalCreateSchema = boundedJsonObject(
   {
-    inviteToken: tokenSchema.optional(),
-    inviteId: databaseIdSchema.optional(),
-    sourceType: defaultedSourceTypeSchema,
-    sourceRef: trimmedString(2, 200).optional(),
-    referralCode: z
-      .string()
-      .trim()
-      .regex(/^[A-Za-z0-9]{6,12}$/)
-      .optional(),
-    proposer: proposerProfileSchema,
+    ...proposalEntryContextShape,
+    continuationToken: eventProposalContinuationTokenSchema.optional(),
+    unaffiliatedAttestation: z.boolean().default(false),
+    proposer: proposerProfileSchema
+      .partial({ email: true, firstName: true, lastName: true })
+      .extend(proposalActingIdentitySelectionShape),
     proposal: z.object({
       type: proposalTypeSchema,
       title: proposalTitleSchema,
@@ -69,11 +68,13 @@ export const proposalCreateSchema = boundedJsonObject(
       )
       .max(MAX_PROPOSAL_ADDITIONAL_SPEAKERS)
       .default([]),
-    consents: z.array(consentItemSchema).min(1).max(20),
+    consents: z.array(consentItemSchema).max(20),
   },
   40_000,
 ).superRefine((value, ctx) => {
-  const participantEmails = [value.proposer.email, ...value.speakers.map((speaker) => speaker.email)];
+  const participantEmails = [value.proposer.email, ...value.speakers.map((speaker) => speaker.email)].filter(
+    (email) => email !== undefined,
+  );
   if (new Set(participantEmails).size !== participantEmails.length) {
     ctx.addIssue({
       code: "custom",
@@ -90,6 +91,17 @@ export const proposalCreateSchema = boundedJsonObject(
         message: "Panel proposals require at least one speaker with role 'panelist'",
       });
     }
+  }
+});
+
+/** The signed-in proposer must make an explicit choice, including individual presentation. */
+export const authenticatedProposalCreateSchema = proposalCreateSchema.superRefine((value, context) => {
+  if (value.proposer.actingIdentityId === undefined) {
+    context.addIssue({
+      code: "custom",
+      path: ["proposer", "actingIdentityId"],
+      message: "Choose the identity you will speak as, or choose individual presentation.",
+    });
   }
 });
 
@@ -142,7 +154,7 @@ export const proposalAccessRecordSchema = z.object({
 export const proposalAccessSpeakerStatusSchema = z.enum(["pending", "invited", "confirmed", "declined"]);
 export type ProposalAccessSpeakerStatus = z.infer<typeof proposalAccessSpeakerStatusSchema>;
 /** Canonical transport fields shared by proposer and admin speaker views. */
-export const proposalSpeakerProfileSchema = z.object({
+export const proposalSpeakerProfileSchema = proposalActingIdentitySchema.extend({
   userId: databaseIdSchema,
   role: speakerRoleSchema,
   status: proposalAccessSpeakerStatusSchema,
@@ -248,6 +260,14 @@ export const speakerProfilePatchSchema = z.object({
   links: linksSchema.optional(),
 });
 
+/** A bound speaker can select only their own representation; roster patches cannot. */
+export const speakerSelfProfilePatchSchema = speakerProfilePatchSchema.extend({
+  ...proposalActingIdentitySelectionShape,
+  continuationToken: eventProposalContinuationTokenSchema.optional(),
+  unaffiliatedAttestation: z.boolean().optional(),
+  consents: z.array(consentItemSchema).max(20).optional(),
+});
+
 export const speakerParticipationPatchSchema = z.discriminatedUnion("status", [
   z.object({
     status: z.literal("confirmed"),
@@ -259,9 +279,11 @@ export const speakerParticipationPatchSchema = z.discriminatedUnion("status", [
   }),
 ]);
 
-export const proposerSpeakerPatchSchema = speakerProfilePatchSchema.extend({
-  role: speakerRoleSchema.optional(),
-});
+export const proposerSpeakerPatchSchema = speakerProfilePatchSchema
+  .extend({
+    role: speakerRoleSchema.optional(),
+  })
+  .strict();
 
 export const proposalSpeakerPatchSchema = proposerSpeakerPatchSchema;
 
@@ -275,13 +297,15 @@ export const proposalSpeakerRemovalResponseSchema = successResponseSchema.extend
   cancelledEmailCount: z.number().int().nonnegative(),
 });
 
-export const coSpeakerInviteSchema = z.object({
-  email: normalizedEmailSchema,
-  firstName: firstNameSchema.optional(),
-  lastName: lastNameSchema.optional(),
-  role: speakerRoleSchema.exclude(["proposer"]).default("speaker"),
-  expiresAt: utcInstantSchema.optional(),
-});
+export const coSpeakerInviteSchema = z
+  .object({
+    email: normalizedEmailSchema,
+    firstName: firstNameSchema.optional(),
+    lastName: lastNameSchema.optional(),
+    role: speakerRoleSchema.exclude(["proposer"]).default("speaker"),
+    expiresAt: utcInstantSchema.optional(),
+  })
+  .strict();
 
 export const coSpeakerInviteResponseSchema = successResponseSchema.extend({
   email: normalizedEmailSchema,

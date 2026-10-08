@@ -1,10 +1,12 @@
+import { isEventDayCapacityConflict, eventDayCapacityChangedError } from "../../db/event-day-capacity-guard";
+export { isEventDayCapacityConflict, eventDayCapacityChangedError } from "../../db/event-day-capacity-guard";
+import { eventEntryOccupiedSql } from "../event-participation/event-entry-capacity";
 import { first, all } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { uuid } from "../../utils/ids";
 import { nowIso } from "../../utils/time";
 import type { EventDayCapacityRow } from "./day-waitlist-types";
-import { NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL } from "./day-waitlist-policy";
 import type { EventParticipantRole } from "../../../../assets/shared/schemas/participant-roles";
 
 const ROLE_BASED_CAPACITY_EXEMPT_ROLES = [
@@ -27,32 +29,8 @@ export function eventDayHasAvailableCapacitySql(dayAlias: string, nowExpression:
   if (!/^[a-z][a-z0-9_]*$/i.test(dayAlias)) {
     throw new Error("Invalid event-day SQL alias");
   }
-  return `
-    ${dayAlias}.in_person_capacity IS NOT NULL
-    AND ${dayAlias}.in_person_capacity > 0
-    AND (
-      (
-        SELECT COUNT(*)
-        FROM registration_day_attendance rda
-        JOIN registrations r ON r.id = rda.registration_id
-        LEFT JOIN event_day_waitlist_entries w
-          ON w.event_day_id = rda.event_day_id
-         AND w.registration_id = rda.registration_id
-         AND ${NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL}
-        WHERE rda.event_day_id = ${dayAlias}.id
-          AND rda.attendance_type = 'in_person'
-          AND r.status IN ('pending_email_confirmation', 'registered')
-          AND w.id IS NULL
-      ) + (
-        SELECT COUNT(*)
-        FROM event_day_waitlist_entries w
-        JOIN registrations r ON r.id = w.registration_id
-        WHERE w.event_day_id = ${dayAlias}.id
-          AND w.status = 'offered'
-          AND (w.offer_expires_at IS NULL OR w.offer_expires_at > ${nowExpression})
-          AND r.status IN ('pending_email_confirmation', 'registered')
-      )
-    ) < ${dayAlias}.in_person_capacity`;
+  return `${dayAlias}.in_person_capacity IS NOT NULL AND ${dayAlias}.in_person_capacity > 0
+    AND ${eventEntryOccupiedSql(`${dayAlias}.event_id`, `${dayAlias}.day_date`, undefined, true, nowExpression)} < ${dayAlias}.in_person_capacity`;
 }
 
 function rolePriority(role: string): number {
@@ -84,19 +62,8 @@ export async function countConfirmedInPersonForDay(
 ): Promise<number> {
   const row = await first<{ total: number }>(
     db,
-    `SELECT COUNT(*) AS total
-     FROM registration_day_attendance rda
-     JOIN registrations r ON r.id = rda.registration_id
-     LEFT JOIN event_day_waitlist_entries w
-       ON w.event_day_id = rda.event_day_id
-      AND w.registration_id = rda.registration_id
-      AND ${NON_CAPACITY_CONSUMING_DAY_WAITLIST_SQL}
-     WHERE rda.event_day_id = ?
-       AND rda.attendance_type = 'in_person'
-       AND r.status IN ('pending_email_confirmation', 'registered')
-       AND w.id IS NULL
-       AND (? IS NULL OR r.id <> ?)`,
-    [eventDayId, excludeRegistrationId ?? null, excludeRegistrationId ?? null],
+    `WITH target AS(SELECT COALESCE((SELECT user_id FROM registrations WHERE id=?),'') AS excluded_user_id) SELECT ${eventEntryOccupiedSql("day.event_id", "day.day_date", "target.excluded_user_id", false)} AS total FROM event_days day CROSS JOIN target WHERE day.id=?`,
+    [excludeRegistrationId ?? null, eventDayId],
   );
   return Number(row?.total ?? 0);
 }
@@ -173,14 +140,6 @@ export async function resolveCapacityExemptReason(
   payload: { eventId: string; userId: string },
 ): Promise<string | null> {
   return roleBasedCapacityExemptReason(db, payload.eventId, payload.userId);
-}
-
-export function isEventDayCapacityConflict(error: unknown): boolean {
-  return error instanceof Error && error.message.includes("EVENT_DAY_CAPACITY_CHANGED");
-}
-
-export function eventDayCapacityChangedError(): AppError {
-  return new AppError(409, "DAY_CAPACITY_CHANGED", "Day capacity changed; please retry");
 }
 
 /** One guard per day, executed before every participant's reconciliation in the same atomic command. */

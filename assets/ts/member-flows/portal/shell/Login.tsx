@@ -22,6 +22,7 @@
  *     it was the only thing besides the color saying the send had worked;
  *     the sentence says it instead, inside the Alert's `role="status"`.
  */
+import type { ComponentChildren } from "preact";
 import { useState } from "preact/hooks";
 import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { postJson } from "../../../shared/api-client";
@@ -37,6 +38,7 @@ import { Button } from "../../../ui/Button";
 import { Field } from "../../../ui/Field";
 import { TextInput } from "../../../ui/TextControl";
 import { LoginBackdrop } from "./LoginBackdrop";
+import { Spinner } from "../../../ui/Spinner";
 import "./Login.css";
 import type { PortalLoginCopy } from "../../../../shared/schemas/portal-login-copy";
 
@@ -52,7 +54,19 @@ async function signInWithPasskey(): Promise<void> {
   await authenticateWithPasskey();
 }
 
-export function Login({ onSignedIn, copy }: { onSignedIn: () => void | Promise<void>; copy?: PortalLoginCopy }) {
+export function Login({
+  onSignedIn,
+  copy,
+  busy = false,
+  status,
+  notice,
+}: {
+  onSignedIn: () => void | Promise<void>;
+  copy?: PortalLoginCopy;
+  busy?: boolean;
+  status?: string;
+  notice?: ComponentChildren;
+}) {
   const [passkeySubmitting, setPasskeySubmitting] = useState(false);
   const [emailOpen, setEmailOpen] = useState(false);
   const [email, setEmail] = useState("");
@@ -67,16 +81,20 @@ export function Login({ onSignedIn, copy }: { onSignedIn: () => void | Promise<v
    * A browser with no passkey support has no primary action to fold behind,
    * so the email form is the screen rather than a disclosure inside it.
    *
-   * A sent link takes the form away. The design leaves it up beside the
-   * confirmation, but a form that still invites a submit after "check your
-   * inbox" contradicts it — and the third send inside a minute is refused by
-   * the rate limiter, so the invitation is to an error. The passkey button
-   * stays: giving up on the email and using a passkey is a real thing to do.
+   * A sent link replaces the form with confirmation and an explicit way to
+   * request another link. Returning to email preserves the address; choosing
+   * a passkey clears the previous email feedback before its ceremony starts.
    */
   const emailShown = (emailOpen || !passkeysSupported) && !magicLink.sent;
 
+  function openEmail(): void {
+    magicLink.clearFeedback();
+    setEmailOpen(true);
+  }
+
   async function handleSubmit(e: Event): Promise<void> {
     e.preventDefault();
+    if (busy || passkeySubmitting || magicLink.submitting) return;
     const checked = form.submit();
     if (!checked.data) return;
     await magicLink.request(async () => {
@@ -90,7 +108,8 @@ export function Login({ onSignedIn, copy }: { onSignedIn: () => void | Promise<v
   }
 
   async function handlePasskeySignIn(): Promise<void> {
-    magicLink.setError(null);
+    if (busy || passkeySubmitting || magicLink.submitting) return;
+    magicLink.clearFeedback();
     setPasskeySubmitting(true);
     try {
       await signInWithPasskey();
@@ -105,7 +124,7 @@ export function Login({ onSignedIn, copy }: { onSignedIn: () => void | Promise<v
   return (
     <div class="pk pk-login">
       <LoginBackdrop copy={copy} />
-      <section class="pk-login__panel" aria-label="Sign in">
+      <section class="pk-login__panel" aria-label="Sign in" aria-busy={busy}>
         <div class="pk-login__card-wrap">
           <div class="pk-login__card">
             <div class="pk-login__card-rule" aria-hidden="true" />
@@ -117,65 +136,86 @@ export function Login({ onSignedIn, copy }: { onSignedIn: () => void | Promise<v
                 </p>
               </div>
 
-              {magicLink.sent && (
-                <Alert tone="ok" title="Check your email">
-                  If this address has portal access, you&apos;ll receive a sign-in link shortly.
-                </Alert>
-              )}
+              {notice}
+              {status && <Spinner size="sm" label={status} />}
+              <fieldset
+                class="pk-login__controls pk-stack"
+                disabled={busy || passkeySubmitting || magicLink.submitting}
+              >
+                {magicLink.sent && (
+                  <Alert tone="ok" title="Check your email">
+                    If this address has portal access, you&apos;ll receive a sign-in link shortly.
+                  </Alert>
+                )}
 
-              {passkeysSupported && (
-                <div class="pk-stack pk-stack--tight">
-                  <Button
-                    variant="primary"
-                    block
-                    loading={passkeySubmitting}
-                    disabled={passkeySubmitting}
-                    onClick={() => {
-                      void handlePasskeySignIn();
+                {passkeysSupported && (
+                  <div class="pk-stack pk-stack--tight">
+                    <Button
+                      variant="primary"
+                      block
+                      loading={passkeySubmitting}
+                      disabled={passkeySubmitting}
+                      onClick={() => {
+                        void handlePasskeySignIn();
+                      }}
+                    >
+                      {passkeySubmitting ? "Waiting for passkey…" : "Sign in with a passkey"}
+                    </Button>
+                    <p class="pk-small pk-muted pk-login__note">Uses Touch ID, Windows Hello or your security key.</p>
+                  </div>
+                )}
+
+                {magicLink.sent && (
+                  <Button variant="secondary" block onClick={openEmail}>
+                    Request another link
+                  </Button>
+                )}
+
+                {passkeysSupported && !emailShown && !magicLink.sent && (
+                  <Button variant="secondary" block onClick={openEmail}>
+                    Sign in with an email link
+                  </Button>
+                )}
+
+                {emailShown && (
+                  <form
+                    noValidate
+                    {...form.handlers}
+                    class="pk-stack pk-stack--tight"
+                    onSubmit={(e) => {
+                      void handleSubmit(e);
                     }}
                   >
-                    {passkeySubmitting ? "Waiting for passkey…" : "Sign in with a passkey"}
-                  </Button>
-                  <p class="pk-small pk-muted pk-login__note">Uses Touch ID, Windows Hello or your security key.</p>
-                </div>
-              )}
-
-              {passkeysSupported && !emailShown && (
-                <Button variant="secondary" block onClick={() => setEmailOpen(true)}>
-                  Sign in with an email link
-                </Button>
-              )}
-
-              {emailShown && (
-                <form
-                  noValidate
-                  {...form.handlers}
-                  class="pk-stack pk-stack--tight"
-                  onSubmit={(e) => {
-                    void handleSubmit(e);
-                  }}
-                >
-                  <Field label="Work email" required {...form.of("email")}>
-                    {(control) => (
-                      <TextInput
-                        {...control}
-                        type="email"
-                        name="email"
-                        value={email}
-                        onInput={(event) => setEmail(event.currentTarget.value)}
-                        placeholder="you@organization.org"
-                        autocomplete="email"
-                      />
+                    <Field label="Work email" required {...form.of("email")}>
+                      {(control) => (
+                        <TextInput
+                          {...control}
+                          type="email"
+                          name="email"
+                          value={email}
+                          onInput={(event) => setEmail(event.currentTarget.value)}
+                          placeholder="you@organization.org"
+                          autocomplete="email"
+                        />
+                      )}
+                    </Field>
+                    <MagicLinkSubmitButton submitting={magicLink.submitting} />
+                    {passkeysSupported && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        block
+                        onClick={() => {
+                          magicLink.clearFeedback();
+                          setEmailOpen(false);
+                        }}
+                      >
+                        Back to passkey
+                      </Button>
                     )}
-                  </Field>
-                  <MagicLinkSubmitButton submitting={magicLink.submitting} />
-                  {passkeysSupported && (
-                    <Button variant="ghost" size="sm" block onClick={() => setEmailOpen(false)}>
-                      Back to passkey
-                    </Button>
-                  )}
-                </form>
-              )}
+                  </form>
+                )}
+              </fieldset>
 
               <SignInError error={magicLink.error} />
 

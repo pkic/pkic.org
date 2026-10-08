@@ -5,6 +5,7 @@ import { EventRegistrationConfirmation } from "../../../assets/ts/site/EventRegi
 import { EventRegistrationManagement } from "../../../assets/ts/site/EventRegistrationManagement";
 import { EventRegistrationForm } from "../../../assets/ts/site/EventRegistrationForm";
 import { SponsorshipInquiryForm } from "../../../assets/ts/site/SponsorshipInquiryForm";
+import { EventSponsorCheckoutForm } from "../../../assets/ts/site/EventSponsorCheckoutForm";
 import { InvitationDeclineForm } from "../../../assets/ts/site/InvitationDeclineForm";
 import { EventProposalForm } from "../../../assets/ts/site/EventProposalForm";
 import { EventProposalManagement } from "../../../assets/ts/site/EventProposalManagement";
@@ -59,6 +60,9 @@ export interface ContentComponentContext {
   assetUrls: (pattern?: string) => string[];
   data: FrontMatter;
   eventData?: Record<string, unknown>;
+  eventSlug?: string;
+  /** Exact owning event document route, resolved from content ancestry. */
+  eventRoute?: string;
   /** Assets owned by the page that declares the inherited event data. */
   eventAssetUrls?: (pattern?: string) => string[];
   listing: (kind: ContentCollectionKind, limit?: number) => SiteListing;
@@ -334,7 +338,8 @@ const renderers: Readonly<Record<string, ContentRenderer>> = {
   "event-registration-manage": async () => component(await render(<EventRegistrationManagement />)),
   "event-speaker-manage": async () => component(await render(<EventSpeakerManagement />)),
   "event-speaker-presentation": async () => component(await render(<EventSpeakerPresentation />)),
-  "event-sponsor-checkout": island("member-flows/event-sponsor-page", { "event-sponsor": "" }),
+  "event-sponsor-checkout": async (call) =>
+    component(await render(<EventSponsorCheckoutForm slug={call.props.slug ?? ""} />)),
   "events-cards": (call, context) => collection("events", call, context),
   // The published shortcode only stashes its YAML for the events layout to
   // read; it draws nothing itself, and `eventsIndex()` reads the same block.

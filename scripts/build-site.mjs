@@ -12,7 +12,14 @@ function run(command, args) {
 await logPublicationBuildCache("after dependency installation");
 run(process.execPath, ["--experimental-strip-types", "scripts/prepare-public.mjs"]);
 run("pnpm", ["exec", "vite", "build"]);
-run("pnpm", ["exec", "astro", "build", "--config", "astro.config.mjs"]);
+run("pnpm", [
+  "exec",
+  "astro",
+  "build",
+  "--config",
+  "astro.config.mjs",
+  ...(process.env.PKIC_PUBLICATION_FORCE_REBUILD === "1" ? ["--force"] : []),
+]);
 run(process.execPath, [
   "--experimental-strip-types",
   "scripts/generate-openapi.mjs",

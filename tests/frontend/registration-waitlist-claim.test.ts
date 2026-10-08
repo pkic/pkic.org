@@ -13,6 +13,7 @@ function jsonResponse(body: unknown, status = 200): Response {
 function manageResponse(): Response {
   return jsonResponse({
     success: true,
+    sponsorSharing: { allowed: false, withdrawnAt: null },
     registration: {
       id: "00000000-0000-0000-0000-000000000000",
       event_id: "event-1",
@@ -116,6 +117,7 @@ describe("registration waitlist claim UI", () => {
       if (url.includes("/forms?")) return jsonResponse({ error: { code: "NOT_FOUND", message: "No form" } }, 404);
       return jsonResponse({
         success: true,
+        sponsorSharing: { allowed: false, withdrawnAt: null },
         registration: {
           id: "00000000-0000-0000-0000-000000000000",
           event_id: "event-1",

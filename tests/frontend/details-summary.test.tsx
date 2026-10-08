@@ -92,24 +92,20 @@ describe("DetailsSummary", () => {
     expect(container.querySelector("pre")).toBeNull();
   });
 
-  it("falls back to a collapsed raw view when nesting goes past one level", () => {
+  it("shows complete raw evidence directly when nesting goes past one level", () => {
     const container = mount(<DetailsSummary value={{ change: { field: { nested: "too deep" } } }} />);
-    const details = container.querySelector("details");
-    expect(details).not.toBeNull();
-    // A native <details>/<summary> is the disclosure: already reachable by
-    // keyboard and announced as expandable, with no role or handler added.
-    expect(details?.open).toBe(false);
-    expect(details?.querySelector("summary")?.textContent).toBe("Raw details");
-    const pre = details?.querySelector("pre");
-    expect(pre?.textContent).toContain('"nested": "too deep"');
+    expect(container.querySelector("details")).toBeNull();
+    expect(container.textContent).toContain("Raw details");
+    expect(JSON.parse(container.querySelector("pre")?.textContent ?? "null")).toEqual({
+      change: { field: { nested: "too deep" } },
+    });
     expect(container.querySelector("dl")).toBeNull();
   });
 
-  it("falls back to a collapsed raw view for a non-object root", () => {
+  it("shows a non-object evidence root without hiding or truncating its values", () => {
     const container = mount(<DetailsSummary value={["one", "two"]} />);
-    const details = container.querySelector("details");
-    expect(details).not.toBeNull();
-    expect(details?.querySelector("pre")?.textContent).toContain('"one"');
+    expect(container.querySelector("details")).toBeNull();
+    expect(JSON.parse(container.querySelector("pre")?.textContent ?? "null")).toEqual(["one", "two"]);
   });
 
   it("renders nothing for an empty object", () => {

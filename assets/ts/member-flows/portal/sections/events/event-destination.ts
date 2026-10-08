@@ -5,6 +5,14 @@ import { usePortalHashLocation } from "../../hash-location";
 export function eventDestination(event: EventAudienceDetail | EventManagementSummary): string | null {
   if (event.participation?.registrationId || event.participation?.proposals || event.participation?.speakerProposals)
     return usePortalHashLocation.hrefs(`/events/${encodeURIComponent(event.slug)}`);
+  if ("scannerAccess" in event && event.scannerAccess?.canScan)
+    return usePortalHashLocation.hrefs(`/events/${encodeURIComponent(event.slug)}/scanner`);
+  if ("scannerAccess" in event && event.scannerAccess?.sponsors.length)
+    return usePortalHashLocation.hrefs(
+      event.scannerAccess.sponsors.length === 1
+        ? `/events/${encodeURIComponent(event.slug)}/sponsors/${encodeURIComponent(event.scannerAccess.sponsors[0]!.id)}/scanner`
+        : `/events/${encodeURIComponent(event.slug)}/lead-scanner`,
+    );
   if (!("viewer" in event)) {
     return usePortalHashLocation.hrefs(
       event.ownerGroupId

@@ -1,0 +1,52 @@
+.pk-agenda-editor__canvas {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  min-inline-size: 0;
+  align-items: stretch;
+}
+.pk-agenda-editor__canvas:has(> .pk-agenda-sources-panel) {
+  grid-template-columns: minmax(0, 1fr) minmax(0, min(28rem, 45%));
+}
+.pk-agenda-editor__canvas > .pk-content-agenda__day {
+  min-inline-size: 0;
+}
+.pk-agenda-sources-panel {
+  min-inline-size: 0;
+  min-block-size: 0;
+  contain: size;
+  padding: var(--pk-4);
+  overflow: auto;
+  color: var(--pk-ink);
+  background: var(--pk-surface);
+  border-inline-start: 1px solid var(--pk-line);
+}
+.pk-agenda-sources-panel .pk-agenda-editor__source-scroll {
+  max-block-size: none;
+  overflow: visible;
+}
+.pk-agenda-sources-panel__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--pk-2);
+  margin-block-end: var(--pk-3);
+}
+.pk-agenda-sources-panel__header h2 {
+  margin: 0;
+  font-size: var(--pk-text-lg);
+}
+
+/* Source tabs fit their sidebar rather than assuming the page's viewport width. */
+.pk-agenda-sources-panel .pk-tabs__list {
+  flex-wrap: wrap;
+  overflow-x: visible;
+}
+.pk-agenda-sources-panel .pk-tabs__link {
+  flex: 1 1 8rem;
+  min-inline-size: min(8rem, 100%);
+  max-inline-size: 100%;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  padding-inline: var(--pk-2);
+}

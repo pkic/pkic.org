@@ -1,19 +1,15 @@
 ---
 import "../../assets/design/layers.generated.css";
 import "../../assets/ts/design-system";
-import { publishedFormResourcesForPath } from "../../assets/shared/published-resource-url";
 import { SiteDocumentHead } from "../../assets/ts/site/SiteDocument";
 import { SiteHeader, SiteFooter, SiteMain } from "../../assets/ts/ui/SiteChrome";
-import { siteNavigation } from "../../functions/_lib/services/site-content";
-import { memberCounts, publication } from "../publication";
 import "../../assets/ts/site/public-styles";
-import { socialCardDescriptor } from "../social-card";
-import { clientAssets } from "../client-assets";
-import { siteContentLanguageForPath } from "../../assets/shared/site-content-language";
+import { publicationPageInputs, type PublicationPageInputs } from "../publication-page-inputs";
 import type { SiteContentPage } from "../../assets/shared/site-content";
 import type { PublicMemberDetail } from "../../assets/shared/schemas/members-directory";
 
 interface Props {
+  pageInputs?: PublicationPageInputs;
   title: string;
   description?: string;
   privatePage?: boolean;
@@ -21,29 +17,31 @@ interface Props {
   robots?: string;
   content?: SiteContentPage;
   member?: PublicMemberDetail;
+  structuredData?: unknown;
 }
-const { title, description, privatePage = false, accent, robots, content, member } = Astro.props;
+const page = Astro.props.pageInputs ?? await publicationPageInputs({ ...Astro.props, route: Astro.url.pathname });
+const { title, description, privatePage, accent, robots, structuredData, clientAssets } = page;
 const excludeFromSearch = privatePage || robots?.includes("noindex");
-const card = socialCardDescriptor({ route: Astro.url.pathname, title, description, content, member, publication });
 ---
-<html lang={siteContentLanguageForPath(Astro.url.pathname)}>
+<html lang={page.language}>
   <head>
     <link rel="preload" href="/fonts/Roboto-latin.woff2" as="font" type="font/woff2" crossorigin />
     <SiteDocumentHead
+      structuredData={privatePage ? undefined : structuredData}
       title={title}
       description={description}
-      currentPath={Astro.url.pathname}
-      canonicalUrl={new URL(Astro.url.pathname, Astro.site).href}
+      currentPath={page.route}
+      canonicalUrl={page.canonicalUrl}
       assets={{}}
       robots={privatePage ? "noindex, nofollow, noarchive" : robots}
     />
-    {!privatePage && !robots?.includes("noindex") && <template id="pkic-social-card">{JSON.stringify(card)}</template>}
+    {!privatePage && !robots?.includes("noindex") && <template id="pkic-social-card">{JSON.stringify(page.socialCard)}</template>}
   </head>
   <body class={`pk-site${accent ? ` pk-page--${accent}` : ""}`}>
-    <SiteHeader currentPath={Astro.url.pathname} navigation={siteNavigation()} memberCounts={memberCounts} />
+    <SiteHeader currentPath={page.route} navigation={page.navigation} memberCounts={page.memberCounts} />
     <SiteMain privatePage={excludeFromSearch}><slot /></SiteMain>
-    {Astro.url.pathname !== "/portal/" && <template id="pkic-public-form-resources">{JSON.stringify(publishedFormResourcesForPath(publication.publicResources, Astro.url.pathname))}</template>}
-    <SiteFooter navigation={siteNavigation()} privatePage={privatePage} memberWall={publication.memberWall} />
+    {page.route !== "/portal/" && <template id="pkic-public-form-resources">{JSON.stringify(page.publicResources)}</template>}
+    <SiteFooter navigation={page.navigation} privatePage={privatePage} memberWall={page.memberWall} copyrightYear={page.copyrightYear} />
     <script is:inline type="module" src={clientAssets.loader.url} integrity={clientAssets.loader.integrity} crossorigin="anonymous"></script>
     {clientAssets.publicSite && <script is:inline type="module" src={clientAssets.publicSite.url} integrity={clientAssets.publicSite.integrity} crossorigin="anonymous"></script>}
   </body>

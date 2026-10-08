@@ -577,7 +577,7 @@ test.describe("Portal management browser-verification pass", () => {
     await expect(page.getByRole("button", { name: "Add team member" })).toBeVisible({ timeout: 15_000 });
     await page.getByRole("button", { name: "Add team member" }).click();
     // Adding is a page of its own: the list it adds to is not underneath it.
-    await expect(page).toHaveURL(new RegExp(`#/groups/${EVENT_GROUP_ID}/events/[^/]+/team/new$`));
+    await expect(page).toHaveURL(new RegExp(`#/groups/${EVENT_GROUP_ID}/events/[^/]+/settings/team/access/new$`));
     await expect(page.getByRole("table", { name: "Event team members" })).toHaveCount(0);
 
     const form = page.locator("form").filter({
@@ -594,7 +594,7 @@ test.describe("Portal management browser-verification pass", () => {
     await form.getByRole("button", { name: "Add team member", exact: true }).click();
     expect((await assigned).status()).toBe(201);
     // And it returns to the list it added to.
-    await expect(page).toHaveURL(new RegExp(`#/groups/${EVENT_GROUP_ID}/events/[^/]+/team$`));
+    await expect(page).toHaveURL(new RegExp(`#/groups/${EVENT_GROUP_ID}/events/[^/]+/settings/team/access$`));
 
     const row = page.getByRole("row").filter({ hasText: email });
     await expect(row).toContainText("Program Committee");

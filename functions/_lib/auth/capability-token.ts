@@ -24,9 +24,16 @@ export type CapabilityPurpose =
   | "meeting_guest_verify"
   | "member_join_verify"
   | "member_join_apply"
+  | "event_proposal_verify"
+  | "event_proposal_continue"
   | EmailAuthCapabilityPurpose;
 
-export type StatelessCapabilityPurpose = "member_join_verify" | "member_join_apply" | EmailAuthCapabilityPurpose;
+export type StatelessCapabilityPurpose =
+  | "member_join_verify"
+  | "member_join_apply"
+  | "event_proposal_verify"
+  | "event_proposal_continue"
+  | EmailAuthCapabilityPurpose;
 
 export type CapabilityVerifyResult =
   { ok: true; resourceId: string; expiresAt: number } | { ok: false; reason: "invalid" | "expired" };
@@ -49,6 +56,8 @@ const purposeCodes: Record<CapabilityPurpose, string> = {
   meeting_guest_verify: "mgv",
   member_join_verify: "mjv",
   member_join_apply: "mja",
+  event_proposal_verify: "epv",
+  event_proposal_continue: "epc",
   user_sign_in: "usi",
   sponsor_sign_in: "ssi",
   identity_invitation: "iid",
@@ -172,6 +181,8 @@ export function isStatelessCapabilityPurpose(purpose: CapabilityPurpose): purpos
   return (
     purpose === "member_join_verify" ||
     purpose === "member_join_apply" ||
+    purpose === "event_proposal_verify" ||
+    purpose === "event_proposal_continue" ||
     purpose === "user_sign_in" ||
     purpose === "sponsor_sign_in" ||
     purpose === "identity_invitation"

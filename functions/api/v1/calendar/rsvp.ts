@@ -1,9 +1,10 @@
+import { normalizeSignedCalendarRsvp } from "../../../_lib/services/session-calendar-rsvp-transport";
 /** POST /api/v1/calendar/rsvp — ingest one replay-protected, signed calendar reply. */
 import { AppError } from "../../../_lib/errors";
 import { json } from "../../../_lib/http";
 import { INTERNAL_CALENDAR_RSVP_MAX_BYTES, readBoundedTextBody } from "../../../_lib/http-body";
 import { openApiRoute } from "../../../_lib/openapi/route";
-import { normalizeCalendarRsvp, recordCalendarRsvpEvent } from "../../../_lib/services/calendar-rsvp";
+import { recordCalendarRsvpEvent } from "../../../_lib/services/calendar-rsvp";
 import type { Env } from "../../../_lib/types";
 import { verifyHmacSha256Hex } from "../../../_lib/utils/crypto";
 import { calendarRsvpPostRouteSchema } from "../../../../assets/shared/schemas/route-contracts";
@@ -39,7 +40,10 @@ async function requireValidSignature(request: Request, secret: string | undefine
 export const CalendarRsvpPost = openApiRoute(
   calendarRsvpPostRouteSchema,
   async (c: CalendarRsvpContext, data) => {
-    await recordCalendarRsvpEvent(c.env.DB, normalizeCalendarRsvp(data.body));
+    await recordCalendarRsvpEvent(
+      c.env.DB,
+      await normalizeSignedCalendarRsvp(data.body, c.env.INTERNAL_SIGNING_SECRET, c.env.RSVP_EMAIL),
+    );
     return json({ processed: 1 as const });
   },
   (c: CalendarRsvpContext) => requireValidSignature(c.req.raw, c.env.INTERNAL_SIGNING_SECRET),

@@ -171,6 +171,52 @@ describe("verified-email-first membership join", () => {
     expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toHaveLength(1);
   });
 
+  it("binds a verified secondary work mailbox to the same person instead of their primary personal mailbox", async () => {
+    const testEnv = makeEnv();
+    const organizationId = await insertOrganization(testEnv.DB, "Secondary Work Organization");
+    const memberId = await seedOrganizationAggregate(testEnv.DB, organizationId, "A");
+    await testEnv.DB.prepare(
+      `INSERT INTO organization_domain_claims
+         (id, domain, application_id, organization_id, created_at, updated_at)
+       VALUES (?, 'secondary-work.example', NULL, ?, datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), organizationId)
+      .run();
+    const userId = await insertUser(testEnv.DB, "known-person@gmail.com");
+    const emailId = crypto.randomUUID();
+    const workEmail = "known-person@secondary-work.example";
+    await testEnv.DB.prepare(
+      `INSERT INTO user_emails
+         (id,user_id,email,normalized_email,verified_at,verification_method,created_at)
+       VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'magic_link', strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+    )
+      .bind(emailId, userId, workEmail, workEmail)
+      .run();
+    const token = await startAndMaterializeVerification(testEnv, workEmail);
+    const response = await verifyJoin(testEnv, token);
+    expect(response.status, await response.clone().text()).toBe(200);
+    const result = memberJoinVerifyResponseSchema.parse(await response.json());
+    expect(result).toMatchObject({
+      status: "organization_access_ready",
+      member: { memberId, userId, email: workEmail },
+    });
+    expect(
+      await queryAll(testEnv.DB, "SELECT user_id,email_id,organization_id FROM identities WHERE user_id=?", [userId]),
+    ).toEqual([{ user_id: userId, email_id: emailId, organization_id: organizationId }]);
+    expect(await queryAll(testEnv.DB, "SELECT id,email FROM users WHERE id=?", [userId])).toEqual([
+      { id: userId, email: "known-person@gmail.com" },
+    ]);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM users WHERE normalized_email=?", [workEmail])).toEqual([]);
+    expect(await queryAll(testEnv.DB, "SELECT user_id FROM sessions")).toEqual([{ user_id: userId }]);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toEqual([]);
+    const replay = await verifyJoin(testEnv, token);
+    expect(replay.status).toBe(200);
+    await expect(replay.json()).resolves.toEqual({ status: "already_member" });
+    expect(await queryAll(testEnv.DB, "SELECT email_id FROM identities WHERE user_id=?", [userId])).toEqual([
+      { email_id: emailId },
+    ]);
+  });
+
   it("does not let an individual attestation bypass an exact claimed organization domain", async () => {
     const testEnv = makeEnv();
     const organizationId = await insertOrganization(testEnv.DB, "Policy Organization");

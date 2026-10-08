@@ -17,11 +17,12 @@ import { getClientIp, requireInternalSecret } from "../../../_lib/request";
 import { getRegistrationByManageToken } from "../../../_lib/services/registrations/queries";
 import { buildRegistrationManageView } from "../../../_lib/services/registrations/manage-view";
 import { updateManagedRegistration } from "../../../_lib/services/registrations/manage-update";
+import { readRegistrationSponsorSharing } from "../../../_lib/services/event-participation/sponsor-consent";
 
 async function ownedRegistration(c: AdminContext, registrationId: string) {
   const db = requestDb(c);
   const identity = await requireIdentityFromRequest(db, c.req.raw, c.env);
-  const authority = { resourceId: registrationId, userId: identity.userId };
+  const authority = { resourceId: registrationId, userId: identity.userId, sessionId: identity.sessionId };
   const registration = await getRegistrationByManageToken(db, authority, requireInternalSecret(c.env));
   return { db, authority, registration };
 }
@@ -68,7 +69,13 @@ export const RegistrationParticipantPatch = openApiRoute(
     for (const id of result.outboxIds) {
       c.executionCtx.waitUntil(processOutboxByIdBackground(db, c.env, id));
     }
-    return json(registrationManageUpdateResponseSchema.parse({ success: true, emailChanged: result.emailChanged }));
+    return json(
+      registrationManageUpdateResponseSchema.parse({
+        success: true,
+        emailChanged: result.emailChanged,
+        sponsorSharing: await readRegistrationSponsorSharing(db, result.registration),
+      }),
+    );
   },
   markResponseSensitive,
 );

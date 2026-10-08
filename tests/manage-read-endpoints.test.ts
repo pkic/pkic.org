@@ -333,7 +333,11 @@ describe("manage read endpoints", () => {
     );
     expect(updateResponse.status).toBe(200);
     const updatePayload = registrationManageUpdateResponseSchema.parse(await updateResponse.clone().json());
-    expect(updatePayload).toEqual({ success: true, emailChanged: false });
+    expect(updatePayload).toEqual({
+      success: true,
+      emailChanged: false,
+      sponsorSharing: { allowed: false, withdrawnAt: null },
+    });
     expect(updatePayload).not.toHaveProperty("registration");
     const [audit] = await queryAll<{ actor_type: string; actor_id: string }>(
       env.DB,

@@ -859,6 +859,42 @@ describe("group event management routes", () => {
     });
   });
 
+  it.each(["registration-settings", "terms"] as const)(
+    "reads and updates legacy SQLite revisions through %s without accepting a stale revision",
+    async (resource) => {
+      const fixture = await createFixture();
+      const created = await createGroupEvent(fixture);
+      await env.DB.prepare("UPDATE events SET updated_at = '2026-09-09 12:00:00' WHERE id = ?").bind(created.id).run();
+      const path = `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/${resource}`;
+      const read = await request(fixture.ownerLeaderToken, path);
+      expect(read.status, await read.clone().text()).toBe(200);
+      const revision = (await read.json()) as { eventUpdatedAt: string };
+      expect(revision.eventUpdatedAt).toBe("2026-09-09T12:00:00.000Z");
+      const body =
+        resource === "registration-settings"
+          ? { expectedUpdatedAt: revision.eventUpdatedAt, registrationPolicy: "no_registration" }
+          : {
+              expectedUpdatedAt: revision.eventUpdatedAt,
+              configuration: {
+                attendee: [{ termKey: "terms", version: "1", required: true, displayText: "I agree to the terms" }],
+                speaker: [],
+                presentation: [],
+              },
+            };
+      const saved = await request(fixture.ownerLeaderToken, path, { method: "PUT", body: JSON.stringify(body) });
+      expect(saved.status, await saved.clone().text()).toBe(200);
+      const savedBody = (await saved.json()) as { eventUpdatedAt: string };
+      expect(savedBody.eventUpdatedAt).not.toBe(revision.eventUpdatedAt);
+      const stale = await request(fixture.ownerLeaderToken, path, { method: "PUT", body: JSON.stringify(body) });
+      expect(stale.status, await stale.clone().text()).toBe(409);
+      const latest = await request(fixture.ownerLeaderToken, path);
+      expect(latest.status, await latest.clone().text()).toBe(200);
+      expect((await latest.json()) as { eventUpdatedAt: string }).toMatchObject({
+        eventUpdatedAt: savedBody.eventUpdatedAt,
+      });
+    },
+  );
+
   it("reads a migrated event's legacy registration mode as the policy the detail already shows", async () => {
     const fixture = await createFixture();
     const created = await createGroupEvent(fixture);

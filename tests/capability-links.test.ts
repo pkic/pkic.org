@@ -10,6 +10,8 @@ import {
   signCapabilityToken,
   verifyCapabilityToken,
   verifyDatabaseCapability,
+  signStatelessCapabilityToken,
+  verifyStatelessCapabilityToken,
 } from "../functions/_lib/services/capability-links";
 import { buildAddProposalSpeaker, queuedSpeakerManageToken } from "../functions/_lib/services/proposal-speakers";
 import { resetDb } from "./helpers/reset-db";
@@ -85,6 +87,48 @@ async function seedSpeakerCapability(): Promise<void> {
 
 describe("public capability links", () => {
   beforeEach(async () => resetDb());
+
+  it.each(["event_proposal_verify", "event_proposal_continue"] as const)(
+    "keeps %s purpose-bound, expiring, and server-authorized at email delivery",
+    async (purpose) => {
+      const resourceId = "event-proposal-context";
+      const marker = queuedCapabilityToken(purpose, resourceId, 60);
+      const unapproved = { verificationUrl: `https://example.test/propose#verify=${marker}` };
+      expect(
+        await materializeQueuedCapabilityLinks(env.DB, { INTERNAL_SIGNING_SECRET: signingSecret }, unapproved),
+      ).toEqual(unapproved);
+      const approved = authorizeQueuedCapabilityLinks(unapproved, [marker]);
+      const materialized = await materializeQueuedCapabilityLinks(
+        env.DB,
+        { INTERNAL_SIGNING_SECRET: signingSecret },
+        approved,
+      );
+      const token = String(materialized.verificationUrl).split("#verify=")[1];
+      await expect(verifyStatelessCapabilityToken({ signingSecret, purpose, token })).resolves.toMatchObject({
+        ok: true,
+        resourceId,
+      });
+      const otherPurpose = purpose === "event_proposal_verify" ? "event_proposal_continue" : "event_proposal_verify";
+      await expect(verifyStatelessCapabilityToken({ signingSecret, purpose: otherPurpose, token })).resolves.toEqual({
+        ok: false,
+        reason: "invalid",
+      });
+      await expect(
+        verifyStatelessCapabilityToken({ signingSecret, purpose: "member_join_verify", token }),
+      ).resolves.toEqual({ ok: false, reason: "invalid" });
+      const expired = await signStatelessCapabilityToken({
+        signingSecret,
+        purpose,
+        resourceId,
+        ttlSeconds: 1,
+        nowSeconds: 1,
+      });
+      await expect(verifyStatelessCapabilityToken({ signingSecret, purpose, token: expired })).resolves.toEqual({
+        ok: false,
+        reason: "expired",
+      });
+    },
+  );
 
   it("signs purpose-bound, expiring tokens and invalidates them after secret rotation", async () => {
     const linkSecret = newCapabilityLinkSecret();

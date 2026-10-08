@@ -8,6 +8,17 @@ let cachedResettableTables: string[] | null = null;
 let cachedDeleteOrder: string[] | null = null;
 let baselinesInitialized = false;
 
+// Completed provenance has two deferred foreign keys and must be removed in
+// one transaction. Its immediate parents still follow ordinary child-first order.
+const RECORDING_PROVENANCE_TABLES = ["event_recording_acquisitions", "event_recording_versions"] as const;
+
+function sharesRecordingProvenanceCycle(child: string, parent: string): boolean {
+  return (
+    RECORDING_PROVENANCE_TABLES.some((table) => table === child) &&
+    RECORDING_PROVENANCE_TABLES.some((table) => table === parent)
+  );
+}
+
 // `roles` / `role_permissions` are system reference data —
 // built-in roles "ship with the portal" and are seeded once by migration
 // consolidated migration 0035, not per-test business data (unlike ordinary
@@ -127,19 +138,53 @@ async function listResettableTables(): Promise<string[]> {
   return cachedResettableTables;
 }
 
+/** Schema edges determine cleanup order even when the first reset sees empty tables. */
+async function childFirstDeleteOrder(tableNames: string[]): Promise<string[]> {
+  const names = [...tableNames].sort();
+  const included = new Set(names);
+  const foreignKeys = await env.DB.batch(names.map((name) => env.DB.prepare(`PRAGMA foreign_key_list("${name}")`)));
+  const parents = new Map<string, Set<string>>();
+  const children = new Map(names.map((name) => [name, 0]));
+  for (const [index, name] of names.entries()) {
+    const rows = foreignKeys[index]?.results;
+    if (!rows) throw new Error(`resetDb: foreign-key metadata unavailable for ${name}`);
+    const referenced = new Set(
+      rows
+        .map((row) => {
+          if (typeof row.table !== "string") throw new Error(`resetDb: invalid foreign-key metadata for ${name}`);
+          return row.table;
+        })
+        .filter((parent) => parent !== name && included.has(parent) && !sharesRecordingProvenanceCycle(name, parent)),
+    );
+    parents.set(name, referenced);
+    for (const parent of referenced) children.set(parent, children.get(parent)! + 1);
+  }
+  const remaining = new Set(names);
+  const ordered: string[] = [];
+  while (remaining.size) {
+    const child = names.find((name) => remaining.has(name) && children.get(name) === 0);
+    if (!child) break;
+    remaining.delete(child);
+    ordered.push(child);
+    for (const parent of parents.get(child)!) children.set(parent, children.get(parent)! - 1);
+  }
+  // Other cycles retain deterministic order and use the FK-aware retry path.
+  return [...ordered, ...remaining];
+}
+
 async function clearTablesWithRetry(tableNames: string[]): Promise<void> {
-  if (cachedDeleteOrder) {
-    try {
-      await env.DB.batch(cachedDeleteOrder.map((tableName) => env.DB.prepare(`DELETE FROM "${tableName}"`)));
-      return;
-    } catch {
-      // A later test may populate an FK edge that earlier resets did not.
-      // The batch is atomic, so relearn a safe order without partial cleanup.
-      cachedDeleteOrder = null;
-    }
+  cachedDeleteOrder ??= await childFirstDeleteOrder(tableNames);
+  const attemptedOrder = cachedDeleteOrder;
+  try {
+    await env.DB.batch(attemptedOrder.map((tableName) => env.DB.prepare(`DELETE FROM "${tableName}"`)));
+    return;
+  } catch {
+    // Cycles or unexpected constraints may need retries. The failed batch is
+    // atomic, so retain the child-first prefix without partial cleanup.
+    cachedDeleteOrder = null;
   }
 
-  const pending = new Set(tableNames);
+  const pending = new Set(attemptedOrder);
   const deleteOrder: string[] = [];
 
   // Re-try deletes so FK parents are attempted after children are cleared.
@@ -147,11 +192,15 @@ async function clearTablesWithRetry(tableNames: string[]): Promise<void> {
     let deletedInPass = 0;
 
     for (const tableName of Array.from(pending)) {
+      if (!pending.has(tableName)) continue;
+      const group = RECORDING_PROVENANCE_TABLES.some((table) => table === tableName)
+        ? RECORDING_PROVENANCE_TABLES.filter((table) => pending.has(table))
+        : [tableName];
       try {
-        await env.DB.prepare(`DELETE FROM "${tableName}"`).run();
-        pending.delete(tableName);
-        deleteOrder.push(tableName);
-        deletedInPass += 1;
+        await env.DB.batch(group.map((table) => env.DB.prepare(`DELETE FROM "${table}"`)));
+        for (const table of group) pending.delete(table);
+        deleteOrder.push(...group);
+        deletedInPass += group.length;
       } catch {
         // Leave table pending for the next pass (usually FK order related).
       }

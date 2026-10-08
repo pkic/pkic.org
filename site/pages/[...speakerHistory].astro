@@ -1,0 +1,41 @@
+---
+import { publicationRouteCacheKey, PUBLICATION_SITE_ORIGIN } from "../publication-cache";
+import { publicationPageInputs } from "../publication-page-inputs";
+import { speakerHistoryStructuredData } from "../../functions/_lib/services/site-history-structured-data";
+import PublicPage from "../layouts/PublicPage.astro";
+import { publication } from "../publication";
+import { publishedSpeakerHistory } from "../../functions/_lib/services/site-session-history";
+import { formatDateRange } from "../../assets/shared/format-date";
+import { Breadcrumb } from "../../assets/ts/ui/Breadcrumb";
+export async function getStaticPaths() {
+  return Promise.all(publishedSpeakerHistory(publication).map(async (person) => {
+    const view = {
+      name: person.name,
+      appearances: person.appearances.map((item) => {
+        const credit = item.appearances.find((appearance) => appearance.userId === person.userId);
+        return { route: item.route, title: item.session.title, eventName: item.agenda.eventName,
+          date: formatDateRange(item.session.startAt, item.session.endAt, item.agenda.timeZone),
+          hasAppearance: credit !== undefined, organizationLabel: credit ? [credit.jobTitle, credit.organizationName].filter(Boolean).join(" · ") : undefined,
+        };
+      }),
+    };
+    const pageInputs = await publicationPageInputs({ route: person.route,
+      title: `${person.name} · Speaking history`, description: `Approved PKI Consortium sessions featuring ${person.name}.`,
+      structuredData: speakerHistoryStructuredData(person, PUBLICATION_SITE_ORIGIN),
+    });
+    return {
+      params: { speakerHistory: person.route.replace(/^\/|\/$/g, "") }, props: { view, pageInputs },
+      ...(pageInputs.imageInputs.cacheable ? { cacheKey: publicationRouteCacheKey(person.route, { view, pageInputs }) } : {}),
+    };
+  }));
+}
+const { view, pageInputs } = Astro.props;
+---
+<PublicPage title={pageInputs.title} pageInputs={pageInputs}>
+  <article class="pk-section pk-container" data-pagefind-body>
+    <Breadcrumb items={[{ label: "Session archive", href: "/sessions/" }, { label: "Speaking history" }]} />
+    <h1>{view.name}</h1><h2>Speaking history</h2>
+    <p>Credits reflect the approved representation at each event.</p>
+    <ul>{view.appearances.map((item) => <li><h3><a href={item.route}>{item.title}</a></h3><p>{item.eventName} · {item.date}</p>{item.hasAppearance && <p>{item.organizationLabel}</p>}</li>)}</ul>
+  </article>
+</PublicPage>

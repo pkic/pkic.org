@@ -1,4 +1,4 @@
-import { hasEventParticipation, eventParticipantSignInEvidence } from "./event-participation";
+import { hasEventParticipation } from "./event-participation";
 /**
  * Canonical human identity session.
  *
@@ -14,12 +14,11 @@ import { normalizeEmail } from "../validation";
 import { nowIso } from "../utils/time";
 import {
   findEligibleStaffUserById,
-  staffSignInAuthorizationEvidence,
   findEligibleMemberById,
-  memberSignInAuthorizationEvidence,
   countPendingIdentitiesForUser,
-  pendingIdentitySignInAuthorizationEvidence,
+  hasActiveAffiliation,
 } from "./identity-capacities";
+import { signInCapacityAuthorizationEvidence } from "./sign-in-capacity-authorization";
 import {
   assertSessionActive,
   fetchSessionRow,
@@ -40,7 +39,6 @@ import { buildFindOrCreateUserStatement } from "../services/users";
 import {
   findActiveSponsorCapacitiesByUserId,
   sponsorSignInAuthorizationEvidence,
-  sponsorUserSignInAuthorizationEvidence,
   verifySponsorSignInCapability,
 } from "./sponsor-capacity";
 import {
@@ -191,15 +189,19 @@ async function resolveUserSessionContext(
   const lastActivityAt = activityAtOrCreatedAt(verified.claims.lastActivityAt, row.createdAt);
   const idleExpiresAt = sessionIdleExpiresAt(lastActivityAt, row.expiresAt, DEFAULT_USER_SESSION_IDLE_TTL_HOURS);
   assertActivityActive(idleExpiresAt);
-  const [identity, staff, member, sponsors, pendingIdentityCount, eventParticipation] = await Promise.all([
+  const [identity, staff, member, sponsors, pendingIdentityCount, eventParticipation, affiliation] = await Promise.all([
     findActiveIdentity(db, verified.claims.sub),
     findEligibleStaffUserById(db, verified.claims.sub),
     findEligibleMemberById(db, verified.claims.sub, verified.claims.iid),
     findActiveSponsorCapacitiesByUserId(db, verified.claims.sub),
     countPendingIdentitiesForUser(db, verified.claims.sub),
     hasEventParticipation(db, verified.claims.sub),
+    hasActiveAffiliation(db, verified.claims.sub),
   ]);
-  if (!identity || (!staff && !member && sponsors.length === 0 && pendingIdentityCount === 0 && !eventParticipation)) {
+  if (
+    !identity ||
+    (!staff && !member && sponsors.length === 0 && pendingIdentityCount === 0 && !eventParticipation && !affiliation)
+  ) {
     throw new AppError(401, "AUTH_INVALID", "This user session no longer has an active capacity");
   }
   const elevatedStaffExpiry = userStaffExpiresAt(row.createdAt, row.expiresAt);
@@ -210,7 +212,14 @@ async function resolveUserSessionContext(
     STAFF_SESSION_IDLE_TTL_HOURS,
   );
   const staffActive = new Date(staffIdleExpiresAt).getTime() > Date.now();
-  if (!staffActive && !member && sponsors.length === 0 && pendingIdentityCount === 0 && !eventParticipation) {
+  if (
+    !staffActive &&
+    !member &&
+    sponsors.length === 0 &&
+    pendingIdentityCount === 0 &&
+    !eventParticipation &&
+    !affiliation
+  ) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This account has no active portal capacity");
   }
   const staffActor =
@@ -238,6 +247,7 @@ async function resolveUserSessionContext(
       sponsors,
       pendingIdentityCount,
       eventParticipation,
+      hasActiveAffiliation: affiliation,
     },
   };
 }
@@ -333,18 +343,21 @@ export async function queueUserSignInCapability(payload: {
 }): Promise<{
   queuedToken: string;
   identity: { id: string; email: string };
-  capacities: Array<"staff" | "member" | "sponsor" | "identity_invitation" | "event_participant">;
+  recipientEmail: string;
+  capacities: Array<"staff" | "member" | "sponsor" | "identity_invitation" | "event_participant" | "affiliation">;
 } | null> {
   const identity = await findActiveIdentityBySignInEmail(payload.db, payload.email);
   if (!identity) return null;
-  const [staff, member, sponsors, pendingIdentityCount, eventParticipation] = await Promise.all([
+  const [staff, member, sponsors, pendingIdentityCount, eventParticipation, affiliation] = await Promise.all([
     findEligibleStaffUserById(payload.db, identity.id),
     findEligibleMemberById(payload.db, identity.id),
     findActiveSponsorCapacitiesByUserId(payload.db, identity.id),
     countPendingIdentitiesForUser(payload.db, identity.id),
     hasEventParticipation(payload.db, identity.id),
+    hasActiveAffiliation(payload.db, identity.id),
   ]);
-  if (!staff && !member && sponsors.length === 0 && pendingIdentityCount === 0 && !eventParticipation) return null;
+  if (!staff && !member && sponsors.length === 0 && pendingIdentityCount === 0 && !eventParticipation && !affiliation)
+    return null;
   const capability = await queueEmailAuthCapability({
     signingSecret: payload.signingSecret,
     purpose: "user_sign_in",
@@ -357,12 +370,14 @@ export async function queueUserSignInCapability(payload: {
   return {
     queuedToken: capability.queuedToken,
     identity: { id: identity.id, email: identity.email },
+    recipientEmail: identity.sign_in_email,
     capacities: [
       ...(staff ? ["staff" as const] : []),
       ...(member ? ["member" as const] : []),
       ...(sponsors.length > 0 ? ["sponsor" as const] : []),
       ...(pendingIdentityCount > 0 ? ["identity_invitation" as const] : []),
       ...(eventParticipation ? ["event_participant" as const] : []),
+      ...(affiliation ? ["affiliation" as const] : []),
     ],
   };
 }
@@ -396,14 +411,15 @@ export async function redeemUserSignInCapability(
     email: signInIdentity.email,
     normalized_email: signInIdentity.normalized_email,
   };
-  const [staff, member, sponsors, pendingIdentityCount, eventParticipation] = await Promise.all([
+  const [staff, member, sponsors, pendingIdentityCount, eventParticipation, affiliation] = await Promise.all([
     findEligibleStaffUserById(db, capability.subjectId),
     findEligibleMemberById(db, capability.subjectId),
     findActiveSponsorCapacitiesByUserId(db, capability.subjectId),
     countPendingIdentitiesForUser(db, capability.subjectId),
     hasEventParticipation(db, capability.subjectId),
+    hasActiveAffiliation(db, capability.subjectId),
   ]);
-  if (!staff && !member && sponsors.length === 0 && pendingIdentityCount === 0 && !eventParticipation) {
+  if (!staff && !member && sponsors.length === 0 && pendingIdentityCount === 0 && !eventParticipation && !affiliation) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This identity no longer has portal access");
   }
   await assertEmailAuthCapabilityEmail({
@@ -413,19 +429,10 @@ export async function redeemUserSignInCapability(
   });
   const prepared = await prepareUserSession(db, identity.id, payload.sessionTtlHours);
   const verifiedAt = nowIso();
-  const authorizationEvidence = [
-    ...(eventParticipation
-      ? [eventParticipantSignInEvidence(identity.id, signInIdentity.normalized_sign_in_email)]
-      : []),
-    ...(staff ? [staffSignInAuthorizationEvidence(identity.id, signInIdentity.normalized_sign_in_email)] : []),
-    ...(member ? [memberSignInAuthorizationEvidence(identity.id, signInIdentity.normalized_sign_in_email)] : []),
-    ...(sponsors.length > 0
-      ? [sponsorUserSignInAuthorizationEvidence(identity.id, signInIdentity.normalized_sign_in_email)]
-      : []),
-    ...(pendingIdentityCount > 0
-      ? [pendingIdentitySignInAuthorizationEvidence(identity.id, signInIdentity.normalized_sign_in_email)]
-      : []),
-  ];
+  const authorizationEvidence = signInCapacityAuthorizationEvidence(
+    { identity, staff, member, sponsors, pendingIdentityCount, eventParticipation, hasActiveAffiliation: affiliation },
+    signInIdentity.normalized_sign_in_email,
+  );
   await commitEmailAuthRedemption(db, {
     purpose: "user_sign_in",
     capabilityId: capability.capabilityId,
@@ -441,6 +448,7 @@ export async function redeemUserSignInCapability(
         ...(sponsors.length > 0 ? ["sponsor"] : []),
         ...(pendingIdentityCount > 0 ? ["identity_invitation"] : []),
         ...(eventParticipation ? ["event_participant"] : []),
+        ...(affiliation ? ["affiliation"] : []),
       ],
       expiresAt: prepared.expiresAt,
     },

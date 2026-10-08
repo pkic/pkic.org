@@ -1,0 +1,398 @@
+.pk-agenda-editor__toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--pk-space-3, 0.75rem);
+  justify-content: space-between;
+}
+.pk-agenda-editor__actions > .pk-row-actions {
+  width: auto;
+}
+
+.pk-agenda-editor__notice {
+  color: var(--pk-muted);
+  font-size: 0.875rem;
+}
+.pk-agenda-editor .pk-content-agenda {
+  margin-block: 0;
+}
+.pk-agenda-editor .pk-content-agenda__filters {
+  display: none;
+}
+.pk-agenda-editor__card-actions {
+  position: absolute;
+  inset-block-start: var(--pk-1);
+  inset-inline-end: var(--pk-1);
+  z-index: 4;
+  opacity: 0;
+}
+.pk-content-agenda__session:hover .pk-agenda-editor__card-actions,
+.pk-content-agenda__session:focus-within .pk-agenda-editor__card-actions {
+  opacity: 1;
+}
+.pk-agenda-editor__drop {
+  width: 100%;
+  min-height: var(--pk-7);
+  border: 1px dashed var(--pk-line);
+  border-radius: 0.5rem;
+  background: transparent;
+  color: var(--pk-muted);
+  font-size: 0.75rem;
+  margin-bottom: 0.5rem;
+}
+.pk-agenda-editor__drop:focus-visible,
+.pk-agenda-editor__drop:hover {
+  background: var(--pk-surface);
+  border-color: var(--pk-accent);
+}
+.pk-agenda-editor__backlog {
+  display: flex;
+  gap: 0.75rem;
+  overflow: auto;
+  padding-block: 0.5rem;
+}
+.pk-agenda-editor__backlog > article {
+  min-width: 14rem;
+  border: 1px solid var(--pk-line);
+  border-radius: 0.75rem;
+  padding: 1rem;
+}
+.pk-agenda-editor__form {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+.pk-agenda-editor__form-wide {
+  grid-column: 1/-1;
+}
+@media (max-width: 640px) {
+  .pk-agenda-editor__form {
+    grid-template-columns: 1fr;
+  }
+}
+.pk-agenda-editor__resize {
+  position: absolute;
+  inset-block-end: 0;
+  inset-inline: 0;
+  width: 100%;
+  height: var(--pk-2);
+  min-height: 0;
+  background: transparent;
+  border: 0;
+  color: var(--pk-muted);
+  padding: 0;
+  cursor: ns-resize;
+  opacity: 0;
+  z-index: 4;
+}
+.pk-agenda-editor__resize::after {
+  content: "";
+  position: absolute;
+  inset-block-end: 2px;
+  inset-inline-start: calc(50% - var(--pk-4));
+  width: var(--pk-6);
+  height: 2px;
+  border-radius: var(--pk-radius-sm);
+  background: currentcolor;
+}
+.pk-content-agenda__session:hover .pk-agenda-editor__resize,
+.pk-content-agenda__session:focus-within .pk-agenda-editor__resize {
+  opacity: 1;
+}
+.pk-agenda-editor__resize:focus-visible {
+  outline: 2px solid var(--pk-accent);
+  outline-offset: 2px;
+}
+.pk-agenda-editor--natural .pk-content-agenda__cell > .pk-content-agenda__session {
+  position: relative;
+  inset: auto;
+  min-height: 14rem;
+  overflow: visible;
+}
+
+/* Native drag must not move its source while destinations become available. */
+.pk-agenda-editor--native-drag {
+  position: relative;
+}
+.pk-agenda-editor--native-drag .pk-agenda-editor__selection-status {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  z-index: 3;
+  max-inline-size: 100%;
+  padding: var(--pk-1);
+  background: var(--pk-surface);
+}
+.pk-agenda-editor__room-name {
+  min-width: 15rem;
+  font-weight: normal;
+}
+.pk-agenda-editor__add-room {
+  width: 10rem;
+  min-width: 10rem;
+  vertical-align: top;
+}
+/* Keep the organizer's room columns and empty time grid on narrow screens. */
+@media (max-width: 46rem) {
+  .pk-agenda-editor .pk-content-agenda__timeline {
+    display: table;
+    width: 100%;
+    min-width: 100%;
+  }
+  .pk-agenda-editor .pk-content-agenda__timeline thead {
+    display: table-header-group;
+  }
+  .pk-agenda-editor .pk-content-agenda__timeline tbody {
+    display: table-row-group;
+  }
+  .pk-agenda-editor .pk-content-agenda__slot {
+    display: table-row;
+  }
+  .pk-agenda-editor .pk-content-agenda__slot td,
+  .pk-agenda-editor .pk-content-agenda__cell:empty {
+    display: table-cell;
+    width: 22rem;
+    min-width: 22rem;
+    padding: var(--pk-1);
+  }
+  .pk-agenda-editor .pk-content-agenda__time {
+    display: table-cell;
+    width: var(--agenda-time-width);
+    min-width: var(--agenda-time-width);
+    vertical-align: top;
+  }
+}
+
+.pk-agenda-editor .pk-content-agenda__time {
+  position: relative;
+  padding: 0;
+}
+.pk-agenda-editor .pk-content-agenda__clocks:not(.pk-sr-only) {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: var(--pk-2);
+  z-index: 3;
+  pointer-events: none;
+}
+.pk-agenda-editor .pk-content-agenda__slot > td {
+  padding-block: 0;
+}
+.pk-agenda-editor .pk-content-agenda__cell > .pk-agenda-editor__drop,
+.pk-agenda-editor .pk-content-agenda__time > .pk-agenda-editor__drop {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  min-height: 0;
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  font-size: 0;
+  border: 0;
+  border-radius: 0;
+  z-index: 2;
+}
+.pk-agenda-editor__drop:hover::after,
+.pk-agenda-editor__drop:focus-visible::after {
+  content: attr(aria-label);
+  position: absolute;
+  inset-block-start: 100%;
+  inset-inline-start: 0;
+  min-width: 12rem;
+  padding: var(--pk-2);
+  font-size: var(--pk-text-xs);
+  background: var(--pk-surface);
+  color: var(--pk-ink);
+  border: 1px solid var(--pk-line);
+  z-index: 3;
+}
+.pk-agenda-editor:not(.pk-agenda-editor--natural) .pk-content-agenda__cell > .pk-content-agenda__session {
+  position: absolute;
+  inset: var(--pk-1);
+  min-height: 0;
+  overflow: hidden;
+}
+
+.pk-agenda-editor__planning {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: var(--pk-4);
+  align-items: start;
+}
+.pk-agenda-editor:has(> .pk-agenda-workspace-navigation) {
+  gap: 0;
+}
+.pk-agenda-editor__calendar {
+  min-width: 0;
+}
+.pk-agenda-editor__sources {
+  position: static;
+  inset-block-start: var(--pk-4);
+  min-width: 0;
+}
+.pk-agenda-editor__sources summary {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 0;
+  inline-size: max-content;
+  white-space: nowrap;
+  cursor: pointer;
+  font-weight: 600;
+  padding-block: var(--pk-2);
+}
+.pk-agenda-editor__source-scroll {
+  max-height: 70dvh;
+  overflow: auto;
+}
+.pk-agenda-editor__sources .pk-agenda-editor__backlog {
+  flex-direction: column;
+}
+.pk-agenda-editor__sources .pk-agenda-editor__backlog > article {
+  min-width: 0;
+}
+@media (max-width: 64rem) {
+  .pk-agenda-editor__planning {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pk-agenda-editor__sources {
+    position: static;
+  }
+  .pk-agenda-editor__source-scroll {
+    max-height: 18rem;
+  }
+}
+
+.pk-agenda-editor .pk-content-agenda__timeline {
+  width: 100%;
+  min-width: 100%;
+  table-layout: fixed;
+}
+.pk-agenda-editor .pk-content-agenda__timeline thead th:first-child,
+.pk-agenda-editor .pk-content-agenda__time {
+  width: var(--agenda-time-width);
+  min-width: var(--agenda-time-width);
+  max-width: var(--agenda-time-width);
+  border-block-start: 0;
+}
+.pk-agenda-editor .pk-content-agenda__timeline thead th:not(:first-child),
+.pk-agenda-editor .pk-content-agenda__slot td.pk-content-agenda__cell {
+  width: 22rem;
+  min-width: 22rem;
+  border-inline-start: 1px solid var(--pk-line);
+}
+.pk-agenda-editor .pk-content-agenda__timeline thead th.pk-agenda-editor__add-room,
+.pk-agenda-editor .pk-content-agenda__slot td.pk-agenda-editor__add-room {
+  width: 10rem;
+  min-width: 10rem;
+  border-inline-start: 1px solid var(--pk-line);
+}
+.pk-agenda-editor .pk-content-agenda__slot > td {
+  border-block-start: 0;
+}
+.pk-agenda-editor .pk-content-agenda__slot[data-agenda-major] > td {
+  border-block-start: 1px solid var(--pk-line);
+}
+.pk-agenda-editor .pk-content-agenda__timeline thead th {
+  border-block-end: 1px solid var(--pk-line);
+}
+
+.pk-agenda-editor .pk-content-agenda__cell > .pk-agenda-editor__drop:hover,
+.pk-agenda-editor .pk-content-agenda__cell > .pk-agenda-editor__drop:focus-visible,
+.pk-agenda-editor .pk-content-agenda__time > .pk-agenda-editor__drop:hover,
+.pk-agenda-editor .pk-content-agenda__time > .pk-agenda-editor__drop:focus-visible {
+  outline: 0;
+  box-shadow: inset 0 0 0 2px var(--pk-accent);
+}
+
+.pk-agenda-editor td[data-agenda-window-selected] {
+  background: var(--pk-accent-soft);
+  box-shadow: inset 0 0 0 1px var(--pk-accent);
+}
+.pk-agenda-editor__window-selection {
+  min-width: 0;
+}
+
+@media (hover: none) {
+  .pk-agenda-editor__resize {
+    opacity: 1;
+  }
+}
+
+.pk-agenda-editor__pointer-calendar {
+  min-width: 0;
+}
+.pk-agenda-editor__pointer-calendar:not([data-interactions-disabled])
+  .pk-content-agenda__timeline
+  .pk-content-agenda__session {
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+.pk-agenda-editor__pointer-calendar [data-agenda-pointer-source] {
+  opacity: 0.35;
+}
+.pk-content-agenda.pk-agenda-editor__pointer-preview-layer .pk-agenda-editor__pointer-preview {
+  position: fixed;
+  min-height: 0;
+  z-index: 1000;
+  pointer-events: none;
+  margin: 0;
+  box-sizing: border-box;
+  overflow: hidden;
+  outline: 2px solid var(--pk-accent);
+}
+.pk-agenda-editor__pointer-preview::after {
+  content: attr(data-placement-label);
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  padding: var(--pk-1);
+  background: var(--pk-surface);
+  color: var(--pk-ink);
+  font-size: var(--pk-text-xs);
+}
+
+.pk-content-agenda.pk-agenda-editor__pointer-preview-layer {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  pointer-events: none;
+  z-index: 1000;
+}
+.pk-content-agenda.pk-agenda-editor__pointer-preview-layer .pk-agenda-editor__pointer-preview[hidden] {
+  display: none;
+}
+
+.pk-agenda-editor__resize--start {
+  inset-block-end: auto;
+  inset-block-start: 0;
+}
+.pk-agenda-editor__resize--start::after {
+  inset-block-end: auto;
+  inset-block-start: 2px;
+}
+
+.pk-agenda-editor > [role="tabpanel"] > .pk-content-agenda__tabs {
+  margin-block-start: var(--pk-2);
+}
+
+.pk-agenda-editor .pk-content-agenda__timeline thead th.pk-agenda-editor__add-room,
+.pk-agenda-editor .pk-content-agenda__slot td.pk-agenda-editor__add-room {
+  width: auto;
+}
+
+.pk-agenda-editor .pk-content-agenda__timeline thead th.pk-content-agenda__location {
+  width: auto;
+}
+.pk-agenda-editor .pk-content-agenda__timeline[data-agenda-has-rooms="true"] .pk-content-agenda__add-column {
+  width: 3.5rem;
+}
+
+.pk-agenda-editor .pk-content-agenda__timeline[data-agenda-has-rooms="false"] thead th.pk-agenda-editor__add-room,
+.pk-agenda-editor
+  .pk-content-agenda__timeline[data-agenda-has-rooms="false"]
+  .pk-content-agenda__slot
+  td.pk-agenda-editor__add-room {
+  width: auto;
+}

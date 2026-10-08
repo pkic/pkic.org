@@ -5,6 +5,7 @@ import type { UserSessionResult } from "./user-session";
 import { publicStaffCapacity } from "./admin-identity";
 
 export function publicUserSession(result: UserSessionResult): {
+  sessionId: string;
   expiresAt: string;
   idleExpiresAt: string;
   identity: { id: string; email: string };
@@ -14,8 +15,10 @@ export function publicUserSession(result: UserSessionResult): {
   sponsors: SponsorCapacity[];
   pendingIdentityCount: number;
   eventParticipation?: boolean;
+  hasActiveAffiliation: boolean;
 } {
   return {
+    sessionId: result.sessionId,
     expiresAt: result.expiresAt,
     idleExpiresAt: result.idleExpiresAt,
     identity: result.identity,
@@ -32,5 +35,6 @@ export function publicUserSession(result: UserSessionResult): {
     sponsors: result.sponsors,
     pendingIdentityCount: result.pendingIdentityCount,
     eventParticipation: result.eventParticipation ?? false,
+    hasActiveAffiliation: result.hasActiveAffiliation,
   };
 }

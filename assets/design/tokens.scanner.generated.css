@@ -1,0 +1,8 @@
+/* GENERATED FILE — source: assets/design/tokens.ts. */
+@layer legacy, tokens, base, components, utilities;
+@layer tokens {
+  :root {
+    --pk-grad-state-ok: linear-gradient(135deg, #0b2a1c, color-mix(in oklab, #198754 85%, #000));
+    --pk-grad-state-attention: linear-gradient(135deg, #5b2c0d, color-mix(in oklab, #ed7d31 70%, #000));
+  }
+}

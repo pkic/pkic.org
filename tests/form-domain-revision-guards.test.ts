@@ -1,3 +1,4 @@
+import { prepareProposalProof } from "./helpers/proposal-proof";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { proposalCreateSchema } from "../assets/shared/schemas/proposal-management";
@@ -100,6 +101,13 @@ async function submitCurrentProposal(eventId: string, answer: string) {
     customAnswers: { answer },
   });
   const body = proposalCreateSchema.parse({
+    ...(await prepareProposalProof({
+      environment: env,
+      eventSlug: event.slug,
+      email: "form-speaker@example.test",
+      consents: [{ termKey: "speaker-terms", version: "v1" }],
+      unaffiliatedAttestation: true,
+    })),
     sourceType: "direct",
     proposer: {
       firstName: "Form",
@@ -122,7 +130,7 @@ async function submitCurrentProposal(eventId: string, answer: string) {
     event,
     body,
     appBaseUrl: "https://app.test",
-    signingSecret: SIGNING_SECRET,
+    signingSecret: env.INTERNAL_SIGNING_SECRET!,
     referralCodeLength: 8,
     proposalDetails: validated.answers,
     ip: null,
@@ -160,6 +168,13 @@ describe("form revision guards on registration and proposal commands", () => {
       customAnswers: { answer: "before edit" },
     });
     const body = proposalCreateSchema.parse({
+      ...(await prepareProposalProof({
+        environment: env,
+        eventSlug: event.slug,
+        email: "stale-speaker@example.test",
+        consents: [{ termKey: "speaker-terms", version: "v1" }],
+        unaffiliatedAttestation: true,
+      })),
       sourceType: "direct",
       proposer: { firstName: "Stale", lastName: "Speaker", email: "stale-speaker@example.test", links: [] },
       proposal: {
@@ -178,7 +193,7 @@ describe("form revision guards on registration and proposal commands", () => {
         event,
         body,
         appBaseUrl: "https://app.test",
-        signingSecret: SIGNING_SECRET,
+        signingSecret: env.INTERNAL_SIGNING_SECRET!,
         referralCodeLength: 8,
         proposalDetails: validated.answers,
         ip: null,
@@ -220,7 +235,7 @@ describe("form revision guards on registration and proposal commands", () => {
     await expect(
       saveProposalAccessChanges(editFormBeforeFirstBatch(proposalFormId), {
         token: proposal.manageToken!,
-        signingSecret: SIGNING_SECRET,
+        signingSecret: env.INTERNAL_SIGNING_SECRET!,
         body: { details: { answer: "stale proposal answer" } },
       }),
     ).rejects.toMatchObject({ status: 409, code: "FORM_CHANGED" });
@@ -256,7 +271,7 @@ describe("form revision guards on registration and proposal commands", () => {
     });
     await saveProposalAccessChanges(env.DB, {
       token: proposal.manageToken!,
-      signingSecret: SIGNING_SECRET,
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
       body: { details: { answer: "current proposal answer" } },
     });
 

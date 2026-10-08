@@ -386,7 +386,8 @@
    * will stretch the whole document sideways from wherever it happens to land.
    * Any scroll container that can hold one needs `position: relative`.
    */
-  .pk-sr-only {
+  .pk-sr-only,
+  .pk-field__sr {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -470,5 +471,4 @@
      40px indent, which would push the values out of line with their term. */
   /* Preformatted text that must still wrap: a long free-text answer has no
      line breaks of its own and would otherwise scroll sideways forever. */
-
 }

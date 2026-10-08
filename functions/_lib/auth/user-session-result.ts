@@ -1,7 +1,7 @@
 import type { SponsorCapacity } from "../../../assets/shared/schemas/sponsor-access";
 import type { AuthMember, DatabaseLike, UserBackedAuthAdmin } from "../types";
 import { createUserBackedAuthAdmin } from "./admin-identity";
-import type { EligibleStaffUser } from "./identity-capacities";
+import { hasActiveAffiliation, type EligibleStaffUser } from "./identity-capacities";
 import { computeGrantsForUser } from "./permissions";
 import {
   DEFAULT_USER_SESSION_IDLE_TTL_HOURS,
@@ -23,6 +23,7 @@ export interface UserSessionResult {
   sponsors: SponsorCapacity[];
   pendingIdentityCount: number;
   eventParticipation?: boolean;
+  hasActiveAffiliation: boolean;
 }
 
 export function userStaffExpiresAt(createdAt: string, sessionExpiresAt: string): string {
@@ -94,5 +95,6 @@ export async function createEstablishedUserSessionResult(
     sponsors: capacities.sponsors,
     pendingIdentityCount: capacities.pendingIdentityCount,
     eventParticipation: capacities.eventParticipation,
+    hasActiveAffiliation: await hasActiveAffiliation(db, capacities.identity.id),
   };
 }

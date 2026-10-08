@@ -24,6 +24,14 @@ import { getStaticAssetsBinding } from "./_lib/static-assets";
 import { primaryFirstDb, requestSessionDb } from "./_lib/db/session";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import {
+  publicSessionRecordingRequest,
+  isSessionRecordingPublicPath,
+} from "./_lib/services/session-recording-public-release";
+import {
+  publicSessionPresentationRequest,
+  isSessionPresentationPublicPath,
+} from "./_lib/services/session-presentation-public-release";
+import {
   conditionalPublicReadResponse,
   isAnonymousReadRequest,
   publicReadCacheResponse,
@@ -123,6 +131,11 @@ function handleHttpRequest(request: Request, env: Env, ctx: ExecutionContext): P
 /** This entrypoint is reached only after the uncached gateway checks the request. */
 export class PublicRead extends WorkerEntrypoint<Env> {
   async fetch(request: Request): Promise<Response> {
+    if (
+      isSessionPresentationPublicPath(new URL(request.url).pathname) ||
+      isSessionRecordingPublicPath(new URL(request.url).pathname)
+    )
+      return new Response(null, { status: 404, headers: { "cache-control": "no-store" } });
     if (!isAnonymousReadRequest(request)) {
       return new Response(null, { status: 404, headers: { "cache-control": "no-store" } });
     }
@@ -155,6 +168,10 @@ async function runScheduledJob(controller: ScheduledController, env: Env): Promi
 
 export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    const presentation = await publicSessionPresentationRequest(request, env);
+    if (presentation) return presentation;
+    const recording = await publicSessionRecordingRequest(request, env);
+    if (recording) return recording;
     const paused = await availabilityResponse(request, env);
     if (paused) return paused;
     try {

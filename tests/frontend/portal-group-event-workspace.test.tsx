@@ -81,7 +81,8 @@ function baseEvent(overrides: Partial<GroupEvent> = {}): GroupEvent {
   };
 }
 
-beforeEach(() => {
+beforeEach(async () => {
+  await import("../../assets/ts/member-flows/portal/sections/events/detail/settings/EventTeamSettings");
   navigate.mockReset();
 });
 
@@ -114,17 +115,17 @@ describe("group event workspace", () => {
       "Registrations",
       "Invitations",
       "Communications",
-      "Team",
-      "Promoters",
       "Analytics",
       "Settings",
     ]);
   });
 
-  it("shows Team, Promoters, and Analytics for a manage-capable event, but not for a view-only one", () => {
+  it("keeps management navigation under Settings and Analytics for capable events", () => {
     const manager = baseEvent({ capabilities: ["view", "manage_attendance", "manage"] });
     const managerContainer = mount(<GroupEventWorkspace event={manager} groupId={GROUP_ID} />);
-    expect(tabLabels(managerContainer)).toEqual(expect.arrayContaining(["Team", "Promoters", "Analytics"]));
+    expect(tabLabels(managerContainer)).toEqual(expect.arrayContaining(["Settings", "Analytics"]));
+    expect(tabLabels(managerContainer)).not.toContain("Team");
+    expect(tabLabels(managerContainer)).not.toContain("Promoters");
 
     const viewer = baseEvent({ capabilities: ["view"] });
     const viewerContainer = mount(<GroupEventWorkspace event={viewer} groupId={GROUP_ID} />);
@@ -209,7 +210,7 @@ describe("group event workspace", () => {
       }),
     );
 
-    const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="team" />);
+    const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" detailId="team" />);
     await settle();
     await settle();
 
@@ -289,6 +290,15 @@ describe("group event workspace", () => {
     expect(proposalSections?.querySelector('a[href$="/proposals/speakers"]')).not.toBeNull();
     expect(proposalSections?.textContent).toContain("Responses");
     expect(proposalSections?.querySelector('a[href$="/proposals/responses"]')).not.toBeNull();
+  });
+
+  it("preserves the Attendance deep link under the Analytics permission gate", () => {
+    const event = baseEvent({ capabilities: ["view"] });
+    const container = mount(
+      <GroupEventWorkspace event={event} groupId={GROUP_ID} tab="attendance" detailId="imports" />,
+    );
+    expect(container.textContent).toContain("This event section is not available to your current identity.");
+    expect(tabLabels(container)).not.toContain("Attendance");
   });
 
   it("shows the not-available pattern for a capability-less tab request instead of falling back", () => {

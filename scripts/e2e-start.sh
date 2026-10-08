@@ -32,7 +32,7 @@ unset npm_config_npm_globalconfig NPM_CONFIG_NPM_GLOBALCONFIG
 unset npm_config_verify_deps_before_run NPM_CONFIG_VERIFY_DEPS_BEFORE_RUN
 unset npm_config__jsr_registry NPM_CONFIG__JSR_REGISTRY
 
-mkdir -p "$(dirname "$INTERCEPT_URL_FILE")"
+mkdir -p "$(dirname "$INTERCEPT_URL_FILE")" "$(dirname "$STATE_PATH_FILE")"
 rm -f "$INTERCEPT_URL_FILE" "$PAYMENT_URL_FILE"
 rm -f test-results/portal-management-verification-auth.json
 rm -f test-results/portal-mobile-navigation-auth.json
@@ -103,6 +103,8 @@ WEBAUTHN_ORIGIN=http://localhost:${E2E_PORT}
 EMAIL_BADGE_DELAY_SECONDS=0
 DEFAULT_MIN_PROPOSAL_REVIEWS=0
 EOF
+chmod 600 "$E2E_ENV_FILE"
+node scripts/local-badge-print-keyring.mjs "$STATE_DIR" "$E2E_ENV_FILE"
 
 # ── Why localhost rather than 127.0.0.1 ────────────────────────────────────
 # WebAuthn requires the relying-party id to be a registrable domain suffix of

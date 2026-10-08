@@ -202,8 +202,11 @@ test.describe("portal sponsor workspace", () => {
     await expect(page.getByText("Casey Attendee")).toBeVisible();
 
     // ── CSV export via the real download link ──────────────────────────────
+    const csvLink = page.getByRole("link", { name: "Download CSV", exact: true });
+    const csvEndpoint = await csvLink.getAttribute("href");
+    expect(csvEndpoint).not.toBeNull();
     const downloadPromise = page.waitForEvent("download");
-    await page.getByRole("link", { name: "Download CSV" }).click();
+    await csvLink.click();
     const download = await downloadPromise;
     const csvPath = await download.path();
     const csv = readFileSync(csvPath as string, "utf8");
@@ -215,12 +218,15 @@ test.describe("portal sponsor workspace", () => {
     // a standalone button.
     await page.getByRole("button", { name: "Account menu" }).click();
     await page.getByRole("menuitem", { name: "Sign out" }).click();
-    await expect(page).toHaveURL(/\/portal\/$/);
-    // The sign-in screen names itself "Sign in"; the card that used to be
-    // titled after the portal is now the portal's front door proper.
-    await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/portal\/#\/sponsors$/);
+    // Sign-out retains the sponsor destination, whose anonymous entry is
+    // the sponsor-link request form rather than an authorized attendee view.
+    await expect(page.getByRole("heading", { name: "Sponsor access", exact: true })).toBeVisible();
+    await expect(page.getByRole("table", { name: /^Consenting attendees for/ })).toHaveCount(0);
+    await expect(page.getByText(attendeeEmail, { exact: true })).toHaveCount(0);
     await page.reload();
-    await expect(page.getByRole("heading", { name: "Sign in", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Sponsor access", exact: true })).toBeVisible();
+    expect((await page.request.get(csvEndpoint!)).status()).toBe(401);
 
     // ── Self-service "request a new link" flow, keyed by the event's public
     // slug rather than its internal id (a sponsor

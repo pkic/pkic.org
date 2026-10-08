@@ -16,21 +16,25 @@ if (!inputPath) {
 // inserted before the referenced table exists. `PRAGMA defer_foreign_keys`
 // (already present in every dump) only defers the row-existence check to
 // commit time — it can't help when the referenced table doesn't exist yet.
-// Moving every CREATE statement ahead of all INSERTs (order preserved within
-// each group) fixes this: by the time any row is inserted, every table
-// already exists, so the deferred FK checks only need to resolve at commit.
+// Create tables, indexes, and views before loading saved data, then install
+// triggers last. Replaying business triggers during restore can regenerate
+// rows already present in the dump or duplicate other recorded effects.
+// Preserve statement order within each group and retain every constraint.
 const sql = fs.readFileSync(inputPath, "utf8");
 const statements = unstable_splitSqlQuery(sql);
 
 const pragmas = [];
 const schema = [];
 const data = [];
+const triggers = [];
 
 for (const statement of statements) {
   const trimmed = statement.trimStart();
   if (/^PRAGMA/i.test(trimmed)) {
     pragmas.push(statement);
-  } else if (/^CREATE\s+(TABLE|(UNIQUE\s+)?INDEX|VIEW|TRIGGER)/i.test(trimmed)) {
+  } else if (/^CREATE\s+(TEMP(?:ORARY)?\s+)?TRIGGER/i.test(trimmed)) {
+    triggers.push(statement);
+  } else if (/^CREATE\s+(TABLE|(UNIQUE\s+)?INDEX|VIEW)/i.test(trimmed)) {
     schema.push(statement);
   } else {
     data.push(statement);
@@ -39,7 +43,7 @@ for (const statement of statements) {
 
 const tmpPath = `${inputPath}.tmp`;
 const out = fs.createWriteStream(tmpPath);
-for (const statement of [...pragmas, ...schema, ...data]) {
+for (const statement of [...pragmas, ...schema, ...data, ...triggers]) {
   out.write(statement);
   out.write(";\n");
 }
@@ -50,5 +54,5 @@ fs.renameSync(tmpPath, inputPath);
 
 console.log(
   `Reordered ${statements.length} statement(s) in ${path.relative(process.cwd(), inputPath)} ` +
-    `(${pragmas.length} pragma, ${schema.length} schema, ${data.length} data) so schema precedes data.`,
+    `(${pragmas.length} pragma, ${schema.length} schema, ${data.length} data, ${triggers.length} trigger) so schema precedes data and triggers follow it.`,
 );

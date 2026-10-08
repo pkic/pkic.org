@@ -1,3 +1,4 @@
+import { scannerCapabilities } from "../../../assets/shared/event-scanner-permissions";
 /**
  * Context-aware permission checking.
  *
@@ -110,8 +111,18 @@ export async function computeGrantsForUser(
  * request for events:write with no event context, and must not authorize a
  * request scoped to a different event B).
  */
+function scannerLegacyCompatible(permission: string): boolean {
+  return (scannerCapabilities as readonly string[]).includes(permission);
+}
+function tokenAllowsPermission(actor: AuthAdmin, permission: string): boolean {
+  return (
+    !actor.scopeRestricted ||
+    actor.scopes?.includes(permission) === true ||
+    (scannerLegacyCompatible(permission) && actor.scopes?.includes("agenda:scan") === true)
+  );
+}
 export function hasPermission(actor: AuthAdmin, permission: string, context?: PermissionContext): boolean {
-  if (actor.scopeRestricted && actor.scopes?.includes(permission) !== true) {
+  if (!tokenAllowsPermission(actor, permission)) {
     return false;
   }
   if (!isUserBackedAuthAdmin(actor) && actor.role === "admin") {
@@ -120,7 +131,8 @@ export function hasPermission(actor: AuthAdmin, permission: string, context?: Pe
 
   const grants = actor.grants ?? [];
   return grants.some((grant) => {
-    if (grant.permission !== permission) return false;
+    if (grant.permission !== permission && !(scannerLegacyCompatible(permission) && grant.permission === "agenda:scan"))
+      return false;
     if (grant.contextType === null && grant.contextId === null) return true;
     if (!context) return false;
     return grant.contextType === context.type && grant.contextId === context.id;
@@ -128,7 +140,7 @@ export function hasPermission(actor: AuthAdmin, permission: string, context?: Pe
 }
 
 export function requirePermission(actor: AuthAdmin, permission: string, context?: PermissionContext): void {
-  if (actor.scopeRestricted && actor.scopes?.includes(permission) !== true) {
+  if (!tokenAllowsPermission(actor, permission)) {
     throw new AppError(403, "SCOPE_REQUIRED", PERMISSION_DENIED_MESSAGE);
   }
   if (!hasPermission(actor, permission, context)) {
@@ -145,7 +157,7 @@ export function requireAnyPermission(
 ): void {
   if (permissions.some((permission) => hasPermission(actor, permission, context))) return;
 
-  if (actor.scopeRestricted && !permissions.some((permission) => actor.scopes?.includes(permission) === true)) {
+  if (!permissions.some((permission) => tokenAllowsPermission(actor, permission))) {
     throw new AppError(403, "SCOPE_REQUIRED", PERMISSION_DENIED_MESSAGE);
   }
   const scope = context ? ` (context: ${context.type}:${context.id})` : "";
@@ -203,13 +215,37 @@ export function permissionAuthorizationEvidenceForResource(
   });
 }
 
+/** Live alternatives for a trusted resource column, with delegated scopes still limiting each alternative. */
+export function anyPermissionAuthorizationEvidenceForResource(
+  actor: AuthAdmin,
+  permissions: readonly string[],
+  context: { type: string; idSql: string },
+): AuthorizationEvidence {
+  const allowed = [...new Set(permissions)].filter((permission) => tokenAllowsPermission(actor, permission));
+  if (!allowed.length) return { sql: "SELECT 1 WHERE 0", bindings: [] };
+  if (!isUserBackedAuthAdmin(actor))
+    return allowed.some((permission) => hasPermission(actor, permission))
+      ? { sql: "SELECT 1", bindings: [] }
+      : { sql: "SELECT 1 WHERE 0", bindings: [] };
+  return buildPermissionsAuthorizationEvidence(
+    actor,
+    allowed.map((permission) => ({ permission })),
+    {
+      sql: `SELECT value AS permission, ? AS context_type, ${context.idSql} AS context_id FROM json_each(?)`,
+      bindings: [context.type, JSON.stringify(allowed)],
+    },
+    "any",
+  );
+}
+
 function buildPermissionsAuthorizationEvidence(
   actor: AuthAdmin,
   unique: readonly PermissionRequirement[],
   required: AuthorizationEvidence,
+  match: "all" | "any" = "all",
 ): AuthorizationEvidence {
   if (unique.length === 0) return { sql: "SELECT 1", bindings: [] };
-  if (unique.some(({ permission }) => actor.scopeRestricted && actor.scopes?.includes(permission) !== true)) {
+  if (unique.some(({ permission }) => !tokenAllowsPermission(actor, permission))) {
     return { sql: "SELECT 1 WHERE 0", bindings: [] };
   }
   if (!isUserBackedAuthAdmin(actor)) {
@@ -219,20 +255,25 @@ function buildPermissionsAuthorizationEvidence(
   }
 
   return {
-    sql: `WITH required(permission, context_type, context_id) AS (${required.sql})
+    sql: `WITH required(permission, context_type, context_id, scanner_legacy_compatible) AS (
+            SELECT permission, context_type, context_id,
+                   permission IN (SELECT value FROM json_each(?))
+              FROM (${required.sql})
+          )
           SELECT 1
             FROM users actor
            WHERE actor.id = ? AND actor.active = 1
-             AND NOT EXISTS (
+             ${actor.sessionId ? "AND EXISTS(SELECT 1 FROM sessions active_session WHERE active_session.id=? AND active_session.user_id=actor.id AND active_session.revoked_at IS NULL AND active_session.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now'))" : ""}
+             AND ${match === "any" ? "EXISTS" : "NOT EXISTS"} (
                SELECT 1
                  FROM required requirement
-                WHERE NOT (
+                WHERE ${match === "any" ? "" : "NOT"} (
                   EXISTS (
                     SELECT 1
                       FROM user_roles role
                       JOIN role_permissions role_permission ON role_permission.role_id = role.role_id
                      WHERE role.user_id = actor.id
-                       AND role_permission.permission = requirement.permission
+                       AND (role_permission.permission = requirement.permission OR (requirement.scanner_legacy_compatible=1 AND role_permission.permission='agenda:scan'))
                        AND role.revoked_at IS NULL
                        AND (role.expires_at IS NULL OR role.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
                        AND (
@@ -260,7 +301,7 @@ function buildPermissionsAuthorizationEvidence(
                     SELECT 1
                       FROM permission_grants grant_row
                      WHERE grant_row.user_id = actor.id
-                       AND grant_row.permission = requirement.permission
+                       AND (grant_row.permission = requirement.permission OR (requirement.scanner_legacy_compatible=1 AND grant_row.permission='agenda:scan'))
                        AND grant_row.revoked_at IS NULL
                        AND (grant_row.expires_at IS NULL OR grant_row.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now'))
                        AND (
@@ -273,7 +314,13 @@ function buildPermissionsAuthorizationEvidence(
                 )
              )
            LIMIT 1`,
-    bindings: [...required.bindings, actor.id, actor.memberId ?? null],
+    bindings: [
+      JSON.stringify(scannerCapabilities),
+      ...required.bindings,
+      actor.id,
+      ...(actor.sessionId ? [actor.sessionId] : []),
+      actor.memberId ?? null,
+    ],
   };
 }
 

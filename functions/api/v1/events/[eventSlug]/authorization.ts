@@ -1,3 +1,4 @@
+import { scannerPermission, type ScannerCapability } from "../../../../../assets/shared/event-scanner-permissions";
 import type { Permission } from "../../../../../assets/shared/schemas/permissions";
 import { requireUserBackedAdminFromRequest } from "../../../../_lib/auth/admin";
 import { hasPermission, requirePermission } from "../../../../_lib/auth/permissions";
@@ -33,4 +34,21 @@ export async function resolveOptionalEventUserSession(c: AdminContext): Promise<
   return resolveUserSessionFromRequest(requestDb(c), c.req.raw, {
     INTERNAL_SIGNING_SECRET: c.env.INTERNAL_SIGNING_SECRET,
   });
+}
+
+export async function requireEventScannerPermission(
+  c: AdminContext,
+  eventSlug: string,
+  capability: ScannerCapability | readonly ScannerCapability[],
+) {
+  const db = requestDb(c);
+  const actor = await requireUserBackedAdminFromRequest(db, c.req.raw, c.env);
+  const event = await getEventBySlug(db, eventSlug);
+  const context = { type: "event", id: event.id };
+  const capabilities = typeof capability === "string" ? [capability] : capability;
+  const permission = capabilities
+    .map((value) => scannerPermission((candidate) => hasPermission(actor, candidate, context), value))
+    .find(Boolean);
+  if (!permission) requirePermission(actor, capabilities[0]!, context);
+  return { actor, context, db, event, permission: permission ?? capabilities[0]! };
 }

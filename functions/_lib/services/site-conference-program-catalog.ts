@@ -1,3 +1,6 @@
+import { approvedEventAgendaForRoute } from "./site-published-event-agendas";
+import type { SitePublicationSnapshot } from "../../../assets/shared/schemas/site-publication";
+import { applyApprovedAgenda } from "./site-approved-agenda";
 import { conferenceDisplaySponsorSelection } from "../../../assets/shared/conference-display-policy";
 import type { ContentDocument } from "./site-documents";
 import { publishedConferenceProgram } from "./site-conference-program";
@@ -7,7 +10,7 @@ export function createSiteConferencePrograms(
   documents: readonly ContentDocument[],
   assetUrls: (sourcePath: string, pattern: string) => string[],
 ) {
-  return () =>
+  return (publication?: SitePublicationSnapshot) =>
     documents
       .filter(
         (document) =>
@@ -21,6 +24,9 @@ export function createSiteConferencePrograms(
         updatedAt: new Date(document.data.lastmod ?? document.data.date ?? "1970-01-01T00:00:00.000Z").toISOString(),
         outputs: document.data.outputs ?? [],
         sponsorSelection: conferenceDisplaySponsorSelection(document.data.params?.sponsoring),
-        program: publishedConferenceProgram(document.data.data, (pattern) => assetUrls(document.sourcePath, pattern)),
+        program: applyApprovedAgenda(
+          publishedConferenceProgram(document.data.data, (pattern) => assetUrls(document.sourcePath, pattern)),
+          approvedEventAgendaForRoute(publication, document.route),
+        ),
       }));
 }

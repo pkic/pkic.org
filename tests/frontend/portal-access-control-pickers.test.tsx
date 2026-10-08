@@ -52,6 +52,7 @@ describe("permission target picker", () => {
       "Event",
       "Group",
       "Organization",
+      "Event sponsor",
     ]);
     // The help is wired to the control rather than floating beside it, so the
     // two are read together.

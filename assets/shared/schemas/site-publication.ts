@@ -1,6 +1,9 @@
+import { publicationAuthoredAgendaRoutesSchema } from "./site-publication-agenda-routes";
+import { publicAgendaCalendarSchema } from "./site-agenda-calendar";
+import { agendaSnapshotSchema } from "./event-agenda";
 import { publicVoteSchema } from "./votes";
 import { z } from "zod";
-import { sitePublicationSnapshotIdSchema } from "./site-publication-release";
+import { sitePublicationSnapshotIdSchema, sitePublicationSourceSequenceSchema } from "./site-publication-release";
 import { publishedFormResourcesSchema } from "../published-resource-url";
 import { publicMemberDetailSchema, publicMemberSummarySchema, memberWallEntrySchema } from "./members-directory";
 import { groupDirectoryResponseSchema } from "./group-directory";
@@ -23,6 +26,9 @@ export const sitePublishedEventFlowSchema = z
 /** Only canonical public projections may cross the publication boundary. */
 export const sitePublicationContentSchema = z.object({
   version: z.literal(1),
+  eventAgendas: z.record(z.string(), agendaSnapshotSchema).optional(),
+  authoredAgendaRoutes: publicationAuthoredAgendaRoutesSchema.optional(),
+  eventAgendaCalendars: z.record(z.string(), publicAgendaCalendarSchema).optional(),
   votes: z.array(publicVoteSchema),
   publicResources: publishedFormResourcesSchema,
   eventFlows: z.array(sitePublishedEventFlowSchema).optional(),
@@ -36,5 +42,6 @@ export const sitePublicationContentSchema = z.object({
 });
 export const sitePublicationSnapshotSchema = sitePublicationContentSchema.extend({
   snapshotId: sitePublicationSnapshotIdSchema,
+  sourceSequence: sitePublicationSourceSequenceSchema.nullable().default(null),
 });
 export type SitePublicationSnapshot = z.infer<typeof sitePublicationSnapshotSchema>;

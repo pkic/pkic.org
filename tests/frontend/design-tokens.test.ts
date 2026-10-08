@@ -10,7 +10,12 @@
 
 import { describe, expect, it } from "vitest";
 
-import { emitPublicTokenCss, emitTemplateTokenCss, emitTokenCss } from "../../assets/design/emit-css.ts";
+import {
+  emitFeatureTokenCss,
+  emitPublicTokenCss,
+  emitTemplateTokenCss,
+  emitTokenCss,
+} from "../../assets/design/emit-css.ts";
 import { accentNeighbour, isAccentHue, markArcs, palette } from "../../assets/design/palette.ts";
 import { constants, cssVar, density, layers, themes, tokenNames } from "../../assets/design/tokens.ts";
 
@@ -119,4 +124,15 @@ describe("emitted stylesheet", () => {
   it("is deterministic", () => {
     expect(emitTokenCss()).toBe(css);
   });
+});
+
+it("loads component-only colors with the owning feature and retains canonical values", () => {
+  const core = emitTokenCss();
+  const agenda = emitFeatureTokenCss("agenda");
+  const scanner = emitFeatureTokenCss("scanner");
+  expect(core).not.toContain("--pk-agenda-location-1:");
+  expect(core).not.toContain("--pk-grad-state-ok:");
+  expect(agenda).toContain("--pk-agenda-location-1: #2f8fcb;");
+  expect(scanner).toContain("--pk-grad-state-ok: linear-gradient(");
+  expect(agenda).not.toContain("--pk-grad-state-ok:");
 });

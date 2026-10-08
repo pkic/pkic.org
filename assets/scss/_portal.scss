@@ -443,3 +443,47 @@ summary.portal-sidebar-group {
 .portal-mailing-list-fields .pk-datalist {
   grid-column: 1 / -1;
 }
+
+.portal-sidebar-collapse {
+  display: none;
+}
+@media (min-width: 901px) {
+  .portal-sidebar-collapse {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex: none;
+    width: 2.25rem;
+    height: 2.25rem;
+    padding: 0.5rem;
+    border: 0;
+    border-radius: var(--pk-radius);
+    background: transparent;
+    color: var(--pk-ink-muted);
+    cursor: pointer;
+  }
+  .portal-sidebar-collapse:hover {
+    background: var(--pk-canvas);
+  }
+  .portal-sidebar-collapsed #portal-sidebar {
+    width: 3.25rem;
+    min-width: 3.25rem;
+  }
+  .portal-sidebar-heading {
+    height: 3rem;
+    min-height: 3rem;
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+  }
+  .portal-sidebar-heading .portal-sidebar-brand {
+    padding: 0;
+    margin: 0;
+    min-width: 0;
+    line-height: 1.2;
+  }
+  .portal-sidebar-collapsed .portal-sidebar-brand,
+  .portal-sidebar-collapsed #portal-sidebar > :not(.portal-sidebar-heading) {
+    display: none;
+  }
+}

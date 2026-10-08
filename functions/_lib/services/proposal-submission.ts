@@ -3,15 +3,17 @@ import type { DatabaseLike, StatementLike } from "../types";
 import type { EventRecord } from "./events";
 import type { UserRecord } from "./users";
 import { proposalCreateSchema } from "../../../assets/shared/schemas/proposal-management";
+import type { AuthenticatedIdentity } from "../auth/user-session";
+import { prepareProposalSubmitter } from "./proposal-submitter";
 import { serializeLinks } from "../../../assets/shared/schemas/links";
 import { buildFindOrCreateUserStatement } from "./users";
 import { buildAddProposalSpeaker, buildCreateProposal, formatInvitePerson } from "./proposals";
-import { prepareConsentStatements } from "./consent";
+import { prepareConsentStatements, prepareActiveTermsSnapshotGuard, validateRequiredConsents } from "./consent";
 import { prepareAcceptInviteStatements, type InviteRecord } from "./invites";
 import { prepareReferralCodeStatement } from "./referrals";
 import { prepareQueueEmailStatement } from "../email/outbox";
 import { emailPlainText } from "../email/plain-text";
-import { buildEventEmailVariables } from "./events";
+import { buildEventEmailVariables, getRequiredTerms } from "./events";
 import { proposalManagePageUrl, speakerManagePageUrl } from "./frontend-links";
 import { queuedCapabilityToken } from "./capability-links";
 import { requireConfiguredSessionType } from "./events";
@@ -33,12 +35,16 @@ import { AppError } from "../errors";
 import { proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
 import { eventInviteWindowEvidence, resolveEventInviteExpiry } from "../invite-validity";
 import { nowIso } from "../utils/time";
+import { sha256Hex } from "../utils/crypto";
+import { isEmailReservationConflict } from "./user-emails";
+import { proposalTermsDigest } from "./event-proposal-proof-capabilities";
 
 type ProposalCreateInput = z.infer<typeof proposalCreateSchema>;
 
 export interface ProposalSubmissionInput {
   event: EventRecord;
   body: ProposalCreateInput;
+  actor?: AuthenticatedIdentity;
   appBaseUrl: string;
   signingSecret: string;
   referralCodeLength: number;
@@ -63,7 +69,7 @@ export interface ProposalSubmissionResult {
   badgeRenderJobId: string;
 }
 
-function profileWrite(profile: ProposalCreateInput["proposer"] | ProposalCreateInput["speakers"][number]) {
+function profileWrite(profile: ProposalCreateInput["speakers"][number]) {
   return {
     email: profile.email,
     firstName: profile.firstName,
@@ -86,6 +92,9 @@ export async function submitProposal(
 ): Promise<ProposalSubmissionResult> {
   const statements: StatementLike[] = input.formRevisionGuard && !input.formDefinition ? [input.formRevisionGuard] : [];
   const inviteNow = nowIso();
+  const terms = await getRequiredTerms(db, input.event.id, "speaker");
+  await validateRequiredConsents(terms, input.body.consents);
+  statements.push(prepareActiveTermsSnapshotGuard(db, input.event.id, terms, "speaker"));
   const coSpeakerExpiresAt =
     input.body.speakers.length > 0 ? resolveEventInviteExpiry(input.event, undefined, inviteNow) : null;
   if (coSpeakerExpiresAt) {
@@ -96,9 +105,17 @@ export async function submitProposal(
       ),
     );
   }
-  const proposerWrite = await buildFindOrCreateUserStatement(db, profileWrite(input.body.proposer));
-  if (proposerWrite.statement) statements.push(proposerWrite.statement);
-  const proposer = proposerWrite.user;
+  const submitter = await prepareProposalSubmitter(db, {
+    eventId: input.event.id,
+    body: input.body,
+    actor: input.actor,
+    signingSecret: input.signingSecret,
+    at: inviteNow,
+    acceptedInvite: input.acceptedInvite,
+  });
+  statements.push(...submitter.statements);
+  const proposer = submitter.user;
+  const actingIdentity = submitter.identity;
 
   const created = await buildCreateProposal(db, {
     eventId: input.event.id,
@@ -134,8 +151,26 @@ export async function submitProposal(
     role: input.body.proposer.role,
     signingSecret: input.signingSecret,
     proposalContext,
+    actingIdentity,
+    requireRepresentationReview: !actingIdentity,
   });
   statements.push(...proposerSpeaker.statements);
+  // Explicit submitted profile values belong to this proposal, never somebody's account or identity.
+  const proposerOverrides = {
+    ...(actingIdentity
+      ? {}
+      : {
+          organizationName: input.body.proposer.organizationName ?? null,
+          jobTitle: input.body.proposer.jobTitle ?? null,
+        }),
+    biography: submitter.profile.bio ?? null,
+    links: submitter.profile.links,
+  };
+  statements.push(
+    db
+      .prepare("UPDATE proposal_speakers SET profile_overrides_json=? WHERE id=?")
+      .bind(JSON.stringify(proposerOverrides), proposerSpeaker.speakerId),
+  );
 
   const coSpeakers: Array<{ user: UserRecord; manageToken: string }> = [];
   for (const speaker of input.body.speakers) {
@@ -149,7 +184,21 @@ export async function submitProposal(
       proposalContext,
     });
     statements.push(...preparedSpeaker.statements);
-    coSpeakers.push({ user: userWrite.user, manageToken: preparedSpeaker.manageToken });
+    statements.push(
+      db.prepare("UPDATE proposal_speakers SET profile_overrides_json=? WHERE id=?").bind(
+        JSON.stringify({
+          organizationName: speaker.organizationName ?? null,
+          jobTitle: speaker.jobTitle ?? null,
+          biography: speaker.bio ?? null,
+          links: speaker.links,
+        }),
+        preparedSpeaker.speakerId,
+      ),
+    );
+    coSpeakers.push({
+      user: { ...userWrite.user, organization_name: speaker.organizationName ?? null },
+      manageToken: preparedSpeaker.manageToken,
+    });
   }
 
   statements.push(
@@ -177,7 +226,13 @@ export async function submitProposal(
   const badgeRenderJob = prepareBadgeRenderJob(db, referral.code);
   statements.push(badgeRenderJob.statement);
 
-  const allPeople = [proposer, ...coSpeakers.map(({ user }) => user)];
+  const proposerRepresentation = {
+    ...proposer,
+    organization_name: actingIdentity
+      ? actingIdentity.snapshot.organizationName
+      : (input.body.proposer.organizationName ?? null),
+  };
+  const allPeople = [proposerRepresentation, ...coSpeakers.map(({ user }) => user)];
   const speakerLineupText = allPeople
     .map(
       (person) =>
@@ -187,7 +242,7 @@ export async function submitProposal(
   const invitedByDisplay = formatInvitePerson(
     proposer.first_name,
     proposer.last_name,
-    proposer.organization_name,
+    proposerRepresentation.organization_name,
     proposer.email,
   );
   const inviteEmailText = proposalInviteEmailTextVariables({
@@ -227,6 +282,7 @@ export async function submitProposal(
     input.event,
     queuedCapabilityToken("proposal_manage", created.proposal.id),
   );
+  const speakerManageUrl = speakerManagePageUrl(input.appBaseUrl, input.event, proposerSpeaker.manageToken);
   const proposerEmail = prepareQueueEmailStatement(db, {
     eventId: input.event.id,
     templateKey: "proposal_submitted",
@@ -234,7 +290,7 @@ export async function submitProposal(
     recipientUserId: proposer.id,
     messageType: "transactional",
     subject: `Proposal submitted: ${created.proposal.title}`,
-    capabilityLinkValues: [queuedManageUrl],
+    capabilityLinkValues: [queuedManageUrl, speakerManageUrl],
     data: {
       ...eventVariables,
       firstName: emailPlainText(proposer.first_name ?? ""),
@@ -242,15 +298,64 @@ export async function submitProposal(
       ...inviteEmailText,
       proposalType: emailPlainText(created.proposal.proposal_type),
       manageUrl: queuedManageUrl,
+      speakerManageUrl,
       shareUrl: `${input.appBaseUrl}/r/${referral.code}`,
     },
   });
   statements.push(proposerEmail.statement);
   outboxIds.push(proposerEmail.id);
+  if (!actingIdentity) {
+    const reviewEmail = prepareQueueEmailStatement(db, {
+      outboxId: (await sha256Hex(`proposal-representation-review:${proposerSpeaker.speakerId}`)).slice(0, 32),
+      idempotencyKey: `proposal-representation-review:${proposerSpeaker.speakerId}`,
+      eventId: input.event.id,
+      templateKey: "proposal_representation_review",
+      recipientEmail: proposer.email,
+      recipientUserId: proposer.id,
+      messageType: "transactional",
+      subject: `Review your speaker representation — ${input.event.name}`,
+      capabilityLinkValues: [speakerManageUrl],
+      data: {
+        ...eventVariables,
+        firstName: emailPlainText(proposer.first_name ?? ""),
+        proposalTitle: emailPlainText(created.proposal.title),
+        speakerManageUrl,
+      },
+    });
+    statements.push(reviewEmail.statement);
+    outboxIds.push(reviewEmail.id);
+  }
 
   try {
     await db.batch(statements);
   } catch (error) {
+    if (
+      isAuthorizationGuardFailure(error) &&
+      (await proposalTermsDigest(await getRequiredTerms(db, input.event.id, "speaker"))) !==
+        (await proposalTermsDigest(terms))
+    )
+      throw new AppError(409, "PROPOSAL_TERMS_CHANGED", "The event terms changed. Review them before submitting.", {
+        consents: "Review the current event terms.",
+      });
+    if (
+      input.body.continuationToken &&
+      error instanceof Error &&
+      (error.message.includes("uq_audit_log_idempotency_key") || error.message.includes("audit_log.idempotency_key"))
+    )
+      throw new AppError(409, "PROPOSAL_PROOF_USED", "This email confirmation has already submitted a proposal.");
+    if (isEmailReservationConflict(error))
+      throw new AppError(
+        409,
+        "PROPOSAL_PERSON_CHANGED",
+        "The confirmed email's account changed. Confirm your email again.",
+      );
+    if (actingIdentity && isAuthorizationGuardFailure(error)) {
+      throw new AppError(
+        409,
+        "PROPOSAL_IDENTITY_CHANGED",
+        "Your session or identity changed while the proposal was submitted.",
+      );
+    }
     if (input.acceptedInvite && isAuthorizationGuardFailure(error)) {
       throw new AppError(410, "INVITE_EXPIRED", "Invite link has expired");
     }
@@ -268,8 +373,8 @@ export async function submitProposal(
     // capability only at their canonical email address. New identities remain
     // able to continue immediately because they carry no pre-existing account
     // authority or data.
-    manageToken: proposerWrite.created ? created.manageToken : null,
-    manageUrl: proposerWrite.created ? proposalManagePageUrl(input.appBaseUrl, input.event, created.manageToken) : null,
+    manageToken: submitter.created ? created.manageToken : null,
+    manageUrl: submitter.created ? proposalManagePageUrl(input.appBaseUrl, input.event, created.manageToken) : null,
     referralCode: referral.code,
     shareUrl: `${input.appBaseUrl}/r/${referral.code}`,
     proposer,

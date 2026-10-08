@@ -7,6 +7,7 @@ import { formatCustomAnswerValue } from "../../utils/custom-answer-display";
 import { writeAuditLog } from "../audit";
 import { resolveEventFormResponses, type EventFormResponse, type EventFormResolutionEvent } from "../forms";
 import type { FormFieldDefinition } from "../forms";
+import { sponsorConsentSql } from "../event-participation/sponsor-consent";
 
 interface ExportRow {
   id: string;
@@ -74,8 +75,7 @@ export async function buildRegistrationCsv(
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
             ${REGISTRATION_ORGANIZATION_SQL} AS organization,
             ${REGISTRATION_JOB_TITLE_SQL} AS job_title,
-            EXISTS(SELECT 1 FROM consent_acceptances ca
-                   WHERE ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing') AS sponsor_consent,
+            ${sponsorConsentSql("r")} AS sponsor_consent,
             r.custom_answers_json, r.form_placement_id
      FROM registrations r
      LEFT JOIN users u ON u.id = r.user_id

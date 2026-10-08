@@ -1,3 +1,4 @@
+import { MeetingOccurrenceCalendar } from "../../assets/ts/member-flows/portal/sections/management/MeetingOccurrenceCalendar";
 // @vitest-environment jsdom
 /**
  * The occurrence list under a meeting series, and the editor for one row.
@@ -113,6 +114,44 @@ afterEach(() => {
   }
   vi.unstubAllGlobals();
   navigate.mockReset();
+});
+
+describe("meeting calendar collection", () => {
+  it("requests bounded overlap pages and warns when the range is incomplete", async () => {
+    const urls: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), "https://example.test");
+        urls.push(url);
+        return json({
+          occurrences: [occurrence()],
+          page: {
+            limit: 50,
+            offset: Number(url.searchParams.get("offset")),
+            total: 60,
+            hasMore: Number(url.searchParams.get("offset")) === 0,
+          },
+        });
+      }),
+    );
+    const container = mount(<MeetingOccurrenceCalendar groupId={GROUP_ID} series={series()} />);
+    await settle();
+    expect(urls[0]!.searchParams.get("limit")).toBe("50");
+    expect(urls[0]!.searchParams.get("overlapsFrom")).toMatch(/Z$/);
+    expect(urls[0]!.searchParams.get("overlapsTo")).toMatch(/Z$/);
+    expect(container.textContent).toContain("Showing 1 of 60 meetings");
+    expect(container.textContent).not.toContain("No meetings");
+    const next = container.querySelector<HTMLButtonElement>('button[aria-label="Next page"]')!;
+    await act(() => next.click());
+    await settle();
+    expect(urls.at(-1)!.searchParams.get("offset")).toBe("50");
+    expect(container.textContent).not.toContain("No meetings");
+    await act(() => buttonNamed(container, "Week").click());
+    await settle();
+    expect(container.querySelectorAll(".pk-calendar__day")).toHaveLength(7);
+    expect(urls.at(-1)!.searchParams.get("offset")).toBe("0");
+  });
 });
 
 describe("meeting occurrence list", () => {

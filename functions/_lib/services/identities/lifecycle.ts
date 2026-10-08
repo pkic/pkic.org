@@ -1,4 +1,4 @@
-import { serializeLinks } from "../../../../assets/shared/schemas/links";
+import { prepareIdentityProfileUpdateStatement } from "./profile-statement";
 import type { IdentityTransition } from "../../../../assets/shared/schemas/identity";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
@@ -9,13 +9,17 @@ import { nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import { buildCreateIdentityStatement } from "../membership/identities";
-import { prepareOrganizationIdentityManagementGuard, requireOrganizationIdentityManagement } from "./authorization";
+import {
+  organizationIdentityAuditScope,
+  prepareOrganizationIdentityManagementGuard,
+  requireOrganizationIdentityManagement,
+} from "./authorization";
 import { loadIdentityNotificationContext, prepareIdentityNotification } from "./notifications";
 import type { IdentityManagerActor } from "./types";
 
 interface IdentityStateRow {
   id: string;
-  member_id: string;
+  member_id: string | null;
   user_id: string;
   organization_id: string;
   email_id: string | null;
@@ -58,7 +62,7 @@ async function requireOrganizationIdentity(
             identity.show_on_organization_profile, identity.started_at, identity.ended_at,
             identity.blocked_at, identity.updated_at
        FROM identities identity
-       JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+       LEFT JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
       WHERE identity.id = ? AND identity.organization_id = ?`,
     [identityId, organizationId],
   );
@@ -92,8 +96,11 @@ export async function updateOrganizationIdentityProfile(
   const identity = await requireOrganizationIdentity(db, input.organizationId, input.identityId);
   await requireOrganizationIdentityManagement(db, {
     memberId: identity.member_id,
+    organizationId: identity.organization_id,
     actorUserId: actor.userId,
     databaseUserId: actor.databaseUserId,
+    sessionId: actor.sessionId,
+    sessionExpiresAt: actor.sessionExpiresAt,
     staffAuthorized: actor.staffAuthorized,
   });
   if (identity.ended_at || identity.blocked_at) {
@@ -103,39 +110,17 @@ export async function updateOrganizationIdentityProfile(
   await commitIdentityLifecycleBatch(db, [
     prepareOrganizationIdentityManagementGuard(db, {
       memberId: identity.member_id,
+      organizationId: identity.organization_id,
       actorUserId: actor.userId,
       databaseUserId: actor.databaseUserId,
+      sessionId: actor.sessionId,
+      sessionExpiresAt: actor.sessionExpiresAt,
       staffAuthorized: actor.staffAuthorized,
     }),
-    db
-      .prepare(
-        `UPDATE identities
-            SET email_id = CASE WHEN ? = 1 THEN ? ELSE email_id END,
-                job_title = CASE WHEN ? = 1 THEN ? ELSE job_title END,
-                biography = CASE WHEN ? = 1 THEN ? ELSE biography END,
-                links_json = CASE WHEN ? = 1 THEN ? ELSE links_json END,
-                show_on_organization_profile = CASE WHEN ? = 1 THEN ? ELSE show_on_organization_profile END,
-                updated_at = ?
-          WHERE id = ? AND ended_at IS NULL AND blocked_at IS NULL AND updated_at = ?`,
-      )
-      .bind(
-        input.emailId !== undefined ? 1 : 0,
-        input.emailId ?? null,
-        input.jobTitle !== undefined ? 1 : 0,
-        input.jobTitle ?? null,
-        input.biography !== undefined ? 1 : 0,
-        input.biography ?? null,
-        input.links !== undefined ? 1 : 0,
-        input.links === undefined ? null : serializeLinks(input.links),
-        input.showOnOrganizationProfile !== undefined ? 1 : 0,
-        input.showOnOrganizationProfile ? 1 : 0,
-        at,
-        identity.id,
-        identity.updated_at,
-      ),
+    prepareIdentityProfileUpdateStatement(db, identity, input, at),
     prepareScopedAuditLogAfterOneChange(
       db,
-      { type: "organization", id: identity.member_id },
+      organizationIdentityAuditScope(identity.member_id, identity.user_id),
       actor.actorType,
       actor.userId,
       "organization_identity_profile_updated",
@@ -161,18 +146,24 @@ export async function transitionOrganizationIdentity(
   const identity = await requireOrganizationIdentity(db, input.organizationId, input.identityId);
   await requireOrganizationIdentityManagement(db, {
     memberId: identity.member_id,
+    organizationId: identity.organization_id,
     actorUserId: actor.userId,
     databaseUserId: actor.databaseUserId,
+    sessionId: actor.sessionId,
+    sessionExpiresAt: actor.sessionExpiresAt,
     staffAuthorized: actor.staffAuthorized,
   });
   const at = nowIso();
   const guard = prepareOrganizationIdentityManagementGuard(db, {
     memberId: identity.member_id,
+    organizationId: identity.organization_id,
     actorUserId: actor.userId,
     databaseUserId: actor.databaseUserId,
+    sessionId: actor.sessionId,
+    sessionExpiresAt: actor.sessionExpiresAt,
     staffAuthorized: actor.staffAuthorized,
   });
-  const context = await loadIdentityNotificationContext(db, identity.member_id, identity.user_id, false);
+  const context = await loadIdentityNotificationContext(db, identity.organization_id, identity.user_id, false);
 
   if (input.transition.state === "active") {
     requireActivationPermission(actor);
@@ -194,7 +185,7 @@ export async function transitionOrganizationIdentity(
           .bind(at, at, identity.id, identity.updated_at),
         prepareScopedAuditLogAfterOneChange(
           db,
-          { type: "organization", id: identity.member_id },
+          organizationIdentityAuditScope(identity.member_id, identity.user_id),
           actor.actorType,
           actor.userId,
           "organization_identity_activated",
@@ -234,7 +225,7 @@ export async function transitionOrganizationIdentity(
       successor.statement,
       prepareScopedAuditLogAfterOneChange(
         db,
-        { type: "organization", id: identity.member_id },
+        organizationIdentityAuditScope(identity.member_id, identity.user_id),
         actor.actorType,
         actor.userId,
         "organization_identity_successor_activated",
@@ -281,7 +272,7 @@ export async function transitionOrganizationIdentity(
       ),
     prepareScopedAuditLogAfterOneChange(
       db,
-      { type: "organization", id: identity.member_id },
+      organizationIdentityAuditScope(identity.member_id, identity.user_id),
       actor.actorType,
       actor.userId,
       blocked ? "organization_identity_blocked" : "organization_identity_ended",

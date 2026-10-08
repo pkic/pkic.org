@@ -1,5 +1,5 @@
-import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
-import { administratorGrants } from "./helpers/administrator";
+import { selectIndividualSpeakerRepresentation } from "./helpers/proposal-proof";
+import { ADMINISTRATOR_FIXTURE_USER_SQL, administratorGrants } from "./helpers/administrator";
 /**
  * speaker-management.test.ts
  *
@@ -169,6 +169,7 @@ describe("speaker self-management endpoints", () => {
     expect(response.status).toBe(200);
     const body = speakerSelfServiceReadResponseSchema.parse(await response.json());
     expect(body.speaker.role).toBeTruthy();
+    expect(body.speaker.userId).toEqual(expect.any(String));
     expect(body.proposal.title).toBe("Post-Quantum Migration Strategies");
     expect(body.profile.firstName).toBe("Co");
     expect(body.profile.email).toBe("cospeaker@example.test");
@@ -230,6 +231,13 @@ describe("speaker self-management endpoints", () => {
   it("keeps self-management available after a speaker confirms before the invitation deadline", async () => {
     await setupWorkflow();
     const { speakerManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    await selectIndividualSpeakerRepresentation({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email: "cospeaker@example.test",
+      consents: [{ termKey: "speaker-terms", version: "v1" }],
+      speakerManagementToken: speakerManageToken,
+    });
     const confirmation = await speakerPost(
       createContext(
         env,
@@ -993,6 +1001,13 @@ describe("speaker self-management endpoints", () => {
   it("POST confirm — confirms speaker participation with required consents", async () => {
     await setupWorkflow();
     const { speakerManageToken } = await inviteSpeakerAndSubmitProposal();
+    await selectIndividualSpeakerRepresentation({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email: "cospeaker@example.test",
+      consents: [{ termKey: "speaker-terms", version: "v1" }],
+      speakerManagementToken: speakerManageToken,
+    });
 
     const response = await speakerPost(
       createContext(
@@ -1050,6 +1065,13 @@ describe("speaker self-management endpoints", () => {
   it("POST confirm — remains idempotent after an already-confirmed proposal closes", async () => {
     await setupWorkflow();
     const { speakerManageToken, proposalId } = await inviteSpeakerAndSubmitProposal();
+    await selectIndividualSpeakerRepresentation({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email: "cospeaker@example.test",
+      consents: [{ termKey: "speaker-terms", version: "v1" }],
+      speakerManagementToken: speakerManageToken,
+    });
     const request = () =>
       speakerPost(
         createContext(
@@ -1076,6 +1098,13 @@ describe("speaker self-management endpoints", () => {
   it("rolls back consent and speaker confirmation when its audit write fails", async () => {
     await setupWorkflow();
     const { speakerManageToken, proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitProposal();
+    await selectIndividualSpeakerRepresentation({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email: "cospeaker@example.test",
+      consents: [{ termKey: "speaker-terms", version: "v1" }],
+      speakerManagementToken: speakerManageToken,
+    });
     await env.DB.prepare(
       `CREATE TRIGGER reject_speaker_confirmed_audit
        BEFORE INSERT ON audit_log
@@ -2386,6 +2415,13 @@ describe("speaker self-management endpoints", () => {
   it("proposal manage reminder requests profile review for confirmed speakers", async () => {
     await setupWorkflow();
     const { proposalManageToken, coSpeakerUserId, speakerManageToken } = await inviteSpeakerAndSubmitProposal();
+    await selectIndividualSpeakerRepresentation({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email: "cospeaker@example.test",
+      consents: [{ termKey: "speaker-terms", version: "v1" }],
+      speakerManagementToken: speakerManageToken,
+    });
 
     const confirmResponse = await speakerPost(
       createContext(

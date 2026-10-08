@@ -42,6 +42,17 @@ export function prepareSiteImage(src: string, portrait = false): Promise<void> |
   return assets.get(key)!.promise;
 }
 
+/** Prepare exact current publication references before cached pages can skip
+ * rendering. The existing resolver registers transforms with Astro's global
+ * image pipeline even outside per-page render metadata collection. */
+export async function preparePublicationImages(
+  refs: readonly { source: string; portrait?: SiteImageProps["portrait"] }[],
+): Promise<boolean> {
+  if (!resolveAsset) return false;
+  for (const { source, portrait = false } of refs) await prepareSiteImage(source, portrait);
+  return true;
+}
+
 /** Render framework-prepared attributes directly, preserving authored crop and accessibility. */
 export function SiteImage({ portrait = false, ...props }: SiteImageProps) {
   const src = typeof props.src === "string" ? props.src : undefined;

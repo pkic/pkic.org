@@ -14,8 +14,22 @@ import {
   portalSectionChildren,
 } from "../../assets/ts/member-flows/portal/shell/portal-navigation";
 import { portalSessionFixture } from "../helpers/portal-session";
+import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 
 describe("portal capability-derived navigation", () => {
+  it("opens own account and profile for an affiliation without granting membership or workspace navigation", () => {
+    const session = userAuthSessionResponseSchema.parse({ ...portalSessionFixture({}), hasActiveAffiliation: true });
+    expect(portalDefaultPath(session)).toBe("/account");
+    expect(portalSectionEnabled(session, "account")).toBe(true);
+    expect(portalSectionEnabled(session, "users")).toBe(true);
+    expect(portalNavigationItems(session).map((item) => item.label)).toEqual(["Home"]);
+    for (const section of ["groups", "organizations", "members", "events", "sponsors", "settings"] as const) {
+      expect(portalSectionEnabled(session, section)).toBe(false);
+    }
+    expect(portalCapacityFallbackPath(session, "/organizations/unrelated")).toBe("/account");
+    expect(userAuthSessionResponseSchema.safeParse({ ...session, hasActiveAffiliation: false }).success).toBe(false);
+  });
+
   it("does not expose permissioned screens from a stale legacy administrator label", () => {
     const session = portalSessionFixture({ staff: true, grants: [] });
     Object.assign(session.staff!, { role: "admin" });
@@ -174,6 +188,24 @@ describe("portal capability-derived navigation", () => {
     // Proposal reviewers reach their programs through the Events domain.
     expect(portalNavigationItems(proposalOnly)).toContainEqual({ path: "/events", section: "events", label: "Events" });
     expect(portalCapacityFallbackPath(proposalOnly, "/events/event-1")).toBeNull();
+  });
+
+  it.each(["agenda:leads_view", "agenda:leads_export"])("opens event contacts with only %s", (permission) => {
+    const session = portalSessionFixture({
+      staff: true,
+      grants: [{ permission, contextType: "event_sponsor", contextId: "sponsorship-1" }],
+    });
+    expect(session.staff!.grants).toHaveLength(1);
+    expect(portalSectionEnabled(session, "events")).toBe(true);
+    expect(portalNavigationItems(session)).toContainEqual({ path: "/events", section: "events", label: "Events" });
+    expect(portalCapacityFallbackPath(session, "/events/event-1/leads")).toBeNull();
+    expect(portalHasPermissionAtAnyScope(session, "agenda:leads_capture")).toBe(false);
+    for (const unrelated of ["groups:read", "groups:manage", "events:manage", "users:read"]) {
+      expect(portalHasPermissionAtAnyScope(session, unrelated)).toBe(false);
+      expect(portalHasGlobalPermission(session, unrelated)).toBe(false);
+    }
+    expect(portalSectionEnabled(session, "settings")).toBe(false);
+    expect(portalSettingsPages(session)).toEqual([]);
   });
 
   it("exposes Donations to global readers or synchronizers", () => {

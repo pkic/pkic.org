@@ -1,4 +1,13 @@
 import { expect, test } from "@playwright/test";
+import {
+  speakerProfileUpdateResponseSchema,
+  speakerSelfServiceReadResponseSchema,
+} from "../../assets/shared/schemas/speaker-self-service";
+import {
+  registrationManageSchema,
+  registrationManageUpdateResponseSchema,
+} from "../../assets/shared/schemas/registration";
+import { speakerSelfProfilePatchSchema } from "../../assets/shared/schemas/proposal-management";
 import { signInToPortal } from "./helpers/portal-auth";
 import { submitProposal, inviteCoSpeaker, PROPOSAL_EVENT_SLUG } from "./helpers/proposals";
 import { registerInBrowser } from "./helpers/registration";
@@ -31,7 +40,19 @@ test("attendee manages a registration and downloads a personal event calendar", 
   await expect(page.getByLabel("Email address", { exact: true })).toHaveValue(email);
   await expect(page.getByLabel("Country", { exact: true })).toHaveValue("US");
   await page.getByLabel("Job title", { exact: true }).fill("Updated attendee");
+  const savedResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname.startsWith("/api/v1/registrations/") && response.request().method() === "PATCH",
+    { timeout: 10_000 },
+  );
   await page.getByRole("button", { name: "Save changes", exact: true }).click();
+  const saved = await savedResponse;
+  expect(saved.status()).toBe(200);
+  expect(registrationManageSchema.parse(saved.request().postDataJSON())).toMatchObject({
+    action: "update",
+    jobTitle: "Updated attendee",
+  });
+  registrationManageUpdateResponseSchema.parse(await saved.json());
   await expect(page.getByText("Registration updated.", { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByLabel("Job title", { exact: true })).toHaveValue("Updated attendee");
@@ -88,13 +109,57 @@ test("proposer and invited speaker manage their own event records without emaile
     await expect(speaker.getByRole("button", { name: "Confirm participation", exact: true })).toBeVisible();
     for (const checkbox of await speaker.getByRole("checkbox").all()) await checkbox.check();
     await speaker.getByRole("button", { name: "Confirm participation", exact: true }).click();
+    await expect(
+      speaker.getByRole("alert").filter({ hasText: "Confirm your speaker identity before confirming participation." }),
+    ).toBeVisible();
+    const profilePath = `/api/v1/proposals/${proposal.proposalId}/participation/profile`;
+    const before = speakerSelfServiceReadResponseSchema.parse(
+      await (await speaker.request.get(`/api/v1/proposals/${proposal.proposalId}/participation`)).json(),
+    );
+    expect(before.speaker.status).toBe("invited");
+    expect(before.profile.actingIdentitySelection).toBe("unrecorded");
+    await speaker
+      .getByRole("radio", { name: "No — I am not employed by and do not own an organization", exact: true })
+      .check();
+    const attestation = speaker.getByRole("checkbox", {
+      name: "I am not employed by, do not own, and am not authorized to represent an organization.",
+      exact: true,
+    });
+    await expect(attestation).not.toBeChecked();
+    await attestation.click();
+    await expect(speaker.getByText("Individual participation", { exact: true })).toBeVisible();
+    await expect(attestation).toHaveCount(0);
+    await expect(speaker.getByLabel("Organization", { exact: true })).toHaveCount(0);
+    await expect(speaker.getByLabel("Job title", { exact: true })).toHaveCount(0);
+    const selectionResponse = speaker.waitForResponse(
+      (response) => new URL(response.url()).pathname === profilePath && response.request().method() === "PATCH",
+    );
+    await speaker.getByRole("button", { name: "Save speaker profile", exact: true }).click();
+    const selectedResponse = await selectionResponse;
+    expect(selectedResponse.status()).toBe(200);
+    const selectedBody = speakerSelfProfilePatchSchema.parse(selectedResponse.request().postDataJSON());
+    expect(selectedBody.actingIdentityId).toBeNull();
+    expect(selectedBody.unaffiliatedAttestation).toBe(true);
+    const selected = speakerProfileUpdateResponseSchema.parse(await selectedResponse.json());
+    expect(selected.profile.actingIdentitySelection).toBe("individual");
+    expect(selected.profile.actingIdentitySelectedAt).not.toBeNull();
+    await expect(speaker.getByText("Speaker profile saved.", { exact: true })).toBeVisible();
+    await speaker.getByRole("button", { name: "Confirm participation", exact: true }).click();
     await expect(speaker.getByText("Participation confirmed.", { exact: true })).toBeVisible();
     await expect(speaker.getByRole("button", { name: "Save proposal", exact: true })).toHaveCount(0);
-    await speaker.getByLabel("Job title", { exact: true }).fill("Guest speaker");
+    const bio = speaker.getByRole("textbox", { name: "Biography", exact: true });
+    await bio.fill("Guest speaker biography saved through authenticated self-service.");
     await speaker.getByRole("button", { name: "Save speaker profile", exact: true }).click();
     await expect(speaker.getByText("Speaker profile saved.", { exact: true })).toBeVisible();
     await speaker.reload();
-    await expect(speaker.getByLabel("Job title", { exact: true })).toHaveValue("Guest speaker");
+    await expect(bio).toHaveText("Guest speaker biography saved through authenticated self-service.");
+    const restored = speakerSelfServiceReadResponseSchema.parse(
+      await (await speaker.request.get(`/api/v1/proposals/${proposal.proposalId}/participation`)).json(),
+    );
+    expect(restored.speaker.status).toBe("confirmed");
+    expect(restored.profile.actingIdentitySelectedAt).toBe(selected.profile.actingIdentitySelectedAt);
+    expect(restored.profile.organizationName).toBeNull();
+    expect(restored.profile.jobTitle).toBeNull();
   } finally {
     await context.close();
   }

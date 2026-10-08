@@ -16,7 +16,7 @@ export function socialCardDescriptor({
   route: string;
   title: string;
   description?: string;
-  content?: SiteContentPage;
+  content?: Pick<SiteContentPage, "workingGroup" | "hero" | "taxonomy" | "blog" | "socialCard" | "pageAccent" | "meta">;
   member?: PublicMemberDetail;
   publication: SitePublicationSnapshot;
 }) {

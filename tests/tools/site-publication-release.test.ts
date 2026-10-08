@@ -6,6 +6,52 @@ import { expect, it } from "vitest";
 import { assembleStaticRelease } from "../../scripts/publication/assemble-static-release.mjs";
 import { preparePublicationPublicAssets } from "../../scripts/publication/prepare-public-assets.mjs";
 import { publicationBindingConfig } from "../../scripts/publication/binding-config.mjs";
+import { createReleaseIntegrity } from "../../scripts/publication/release-integrity.mjs";
+import { createTemporaryDirectory } from "./helpers/temporary-directory";
+
+it("protects the generic error asset and its canonical path without adding application routes", async () => {
+  const root = await createTemporaryDirectory("publication-error-headers");
+  const source = resolve(root, "source"),
+    destination = resolve(root, "destination");
+  const files = ["index.html", "404.html"];
+  const privatePaths = ["/404.html"];
+  try {
+    await mkdir(source, { recursive: true });
+    await writeFile(resolve(source, "index.html"), "Approved home");
+    await writeFile(resolve(source, "404.html"), "Generic page not found");
+    const release = sitePublicationReleaseSchema.parse({
+      version: 1,
+      source: "native",
+      snapshotId: "4".repeat(64),
+      sourceSequence: 1,
+      environment: "production",
+      files,
+      privatePaths,
+      integrity: await createReleaseIntegrity(source, files),
+    });
+    await writeFile(resolve(source, "publication.json"), JSON.stringify(release));
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      await assembleStaticRelease(source, destination, "production");
+      const headers = await readFile(resolve(destination, "_headers"), "utf8");
+      const rules = headers.split(/\r?\n/).filter((line) => line && !/^(?:\s|#)/.test(line));
+      expect(rules.length).toBeLessThanOrEqual(100);
+      for (const path of ["/404.html", "/404"]) {
+        expect(rules.filter((rule) => rule === path)).toHaveLength(1);
+        expect(headers).toContain(
+          `${path}\n    ! Cache-Control\n    Cache-Control: no-store, max-age=0\n    ! Referrer-Policy\n    Referrer-Policy: no-referrer\n    ! X-Robots-Tag\n    X-Robots-Tag: noindex, nofollow, noarchive`,
+        );
+      }
+      const installed = sitePublicationReleaseSchema.parse(
+        JSON.parse(await readFile(resolve(destination, "publication.json"), "utf8")),
+      );
+      expect(installed.privatePaths).toEqual(privatePaths);
+      expect(installed.redirects).not.toContainEqual(expect.objectContaining({ from: "/404" }));
+      expect(await readFile(resolve(destination, "404.html"), "utf8")).toBe("Generic page not found");
+    }
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
 
 it("replaces withdrawn pages and media without removing unrelated Vite assets", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "pkic-release-"));
@@ -54,6 +100,16 @@ it("replaces withdrawn pages and media without removing unrelated Vite assets", 
     await put(source, "js/built/loader.release.js", 'import("./form.release.js")');
     await put(source, "js/built/form.release.js", "published form");
     await put(source, "js/built/manifest.json", '{"loader":{"url":"/js/built/loader.release.js"}}');
+    const incoming = JSON.parse(await readFile(resolve(source, "publication.json"), "utf8"));
+    await put(
+      source,
+      "publication.json",
+      JSON.stringify({
+        ...incoming,
+        sourceSequence: 0,
+        integrity: await createReleaseIntegrity(source, incoming.files),
+      }),
+    );
     await assembleStaticRelease(source, destination, "preview");
     expect((await stat(sharedStylesheet)).ino).toBe(stylesheetIdentity.ino);
     await expect(readFile(resolve(destination, "_assets/withdrawn.css"))).rejects.toMatchObject({ code: "ENOENT" });
@@ -207,6 +263,8 @@ it("keeps conference exports public while excluding them from indexing and remov
         version: 1,
         source: "native",
         snapshotId: "3".repeat(64),
+        sourceSequence: 0,
+        integrity: await createReleaseIntegrity(source, ownedFiles),
         environment: "production",
         files: ownedFiles,
         redirects: [],

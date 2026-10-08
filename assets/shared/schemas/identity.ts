@@ -1,4 +1,4 @@
-/** Approved Member acting identities, proof evidence, and lifecycle contracts. */
+/** Canonical acting affiliations, proof evidence, and lifecycle contracts. */
 import { z } from "zod";
 import {
   booleanQueryFlagSchema,
@@ -16,6 +16,7 @@ import { httpOrSameOriginUrlSchema } from "./urls";
 export const IDENTITY_SOURCES = [
   "membership_approval",
   "verified_domain",
+  "verified_email",
   "organization_contact",
   "staff",
   "migration",
@@ -65,10 +66,10 @@ export type IdentityDomainAssessment = z.infer<typeof identityDomainAssessmentSc
 
 export const actingIdentitySchema = z.object({
   id: databaseIdSchema,
-  memberId: databaseIdSchema,
+  memberId: databaseIdSchema.nullable(),
   organizationId: databaseIdSchema.nullable(),
   organizationName: z.string().nullable(),
-  membershipCategory: z.string().min(1),
+  membershipCategory: z.string().min(1).nullable(),
   userId: databaseIdSchema,
   userName: z.string(),
   emailId: databaseIdSchema.nullable(),
@@ -177,6 +178,7 @@ export const IDENTITY_SORT_COLUMNS = ["user_name", "email", "organization_name",
 export const identitiesListQuerySchema = listQuerySchema(IDENTITY_SORT_COLUMNS).extend({
   memberId: databaseIdSchema.optional(),
   organizationId: databaseIdSchema.optional(),
+  organizationOnly: booleanQueryFlagSchema.optional(),
   userId: databaseIdSchema.optional(),
   active: booleanQueryFlagSchema.optional(),
   blocked: booleanQueryFlagSchema.optional(),

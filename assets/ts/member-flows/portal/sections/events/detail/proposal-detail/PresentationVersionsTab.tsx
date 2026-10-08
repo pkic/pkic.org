@@ -1,3 +1,10 @@
+import type { z } from "zod";
+import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
+import {
+  sessionPresentationVersionsSchema,
+  sessionPresentationVersionResponseSchema,
+} from "../../../../../../../shared/schemas/session-presentation-versions";
+import { formatNumber } from "../../../../../../../shared/format-number";
 import { useRef, useState } from "preact/hooks";
 import { confirmAction } from "../../../../../../components/ConfirmDialog";
 import { ApiDataTable, type ApiTableActions } from "../../../../../../components/ApiDataTable";
@@ -16,6 +23,7 @@ import { Badge } from "../../../../../../components/Badge";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { Alert } from "../../../../../../ui/Alert";
 import { Badge as ToneBadge } from "../../../../../../ui/Badge";
+import { RowActions } from "../../../../../../ui/RowActions";
 import { Button, ButtonLink } from "../../../../../../ui/Button";
 import { Field } from "../../../../../../ui/Field";
 import { Select } from "../../../../../../ui/TextControl";
@@ -28,8 +36,8 @@ import { MarkdownEditor } from "../../../../../../components/markdown-editor/Mar
 
 function formatBytes(bytes: number | null): string {
   if (bytes == null) return "—";
-  if (bytes < 1024) return `${bytes} B`;
-  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  if (bytes < 1024) return `${formatNumber(bytes)} B`;
+  if (bytes < 1024 * 1024) return `${formatNumber(Math.round(bytes / 1024))} KB`;
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
@@ -43,6 +51,49 @@ function reviewFormId(versionId: string): string {
 }
 
 export function PresentationVersionsTab({ proposalId, canManage }: { proposalId: string; canManage: boolean }) {
+  return <PresentationVersions endpoint={proposalResourcePath(proposalId, "presentations")} canManage={canManage} />;
+}
+export function SessionPresentationVersions({
+  eventSlug,
+  occurrenceId,
+  canManage,
+  onChanged,
+}: {
+  eventSlug: string;
+  occurrenceId: string;
+  canManage: boolean;
+  onChanged?: () => void;
+}) {
+  return (
+    <PresentationVersions
+      endpoint={`/api/v1/events/${encodeURIComponent(eventSlug)}/agenda/occurrences/${encodeURIComponent(occurrenceId)}/materials/presentations`}
+      session
+      onChanged={onChanged}
+      canManage={canManage}
+    />
+  );
+}
+function PresentationVersions({
+  endpoint,
+  session = false,
+  canManage,
+  onChanged,
+}: {
+  endpoint: string;
+  session?: boolean;
+  canManage: boolean;
+  onChanged?: () => void;
+}) {
+  const listSchema = presentationVersionsResponseSchema
+    .or(sessionPresentationVersionsSchema)
+    .refine(
+      (response) =>
+        response.versions.every((version) => (session ? "occurrenceId" in version : "proposalId" in version)),
+      "Presentation versions belong to a different resource type",
+    );
+  const versionSchema = session ? sessionPresentationVersionResponseSchema : presentationVersionResponseSchema;
+
+  const [uploadView, setUploadView] = useState(false);
   const [reviewingId, setReviewingId] = useState<string | null>(null);
   const [reviewStatus, setReviewStatus] = useState<PresentationVersionReview["status"]>("approved");
   const [reviewNote, setReviewNote] = useState("");
@@ -79,12 +130,13 @@ export function PresentationVersionsTab({ proposalId, canManage }: { proposalId:
     setUploading(true);
     setError(null);
     try {
-      await requestJson(proposalResourcePath(proposalId, "presentations"), successResponseSchema, {
+      await requestJson(endpoint, session ? sessionPresentationVersionResponseSchema : successResponseSchema, {
         method: "POST",
         ...presentationUploadRequest(file),
       });
       toast("Presentation uploaded", "success");
-      await tableRef.current?.reload();
+      setUploadView(false);
+      onChanged?.();
     } catch (caught) {
       setError((caught as Error).message);
     } finally {
@@ -101,14 +153,10 @@ export function PresentationVersionsTab({ proposalId, canManage }: { proposalId:
     setSavingReview(true);
     setReviewError(null);
     try {
-      await postJson(
-        proposalResourcePath(proposalId, `presentations/${encodeURIComponent(versionId)}/reviews`),
-        checked.data,
-        presentationVersionResponseSchema,
-      );
+      await postJson(`${endpoint}/${encodeURIComponent(versionId)}/reviews`, checked.data, versionSchema);
       toast("Review saved", "success");
       openReview(null);
-      await tableRef.current?.reload();
+      onChanged?.();
     } catch (caught) {
       // A refusal that names a field lands on that control; the rest is
       // stated inside the form.
@@ -118,10 +166,10 @@ export function PresentationVersionsTab({ proposalId, canManage }: { proposalId:
     }
   }
 
-  async function handleDelete(version: PresentationVersion) {
+  async function handleDelete(version: Pick<PresentationVersion, "id" | "versionNumber" | "isCurrent">) {
     if (
       !(await confirmAction({
-        title: `Delete presentation version ${version.versionNumber}?`,
+        title: `Delete presentation version ${formatNumber(version.versionNumber)}?`,
         consequences: [
           "The uploaded file is deleted and this version no longer appears here",
           ...(version.isCurrent ? ["The next most recent version becomes the current version"] : []),
@@ -133,13 +181,11 @@ export function PresentationVersionsTab({ proposalId, canManage }: { proposalId:
     setDeletingId(version.id);
     setError(null);
     try {
-      await deleteJson(
-        proposalResourcePath(proposalId, `presentations/${encodeURIComponent(version.id)}`),
-        successResponseSchema,
-      );
+      await deleteJson(`${endpoint}/${encodeURIComponent(version.id)}`, successResponseSchema);
       toast("Version deleted", "success");
       tableRef.current?.resetPage();
       await tableRef.current?.reload();
+      onChanged?.();
     } catch (caught) {
       setError((caught as Error).message);
     } finally {
@@ -153,7 +199,7 @@ export function PresentationVersionsTab({ proposalId, canManage }: { proposalId:
   const uploadButton = (
     <div class="pk-cluster">
       <Button variant="secondary" size="sm" loading={uploading} onClick={() => uploadInputRef.current?.click()}>
-        {uploading ? "Uploading…" : "Upload on behalf of speaker"}
+        {uploading ? "Uploading…" : "Choose presentation file"}
       </Button>
       <input
         ref={uploadInputRef}
@@ -166,27 +212,129 @@ export function PresentationVersionsTab({ proposalId, canManage }: { proposalId:
     </div>
   );
 
+  if (canManage && reviewingId)
+    return (
+      <Panel>
+        <PanelHeader title="Review presentation version">
+          <Button disabled={savingReview} onClick={() => openReview(null)}>
+            Back to presentation versions
+          </Button>
+        </PanelHeader>
+        <PanelBody>
+          <form
+            noValidate
+            class="pk-stack pk-stack--snug"
+            id={reviewFormId(reviewingId)}
+            {...review.handlers}
+            onSubmit={(event) => {
+              event.preventDefault();
+              void handleReview(reviewingId);
+            }}
+          >
+            <Field label="Review outcome" {...review.of("status")}>
+              {(control) => (
+                <Select
+                  {...control}
+                  name="status"
+                  value={reviewStatus}
+                  disabled={savingReview}
+                  onChange={(event) =>
+                    setReviewStatus((event.target as HTMLSelectElement).value as PresentationVersionReview["status"])
+                  }
+                >
+                  {presentationReviewStatusSchema.options.map((status) => (
+                    <option key={status} value={status}>
+                      {PRESENTATION_REVIEW_STATUS_LABELS[status]}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <Field
+              label="Note for the speaker"
+              help="Optional. The speaker sees this alongside the outcome."
+              {...review.of("note")}
+            >
+              {(control) => (
+                <MarkdownEditor
+                  variant="compact"
+                  {...control}
+                  name="note"
+                  label="Note for the speaker"
+                  initialValue={reviewNote}
+                  disabled={savingReview}
+                  onChange={setReviewNote}
+                />
+              )}
+            </Field>
+            {reviewError && <Alert tone="danger">{reviewError}</Alert>}
+            <div class="pk-cluster">
+              <Button type="submit" variant="primary" size="sm" loading={savingReview}>
+                {savingReview ? "Saving…" : "Save review"}
+              </Button>
+              <Button type="button" size="sm" onClick={() => openReview(null)}>
+                Cancel
+              </Button>
+            </div>
+          </form>
+        </PanelBody>
+      </Panel>
+    );
+  if (canManage && uploadView)
+    return (
+      <Panel>
+        <PanelHeader title="Upload presentation">
+          <Button
+            disabled={uploading}
+            onClick={() => {
+              setUploadView(false);
+              setError(null);
+            }}
+          >
+            Back to presentation versions
+          </Button>
+        </PanelHeader>
+        <PanelBody>
+          <p>
+            Choose a PDF or presentation file up to 100 MB. Upload creates a private version awaiting review; public
+            release requires separate rights, consent and publication approval.
+          </p>
+          {error && <Alert tone="danger">{error}</Alert>}
+          {uploadButton}
+        </PanelBody>
+      </Panel>
+    );
   return (
     <div class="pk pk-stack">
       {error && <Alert tone="danger">{error}</Alert>}
-      <ApiDataTable
+      <ApiDataTable<z.infer<typeof listSchema>["versions"][number], z.infer<typeof listSchema>>
         caption="Presentation versions"
-        endpoint={proposalResourcePath(proposalId, "presentations")}
-        responseSchema={presentationVersionsResponseSchema}
+        endpoint={endpoint}
+        responseSchema={listSchema}
         resolve={(response) => response.versions}
         resolvePage={(response) => response.page}
         paginate
         initialPageSize={25}
         initialSort="-versionNumber"
         searchPlaceholder="Search presentation files…"
-        toolbar={canManage ? () => uploadButton : undefined}
+        createAction={
+          canManage
+            ? {
+                label: "Upload on behalf of speaker",
+                onSelect: () => {
+                  setError(null);
+                  setUploadView(true);
+                },
+              }
+            : undefined
+        }
         actionsRef={tableRef}
         columns={[
           {
             header: "Version",
             cell: (version) => (
               <span class="pk-cluster">
-                <span class="pk-strong">Version {version.versionNumber}</span>
+                <span class="pk-strong">Version {formatNumber(version.versionNumber)}</span>
                 {version.isCurrent && <ToneBadge tone="accent">Current</ToneBadge>}
               </span>
             ),
@@ -207,6 +355,7 @@ export function PresentationVersionsTab({ proposalId, canManage }: { proposalId:
           },
           {
             header: "Size",
+            align: "end",
             cell: (version) => formatBytes(version.fileSize),
             width: "fit",
           },
@@ -226,35 +375,23 @@ export function PresentationVersionsTab({ proposalId, canManage }: { proposalId:
             header: "Actions",
             cell: (version) => (
               <span class="pk-cluster">
-                <ButtonLink
-                  href={proposalResourcePath(
-                    proposalId,
-                    "presentations/" + encodeURIComponent(version.id) + "/content",
-                  )}
-                  size="sm"
-                  download
-                >
+                <ButtonLink href={`${endpoint}/${encodeURIComponent(version.id)}/content`} size="sm" download>
                   Download
                 </ButtonLink>
                 {canManage && (
-                  <>
-                    <Button
-                      size="sm"
-                      aria-expanded={reviewingId === version.id ? "true" : "false"}
-                      aria-controls={reviewFormId(version.id)}
-                      onClick={() => openReview(reviewingId === version.id ? null : version.id)}
-                    >
-                      Review
-                    </Button>
-                    <Button
-                      size="sm"
-                      variant="danger-quiet"
-                      loading={deletingId === version.id}
-                      onClick={() => void handleDelete(version)}
-                    >
-                      {deletingId === version.id ? "Deleting…" : "Delete"}
-                    </Button>
-                  </>
+                  <RowActions
+                    subject={`Version ${formatNumber(version.versionNumber)}, ${version.fileName ?? "presentation"}`}
+                    actions={[
+                      { id: "review", label: "Review", onSelect: () => openReview(version.id) },
+                      {
+                        id: "delete",
+                        label: deletingId === version.id ? "Deleting…" : "Delete",
+                        danger: true,
+                        disabled: deletingId === version.id,
+                        onSelect: () => void handleDelete(version),
+                      },
+                    ]}
+                  />
                 )}
               </span>
             ),
@@ -265,8 +402,7 @@ export function PresentationVersionsTab({ proposalId, canManage }: { proposalId:
         rowKey={(version) => version.id}
         detailRow={(version) => {
           const note = version.latestReview?.note;
-          const editing = canManage && reviewingId === version.id;
-          if (!note && !editing) return null;
+          if (!note) return null;
           return (
             <div class="pk-stack pk-stack--snug">
               {note && (
@@ -274,66 +410,6 @@ export function PresentationVersionsTab({ proposalId, canManage }: { proposalId:
                   <span class="pk-muted">Reviewer note: </span>
                   {note}
                 </p>
-              )}
-              {editing && (
-                <form
-                  noValidate
-                  class="pk-stack pk-stack--snug"
-                  id={reviewFormId(version.id)}
-                  {...review.handlers}
-                  onSubmit={(event) => {
-                    event.preventDefault();
-                    void handleReview(version.id);
-                  }}
-                >
-                  <Field label="Review outcome" {...review.of("status")}>
-                    {(control) => (
-                      <Select
-                        {...control}
-                        name="status"
-                        value={reviewStatus}
-                        disabled={savingReview}
-                        onChange={(event) =>
-                          setReviewStatus(
-                            (event.target as HTMLSelectElement).value as PresentationVersionReview["status"],
-                          )
-                        }
-                      >
-                        {presentationReviewStatusSchema.options.map((status) => (
-                          <option key={status} value={status}>
-                            {PRESENTATION_REVIEW_STATUS_LABELS[status]}
-                          </option>
-                        ))}
-                      </Select>
-                    )}
-                  </Field>
-                  <Field
-                    label="Note for the speaker"
-                    help="Optional. The speaker sees this alongside the outcome."
-                    {...review.of("note")}
-                  >
-                    {(control) => (
-                      <MarkdownEditor
-                        variant="compact"
-                        {...control}
-                        name="note"
-                        label="Note for the speaker"
-                        initialValue={reviewNote}
-                        disabled={savingReview}
-                        onChange={setReviewNote}
-                      />
-                    )}
-                  </Field>
-                  {reviewError && <Alert tone="danger">{reviewError}</Alert>}
-                  <div class="pk-cluster">
-                    <Button type="submit" variant="primary" size="sm" loading={savingReview}>
-                      {savingReview ? "Saving…" : "Save review"}
-                    </Button>
-                    <Button type="button" size="sm" onClick={() => openReview(null)}>
-                      Cancel
-                    </Button>
-                  </div>
-                </form>
               )}
             </div>
           );

@@ -12,6 +12,7 @@ const template = {
 };
 
 const EXPECTED_BASELINE_TEMPLATE_KEYS = [
+  "agenda_changed",
   "attendee_invite",
   "co_speaker_invite",
   "donation_expired",
@@ -19,6 +20,10 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
   "donation_thank_you",
   "email_layout",
   "msg_attendee_inperson_check_plans",
+  "msg_attendee_session_favorites",
+  "msg_attendee_session_reminder",
+  "msg_attendee_session_reservations",
+  "msg_attendee_session_waitlist",
   "msg_dear_firstname",
   "msg_message_only",
   "partial_about_pkic",
@@ -29,6 +34,7 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
   "presentation_upload_request",
   "proposal_decision",
   "proposal_manage_link_transferred",
+  "proposal_representation_review",
   "proposal_submitted",
   "registration_confirm_email",
   "registration_confirmation_reminder",
@@ -46,6 +52,24 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
 ] as const;
 
 describe("buildTemplateSqlStatements", () => {
+  it("delivers a dedicated speaker representation link without depending on the configured submission template", async () => {
+    const review = DEFAULT_TEMPLATES.find((item) => item.key === "proposal_representation_review")!;
+    const rendered = await renderEmail(
+      review.content,
+      {
+        firstName: "Alex",
+        proposalTitle: "A speaker proposal",
+        eventName: "Example conference",
+        speakerManageUrl: "https://example.test/private-speaker-profile",
+      },
+      DEFAULT_LAYOUT_HTML,
+      "markdown",
+      "https://example.test",
+    );
+    expect(rendered.text).toContain("https://example.test/private-speaker-profile");
+    expect(rendered.text).toContain("individual presentation");
+    expect(rendered.text).toContain("only your own speaker profile");
+  });
   it.each([true, false])(
     "keeps profile reminders independent of decisions (invited: %s)",
     async (requiresConfirmation) => {

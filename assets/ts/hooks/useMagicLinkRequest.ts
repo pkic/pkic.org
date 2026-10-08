@@ -21,5 +21,10 @@ export function useMagicLinkRequest(fallbackError: string) {
     }
   }
 
-  return { sent, request, ...submission };
+  function clearFeedback(): void {
+    setSent(false);
+    submission.setError(null);
+  }
+
+  return { sent, request, clearFeedback, ...submission };
 }
