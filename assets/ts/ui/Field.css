@@ -54,19 +54,6 @@
     clear: both;
   }
 
-  /* The asterisk is decorative; the word behind it is what gets announced. */
-  .pk-field__sr {
-    position: absolute;
-    width: 1px;
-    height: 1px;
-    margin: -1px;
-    padding: 0;
-    overflow: hidden;
-    clip-path: inset(50%);
-    white-space: nowrap;
-    border: 0;
-  }
-
   .pk-field__control {
     position: relative;
     display: flex;
@@ -246,7 +233,7 @@
     border-color: var(--pk-accent-strong);
   }
 
-  .pk-check__input[type="checkbox"]:checked::after {
+  .pk-check__input[type="checkbox"]:not([role="switch"]):checked::after {
     content: "";
     position: absolute;
     left: 0.3rem;
@@ -258,7 +245,7 @@
     transform: rotate(45deg);
   }
 
-  .pk-check__input[type="radio"]:checked::after {
+  .pk-check__input[type="radio"]:not([role="switch"]):checked::after {
     content: "";
     position: absolute;
     inset: 0.22rem;
@@ -314,15 +301,8 @@
     background: var(--pk-accent-strong);
   }
 
-  /* The knob moves; the tick mark that a checkbox would draw does not apply. */
+  /* Switches keep the same knob in both states; only its position changes. */
   .pk-check__input[role="switch"]:checked::after {
-    border: 0;
-    inset: auto;
-    top: 0.15rem;
-    left: 0.15rem;
-    width: 0.85rem;
-    height: 0.85rem;
-    transform: none;
     translate: 0.95rem 0;
   }
 }

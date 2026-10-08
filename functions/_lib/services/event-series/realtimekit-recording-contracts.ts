@@ -1,14 +1,7 @@
 import { z } from "zod";
 import { utcInstantSchema } from "../../../../assets/shared/schemas/api-common";
 
-export const realtimeKitRecordingStatusSchema = z.enum([
-  "INVOKED",
-  "RECORDING",
-  "UPLOADING",
-  "UPLOADED",
-  "ERRORED",
-  "PAUSED",
-]);
+import { realtimeKitRecordingStatusSchema } from "../../../../assets/shared/schemas/event-recordings";
 
 export const realtimeKitRecordingConfigurationSchema = z
   .object({
@@ -36,6 +29,7 @@ export const realtimeKitRecordingDetailInputSchema = z
   .object({
     recordingId: z.uuid(),
     sessionId: z.uuid(),
+    meetingId: z.uuid(),
   })
   .strict();
 export type RealtimeKitRecordingDetailInput = z.infer<typeof realtimeKitRecordingDetailInputSchema>;
@@ -118,6 +112,25 @@ export const realtimeKitRecordingDetailWireSchema = z.object({
   success: z.literal(true),
   data: realtimeKitRecordingWireSchema,
 });
+
+/** Missing provider meeting metadata preserves a caller's established ownership; contradictory metadata never does. */
+export function realtimeKitRecordingMatchesMeeting(
+  value: Pick<z.infer<typeof realtimeKitRecordingWireSchema>, "meeting">,
+  meetingId: string,
+) {
+  return value.meeting === undefined || value.meeting.id === meetingId;
+}
+
+export function realtimeKitRecordingMatchesIdentity(
+  value: Pick<z.infer<typeof realtimeKitRecordingWireSchema>, "id" | "session_id" | "meeting">,
+  expected: RealtimeKitRecordingDetailInput,
+) {
+  return (
+    value.id === expected.recordingId &&
+    value.session_id === expected.sessionId &&
+    realtimeKitRecordingMatchesMeeting(value, expected.meetingId)
+  );
+}
 
 export function recordingMetadataFromWire(
   value: z.infer<typeof realtimeKitRecordingWireSchema>,

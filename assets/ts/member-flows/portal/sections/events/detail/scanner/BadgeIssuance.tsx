@@ -1,13 +1,17 @@
-import { composeBadgePrintSvg } from "../../../../../../../shared/badge-print-svg";
 import { formatDateTime } from "../../../../../../../shared/format-date";
 import { TextInput } from "../../../../../../ui/TextControl";
-import { useState } from "preact/hooks";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import type { z } from "zod";
 import {
   badgeIssueRequestSchema,
   badgeIssueResponseSchema,
   badgeAttendeesResponseSchema,
   badgeCredentialMetadataSchema,
+  badgePrintingResponseSchema,
+  badgePrintRequestSchema,
+  badgePrintResponseSchema,
+  type BadgePrintingContext,
+  type BadgePrintRequest,
   type BadgeIssueResponse,
 } from "../../../../../../../shared/schemas/route-contracts-event-badges";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
@@ -23,6 +27,13 @@ import { DescriptionList } from "../../../../../../ui/DescriptionList";
 import { Menu } from "../../../../../../ui/Menu";
 import { Alert } from "../../../../../../ui/Alert";
 import { BadgePrintPreview } from "../../../../../../components/event-badges/BadgePrintPreview";
+import {
+  verifyBadgePrintingContext,
+  verifyBadgePrintArtifact,
+} from "../../../../../../components/event-badges/badge-print-context";
+import { isAuthed, portalSession } from "../../../../state";
+import type { PortalSession } from "../../../../types";
+import { useSessionExpiry } from "../../../../use-session-expiry";
 import type { FreshBadgePrint } from "../../../../../../components/event-badges/badge-print-artifacts";
 
 type CredentialMetadata = z.infer<typeof badgeCredentialMetadataSchema>;
@@ -41,6 +52,51 @@ export function BadgeIssuance({
   onBack: () => void;
   onRecord: (id: string) => void;
 }) {
+  useSessionExpiry();
+  const session = portalSession.value;
+  if (!isAuthed.value || !session) return <ErrorAlert error="Sign in again to create this badge." />;
+  return (
+    <SessionBadgeIssuance
+      key={`${slug}:${session.sessionId}:${session.identity.id}`}
+      {...{ slug, replacement, userId, onBack, onRecord }}
+      session={session}
+    />
+  );
+}
+
+function SessionBadgeIssuance({
+  slug,
+  replacement,
+  userId,
+  onBack,
+  onRecord,
+  session,
+}: {
+  slug: string;
+  replacement?: CredentialMetadata;
+  userId?: string;
+  onBack: () => void;
+  onRecord: (id: string) => void;
+  session: PortalSession;
+}) {
+  const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/badges`;
+  const request = useMemo(() => new AbortController(), [endpoint, session]);
+  useEffect(() => () => request.abort(), [request]);
+  const [printing, setPrinting] = useState<BadgePrintingContext | null>(null);
+  const [printBody, setPrintBody] = useState<BadgePrintRequest | null>(null);
+  const [printResponse, setPrintResponse] = useState<z.output<typeof badgePrintResponseSchema> | null>(null);
+  const [printOperationId] = useState(() => crypto.randomUUID());
+  function current() {
+    return (
+      !request.signal.aborted &&
+      isAuthed.value &&
+      portalSession.value === session &&
+      Math.min(Date.parse(session.expiresAt), Date.parse(session.idleExpiresAt)) > Date.now()
+    );
+  }
+  function requireCurrent() {
+    if (!current()) throw new Error("Sign in again to prepare this badge.");
+  }
   const [user, setUser] = useState<PickedUser | null>(null);
   const [operationId, setOperationId] = useState(() => crypto.randomUUID());
   const [result, setResult] = useState<BadgeIssueResponse | null>(null);
@@ -56,24 +112,43 @@ export function BadgeIssuance({
     ...(replacement ? { replaceBadgeId: replacement.id } : {}),
   });
   async function preparePrint(issued: Extract<BadgeIssueResponse, { result: "issued" }>) {
-    const { default: QR } = await import("qrcode");
-    const svg = composeBadgePrintSvg(
-      await QR.toString(issued.credential, { type: "svg", errorCorrectionLevel: "M", margin: 4 }),
-      issued.credential,
+    requireCurrent();
+    const context =
+      printing ?? (await getJson(`${endpoint}/printing`, badgePrintingResponseSchema, { signal: request.signal }));
+    requireCurrent();
+    setPrinting(context);
+    const body = badgePrintRequestSchema.parse({ operationId: printOperationId, printingRevision: context.revision });
+    const prepared = await postJson(
+      `${endpoint}/${encodeURIComponent(issued.id)}/print`,
+      body,
+      badgePrintResponseSchema,
     );
-    const displayName =
-      replacement?.displayName ?? ([user?.firstName, user?.lastName].filter(Boolean).join(" ") || "Attendee");
-    setPrintable({ id: issued.id, credential: issued.credential, displayName, svg });
-    const metadata = await getJson(
-      `/api/v1/events/${encodeURIComponent(slug)}/badges/${encodeURIComponent(issued.id)}`,
-      badgeCredentialMetadataSchema,
-    );
-    setPrintable({
-      id: issued.id,
-      credential: issued.credential,
-      displayName: metadata.displayName ?? "Attendee",
-      svg,
-    });
+    requireCurrent();
+    if (
+      prepared.id !== issued.id ||
+      prepared.expiresAt !== issued.expiresAt ||
+      prepared.printingRevision !== context.revision ||
+      Date.parse(prepared.expiresAt) <= Date.now()
+    )
+      throw new Error("This badge changed. Open its record to prepare a new print document.");
+    setPrintBody(body);
+    setPrintResponse(prepared);
+    setPrintable({ ...prepared, displayName: prepared.displayName ?? "Attendee", credential: issued.credential });
+  }
+  async function beforeRelease() {
+    if (!printing || !printBody || !printResponse) return false;
+    try {
+      requireCurrent();
+      await verifyBadgePrintingContext(endpoint, printing, request.signal);
+      requireCurrent();
+      await verifyBadgePrintArtifact(endpoint, printResponse, printBody);
+      requireCurrent();
+      return true;
+    } catch (cause) {
+      setPrintable(null);
+      if (current()) setError(cause instanceof Error ? cause.message : "Could not verify this print document.");
+      return false;
+    }
   }
   async function issue(event: Event) {
     event.preventDefault();
@@ -90,14 +165,15 @@ export function BadgeIssuance({
         checked.data,
         badgeIssueResponseSchema,
       );
+      requireCurrent();
       setResult(issued);
       if (issued.result === "issued") {
         await preparePrint(issued);
       }
     } catch (cause) {
-      setError(form.refuse(cause));
+      if (current()) setError(form.refuse(cause));
     } finally {
-      setBusy(false);
+      if (current()) setBusy(false);
     }
   }
   if (result)
@@ -118,10 +194,10 @@ export function BadgeIssuance({
         {result.result === "replayed" ? (
           <Alert tone="info">
             This request was already completed. Open View credential to reprint this active badge where available,
-            without changing its code. Older badges may require a previously saved print file or explicit replacement.
+            without changing its code.
           </Alert>
-        ) : printable ? (
-          <BadgePrintPreview badges={[printable]} />
+        ) : printable && printing ? (
+          <BadgePrintPreview badges={[printable]} printing={printing} beforeRelease={beforeRelease} />
         ) : (
           <div class="pk-stack">
             <Alert tone="info">The credential was issued. Keep this page open while preparing its print file.</Alert>

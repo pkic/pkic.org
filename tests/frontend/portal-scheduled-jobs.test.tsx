@@ -81,6 +81,24 @@ afterEach(() => {
 });
 
 describe("portal scheduled-job management", () => {
+  it("shows the latest failure directly with its job health without requiring disclosure", async () => {
+    const message = "Recording storage temporarily unavailable; retry scheduled.";
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json(jobsPage([scheduledJob({ lastStatus: "failed", lastError: message, consecutiveFailures: 1 })])),
+      ),
+    );
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<ScheduledJobs />, container!));
+    await settle();
+    const row = container.querySelector("tbody tr");
+    expect(row?.textContent).toContain("Last error:");
+    expect(row?.textContent).toContain(message);
+    expect(row?.querySelector("details")).toBeNull();
+    expect(row?.textContent).toContain("Failures 1");
+  });
   it("renders the bounded registry without reconstructing server-denied actions", async () => {
     const requests: string[] = [];
     vi.stubGlobal(

@@ -12,6 +12,8 @@ import { nowIso } from "../../utils/time";
 import { prepareScopedAuditLog } from "../audit";
 import { badgeCredentialDisplayEvidence, getBadgeCredential } from "./badge-credentials";
 import { recoverBadgeCredential, type BadgePrintEnvironment } from "./badge-print-protection";
+import { prepareBadgePrintMetadata } from "./badge-print-metadata";
+import { prepareBadgePrintingBasis } from "./badge-print-branding";
 
 interface PrintRow {
   id: string;
@@ -46,6 +48,14 @@ export async function prepareBadgePrint(
       "BADGE_PRINT_UNAVAILABLE",
       "This badge has no recoverable print file. Use a saved original file or explicitly replace it.",
     );
+  const printing = await prepareBadgePrintingBasis(db, eventId);
+  if (printing.revision !== request.printingRevision)
+    throw new AppError(
+      409,
+      "BADGE_PRINTING_CHANGED",
+      "The event badge template or sponsor branding changed. Reload the print document.",
+    );
+  const labels = await prepareBadgePrintMetadata(db, eventId, badgeId);
   const credential = await recoverBadgeCredential(
     environment,
     {
@@ -86,6 +96,8 @@ export async function prepareBadgePrint(
       ],
     }),
     prepareAuthorizationGuard(db, badgeCredentialDisplayEvidence(eventId, row.id, metadata.displayName)),
+    ...labels.guards,
+    ...printing.guards,
     prepareScopedAuditLog(
       db,
       { type: "event", id: eventId },
@@ -103,6 +115,11 @@ export async function prepareBadgePrint(
     id: row.id,
     svg,
     displayName: metadata.displayName,
+    firstName: labels.firstName,
+    lastName: labels.lastName,
+    organization: labels.organization,
+    badgeRole: labels.badgeRole,
+    printingRevision: printing.revision,
     expiresAt: row.expires_at,
   });
 }

@@ -71,6 +71,7 @@ interface RoleStyle {
 
 const ROLE_STYLES: Record<BadgeRole, RoleStyle> = {
   attendee: { accent: PKI_BLUE, action: "is attending", chip: "Attendee" },
+  sponsor: { accent: PKI_BLUE, action: "is sponsoring", chip: "Sponsor" },
   speaker: { accent: PKI_YELLOW, action: "is speaking at", chip: "Speaker" },
   co_speaker: { accent: PKI_YELLOW, action: "is speaking at", chip: "Speaker" },
   moderator: { accent: PKI_RED, action: "is moderating", chip: "Moderator" },

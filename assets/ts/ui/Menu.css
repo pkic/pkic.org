@@ -178,6 +178,23 @@
   }
 }
 
+/* Include devices with both touch and a mouse; fine-pointer-only menus keep
+   their compact geometry. The spacing scale combines to a 44px touch target. */
+@layer utilities {
+  @media (any-pointer: coarse) {
+    .pk-menu__trigger,
+    .pk-menu__item {
+      min-block-size: calc(var(--pk-6) + var(--pk-3));
+      min-inline-size: calc(var(--pk-6) + var(--pk-3));
+    }
+
+    .pk-menu__item {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
+  }
+}
+
 @layer components {
   .pk-menu__item-icon {
     display: inline-flex;

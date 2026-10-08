@@ -11,6 +11,7 @@ import { AppError } from "../../errors";
 import { publishedSessionsSql } from "./published-schedule";
 import { nativeEventCaptureApplies } from "../../../../assets/shared/native-event-capture";
 import { nativeEventCaptureContextSchema } from "../../../../assets/shared/schemas/event-attendance-capture";
+import { registrationDayAttendanceSql, sessionAccessEligibleSql } from "./session-access";
 
 /** Dated eligibility evidence only; this manifest never allocates admission. */
 export async function offlineEligibility(
@@ -59,26 +60,18 @@ export async function offlineEligibility(
   const day = instantToDateTimeLocal(session?.start_at ?? serverNow, session?.timezone ?? state.timezone).slice(0, 10);
   const result = await db
     .prepare(
-      `SELECT b.id AS badgeId,b.user_id AS userId,b.credential_hash AS credentialHash,
+      `WITH target AS(SELECT ? AS occurrence_id,? AS room_id,? AS day_date) SELECT b.id AS badgeId,b.user_id AS userId,b.credential_hash AS credentialHash,
     b.revoked_at IS NOT NULL AS revoked,b.expires_at AS expiresAt,COALESCE(r.status='registered',0) AS eventRegistered,
-    COALESCE((SELECT a.attendance_type FROM registration_day_attendance a JOIN event_days d ON d.id=a.event_day_id WHERE a.registration_id=r.id AND d.event_id=b.event_id AND d.day_date=?),CASE WHEN EXISTS(SELECT 1 FROM event_days d WHERE d.event_id=b.event_id AND d.day_date=?) THEN 'none' ELSE r.attendance_type END)='in_person' AS physicalDayEligible,
-    ${operationalAllocationCompatibleSql("?", "b.user_id", "'physical'", "?")} AS allocationCompatible,
-    EXISTS(SELECT 1 FROM agenda_session_invitations invitation WHERE invitation.occurrence_id=? AND invitation.user_id=b.user_id AND invitation.revoked_at IS NULL AND (invitation.room_id IS NULL OR invitation.room_id=?)) AS invited,p.status AS sessionStatus,p.attendance_mode AS participantMode,p.room_id AS participantRoomId
-    FROM event_badge_credentials b LEFT JOIN registrations r ON r.event_id=b.event_id AND r.user_id=b.user_id
-    LEFT JOIN agenda_session_participations p ON p.user_id=b.user_id AND p.occurrence_id=?
+    ${registrationDayAttendanceSql("r", "target.day_date")}='in_person' AS physicalDayEligible,
+    ${operationalAllocationCompatibleSql("target.occurrence_id", "b.user_id", "'physical'", "target.room_id")} AS allocationCompatible,
+    (s.id IS NULL OR ${sessionAccessEligibleSql("s", "b.user_id", "'physical'", "target.room_id", false)}) AS privateAccess,
+    (s.id IS NULL OR ${sessionAccessEligibleSql("s", "b.user_id", "'physical'", "target.room_id")}) AS entryEligible,p.status AS sessionStatus
+    FROM event_badge_credentials b CROSS JOIN target LEFT JOIN registrations r ON r.event_id=b.event_id AND r.user_id=b.user_id
+    LEFT JOIN agenda_session_participations p ON p.user_id=b.user_id AND p.occurrence_id=target.occurrence_id
+    LEFT JOIN (${publishedSessionsSql}) s ON s.id=target.occurrence_id AND s.event_id=b.event_id
     WHERE b.event_id=? AND b.id>? ORDER BY b.id LIMIT 251`,
     )
-    .bind(
-      day,
-      day,
-      query.occurrenceId ?? null,
-      roomId,
-      query.occurrenceId ?? null,
-      roomId,
-      query.occurrenceId ?? null,
-      eventId,
-      query.afterBadgeId ?? "",
-    )
+    .bind(query.occurrenceId ?? null, roomId, day, eventId, query.afterBadgeId ?? "")
     .all<{
       badgeId: string;
       userId: string;
@@ -87,11 +80,10 @@ export async function offlineEligibility(
       expiresAt: string | null;
       eventRegistered: number;
       physicalDayEligible: number | null;
-      invited: number;
       allocationCompatible: number;
+      privateAccess: number;
+      entryEligible: number;
       sessionStatus: string | null;
-      participantMode: string | null;
-      participantRoomId: string | null;
     }>();
   const afterState = await db
     .prepare(
@@ -119,15 +111,6 @@ export async function offlineEligibility(
     expiresAt: offlineEligibilityExpiresAt(serverNow, session?.timezone ?? state.timezone),
     session: session ? { admissionPolicy: session.admission_policy, visibility: session.visibility } : null,
     entries: rows.slice(0, 250).map((row) => {
-      const reserved =
-        row.sessionStatus === "reserved" &&
-        row.participantMode === "physical" &&
-        (row.participantRoomId ?? session?.room_id ?? null) === roomId;
-      const privateAccess =
-        !session ||
-        session.visibility === "public" ||
-        reserved ||
-        (session.admission_policy === "preference" && Boolean(row.invited));
       return {
         badgeId: row.badgeId,
         userId: row.userId,
@@ -138,14 +121,13 @@ export async function offlineEligibility(
         physicalDayEligible: Boolean(row.physicalDayEligible),
         sessionStatus: row.sessionStatus,
         allocationCompatible: Boolean(row.allocationCompatible),
-        privateAccess,
+        privateAccess: Boolean(row.privateAccess),
         sessionEligible:
           !row.revoked &&
           Boolean(row.eventRegistered) &&
           Boolean(row.physicalDayEligible) &&
           Boolean(row.allocationCompatible) &&
-          privateAccess &&
-          (!session || session.admission_policy === "preference" || reserved),
+          Boolean(row.entryEligible),
       };
     }),
     nextBadgeId: rows.length > 250 ? rows[249]!.badgeId : null,

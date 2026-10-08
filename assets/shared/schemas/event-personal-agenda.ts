@@ -6,6 +6,7 @@ import { databaseIdSchema } from "./identifiers";
 import { utcInstantSchema, eventSlugParamsSchema, jsonErrorResponse } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { sessionParticipationStatusSchema } from "./event-participation-scanning";
+import { agendaAdmissionPolicySchema } from "./event-agenda";
 export const personalAgendaQuerySchema = listQuerySchema(["title", "startAt"] as const).extend({
   status: sessionParticipationStatusSchema.optional(),
   occurrenceId: databaseIdSchema.optional(),
@@ -21,7 +22,7 @@ export const personalAgendaSessionSchema = z.object({
   startAt: utcInstantSchema.nullable(),
   endAt: utcInstantSchema.nullable(),
   visibility: z.enum(["public", "private"]).default("public"),
-  admissionPolicy: z.enum(["preference", "reservation", "approval"]),
+  admissionPolicy: agendaAdmissionPolicySchema,
   status: sessionParticipationStatusSchema.nullable(),
   saved: z.boolean().default(false),
   overlapCount: z.number().int().nonnegative().default(0),

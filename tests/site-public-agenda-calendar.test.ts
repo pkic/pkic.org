@@ -6,7 +6,8 @@ import {
   agendaSnapshotSchema,
   type AgendaSnapshot,
 } from "../assets/shared/schemas/event-agenda";
-import { createAgendaOccurrence, publishAgenda } from "../functions/_lib/services/event-agenda/mutations";
+import { createAgendaOccurrence } from "../functions/_lib/services/event-agenda/mutations";
+import type { Env } from "../functions/_lib/types";
 import {
   publicAgendaCalendarPages,
   publicConferenceAgendaCalendar,
@@ -18,7 +19,7 @@ import { resetDb } from "./helpers/reset-db";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { callApi } from "./helpers/app";
-import { mutateBeforeNextBatch } from "./helpers/database-races";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 
 const publicVisibility = eventVisibilitySchema.parse("public");
 const privateVisibility = eventVisibilitySchema.parse("invitation_only");
@@ -96,12 +97,22 @@ describe("native build public calendar history", () => {
         ].map((sql) => queryAll(env.DB, sql)),
       );
     const before = await effects();
-    const raced = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE events SET visibility=? WHERE id=?").bind(privateVisibility, fixtureValue.eventId).run(),
+    const raced = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("SELECT 1 FROM events WHERE id=? AND visibility=?"),
+      () =>
+        env.DB.prepare("UPDATE events SET visibility=? WHERE id=?").bind(privateVisibility, fixtureValue.eventId).run(),
     );
-    await expect(
-      publishAgenda(raced, fixtureValue.eventId, "pqc-2026", fixtureValue.snapshot.revision, fixtureValue.adminId),
-    ).rejects.toMatchObject({ status: 409 });
+    const response = await callApi({ ...env, DB: raced } as Env, "/api/v1/events/pqc-2026/agenda/publications", {
+      method: "POST",
+      headers: { authorization: `Bearer ${fixtureValue.token}`, "content-type": "application/json" },
+      body: JSON.stringify({ expectedRevision: fixtureValue.snapshot.revision }),
+    });
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "AGENDA_AUTHORIZATION_CHANGED" } });
+    expect(
+      await env.DB.prepare("SELECT visibility FROM events WHERE id=?").bind(fixtureValue.eventId).first("visibility"),
+    ).toBe(privateVisibility);
     expect(await effects()).toEqual(before);
   });
   it("reads all101 approvals through bounded cursor pages and reconstructs the same unchanged sequence", async () => {

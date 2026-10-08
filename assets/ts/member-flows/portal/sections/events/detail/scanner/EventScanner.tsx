@@ -1,3 +1,7 @@
+import { Tabs } from "../../../../../../components/Tabs";
+import { useHashQueryParam } from "../../../../../../hooks/useHashQueryParam";
+import { ScannerCaptureContext } from "./ScannerCaptureContext";
+import { ScannerSyncStatus } from "./ScannerPreparationStatus";
 import { portalSession } from "../../../../state";
 import { useScannerSessionFence } from "./useScannerSessionFence";
 import { ScannerLeadExport } from "./ScannerLeadExport";
@@ -18,7 +22,6 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import {
   scanActionSchema,
   eventScanCaptureIntentForRoomsSchema,
-  eventScanResponseSchema,
   type EventScanResponse,
   type EventScanRequest,
 } from "../../../../../../../shared/schemas/event-participation-scanning";
@@ -26,7 +29,8 @@ import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { openBadgeCamera } from "./camera-driver";
 import { ScanFrameGate, receiptMatchesOperation, unknownScanResponse, localScanResponse } from "./scan-stream";
-import { drainScanOutbox, pendingScanCount, requestScanOutboxBackgroundSync } from "./scan-outbox";
+import { pendingScanCount } from "./scan-outbox";
+import { useScannerOutboxSync } from "./useScannerOutboxSync";
 import "./EventScanner.css";
 import { FastScannerView } from "./FastScannerView";
 import { enterScannerFullscreen, scannerImmersiveLifecycle } from "./immersive-scanner";
@@ -34,7 +38,6 @@ import { useEligibilityManifest, useScannerOfflinePreparation } from "./useEligi
 import { ScannerFeedback } from "./ScannerFeedback";
 import { useScanCooldown } from "./useScanCooldown";
 import { useScannerSyncHistory } from "./useScannerSyncHistory";
-import { scannerWorkerMessageListener } from "./scanner-worker-messages";
 import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
 import { scannerPreparationRefusal } from "./scanner-offline-context";
 export function EventScanner({
@@ -67,10 +70,11 @@ export function EventScanner({
           ? "attendance"
           : (allowedActions.find((value) => value !== "lead" && value !== "exception") ?? "check")),
   );
-  const [manualEntry, setManualEntry] = useState(false);
+  const [manualFocusRequested, setManualFocusRequested] = useState(false);
+  const [manualOpen, setManualOpen] = useState(false);
+  const [scannerTab, setScannerTab] = useHashQueryParam("scannerTab", "scan");
+  const recentVisible = scannerTab === "recent" && !collectorContext;
   const [consentConfirmed, setConsent] = useState(false);
-  const [pending, setPending] = useState(0);
-  const [pendingReadyScope, setPendingReadyScope] = useState<string | null>(null);
   const lastOperation = useRef<string | null>(null);
   const lastCommittedOperation = useRef<string | null>(null);
   const lastBadge = useRef("");
@@ -90,8 +94,8 @@ export function EventScanner({
     messageOperation.current = operation;
     updateMessage(value);
   }
-  const [uploadStatus, setUploadStatus] = useState("");
   const [busy, setBusy] = useState(false);
+  const manualCapturePending = useRef(false);
   const video = useRef<HTMLVideoElement>(null);
   const [cameraActive, setCameraActive] = useState(false);
   const [cameraStarting, setCameraStarting] = useState(false);
@@ -106,6 +110,9 @@ export function EventScanner({
   const {
     targetId,
     targetLabel,
+    target,
+    timeZone,
+    setTimeZone,
     rooms: targetRooms,
     roomId,
     selectTarget,
@@ -139,7 +146,7 @@ export function EventScanner({
     Boolean(collectorContext),
   );
   const offlineAdmission = useOfflineAdmission(slug, operatorUserId, eligibilityManifest, collectorContext);
-  useScannerOfflinePreparation(
+  const offlinePreparation = useScannerOfflinePreparation(
     collectorContext ? null : portalSession.value,
     scannerDevice.epoch,
     eligibilityManifest.current,
@@ -168,9 +175,6 @@ export function EventScanner({
     observedAt: new Date().toISOString(),
   });
   const syncHistory = useScannerSyncHistory(operatorUserId, slug);
-  const retryTimer = useRef<number | null>(null);
-  const activeSyncs = useRef(0);
-  const syncAgain = useRef(false);
   const authorityPaused = useRef(false);
   const operatorPaused = useRef(false);
   function presentReceipt(receipt: EventScanResponse) {
@@ -195,104 +199,25 @@ export function EventScanner({
       setBadge("");
       setConsent(false);
       setResult(null);
-      syncAgain.current = false;
-      if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
+      cancelRetries();
     },
     collectorContext?.sessionId,
   );
   const scannerContext = useRef({ targetId, action, operatorUserId, deviceId, roomId, rooms: targetRooms });
   scannerContext.current = { targetId, action, operatorUserId, deviceId, roomId, rooms: targetRooms };
-  async function sync() {
-    if (collectorContext) {
-      setPending(await pendingScanCount(operatorUserId));
-      setPendingReadyScope(`${slug}:${operatorUserId}`);
-      setUploadStatus("Reconnect and check sign-in to verify and upload.");
-      return;
-    }
-    if (activeSyncs.current >= 4) {
-      syncAgain.current = true;
-      return;
-    }
-    activeSyncs.current++;
-    try {
-      if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
-      const drained = await drainScanOutbox(async (record) => {
-        const response = await fetch(`/api/v1/events/${encodeURIComponent(record.eventId)}/scans`, {
-          method: "POST",
-          credentials: "same-origin",
-          headers: { "content-type": "application/json" },
-          body: JSON.stringify(record.scan),
-          signal: AbortSignal.timeout(8000),
-        });
-        if (response.ok) {
-          const receipt = eventScanResponseSchema.parse(await response.clone().json());
-          presentReceipt(receipt);
-        }
-        return response;
-      }, operatorUserId);
-      if (drained.state === "authentication_required") {
-        authorityPaused.current = true;
-        setResult(null);
-        stopCamera.current();
-        syncAgain.current = false;
-      }
-      if (drained.uploaded > 0) await syncHistory.refresh();
-      const remaining = await pendingScanCount(operatorUserId);
-      setPending(remaining);
-      setPendingReadyScope(`${slug}:${operatorUserId}`);
-      if (remaining > 0 && drained.state !== "authentication_required") await requestScanOutboxBackgroundSync();
-      if (drained.state === "retry" && navigator.onLine)
-        retryTimer.current = window.setTimeout(() => {
-          void sync();
-        }, drained.retryAfterMs ?? 1000);
-      if (authorityPaused.current) setMessage("Sign in again to upload pending scans.");
-      setUploadStatus(
-        authorityPaused.current
-          ? "Sign in again to upload pending scans."
-          : remaining === 0
-            ? "All pending scans uploaded."
-            : drained.state === "retry"
-              ? "Uploads will resume when connected."
-              : "Uploading scans in the background…",
-      );
-    } finally {
-      activeSyncs.current--;
-      if (syncAgain.current) {
-        syncAgain.current = false;
-        void sync();
-      }
-    }
-  }
-  useEffect(() => {
-    setPendingReadyScope(null);
-    const reconnect = () => {
-      void sync();
-    };
-    window.addEventListener("online", reconnect);
-    window.addEventListener("focus", reconnect);
-    const acknowledged = scannerWorkerMessageListener({
+  const { pending, setPending, pendingReadyScope, uploadStatus, setUploadStatus, sync, cancelRetries } =
+    useScannerOutboxSync({
+      slug,
+      operatorUserId,
+      collectorContext,
+      authorityPaused,
       currentOperation: () => lastOperation.current,
-      authorityPaused: () => authorityPaused.current,
-      setResult: presentReceipt,
-      refreshPending: async () => setPending(await pendingScanCount(operatorUserId)),
-      syncCurrentOperator: sync,
+      presentReceipt,
+      setResult,
+      setMessage,
+      stopCamera: () => stopCamera.current(),
+      refreshHistory: syncHistory.refresh,
     });
-    navigator.serviceWorker?.addEventListener("message", acknowledged);
-    const resume = () => {
-      if (document.visibilityState === "visible") reconnect();
-    };
-    document.addEventListener("visibilitychange", resume);
-    reconnect();
-    return () => {
-      window.removeEventListener("online", reconnect);
-      window.removeEventListener("focus", reconnect);
-      navigator.serviceWorker?.removeEventListener("message", acknowledged);
-      document.removeEventListener("visibilitychange", resume);
-      authorityPaused.current = true;
-      stopCamera.current();
-      if (retryTimer.current !== null) window.clearTimeout(retryTimer.current);
-    };
-  }, [slug, operatorUserId, collectorContext?.epochId]);
   function showLocalEligibility(scan: EventScanRequest, local?: LocalEligibility) {
     if (!local || authorityPaused.current) return;
     if (
@@ -304,14 +229,19 @@ export function EventScanner({
     showProvisionalMessage(scan.operationId, local.message);
   }
   function resetCaptureFields() {
+    setManualFocusRequested(false);
+    setManualOpen(false);
     form.reset();
     setBadge("");
     if (action === "lead") setConsent(false);
     setOperation(crypto.randomUUID());
   }
-  async function submit(event: Event) {
+  function submit(event: Event) {
     event.preventDefault();
-    if (!scannerDevice.ready) return;
+    void capture();
+  }
+  async function capture() {
+    if (!scannerDevice.ready || manualCapturePending.current) return;
     if (authorityPaused.current) {
       setMessage("Sign in again to upload pending scans.");
       return;
@@ -319,10 +249,11 @@ export function EventScanner({
     const checked = form.submit();
     if (!checked.data) {
       lastOperation.current = null;
-      setMessage("Invalid QR code. Scan a PKI Consortium badge.");
-      setResult(unknownScanResponse(operationId));
+      setMessage(action === "lead" ? checked.message : "Invalid QR code. Scan a PKI Consortium badge.");
+      setResult(action === "lead" ? null : unknownScanResponse(operationId));
       return;
     }
+    manualCapturePending.current = true;
     setBusy(true);
     setResult(null);
     try {
@@ -338,6 +269,7 @@ export function EventScanner({
     } catch {
       setMessage("Unable to save this scan. Keep the attendee here and retry.");
     } finally {
+      manualCapturePending.current = false;
       setBusy(false);
     }
   }
@@ -349,7 +281,8 @@ export function EventScanner({
     const current = scannerContext.current;
     if (current.action === "lead" || current.action === "exception") {
       setBadge(raw);
-      setManualEntry(true);
+      setManualOpen(true);
+      setManualFocusRequested(true);
       lastBadge.current = raw;
       stopCamera.current();
       setFastMode(false);
@@ -450,119 +383,183 @@ export function EventScanner({
     ready: manifestReady,
     error: manifestError,
   };
-  function renderRecentScans(expanded?: boolean) {
-    return (
-      <ScannerRecentScans
-        expanded={expanded}
-        slug={slug}
-        operatorUserId={operatorUserId}
-        pending={pending}
-        lastSync={syncHistory.lastSync}
-      />
-    );
+  function showRecentScans() {
+    stopCamera.current();
+    setFastMode(false);
+    setManualFocusRequested(false);
+    setManualOpen(false);
+    setScannerTab("recent");
   }
+  useEffect(() => {
+    if (recentVisible) {
+      stopCamera.current();
+      setFastMode(false);
+      setManualFocusRequested(false);
+      setManualOpen(false);
+    }
+  }, [recentVisible]);
+  const contextLabel = `${targetLabel || (targetId ? "Session check-in" : "Event entrance")}${roomId ? ` · ${targetRooms.find((room) => room.id === roomId)?.name ?? "Room"}` : ""}`;
   return (
     <div ref={scannerShell}>
       <div hidden={fastMode}>
-        <Panel>
-          <PanelHeader title="Badge scanner" />
-          {!collectorContext && sponsorId && canExportLeads && <ScannerLeadExport slug={slug} sponsorId={sponsorId} />}
-          <PanelBody>
-            <p>No attendee names or contact details are stored on this phone.</p>
-            {!collectorContext && (
-              <ScannerDiagnostics
-                session={{
-                  sessionId: portalSession.value?.sessionId,
-                  scanner: scannerDevice,
-                  slug,
-                  operatorUserId,
-                  sponsorId,
-                  sync,
-                  message: setMessage,
-                  capturePause: (paused) => {
-                    if (paused) stopCamera.current();
-                    operatorPaused.current = paused;
-                  },
-                }}
-                pacing={{ value: feedbackPause, onChange: setFeedbackPause }}
-                preparation={preparation}
-                unverifiedStart={action !== "lead" && !manifestReady && !manifestPreparing ? startScanning : undefined}
-              />
+        {!collectorContext && (
+          <Tabs
+            label="Badge scanner views"
+            idPrefix="scanner-view"
+            active={recentVisible ? "recent" : "scan"}
+            onChange={(view) => {
+              if (view === "recent") showRecentScans();
+              else setScannerTab("scan");
+            }}
+            items={[
+              { key: "scan", label: "Scan", panelId: "scanner-scan-panel" },
+              { key: "recent", label: "Recent scans", panelId: "scanner-recent-panel" },
+            ]}
+          />
+        )}
+        <div
+          id="scanner-scan-panel"
+          role="tabpanel"
+          aria-labelledby={collectorContext ? undefined : "scanner-view-scan"}
+          hidden={recentVisible}
+        >
+          <Panel>
+            <PanelHeader title="Badge scanner" />
+            {!collectorContext && sponsorId && canExportLeads && (
+              <ScannerLeadExport slug={slug} sponsorId={sponsorId} />
             )}
-            {(result || pending > 0 || message !== "Ready to scan") && (
-              <ScannerFeedback result={result} action={action} message={message} pending={pending} />
-            )}
-            <form class="pk-form" noValidate {...form.handlers} onSubmit={submit}>
-              <ScannerCaptureControls
-                collector={collectorContext}
-                onCheckSignIn={onCheckSignIn}
-                setup={{
-                  operatorUserId,
-                  sponsorOnly: action === "lead",
-                  explicitTarget: Boolean(occurrenceId),
-                  ready: pendingReadyScope === `${slug}:${operatorUserId}`,
-                  locked:
-                    cameraActive ||
-                    fastMode ||
-                    busy ||
-                    cooldown.saving ||
-                    cooldown.remainingMs > 0 ||
-                    Boolean(lastOperation.current) ||
-                    pending > 0,
-                  slug,
-                  targetId,
-                  label: targetLabel,
-                  roomId,
-                  rooms: targetRooms,
-                  targetField: form.of("occurrenceId"),
-                  roomField: form.of("roomId"),
-                  onTarget: selectTarget,
-                  onRoom: selectRoom,
-                }}
-                mode={{
-                  action,
-                  allowedActions,
-                  sponsorId,
-                  actionField: form.of("action"),
-                  onAction: (value) => {
+            <PanelBody>
+              <ScannerCaptureContext action={action} contextLabel={contextLabel} target={target} timeZone={timeZone} />
+              {(result || pending > 0 || message !== "Ready to scan") && (
+                <ScannerFeedback result={result} action={action} message={message} pending={pending} />
+              )}
+              <form class="pk-form" noValidate aria-busy={busy} {...form.handlers} onSubmit={submit}>
+                <ScannerCaptureControls
+                  collector={collectorContext}
+                  onCheckSignIn={onCheckSignIn}
+                  setup={{
+                    operatorUserId,
+                    sponsorOnly: action === "lead",
+                    explicitTarget: Boolean(occurrenceId),
+                    ready: pendingReadyScope === `${slug}:${operatorUserId}`,
+                    locked:
+                      cameraActive ||
+                      fastMode ||
+                      busy ||
+                      cooldown.saving ||
+                      cooldown.remainingMs > 0 ||
+                      Boolean(lastOperation.current) ||
+                      pending > 0,
+                    slug,
+                    targetId,
+                    label: targetLabel,
+                    roomId,
+                    rooms: targetRooms,
+                    onTimeZone: setTimeZone,
+                    targetField: form.of("occurrenceId"),
+                    roomField: form.of("roomId"),
+                    onTarget: selectTarget,
+                    onRoom: selectRoom,
+                  }}
+                  mode={{
+                    action,
+                    allowedActions,
+                    sponsorId,
+                    actionField: form.of("action"),
+                    onAction: (value) => {
+                      stopCamera.current();
+                      lastOperation.current = null;
+                      setAction(value);
+                      setResult(null);
+                    },
+                  }}
+                  canStart={
+                    scannerDevice.ready &&
+                    Boolean(collectorContext || action === "lead" || (manifestReady && !manifestPreparing))
+                  }
+                  preparing={manifestPreparing || !scannerDevice.ready}
+                  cameraError={cameraError}
+                  start={startScanning}
+                />
+                <ScannerManualControls
+                  action={action}
+                  busy={busy}
+                  ready={scannerDevice.ready}
+                  onCapture={() => void capture()}
+                  consent={
+                    action === "lead"
+                      ? { confirmed: consentConfirmed, field: form.of("consentConfirmed"), onChange: setConsent }
+                      : undefined
+                  }
+                  open={manualOpen}
+                  onOpen={() => {
                     stopCamera.current();
-                    lastOperation.current = null;
-                    setAction(value);
-                    setResult(null);
-                  },
-                }}
-                consent={consentConfirmed}
-                consentField={form.of("consentConfirmed")}
-                onConsent={setConsent}
-                canStart={
-                  scannerDevice.ready &&
-                  Boolean(collectorContext || action === "lead" || (manifestReady && !manifestPreparing))
-                }
-                preparing={manifestPreparing}
-                cameraError={cameraError}
-                start={startScanning}
-              />
-              <ScannerManualControls
-                entry={{
-                  open: manualEntry,
-                  onOpen: setManualEntry,
-                  badgeId,
-                  onBadge: setBadge,
-                  field: form.of("badgeId"),
-                  action,
-                  busy,
-                }}
+                    setManualOpen(true);
+                    setManualFocusRequested(true);
+                  }}
+                  onClose={() => {
+                    setManualOpen(false);
+                    setManualFocusRequested(false);
+                  }}
+                  entry={{
+                    focusRequested: manualFocusRequested,
+                    onFocusHandled: () => setManualFocusRequested(false),
+                    badgeId,
+                    onBadge: setBadge,
+                    field: form.of("badgeId"),
+                  }}
+                />
+              </form>
+              <ScannerSyncStatus
+                pending={pending}
+                lastSync={syncHistory.lastSync}
+                uploadStatus={uploadStatus}
+                collector={collectorContext}
+                offline={offlinePreparation}
+                action={action}
                 sync={collectorContext ? undefined : () => void sync()}
               />
-            </form>
-            {!collectorContext && !fastMode && renderRecentScans()}
-          </PanelBody>
-        </Panel>
+              {!collectorContext && (
+                <ScannerDiagnostics
+                  session={{
+                    sessionId: portalSession.value?.sessionId,
+                    scanner: scannerDevice,
+                    slug,
+                    operatorUserId,
+                    sponsorId,
+                    sync,
+                    message: setMessage,
+                    capturePause: (paused) => {
+                      if (paused) stopCamera.current();
+                      operatorPaused.current = paused;
+                    },
+                  }}
+                  pacing={{ value: feedbackPause, onChange: setFeedbackPause }}
+                  preparation={preparation}
+                  unverifiedStart={
+                    action !== "lead" && !manifestReady && !manifestPreparing ? startScanning : undefined
+                  }
+                />
+              )}
+            </PanelBody>
+          </Panel>
+        </div>
+        {!collectorContext && (
+          <div id="scanner-recent-panel" role="tabpanel" aria-labelledby="scanner-view-recent" hidden={!recentVisible}>
+            <ScannerRecentScans
+              active={recentVisible}
+              slug={slug}
+              operatorUserId={operatorUserId}
+              pending={pending}
+              lastSync={syncHistory.lastSync}
+            />
+          </div>
+        )}
       </div>
       {fastMode && (
         <FastScannerView
           canRecordAttendance={!collectorContext && allowedActions.includes("attendance")}
-          context={`${targetLabel || (targetId ? "Session check-in" : `Event · ${slug}`)}${roomId ? ` · ${targetRooms.find((room) => room.id === roomId)?.name ?? "Room"}` : ""}`}
+          context={contextLabel}
           result={result}
           preparation={collectorContext ? undefined : preparation}
           mode={action}
@@ -579,10 +576,11 @@ export function EventScanner({
           cameraError={cameraError}
           onCameraRetry={() => void camera()}
           onManual={() => {
-            setManualEntry(true);
+            setManualOpen(true);
+            setManualFocusRequested(true);
             setFastMode(false);
           }}
-          recentScans={collectorContext ? undefined : renderRecentScans}
+          onRecentScans={collectorContext ? undefined : showRecentScans}
           preview={preview}
           onPreview={() => setPreview(!preview)}
           onExit={() => {

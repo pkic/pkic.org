@@ -163,3 +163,28 @@ it("progressively opens canonical title links while preserving native navigation
   dispose();
   document.body.classList.remove("agenda-modal-open");
 });
+
+it("pauses native playback and releases YouTube playback on public session close", async () => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe = vi.fn();
+      disconnect = vi.fn();
+    },
+  );
+  const { initializeContentAgenda } = await import("../../assets/ts/site/agenda");
+  root = document.createElement("section");
+  root.innerHTML =
+    '<dialog><video controls preload="none"></video><iframe data-video-src="https://www.youtube-nocookie.com/embed/example" src="https://www.youtube-nocookie.com/embed/example"></iframe></dialog>';
+  document.body.append(root);
+  const pause = vi.fn();
+  Object.defineProperty(root.querySelector("video")!, "pause", { value: pause });
+  const dispose = initializeContentAgenda(root);
+  try {
+    root.querySelector("dialog")!.dispatchEvent(new Event("close"));
+    expect(pause).toHaveBeenCalledTimes(1);
+    expect(root.querySelector("iframe")!.hasAttribute("src")).toBe(false);
+  } finally {
+    dispose();
+  }
+});

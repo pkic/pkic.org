@@ -1,6 +1,7 @@
 import type { z } from "zod";
 import { sessionHistoryMetadataSchema } from "../../../../assets/shared/schemas/event-session-history";
 import type { transferPrepareSchema } from "../../../../assets/shared/schemas/event-agenda-transfer";
+import { parseSessionRecordingPublicUrl } from "../../../../assets/shared/session-recording-public-url";
 type Input = z.infer<typeof transferPrepareSchema>;
 export function legacyFragmentTransferRoomRef(input: Input, fragment: { roomRef: string; roomId: string | null }) {
   return input.document.rooms.some((room) => room.ref === fragment.roomRef) ? fragment.roomRef : fragment.roomId;
@@ -16,14 +17,17 @@ export function transferredSessionHistory(input: Input, row: Input["document"]["
   const materials = (row.archive?.materials ?? []).flatMap((material) => {
     // Uploaded versions belong to their original occurrence. A new import keeps only a reusable URL candidate.
     const media = row.media.find((item) => item.kind === material.kind);
-    const url = material.url || (media && (input.resolutions.media[media.authoredReference] ?? media.publicUrl));
-    if (!url) return [];
+    const url =
+      (parseSessionRecordingPublicUrl(material.url) ? "" : material.url) ||
+      (media && (input.resolutions.media[media.authoredReference] ?? media.publicUrl));
+    if (!url || parseSessionRecordingPublicUrl(url)) return [];
     return [
       {
         ...material,
         id: copy ? crypto.randomUUID() : material.id,
         url,
         presentationVersionId: null,
+        recordingVersionId: null,
         legacyDownloadUrl: null,
         presentationSource: "proposal" as const,
         rightsConfirmed: false,
@@ -31,6 +35,7 @@ export function transferredSessionHistory(input: Input, row: Input["document"]["
         validated: false,
         status: material.status === "withdrawn" ? ("withdrawn" as const) : ("draft" as const),
         approvedAt: null,
+        approvalNonce: null,
       },
     ];
   });
@@ -41,13 +46,19 @@ export function transferredSessionHistory(input: Input, row: Input["document"]["
       : kind === "presentation"
         ? row.fields.presentationUrl
         : row.fields.recordingUrl;
-    if (!url || materials.some((material) => material.kind === kind && material.url === url)) continue;
+    if (
+      !url ||
+      parseSessionRecordingPublicUrl(url) ||
+      materials.some((material) => material.kind === kind && material.url === url)
+    )
+      continue;
     materials.push({
       id: crypto.randomUUID(),
       kind,
       title: `${row.fields.title} — ${kind}`.slice(0, 300),
       url,
       presentationVersionId: null,
+      recordingVersionId: null,
       legacyDownloadUrl: null,
       presentationSource: "proposal",
       version: 1,
@@ -56,6 +67,7 @@ export function transferredSessionHistory(input: Input, row: Input["document"]["
       validated: false,
       status: "draft",
       approvedAt: null,
+      approvalNonce: null,
     });
   }
   if (!row.archive && !materials.length) return null;

@@ -127,7 +127,15 @@ describe("portal event statistics", () => {
     const tabs = [...container.querySelectorAll('[aria-label="Analytics sections"] a')].map((tab) =>
       tab.textContent?.trim(),
     );
-    expect(tabs).toEqual(["Overview", "Attendance", "Registrations", "Invitations", "Calendar", "Promoters"]);
+    expect(tabs).toEqual([
+      "Overview",
+      "Registration changes",
+      "Registrations",
+      "Invitations",
+      "Calendar",
+      "Promoters",
+      "Session demand",
+    ]);
     expect([...container.querySelectorAll("caption")].map((node) => node.textContent)).not.toContain(
       "Attendee invites by status",
     );
@@ -218,4 +226,28 @@ describe("portal event statistics", () => {
     // Nothing is actionable, so nothing is claimed to be.
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
+});
+
+it("opens attendance imports without fetching an unauthorized analytics dashboard", async () => {
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  mount(
+    <EventStats
+      slug={SLUG}
+      section="attendance"
+      basePath="/groups/group/events/event/stats"
+      canViewAnalytics={false}
+      attendance={{ timeZone: "Europe/Amsterdam", canRead: false, canImport: true, canCorrect: false }}
+    />,
+  );
+  await vi.waitFor(async () => {
+    await settle();
+    expect(container.querySelector('[aria-label="Attendance sections"]')).not.toBeNull();
+  });
+  const analyticsLinks = [...container.querySelectorAll('[aria-label="Analytics sections"] a')];
+  expect(analyticsLinks.map((link) => link.textContent?.trim())).toEqual(["Attendance"]);
+  expect(container.querySelector('[aria-label="Attendance sections"] a')?.getAttribute("href")).toBe(
+    "#/groups/group/events/event/stats/attendance/imports",
+  );
+  expect(fetch).not.toHaveBeenCalled();
 });

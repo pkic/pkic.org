@@ -6,7 +6,7 @@ import {
   eventWebPushRevokeResponseSchema,
 } from "../../../../shared/schemas/event-web-push";
 import { getJson, postJson, deleteJson } from "../../../shared/api-client";
-import scannerWorkerUrl from "../sections/events/detail/scanner/scanner-service-worker?worker&url";
+import { registerPortalServiceWorker } from "../portal-worker-registration";
 import { pushDeviceId } from "./push-device";
 function supported() {
   return "serviceWorker" in navigator && "PushManager" in window && "Notification" in window && window.isSecureContext;
@@ -90,10 +90,8 @@ export function useEventPushNotifications(slug: string) {
       if ((await Notification.requestPermission()) !== "granted")
         throw new Error("Browser permission was not granted. Email reminders are unchanged.");
       if (version !== scope.current) return;
-      const registration = await navigator.serviceWorker.register(scannerWorkerUrl, {
-        scope: "/portal/",
-        type: "module",
-      });
+      const registration = await registerPortalServiceWorker();
+      if (!registration) throw new Error("Browser notifications are unavailable.");
       await waitForPortalWorker();
       if (version !== scope.current) return;
       let subscription = await registration.pushManager.getSubscription();

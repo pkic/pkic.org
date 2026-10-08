@@ -1,3 +1,12 @@
+import { hasD1QueryCapacity } from "../../db/query-budget";
+import { getRecordingAcquisitionConfiguration } from "../event-recordings/configuration";
+import { dueRecordingAcquisitionIds } from "../event-recordings/acquisitions";
+import { processRecordingAcquisition } from "../event-recordings/processor";
+import {
+  cleanupRecordingAcquisition,
+  dueRecordingAcquisitionCleanupIds,
+} from "../event-recordings/acquisition-cleanup";
+import { recordingAcquisitionCleanupStorage } from "../event-recordings/acquisition-cleanup-storage";
 import { runSitePublicationPipeline } from "../site-publication-runtime";
 import { processPendingPromotionRenders } from "../event-agenda/promotion-render-jobs";
 import { runAgendaParticipationDueWork } from "../event-participation/reconciliation";
@@ -31,6 +40,11 @@ import type { ScheduledJobDefinition } from "./types";
 const DEFAULT_LEASE_SECONDS = 600;
 /** At most 2,000 personal outbox rows per scheduled invocation. */
 const CAMPAIGN_PAGES_PER_PASS = 20;
+/** One bounded transfer or verification step for each of two due acquisitions. */
+const RECORDING_STEPS_PER_PASS = 2;
+const RECORDING_CLEANUPS_PER_PASS = 2;
+/** Conservative capacity includes claim, progress, failure and terminalization commands. */
+const RECORDING_STEP_QUERY_HEADROOM = 64;
 
 /**
  * Reconciliation floors for the deadline-driven jobs. These are the longest a
@@ -52,6 +66,59 @@ const VOTES_INTERVAL_SECONDS = 900;
  * how often a job runs is a data change instead of a deployment.
  */
 export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
+  {
+    key: "recording_acquisitions",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["events:manage"],
+    run: async ({ env, d1QueryBudget }) => {
+      const configuration = getRecordingAcquisitionConfiguration(env);
+      const summary = {
+        configuration: configuration ? "ready" : "unavailable",
+        selected: 0,
+        processed: 0,
+        budgetLimited: false,
+        skipped: 0,
+        progress: 0,
+        completed: 0,
+        retrying: 0,
+        failed: 0,
+        lost_lease: 0,
+        partsTransferred: 0,
+        verifiedBytes: 0,
+        cleanupSelected: 0,
+        cleanupCompleted: 0,
+      };
+      if (!hasD1QueryCapacity(d1QueryBudget, RECORDING_STEP_QUERY_HEADROOM + 1))
+        return { summary: { ...summary, budgetLimited: true } };
+      const ids = configuration ? await dueRecordingAcquisitionIds(env.DB, RECORDING_STEPS_PER_PASS) : [];
+      summary.selected = ids.length;
+      for (const id of ids) {
+        if (!hasD1QueryCapacity(d1QueryBudget, RECORDING_STEP_QUERY_HEADROOM)) {
+          summary.budgetLimited = true;
+          break;
+        }
+        if (!configuration) break;
+        const result = await processRecordingAcquisition(env.DB, id, configuration);
+        summary.processed++;
+        summary[result.status]++;
+        summary.partsTransferred += result.partsTransferred;
+        summary.verifiedBytes += result.verifiedBytes;
+      }
+      if (env.SPEAKER_UPLOADS_BUCKET && hasD1QueryCapacity(d1QueryBudget, RECORDING_STEP_QUERY_HEADROOM + 1)) {
+        const cleanupIds = await dueRecordingAcquisitionCleanupIds(env.DB, RECORDING_CLEANUPS_PER_PASS);
+        summary.cleanupSelected = cleanupIds.length;
+        const storage = recordingAcquisitionCleanupStorage(env.SPEAKER_UPLOADS_BUCKET);
+        for (const id of cleanupIds) {
+          if (!hasD1QueryCapacity(d1QueryBudget, RECORDING_STEP_QUERY_HEADROOM)) {
+            summary.budgetLimited = true;
+            break;
+          }
+          if (await cleanupRecordingAcquisition(env.DB, id, storage)) summary.cleanupCompleted++;
+        }
+      } else if (env.SPEAKER_UPLOADS_BUCKET) summary.budgetLimited = true;
+      return { summary };
+    },
+  },
   {
     key: "site_publication",
     leaseSeconds: DEFAULT_LEASE_SECONDS,

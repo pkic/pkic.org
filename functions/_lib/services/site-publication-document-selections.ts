@@ -1,7 +1,10 @@
 import { all } from "../db/queries";
 import { prepareAuthorizationGuard } from "../db/authorization-guard";
 import type { DatabaseLike } from "../types";
-import { publicationDocumentEffectsSchema } from "../../../assets/shared/schemas/site-publication-documents";
+import {
+  publicationDocumentEffectsSchema,
+  type PublicationDocumentEffect,
+} from "../../../assets/shared/schemas/site-publication-documents";
 
 /** Capture recorded selections, including builds not yet activated, inside the existing mutation boundary. */
 export async function preparePublicationDocumentEffects(
@@ -25,19 +28,35 @@ export async function preparePublicationDocumentEffects(
     materialIds,
     materialIds,
   ];
-  const rows = await all(
+  const sources = [
+    { table: "site_publication_document_manifests", kind: null },
+    { table: "site_publication_recording_manifests", kind: "recording" },
+  ] as const;
+  const rows = await all<Omit<PublicationDocumentEffect, "kind"> & { kind: "recording" | null }>(
     db,
-    `SELECT DISTINCT event.slug AS eventSlug,manifest.event_id AS eventId,
-    manifest.occurrence_id AS occurrenceId,manifest.material_id AS materialId,manifest.version_id AS versionId,
-    manifest.digest,manifest.grant_id AS grantId FROM site_publication_document_manifests manifest
-    JOIN events event ON event.id=manifest.event_id WHERE ${where} ORDER BY manifest.grant_id LIMIT 1001`,
-    bindings,
+    `SELECT DISTINCT eventSlug,eventId,occurrenceId,materialId,versionId,digest,grantId,kind FROM (
+      ${sources
+        .map(
+          ({ table, kind }) => `SELECT event.slug AS eventSlug,manifest.event_id AS eventId,
+        manifest.occurrence_id AS occurrenceId,manifest.material_id AS materialId,manifest.version_id AS versionId,
+        manifest.digest,manifest.grant_id AS grantId,${kind ? "'recording'" : "NULL"} AS kind
+        FROM ${table} manifest JOIN events event ON event.id=manifest.event_id WHERE ${where}`,
+        )
+        .join(" UNION ALL ")}
+      ) ORDER BY grantId LIMIT 1001`,
+    [...bindings, ...bindings],
   );
-  const effects = publicationDocumentEffectsSchema.parse(rows);
+  const effects = publicationDocumentEffectsSchema.parse(
+    rows.map(({ kind, ...row }) => (kind ? { ...row, kind } : row)),
+  );
   const guard = prepareAuthorizationGuard(db, {
-    sql: `SELECT 1 WHERE NOT EXISTS(SELECT 1 FROM site_publication_document_manifests manifest
+    sql: `SELECT 1 WHERE ${sources
+      .map(
+        ({ table }) => `NOT EXISTS(SELECT 1 FROM ${table} manifest
       WHERE ${where} AND manifest.grant_id NOT IN(SELECT json_extract(value,'$.grantId') FROM json_each(?)))`,
-    bindings: [...bindings, JSON.stringify(effects)],
+      )
+      .join(" AND ")}`,
+    bindings: sources.flatMap(() => [...bindings, JSON.stringify(effects)]),
   });
   return { effects, guard };
 }

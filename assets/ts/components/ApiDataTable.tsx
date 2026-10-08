@@ -168,8 +168,10 @@ export function ApiDataTable<T, Response = unknown>({
   }
 
   const query = {
-    ...params,
     ...filters,
+    // Caller-owned scope (for example, the selected attendee) cannot be
+    // replaced by a column filter restored from the URL.
+    ...params,
     ...(paginate ? { limit: String(pager.pageSize), offset: String(requestOffset) } : {}),
     ...(search ? { q: search } : {}),
     ...(sort ? { sort } : {}),

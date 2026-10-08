@@ -51,6 +51,10 @@ export const OPENAPI_TAGS: readonly { name: string; description: string }[] = [
   { name: "Passkeys", description: "WebAuthn credential registration and authentication." },
 
   { name: "Event agenda", description: "Approved schedules, organizer drafts, locations, imports, and staffing." },
+  {
+    name: "Event recordings",
+    description: "Authorized meeting recording discovery, source binding, acquisition, and owned recording versions.",
+  },
   { name: "Event promotion", description: "Revision-bound session promotion kits and authorized export jobs." },
   { name: "Meeting agendas", description: "Occurrence agendas and reusable versioned meeting formats." },
   { name: "Events", description: "The event catalogue and one event's configuration." },
@@ -121,6 +125,7 @@ export const OPENAPI_TAG_GROUPS: readonly { name: string; tags: string[] }[] = [
     tags: [
       "Events",
       "Event agenda",
+      "Event recordings",
       "Event promotion",
       "Meeting agendas",
       "Event registrations",

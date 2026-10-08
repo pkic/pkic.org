@@ -1,5 +1,5 @@
 import { useEffect, useState } from "preact/hooks";
-import scannerWorkerUrl from "./scanner-service-worker?worker&url";
+import { registerPortalServiceWorker } from "../../../../portal-worker-registration";
 import { prepareScannerDecoder } from "./prepareScannerDecoder";
 
 const unavailable = "Offline camera files are not prepared. Use manual entry or a hardware scanner when offline.";
@@ -14,8 +14,7 @@ export function useScannerDecoderPreparation(scope: string) {
     setStatus("Preparing offline camera files…");
     void (async () => {
       try {
-        if (!("serviceWorker" in navigator)) throw new Error("Service workers are unavailable");
-        await navigator.serviceWorker.register(scannerWorkerUrl, { scope: "/portal/", type: "module" });
+        if (!(await registerPortalServiceWorker())) throw new Error("Service workers are unavailable");
         const prepared = await prepareScannerDecoder(controller.signal);
         if (!controller.signal.aborted) setStatus(prepared ? "Offline camera files prepared." : unavailable);
       } catch {

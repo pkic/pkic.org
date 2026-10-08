@@ -40,6 +40,8 @@ import {
   scrollScannerToTop,
   reconnectScannerBrowser,
   openScannerDiagnostics,
+  closeScannerDiagnostics,
+  openScannerManualEntry,
 } from "./scanner-recovery-storage";
 
 export const sponsorEventSlug = "pqc-conference-amsterdam-nl";
@@ -171,12 +173,7 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
 }
 
 async function openManualBadgeEntry(page: Page) {
-  const manual = page.locator("details").filter({
-    has: page.getByText("Enter or paste badge code", { exact: true }),
-  });
-  if (!(await manual.evaluate((element) => (element as HTMLDetailsElement).open)))
-    await manual.getByText("Enter or paste badge code", { exact: true }).click();
-  await expect(page.getByLabel("Badge code", { exact: true })).toBeVisible();
+  await openScannerManualEntry(page);
 }
 
 async function expectDoorScannerReady(page: Page) {
@@ -186,8 +183,8 @@ async function expectDoorScannerReady(page: Page) {
       exact: true,
     }),
   ).toBeVisible();
+  await closeScannerDiagnostics(page);
   await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
-  await diagnostics.getByText("Recovery and diagnostics", { exact: true }).click();
 }
 
 export async function captureSponsorBadge(page: Page, badgeId: string, sponsorId: string, operatorUserId: string) {
@@ -246,8 +243,8 @@ export async function captureOfflineSponsorBadge(
       exact: true,
     }),
   ).toBeVisible();
+  await closeScannerDiagnostics(page);
   await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
-  await diagnostics.getByText("Recovery and diagnostics", { exact: true }).click();
   expect((await scannerStorage(page)).pending).toHaveLength(0);
   const offlineReceipts: number[] = [];
   const observeReceipt = (response: import("@playwright/test").Response) => {

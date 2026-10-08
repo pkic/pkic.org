@@ -27,6 +27,7 @@ export const EventDetailGet = openApiRoute(eventDetailRouteSchema, async (c: Adm
             guardEventReadDatabase(db, session.staff, context),
             data.params.eventSlug,
             eventManagementCapabilities(session.staff, context),
+            eventAudienceViewer(session),
           ),
         ),
       }),

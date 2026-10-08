@@ -126,7 +126,7 @@ describe("occurrence PATCH omission semantics", () => {
       description: original.description,
     });
     expect(stale.status).toBe(409);
-    expect(await stale.json()).toMatchObject({ error: { code: "AGENDA_AUTHORIZATION_CHANGED" } });
+    expect(await stale.json()).toMatchObject({ error: { code: "AGENDA_REVISION_CHANGED" } });
     expect(await effects()).toEqual(before);
   });
 });

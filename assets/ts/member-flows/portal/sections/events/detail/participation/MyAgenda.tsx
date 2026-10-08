@@ -18,7 +18,7 @@ import { Menu } from "../../../../../../ui/Menu";
 import { usePortalHashLocation } from "../../../../hash-location";
 
 type Session = z.infer<typeof personalAgendaSessionSchema>;
-export function MyAgenda({ slug }: { slug: string }) {
+export function MyAgenda({ slug, eventId }: { slug: string; eventId?: string }) {
   const [showLocalTime, setShowLocalTime] = useState(false);
   const localZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const [rawLocation] = useHashLocation();
@@ -46,6 +46,7 @@ export function MyAgenda({ slug }: { slug: string }) {
       <SessionParticipation
         key={focus.data}
         slug={slug}
+        eventId={eventId}
         occurrenceId={focus.data}
         backHref={backHref}
         showLocalTime={showLocalTime}

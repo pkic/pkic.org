@@ -5,6 +5,8 @@ import { attendanceCaptureRequestFieldsSchema, refineAttendanceCaptureIntent } f
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { utcInstantSchema } from "./api-common";
+import { eventDayDateSchema } from "./event-read-models";
+import { timeZoneSchema } from "./event-series";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { scannerSessionSchema, scannerReceiptSchema } from "./event-scanner-devices";
 
@@ -156,18 +158,26 @@ export const enrolledEventScanResponseSchema = eventScanResponseSchema.extend({
 });
 export type EventScanResponse = z.infer<typeof eventScanResponseSchema>;
 export type OfflineScanRecord = z.infer<typeof offlineScanRecordSchema>;
-export const scannerTargetQuerySchema = listQuerySchema(["title"] as const).extend({
+export const scannerTargetQuerySchema = listQuerySchema(["title", "startAt"] as const).extend({
   occurrenceId: databaseIdSchema.optional(),
+  roomId: databaseIdSchema.optional(),
+  dayDate: eventDayDateSchema.optional(),
+  timeWindow: z.enum(["now", "next"]).optional(),
 });
+export const scannerTargetRoomSchema = z.object({ id: databaseIdSchema, name: z.string() });
 export const scannerTargetSchema = z.object({
   id: databaseIdSchema,
   title: z.string(),
-  rooms: z
-    .array(z.object({ id: databaseIdSchema, name: z.string() }))
-    .max(20)
-    .optional(),
+  startAt: utcInstantSchema.nullable(),
+  endAt: utcInstantSchema.nullable(),
+  rooms: z.array(scannerTargetRoomSchema).max(20).optional(),
 });
-export const scannerTargetsResponseSchema = paginatedResponseSchema("sessions", scannerTargetSchema);
+export const scannerTargetsResponseSchema = paginatedResponseSchema("sessions", scannerTargetSchema).extend({
+  timeZone: timeZoneSchema,
+  serverNow: utcInstantSchema,
+  rooms: z.array(scannerTargetRoomSchema).max(200),
+  roomsTruncated: z.boolean(),
+});
 
 export type ScannerTarget = z.infer<typeof scannerTargetSchema>;
 export type ScannerTargetsResponse = z.infer<typeof scannerTargetsResponseSchema>;

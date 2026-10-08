@@ -1,5 +1,5 @@
 import { ScannerPreparationStatus } from "./ScannerPreparationStatus";
-import type { ComponentProps, ComponentChildren } from "preact";
+import type { ComponentProps } from "preact";
 import { scanFeedbackLabel, scanFeedbackOutcome, scanEligibilityLabel } from "./scan-stream";
 import "../../../../../../../design/tokens.scanner.generated.css";
 import { ScannerExceptionReview } from "./ScannerExceptionReview";
@@ -34,7 +34,7 @@ export function FastScannerView({
   cameraError = "",
   onCameraRetry,
   onManual,
-  recentScans,
+  onRecentScans,
   preview,
   onPreview,
   onExit,
@@ -57,7 +57,7 @@ export function FastScannerView({
   cameraError?: string;
   onCameraRetry?: () => void;
   onManual?: () => void;
-  recentScans?: (visible: boolean) => ComponentChildren;
+  onRecentScans?: () => void;
   preview: boolean;
   onPreview: () => void;
   onExit: () => void;
@@ -185,8 +185,8 @@ export function FastScannerView({
               Enter or paste code
             </Button>
           )}
-          {recentScans && (
-            <Button variant="secondary" onClick={() => setOperatorOpen(true)}>
+          {onRecentScans && (
+            <Button variant="secondary" onClick={onRecentScans}>
               Recent scans
             </Button>
           )}
@@ -292,12 +292,11 @@ export function FastScannerView({
             <dd>{readiness}</dd>
           </div>
         </dl>
-        {recentScans?.(operatorOpen)}
         {preparation && (
-          <details>
-            <summary>Preparation details</summary>
+          <section aria-label="Preparation details">
+            <h3>Preparation details</h3>
             <ScannerPreparationStatus {...preparation} />
-          </details>
+          </section>
         )}
         <p>
           {cameraActive

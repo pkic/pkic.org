@@ -11,6 +11,7 @@ import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { ApiClientError, postJson } from "../../../../../../shared/api-client";
 import { Button, ButtonLink } from "../../../../../../ui/Button";
 import { DescriptionList } from "../../../../../../ui/DescriptionList";
+import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
 import { Field } from "../../../../../../ui/Field";
 import { Textarea } from "../../../../../../ui/TextControl";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
@@ -139,33 +140,36 @@ export function AttendanceImport({
         presence does not create admission, reservations or scan attempts. Provider verification is an attributed source
         assertion; imported clock time remains unverified.
       </p>
-      <details>
-        <summary>Import format</summary>
-        <pre>
-          {JSON.stringify(
-            {
-              source: "vendor_attendance",
-              sourceReference: "vendor-export-reference",
-              rows: [
-                {
-                  sourceRecordId: "record-1",
-                  userId: "canonical-user-uuid",
-                  occurrenceId: null,
-                  attendanceMode: "virtual",
-                  observedAt: "2026-10-04T10:00:00.000Z",
-                  verification: "unverified",
-                },
-              ],
-            },
-            null,
-            2,
-          )}
-        </pre>
-        <p>
-          Use manual_evidence for reviewed physical evidence, with verification unverified. An occurrence must be
-          approved and the observation must fall within its interval. Reusing a source record cannot overwrite evidence.
-        </p>
-      </details>
+      <Panel aria-label="Import format">
+        <PanelHeader title="Import format" headingLevel={4} />
+        <PanelBody class="pk-stack">
+          <pre>
+            {JSON.stringify(
+              {
+                source: "vendor_attendance",
+                sourceReference: "vendor-export-reference",
+                rows: [
+                  {
+                    sourceRecordId: "record-1",
+                    userId: "canonical-user-uuid",
+                    occurrenceId: null,
+                    attendanceMode: "virtual",
+                    observedAt: "2026-10-04T10:00:00.000Z",
+                    verification: "unverified",
+                  },
+                ],
+              },
+              null,
+              2,
+            )}
+          </pre>
+          <p>
+            Use manual_evidence for reviewed physical evidence, with verification unverified. An occurrence must be
+            approved and the observation must fall within its interval. Reusing a source record cannot overwrite
+            evidence.
+          </p>
+        </PanelBody>
+      </Panel>
       <form noValidate {...form.handlers} onSubmit={prepare} class="pk-stack">
         <Field label="Attendance evidence JSON" {...form.of("evidence")}>
           {(control) => (
@@ -203,15 +207,17 @@ export function AttendanceImport({
             ]}
           />
           {review.captureContext.occurrences.length > 0 && (
-            <details>
-              <summary>Reviewed session intervals</summary>
-              <DescriptionList
-                items={review.captureContext.occurrences.map((occurrence) => ({
-                  term: occurrence.occurrenceId,
-                  value: `${formatDateTimeInZone(occurrence.startAt, review.captureContext.timeZone)} – ${formatDateTimeInZone(occurrence.endAt, review.captureContext.timeZone)}`,
-                }))}
-              />
-            </details>
+            <Panel aria-label="Reviewed session intervals">
+              <PanelHeader title="Reviewed session intervals" headingLevel={4} />
+              <PanelBody>
+                <DescriptionList
+                  items={review.captureContext.occurrences.map((occurrence) => ({
+                    term: occurrence.occurrenceId,
+                    value: `${formatDateTimeInZone(occurrence.startAt, review.captureContext.timeZone)} – ${formatDateTimeInZone(occurrence.endAt, review.captureContext.timeZone)}`,
+                  }))}
+                />
+              </PanelBody>
+            </Panel>
           )}
           <p>Changing the event timezone or published schedule requires a new review before importing.</p>
           <Button onClick={apply} loading={busy}>

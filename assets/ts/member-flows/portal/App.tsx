@@ -1,6 +1,7 @@
 import { Button } from "../../ui/Button";
 import { ScannerCodePreparation } from "./sections/events/detail/scanner/scanner-code-preparation";
 import { prepareScannerDecoder } from "./sections/events/detail/scanner/prepareScannerDecoder";
+import { registerPortalServiceWorker } from "./portal-worker-registration";
 /**
  * Portal root — gates on identity authentication, then loads member profile
  * data only when the session advertises member capacity. Staff-only users can
@@ -68,6 +69,10 @@ async function verifyMagicLink(token: string): Promise<PortalSession> {
 }
 
 export function App() {
+  useEffect(() => {
+    // Public shell preparation is independent of sign-in, scanner diagnostics, and push enrollment.
+    void registerPortalServiceWorker().catch(() => {});
+  }, []);
   const [portalPath] = usePortalHashLocation();
   const isMcpAuthorization = portalPath === "/auth/oauth";
   const isIdentityInvitation = portalPath === "/identity-invitations";

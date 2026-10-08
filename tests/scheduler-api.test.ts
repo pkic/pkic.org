@@ -158,12 +158,13 @@ describe("scheduler API", () => {
     // The escalation this surface must not permit: retention redacts user data,
     // so triggering it through the scheduler still requires users:anonymize.
     const token = await staffWith(["schedulerOperator"]);
-    const response = await call(token, "/api/v1/scheduler/jobs/retention/runs", {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
-
-    expect(response.status).toBe(403);
+    for (const job of ["retention", "recording_acquisitions"]) {
+      const response = await call(token, `/api/v1/scheduler/jobs/${job}/runs`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      expect(response.status).toBe(403);
+    }
     expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'scheduled_job_triggered'")).toHaveLength(0);
   });
 

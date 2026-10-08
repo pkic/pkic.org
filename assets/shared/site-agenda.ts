@@ -1,5 +1,6 @@
 import type { AgendaBreakSponsorDisplay } from "./schemas/event-agenda-sponsors";
 import type { AgendaOccurrence } from "./schemas/event-agenda";
+import type { eventParticipationLink } from "./event-participation-link";
 import type { AgendaMediaCapabilities } from "./event-agenda-media";
 
 export interface ContentAgendaDay {
@@ -25,7 +26,7 @@ export interface ContentAgendaDay {
       endNotRecorded?: boolean;
       locations: string[];
       sessionUrl?: string;
-      participation?: { url: string; label: string; message: string; preference?: boolean };
+      participation?: ReturnType<typeof eventParticipationLink>;
       presentationUrl?: string;
       legacyPresentationUrl?: string;
       recordingUrl?: string;

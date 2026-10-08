@@ -10,6 +10,7 @@ import {
   badgeIssueResponseSchema,
   badgePrintRequestSchema,
   badgePrintResponseSchema,
+  badgePrintingResponseSchema,
 } from "../assets/shared/schemas/route-contracts-event-badges";
 import { createEventScannerFixture } from "./helpers/event-scanner-fixture";
 import { callApi } from "./helpers/app";
@@ -36,12 +37,20 @@ function request(path: string, init: RequestInit = {}, overrides: Partial<Env> =
     },
   });
 }
-function print(id: string, operationId = crypto.randomUUID(), overrides: Partial<Env> = {}, token = fixture.token) {
+async function print(
+  id: string,
+  operationId = crypto.randomUUID(),
+  overrides: Partial<Env> = {},
+  token = fixture.token,
+) {
+  const contextResponse = await request(`${base}/printing`, {}, overrides);
+  if (!contextResponse.ok) return contextResponse;
+  const context = badgePrintingResponseSchema.parse(await contextResponse.json());
   return request(
     `${base}/${id}/print`,
     {
       method: "POST",
-      body: JSON.stringify(badgePrintRequestSchema.parse({ operationId })),
+      body: JSON.stringify(badgePrintRequestSchema.parse({ operationId, printingRevision: context.revision })),
     },
     overrides,
     token,
@@ -186,7 +195,13 @@ describe("Authenticated recovery of the same active badge print", () => {
     const anonymous = await callApi(env, `${base}/${id}/print`, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ operationId: crypto.randomUUID() }),
+      body: JSON.stringify(
+        badgePrintRequestSchema.parse({
+          operationId: crypto.randomUUID(),
+          printingRevision: badgePrintingResponseSchema.parse(await (await request(`${base}/printing`)).json())
+            .revision,
+        }),
+      ),
     });
     expect(anonymous.status).toBe(401);
     expect((await print(crypto.randomUUID())).status).toBe(404);
@@ -201,7 +216,14 @@ describe("Authenticated recovery of the same active badge print", () => {
       (
         await request(`/api/v1/events/other-print/badges/${id}/print`, {
           method: "POST",
-          body: JSON.stringify({ operationId: crypto.randomUUID() }),
+          body: JSON.stringify(
+            badgePrintRequestSchema.parse({
+              operationId: crypto.randomUUID(),
+              printingRevision: badgePrintingResponseSchema.parse(
+                await (await request("/api/v1/events/other-print/badges/printing")).json(),
+              ).revision,
+            }),
+          ),
         })
       ).status,
     ).toBe(404);
@@ -272,7 +294,8 @@ describe("Authenticated recovery of the same active badge print", () => {
       const before = await state(),
         log = await audits();
       const response = await print(id, crypto.randomUUID(), overrides);
-      expect(response.status).toBe(503);
+      // A mismatched owner has no event registration, so the metadata boundary refuses it before recovery.
+      expect(response.status).toBe(kind === "owner" ? 404 : 503);
       expect(await response.text()).not.toContain(fixture.badgeId);
       expect(await state()).toEqual(before);
       expect(await audits()).toEqual(log);

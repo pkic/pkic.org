@@ -1,5 +1,5 @@
 import { observeAgendaLayout } from "./agenda-layout-stylesheet";
-import { initializeAgendaSessionMedia } from "./agenda-session-media";
+import { initializeAgendaSessionMedia, pauseAgendaSessionMedia } from "./agenda-session-media";
 
 let agendaStickySequence = 0;
 
@@ -282,7 +282,7 @@ export function initializeContentAgenda(root: HTMLElement): () => void {
   updateScrollControls();
   root.querySelectorAll<HTMLDialogElement>("dialog").forEach((dialog) => {
     listen(dialog, "close", () => {
-      dialog.querySelector<HTMLIFrameElement>("iframe")?.removeAttribute("src");
+      pauseAgendaSessionMedia(dialog);
       if (!document.querySelector(".pk-content-agenda dialog[open]")) {
         document.body.classList.remove("agenda-modal-open");
       }

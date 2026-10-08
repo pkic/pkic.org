@@ -6,10 +6,10 @@ export function hasEventAgendaPermission(eventId: string, permission: string, sp
     staff?.grants.some(
       (grant) =>
         grant.permission === permission &&
-        ((grant.contextType === null && grant.contextId === null) ||
-          (sponsorId
-            ? grant.contextType === "event_sponsor" && grant.contextId === sponsorId
-            : grant.contextType === "event" && grant.contextId === eventId)),
+        (sponsorId
+          ? grant.contextType === "event_sponsor" && grant.contextId === sponsorId
+          : (grant.contextType === null && grant.contextId === null) ||
+            (grant.contextType === "event" && grant.contextId === eventId)),
     ) ?? false
   );
 }

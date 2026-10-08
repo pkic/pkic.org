@@ -1,3 +1,4 @@
+import { eventParticipationLink } from "../../assets/shared/event-participation-link";
 import { describe, expect, it } from "vitest";
 import type { ContentAgendaDay } from "../../assets/shared/site-agenda";
 import { agendaRows } from "../../assets/ts/site/agenda-layout";
@@ -61,7 +62,7 @@ describe("native agenda table layout", () => {
     const withDescription = agendaRows(day)[0]!.height;
     expect(withDescription).toBeGreaterThan(longTitle);
     session.sessionUrl = "/events/example/sessions/talk/";
-    session.participation = { url: "/portal/events/example", label: "Save preference", message: "Save this session" };
+    session.participation = eventParticipationLink("example", "session", "preference");
     const twoActions = agendaRows(day)[0]!.height;
     expect(twoActions).toBeGreaterThan(withDescription);
     session.presentationUrl = "/slides.pdf";
@@ -114,7 +115,7 @@ describe("native agenda table layout", () => {
             title: "A long discussion ".repeat(12),
             descriptionMarkdown: "Discussion notes",
             sessionUrl: "/sessions/discussion/",
-            participation: { label: "Save preference", url: "/portal/", message: "Save this session" },
+            participation: eventParticipationLink("example", "session", "reservation"),
             locations: ["red"],
             endsAt: "2026-12-01T11:00:00.000Z",
           },

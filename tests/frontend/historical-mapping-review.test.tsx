@@ -31,6 +31,14 @@ it("compares immutable original and verified attribution with canonical mapping 
   expect(host.textContent).toContain("Title not recorded");
   expect(host.textContent).toContain("Verified historical title");
   expect(host.textContent).toContain("Existing approved appearances and materials are retained");
+  const evidence = host.querySelector('section[aria-label="Source evidence"]')!;
+  expect(evidence.querySelector("h4")?.textContent).toBe("Source evidence");
+  expect(evidence.textContent).toContain(entry.originalSource.sourceDigest);
+  expect(evidence.textContent).toContain(entry.sourceDigest);
+  const references = host.querySelector('section[aria-label="Record references"]')!;
+  expect(references.querySelector("h4")?.textContent).toBe("Record references");
+  expect(references.textContent).toContain(entry.people[0]!.userId);
+  expect(host.querySelector("details, summary")).toBeNull();
   expect(host.querySelector("input, select, button, form")).toBeNull();
 });
 

@@ -32,6 +32,10 @@ import {
 } from "./registration-detail/RegistrationPanels";
 import { attendanceTypeLabel } from "../../../../../shared/attendance";
 import { eventRegistrationPath, eventRegistrationResourcePath, eventRegistrationsViewPath } from "./registration-paths";
+import { AttendeeParticipationSections } from "./registration-detail/AttendeeParticipationSections";
+import { portalSession } from "../../../state";
+import { portalHasGlobalPermission } from "../../../shell/portal-navigation";
+import { hasEventAgendaPermission } from "../event-agenda-access";
 import "../../../../../ui/Content.css";
 
 /**
@@ -68,10 +72,10 @@ export function RegistrationDetailPage({
 
   const { data, loading, error, reload } = useData<EventRegistrationDetailResponse>(
     async () => getJson(eventRegistrationPath(slug, regId), eventRegistrationDetailResponseSchema),
-    [slug, regId],
+    [slug, regId, portalSession.value?.sessionId],
   );
 
-  const reg = data?.registration;
+  const reg = data?.registration.id === regId ? data.registration : undefined;
   const form = data?.form ?? null;
 
   async function handleResend(): Promise<void> {
@@ -166,138 +170,185 @@ export function RegistrationDetailPage({
         title={name}
         context={<Badge status={reg.status} />}
         actions={
-          <Button size="sm" onClick={() => void reload()}>
-            ↺ Refresh
-          </Button>
+          <div class="pk-cluster">
+            {portalHasGlobalPermission(portalSession.value, "users:read") && (
+              <ButtonLink size="sm" href={usePortalHashLocation.hrefs(`/users/${encodeURIComponent(reg.user_id)}`)}>
+                Account
+              </ButtonLink>
+            )}
+            <Button size="sm" onClick={() => void reload()}>
+              ↺ Refresh
+            </Button>
+          </div>
         }
       />
 
-      <div class="pk-record">
-        <div class="pk-stack">
-          <Panel>
-            <PanelHeader title="Attendance by day" />
-            <DataTable
-              caption="Attendance by day"
-              data={data?.dayAttendance ?? []}
-              columns={[
-                { header: "Day", cell: (day) => fmtCalendarDate(day.dayDate), width: "primary" },
-                { header: "Attendance", cell: (day) => attendanceTypeLabel(day.attendanceType), width: "fit" },
-              ]}
-            />
-          </Panel>
-          {(form || (reg.customAnswers && Object.keys(reg.customAnswers).length > 0)) && (
-            <Panel>
-              <PanelHeader title={answersTitle} />
-              <PanelBody>
-                <FormAnswerTable answers={reg.customAnswers} fields={form?.fields} />
-              </PanelBody>
-            </Panel>
-          )}
-
+      <AttendeeParticipationSections
+        slug={slug}
+        eventId={reg.event_id}
+        registrationId={regId}
+        userId={reg.user_id}
+        canManage={hasEventAgendaPermission(reg.event_id, "events:manage")}
+        history={
           <Panel>
             <PanelHeader title="Audit log" />
             <RegistrationAuditLogSection slug={slug} regId={regId} />
           </Panel>
-        </div>
-        <aside class="pk-stack pk-datalist-aligned">
-          <Panel>
-            <PanelHeader title="Registration summary" />
-            <PanelBody>
-              <dl class="pk-datalist pk-small">
-                <dt>Email</dt>
-                <dd>
-                  <RegistrationEmailEditor
-                    email={reg.user_email ?? "Not recorded"}
-                    slug={slug}
-                    regId={regId}
-                    isCancelled={reg.status === "cancelled"}
-                    onSaved={() => void reload()}
-                  />
-                </dd>
-                <dt>Attendance</dt>
-                <dd>{attendanceTypeLabel(reg.attendance_type)}</dd>
-                <dt>Source</dt>
-                <dd>{reg.source_type}</dd>
-                <dt>Registered</dt>
-                <dd class="pk-mono">{fmt(reg.created_at)}</dd>
-              </dl>
-            </PanelBody>
-          </Panel>
+        }
+        registration={
+          <div class="pk-record">
+            <div class="pk-stack">
+              <Panel>
+                <PanelHeader title="Attendance by day" />
+                <DataTable
+                  caption="Attendance by day"
+                  data={data?.dayAttendance ?? []}
+                  columns={[
+                    { header: "Day", cell: (day) => fmtCalendarDate(day.dayDate), width: "primary" },
+                    { header: "Attendance", cell: (day) => attendanceTypeLabel(day.attendanceType), width: "fit" },
+                  ]}
+                />
+              </Panel>
+              <Panel>
+                <PanelHeader title="Attendance history" />
+                <DataTable
+                  caption="Attendance changes"
+                  data={data?.attendanceChangeHistory ?? []}
+                  rowKey={(change) => change.changedAt}
+                  columns={[
+                    { header: "Changed", cell: (change) => fmt(change.changedAt), width: "fit" },
+                    {
+                      header: "Attendance",
+                      width: "primary",
+                      cell: (change) => (
+                        <div class="pk-stack pk-stack--tight">
+                          {change.transitions.map((transition) => (
+                            <div key={`${transition.fromType}:${transition.toType}`}>
+                              {attendanceTypeLabel(transition.fromType)} → {attendanceTypeLabel(transition.toType)}
+                              {" · "}
+                              {transition.days.map((day) => day.label ?? day.dayDate).join(", ")}
+                            </div>
+                          ))}
+                        </div>
+                      ),
+                    },
+                  ]}
+                  empty="No attendance changes recorded."
+                />
+              </Panel>
+              {(form || (reg.customAnswers && Object.keys(reg.customAnswers).length > 0)) && (
+                <Panel>
+                  <PanelHeader title={answersTitle} />
+                  <PanelBody>
+                    <FormAnswerTable answers={reg.customAnswers} fields={form?.fields} />
+                  </PanelBody>
+                </Panel>
+              )}
+            </div>
+            <aside class="pk-stack pk-datalist-aligned">
+              <Panel>
+                <PanelHeader title="Registration summary" />
+                <PanelBody>
+                  <dl class="pk-datalist pk-small">
+                    <dt>Email</dt>
+                    <dd>
+                      <RegistrationEmailEditor
+                        email={reg.user_email ?? "Not recorded"}
+                        slug={slug}
+                        regId={regId}
+                        isCancelled={reg.status === "cancelled"}
+                        onSaved={() => void reload()}
+                      />
+                    </dd>
+                    <dt>Attendance</dt>
+                    <dd>{attendanceTypeLabel(reg.attendance_type)}</dd>
+                    <dt>Source</dt>
+                    <dd>{reg.source_type}</dd>
+                    <dt>Registered</dt>
+                    <dd class="pk-mono">{fmt(reg.created_at)}</dd>
+                  </dl>
+                </PanelBody>
+              </Panel>
 
-          <Panel>
-            <PanelHeader title="Manage" />
-            <PanelBody class="pk-stack pk-stack--snug">
-              <p class="pk-small">Opens the registrant-facing manage page in a new tab.</p>
-              <div class="pk-cluster">
-                <Button size="sm" variant="primary" loading={openingManage} onClick={() => void handleOpenManage()}>
-                  {openingManage ? "Opening…" : "Open manage page ↗"}
-                </Button>
-              </div>
-            </PanelBody>
-          </Panel>
-
-          <Panel>
-            <PanelHeader title="Registration email" />
-            <PanelBody class="pk-stack pk-stack--snug">
-              <p class="pk-small">
-                {reg.status === "cancelled"
-                  ? "Canceled registrations cannot receive confirmation emails."
-                  : reg.status === "pending_email_confirmation"
-                    ? "Send another email asking the attendee to confirm their email address."
-                    : "Send the attendee their current registration details and calendar invitation again."}
-              </p>
-              <div class="pk-cluster">
-                <Button
-                  size="sm"
-                  loading={resending}
-                  disabled={reg.status === "cancelled"}
-                  onClick={() => void handleResend()}
-                >
-                  {resending ? "Sending…" : "Resend email"}
-                </Button>
-              </div>
-              {resendOutcome && <Alert tone={resendOutcome.tone}>{resendOutcome.message}</Alert>}
-            </PanelBody>
-          </Panel>
-
-          <Panel>
-            <PanelHeader title="Social promo kit" />
-            <PanelBody class="pk-stack pk-stack--snug">
-              {shareUrl && ogBadgeUrl ? (
-                <>
-                  <Field label="Referral link" help="Share this link so registrations are credited to this attendee.">
-                    {(control) => <TextInput {...control} class="pk-mono" value={shareUrl} readOnly />}
-                  </Field>
+              <Panel>
+                <PanelHeader title="Manage" />
+                <PanelBody class="pk-stack pk-stack--snug">
+                  <p class="pk-small">Opens the registrant-facing manage page in a new tab.</p>
                   <div class="pk-cluster">
-                    <Button size="sm" onClick={() => void handleCopyReferralLink(shareUrl)}>
-                      Copy link
-                    </Button>
-                    <ButtonLink size="sm" href={ogBadgeUrl} target="_blank" rel="noopener">
-                      View badge ↗
-                    </ButtonLink>
-                    <Button size="sm" loading={regenerating} onClick={() => void handleRegenerateBadge()}>
-                      {regenerating ? "Regenerating…" : "Regenerate badge"}
+                    <Button size="sm" variant="primary" loading={openingManage} onClick={() => void handleOpenManage()}>
+                      {openingManage ? "Opening…" : "Open manage page ↗"}
                     </Button>
                   </div>
-                  <p class="pk-small" role="status">
-                    {copyStatus}
-                  </p>
-                </>
-              ) : (
-                <p class="pk-small">This registration has no referral code, so there is no promo kit to share.</p>
-              )}
-            </PanelBody>
-          </Panel>
+                </PanelBody>
+              </Panel>
 
-          <Panel>
-            <PanelHeader title="Badge role" />
-            <PanelBody class="pk-stack pk-stack--snug">
-              <p class="pk-small">Set the role shown on the attendee's promotional badge.</p>
-              <BadgeRolePanel slug={slug} regId={regId} />
-            </PanelBody>
-          </Panel>
-        </aside>
-      </div>
+              <Panel>
+                <PanelHeader title="Registration email" />
+                <PanelBody class="pk-stack pk-stack--snug">
+                  <p class="pk-small">
+                    {reg.status === "cancelled"
+                      ? "Canceled registrations cannot receive confirmation emails."
+                      : reg.status === "pending_email_confirmation"
+                        ? "Send another email asking the attendee to confirm their email address."
+                        : "Send the attendee their current registration details and calendar invitation again."}
+                  </p>
+                  <div class="pk-cluster">
+                    <Button
+                      size="sm"
+                      loading={resending}
+                      disabled={reg.status === "cancelled"}
+                      onClick={() => void handleResend()}
+                    >
+                      {resending ? "Sending…" : "Resend email"}
+                    </Button>
+                  </div>
+                  {resendOutcome && <Alert tone={resendOutcome.tone}>{resendOutcome.message}</Alert>}
+                </PanelBody>
+              </Panel>
+
+              <Panel>
+                <PanelHeader title="Social promo kit" />
+                <PanelBody class="pk-stack pk-stack--snug">
+                  {shareUrl && ogBadgeUrl ? (
+                    <>
+                      <Field
+                        label="Referral link"
+                        help="Share this link so registrations are credited to this attendee."
+                      >
+                        {(control) => <TextInput {...control} class="pk-mono" value={shareUrl} readOnly />}
+                      </Field>
+                      <div class="pk-cluster">
+                        <Button size="sm" onClick={() => void handleCopyReferralLink(shareUrl)}>
+                          Copy link
+                        </Button>
+                        <ButtonLink size="sm" href={ogBadgeUrl} target="_blank" rel="noopener">
+                          View badge ↗
+                        </ButtonLink>
+                        <Button size="sm" loading={regenerating} onClick={() => void handleRegenerateBadge()}>
+                          {regenerating ? "Regenerating…" : "Regenerate badge"}
+                        </Button>
+                      </div>
+                      <p class="pk-small" role="status">
+                        {copyStatus}
+                      </p>
+                    </>
+                  ) : (
+                    <p class="pk-small">This registration has no referral code, so there is no promo kit to share.</p>
+                  )}
+                </PanelBody>
+              </Panel>
+
+              <Panel>
+                <PanelHeader title="Badge role" />
+                <PanelBody class="pk-stack pk-stack--snug">
+                  <p class="pk-small">Set the role shown on the attendee's promotional badge.</p>
+                  <BadgeRolePanel slug={slug} regId={regId} />
+                </PanelBody>
+              </Panel>
+            </aside>
+          </div>
+        }
+      />
     </div>
   );
 }

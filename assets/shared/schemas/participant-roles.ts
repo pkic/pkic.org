@@ -13,12 +13,16 @@ export const EVENT_PARTICIPANT_ROLES = ["attendee", "speaker", "moderator", "pan
 export const eventParticipantRoleSchema = z.enum(EVENT_PARTICIPANT_ROLES);
 export type EventParticipantRole = z.infer<typeof eventParticipantRoleSchema>;
 
-export const REGISTRATION_BADGE_ROLES = EVENT_PARTICIPANT_ROLES;
+export const REGISTRATION_BADGE_ROLES = [...EVENT_PARTICIPANT_ROLES, "sponsor"] as const;
 export const registrationBadgeRoleSchema = z.enum(REGISTRATION_BADGE_ROLES);
 export type RegistrationBadgeRole = z.infer<typeof registrationBadgeRoleSchema>;
 
+/** Printed display bands do not grant event duties, membership, or sponsor access. */
+export const badgeDisplayRoleSchema = z.enum(["attendee", "speaker", "staff", "sponsor"]);
+export type BadgeDisplayRole = z.infer<typeof badgeDisplayRoleSchema>;
+
 /** Proposal referral badges may describe proposal ownership before acceptance. */
-export const SOCIAL_BADGE_ROLES = [...EVENT_PARTICIPANT_ROLES, "proposer", "co_speaker"] as const;
+export const SOCIAL_BADGE_ROLES = [...REGISTRATION_BADGE_ROLES, "proposer", "co_speaker"] as const;
 export const socialBadgeRoleSchema = z.enum(SOCIAL_BADGE_ROLES);
 export type SocialBadgeRole = z.infer<typeof socialBadgeRoleSchema>;
 

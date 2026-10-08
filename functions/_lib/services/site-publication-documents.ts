@@ -12,7 +12,10 @@ import {
 } from "../../../assets/shared/schemas/event-session-history";
 import { legacyAgendaDownloadSchema } from "../../../assets/shared/schemas/event-agenda-legacy-fragments";
 import type { LegacyAgendaDownload } from "../../../assets/shared/schemas/event-agenda-legacy-fragments";
-import { assertPublicationMachineExtraction } from "./site-publication-machine-extraction";
+import {
+  assertPublicationMachineExtraction,
+  preparePublicationMachineExtractionGuard,
+} from "./site-publication-machine-extraction";
 import { publicationDocumentGrantId } from "../../../assets/shared/schemas/site-publication-documents";
 
 export interface PublishedDocument {
@@ -266,12 +269,7 @@ export async function recordPublishedDocuments(
   const claimed = documents.map(documentIdentity).sort();
   if (JSON.stringify(selected.map(documentIdentity).sort()) !== JSON.stringify(claimed))
     throw new Error("Published PDF selection does not match the approved snapshot");
-  const statements = [
-    prepareAuthorizationGuard(db, {
-      sql: `SELECT 1 FROM site_publication_pipeline_fence fence JOIN site_publication_provider_attempts attempt ON attempt.id=fence.attempt_id JOIN site_publication_delivery_state state ON state.id=1 WHERE fence.id=1 AND attempt.id=? AND attempt.build_id=? AND attempt.phase='build_attested' AND fence.lease_token=attempt.lease_token AND state.desired_sequence=?`,
-      bindings: [machine.attemptId, machine.buildId, machine.sourceSequence],
-    }),
-  ];
+  const statements = [preparePublicationMachineExtractionGuard(db, machine)];
   for (let offset = 0; offset < selections.length; offset += 100) {
     const page = selections
       .slice(offset, offset + 100)

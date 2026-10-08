@@ -12,6 +12,7 @@ import {
 } from "./registration";
 import { eventDayResponseSchema } from "./event-configuration";
 import { sourceTypeSchema } from "./source";
+import { eventRegistrationAttendanceChangeSchema } from "./event-registrations";
 
 /** RSVP state attached to a registration's most recent response for each day. */
 export const eventRegistrationRsvpDaySchema = z.object({
@@ -60,6 +61,7 @@ export const eventRegistrationDetailResponseSchema = z.object({
   form: activeFormSummarySchema.nullable(),
   dayAttendance: z.array(eventRegistrationDayAttendanceSchema),
   dayWaitlist: z.array(eventRegistrationDayWaitlistSchema),
+  attendanceChangeHistory: z.array(eventRegistrationAttendanceChangeSchema),
 });
 
 export const eventRegistrationAttendanceDetailResponseSchema = z.object({

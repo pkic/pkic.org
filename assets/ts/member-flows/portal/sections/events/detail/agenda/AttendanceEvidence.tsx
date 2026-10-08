@@ -146,18 +146,21 @@ export function AttendanceCorrectionReview({
 export function AttendanceEvidence({
   slug,
   occurrenceId,
+  userId,
   timeZone,
   canCorrect = false,
   onChanged,
 }: {
   slug: string;
-  occurrenceId: string;
+  occurrenceId?: string;
+  userId?: string;
   timeZone: string;
   canCorrect?: boolean;
   onChanged: () => void;
 }) {
   const [selected, setSelected] = useState<Evidence | null>(null),
     [epoch, setEpoch] = useState(0);
+  if (!occurrenceId && !userId) return <ErrorAlert error="Select an attendee or session to review attendance." />;
   if (selected)
     return (
       <Panel>
@@ -182,9 +185,11 @@ export function AttendanceEvidence({
   return (
     <div class="pk-stack">
       <ApiDataTable
-        key={epoch}
+        key={`${slug}:${occurrenceId ?? ""}:${userId ?? ""}:${epoch}`}
+        clearDataOnReload
+        retainDataOnError={false}
         endpoint={`/api/v1/events/${encodeURIComponent(slug)}/attendance/observations`}
-        params={{ occurrenceId }}
+        params={{ ...(occurrenceId ? { occurrenceId } : {}), ...(userId ? { userId } : {}) }}
         responseSchema={attendanceEvidenceResponseSchema}
         resolve={(value) => value.observations}
         resolvePage={(value) => value.page}
@@ -194,6 +199,21 @@ export function AttendanceEvidence({
         initialSort="-observedAt"
         columns={[
           { header: "Attendee", cell: (row) => row.displayName ?? "Attendee" },
+          ...(userId
+            ? [
+                {
+                  header: "Check-in scope",
+                  cell: (row: Evidence) =>
+                    row.occurrenceId ? (
+                      <span>
+                        Session <code>{row.occurrenceId}</code>
+                      </span>
+                    ) : (
+                      "Event entrance"
+                    ),
+                },
+              ]
+            : []),
           {
             header: "Observed",
             cell: (row) =>

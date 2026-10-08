@@ -1,4 +1,9 @@
 import {
+  resolvePublishedRecordings,
+  recordPublishedRecordings,
+} from "../functions/_lib/services/site-publication-recordings";
+import { verifyPublicRecordings } from "../scripts/publication/verify-public-recordings.mjs";
+import {
   resolvePublishedDocuments,
   resolveRetainedPublishedDocuments,
   recordPublishedDocuments,
@@ -96,6 +101,10 @@ export async function readPublicationSource() {
     const verifiedObjects = await verifyPublicDocuments(documents, (key) =>
       requirePresentationBucket(platform.env).get(key),
     );
+    const recordings = await resolvePublishedRecordings(platform.env.DB, snapshot);
+    const verifiedRecordings = await verifyPublicRecordings(recordings, (key, options) =>
+      requirePresentationBucket(platform.env).get(key, options),
+    );
     const references = publishedMediaReferences(snapshot);
     if (references.length && !platform.env.ASSETS_BUCKET)
       throw new Error("Public media requires the native R2 binding");
@@ -123,6 +132,9 @@ export async function readPublicationSource() {
     const verifiedDocuments = await resolvePublishedDocuments(platform.env.DB, verified);
     if (JSON.stringify(documents) !== JSON.stringify(verifiedDocuments))
       throw new Error("Published PDF sources changed during extraction");
+    const currentRecordings = await resolvePublishedRecordings(platform.env.DB, verified);
+    if (JSON.stringify(recordings) !== JSON.stringify(currentRecordings))
+      throw new Error("Published recording sources changed during extraction");
     const verifiedKeys = await resolvePublishedMediaKeys(platform.env.DB, publishedMediaReferences(verified));
     const mediaChanged =
       Object.keys(keys).length !== Object.keys(verifiedKeys).length ||
@@ -132,11 +144,12 @@ export async function readPublicationSource() {
       throw new Error("Public content or selected media changed during export; rebuild the publication");
     await assertPublicationMachineExtraction(platform.env.DB, process.env);
     await recordPublishedDocuments(platform.env.DB, published, verifiedObjects, process.env);
-    if (verifiedObjects.length && !machine)
+    await recordPublishedRecordings(platform.env.DB, published, verifiedRecordings, process.env);
+    if ((verifiedObjects.length || verifiedRecordings.length) && !machine)
       throw new Error("Published PDF projections require the attested native publication coordinator");
-    for (const document of verifiedObjects) {
+    for (const document of [...verifiedObjects, ...verifiedRecordings]) {
       const projection = { ...document };
-      delete projection.legacyDownload;
+      if ("legacyDownload" in projection) delete projection.legacyDownload;
       await writePublicationDocumentAllow(
         requirePresentationBucket(platform.env),
         publicationDocumentAllowSchema.parse({ ...projection, version: 1 }),
@@ -144,7 +157,7 @@ export async function readPublicationSource() {
     }
     await writeFile(
       resolve(output, "document-routes.json"),
-      JSON.stringify(collectDocumentRedirects(published, verifiedObjects, retainedDocuments)),
+      JSON.stringify(collectDocumentRedirects(published, verifiedObjects, retainedDocuments, verifiedRecordings)),
     );
     await writeFile(resolve(output, "retained-documents.json"), JSON.stringify(retainedDocuments));
     await writeFile(resolve(output, "snapshot.json"), JSON.stringify(published));

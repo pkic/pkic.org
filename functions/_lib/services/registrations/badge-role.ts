@@ -8,6 +8,8 @@ import { requirePermission } from "../../auth/permissions";
 import { requireAdminDatabaseUserId } from "../../auth/admin-identity";
 import { batchFirst, batchRows } from "../../db/pagination";
 import { AppError } from "../../errors";
+import type { AuthorizationEvidence } from "../../db/authorization-guard";
+import type { BadgeDisplayRole } from "../../../../assets/shared/schemas/participant-roles";
 import type { AuthAdmin, DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { prepareAuditLog } from "../audit";
@@ -32,7 +34,7 @@ function resolveAutoRole(rows: ParticipantRow[]): RegistrationBadgeRole {
   return toRegistrationBadgeRole(rows[0]?.role) ?? "attendee";
 }
 
-async function loadBadgeRole(db: DatabaseLike, eventId: string, registrationId: string) {
+export async function loadRegistrationBadgeRole(db: DatabaseLike, eventId: string, registrationId: string) {
   const [registrationResult, participantResult] = await db.batch([
     db
       .prepare(
@@ -54,10 +56,12 @@ async function loadBadgeRole(db: DatabaseLike, eventId: string, registrationId: 
   ]);
   const registration = batchFirst<RegistrationRow>(registrationResult);
   if (!registration) throw new AppError(404, "REGISTRATION_NOT_FOUND", "Registration not found");
-  const autoDetected = resolveAutoRole(batchRows<ParticipantRow>(participantResult));
+  const participants = batchRows<ParticipantRow>(participantResult);
+  const autoDetected = resolveAutoRole(participants);
   const registrationOverride = toRegistrationBadgeRole(registration.override_role);
   return {
     registration,
+    autoSourceRole: participants[0]?.role ?? null,
     response: registrationBadgeResponseSchema.parse({
       admin_override: registrationOverride,
       auto_detected: autoDetected,
@@ -75,7 +79,7 @@ export async function getRegistrationBadge(
 ) {
   const event = await getEventBySlug(db, eventSlug);
   requirePermission(actor, "events:manage", { type: "event", id: event.id });
-  return (await loadBadgeRole(db, event.id, registrationId)).response;
+  return (await loadRegistrationBadgeRole(db, event.id, registrationId)).response;
 }
 
 export async function setRegistrationBadge(
@@ -85,7 +89,7 @@ export async function setRegistrationBadge(
 ) {
   const event = await getEventBySlug(db, input.eventSlug);
   requirePermission(actor, "events:manage", { type: "event", id: event.id });
-  const current = await loadBadgeRole(db, event.id, input.registrationId);
+  const current = await loadRegistrationBadgeRole(db, event.id, input.registrationId);
   const newRole = input.patch.role && input.patch.role !== "attendee" ? input.patch.role : null;
   const setterUserId = newRole ? requireAdminDatabaseUserId(actor) : null;
   const at = nowIso();
@@ -112,9 +116,38 @@ export async function setRegistrationBadge(
       newRole,
     }),
   ]);
-  const updated = (await loadBadgeRole(db, event.id, input.registrationId)).response;
+  const updated = (await loadRegistrationBadgeRole(db, event.id, input.registrationId)).response;
   return {
     response: registrationBadgeResponseSchema.parse({ ...updated, success: true }),
     userId: current.registration.user_id,
+  };
+}
+
+/** Badge footer categories do not grant participant duties or permissions. */
+export function registrationBadgeDisplayRole(role: RegistrationBadgeRole): BadgeDisplayRole {
+  if (role === "speaker" || role === "moderator" || role === "panelist") return "speaker";
+  if (role === "organizer" || role === "staff") return "staff";
+  return role === "sponsor" ? "sponsor" : "attendee";
+}
+
+/** Recheck the same override and ranked automatic role before releasing print metadata. */
+export function registrationBadgeRoleEvidence(
+  eventId: string,
+  captured: Awaited<ReturnType<typeof loadRegistrationBadgeRole>>,
+): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1 FROM registrations r
+      LEFT JOIN registration_badge_role_overrides bro ON bro.registration_id=r.id
+      WHERE r.event_id=? AND r.id=? AND r.user_id=? AND bro.role IS ?
+        AND (SELECT ep.role FROM event_participant_badge_roles ep
+          WHERE ep.event_id=r.event_id AND ep.user_id=r.user_id
+          ORDER BY ep.priority ASC,ep.role ASC LIMIT 1) IS ?`,
+    bindings: [
+      eventId,
+      captured.registration.id,
+      captured.registration.user_id,
+      captured.registration.override_role,
+      captured.autoSourceRole,
+    ],
   };
 }

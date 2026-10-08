@@ -16,10 +16,14 @@ import { getJson } from "../../../../../shared/api-client";
 import { eventAnalyticsResponseSchema } from "../../../../../../shared/schemas/event-analytics";
 import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../../../../../shared/attendance";
 import { StackedBarChart } from "../../../../../ui/StackedBarChart";
+import { formatDayAndMonth } from "../../../../../../shared/format-date";
 import { isoDateRange } from "../../../../../components/analytics/date-range";
 import type { EventStatsResponse } from "../types";
 import { useData } from "../../../../../hooks/useData";
 import { AttendanceChangeDashboard } from "./AttendanceChangeDashboard";
+const SessionDemandReport = lazy(() =>
+  import("./SessionDemandReport").then((module) => ({ default: module.SessionDemandReport })),
+);
 const Promoters = lazy(() => import("./Promoters").then((module) => ({ default: module.Promoters })));
 
 /**
@@ -56,30 +60,100 @@ interface WaitlistDayRow {
 }
 
 /** The page's sections, each a routed tab (#118). */
-type StatsSection = "overview" | "attendance" | "registrations" | "invitations" | "calendar" | "promoters";
+type StatsSection =
+  "overview" | "registration-changes" | "registrations" | "invitations" | "calendar" | "promoters" | "session-demand";
 const STATS_SECTIONS: ReadonlyArray<{ key: StatsSection; label: string }> = [
   { key: "overview", label: "Overview" },
-  { key: "attendance", label: "Attendance" },
+  { key: "registration-changes", label: "Registration changes" },
   { key: "registrations", label: "Registrations" },
   { key: "invitations", label: "Invitations" },
   { key: "calendar", label: "Calendar" },
   { key: "promoters", label: "Promoters" },
+  { key: "session-demand", label: "Session demand" },
 ];
+
+const AttendanceReport = lazy(() =>
+  import("./agenda/AttendanceReport").then((module) => ({ default: module.AttendanceReport })),
+);
+type AttendanceAccess = { timeZone: string; canRead: boolean; canImport: boolean; canCorrect: boolean };
 
 export function EventStats({
   slug,
   section,
   subTab,
   basePath = `/events/${encodeURIComponent(slug)}/stats`,
+  canViewAnalytics = true,
+  attendance,
+}: {
+  slug: string;
+  section?: string;
+  subTab?: string;
+  basePath?: string;
+  canViewAnalytics?: boolean;
+  attendance?: AttendanceAccess;
+}) {
+  const [location, navigate] = usePortalHashLocation();
+  const canViewAttendance = Boolean(attendance?.canRead || attendance?.canImport);
+  const sections = [
+    ...(canViewAnalytics ? STATS_SECTIONS : []),
+    ...(canViewAttendance ? [{ key: "attendance", label: "Attendance" }] : []),
+  ];
+  const active = sections.some((item) => item.key === section) ? section! : sections[0]?.key;
+  const hrefFor = (key: string) => (key === "overview" ? basePath : `${basePath}/${key}`);
+  const attendanceBase = `${basePath}/attendance`;
+  const attendanceParts = location.startsWith(`${attendanceBase}/`)
+    ? location
+        .slice(attendanceBase.length + 1)
+        .split("/")
+        .filter(Boolean)
+        .map(decodeURIComponent)
+    : [];
+  return (
+    <div class="pk pk-stack">
+      <Tabs
+        label="Analytics sections"
+        items={sections}
+        active={active ?? ""}
+        onChange={(key) => navigate(hrefFor(key))}
+        hrefFor={hrefFor}
+      />
+      {active === "attendance" && attendance && (
+        <Suspense fallback={<Spinner label="Loading attendance…" />}>
+          <AttendanceReport
+            slug={slug}
+            basePath={attendanceBase}
+            section={attendanceParts[0]}
+            detailId={attendanceParts[1]}
+            detailTab={attendanceParts[2]}
+            {...attendance}
+          />
+        </Suspense>
+      )}
+      {active === "session-demand" && (
+        <Suspense fallback={<Spinner label="Loading session demand…" />}>
+          <SessionDemandReport slug={slug} />
+        </Suspense>
+      )}
+      {active === "promoters" && (
+        <Suspense fallback={<Spinner label="Loading promoters…" />}>
+          <Promoters slug={slug} subTab={subTab} basePath={`${basePath}/promoters`} />
+        </Suspense>
+      )}
+      {active && !["attendance", "session-demand", "promoters"].includes(active) && canViewAnalytics && (
+        <EventStatsData slug={slug} section={active} />
+      )}
+    </div>
+  );
+}
+
+function EventStatsData({
+  slug,
+  section,
 }: {
   slug: string;
   /** The routed section below the tab; the overview when absent. */
   section?: string;
-  subTab?: string;
-  /** Where the sections live, so the tabs stay inside the workspace that rendered them. */
-  basePath?: string;
 }) {
-  const [, navigate] = usePortalHashLocation();
   const {
     data: stats,
     loading,
@@ -172,6 +246,9 @@ export function EventStats({
 
   // By-day chart
   const dayLabels = [...new Set(registrationsByEventDay.map((r) => r.label ?? r.day_date))];
+  const dayDates = dayLabels.map(
+    (label) => registrationsByEventDay.find((row) => (row.label ?? row.day_date) === label)!.day_date,
+  );
   const dayAttTypes = [...new Set(registrationsByEventDay.map((r) => r.attendance_type))];
   const dayIdx: Record<string, Record<string, { accepted: number; pending: number }>> = {};
   for (const r of registrationsByEventDay) {
@@ -228,13 +305,8 @@ export function EventStats({
 
   // The sections a reader can open: the calendar only once something has
   // been answered, and the invitation section only when invitations exist.
-  const hasInvites = Boolean(s.invites?.attendee || s.invites?.speaker);
-  const hasRsvp = (s.rsvp?.total ?? 0) > 0;
-  const sections = STATS_SECTIONS.filter(
-    ({ key }) => (key !== "calendar" || hasRsvp) && (key !== "invitations" || hasInvites),
-  );
+  const sections = STATS_SECTIONS;
   const active: StatsSection = sections.find(({ key }) => key === section)?.key ?? "overview";
-  const hrefFor = (key: string) => (key === "overview" ? basePath : `${basePath}/${key}`);
 
   return (
     <div class="pk pk-stack">
@@ -242,19 +314,6 @@ export function EventStats({
           moving, how registrations arrived, how invitations fared. Each is a
           section with its own address rather than a column of every panel
           at once (#118). */}
-      <Tabs
-        label="Analytics sections"
-        items={sections}
-        active={active}
-        onChange={(key) => navigate(hrefFor(key))}
-        hrefFor={hrefFor}
-      />
-
-      {active === "promoters" && (
-        <Suspense fallback={<Spinner label="Loading promoters…" />}>
-          <Promoters slug={slug} subTab={subTab} basePath={`${basePath}/promoters`} />
-        </Suspense>
-      )}
       {active === "overview" && (
         <>
           <Panel>
@@ -334,7 +393,12 @@ export function EventStats({
                   <Badge tone="neutral">light = pending/waitlisted</Badge>
                 </div>
                 {daySeries.length > 0 ? (
-                  <StackedBarChart labels={dayLabels} series={daySeries} caption="Registrations by event day" />
+                  <StackedBarChart
+                    labels={dayDates.map(formatDayAndMonth)}
+                    isoLabels={dayDates}
+                    series={daySeries}
+                    caption="Registrations by event day"
+                  />
                 ) : (
                   <EmptyState title="No registrations on any event day yet." />
                 )}
@@ -344,7 +408,7 @@ export function EventStats({
         </>
       )}
 
-      {active === "attendance" && <AttendanceChangeDashboard slug={slug} changes={attendanceChanges} />}
+      {active === "registration-changes" && <AttendanceChangeDashboard slug={slug} changes={attendanceChanges} />}
 
       {active === "registrations" && (
         <>

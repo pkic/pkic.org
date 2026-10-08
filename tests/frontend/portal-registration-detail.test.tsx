@@ -16,6 +16,9 @@ import { RegistrationDetailPage } from "../../assets/ts/member-flows/portal/sect
 import { eventRegistrationDetailResponseSchema } from "../../assets/shared/schemas/event-registration-detail";
 import { eventRegistrationNotificationCreateSchema } from "../../assets/shared/schemas/route-contracts-event-registration-management";
 
+import { portalSession, authStatus } from "../../assets/ts/member-flows/portal/state";
+import { portalSessionFixture } from "../helpers/portal-session";
+
 const navigate = vi.fn();
 
 vi.mock("wouter/use-hash-location", () => ({
@@ -47,6 +50,20 @@ const detailResponse = eventRegistrationDetailResponseSchema.parse({
   form: null,
   dayAttendance: [{ dayDate: "2026-09-16", attendanceType: "virtual", label: "Conference day" }],
   dayWaitlist: [],
+  attendanceChangeHistory: [
+    {
+      changedAt: "2026-08-03T10:00:00.000Z",
+      transitions: [
+        { fromType: "in_person", toType: "virtual", days: [{ dayDate: "2026-09-16", label: "Conference day" }] },
+      ],
+    },
+    {
+      changedAt: "2026-08-04T10:00:00.000Z",
+      transitions: [
+        { fromType: "virtual", toType: "on_demand", days: [{ dayDate: "2026-09-16", label: "Conference day" }] },
+      ],
+    },
+  ],
 });
 
 const mounted: HTMLElement[] = [];
@@ -137,11 +154,29 @@ afterEach(() => {
   }
   vi.unstubAllGlobals();
   navigate.mockReset();
+  portalSession.value = null;
+  authStatus.value = "anonymous";
+  history.replaceState(null, "", location.pathname);
 });
 
 describe("registration detail", () => {
-  it("names every control and binds the referral field's label to a real input", async () => {
+  it("shows every recorded attendance transition directly in the registration detail", async () => {
     stubApi(() => json({ success: true, message: "Email queued" }));
+    const container = mount(<RegistrationDetailPage slug={SLUG} regId={REG_ID} />);
+    await settle();
+    const table = [...container.querySelectorAll("table")].find(
+      (candidate) => candidate.querySelector("caption")?.textContent === "Attendance changes",
+    );
+    expect(table).toBeDefined();
+    expect(table?.textContent).toContain("In-person → Virtual · Conference day");
+    expect(table?.textContent).toContain("Virtual → On-demand · Conference day");
+    expect(table?.querySelectorAll("tbody tr")).toHaveLength(2);
+    expect(table?.closest("details")).toBeNull();
+  });
+  it("names every control and binds the referral field's label to a real input", async () => {
+    const captured = stubApi(() => json({ success: true, message: "Email queued" }));
+    portalSession.value = portalSessionFixture({ staff: true });
+    authStatus.value = "authenticated";
 
     const container = mount(<RegistrationDetailPage slug={SLUG} regId={REG_ID} />);
     await settle();
@@ -173,17 +208,24 @@ describe("registration detail", () => {
     expect(badgeLink?.getAttribute("href")).toBe(`${location.origin}/api/v1/registrations/referrals/abc123/badge`);
     expect(badgeLink?.getAttribute("rel")).toBe("noopener");
 
-    // The history table says whose history it is, so a page carrying several
-    // tables does not announce two of them under the same generic name.
-    expect([...container.querySelectorAll("caption")].map((caption) => caption.textContent)).toContain(
-      "Registration history",
+    expect(container.querySelector(".pk-record > aside")).not.toBeNull();
+    expect(container.querySelector(".pk-record table tbody")?.textContent).toContain("Virtual");
+    const account = [...container.querySelectorAll("a")].find((anchor) => anchor.textContent === "Account");
+    expect(account?.getAttribute("href")).toBe("#/users/22222222-2222-4222-8222-222222222222");
+    expect(captured.some((request) => request.pathname.endsWith("/audit"))).toBe(false);
+    await act(async () => {
+      buttonNamed(container, "History").click();
+    });
+    await vi.waitFor(() =>
+      expect([...container.querySelectorAll("caption")].map((caption) => caption.textContent)).toContain(
+        "Registration history",
+      ),
     );
     const auditHeader = [...container.querySelectorAll(".pk-panel__title")].find(
       (heading) => heading.textContent === "Audit log",
     );
     expect(auditHeader?.closest(".pk-panel")?.querySelector(":scope > .pk-table-list")).not.toBeNull();
-    expect(container.querySelector(".pk-record > aside")).not.toBeNull();
-    expect(container.querySelector(".pk-record table tbody")?.textContent).toContain("Virtual");
+    expect(captured.filter((request) => request.pathname.endsWith("/audit"))).toHaveLength(1);
   });
 
   it("sends the shared notification contract and announces the queued email", async () => {

@@ -8,10 +8,16 @@ import {
   badgeCredentialsQuerySchema,
   badgeCredentialsResponseSchema,
   badgeIssueRequestSchema,
+  badgePrintingResponseSchema,
+  badgePrintRequestSchema,
+  badgePrintResponseSchema,
 } from "../../assets/shared/schemas/route-contracts-event-badges";
 import { BadgeCredentials } from "../../assets/ts/member-flows/portal/sections/events/detail/badges/BadgeCredentials";
 import { BadgeIssuance } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/BadgeIssuance";
 import { confirmAction } from "../../assets/ts/components/ConfirmDialog";
+
+import { clearAuth, savePortalSession } from "../../assets/ts/member-flows/portal/state";
+import { portalSessionFixture } from "../helpers/portal-session";
 
 const navigate = vi.fn();
 const qr = vi.fn(
@@ -38,7 +44,7 @@ const metadata = badgeCredentialMetadataSchema.parse({
   userId: USER,
   displayName: "Sam Speaker",
   createdAt: "2026-10-05T10:00:00.000Z",
-  expiresAt: "2026-10-06T10:00:00.000Z",
+  expiresAt: "2099-01-01T00:00:00.000Z",
   revokedAt: null,
   status: "active",
 });
@@ -79,6 +85,8 @@ function requestUrl(input: RequestInfo | URL): URL {
 }
 
 beforeEach(() => {
+  clearAuth();
+  savePortalSession(portalSessionFixture({ member: true }));
   viewer.timeZone = "UTC";
   navigate.mockReset();
   qr.mockClear();
@@ -89,6 +97,7 @@ afterEach(() => {
     void act(() => render(null, host));
     host.remove();
   }
+  clearAuth();
   vi.unstubAllGlobals();
 });
 
@@ -196,7 +205,26 @@ describe("badge credentials", () => {
     const bodies: unknown[] = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const path = requestUrl(input).pathname;
+        if (path.endsWith("/printing"))
+          return json(badgePrintingResponseSchema.parse({ revision: "1".repeat(64), template: null, branding: [] }));
+        if (path.endsWith("/print")) {
+          expect(badgePrintRequestSchema.parse(JSON.parse(String(init?.body))).printingRevision).toBe("1".repeat(64));
+          return json(
+            badgePrintResponseSchema.parse({
+              id: NEXT,
+              displayName: metadata.displayName,
+              firstName: "Sam",
+              lastName: "Speaker",
+              organization: null,
+              badgeRole: "speaker",
+              printingRevision: "1".repeat(64),
+              expiresAt: metadata.expiresAt,
+              svg: '<svg xmlns="http://www.w3.org/2000/svg"><text>Badge code</text><text>ABCD-EFGH-JKLM-NPQR</text></svg>',
+            }),
+          );
+        }
         if (!init?.body) return json({ ...metadata, id: NEXT });
         bodies.push(JSON.parse(String(init.body)));
         return json({
@@ -223,10 +251,7 @@ describe("badge credentials", () => {
     );
     expect(printable).toContain(">Badge code</text>");
     expect(printable).toContain(">ABCD-EFGH-JKLM-NPQR</text>");
-    expect(qr).toHaveBeenCalledWith(
-      BEARER,
-      expect.objectContaining({ type: "svg", errorCorrectionLevel: "M", margin: 4 }),
-    );
+    expect(qr).not.toHaveBeenCalled();
     await click(host, "Badge actions");
     await click(host, "View credential");
     expect(navigate).toHaveBeenCalledWith(NEXT);

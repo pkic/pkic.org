@@ -9,6 +9,7 @@ import { formatDateTime, formatDateTimeInZone } from "../../../../../../shared/u
 import { Alert } from "../../../../../../ui/Alert";
 import { DescriptionList } from "../../../../../../ui/DescriptionList";
 import { DataTable } from "../../../../../../ui/DataTable";
+import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
 
 function HistoricalAttribution({
   metadata,
@@ -130,19 +131,21 @@ export function HistoricalMappingReview({
                 </ul>
               </Alert>
             )}
-            <details>
-              <summary>Source evidence</summary>
-              <DescriptionList
-                items={[
-                  { term: "Original source", value: entry.originalSource.sourcePath },
-                  { term: "Original source reference", value: entry.originalSource.sourceRef },
-                  { term: "Original source digest", value: entry.originalSource.sourceDigest },
-                  { term: "Incoming source", value: entry.sourcePath },
-                  { term: "Incoming source reference", value: entry.sourceRef },
-                  { term: "Incoming source digest", value: entry.sourceDigest },
-                ]}
-              />
-            </details>
+            <Panel aria-label="Source evidence">
+              <PanelHeader title="Source evidence" headingLevel={4} />
+              <PanelBody>
+                <DescriptionList
+                  items={[
+                    { term: "Original source", value: entry.originalSource.sourcePath },
+                    { term: "Original source reference", value: entry.originalSource.sourceRef },
+                    { term: "Original source digest", value: entry.originalSource.sourceDigest },
+                    { term: "Incoming source", value: entry.sourcePath },
+                    { term: "Incoming source reference", value: entry.sourceRef },
+                    { term: "Incoming source digest", value: entry.sourceDigest },
+                  ]}
+                />
+              </PanelBody>
+            </Panel>
             <HistoricalAttribution
               label="Original historical attribution"
               metadata={entry.originalMetadata}
@@ -191,18 +194,20 @@ export function HistoricalMappingReview({
               ]}
             />
             {entry.people.length > 0 && (
-              <details>
-                <summary>Record references</summary>
-                <DescriptionList
-                  items={entry.people.map((person) => ({
-                    term: person.sourceRef,
-                    value:
-                      person.userId === null
-                        ? "Needs verified mapping"
-                        : `${person.userId} / ${person.actingIdentityId ?? "Explicit individual"}`,
-                  }))}
-                />
-              </details>
+              <Panel aria-label="Record references">
+                <PanelHeader title="Record references" headingLevel={4} />
+                <PanelBody>
+                  <DescriptionList
+                    items={entry.people.map((person) => ({
+                      term: person.sourceRef,
+                      value:
+                        person.userId === null
+                          ? "Needs verified mapping"
+                          : `${person.userId} / ${person.actingIdentityId ?? "Explicit individual"}`,
+                    }))}
+                  />
+                </PanelBody>
+              </Panel>
             )}
             {materials.length > 0 && (
               <DescriptionList

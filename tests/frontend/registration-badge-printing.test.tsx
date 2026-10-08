@@ -10,6 +10,7 @@ import {
   badgeIssueRequestSchema,
   badgePrintRequestSchema,
   badgeCredentialMetadataSchema,
+  badgePrintingResponseSchema,
 } from "../../assets/shared/schemas/route-contracts-event-badges";
 import { RegistrationBadgePrinting } from "../../assets/ts/components/event-badges/RegistrationBadgePrinting";
 import {
@@ -19,6 +20,13 @@ import {
 } from "../../assets/ts/components/event-badges/badge-print-population";
 import { downloadBadgeArtifact } from "../../assets/ts/components/event-badges/badge-print-artifacts";
 import QR from "qrcode";
+import { BadgePrintLayoutEditor } from "../../assets/ts/components/event-badges/BadgePrintLayoutEditor";
+import { controlFor } from "./helpers/labelled-control";
+import { badgePrintSettingsSchema } from "../../assets/shared/schemas/badge-print-layout";
+import { BadgePrintPreview } from "../../assets/ts/components/event-badges/BadgePrintPreview";
+import { BADGE_GENERIC_FONT_LICENSE } from "../../assets/shared/badge-generic-template-assets";
+import { badgePrintHtml } from "../../assets/ts/components/event-badges/badge-print-artifacts";
+import { badgePrintPreset } from "../../assets/shared/badge-print-layout";
 import { confirmAction } from "../../assets/ts/components/ConfirmDialog";
 
 vi.mock("../../assets/ts/components/ConfirmDialog", () => ({ confirmAction: vi.fn(async () => true) }));
@@ -29,11 +37,28 @@ vi.mock("qrcode", () => ({
     ),
   },
 }));
+const archiveGate = vi.hoisted(() => ({ resolve: null as ((blob: Blob) => void) | null }));
+vi.mock("../../assets/ts/components/event-badges/badge-svg-archive", () => ({
+  badgeSvgArchive: vi.fn(
+    () =>
+      new Promise<Blob>((resolve) => {
+        archiveGate.resolve = resolve;
+      }),
+  ),
+}));
 const eventId = "80000000-0000-4000-8000-000000000001";
 vi.mock("../../assets/ts/components/event-badges/badge-print-artifacts", async (importOriginal) => ({
   ...(await importOriginal<typeof import("../../assets/ts/components/event-badges/badge-print-artifacts")>()),
   downloadBadgeArtifact: vi.fn(),
 }));
+const printing = badgePrintingResponseSchema.parse({ revision: "1".repeat(64), template: null, branding: [] });
+const printDetails = {
+  firstName: "Synthetic",
+  lastName: "Attendee",
+  organization: null,
+  badgeRole: "attendee" as const,
+  printingRevision: printing.revision,
+};
 const endpoint = "/api/v1/groups/example/events/workshop/registrations/badges/population";
 const mounted: HTMLElement[] = [];
 
@@ -161,6 +186,36 @@ it("loads every filtered page before confirmation, retains successful badges on 
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const pathname = new URL(String(input), location.origin).pathname;
+      if (pathname.endsWith("/printing")) return json(printing);
+      if (pathname.endsWith("/print")) {
+        const parsed = badgePrintRequestSchema.parse(JSON.parse(String(init.body)));
+        expect(parsed.printingRevision).toBe(printing.revision);
+        const id = pathname.split("/").at(-2)!;
+        const index = Number(id.slice(-12));
+        return json({
+          ...printDetails,
+          id,
+          svg: '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 37 37"><path d="M4 4h1v1H4z"/></svg>',
+          displayName: row(index).display_name,
+          expiresAt: "2026-12-01T00:00:00.000Z",
+        });
+      }
+      if (init.method !== "POST" && !pathname.endsWith("/population")) {
+        const id = pathname.split("/").at(-1)!;
+        const index = Number(id.slice(-12));
+        return json({
+          id,
+          eventId,
+          userId: row(index).user_id,
+          displayName: row(index).display_name,
+          createdAt: "2026-10-07T00:00:00.000Z",
+          expiresAt: "2026-12-01T00:00:00.000Z",
+          revokedAt: null,
+          status: "active",
+          reprintAvailable: true,
+        });
+      }
       if (init.method !== "POST") {
         const parsed = query(input);
         reads++;
@@ -268,6 +323,20 @@ it.each(["session changed", "revoked"])(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
         const path = new URL(String(input), location.origin).pathname;
+        if (path.endsWith("/printing")) return json(printing);
+        const firstId = "60000000-0000-4000-8000-000000000001";
+        if (path.endsWith(`${firstId}/print`)) {
+          badgePrintRequestSchema.parse(JSON.parse(String(init.body)));
+          return json({
+            ...printDetails,
+            id: firstId,
+            svg,
+            displayName: row(1).display_name,
+            expiresAt: metadata.expiresAt,
+          });
+        }
+        if (init.method !== "POST" && path.endsWith(firstId))
+          return json({ ...metadata, id: firstId, userId: row(1).user_id, displayName: row(1).display_name });
         if (init.method !== "POST") {
           expect(path).toBe(`/api/v1/events/workshop/badges/${badgeId}`);
           metadataReads++;
@@ -276,12 +345,23 @@ it.each(["session changed", "revoked"])(
         if (path.endsWith("/print")) {
           expect(path).toBe(`/api/v1/events/workshop/badges/${badgeId}/print`);
           printBodies.push(badgePrintRequestSchema.parse(JSON.parse(String(init.body))));
+          if (revoked)
+            return json(
+              { error: { code: "BADGE_PRINT_UNAVAILABLE", message: "Badge no longer available for printing." } },
+              409,
+            );
           if (printBodies.length === 1)
             return json(
               { error: { code: "TEMPORARY_UNAVAILABLE", message: "Synthetic print preparation interrupted" } },
               503,
             );
-          return json({ id: badgeId, svg, displayName: metadata.displayName, expiresAt: metadata.expiresAt });
+          return json({
+            ...printDetails,
+            id: badgeId,
+            svg,
+            displayName: metadata.displayName,
+            expiresAt: metadata.expiresAt,
+          });
         }
         expect(path).toBe("/api/v1/events/workshop/badges");
         const body = badgeIssueRequestSchema.parse(JSON.parse(String(init.body)));
@@ -329,18 +409,13 @@ it.each(["session changed", "revoked"])(
     expect(host.textContent).toContain("1 of 2 requests completed");
     await click(host, "Retry remaining requests");
     await vi.waitFor(() => expect(host.textContent).toContain("2 of 2 requests completed"));
-    expect(issueBodies.map((body) => body.userId)).toEqual([
-      row(1).user_id,
-      row(2).user_id,
-      row(2).user_id,
-      row(2).user_id,
-    ]);
+    expect(issueBodies.map((body) => body.userId)).toEqual([row(1).user_id, row(2).user_id, row(2).user_id]);
     expect(new Set(issueBodies.slice(1).map((body) => body.operationId)).size).toBe(1);
     expect(printBodies).toHaveLength(2);
     expect(printBodies[0]).toEqual(printBodies[1]);
     expect(printBodies[0]?.operationId).not.toBe(issueBodies[1]?.operationId);
-    expect(QR.toString).toHaveBeenCalledTimes(1);
-    expect(metadataReads).toBe(2);
+    expect(QR.toString).not.toHaveBeenCalled();
+    expect(metadataReads).toBe(1);
     expect(host.querySelector("iframe")?.getAttribute("srcdoc")).toContain("original-badge");
     expect(host.textContent).toContain("recovered without replacing their credentials");
     await click(host, "Download print files");
@@ -353,8 +428,95 @@ it.each(["session changed", "revoked"])(
       refusal === "session changed" ? "Sign in again" : "no longer available for printing",
     );
     expect(downloadBadgeArtifact).not.toHaveBeenCalled();
-    expect(metadataReads).toBe(refusal === "revoked" ? 3 : 2);
-    expect(issueBodies).toHaveLength(4);
-    expect(printBodies).toHaveLength(2);
+    expect(metadataReads).toBe(1);
+    expect(issueBodies).toHaveLength(3);
+    expect(printBodies).toHaveLength(refusal === "revoked" ? 3 : 2);
   },
 );
+
+it("prints exact canonical front/back sheets and label stock without changing QR bytes", () => {
+  const badges = [
+    {
+      ...printDetails,
+      id: "reference",
+      displayName: "A < B",
+      svg: '<svg xmlns="http://www.w3.org/2000/svg"><path d="M1 1h1"/></svg>',
+    },
+  ];
+  const a4 = badgePrintHtml(badges, badgePrintPreset("a6_front_back_a4"), printing, "name_qr");
+  const document = new DOMParser().parseFromString(a4, "text/html");
+  expect(document.querySelectorAll("div[hidden] pre")).toHaveLength(1);
+  expect(document.querySelector("div[hidden] pre")?.textContent).toBe(BADGE_GENERIC_FONT_LICENSE);
+  expect(a4).toContain("size:297mm 210mm");
+  expect(a4.match(/class="badge-print-sheet"/g)).toHaveLength(1);
+  expect(a4).toContain('aria-label="Badge front"');
+  expect(a4).toContain('aria-label="Badge back"');
+  expect(a4).toContain("A &lt; B");
+  expect(a4).toContain(encodeURIComponent(badges[0].svg));
+  expect(badgePrintHtml(badges, badgePrintPreset("avery_5160"), printing, "name_qr")).toContain("size:215.9mm 279.4mm");
+});
+it("checks release authority after asynchronous SVG archive preparation", async () => {
+  let authorized = true;
+  const beforeRelease = vi.fn(async () => authorized);
+  const host = document.createElement("div");
+  document.body.append(host);
+  mounted.push(host);
+  await act(() =>
+    render(
+      <BadgePrintPreview
+        badges={[
+          { ...printDetails, id: "one", displayName: "One", svg: "<svg/>" },
+          { ...printDetails, id: "two", displayName: "Two", svg: "<svg/>" },
+        ]}
+        printing={printing}
+        beforeRelease={beforeRelease}
+      />,
+      host,
+    ),
+  );
+  await click(host, "Download print files");
+  await click(host, "QR codes (SVG ZIP)");
+  expect(beforeRelease).not.toHaveBeenCalled();
+  authorized = false;
+  await act(async () => {
+    archiveGate.resolve?.(new Blob(["archive"], { type: "application/zip" }));
+    await Promise.resolve();
+  });
+  expect(beforeRelease).toHaveBeenCalledTimes(1);
+  expect(downloadBadgeArtifact).not.toHaveBeenCalled();
+});
+
+it("refuses a custom layout that does not fit, then applies the corrected canonical dimensions", async () => {
+  const onApply = vi.fn();
+  const host = document.createElement("div");
+  document.body.append(host);
+  mounted.push(host);
+  await act(() =>
+    render(
+      <BadgePrintLayoutEditor
+        layout={{ ...badgePrintPreset("a6"), design: "name_qr" }}
+        template={null}
+        onApply={onApply}
+      />,
+      host,
+    ),
+  );
+  const width = controlFor<HTMLInputElement>(host, "Badge width (mm)");
+  await act(() => {
+    width.value = "1000";
+    width.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(() => {
+    host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  expect(onApply).not.toHaveBeenCalled();
+  expect(host.textContent).toContain("exceed the page width");
+  await act(() => {
+    width.value = "100";
+    width.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(() => {
+    host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  expect(badgePrintSettingsSchema.parse(onApply.mock.calls[0]?.[0]).label.widthMm).toBe(100);
+});

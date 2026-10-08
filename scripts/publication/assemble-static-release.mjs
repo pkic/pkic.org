@@ -1,17 +1,15 @@
-import {
-  prepareDocumentRetirement,
-  readReleaseDocumentRoutes,
-  validateDocumentRedirectRules,
-} from "./collect-document-redirects.mjs";
-import { sitePublicationReleaseSchema } from "../../assets/shared/schemas/site-publication-release.ts";
-import {
-  createReleaseIntegrity,
-  verifyReleaseIntegrity,
-  synchronizedPublicationDirectories,
-} from "./release-integrity.mjs";
+import { registerLegacyAgendaSchemaResolution } from "../lib/legacy-agenda-runtime.mjs";
 import { readFile, access, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { installReleaseBytes, installReleaseFile, synchronizeReleaseDirectory } from "./synchronize-release-files.mjs";
+
+// Register native TypeScript resolution before loading the canonical shared schema graph.
+registerLegacyAgendaSchemaResolution();
+const { prepareDocumentRetirement, readReleaseDocumentRoutes, validateDocumentRedirectRules } =
+  await import("./collect-document-redirects.mjs");
+const { sitePublicationReleaseSchema } = await import("../../assets/shared/schemas/site-publication-release.ts");
+const { createReleaseIntegrity, verifyReleaseIntegrity, synchronizedPublicationDirectories } =
+  await import("./release-integrity.mjs");
 
 /** Merge a complete publication into the complete Worker build, never a partial asset upload. */
 export async function assembleStaticRelease(source, destination, environment) {

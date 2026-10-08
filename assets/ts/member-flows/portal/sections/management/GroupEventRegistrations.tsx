@@ -26,16 +26,12 @@ import { RegistrationRosterActions } from "../../../../components/event-registra
 import { Button } from "../../../../ui/Button";
 import { BulkBar } from "../../../../ui/BulkBar";
 import { useCollectionSelection } from "../../../../hooks/useCollectionSelection";
-import { RegistrationBadgePrinting } from "../../../../components/event-badges/RegistrationBadgePrinting";
 import {
   filteredBadgePrintScope,
   type BadgePrintScope,
 } from "../../../../components/event-badges/badge-print-population";
 import { usePortalHashLocation } from "../../hash-location";
 import { fmtDate, toast } from "../../ui";
-import { isAuthed, portalSession } from "../../state";
-import type { PortalSession } from "../../types";
-import { ErrorAlert } from "../../../../components/ErrorAlert";
 
 /** The registration's address inside its group event. */
 export function groupEventRegistrationPath(groupId: string, eventId: string, registrationId: string): string {
@@ -48,26 +44,16 @@ export function GroupEventRegistrations({
   canManage = false,
   eventSlug,
   badgesPath,
+  onPrint,
 }: {
   groupId: string;
   eventId: string;
   canManage?: boolean;
   eventSlug?: string;
   badgesPath?: string;
+  onPrint?: (scope: BadgePrintScope) => void;
 }) {
-  const [printing, setPrinting] = useState<{ scope: BadgePrintScope; session: PortalSession | null } | null>(null);
-  function startPrinting(scope: BadgePrintScope) {
-    setPrinting({ scope, session: portalSession.value });
-  }
-  function printContextCurrent() {
-    const session = printing?.session;
-    return Boolean(
-      session &&
-      isAuthed.value &&
-      portalSession.value === session &&
-      Math.min(Date.parse(session.expiresAt), Date.parse(session.idleExpiresAt)) > Date.now(),
-    );
-  }
+  const startPrinting = (scope: BadgePrintScope) => onPrint?.(scope);
   const selection = useCollectionSelection<EventAttendanceRegistrationSummary>({
     rowKey: (row) => row.id,
     rowLabel: (row) => row.display_name ?? "Attendee",
@@ -76,21 +62,6 @@ export function GroupEventRegistrations({
   const tableRef = useRef<ApiTableActions | null>(null);
   const registrationEndpoint = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/registrations`;
 
-  if (printing && eventSlug && !printContextCurrent())
-    return <ErrorAlert error="Sign in again before printing these badges." />;
-  if (printing && eventSlug)
-    return (
-      <RegistrationBadgePrinting
-        slug={eventSlug}
-        eventId={eventId}
-        scope={printing.scope}
-        isCurrent={printContextCurrent}
-        onBack={() => {
-          setPrinting(null);
-          selection.clear();
-        }}
-      />
-    );
   return (
     <div class="pk-stack pk-stack--snug">
       {stats && <RegistrationTotals stats={stats} />}
@@ -106,9 +77,9 @@ export function GroupEventRegistrations({
           selection.onRows(response.registrations);
         }}
         onQueryChange={selection.onQueryChange}
-        selection={canManage && eventSlug ? selection.selection : undefined}
+        selection={canManage && eventSlug && onPrint ? selection.selection : undefined}
         bulkBar={
-          canManage && eventSlug ? (
+          canManage && eventSlug && onPrint ? (
             <BulkBar count={selection.selected.size} total={selection.total} onClear={selection.clear}>
               <Button
                 onClick={() => startPrinting({ kind: "selected", rows: selection.selectedRows })}
@@ -129,7 +100,7 @@ export function GroupEventRegistrations({
                   onPromoted={() => tableRef.current?.reload()}
                   notify={toast}
                   onPrintAllMatching={
-                    eventSlug
+                    eventSlug && onPrint
                       ? () => startPrinting(filteredBadgePrintScope(`${registrationEndpoint}/badges/population`, query))
                       : undefined
                   }

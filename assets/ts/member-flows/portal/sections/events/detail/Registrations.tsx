@@ -165,32 +165,6 @@ export function RegistrationsList({
                 <div class="pk-stack pk-stack--tight pk-small">
                   <div class="pk-strong">{attendanceJourneyLabel(history)}</div>
                   <div class="pk-muted pk-mono">Last changed {fmt(latest.changedAt)}</div>
-                  {history.length > 1 && (
-                    <details onClick={(event) => event.stopPropagation()}>
-                      <summary>View {history.length} updates</summary>
-                      {/* The left rule and indent this had were Bootstrap's
-                          `border-start ps-2`; the disclosure already marks the
-                          entries as subordinate, so the nesting is carried by
-                          the control rather than by a border with no
-                          design-system equivalent. */}
-                      <div class="pk-stack pk-stack--tight">
-                        {history.map((change) => (
-                          <div key={change.changedAt} class="pk-stack pk-stack--tight">
-                            {change.transitions.map((transition) => (
-                              <div key={`${transition.fromType}->${transition.toType}`}>
-                                {attendanceTypeLabel(transition.fromType)} → {attendanceTypeLabel(transition.toType)}
-                                <span class="pk-muted">
-                                  {" "}
-                                  · {transition.days.map((day) => day.label ?? day.dayDate).join(", ")}
-                                </span>
-                              </div>
-                            ))}
-                            <div class="pk-muted pk-mono">{fmt(change.changedAt)}</div>
-                          </div>
-                        ))}
-                      </div>
-                    </details>
-                  )}
                 </div>
               ) : (
                 "—"

@@ -10,8 +10,10 @@ import { issueDatabaseCapability } from "../functions/_lib/services/capability-l
 import { speakerSelfServiceReadResponseSchema } from "../assets/shared/schemas/speaker-self-service";
 import {
   proposalCreateSchema,
+  proposalCreateResponseSchema,
   proposerSpeakerPatchSchema,
   coSpeakerInviteSchema,
+  speakerSelfProfilePatchSchema,
 } from "../assets/shared/schemas/proposal-management";
 import { identitiesListResponseSchema } from "../assets/shared/schemas/identity";
 import { nowIso } from "../functions/_lib/utils/time";
@@ -86,6 +88,74 @@ async function speakerPath(proposalId: string, userId: string) {
 }
 
 describe("proposal speaker acting identity", () => {
+  it("corrects a recorded organization representation without changing the proposal, speaker role or capacities", async () => {
+    const f = await fixture();
+    const submitted = await submit(f.body, f.token);
+    expect(submitted.status, await submitted.clone().text()).toBe(200);
+    const { proposalId } = proposalCreateResponseSchema.parse(await submitted.json());
+    const path = await speakerPath(proposalId, f.userId);
+    const read = async () => speakerSelfServiceReadResponseSchema.parse(await (await callApi(env, path)).json());
+    const original = await read();
+    expect(original.profile).toMatchObject({
+      actingIdentityId: f.identityId,
+      organizationName: "Chosen organization",
+      jobTitle: "Chosen role",
+    });
+    const speaker = () =>
+      queryAll(
+        env.DB,
+        "SELECT id,proposal_id,user_id,role,status,confirmed_at FROM proposal_speakers WHERE proposal_id=?",
+        [proposalId],
+      );
+    const originalSpeaker = await speaker();
+    expect(originalSpeaker).toEqual([expect.objectContaining({ user_id: f.userId, role: "proposer" })]);
+    const unchanged = () =>
+      Promise.all([
+        queryAll(env.DB, "SELECT id,email,first_name,last_name,organization_name,job_title FROM users ORDER BY id"),
+        queryAll(env.DB, "SELECT id,name,normalized_name,updated_at FROM organizations ORDER BY id"),
+        queryAll(
+          env.DB,
+          "SELECT id,user_id,organization_id,email_id,job_title,biography,links_json,started_at,ended_at,blocked_at,updated_at FROM identities ORDER BY id",
+        ),
+        queryAll(
+          env.DB,
+          `SELECT (SELECT COUNT(*) FROM members) AS members,
+        (SELECT COUNT(*) FROM member_category_assignments) AS categories,
+        (SELECT COUNT(*) FROM identity_member_capacities) AS capacities,
+        (SELECT COUNT(*) FROM user_roles) AS roles,(SELECT COUNT(*) FROM permission_grants) AS grants,
+        (SELECT COUNT(*) FROM session_proposals) AS proposals`,
+        ),
+      ]);
+    const before = await unchanged();
+    const correction = await callApi(env, `${path}/profile`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json", authorization: `Bearer ${f.token}` },
+      body: JSON.stringify(speakerSelfProfilePatchSchema.parse({ actingIdentityId: f.secondIdentityId })),
+    });
+    expect(correction.status, await correction.clone().text()).toBe(200);
+    const corrected = await read();
+    expect(corrected.profile).toMatchObject({
+      actingIdentityId: f.secondIdentityId,
+      actingIdentitySelection: "identity",
+      organizationName: "Other organization",
+      jobTitle: "Second role",
+    });
+    expect(corrected.profile.actingIdentitySelectedAt).toBeTruthy();
+    expect(await speaker()).toEqual(originalSpeaker);
+    expect(await unchanged()).toEqual(before);
+    const recorded = await queryAll<{ acting_identity_id: string; acting_identity_snapshot_json: string }>(
+      env.DB,
+      "SELECT acting_identity_id,acting_identity_snapshot_json FROM proposal_speakers WHERE proposal_id=? AND user_id=?",
+      [proposalId, f.userId],
+    );
+    expect(recorded).toHaveLength(1);
+    expect(recorded[0]?.acting_identity_id).toBe(f.secondIdentityId);
+    expect(JSON.parse(recorded[0]!.acting_identity_snapshot_json)).toMatchObject({
+      organizationName: "Other organization",
+      jobTitle: "Second role",
+    });
+  });
+
   it("records the deliberate second identity and freezes affiliation without editing the account", async () => {
     const f = await fixture();
     const response = await submit(

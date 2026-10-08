@@ -44,7 +44,9 @@ it("reports success only after the controlled decoder preparation completes", as
       }),
   );
   await act(async () => render(<Harness />, host));
+  await vi.waitFor(() => expect(prepare).toHaveBeenCalledTimes(1));
   expect(host.textContent).toBe("Preparing offline camera files…");
+  expect(prepare.mock.calls[0]![0].aborted).toBe(false);
   await act(async () => resolve(true));
   expect(host.textContent).toBe("Offline camera files prepared.");
 });
@@ -65,7 +67,11 @@ it("ignores a preparation response from the previous operator scope", async () =
   const resolvers: Array<(value: boolean) => void> = [];
   prepare.mockImplementation(() => new Promise<boolean>((resolve) => resolvers.push(resolve)));
   await act(async () => render(<Harness />, host));
+  await vi.waitFor(() => expect(resolvers).toHaveLength(1));
   await act(async () => render(<Harness scope="event:next-operator" />, host));
+  await vi.waitFor(() => expect(resolvers).toHaveLength(2));
+  expect(prepare.mock.calls[0]![0].aborted).toBe(true);
+  expect(prepare.mock.calls[1]![0].aborted).toBe(false);
   await act(async () => resolvers[0]!(true));
   expect(host.textContent).toBe("Preparing offline camera files…");
   await act(async () => resolvers[1]!(false));

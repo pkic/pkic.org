@@ -5,11 +5,12 @@ import { physicalOccupiedSql, physicalRoomOccupiedSql, remoteOccupiedSql } from 
 import { operationalAllocationCompatibleSql } from "./session-allocation";
 import { participationAvailability } from "../../../../assets/shared/event-participation-availability";
 import type { ParticipationAvailability } from "../../../../assets/shared/schemas/event-participation-availability";
+import type { AgendaAdmissionPolicy } from "../../../../assets/shared/schemas/event-agenda";
 import { instantToDateTimeLocal } from "../../../../assets/shared/timezone";
 import { nowIso } from "../../utils/time";
 interface AvailabilityRow {
   id: string;
-  policy: "preference" | "reservation" | "approval";
+  policy: AgendaAdmissionPolicy;
   invitation_required: number;
   invited: number;
   registered: number;

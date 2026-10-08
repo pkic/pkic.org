@@ -7,20 +7,32 @@ import {
   parseSessionPresentationPublicUrl,
 } from "../session-presentation-public-url.ts";
 
-export const publicationDocumentGrantIdSchema = z.string().regex(/^[a-f0-9]{64}$/);
+import { parseSessionRecordingPublicUrl } from "../session-recording-public-url.ts";
+import {
+  publicationDocumentGrantIdSchema,
+  publicationRecordingEffectSchema,
+  publicationRecordingAllowSchema,
+  publicationRecordingDenialSchema,
+} from "./site-publication-recordings.ts";
+export { publicationDocumentGrantIdSchema } from "./site-publication-recordings.ts";
 export const publicationDocumentSelectionSchema = z
   .object({
-    url: z.string().refine((value) => parseSessionPresentationPublicUrl(value) !== null),
+    url: z
+      .string()
+      .refine(
+        (value) => parseSessionPresentationPublicUrl(value) !== null || parseSessionRecordingPublicUrl(value) !== null,
+      ),
     grantId: publicationDocumentGrantIdSchema,
   })
   .strict();
-export const publicationDocumentEffectSchema = sessionPresentationReleaseParamsSchema
+export const publicationPdfEffectSchema = sessionPresentationReleaseParamsSchema
   .extend({
     eventId: databaseIdSchema,
     materialId: z.string().min(1).max(300),
     grantId: publicationDocumentGrantIdSchema,
   })
   .strict();
+export const publicationDocumentEffectSchema = z.union([publicationPdfEffectSchema, publicationRecordingEffectSchema]);
 export const publicationDocumentEffectsSchema = z
   .array(publicationDocumentEffectSchema)
   .max(1000)
@@ -28,7 +40,7 @@ export const publicationDocumentEffectsSchema = z
     (effects) => new Set(effects.map(({ grantId }) => grantId)).size === effects.length,
     "Duplicate document effect",
   );
-export const publicationDocumentAllowSchema = publicationDocumentEffectSchema
+const publicationPdfAllowSchema = publicationPdfEffectSchema
   .extend({
     version: z.literal(1),
     r2Key: z.string().min(1).max(1024),
@@ -40,9 +52,9 @@ export const publicationDocumentAllowSchema = publicationDocumentEffectSchema
     approvalNonce: z.uuid().nullable(),
   })
   .strict();
-export const publicationDocumentDenialSchema = publicationDocumentEffectSchema
-  .extend({ version: z.literal(1) })
-  .strict();
+const publicationPdfDenialSchema = publicationPdfEffectSchema.extend({ version: z.literal(1) }).strict();
+export const publicationDocumentAllowSchema = z.union([publicationPdfAllowSchema, publicationRecordingAllowSchema]);
+export const publicationDocumentDenialSchema = z.union([publicationPdfDenialSchema, publicationRecordingDenialSchema]);
 export type PublicationDocumentEffect = z.infer<typeof publicationDocumentEffectSchema>;
 export type PublicationDocumentAllow = z.infer<typeof publicationDocumentAllowSchema>;
 
@@ -51,9 +63,11 @@ export function publicationDocumentGrantHashInput(
   input: Pick<PublicationDocumentEffect, "eventSlug" | "occurrenceId" | "materialId" | "versionId" | "digest"> & {
     approvedAt: string;
     approvalNonce: string | null;
+    kind?: "recording";
   },
 ): string {
   return JSON.stringify([
+    ...(input.kind === "recording" ? ["recording"] : []),
     input.eventSlug,
     input.occurrenceId,
     input.materialId,

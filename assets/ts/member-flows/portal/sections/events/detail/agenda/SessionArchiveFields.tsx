@@ -1,3 +1,4 @@
+import { SessionRecordingVersionField } from "./SessionRecordingVersionField";
 import { useState } from "preact/hooks";
 import {
   sessionAppearanceSchema,
@@ -12,8 +13,7 @@ import { sessionAppearanceChoicesSchema } from "../../../../../../../shared/sche
 import type { SessionAppearance, SessionMaterial } from "../../../../../../../shared/schemas/event-session-history";
 import { sessionMaterialSchema } from "../../../../../../../shared/schemas/event-session-history";
 import { FormSection } from "../../../../../../ui/FormSection";
-import { CollapsiblePanel } from "../../../../../../ui/CollapsiblePanel";
-import { PanelBody } from "../../../../../../ui/Panel";
+import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
 import { Field } from "../../../../../../ui/Field";
 import { TextInput, Textarea, Select } from "../../../../../../ui/TextControl";
 import { Button } from "../../../../../../ui/Button";
@@ -127,13 +127,11 @@ export function AppearanceFields({
           >
             <Field label="Display name">
               {(control) => (
-                <>
-                  <TextInput
-                    {...control}
-                    value={person.displayName}
-                    onInput={(e) => update(index, { displayName: e.currentTarget.value })}
-                  />
-                </>
+                <TextInput
+                  {...control}
+                  value={person.displayName}
+                  onInput={(e) => update(index, { displayName: e.currentTarget.value })}
+                />
               )}
             </Field>
             <Field
@@ -184,35 +182,29 @@ export function AppearanceFields({
             </Field>
             <Field label="Organization at this event">
               {(control) => (
-                <>
-                  <TextInput
-                    {...control}
-                    value={person.organizationName ?? ""}
-                    onInput={(e) => update(index, { organizationName: e.currentTarget.value || null })}
-                  />
-                </>
+                <TextInput
+                  {...control}
+                  value={person.organizationName ?? ""}
+                  onInput={(e) => update(index, { organizationName: e.currentTarget.value || null })}
+                />
               )}
             </Field>
             <Field label="Role at this event">
               {(control) => (
-                <>
-                  <TextInput
-                    {...control}
-                    value={person.jobTitle ?? ""}
-                    onInput={(e) => update(index, { jobTitle: e.currentTarget.value || null })}
-                  />
-                </>
+                <TextInput
+                  {...control}
+                  value={person.jobTitle ?? ""}
+                  onInput={(e) => update(index, { jobTitle: e.currentTarget.value || null })}
+                />
               )}
             </Field>
             <Field label="Approved biography">
               {(control) => (
-                <>
-                  <Textarea
-                    {...control}
-                    value={person.biography}
-                    onInput={(e) => update(index, { biography: e.currentTarget.value })}
-                  />
-                </>
+                <Textarea
+                  {...control}
+                  value={person.biography}
+                  onInput={(e) => update(index, { biography: e.currentTarget.value })}
+                />
               )}
             </Field>
             {profileCandidate?.biography && (
@@ -227,13 +219,11 @@ export function AppearanceFields({
             <FormSection title="Portrait and approval" layout="stack">
               <Field label="Approved portrait URL">
                 {(control) => (
-                  <>
-                    <TextInput
-                      {...control}
-                      value={person.photoUrl ?? ""}
-                      onInput={(e) => update(index, { photoUrl: e.currentTarget.value || null })}
-                    />
-                  </>
+                  <TextInput
+                    {...control}
+                    value={person.photoUrl ?? ""}
+                    onInput={(e) => update(index, { photoUrl: e.currentTarget.value || null })}
+                  />
                 )}
               </Field>
               {person.photoUrl && (
@@ -319,49 +309,46 @@ export function MaterialFields({
         <FormSection key={material.id} title={material.title || "New material"}>
           <Field label="Material title">
             {(control) => (
-              <>
-                <TextInput
-                  {...control}
-                  value={material.title}
-                  onInput={(e) => update(index, { title: e.currentTarget.value })}
-                />
-              </>
+              <TextInput
+                {...control}
+                value={material.title}
+                onInput={(e) => update(index, { title: e.currentTarget.value })}
+              />
             )}
           </Field>
           <Field label="Material type">
             {(control) => (
-              <>
-                <Select
-                  {...control}
-                  value={material.kind}
-                  onChange={(e) =>
-                    update(index, {
-                      kind: sessionMaterialSchema.shape.kind.parse(e.currentTarget.value),
-                      ...(e.currentTarget.value !== "presentation"
-                        ? { presentationVersionId: null, presentationSource: "proposal", legacyDownloadUrl: null }
-                        : {}),
-                    })
-                  }
-                >
-                  {sessionMaterialSchema.shape.kind.options.map((kind) => (
-                    <option value={kind}>{materialKindLabels[kind]}</option>
-                  ))}
-                </Select>
-              </>
+              <Select
+                {...control}
+                value={material.kind}
+                onChange={(e) =>
+                  update(index, {
+                    kind: sessionMaterialSchema.shape.kind.parse(e.currentTarget.value),
+                    recordingVersionId: null,
+                    ...(e.currentTarget.value !== "presentation"
+                      ? { presentationVersionId: null, presentationSource: "proposal", legacyDownloadUrl: null }
+                      : {}),
+                  })
+                }
+              >
+                {sessionMaterialSchema.shape.kind.options.map((kind) => (
+                  <option value={kind}>{materialKindLabels[kind]}</option>
+                ))}
+              </Select>
             )}
           </Field>
-          {material.presentationSource === "session" && material.presentationVersionId ? (
+          {material.recordingVersionId ? (
+            <p>The selected recording receives an owned link after review and publication approval.</p>
+          ) : material.presentationSource === "session" && material.presentationVersionId ? (
             <p>The selected slides will receive a download link when their review and publication are approved.</p>
           ) : (
             <Field label={`${materialKindLabels[material.kind]} link`}>
               {(control) => (
-                <>
-                  <TextInput
-                    {...control}
-                    value={material.url}
-                    onInput={(e) => update(index, { url: e.currentTarget.value })}
-                  />
-                </>
+                <TextInput
+                  {...control}
+                  value={material.url}
+                  onInput={(e) => update(index, { url: e.currentTarget.value })}
+                />
               )}
             </Field>
           )}
@@ -372,7 +359,8 @@ export function MaterialFields({
               offset > 0) && (
               <>
                 {(Boolean(catalog.data?.page.total) || query !== "" || offset > 0) && (
-                  <CollapsiblePanel title="Find uploaded slides">
+                  <Panel>
+                    <PanelHeader title="Find uploaded slides" />
                     <PanelBody>
                       <Field label="Find uploaded version">
                         {(control) => (
@@ -405,7 +393,7 @@ export function MaterialFields({
                         </div>
                       )}
                     </PanelBody>
-                  </CollapsiblePanel>
+                  </Panel>
                 )}
                 <Field
                   label="Uploaded slides"
@@ -455,7 +443,24 @@ export function MaterialFields({
                 </Field>
               </>
             )}
-          <CollapsiblePanel title="Additional details">
+          {material.kind === "recording" && (
+            <SessionRecordingVersionField
+              slug={slug}
+              value={material.recordingVersionId}
+              version={material.version}
+              onChange={(item) =>
+                update(index, {
+                  recordingVersionId: item?.id ?? null,
+                  approvalNonce: null,
+                  ...(item ? { version: item.version, url: "" } : {}),
+                  approvedAt: null,
+                  status: "draft",
+                })
+              }
+            />
+          )}
+          <Panel>
+            <PanelHeader title="Additional details" />
             <PanelBody>
               {material.kind === "presentation" &&
                 material.presentationSource === "session" &&
@@ -492,19 +497,17 @@ export function MaterialFields({
                 )}
               <Field label="Version">
                 {(control) => (
-                  <>
-                    <TextInput
-                      {...control}
-                      type="number"
-                      min="1"
-                      value={material.version}
-                      onInput={(e) => update(index, { version: Number(e.currentTarget.value) })}
-                    />
-                  </>
+                  <TextInput
+                    {...control}
+                    type="number"
+                    min="1"
+                    value={material.version}
+                    onInput={(e) => update(index, { version: Number(e.currentTarget.value) })}
+                  />
                 )}
               </Field>
             </PanelBody>
-          </CollapsiblePanel>
+          </Panel>
           <FormSection title="Publication review" layout="stack">
             <Checkbox
               checked={material.rightsConfirmed}
@@ -523,31 +526,29 @@ export function MaterialFields({
             />
             <Field label="Release status">
               {(control) => (
-                <>
-                  <Select
-                    {...control}
-                    value={material.status}
-                    onChange={(e) =>
-                      update(index, {
-                        status: sessionMaterialSchema.shape.status.parse(e.currentTarget.value),
-                        approvedAt: e.currentTarget.value === "approved" ? new Date().toISOString() : null,
-                      })
-                    }
-                  >
-                    {sessionMaterialSchema.shape.status.options.map((status) => (
-                      <option value={status}>
+                <Select
+                  {...control}
+                  value={material.status}
+                  onChange={(e) =>
+                    update(index, {
+                      status: sessionMaterialSchema.shape.status.parse(e.currentTarget.value),
+                      approvedAt: e.currentTarget.value === "approved" ? new Date().toISOString() : null,
+                    })
+                  }
+                >
+                  {sessionMaterialSchema.shape.status.options.map((status) => (
+                    <option value={status}>
+                      {
                         {
-                          {
-                            draft: "Draft — private",
-                            approved: "Approved for publication",
-                            withdrawn: "Withdrawn",
-                            failed: "Review failed",
-                          }[status]
-                        }
-                      </option>
-                    ))}
-                  </Select>
-                </>
+                          draft: "Draft — private",
+                          approved: "Approved for publication",
+                          withdrawn: "Withdrawn",
+                          failed: "Review failed",
+                        }[status]
+                      }
+                    </option>
+                  ))}
+                </Select>
               )}
             </Field>
             <Button type="button" onClick={() => onChange(materials.filter((_, i) => i !== index))}>
@@ -567,6 +568,7 @@ export function MaterialFields({
               kind: "presentation",
               url: "",
               presentationVersionId: null,
+              recordingVersionId: null,
               legacyDownloadUrl: null,
               presentationSource: "proposal",
               version: 1,

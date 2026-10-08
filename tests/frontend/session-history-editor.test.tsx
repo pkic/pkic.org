@@ -112,9 +112,14 @@ describe("session archive correction", () => {
       expect(host.textContent).not.toContain("Find uploaded slides");
       expect(host.textContent).not.toContain("Previous uploads");
       expect(host.textContent).not.toContain("Next uploads");
-      const details = host.querySelector<HTMLDetailsElement>("details.pk-panel");
-      expect(details?.querySelector("summary")?.textContent).toBe("Additional details");
-      expect(details?.open).toBe(false);
+      const version = controlFor<HTMLInputElement>(host, "Version");
+      expect(version.closest("section.pk-panel")?.querySelector("h3")?.textContent).toBe("Additional details");
+      expect(version.value).toBe("1");
+      for (const label of ["Version", "Release status", "We have permission to publish this material"]) {
+        const control = controlFor<HTMLInputElement>(host, label);
+        expect(control.closest('details,[hidden],[aria-hidden="true"]')).toBeNull();
+        expect(control.disabled).toBe(false);
+      }
       expect(initial.presentationVersionId).toBe("uploaded-version");
       expect(initial.kind).toBe("presentation");
     },
@@ -412,13 +417,14 @@ describe("session archive correction", () => {
       render(<MaterialFields slug="event" occurrenceId="session" materials={[material]} onChange={() => {}} />, host),
     );
     await vi.waitFor(() => expect(controlFor<HTMLSelectElement>(host, "Uploaded slides").options.length).toBe(2));
-    const disclosure = host.querySelector<HTMLDetailsElement>("details.pk-panel")!;
-    await act(() => {
-      disclosure.open = true;
-    });
+    const search = controlFor<HTMLInputElement>(host, "Find uploaded version");
+    expect(search.closest("section.pk-panel")?.querySelector("h3")?.textContent).toBe("Find uploaded slides");
+    expect(search.closest('details,[hidden],[aria-hidden="true"]')).toBeNull();
+    expect(search.disabled).toBe(false);
     await typeInto(controlFor(host, "Find uploaded version"), "missing");
     await vi.waitFor(() => expect(controlFor<HTMLSelectElement>(host, "Uploaded slides").options.length).toBe(1));
     expect(controlFor<HTMLInputElement>(host, "Find uploaded version").value).toBe("missing");
+    expect(controlFor(host, "Find uploaded version").closest('details,[hidden],[aria-hidden="true"]')).toBeNull();
     await typeInto(controlFor(host, "Find uploaded version"), "");
     await vi.waitFor(() =>
       expect(optionValues(controlFor<HTMLSelectElement>(host, "Uploaded slides"))).toEqual([

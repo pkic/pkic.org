@@ -2,22 +2,8 @@ import type { Permission } from "../../../../assets/shared/schemas/permissions";
 import type { D1QueryBudget } from "../../db/query-budget";
 import type { Env } from "../../types";
 
-export type ScheduledJobKey =
-  | "membership_workflows"
-  | "membership_fee_checkouts"
-  | "member_news_refresh"
-  | "due_work"
-  | "agenda_participation"
-  | "agenda_reminders"
-  | "site_publication"
-  | "on_hold_due_work"
-  | "google_groups_sync"
-  | "sponsorship_due_work"
-  | "votes_due_work"
-  | "retention"
-  | "working_group_chair_digest"
-  | "meeting_invitations"
-  | "event_email_campaigns";
+import type { ScheduledJobKey, ScheduledJobStatus } from "../../../../assets/shared/schemas/scheduler";
+export type { ScheduledJobKey, ScheduledJobStatus } from "../../../../assets/shared/schemas/scheduler";
 
 export interface ScheduledJobRunContext {
   env: Env;
@@ -55,8 +41,6 @@ export interface ScheduledJobDefinition {
   leaseSeconds: number;
   run(context: ScheduledJobRunContext): Promise<ScheduledJobOutcome | void>;
 }
-
-export type ScheduledJobStatus = "succeeded" | "failed" | "abandoned" | "budget_exhausted";
 
 export interface ScheduledJobRow {
   job_key: ScheduledJobKey;

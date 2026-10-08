@@ -79,7 +79,8 @@ function refusal() {
     {
       error: {
         code: "SESSION_PUBLICATION_CHANGED",
-        message: "This session changed. Review the refreshed details and submit again.",
+        message:
+          "The published agenda changed. Refresh it and confirm your choice again. Any existing reservation has been preserved.",
       },
     },
     409,
@@ -129,6 +130,7 @@ describe("personal agenda publication revisions", () => {
     async (action) => {
       const bodies: ReturnType<typeof sessionParticipationRequestSchema.parse>[] = [];
       let gets = 0;
+      let accepted = false;
       let resolveRefresh!: (value: Response) => void;
       const refreshed = new Promise<Response>((resolve) => {
         resolveRefresh = resolve;
@@ -138,19 +140,27 @@ describe("personal agenda publication revisions", () => {
         vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
           const url = new URL(String(input), location.origin);
           if (init?.method === "PUT") {
-            bodies.push(sessionParticipationRequestSchema.parse(JSON.parse(String(init.body))));
-            return bodies.length === 1
-              ? refusal()
-              : json(
-                  sessionParticipationResponseSchema.parse({
-                    status: action === "reserve" ? "reserved" : "approval_pending",
-                    attendanceMode: "physical",
-                  }),
-                );
+            const body = sessionParticipationRequestSchema.parse(JSON.parse(String(init.body)));
+            bodies.push(body);
+            if (body.expectedPublishedRevision !== 2) return refusal();
+            accepted = true;
+            return json(
+              sessionParticipationResponseSchema.parse({
+                status: action === "reserve" ? "reserved" : "approval_pending",
+                attendanceMode: "physical",
+              }),
+            );
           }
           if (url.searchParams.get("status") === "reserved") return json(listing(1, action, true));
           gets++;
-          return gets === 1 ? json(listing(1, action)) : refreshed;
+          if (gets === 1) return json(listing(1, action));
+          if (gets === 2) return refreshed;
+          const response = listing(2, action);
+          Object.assign(response.sessions[0]!, {
+            status: accepted ? (action === "reserve" ? "reserved" : "approval_pending") : null,
+            roomId: NEW_ROOM,
+          });
+          return json(response);
         }),
       );
       const host = mount();
@@ -161,6 +171,14 @@ describe("personal agenda publication revisions", () => {
         expect(gets).toBe(2);
         expect(update(host).disabled).toBe(true);
       });
+      expect(host.querySelector('[role="alert"]')?.textContent).toContain("The published agenda changed.");
+      expect(host.querySelector('[role="alert"]')?.textContent).toContain(
+        "Any existing reservation has been preserved.",
+      );
+      expect(host.textContent).toContain("Original workshop");
+      expect(host.textContent).toContain("Original room");
+      expect(accepted).toBe(false);
+      await clickUpdate(host);
       expect(bodies).toHaveLength(1);
       expect(bodies[0]?.expectedPublishedRevision).toBe(1);
       expect(bodies[0]?.roomId).toBe(OLD_ROOM);
@@ -172,12 +190,20 @@ describe("personal agenda publication revisions", () => {
         expect(update(host).disabled).toBe(false);
       });
       expect(bodies).toHaveLength(1);
-      expect(host.textContent).toContain("submit again");
+      expect(host.querySelector('[role="alert"]')?.textContent).toContain("confirm your choice again");
       await clickUpdate(host);
       await vi.waitFor(() => expect(bodies).toHaveLength(2));
       expect(bodies[1]?.expectedPublishedRevision).toBe(2);
       expect(bodies[1]?.roomId).toBe(NEW_ROOM);
       expect(bodies[1]?.action).toBe(action);
+      await vi.waitFor(() => {
+        expect(host.querySelector('[role="alert"]')).toBeNull();
+        expect(host.textContent).toContain(action === "reserve" ? "Reserved" : "Awaiting approval");
+      });
+      expect(accepted).toBe(true);
+      expect(bodies).toHaveLength(2);
+      expect(host.textContent).toContain("Revised room");
+      expect(host.querySelector('button[aria-label="Save preference"]')?.getAttribute("aria-pressed")).toBe("false");
     },
   );
 

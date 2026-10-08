@@ -6,6 +6,8 @@ import {
   PUBLICATION_DOCUMENT_ROUTES_PATH,
   sitePublicationDocumentRoutesSchema,
 } from "../../assets/shared/schemas/site-publication-release.ts";
+import { parseSessionRecordingPublicUrl } from "../../assets/shared/session-recording-public-url.ts";
+import { publicSessionMaterials } from "../../assets/shared/schemas/event-session-history.ts";
 import { parseSessionPresentationPublicUrl } from "../../assets/shared/session-presentation-public-url.ts";
 import { verifiedSessionMaterialLegacyDownload } from "../../assets/shared/session-material-legacy-download.ts";
 import { publicationDocumentGrantHashInput } from "../../assets/shared/schemas/site-publication-documents.ts";
@@ -75,6 +77,34 @@ function snapshotDocumentRoutes(snapshot, verify) {
               .digest("hex"),
           });
         }
+        if (
+          material.kind === "recording" &&
+          material.recordingVersionId &&
+          publicSessionMaterials([material]).length === 1
+        ) {
+          const canonical = parseSessionRecordingPublicUrl(material.url);
+          if (
+            !canonical ||
+            canonical.eventSlug !== eventSlug ||
+            canonical.occurrenceId !== occurrence.id ||
+            canonical.materialId !== material.id ||
+            canonical.versionId !== material.recordingVersionId
+          )
+            throw new Error("Published recording selection lacks its canonical URL");
+          documents.push({
+            url: material.url,
+            grantId: createHash("sha256")
+              .update(
+                publicationDocumentGrantHashInput({
+                  ...canonical,
+                  kind: "recording",
+                  approvedAt: material.approvedAt,
+                  approvalNonce: material.approvalNonce ?? null,
+                }),
+              )
+              .digest("hex"),
+          });
+        }
         if (!material.legacyDownloadUrl || material.status !== "approved") continue;
         if (!material.rightsConfirmed || !material.consentConfirmed || !material.validated || !material.approvedAt)
           throw new Error("Historical document selection lacks publication approval");
@@ -111,7 +141,7 @@ function snapshotDocumentRoutes(snapshot, verify) {
 }
 
 /** Only native verified documents can turn an explicitly selected receipt into redirects. */
-export function collectDocumentRedirects(snapshot, documents, retained = []) {
+export function collectDocumentRedirects(snapshot, documents, retained = [], recordings = []) {
   const current = snapshotDocumentRoutes(snapshot, (occurrence, material, receipt, target) => {
     const matches = documents.filter(
       (document) => document.occurrenceId === occurrence.id && document.materialId === material.id,
@@ -128,19 +158,27 @@ export function collectDocumentRedirects(snapshot, documents, retained = []) {
       throw new Error("Historical document selection lacks exact native byte verification");
   });
   for (const selection of current.documents) {
-    const target = parseSessionPresentationPublicUrl(selection.url);
-    const matches = documents.filter(
+    const recording = parseSessionRecordingPublicUrl(selection.url);
+    const target = recording ?? parseSessionPresentationPublicUrl(selection.url);
+    const candidates = recording ? recordings : documents;
+    const matches = candidates.filter(
       (document) =>
+        (!recording || document.eventSlug === target.eventSlug) &&
         document.occurrenceId === target.occurrenceId &&
         document.versionId === target.versionId &&
-        document.digest === target.digest,
+        document.digest === target.digest &&
+        (!recording || document.materialId === recording.materialId),
     );
     if (
       matches.length !== 1 ||
       !matches[0].objectEtag ||
       (matches[0].grantId && matches[0].grantId !== selection.grantId)
     )
-      throw new Error("Published PDF selection lacks exact native verification");
+      throw new Error(
+        recording
+          ? "Published recording selection lacks exact native verification"
+          : "Published PDF selection lacks exact native verification",
+      );
   }
   return appendRetainedDocumentRoutes(current, documents, retained);
 }

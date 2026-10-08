@@ -12,14 +12,19 @@ import { DescriptionList } from "../../../../../../ui/DescriptionList";
 import { Button, ButtonLink } from "../../../../../../ui/Button";
 import { PersonalAgendaStatus } from "./PersonalAgendaStatus";
 import { ParticipationControls } from "./ParticipationControls";
+import { availableScannerActions } from "../../../../../../../shared/event-scanner-permissions";
+import { hasEventAgendaPermission } from "../../event-agenda-access";
+import { usePortalHashLocation } from "../../../../hash-location";
 
 export function SessionParticipation({
   slug,
+  eventId,
   occurrenceId,
   backHref,
   showLocalTime = false,
 }: {
   slug: string;
+  eventId?: string;
   occurrenceId: string;
   backHref: string;
   showLocalTime?: boolean;
@@ -93,6 +98,16 @@ export function SessionParticipation({
         eyebrow="Session participation"
         actions={
           <>
+            {eventId &&
+              availableScannerActions((permission) => hasEventAgendaPermission(eventId, permission)).length > 0 && (
+                <ButtonLink
+                  href={usePortalHashLocation.hrefs(
+                    `/events/${encodeURIComponent(slug)}/scanner?${new URLSearchParams({ session: session.id }).toString()}`,
+                  )}
+                >
+                  Start session check-in
+                </ButtonLink>
+              )}
             {session.onlineAccessAvailable && (
               <Button variant="primary" loading={joining} onClick={() => void joinOnline()}>
                 Join online

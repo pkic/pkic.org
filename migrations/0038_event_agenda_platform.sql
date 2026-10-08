@@ -784,6 +784,41 @@ BEGIN
   FROM events event WHERE event.id=OLD.event_id ON CONFLICT(event_id) DO NOTHING;
 END;
 
+-- Correct known Hugo importer calendar dates using authored event bounds.
+-- Preserve unknown Amsterdam end; the preceding retention triggers preserve expired purpose.
+-- Source: content/events/2023/pqc-conference-amsterdam-nl/index.md
+-- SHA256: f38c44c03622d5d9dc06b7d641e0628c816f7832450f37a4d7e3520b9ffeda8d
+-- Original importer calendar dates: 2023-11-07 through 2023-11-08; calendar evidence remains authored.
+UPDATE events
+SET starts_at = '2023-11-07T07:30:00.000Z', ends_at = NULL,
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+WHERE slug = 'pqc-conference-amsterdam-nl-2023'
+  AND source_mode = 'hugo'
+  AND timezone = 'Europe/Amsterdam'
+  AND starts_at = '2023-11-07' AND ends_at = '2023-11-08';
+
+-- Source: content/events/2025/pqc-conference-austin-us/index.md
+-- SHA256: fa8b8bd508a53f2baa8625f0d3f0e9af93e5f0aacca0da79ef5ed04e001ffc19
+-- Original importer calendar dates: 2025-01-15 through 2025-01-16; calendar evidence remains authored.
+UPDATE events
+SET starts_at = '2025-01-15T14:30:00.000Z', ends_at = '2025-01-17T00:00:00.000Z',
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+WHERE slug = 'pqc-conference-austin-us-2025'
+  AND source_mode = 'hugo'
+  AND timezone = 'America/Chicago'
+  AND starts_at = '2025-01-15' AND ends_at = '2025-01-16';
+
+-- Source: content/events/2025/pqc-conference-kuala-lumpur-my/_index.md
+-- SHA256: 57e182eadb0e1f620685143e3db4908a0809bd745ffbcbb9ca4e20ee277a0943
+-- Original importer calendar dates: 2025-10-28 through 2025-10-30; calendar evidence remains authored.
+UPDATE events
+SET starts_at = '2025-10-28T00:30:00.000Z', ends_at = '2025-10-30T09:00:00.000Z',
+    updated_at = strftime('%Y-%m-%dT%H:%M:%fZ','now')
+WHERE slug = 'pqc-conference-kuala-lumpur-my-2025'
+  AND source_mode = 'hugo'
+  AND timezone = 'Asia/Kuala_Lumpur'
+  AND starts_at = '2025-10-28' AND ends_at = '2025-10-30';
+
 -- Preserve historical event-calendar classification without inventing legacy context.
 ALTER TABLE event_scan_attempts ADD COLUMN capture_day_date TEXT;
 ALTER TABLE event_scan_attempts ADD COLUMN capture_time_zone TEXT;
@@ -1466,3 +1501,232 @@ BEGIN SELECT RAISE(ABORT,'CONSENT_WITHDRAWAL_EVIDENCE_IMMUTABLE'); END;
 
 -- Record only the scanner decision made for this attempt; existing evidence stays unknown.
 ALTER TABLE event_scan_attempts ADD COLUMN admission_decision TEXT;
+
+-- Canonical recording sources, private acquisition receipts and immutable owned versions.
+CREATE UNIQUE INDEX event_series_event_identity ON event_series(event_id,id);
+
+CREATE TABLE event_recording_meetings (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES events(id),
+  native_series_id TEXT,
+  native_occurrence_id TEXT,
+  provider_type TEXT NOT NULL,
+  provider_account_id TEXT NOT NULL,
+  provider_app_id TEXT NOT NULL,
+  provider_meeting_id TEXT NOT NULL,
+  title TEXT NOT NULL,
+  linked_by_user_id TEXT NOT NULL REFERENCES users(id),
+  linked_at TEXT NOT NULL,
+  UNIQUE(event_id,id),
+  CHECK((native_series_id IS NULL)=(native_occurrence_id IS NULL)),
+  FOREIGN KEY(event_id,native_series_id) REFERENCES event_series(event_id,id),
+  FOREIGN KEY(native_occurrence_id,native_series_id) REFERENCES event_occurrences(id,series_id)
+);
+CREATE UNIQUE INDEX event_recording_meetings_scope ON event_recording_meetings(event_id,provider_account_id,provider_app_id,provider_meeting_id,COALESCE(native_occurrence_id,''));
+CREATE INDEX event_recording_meetings_catalog ON event_recording_meetings(event_id,linked_at,id);
+CREATE TRIGGER event_recording_meeting_immutable BEFORE UPDATE ON event_recording_meetings
+BEGIN SELECT RAISE(ABORT,'RECORDING_MEETING_IMMUTABLE'); END;
+
+CREATE TABLE event_recording_sources (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES events(id),
+  meeting_link_id TEXT NOT NULL,
+  native_series_id TEXT,
+  native_occurrence_id TEXT,
+  provider_type TEXT NOT NULL,
+  provider_account_id TEXT NOT NULL,
+  provider_app_id TEXT NOT NULL,
+  provider_meeting_id TEXT NOT NULL,
+  provider_session_id TEXT NOT NULL,
+  provider_recording_id TEXT NOT NULL,
+  provider_status TEXT NOT NULL,
+  provider_invoked_at TEXT NOT NULL,
+  provider_started_at TEXT NOT NULL,
+  provider_stopped_at TEXT,
+  provider_file_size INTEGER NOT NULL CHECK(provider_file_size>=0),
+  metadata_revision INTEGER NOT NULL DEFAULT 1 CHECK(metadata_revision>0),
+  observed_at TEXT NOT NULL,
+  disabled_at TEXT,
+  created_by_user_id TEXT NOT NULL REFERENCES users(id),
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(event_id,id),
+  UNIQUE(provider_type,provider_account_id,provider_app_id,provider_recording_id),
+  CHECK((native_series_id IS NULL)=(native_occurrence_id IS NULL)),
+  FOREIGN KEY(event_id,meeting_link_id) REFERENCES event_recording_meetings(event_id,id),
+  FOREIGN KEY(event_id,native_series_id) REFERENCES event_series(event_id,id),
+  FOREIGN KEY(native_occurrence_id,native_series_id) REFERENCES event_occurrences(id,series_id)
+);
+CREATE INDEX event_recording_sources_catalog ON event_recording_sources(event_id,disabled_at,provider_invoked_at,id);
+CREATE INDEX event_recording_sources_native ON event_recording_sources(native_series_id,native_occurrence_id,id);
+CREATE INDEX event_recording_sources_author ON event_recording_sources(created_by_user_id,id);
+CREATE TRIGGER event_recording_source_scope_immutable BEFORE UPDATE ON event_recording_sources
+WHEN NEW.id IS NOT OLD.id OR NEW.event_id IS NOT OLD.event_id
+ OR NEW.meeting_link_id IS NOT OLD.meeting_link_id
+ OR NEW.native_series_id IS NOT OLD.native_series_id OR NEW.native_occurrence_id IS NOT OLD.native_occurrence_id
+ OR NEW.provider_type IS NOT OLD.provider_type OR NEW.provider_account_id IS NOT OLD.provider_account_id
+ OR NEW.provider_app_id IS NOT OLD.provider_app_id OR NEW.provider_meeting_id IS NOT OLD.provider_meeting_id
+ OR NEW.provider_session_id IS NOT OLD.provider_session_id OR NEW.provider_recording_id IS NOT OLD.provider_recording_id
+ OR NEW.created_by_user_id IS NOT OLD.created_by_user_id OR NEW.created_at IS NOT OLD.created_at
+BEGIN SELECT RAISE(ABORT,'RECORDING_SOURCE_SCOPE_IMMUTABLE'); END;
+
+CREATE TABLE event_recording_acquisitions (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES events(id),
+  source_id TEXT NOT NULL,
+  operation_id TEXT NOT NULL,
+  payload_hash TEXT NOT NULL,
+  expected_metadata_revision INTEGER NOT NULL CHECK(expected_metadata_revision>0),
+  requested_by_user_id TEXT NOT NULL REFERENCES users(id),
+  status TEXT NOT NULL,
+  attempts INTEGER NOT NULL DEFAULT 0 CHECK(attempts>=0),
+  next_attempt_at TEXT NOT NULL,
+  processing_token TEXT,
+  claimed_at TEXT,
+  lease_expires_at TEXT,
+  last_failure_kind TEXT,
+  last_provider_status INTEGER,
+  transfer_version_id TEXT,
+  transfer_upload_id TEXT,
+  transfer_part_bytes INTEGER CHECK(transfer_part_bytes IS NULL OR transfer_part_bytes>0),
+  transfer_total_bytes INTEGER CHECK(transfer_total_bytes IS NULL OR transfer_total_bytes>0),
+  transfer_source_etag TEXT,
+  transfer_r2_key TEXT,
+  verification_object_etag TEXT,
+  verification_offset INTEGER NOT NULL DEFAULT 0 CHECK(verification_offset>=0),
+  verification_checkpoint TEXT CHECK(verification_checkpoint IS NULL OR json_valid(verification_checkpoint)),
+  verified_digest TEXT,
+  verified_mime_type TEXT,
+  completed_version_id TEXT,
+  completed_at TEXT,
+  created_at TEXT NOT NULL,
+  updated_at TEXT NOT NULL,
+  UNIQUE(event_id,operation_id),
+  UNIQUE(event_id,source_id,id),
+  CHECK((processing_token IS NULL)=(claimed_at IS NULL)),
+  CHECK((processing_token IS NULL)=(lease_expires_at IS NULL)),
+  CHECK(lease_expires_at IS NULL OR lease_expires_at>claimed_at),
+  CHECK((completed_version_id IS NULL)=(completed_at IS NULL)),
+  CHECK((transfer_version_id IS NULL)=(transfer_upload_id IS NULL)),
+  CHECK((transfer_upload_id IS NULL)=(transfer_part_bytes IS NULL)),
+  CHECK((transfer_upload_id IS NULL)=(transfer_total_bytes IS NULL)),
+  CHECK((transfer_upload_id IS NULL)=(transfer_source_etag IS NULL)),
+  CHECK((transfer_upload_id IS NULL)=(transfer_r2_key IS NULL)),
+  CHECK(verification_object_etag IS NULL OR transfer_r2_key IS NOT NULL),
+  CHECK((transfer_total_bytes IS NULL AND verification_offset=0)
+    OR verification_offset<=transfer_total_bytes),
+  CHECK(verification_checkpoint IS NULL OR (verification_object_etag IS NOT NULL AND verification_offset>0)),
+  CHECK(verification_offset=0 OR verification_checkpoint IS NOT NULL OR verified_digest IS NOT NULL),
+  CHECK((verified_digest IS NULL)=(verified_mime_type IS NULL)),
+  CHECK(verified_digest IS NULL OR (verification_offset=transfer_total_bytes
+    AND verification_object_etag IS NOT NULL AND verification_checkpoint IS NULL)),
+  FOREIGN KEY(event_id,source_id) REFERENCES event_recording_sources(event_id,id),
+  FOREIGN KEY(event_id,source_id,completed_version_id) REFERENCES event_recording_versions(event_id,source_id,id) DEFERRABLE INITIALLY DEFERRED
+);
+CREATE INDEX event_recording_acquisitions_due ON event_recording_acquisitions(status,next_attempt_at,created_at,id);
+CREATE INDEX event_recording_acquisitions_lease ON event_recording_acquisitions(lease_expires_at,id) WHERE processing_token IS NOT NULL;
+CREATE INDEX event_recording_acquisitions_source ON event_recording_acquisitions(event_id,source_id,created_at,id);
+CREATE INDEX event_recording_acquisitions_actor ON event_recording_acquisitions(requested_by_user_id,id);
+CREATE INDEX event_recording_acquisitions_version ON event_recording_acquisitions(event_id,source_id,completed_version_id);
+CREATE TRIGGER event_recording_acquisition_request_immutable BEFORE UPDATE ON event_recording_acquisitions
+WHEN NEW.id IS NOT OLD.id OR NEW.event_id IS NOT OLD.event_id OR NEW.source_id IS NOT OLD.source_id
+ OR NEW.operation_id IS NOT OLD.operation_id OR NEW.payload_hash IS NOT OLD.payload_hash
+ OR NEW.expected_metadata_revision IS NOT OLD.expected_metadata_revision
+ OR NEW.requested_by_user_id IS NOT OLD.requested_by_user_id OR NEW.created_at IS NOT OLD.created_at
+BEGIN SELECT RAISE(ABORT,'RECORDING_ACQUISITION_REQUEST_IMMUTABLE'); END;
+CREATE TRIGGER event_recording_acquisition_result_immutable BEFORE UPDATE ON event_recording_acquisitions
+WHEN OLD.completed_version_id IS NOT NULL AND
+ (NEW.completed_version_id IS NOT OLD.completed_version_id OR NEW.completed_at IS NOT OLD.completed_at)
+BEGIN SELECT RAISE(ABORT,'RECORDING_ACQUISITION_RESULT_IMMUTABLE'); END;
+
+CREATE TABLE event_recording_versions (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES events(id),
+  source_id TEXT NOT NULL,
+  acquisition_id TEXT NOT NULL UNIQUE,
+  version_number INTEGER NOT NULL CHECK(version_number>0),
+  source_metadata_revision INTEGER NOT NULL CHECK(source_metadata_revision>0),
+  r2_key TEXT NOT NULL UNIQUE,
+  digest TEXT NOT NULL,
+  file_size INTEGER NOT NULL CHECK(file_size>0),
+  mime_type TEXT NOT NULL,
+  object_etag TEXT NOT NULL,
+  acquired_at TEXT NOT NULL,
+  deleted_at TEXT,
+  UNIQUE(event_id,source_id,id),
+  UNIQUE(event_id,id),
+  UNIQUE(source_id,version_number),
+  FOREIGN KEY(event_id,source_id) REFERENCES event_recording_sources(event_id,id),
+  FOREIGN KEY(event_id,source_id,acquisition_id) REFERENCES event_recording_acquisitions(event_id,source_id,id) DEFERRABLE INITIALLY DEFERRED
+);
+CREATE UNIQUE INDEX event_recording_versions_live_digest ON event_recording_versions(source_id,digest) WHERE deleted_at IS NULL;
+CREATE INDEX event_recording_versions_catalog ON event_recording_versions(event_id,deleted_at,acquired_at,id);
+CREATE TRIGGER event_recording_version_bytes_immutable BEFORE UPDATE ON event_recording_versions
+WHEN NEW.id IS NOT OLD.id OR NEW.event_id IS NOT OLD.event_id OR NEW.source_id IS NOT OLD.source_id
+ OR NEW.acquisition_id IS NOT OLD.acquisition_id OR NEW.version_number IS NOT OLD.version_number
+ OR NEW.source_metadata_revision IS NOT OLD.source_metadata_revision OR NEW.r2_key IS NOT OLD.r2_key
+ OR NEW.digest IS NOT OLD.digest OR NEW.file_size IS NOT OLD.file_size OR NEW.mime_type IS NOT OLD.mime_type
+ OR NEW.object_etag IS NOT OLD.object_etag OR NEW.acquired_at IS NOT OLD.acquired_at
+BEGIN SELECT RAISE(ABORT,'RECORDING_VERSION_BYTES_IMMUTABLE'); END;
+CREATE TRIGGER event_recording_version_deletion_immutable BEFORE UPDATE OF deleted_at ON event_recording_versions
+WHEN OLD.deleted_at IS NOT NULL AND NEW.deleted_at IS NOT OLD.deleted_at
+BEGIN SELECT RAISE(ABORT,'RECORDING_VERSION_DELETION_IMMUTABLE'); END;
+
+
+-- Immutable multipart receipts belong to one exact owned acquisition and upload.
+CREATE TABLE event_recording_parts (
+  event_id TEXT NOT NULL,
+  source_id TEXT NOT NULL,
+  acquisition_id TEXT NOT NULL,
+  upload_id TEXT NOT NULL,
+  part_number INTEGER NOT NULL CHECK(part_number>0),
+  etag TEXT NOT NULL,
+  byte_offset INTEGER NOT NULL CHECK(byte_offset>=0),
+  byte_length INTEGER NOT NULL CHECK(byte_length>0),
+  recorded_at TEXT NOT NULL,
+  PRIMARY KEY(acquisition_id,upload_id,part_number),
+  FOREIGN KEY(event_id,source_id,acquisition_id) REFERENCES event_recording_acquisitions(event_id,source_id,id)
+);
+CREATE INDEX event_recording_parts_owner ON event_recording_parts(event_id,source_id,acquisition_id,upload_id,part_number);
+CREATE TRIGGER event_recording_part_immutable BEFORE UPDATE ON event_recording_parts
+BEGIN SELECT RAISE(ABORT,'RECORDING_ACQUISITION_PART_IMMUTABLE'); END;
+
+-- Recording selections use the existing publication build and grant authority.
+-- Owned versions retain MIME and byte evidence; the manifest freezes selection only.
+CREATE TABLE site_publication_recording_manifests (
+  build_id TEXT NOT NULL,
+  snapshot_id TEXT NOT NULL,
+  event_id TEXT NOT NULL REFERENCES events(id),
+  occurrence_id TEXT NOT NULL,
+  material_id TEXT NOT NULL,
+  version_id TEXT NOT NULL,
+  digest TEXT NOT NULL,
+  object_etag TEXT NOT NULL,
+  grant_id TEXT NOT NULL,
+  PRIMARY KEY(build_id,event_id,occurrence_id,material_id),
+  FOREIGN KEY(event_id,version_id) REFERENCES event_recording_versions(event_id,id),
+  FOREIGN KEY(event_id,occurrence_id) REFERENCES event_agenda_occurrences(event_id,id)
+);
+CREATE INDEX site_publication_recording_lookup ON site_publication_recording_manifests(build_id,occurrence_id,version_id,digest);
+CREATE TRIGGER site_publication_recording_manifest_immutable BEFORE UPDATE ON site_publication_recording_manifests
+BEGIN SELECT RAISE(ABORT,'PUBLICATION_RECORDING_MANIFEST_IMMUTABLE'); END;
+CREATE TRIGGER site_publication_recording_manifest_conflict BEFORE INSERT ON site_publication_recording_manifests
+WHEN EXISTS(SELECT 1 FROM site_publication_recording_manifests old WHERE old.build_id=NEW.build_id AND old.event_id=NEW.event_id AND old.occurrence_id=NEW.occurrence_id AND old.material_id=NEW.material_id AND (old.snapshot_id<>NEW.snapshot_id OR old.version_id<>NEW.version_id OR old.digest<>NEW.digest OR old.object_etag<>NEW.object_etag OR old.grant_id<>NEW.grant_id))
+BEGIN SELECT RAISE(ABORT,'PUBLICATION_RECORDING_MANIFEST_CONFLICT'); END;
+
+
+-- Revision conflicts have their own domain guard, independent of permission refusal.
+CREATE TABLE event_agenda_revision_guards (
+  id TEXT PRIMARY KEY,
+  event_id TEXT NOT NULL REFERENCES events(id),
+  expected_revision INTEGER NOT NULL CHECK(expected_revision>=0)
+);
+CREATE TRIGGER event_agenda_revision_guard_valid BEFORE INSERT ON event_agenda_revision_guards
+WHEN NOT EXISTS(SELECT 1 FROM event_agenda_state WHERE event_id=NEW.event_id AND revision=NEW.expected_revision)
+BEGIN SELECT RAISE(ABORT,'AGENDA_REVISION_CHANGED'); END;
+CREATE TRIGGER event_agenda_revision_guard_cleanup AFTER INSERT ON event_agenda_revision_guards
+BEGIN DELETE FROM event_agenda_revision_guards WHERE id=NEW.id; END;
+
+-- Acquisition owns retry state; this scheduler only advances bounded due work.
+INSERT INTO scheduled_jobs(job_key,interval_seconds,next_run_at)
+VALUES('recording_acquisitions',60,strftime('%Y-%m-%dT%H:%M:%fZ','now'));

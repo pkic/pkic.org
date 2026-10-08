@@ -17,22 +17,36 @@ import {
   scannerTargetQuerySchema,
   scannerTargetsResponseSchema,
 } from "../../../../assets/shared/schemas/event-participation-scanning";
+import { scannerTargetCatalog, scannerTargetFilter } from "./scanner-target-catalog";
 export async function scannerTargets(db: DatabaseLike, eventId: string, raw: unknown) {
   const query = scannerTargetQuerySchema.parse(raw);
-  const bindings = [eventId, query.q ?? "", query.occurrenceId ?? null, query.occurrenceId ?? null];
-  const where = "event_id=? AND INSTR(LOWER(title),LOWER(?))>0 AND (? IS NULL OR id=?)";
+  const catalog = await scannerTargetCatalog(db, eventId);
+  const { bindings, where, order } = scannerTargetFilter(eventId, query, catalog);
   const count = await first<{ total: number }>(
     db,
-    `SELECT COUNT(*) AS total FROM (${publishedSessionsSql}) WHERE ${where}`,
+    `SELECT COUNT(*) AS total FROM (${publishedSessionsSql}) s WHERE ${where}`,
     bindings,
   );
-  const rows = await all<{ id: string; title: string; rooms_json: string }>(
+  const rows = await all<{
+    id: string;
+    title: string;
+    startAt: string | null;
+    endAt: string | null;
+    rooms_json: string;
+  }>(
     db,
-    `SELECT s.id,s.title,(SELECT json_group_array(json_object('id',location.id,'name',location.name)) FROM (${publishedRoomsSql}) location WHERE location.event_id=s.event_id AND (location.id=s.room_id OR EXISTS(SELECT 1 FROM json_each(s.additional_room_ids_json) placement WHERE placement.value=location.id))) AS rooms_json FROM (${publishedSessionsSql}) s WHERE ${where} ORDER BY title ${query.sort === "-title" ? "DESC" : "ASC"},id LIMIT ? OFFSET ?`,
+    `SELECT s.id,s.title,s.start_at AS startAt,s.end_at AS endAt,(SELECT json_group_array(json_object('id',location.id,'name',location.name)) FROM (${publishedRoomsSql}) location WHERE location.event_id=s.event_id AND (location.id=s.room_id OR EXISTS(SELECT 1 FROM json_each(s.additional_room_ids_json) placement WHERE placement.value=location.id))) AS rooms_json FROM (${publishedSessionsSql}) s WHERE ${where} ORDER BY ${order} LIMIT ? OFFSET ?`,
     [...bindings, query.limit, query.offset],
   );
   return scannerTargetsResponseSchema.parse({
-    sessions: rows.map((row) => ({ id: row.id, title: row.title, rooms: JSON.parse(row.rooms_json) })),
+    ...catalog,
+    sessions: rows.map((row) => ({
+      id: row.id,
+      title: row.title,
+      startAt: row.startAt,
+      endAt: row.endAt,
+      rooms: JSON.parse(row.rooms_json),
+    })),
     page: buildPageInfo(query.limit, query.offset, count?.total ?? 0, rows.length),
   });
 }

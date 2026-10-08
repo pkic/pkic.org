@@ -1,0 +1,29 @@
+@layer components {
+  @media (max-width: 64rem), (pointer: coarse) {
+    .pk-participant-event {
+      padding-block-end: calc(var(--pk-6) + var(--pk-3) + var(--pk-4) + env(safe-area-inset-bottom, 0px));
+    }
+
+    .pk-participant-event__navigation {
+      position: fixed;
+      inset-inline: 0;
+      inset-block-end: 0;
+      z-index: 40;
+      margin: 0;
+      background: var(--pk-surface);
+      border-block-start: 1px solid var(--pk-line);
+      padding-block-end: env(safe-area-inset-bottom, 0px);
+    }
+
+    .pk-participant-event__navigation .pk-tabs__list {
+      overflow-x: auto;
+      flex-wrap: nowrap;
+      border-block-end: 0;
+    }
+
+    .pk-participant-event__navigation .pk-tabs__link {
+      min-block-size: calc(var(--pk-6) + var(--pk-3));
+      flex-grow: 1;
+    }
+  }
+}

@@ -8,11 +8,14 @@ import type {
   VerifiedPublishedDocument,
 } from "../../functions/_lib/services/site-publication-documents";
 
+import type { PublishedRecording } from "../../functions/_lib/services/site-publication-recordings";
+
 export function documentFilePath(url: unknown): string;
 export function collectDocumentRedirects(
   snapshot: SitePublicationSnapshot,
   documents: readonly VerifiedPublishedDocument[],
   retained?: readonly RetainedPublishedDocument[],
+  recordings?: readonly PublishedRecording[],
 ): SitePublicationDocumentRoutes;
 export function assertDocumentRoutesSnapshot(
   snapshot: SitePublicationSnapshot,

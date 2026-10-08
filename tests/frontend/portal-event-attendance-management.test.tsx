@@ -206,6 +206,31 @@ function statFigures(root: Element | null): Record<string, { value: string; note
 }
 
 describe("group event registrations roster", () => {
+  it("hands the filtered print population to the dedicated Badges view instead of replacing the roster", async () => {
+    installApi(false);
+    const onPrint = vi.fn();
+    const container = mount(
+      <GroupEventRegistrations
+        groupId={GROUP_ID}
+        eventId={EVENT_ID}
+        eventSlug="architecture-workshop"
+        canManage
+        onPrint={onPrint}
+      />,
+    );
+    await settle();
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Registration actions"]');
+    expect(trigger).not.toBeNull();
+    await act(async () => trigger!.click());
+    await act(async () => menuItemNamed(container, "Create / print all matching badges")!.click());
+    expect(onPrint).toHaveBeenCalledWith({
+      kind: "filtered",
+      endpoint: `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/registrations/badges/population`,
+      filters: {},
+    });
+    expect(container.querySelector("caption")?.textContent).toBe("Registrations");
+    expect(container.textContent).not.toContain("Print all matching attendee badges");
+  });
   it("names the roster and every one of its columns, with no blank action column", async () => {
     installApi(false);
     const container = mountRoster();

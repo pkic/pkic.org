@@ -33,6 +33,12 @@ export type R2BucketLike = R2Bucket;
 
 export interface Env {
   DB: DatabaseLike;
+  /** Optional private RealtimeKit discovery configuration; never sent to recording asset hosts. */
+  REALTIMEKIT_ACCOUNT_ID?: string;
+  REALTIMEKIT_APP_ID?: string;
+  REALTIMEKIT_API_TOKEN?: string;
+  /** JSON array of explicitly trusted HTTPS recording download origins. */
+  REALTIMEKIT_RECORDING_DOWNLOAD_ORIGINS?: string;
   /** Optional browser push configuration. Missing keys keep delivery disabled. */
   VAPID_PUBLIC_KEY?: string;
   VAPID_PRIVATE_KEY?: string;

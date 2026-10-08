@@ -14,6 +14,8 @@ export function useScannerLocation(
 ) {
   const [targetId, setTarget] = useState(initialId),
     [targetLabel, setLabel] = useState(""),
+    [target, setMetadata] = useState<ScannerTarget | null>(null),
+    [timeZone, setTimeZone] = useState<string | null>(null),
     [rooms, setRooms] = useState<NonNullable<ScannerTarget["rooms"]>>([]),
     [roomId, setRoom] = useState<string | null>(null);
   const current = useRef(targetId);
@@ -23,6 +25,7 @@ export function useScannerLocation(
   function selectTarget(item: ScannerTarget | null) {
     changed.current();
     setTarget(item?.id ?? null);
+    setMetadata(item);
     setLabel(item?.title ?? "");
     const locations = item?.rooms ?? [];
     setRooms(locations);
@@ -45,8 +48,10 @@ export function useScannerLocation(
         });
         if (!response.ok) return;
         const result = scannerTargetsResponseSchema.parse(await response.json());
-        if (!controller.signal.aborted && current.current === initialId && result.sessions[0])
+        if (!controller.signal.aborted && current.current === initialId && result.sessions[0]) {
+          setTimeZone(result.timeZone);
           selectTarget(result.sessions[0]);
+        }
       } catch {
         /* Explicit target selection remains available when metadata preparation is interrupted. */
       }
@@ -55,6 +60,9 @@ export function useScannerLocation(
   }, [slug, initialId, enabled, collector?.epochId]);
   // Lead capture is event-wide. Retain the prior check-in choice for a return to that mode.
   return {
+    timeZone,
+    setTimeZone,
+    target: enabled && !collector ? target : null,
     targetId: collector ? collector.occurrenceId : enabled ? targetId : null,
     targetLabel: collector
       ? collector.occurrenceId

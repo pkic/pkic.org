@@ -1,8 +1,9 @@
 import type { ParticipationAvailability } from "./schemas/event-participation-availability";
+import type { AgendaAdmissionPolicy } from "./schemas/event-agenda";
 export interface AvailabilityEvidence {
   attendanceMode: "physical" | "remote";
   roomId: string | null;
-  policy: "preference" | "reservation" | "approval";
+  policy: AgendaAdmissionPolicy;
   invitationRequired: boolean;
   invited: boolean;
   registered: boolean;
@@ -72,13 +73,17 @@ export function participationAvailability(evidence: AvailabilityEvidence, now: s
         ? full
           ? "Full at the last refresh. Saving interest does not guarantee admission; entry remains first come, first served."
           : "Save a preference. Admission is first come, first served and no place is reserved."
-        : full
-          ? evidence.policy === "approval"
-            ? "Full at the last refresh. You can request approval; approval does not promise an available place."
-            : "Full at the last refresh. You can join the waiting list; no place is reserved."
-          : evidence.policy === "approval"
-            ? "Request approval. A place is confirmed only after approval and available capacity."
-            : "Places are available at the last refresh. Your place is confirmed only after the server accepts your reservation.",
+        : evidence.policy === "optional_reservation"
+          ? full
+            ? "Optional registration is full at the last refresh. You can join the waiting list; attending without a reservation remains permitted."
+            : "Registration is optional. Reserve an available place, or attend without a reservation. Saving interest does not reserve a place."
+          : full
+            ? evidence.policy === "approval"
+              ? "Full at the last refresh. You can request approval; approval does not promise an available place."
+              : "Full at the last refresh. You can join the waiting list; no place is reserved."
+            : evidence.policy === "approval"
+              ? "Request approval. A place is confirmed only after approval and available capacity."
+              : "Places are available at the last refresh. Your place is confirmed only after the server accepts your reservation.",
   };
 }
 export const PARTICIPATION_AVAILABILITY_LABELS: Record<ParticipationAvailability["state"], string> = {

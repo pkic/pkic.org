@@ -17,7 +17,6 @@ import { Alert } from "../../../../../../ui/Alert";
 import { Button } from "../../../../../../ui/Button";
 import { Checkbox } from "../../../../../../ui/Checkbox";
 import { Field } from "../../../../../../ui/Field";
-import { CollapsiblePanel } from "../../../../../../ui/CollapsiblePanel";
 import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
 import { DataTable } from "../../../../../../ui/DataTable";
 import { StatCard } from "../../../../../../ui/StatCard";
@@ -261,7 +260,8 @@ export function EvidenceRemoval({ eventId, canRemove }: { eventId: string; canRe
                 {(run?.reconciliation ?? evidence.reconciliation).deviceBacklog}
               </Badge>
             </p>
-            <CollapsiblePanel title="All evidence included in this review">
+            <Panel>
+              <PanelHeader title="All evidence included in this review" />
               <DataTable
                 narrowLayout="columns"
                 caption="Evidence included in removal review"
@@ -278,7 +278,7 @@ export function EvidenceRemoval({ eventId, canRemove }: { eventId: string; canRe
                 rows={EVIDENCE_PURGE_TABLES}
                 rowKey={(table) => table}
               />
-            </CollapsiblePanel>
+            </Panel>
             {preview.blockers
               .filter((blocker) => !run || (blocker !== "active_run" && blocker !== "device_reconciliation_incomplete"))
               .map((blocker) => (

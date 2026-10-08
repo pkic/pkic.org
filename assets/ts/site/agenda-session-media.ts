@@ -1,3 +1,9 @@
+/** Stop media when a shared session dialog closes or its recording becomes unavailable. */
+export function pauseAgendaSessionMedia(root: HTMLElement): void {
+  root.querySelectorAll<HTMLVideoElement>("video").forEach((video) => video.pause());
+  root.querySelectorAll<HTMLIFrameElement>("iframe[data-video-src]").forEach((iframe) => iframe.removeAttribute("src"));
+}
+
 /** Update static and portal cards from the current browser clock, never the publication build time. */
 export function initializeAgendaSessionMedia(root: HTMLElement): () => void {
   const update = () => {
@@ -28,7 +34,7 @@ export function initializeAgendaSessionMedia(root: HTMLElement): () => void {
       });
       card.querySelectorAll<HTMLElement>("[data-agenda-media-recording]").forEach((element) => {
         element.hidden = !recordingAvailable;
-        if (!recordingAvailable) element.querySelector<HTMLIFrameElement>("iframe")?.removeAttribute("src");
+        if (!recordingAvailable) pauseAgendaSessionMedia(element);
       });
     }
   };

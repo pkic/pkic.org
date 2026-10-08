@@ -4,6 +4,7 @@ import { Field } from "../../../../../../ui/Field";
 import { FileInput } from "../../../../../../ui/FileInput";
 import { importScanRecovery, CANONICAL_RECOVERY_EXPORT_BYTE_LIMIT } from "./scan-recovery-import";
 import { Button } from "../../../../../../ui/Button";
+import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { scanRecoverySchema } from "../../../../../../../shared/schemas/event-scan-recovery";
 import {
   restoreScanHistory,
@@ -133,13 +134,9 @@ export function ScannerRecovery({
     }
   }
   return (
-    <details
-      onToggle={() => {
-        void refresh().catch(() => {});
-      }}
-    >
-      <summary>Recovery backup</summary>
-      <div class="pk-form">
+    <Panel>
+      <PanelHeader title="Recovery backup" />
+      <PanelBody class="pk-form">
         <p>
           Uploaded scan records remain on this phone for {formatNumber(14)} days, including badge codes and minimal scan
           context. Pending uploads remain until the server acknowledges them. Browser storage can be cleared; download a
@@ -200,7 +197,7 @@ export function ScannerRecovery({
           Import recovery file
         </Button>
         {message && <p role="status">{message}</p>}
-      </div>
-    </details>
+      </PanelBody>
+    </Panel>
   );
 }

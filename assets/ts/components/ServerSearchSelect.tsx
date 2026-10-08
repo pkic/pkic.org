@@ -1,3 +1,4 @@
+import { Button } from "../ui/Button";
 import { useCallback, useEffect, useId, useLayoutEffect, useRef, useState } from "preact/hooks";
 import {
   buildCollectionResetKey,
@@ -26,6 +27,8 @@ const loadCollection: CollectionLoader = (url, signal, schema) => getJson(url, s
 
 export interface ServerSearchSelectProps<Item, Response> extends FieldControlProps {
   catalog: ServerCatalog<Item, Response>;
+  pageSize?: number;
+  searchable?: boolean;
   /**
    * What is being searched — "Working group", "Template". It names the listbox
    * of matches and shapes the default search placeholder. The visible label is
@@ -72,6 +75,8 @@ export interface ServerSearchSelectProps<Item, Response> extends FieldControlPro
  */
 export function ServerSearchSelect<Item, Response>({
   catalog,
+  pageSize = SELECTOR_PAGE_SIZE,
+  searchable = true,
   searchLabel,
   value,
   selectedLabel,
@@ -103,6 +108,7 @@ export function ServerSearchSelect<Item, Response>({
   const popupRef = useRef<HTMLDivElement>(null);
   const optionRefs = useRef<(HTMLElement | null)[]>([]);
   const excluded = new Set(excludeValues);
+  const [offset, setOffset] = useState(0);
   const resetKey = buildCollectionResetKey(catalog.endpoint, catalog.params);
 
   const cancelDebounce = useCallback(() => {
@@ -118,6 +124,7 @@ export function ServerSearchSelect<Item, Response>({
   // the reset effect lands — `resetPending` blanks it synchronously.
   const resetSelection = useCallback(() => {
     cancelDebounce();
+    setOffset(0);
     setQuery(null);
     setSearch("");
     setOpen(false);
@@ -129,10 +136,10 @@ export function ServerSearchSelect<Item, Response>({
     endpoint: catalog.endpoint,
     params: {
       ...catalog.params,
-      limit: String(SELECTOR_PAGE_SIZE),
-      offset: "0",
-      sort: catalog.sort,
-      ...(!resetPending && search ? { q: search } : {}),
+      limit: String(pageSize),
+      offset: String(resetPending ? 0 : offset),
+      ...(catalog.sort ? { sort: catalog.sort } : {}),
+      ...(searchable && !resetPending && search ? { q: search } : {}),
     },
     responseSchema: catalog.responseSchema,
     load,
@@ -261,30 +268,49 @@ export function ServerSearchSelect<Item, Response>({
           ? `No matches for “${search}”.`
           : "No matches."
         : page?.hasMore
-          ? `Showing ${rawItems.length} of ${page.total} matches. Keep typing to narrow the list.`
+          ? searchable
+            ? `Showing ${rawItems.length} of ${page.total} matches. Keep typing to narrow the list.`
+            : `Showing ${rawItems.length} of ${page.total} matches.`
           : "";
 
   return (
     <div class="pk-control-stack" ref={anchorRef}>
-      <TextInput
-        {...control}
-        type="text"
-        role="combobox"
-        autocomplete="off"
-        aria-haspopup="listbox"
-        aria-expanded={open ? "true" : "false"}
-        aria-controls={open ? listboxId : undefined}
-        aria-autocomplete="list"
-        aria-activedescendant={open && activeIndex >= 0 ? optionId(activeIndex) : undefined}
-        placeholder={searchPlaceholder ?? `Search ${searchLabel.toLowerCase()}…`}
-        value={query ?? displayLabel}
-        disabled={disabled}
-        onInput={(event) => handleInput((event.target as HTMLInputElement).value)}
-        onKeyDown={handleKeyDown}
-        onFocus={(event) => event.currentTarget.select()}
-        onClick={() => !disabled && !open && setOpen(true)}
-        onBlur={close}
-      />
+      {searchable ? (
+        <TextInput
+          {...control}
+          type="text"
+          role="combobox"
+          autocomplete="off"
+          aria-haspopup="listbox"
+          aria-expanded={open ? "true" : "false"}
+          aria-controls={open ? listboxId : undefined}
+          aria-autocomplete="list"
+          aria-activedescendant={open && activeIndex >= 0 ? optionId(activeIndex) : undefined}
+          placeholder={searchPlaceholder ?? `Search ${searchLabel.toLowerCase()}…`}
+          value={query ?? displayLabel}
+          disabled={disabled}
+          onInput={(event) => handleInput((event.target as HTMLInputElement).value)}
+          onKeyDown={handleKeyDown}
+          onFocus={(event) => event.currentTarget.select()}
+          onClick={() => !disabled && !open && setOpen(true)}
+          onBlur={close}
+        />
+      ) : (
+        <Button
+          {...control}
+          type="button"
+          role="combobox"
+          aria-haspopup="listbox"
+          aria-expanded={open ? "true" : "false"}
+          aria-controls={open ? listboxId : undefined}
+          disabled={disabled}
+          onKeyDown={handleKeyDown}
+          onBlur={close}
+          onClick={() => setOpen(!open)}
+        >
+          {displayLabel || placeholder}
+        </Button>
+      )}
       {open && (
         // Pressing anywhere in the popup — an option, the scrollbar — must
         // not steal focus from the input, or the blur would close the list
@@ -333,6 +359,24 @@ export function ServerSearchSelect<Item, Response>({
           </div>
           {/* Empty and truncated result sets say so in words rather than
               leaving a silent, shorter list. */}
+          {!searchable && (offset > 0 || page?.hasMore) && (
+            <div class="pk-cluster">
+              <Button
+                type="button"
+                disabled={offset === 0 || collection.loading}
+                onClick={() => setOffset(Math.max(0, offset - pageSize))}
+              >
+                Previous options
+              </Button>
+              <Button
+                type="button"
+                disabled={!page?.hasMore || collection.loading}
+                onClick={() => setOffset(offset + pageSize)}
+              >
+                Next options
+              </Button>
+            </div>
+          )}
           {status && (
             <p class="pk-menu__status" role="status">
               {status}

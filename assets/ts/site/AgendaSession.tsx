@@ -8,10 +8,11 @@ import type { ComponentChildren, JSX } from "preact";
 import { useEffect, useRef } from "preact/hooks";
 import { youtubeVideoEmbed } from "../../shared/markdown-media";
 import { sameOriginPathSchema } from "../../shared/schemas/urls";
-import { initializeAgendaSessionMedia } from "./agenda-session-media";
+import { initializeAgendaSessionMedia, pauseAgendaSessionMedia } from "./agenda-session-media";
+import { parseSessionRecordingPublicUrl } from "../../shared/session-recording-public-url";
 import { IconBadge } from "../ui/Badge";
 import { IconDownload, IconRemote, IconVideo } from "../ui/MediaIcons";
-import { PreferenceStar } from "../ui/PreferenceStar";
+import { AgendaParticipationControls } from "./AgendaParticipationControls";
 import { Button, ButtonLink } from "../ui/Button";
 import { Markdown } from "../ui/Markdown";
 import { formatTimeRangeInZone } from "../../shared/format-date";
@@ -106,9 +107,13 @@ export function AgendaSession({
   const onlineAccess = sameOriginPathSchema.safeParse(session.onlineAccessUrl);
   const onlineAccessUrl = onlineAccess.success ? onlineAccess.data : undefined;
   const approvedEmbed = recordingUrl && session.recordingApproved ? youtubeVideoEmbed(recordingUrl) : null;
-  const recordingEmbed = session.youtube
-    ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(session.youtube)}`
-    : approvedEmbed?.replace("https://www.youtube.com/embed/", "https://www.youtube-nocookie.com/embed/");
+  const ownedRecording =
+    recordingUrl && session.recordingApproved && parseSessionRecordingPublicUrl(recordingUrl) ? recordingUrl : null;
+  const recordingEmbed = ownedRecording
+    ? null
+    : session.youtube
+      ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(session.youtube)}`
+      : approvedEmbed?.replace("https://www.youtube.com/embed/", "https://www.youtube-nocookie.com/embed/");
   const hasMedia = Boolean(
     session.plannedMedia?.recording ||
     session.plannedMedia?.liveStreaming ||
@@ -264,20 +269,7 @@ export function AgendaSession({
         (!editor && session.participation) ? (
           <div class="pk-content-agenda__actions">
             {!editor && session.participation && (
-              <a
-                class="pk-content-agenda__media-action"
-                href={session.participation.url}
-                title={
-                  session.participation.preference
-                    ? `${session.participation.label}. ${session.participation.message}`
-                    : session.participation.message
-                }
-                aria-label={
-                  session.participation.preference ? `${session.participation.label} for ${session.title}` : undefined
-                }
-              >
-                {session.participation.preference ? <PreferenceStar /> : session.participation.label}
-              </a>
+              <AgendaParticipationControls participation={session.participation} title={session.title} />
             )}
             {onlineAccessUrl && (
               <a
@@ -292,7 +284,7 @@ export function AgendaSession({
                 <span class="pk-sr-only">Join online</span>
               </a>
             )}
-            {recordingEmbed ? (
+            {recordingEmbed || ownedRecording ? (
               <a
                 href={recordingUrl ?? `https://www.youtube.com/watch?v=${encodeURIComponent(session.youtube ?? "")}`}
                 class="pk-content-agenda__media-action"
@@ -314,7 +306,7 @@ export function AgendaSession({
                 <span class="pk-sr-only">Watch recording</span>
               </a>
             ) : null}
-            {!recordingEmbed && recordingUrl && (
+            {!recordingEmbed && !ownedRecording && recordingUrl && (
               <a
                 class="pk-content-agenda__media-action"
                 href={recordingUrl}
@@ -353,9 +345,7 @@ export function AgendaSession({
         class="session-modal"
         id={dialogId}
         aria-labelledby={`${dialogId}-title`}
-        onClose={
-          editor ? () => detail.current?.querySelector<HTMLIFrameElement>("iframe")?.removeAttribute("src") : undefined
-        }
+        onClose={editor ? (event) => pauseAgendaSessionMedia(event.currentTarget) : undefined}
       >
         <div class="session-modal__header">
           <div class="session-modal__heading pk-stack pk-stack--snug">
@@ -386,11 +376,21 @@ export function AgendaSession({
           </Button>
         </div>
         <div class="session-modal__body">
-          {recordingEmbed && (
+          {ownedRecording ? (
+            <div class="session-modal__video" data-agenda-media-recording>
+              <video
+                src={ownedRecording}
+                controls
+                playsInline
+                preload="none"
+                aria-label={`Recording: ${session.title}`}
+              />
+            </div>
+          ) : recordingEmbed ? (
             <div class="session-modal__video" data-agenda-media-recording>
               <iframe loading="lazy" data-video-src={recordingEmbed} title={session.title} allowFullScreen />
             </div>
-          )}
+          ) : null}
           {(
             session.descriptionMarkdown !== undefined ? session.descriptionMarkdown.trim() : session.descriptionHtml
           ) ? (
@@ -407,7 +407,7 @@ export function AgendaSession({
             <section class="pk-stack pk-stack--snug">
               <h3>Speakers</h3>
               {session.speakers.map((speaker) => (
-                <article class="session-modal__speaker" key={speaker.name}>
+                <article class="speaker-card session-modal__speaker" key={speaker.name}>
                   <AgendaSpeaker speaker={speaker} detail />
                 </article>
               ))}
@@ -416,20 +416,7 @@ export function AgendaSession({
         </div>
         <div class="session-modal__footer pk-cluster pk-cluster--end">
           {!editor && session.participation && (
-            <ButtonLink
-              href={session.participation.url}
-              icon={session.participation.preference}
-              aria-label={
-                session.participation.preference ? `${session.participation.label} for ${session.title}` : undefined
-              }
-              title={
-                session.participation.preference
-                  ? `${session.participation.label}. ${session.participation.message}`
-                  : session.participation.message
-              }
-            >
-              {session.participation.preference ? <PreferenceStar /> : session.participation.label}
-            </ButtonLink>
+            <AgendaParticipationControls participation={session.participation} title={session.title} detail />
           )}
           {recordingUrl && (
             <ButtonLink

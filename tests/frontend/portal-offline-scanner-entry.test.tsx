@@ -6,11 +6,15 @@ import { AVAILABILITY_ERROR_CODE } from "../../assets/shared/schemas/availabilit
 import { serviceAvailability } from "../../assets/ts/shared/availability-state";
 import { clearAuth, portalSession, isAuthed } from "../../assets/ts/member-flows/portal/state";
 const mocks = vi.hoisted(() => ({
+  registerWorker: vi.fn(),
   clearPreparation: vi.fn(),
   recordSession: vi.fn(),
   pendingLogout: vi.fn(),
   activeSession: vi.fn(),
   sessionListeners: new Set<() => void>(),
+}));
+vi.mock("../../assets/ts/member-flows/portal/portal-worker-registration", () => ({
+  registerPortalServiceWorker: mocks.registerWorker,
 }));
 vi.mock(
   "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context",
@@ -60,6 +64,7 @@ import { scannerTransportUnavailable } from "../../assets/ts/member-flows/portal
 let host: HTMLElement;
 let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
+  mocks.registerWorker.mockReset().mockResolvedValue(null);
   clearAuth();
   scannerTransportUnavailable.value = false;
   mocks.sessionListeners.clear();
@@ -87,6 +92,30 @@ afterEach(async () => {
 async function mount() {
   await act(async () => render(<App />, host));
 }
+it("registers the public worker on ordinary app startup without diagnostics or notification enrollment", async () => {
+  fetchMock.mockResolvedValue(
+    new Response(JSON.stringify({ error: { code: "AUTH_REQUIRED", message: "Sign in required" } }), {
+      status: 401,
+      headers: { "content-type": "application/json" },
+    }),
+  );
+  await mount();
+  expect(mocks.registerWorker).toHaveBeenCalledOnce();
+  expect(host.textContent).not.toContain("Recovery and diagnostics");
+});
+it("keeps ordinary sign-in usable after startup worker registration fails", async () => {
+  mocks.registerWorker.mockRejectedValueOnce(new Error("Offline files unavailable"));
+  fetchMock.mockResolvedValue(
+    new Response(JSON.stringify({ error: { code: "AUTH_REQUIRED", message: "Sign in required" } }), {
+      status: 401,
+      headers: { "content-type": "application/json" },
+    }),
+  );
+  await mount();
+  await vi.waitFor(() => expect(host.textContent).toContain("Sign in"));
+  expect(mocks.registerWorker).toHaveBeenCalledOnce();
+  expect(host.textContent).not.toContain("Offline files unavailable");
+});
 it.each([true, false])(
   "enters after a real disconnected fetch with navigator online=%s without authenticating",
   async (online) => {

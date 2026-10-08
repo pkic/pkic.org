@@ -19,6 +19,9 @@ import { Field } from "../../../../../../ui/Field";
 import { Select, TextInput } from "../../../../../../ui/TextControl";
 import { Checkbox } from "../../../../../../ui/Checkbox";
 import { Button, ButtonLink } from "../../../../../../ui/Button";
+import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
+import { DescriptionList } from "../../../../../../ui/DescriptionList";
+import { formatNumber } from "../../../../../../../shared/format-number";
 import { formatDateTimeInZone } from "../../../../../../../shared/format-date";
 type Document = z.infer<typeof agendaTransferSchema>;
 type Resolutions = z.infer<typeof transferPrepareSchema>["resolutions"];
@@ -319,53 +322,41 @@ export function AgendaImportReview({
                 row.timing.transitionSource === "default") && (
                 <p>Some timing was inferred. Check the source details before approving the import.</p>
               )}
-            <details>
-              <summary>Source details for {row.fields.title}</summary>
-              <dl>
-                <dt>Source schedule</dt>
-                <dd>
-                  {row.timing.startAt
-                    ? formatDateTimeInZone(row.timing.startAt, row.timing.timeZone)
-                    : "Start time not supplied"}
-                  {row.timing.endAt
-                    ? ` – ${formatDateTimeInZone(row.timing.endAt, row.timing.timeZone)}`
-                    : " · End time not determined"}{" "}
-                  ({row.timing.timeZone})
-                </dd>
-                <dt>End time basis</dt>
-                <dd>
-                  {
+            <Panel aria-label={`Source details for ${row.fields.title}`}>
+              <PanelHeader title={`Source details for ${row.fields.title}`} headingLevel={4} />
+              <PanelBody>
+                <DescriptionList
+                  items={[
                     {
-                      explicit: "Supplied in the source",
-                      duration: "Calculated from the session duration; review required",
-                      next_start: "Inferred from the following session; review required",
-                      unresolved: "Not determined; review required",
-                    }[row.timing.endSource]
-                  }
-                </dd>
-                <dt>Time between sessions</dt>
-                <dd>
-                  {row.timing.transitionMinutes} minutes ·{" "}
-                  {
+                      term: "Source schedule",
+                      value: `${row.timing.startAt ? formatDateTimeInZone(row.timing.startAt, row.timing.timeZone) : "Start time not supplied"}${row.timing.endAt ? ` – ${formatDateTimeInZone(row.timing.endAt, row.timing.timeZone)}` : " · End time not determined"} (${row.timing.timeZone})`,
+                    },
                     {
-                      explicit: "supplied in the source",
-                      default: "default allowance; review required",
-                      none: "no allowance",
-                    }[row.timing.transitionSource]
-                  }
-                </dd>
-                <dt>Original link anchor</dt>
-                <dd>{row.sourceAnchor ?? "No original anchor"}</dd>
-                <dt>Source reference</dt>
-                <dd>{row.sourceKey}</dd>
-                {row.sourcePath && (
-                  <>
-                    <dt>Source path</dt>
-                    <dd>{row.sourcePath}</dd>
-                  </>
-                )}
-              </dl>
-            </details>
+                      term: "End time basis",
+                      value: {
+                        explicit: "Supplied in the source",
+                        duration: "Calculated from the session duration; review required",
+                        next_start: "Inferred from the following session; review required",
+                        unresolved: "Not determined; review required",
+                      }[row.timing.endSource],
+                    },
+                    {
+                      term: "Time between sessions",
+                      value: `${formatNumber(row.timing.transitionMinutes)} minutes · ${
+                        {
+                          explicit: "supplied in the source",
+                          default: "default allowance; review required",
+                          none: "no allowance",
+                        }[row.timing.transitionSource]
+                      }`,
+                    },
+                    { term: "Original link anchor", value: row.sourceAnchor ?? "No original anchor" },
+                    { term: "Source reference", value: row.sourceKey },
+                    ...(row.sourcePath ? [{ term: "Source path", value: row.sourcePath }] : []),
+                  ]}
+                />
+              </PanelBody>
+            </Panel>
           </section>
         ))}
         {review && (

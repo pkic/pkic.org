@@ -28,6 +28,7 @@ import {
   openScannerDiagnostics,
   closeScannerDiagnostics,
   openScannerManualEntry,
+  openScannerRecovery,
 } from "./helpers/scanner-recovery-storage";
 
 const slug = "pqc-conference-amsterdam-nl";
@@ -239,10 +240,10 @@ test("phone scanner retains an IDs-only offline scan and acknowledges it after r
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(scannerPath);
   await expect(page.getByRole("heading", { name: "Badge scanner", exact: true })).toBeVisible();
-  const recovery = page
-    .locator("details.pk-panel")
-    .filter({ has: page.getByText("Recovery and diagnostics", { exact: true }) });
-  await expect(recovery).toHaveJSProperty("open", false);
+  const recovery = page.getByRole("dialog", { name: "Recovery and diagnostics", exact: true });
+  await expect(recovery).not.toBeVisible();
+  await expect(page.getByRole("heading", { name: "Enter or paste badge code", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Recent scans", exact: true })).toBeVisible();
   await openScannerDiagnostics(page);
   await expect(
     page.getByText("Eligibility data ready. Checks run locally; attendance uploads in the background.", {
@@ -258,9 +259,9 @@ test("phone scanner retains an IDs-only offline scan and acknowledges it after r
       }),
     )
     .toBe("activated");
-  await expect(page.getByLabel("Scan mode", { exact: true })).toHaveValue("attendance");
   await closeScannerDiagnostics(page);
-  await expect(recovery).toHaveJSProperty("open", false);
+  await expect(page.getByLabel("Scan mode", { exact: true })).toHaveValue("attendance");
+  await expect(recovery).not.toBeVisible();
   await expect(
     page.getByRole("button", { name: /Prepare offline admission|Allocate for one hour|Review admission exception/ }),
   ).toHaveCount(0);
@@ -319,8 +320,7 @@ test("phone scanner retains an IDs-only offline scan and acknowledges it after r
   expect(archived.scan.observedAt).toBe(record.scan.observedAt);
   expect(archived.receipt).toMatchObject({ outcome: "unknown", recorded: false, attendanceRecorded: false });
   expect(archived.expiresAt - archived.acknowledgedAt).toBeGreaterThanOrEqual(14 * 24 * 60 * 60 * 1000);
-  await recovery.getByText("Recovery and diagnostics", { exact: true }).click();
-  await page.getByText("Recovery backup", { exact: true }).click();
+  await openScannerRecovery(page);
   await expect(
     page.getByText("1 uploaded scans available for this event and your account.", { exact: true }),
   ).toBeVisible();

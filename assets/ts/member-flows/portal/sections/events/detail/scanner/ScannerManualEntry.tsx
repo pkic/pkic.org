@@ -1,36 +1,35 @@
+import type { ComponentChildren } from "preact";
 import { useEffect, useRef } from "preact/hooks";
-import type { EventScanRequest } from "../../../../../../../shared/schemas/event-participation-scanning";
 import type { FieldPresentation } from "../../../../../../hooks/useContractForm";
 import { Field } from "../../../../../../ui/Field";
 import { TextInput } from "../../../../../../ui/TextControl";
-import { Button } from "../../../../../../ui/Button";
-import { scannerActionLabel } from "./ScannerModeSelect";
 
 /** Uses the scanner's existing canonical form; no separate manual protocol. */
 export function ScannerManualEntry({
-  open,
-  onOpen,
+  focusRequested,
+  onFocusHandled,
   badgeId,
   onBadge,
   field,
-  action,
-  busy,
+  children,
 }: {
-  open: boolean;
-  onOpen: (open: boolean) => void;
+  focusRequested: boolean;
+  onFocusHandled: () => void;
   badgeId: string;
   onBadge: (code: string) => void;
   field: FieldPresentation;
-  action: EventScanRequest["action"];
-  busy: boolean;
+  children?: ComponentChildren;
 }) {
-  const manual = useRef<HTMLDetailsElement>(null);
+  const manual = useRef<HTMLElement>(null);
   useEffect(() => {
-    if (open) manual.current?.querySelector<HTMLInputElement>("input")?.focus();
-  }, [open]);
+    if (focusRequested) {
+      manual.current?.querySelector<HTMLInputElement>("input")?.focus();
+      onFocusHandled();
+    }
+  }, [focusRequested, onFocusHandled]);
   return (
-    <details ref={manual} open={open} onToggle={(event) => onOpen(event.currentTarget.open)}>
-      <summary>Enter or paste badge code</summary>
+    <section ref={manual}>
+      <h3>Enter or paste badge code</h3>
       <div class="pk-form">
         <p>Type or paste the badge code printed below the QR. Spaces and hyphens are optional.</p>
         <Field label="Badge code" {...field}>
@@ -44,12 +43,8 @@ export function ScannerManualEntry({
             />
           )}
         </Field>
-        <div class="pk-cluster">
-          <Button type="submit" loading={busy}>
-            {scannerActionLabel(action)}
-          </Button>
-        </div>
+        {children}
       </div>
-    </details>
+    </section>
   );
 }

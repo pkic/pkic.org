@@ -16,6 +16,7 @@ import type { DatabaseLike } from "../../types";
 import { publishedSessionsSql } from "./published-schedule";
 import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
+import { registrationDayAttendanceSql, sessionAccessEligibleSql } from "./session-access";
 
 export { hashBadgeCredential } from "./badge-hash";
 export { issueBadge, revokeBadge } from "./badge-lifecycle";
@@ -104,21 +105,24 @@ export async function recordScan(
   const now = nowIso();
   const registration = "COALESCE(reg.status,'')<>'registered'";
   const missingBooking = scan.occurrenceId
-    ? `EXISTS(SELECT 1 FROM (${publishedSessionsSql}) session WHERE session.id=? AND session.event_id=badge.event_id AND (session.admission_policy<>'preference' OR session.visibility='private')) AND NOT EXISTS(SELECT 1 FROM agenda_session_participations participation WHERE participation.occurrence_id=? AND participation.user_id=badge.user_id AND participation.status='reserved')`
+    ? `NOT EXISTS(SELECT 1 FROM (${publishedSessionsSql}) session WHERE session.id=target.occurrence_id AND session.event_id=badge.event_id AND ${sessionAccessEligibleSql("session", "badge.user_id", "'physical'", "target.room_id")})`
     : "0=1";
-  const targetBindings = scan.occurrenceId ? [scan.occurrenceId, scan.occurrenceId] : [];
-  const outcomeSql = `CASE WHEN badge.revoked_at IS NOT NULL OR (badge.expires_at IS NOT NULL AND badge.expires_at<=?) THEN 'denied' WHEN ${wrongLocation ? "1=1" : "0=1"} THEN 'warning' WHEN ${registration} OR (${missingBooking}) OR reg.attendance_type<>'in_person' THEN 'warning' WHEN NOT (${capture.sql}) THEN 'unverified' ELSE 'eligible' END`;
-  const reasonSql = `CASE WHEN badge.revoked_at IS NOT NULL THEN 'revoked_badge' WHEN badge.expires_at IS NOT NULL AND badge.expires_at<=? THEN 'expired_badge' WHEN ${wrongLocation ? "1=1" : "0=1"} THEN 'wrong_location' WHEN reg.status='cancelled' THEN 'canceled_registration' WHEN ${registration} OR (${missingBooking}) THEN 'missing_registration' WHEN reg.attendance_type<>'in_person' THEN 'wrong_attendance_mode' WHEN NOT (${capture.sql}) THEN 'verification_required' ELSE 'eligible' END`;
+  const physicalDay = `${registrationDayAttendanceSql("reg", "target.day_date")}<>'in_person'`;
+  const outcomeSql = `CASE WHEN badge.revoked_at IS NOT NULL OR (badge.expires_at IS NOT NULL AND badge.expires_at<=?) THEN 'denied' WHEN ${wrongLocation ? "1=1" : "0=1"} THEN 'warning' WHEN ${registration} OR (${missingBooking}) OR ${physicalDay} THEN 'warning' WHEN NOT (${capture.sql}) THEN 'unverified' ELSE 'eligible' END`;
+  const reasonSql = `CASE WHEN badge.revoked_at IS NOT NULL THEN 'revoked_badge' WHEN badge.expires_at IS NOT NULL AND badge.expires_at<=? THEN 'expired_badge' WHEN ${wrongLocation ? "1=1" : "0=1"} THEN 'wrong_location' WHEN reg.status='cancelled' THEN 'canceled_registration' WHEN ${registration} OR (${missingBooking}) THEN 'missing_registration' WHEN ${physicalDay} THEN 'wrong_attendance_mode' WHEN NOT (${capture.sql}) THEN 'verification_required' ELSE 'eligible' END`;
   const statements = [
     db
       .prepare(
-        `INSERT INTO event_scan_attempts
+        `WITH target AS(SELECT ? AS occurrence_id,? AS room_id,? AS day_date) INSERT INTO event_scan_attempts
     (id,event_id,occurrence_id,badge_id,user_id,operator_user_id,device_id,operation_id,request_hash,room_id,outcome,reason,exception_reason,action,observed_at,created_at,capture_day_date,capture_time_zone,capture_publication_revision,capture_context_source)
     SELECT ?,badge.event_id,?,badge.id,badge.user_id,?,?,?,?,?,${outcomeSql},${reasonSql},?,?,?,?,?,?,?,?
-    FROM event_badge_credentials badge LEFT JOIN registrations reg ON reg.event_id=badge.event_id AND reg.user_id=badge.user_id
+    FROM event_badge_credentials badge CROSS JOIN target LEFT JOIN registrations reg ON reg.event_id=badge.event_id AND reg.user_id=badge.user_id
     WHERE badge.id=? AND badge.event_id=? ON CONFLICT(operation_id) DO NOTHING`,
       )
       .bind(
+        scan.occurrenceId,
+        roomId,
+        capture.context.state === "captured" ? capture.context.dayDate : null,
         id,
         scan.occurrenceId,
         authority.operatorUserId,
@@ -127,10 +131,8 @@ export async function recordScan(
         requestHash,
         roomId,
         scan.observedAt,
-        ...targetBindings,
         ...capture.bindings,
         scan.observedAt,
-        ...targetBindings,
         ...capture.bindings,
         scan.exceptionReason ?? null,
         scan.action,

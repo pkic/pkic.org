@@ -5,6 +5,7 @@ import {
   badgeCredentialsRouteSchema,
   badgeCredentialRouteSchema,
   badgePrintRouteSchema,
+  badgePrintingRouteSchema,
 } from "../../../../../assets/shared/schemas/route-contracts-event-badges";
 import { guardPermissionDatabase } from "../../../../_lib/auth/permissions";
 import { markResponseSensitive, type AdminContext } from "../../../../_lib/db/context";
@@ -16,12 +17,17 @@ import {
   listBadgeCredentials,
   getBadgeCredential,
 } from "../../../../_lib/services/event-participation/badge-credentials";
+import { getBadgePrintingContext } from "../../../../_lib/services/event-participation/badge-print-branding";
 import { prepareBadgePrint } from "../../../../_lib/services/event-participation/badge-print";
 import { requireEventPermission } from "./authorization";
 import { badgeAttendees } from "../../../../_lib/services/event-participation/badge-attendees";
 export const EventBadgeAttendeesGet = openApiRoute(badgeAttendeesRouteSchema, async (c: AdminContext, data) => {
   const { db, event } = await badgeManagementContext(c, data.params.eventSlug);
   return json(await badgeAttendees(db, event.id, data.query));
+});
+export const EventBadgePrintingGet = openApiRoute(badgePrintingRouteSchema, async (c: AdminContext, data) => {
+  const { db, event } = await badgeManagementContext(c, data.params.eventSlug);
+  return json(await getBadgePrintingContext(db, c.env, event.id));
 });
 export const EventBadgesGet = openApiRoute(badgeCredentialsRouteSchema, async (c: AdminContext, data) => {
   const { db, event } = await badgeManagementContext(c, data.params.eventSlug);

@@ -3,6 +3,7 @@ import { z } from "zod";
 import { sessionParticipationStatusSchema } from "./event-participation-scanning";
 import { databaseIdSchema } from "./identifiers";
 import { nativeEventCaptureContextSchema } from "./event-attendance-capture";
+import { agendaAdmissionPolicySchema } from "./event-agenda";
 
 export const offlineEligibilityQuerySchema = z
   .object({
@@ -25,7 +26,7 @@ export const offlineEligibilityResponseSchema = z
     expiresAt: z.string().datetime(),
     session: z
       .object({
-        admissionPolicy: z.enum(["preference", "reservation", "approval"]),
+        admissionPolicy: agendaAdmissionPolicySchema,
         visibility: z.enum(["public", "private"]),
       })
       .strict()

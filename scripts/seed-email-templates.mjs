@@ -6,6 +6,7 @@ import YAML from "yaml";
 import { buildWranglerD1ExecuteArgs, parseSeedCliArgs } from "./lib/seed-cli.mjs";
 import { sqlString } from "./lib/sql.mjs";
 import { buildTemplateSqlStatements } from "./lib/email-template-seed-sql.mjs";
+import { DEFAULT_EVENT_MESSAGE_TEMPLATES } from "./lib/event-message-default-templates.mjs";
 
 const DEFAULT_CONFIG_PATH = path.join(process.cwd(), "scripts", "seed-event.yaml");
 const DEFAULT_BUCKET = process.env.ASSETS_BUCKET_NAME ?? "pkic-assets";
@@ -126,6 +127,7 @@ export const DEFAULT_LAYOUT_HTML = `<!doctype html>
 // NOTE: shared email partials are seeded here and managed through the portal.
 // Keep these in sync with the editor labels and the partial loader.
 export const DEFAULT_TEMPLATES = [
+  ...DEFAULT_EVENT_MESSAGE_TEMPLATES,
   {
     key: "agenda_changed",
     subjectTemplate: "Your schedule has changed — {{eventName}}",

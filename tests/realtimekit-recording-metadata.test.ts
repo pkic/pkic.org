@@ -1,4 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { realtimeKitRecordingStatusSchema } from "../assets/shared/schemas/event-recordings";
 import {
   getRealtimeKitRecordingMetadata,
   listRealtimeKitRecordingMetadata,
@@ -6,7 +7,6 @@ import {
 import {
   realtimeKitRecordingMetadataSchema,
   realtimeKitRecordingPageSchema,
-  realtimeKitRecordingStatusSchema,
 } from "../functions/_lib/services/event-series/realtimekit-recording-contracts";
 
 const configuration = {
@@ -19,7 +19,7 @@ const recordingId = "20000000-0000-4000-8000-000000000001";
 const sessionId = "30000000-0000-4000-8000-000000000001";
 const foreignId = "40000000-0000-4000-8000-000000000001";
 const input = { meetingId, page: 0, limit: 2 };
-const expected = { recordingId, sessionId };
+const expected = { recordingId, sessionId, meetingId };
 const sentinel = "PRIVATE_PROVIDER_BODY person@example.test";
 
 function recording(overrides: Record<string, unknown> = {}) {
@@ -193,17 +193,31 @@ describe("RealtimeKit recording metadata observations", () => {
     );
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("Expected recording detail");
-    expect(realtimeKitRecordingMetadataSchema.parse(result.value)).toMatchObject(expected);
+    expect(realtimeKitRecordingMetadataSchema.parse(result.value)).toMatchObject({ recordingId, sessionId });
     expect(JSON.stringify(result)).not.toContain(sentinel);
     expect(result.value).not.toHaveProperty("meetingId");
   });
 
-  it.each([{ id: foreignId }, { session_id: foreignId }])("refuses changed detail identity", async (overrides) => {
-    const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({ success: true, data: recording(overrides) }));
-    expect(await getRealtimeKitRecordingMetadata(configuration, expected, fetcher)).toEqual({
-      ok: false,
-      error: { kind: "identity_mismatch", status: 200 },
-    });
+  it.each([{ id: foreignId }, { session_id: foreignId }, { meeting: { id: foreignId } }])(
+    "refuses changed detail identity",
+    async (overrides) => {
+      const fetcher = vi.fn<typeof fetch>().mockResolvedValue(response({ success: true, data: recording(overrides) }));
+      expect(await getRealtimeKitRecordingMetadata(configuration, expected, fetcher)).toEqual({
+        ok: false,
+        error: { kind: "identity_mismatch", status: 200 },
+      });
+    },
+  );
+
+  it("preserves established source ownership when detail omits meeting metadata", async () => {
+    const fetcher = vi
+      .fn<typeof fetch>()
+      .mockResolvedValue(response({ success: true, data: recording({ meeting: undefined }) }));
+    const result = await getRealtimeKitRecordingMetadata(configuration, expected, fetcher);
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error("Expected exact source metadata");
+    expect(result.value).toMatchObject({ recordingId, sessionId });
+    expect(result.value).not.toHaveProperty("meetingId");
   });
 
   it.each([null, { ...configuration, apiToken: "" }, { ...configuration, appId: "../foreign" }])(
@@ -299,7 +313,8 @@ describe("RealtimeKit recording metadata observations", () => {
     );
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error("Expected metadata at the inclusive limit");
-    expect(realtimeKitRecordingMetadataSchema.parse(result.value)).toMatchObject(expected);
+    expect(realtimeKitRecordingMetadataSchema.parse(result.value)).toMatchObject({ recordingId, sessionId });
+    expect(result.value).not.toHaveProperty("meetingId");
   });
 
   it("redacts thrown provider diagnostics and cancellation failures", async () => {

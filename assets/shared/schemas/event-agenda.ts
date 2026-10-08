@@ -18,7 +18,8 @@ import { utcInstantSchema } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 
 const id = z.string().min(1).max(200);
-export const agendaAdmissionPolicySchema = z.enum(["preference", "reservation", "approval"]);
+export const agendaAdmissionPolicySchema = z.enum(["preference", "optional_reservation", "reservation", "approval"]);
+export type AgendaAdmissionPolicy = z.infer<typeof agendaAdmissionPolicySchema>;
 export const agendaAccessPolicySchema = z.enum(["open", "invitation"]);
 export const agendaPublicationStatusSchema = z.enum(["published", "changed", "unpublished"]);
 export const agendaVisibilitySchema = z.enum(["public", "private"]);

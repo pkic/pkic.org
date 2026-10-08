@@ -18,6 +18,7 @@ import { Badge } from "../../../../components/Badge";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { Panel, PanelHeader, PanelBody } from "../../../../ui/Panel";
 import { Tabs } from "../../../../ui/Tabs";
+import { ParticipantEventNavigation, ParticipantLeadScanner } from "./ParticipantEventNavigation";
 import { Alert } from "../../../../ui/Alert";
 import { DescriptionList } from "../../../../ui/DescriptionList";
 import { formatDateRange } from "../../ui";
@@ -57,9 +58,11 @@ export function ParticipantEvent({ event, kind, resourceId, tab }: Selection & {
           ? "agenda"
           : tab === "promotion"
             ? "promotion"
-            : tab === "session-management"
-              ? "session-management"
-              : "overview";
+            : tab === "lead-scanner"
+              ? "lead-scanner"
+              : tab === "session-management"
+                ? "session-management"
+                : "overview";
   const tabs = [
     { id: "overview", label: "Overview", href: href(base) },
     { id: "agenda", label: "My agenda", href: href(base + "/agenda") },
@@ -101,9 +104,11 @@ export function ParticipantEvent({ event, kind, resourceId, tab }: Selection & {
                         ? "My agenda"
                         : active === "promotion"
                           ? "Promotion kits"
-                          : active === "session-management"
-                            ? "My sessions"
-                            : "Proposals",
+                          : active === "lead-scanner"
+                            ? "Lead scanner"
+                            : active === "session-management"
+                              ? "My sessions"
+                              : "Proposals",
                   ...(kind === "proposal" ? { href: href(base + "/submissions") } : {}),
                 },
               ]
@@ -111,11 +116,17 @@ export function ParticipantEvent({ event, kind, resourceId, tab }: Selection & {
           ...(kind === "proposal" ? [{ label: recordTitle ?? "Proposal" }] : []),
         ]}
       />
-      <Tabs label="Event" activeId={active} items={tabs} />
+      <ParticipantEventNavigation
+        eventId={event.id}
+        slug={event.slug}
+        scannerAccess={event.scannerAccess}
+        activeId={active}
+        items={tabs}
+      />
     </>
   );
   return (
-    <div class="pk-stack">
+    <div class="pk-stack pk-participant-event">
       {kind !== "proposal" && header()}
       {kind === "registration" && resourceId ? (
         <ParticipantRegistration registrationId={resourceId} eventId={event.id} slug={event.slug} />
@@ -123,7 +134,7 @@ export function ParticipantEvent({ event, kind, resourceId, tab }: Selection & {
         <ParticipantProposal event={event} proposalId={resourceId} facet={tab} header={header} />
       ) : tab === "agenda" ? (
         <Suspense fallback={<Spinner />}>
-          <MyAgenda slug={event.slug} />
+          <MyAgenda slug={event.slug} eventId={event.id} />
         </Suspense>
       ) : tab === "session-management" ? (
         <Suspense fallback={<Spinner />}>
@@ -133,6 +144,8 @@ export function ParticipantEvent({ event, kind, resourceId, tab }: Selection & {
         <Suspense fallback={<Spinner />}>
           <MyPromotionKits slug={event.slug} />
         </Suspense>
+      ) : tab === "lead-scanner" ? (
+        <ParticipantLeadScanner eventId={event.id} slug={event.slug} scannerAccess={event.scannerAccess} />
       ) : tab === "submissions" ? (
         <ParticipantProposals event={event} />
       ) : (

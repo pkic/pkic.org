@@ -1,5 +1,12 @@
+import {
+  verifyBadgePrintingContext,
+  verifyBadgePrintArtifact,
+} from "../../../../../../components/event-badges/badge-print-context";
 import { useEffect, useMemo, useRef, useState } from "preact/hooks";
 import {
+  badgePrintingResponseSchema,
+  type BadgePrintingContext,
+  type BadgePrintRequest,
   badgeCredentialMetadataSchema,
   badgePrintRequestSchema,
   badgePrintResponseSchema,
@@ -38,10 +45,13 @@ function SessionBadgePrint({
   const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/badges/${encodeURIComponent(credentialId)}`;
   const request = useMemo(() => new AbortController(), [endpoint, session]);
   const record = useData(() => getJson(endpoint, badgeCredentialMetadataSchema, { signal: request.signal }), [request]);
-  const [operationId] = useState(() => crypto.randomUUID());
+  const [basis, setBasis] = useState<BadgePrintingContext | null>(null);
+  const [operationId, setOperationId] = useState(() => crypto.randomUUID());
   const [artifact, setArtifact] = useState<{
     owner: AbortController;
     print: z.output<typeof badgePrintResponseSchema>;
+    printing: BadgePrintingContext;
+    body: BadgePrintRequest;
   } | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
@@ -105,14 +115,26 @@ function SessionBadgePrint({
     setError("");
     setArtifact(null);
     try {
-      const body = badgePrintRequestSchema.parse({ operationId });
+      let printing = basis;
+      if (!printing) {
+        printing = await getJson(
+          `/api/v1/events/${encodeURIComponent(slug)}/badges/printing`,
+          badgePrintingResponseSchema,
+          { signal: request.signal },
+        );
+        if (!current()) return;
+        setBasis(printing);
+      }
+      const body = badgePrintRequestSchema.parse({ operationId, printingRevision: printing.revision });
       const result = await requestJson(`${endpoint}/print`, badgePrintResponseSchema, {
         method: "POST",
         body: JSON.stringify(body),
         signal: request.signal,
       });
       await verify(result);
-      setArtifact({ owner: request, print: result });
+      if (result.printingRevision !== printing.revision)
+        throw new Error("The print document changed. Prepare it again.");
+      setArtifact({ owner: request, print: result, printing, body });
     } catch (cause) {
       if (current()) setError(cause instanceof Error ? cause.message : "Could not prepare this badge for printing.");
     } finally {
@@ -121,9 +143,17 @@ function SessionBadgePrint({
     }
   }
   async function beforeRelease() {
-    if (!print) return false;
+    if (!print || !artifact) return false;
     try {
-      await verify(print);
+      if (!current()) throw new Error("Sign in again to print this badge.");
+      await verifyBadgePrintingContext(
+        `/api/v1/events/${encodeURIComponent(slug)}/badges`,
+        artifact.printing,
+        request.signal,
+      );
+      if (!current()) throw new Error("Sign in again to print this badge.");
+      await verifyBadgePrintArtifact(`/api/v1/events/${encodeURIComponent(slug)}/badges`, print, artifact.body);
+      if (!current()) throw new Error("Sign in again to print this badge.");
       return true;
     } catch (cause) {
       setArtifact(null);
@@ -150,6 +180,7 @@ function SessionBadgePrint({
       ) : print ? (
         <BadgePrintPreview
           badges={[{ ...print, displayName: print.displayName ?? "Attendee name unavailable" }]}
+          printing={artifact!.printing}
           beforeRelease={beforeRelease}
         />
       ) : (
@@ -157,7 +188,22 @@ function SessionBadgePrint({
           {busy ? "Preparing print preview…" : "Prepare print preview"}
         </Button>
       )}
-      {error && <ErrorAlert error={error} />}
+      {error && (
+        <>
+          <ErrorAlert error={error} />
+          <Button
+            disabled={busy}
+            onClick={() => {
+              setArtifact(null);
+              setBasis(null);
+              setOperationId(crypto.randomUUID());
+              setError("");
+            }}
+          >
+            Reload print document
+          </Button>
+        </>
+      )}
     </div>
   );
 }

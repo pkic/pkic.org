@@ -16,6 +16,9 @@ import { portalSession } from "../../state";
 import { portalHasPermissionAtAnyScope } from "../../shell/portal-navigation";
 import type { PortalSession } from "../../types";
 import { createScannerEventBootstrap } from "./detail/scanner/scanner-event-bootstrap";
+import { databaseIdSchema } from "../../../../../shared/schemas/identifiers";
+import { readHashQueryParam } from "../../../../shared/hash-query";
+import { ParticipantEventNavigation } from "./ParticipantEventNavigation";
 
 const scannerEventBootstrap = createScannerEventBootstrap(() => portalSession.value);
 
@@ -79,15 +82,41 @@ function ScopedScannerRoute({ slug, sponsorId }: { slug: string; sponsorId?: str
   const can = (value: import("../../../../../shared/schemas/permissions").Permission) =>
     hasEventAgendaPermission(event.data!.event.id, value, sponsorId);
   const allowedActions = availableScannerActions(can);
-  if (sponsorId ? !can(permission as "agenda:leads_capture") : !allowedActions.length)
+  if (
+    sponsorId
+      ? !can(permission as "agenda:leads_capture") ||
+        !scannerAccess?.sponsors.some((sponsor) => sponsor.id === sponsorId)
+      : !allowedActions.length || !scannerAccess?.canScan
+  )
     return <ErrorAlert error="Your current identity does not have permission to scan for this event." />;
+  const selectedSession = sponsorId ? null : readHashQueryParam("session");
+  const target = selectedSession === null ? null : databaseIdSchema.safeParse(selectedSession);
+  if (target && !target.success) return <ErrorAlert error="This session is not available for check-in." />;
   return (
-    <div class="pk pk-stack portal-section">
+    <div class="pk pk-stack portal-section pk-participant-event">
       <PageHeader
         title={event.data.event.name}
         trail={[
           { label: "Events", href: usePortalHashLocation.hrefs("/events") },
           { label: sponsorId ? "Lead scanner" : "Scanner" },
+        ]}
+      />
+      <ParticipantEventNavigation
+        eventId={event.data.event.id}
+        slug={slug}
+        scannerAccess={scannerAccess}
+        activeId={sponsorId ? "lead-scanner" : "scanner"}
+        items={[
+          {
+            id: "overview",
+            label: "Overview",
+            href: usePortalHashLocation.hrefs(`/events/${encodeURIComponent(slug)}`),
+          },
+          {
+            id: "agenda",
+            label: "My agenda",
+            href: usePortalHashLocation.hrefs(`/events/${encodeURIComponent(slug)}/agenda`),
+          },
         ]}
       />
       {scannerAccess && scannerAccess.sponsors.length + Number(scannerAccess.canScan) > 1 && (
@@ -114,8 +143,9 @@ function ScopedScannerRoute({ slug, sponsorId }: { slug: string; sponsorId?: str
       )}
       <Suspense fallback={<Spinner />}>
         <EventScanner
-          key={`${slug}:${sponsorId ?? "event"}:${portalSession.value?.identity.id ?? ""}`}
+          key={`${slug}:${sponsorId ?? "event"}:${target?.success ? target.data : "entrance"}:${portalSession.value?.identity.id ?? ""}`}
           slug={slug}
+          occurrenceId={target?.success ? target.data : null}
           allowedActions={
             sponsorId
               ? ["lead"]
@@ -210,6 +240,14 @@ export function eventListShowsProposalPrograms(session: PortalSession | null): b
 export function EventWorkspace(props: EventWorkspaceProps) {
   const session = portalSession.value;
   useEffect(() => scannerEventBootstrap.sessionChanged(), [session?.sessionId, session?.identity.id]);
+  if (props.view === "detail" && props.tab === "lead-scanner")
+    return (
+      <div class="pk pk-stack portal-section">
+        <Suspense fallback={<Spinner />}>
+          <ParticipantEventPage slug={props.slug} tab="lead-scanner" />
+        </Suspense>
+      </div>
+    );
   if (props.view === "detail" && props.tab === "leads") return <ScopedSponsorLeadsRoute slug={props.slug} />;
   if (
     props.view === "detail" &&

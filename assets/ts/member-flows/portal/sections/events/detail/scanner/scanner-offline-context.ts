@@ -68,7 +68,7 @@ export async function saveScannerOfflineContext(input: {
   action: EventScanRequest["action"];
   signal?: AbortSignal;
   prepareCode: (signal: AbortSignal) => Promise<boolean>;
-}) {
+}): Promise<ScannerOfflineContext | null> {
   const { session, epoch, manifest } = input;
   const route = scannerCollectorPath(window.location.hash);
   if (
@@ -77,7 +77,7 @@ export async function saveScannerOfflineContext(input: {
       ? route.split("/")[4] !== manifest.enrollment?.eventId
       : route !== `/events/${encodeURIComponent(input.slug)}/scanner`)
   )
-    return;
+    return null;
   if (
     input.signal?.aborted ||
     !navigator.onLine ||
@@ -89,14 +89,14 @@ export async function saveScannerOfflineContext(input: {
     manifest.enrollment.epochId !== epoch.epochId ||
     ["lead", "exception"].includes(input.action)
   )
-    return;
+    return null;
   const active = await readActiveUserSession();
   if (
     active?.sessionId !== session.sessionId ||
     active.operatorUserId !== session.identity.id ||
     (await scannerUploadSuspended(session.identity.id, session.sessionId))
   )
-    return;
+    return null;
   const deadlines = [
     manifest.expiresAt,
     session.expiresAt,
@@ -105,9 +105,9 @@ export async function saveScannerOfflineContext(input: {
     session.staff?.idleExpiresAt,
   ].filter((value): value is string => Boolean(value));
   const deadline = Math.min(...deadlines.map((value) => Date.parse(value)));
-  if (!Number.isFinite(deadline) || !Number.isFinite(manifest.enrollment.writtenAt)) return;
+  if (!Number.isFinite(deadline) || !Number.isFinite(manifest.enrollment.writtenAt)) return null;
   const savedDate = new Date(manifest.enrollment.writtenAt);
-  if (!Number.isFinite(savedDate.getTime()) || !Number.isFinite(new Date(deadline).getTime())) return;
+  if (!Number.isFinite(savedDate.getTime()) || !Number.isFinite(new Date(deadline).getTime())) return null;
   const expiresAt = new Date(deadline).toISOString();
   const now = new Date().toISOString();
   const context = scannerOfflineContextSchema.safeParse({
@@ -128,7 +128,7 @@ export async function saveScannerOfflineContext(input: {
     savedAt: savedDate.toISOString(),
     lastObservedAt: now,
   });
-  if (!context.success || !scannerContextCurrent(context.data)) return;
+  if (!context.success || !scannerContextCurrent(context.data)) return null;
   if (
     !(await input.prepareCode(input.signal ?? new AbortController().signal)) ||
     !navigator.onLine ||
@@ -136,13 +136,14 @@ export async function saveScannerOfflineContext(input: {
     !scannerContextCurrent(context.data) ||
     (await scannerUploadSuspended(session.identity.id, session.sessionId))
   )
-    return;
+    return null;
   const latestActive = await readActiveUserSession();
-  if (latestActive?.sessionId !== session.sessionId || latestActive.operatorUserId !== session.identity.id) return;
+  if (latestActive?.sessionId !== session.sessionId || latestActive.operatorUserId !== session.identity.id) return null;
   const db = await openScanStorage();
   try {
     const tx = db.transaction(SCANNER_EPOCH_STORE, "readwrite"),
       done = idbCompletion(tx);
+    let committed: ScannerOfflineContext | null = null;
     const store = tx.objectStore(SCANNER_EPOCH_STORE);
     const current = await idbRequest<(ScannerEpoch & { collectorContext?: ScannerOfflineContext }) | undefined>(
       store.get(epoch.key),
@@ -151,7 +152,7 @@ export async function saveScannerOfflineContext(input: {
       const previous = current.collectorContext;
       if (previous?.serverNow === context.data.serverNow && !scannerContextCurrent(previous)) {
         await done;
-        return;
+        return null;
       }
       const saved =
         previous?.serverNow === context.data.serverNow
@@ -164,8 +165,38 @@ export async function saveScannerOfflineContext(input: {
             }
           : context.data;
       store.put({ ...current, collectorContext: saved });
+      committed = saved;
     }
     await done;
+    if (
+      input.signal?.aborted ||
+      !committed ||
+      !scannerContextCurrent(committed) ||
+      scannerCollectorPath(window.location.hash) !== route ||
+      (await scannerUploadSuspended(session.identity.id, session.sessionId))
+    )
+      return null;
+    const settledActive = await readActiveUserSession();
+    if (settledActive?.sessionId !== session.sessionId || settledActive.operatorUserId !== session.identity.id)
+      return null;
+    const check = db.transaction(SCANNER_EPOCH_STORE, "readonly");
+    const checked = idbCompletion(check);
+    const [settled] = await Promise.all([
+      idbRequest<(ScannerEpoch & { collectorContext?: ScannerOfflineContext }) | undefined>(
+        check.objectStore(SCANNER_EPOCH_STORE).get(epoch.key),
+      ),
+      checked,
+    ]);
+    return !input.signal?.aborted &&
+      settled?.epochId === epoch.epochId &&
+      settled.state === "open" &&
+      settled.collectorContext?.sessionId === committed.sessionId &&
+      settled.collectorContext.savedAt === committed.savedAt &&
+      settled.collectorContext.serverNow === committed.serverNow &&
+      settled.collectorContext.expiresAt === committed.expiresAt &&
+      scannerContextCurrent(committed)
+      ? committed
+      : null;
   } finally {
     db.close();
   }
