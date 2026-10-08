@@ -1,4 +1,14 @@
+import {
+  prepareDocumentRetirement,
+  readReleaseDocumentRoutes,
+  validateDocumentRedirectRules,
+} from "./collect-document-redirects.mjs";
 import { sitePublicationReleaseSchema } from "../../assets/shared/schemas/site-publication-release.ts";
+import {
+  createReleaseIntegrity,
+  verifyReleaseIntegrity,
+  synchronizedPublicationDirectories,
+} from "./release-integrity.mjs";
 import { readFile, access, rm } from "node:fs/promises";
 import { resolve } from "node:path";
 import { installReleaseBytes, installReleaseFile, synchronizeReleaseDirectory } from "./synchronize-release-files.mjs";
@@ -12,8 +22,10 @@ export async function assembleStaticRelease(source, destination, environment) {
     throw new Error("Publication environment does not match the Worker build");
   if (environment !== "local" && release.source !== "native")
     throw new Error("Remote deployments require a native publication snapshot");
-  // A repeated assembly replaces only the previous publication's owned files.
-  // The normal pipeline starts from a fresh complete Vite build.
+  if (environment !== "local" && (release.sourceSequence === null || !release.integrity))
+    throw new Error("Remote deployments require tracked publication provenance and integrity");
+  if (release.integrity) await verifyReleaseIntegrity(source, release);
+  const documentRoutes = await readReleaseDocumentRoutes(source, release);
   const previousPath = resolve(destination, "publication.json");
   let previous;
   try {
@@ -21,14 +33,34 @@ export async function assembleStaticRelease(source, destination, environment) {
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
-  if (previous) {
-    const manifest = sitePublicationReleaseSchema.parse(JSON.parse(previous));
+  const manifest = previous ? sitePublicationReleaseSchema.parse(JSON.parse(previous)) : null;
+  const retired = new Set(documentRoutes.retiredPaths.map(({ path }) => path));
+  const redirectPath = resolve(destination, "_redirects");
+  let redirects = "";
+  try {
+    redirects = await readFile(redirectPath, "utf8");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  redirects = redirects.replace(/\n# BEGIN PUBLICATION[\s\S]*?# END PUBLICATION\n?/g, "");
+  const feedRedirects = ["/news/feed", "/news/feed/", "/news/feed/index.xml"].map((from) => ({
+    from,
+    to: "/news/feed.xml",
+    status: 301,
+  }));
+  const installedRedirects = [...release.redirects, ...feedRedirects];
+  validateDocumentRedirectRules(installedRedirects, documentRoutes, redirects);
+  const retire = await prepareDocumentRetirement([source, destination], documentRoutes);
+  await retire();
+  // A repeated assembly replaces only the previous publication's owned files.
+  // Normal fresh builds cannot derive prior document routes from this local destination.
+  if (manifest) {
     const incoming = new Set(release.files);
     for (const file of manifest.files) {
-      if (!incoming.has(file)) await rm(resolve(destination, file), { force: true });
+      if (!incoming.has(file) && !retired.has(file)) await rm(resolve(destination, file), { force: true });
     }
   }
-  for (const directory of ["_assets", "_published", "pagefind", "js/built"]) {
+  for (const directory of synchronizedPublicationDirectories) {
     try {
       await access(resolve(source, directory));
     } catch (error) {
@@ -68,7 +100,11 @@ export async function assembleStaticRelease(source, destination, environment) {
     )
     .join("");
   const conferenceRules = release.files
-    .filter((file) => /^events\/.*\/(?:event-data\.json|agenda\.ics)$/.test(file))
+    .filter((file) =>
+      /^(?:events\/.*\/(?:event-data\.json|agenda\.ics)|.*\/agenda\/(?:data\.json|calendar\.ics|calendar\/[^/]+\.ics))$/.test(
+        file,
+      ),
+    )
     .map((file) => `\n/${file}\n    ! X-Robots-Tag\n    X-Robots-Tag: noindex, nofollow, noarchive\n`)
     .join("");
   const immutableRules = [
@@ -79,7 +115,10 @@ export async function assembleStaticRelease(source, destination, environment) {
     "/_published/diagrams/*",
     "/_published/agenda/*",
   ]
-    .map((path) => `\n${path}\n    ! Cache-Control\n    Cache-Control: public, max-age=31536000, immutable\n`)
+    .map(
+      (path) =>
+        `\n${path}\n    ! Cache-Control\n    Cache-Control: public, max-age=31536000, immutable\n${path === "/_assets/*" ? "    Service-Worker-Allowed: /portal/\n" : ""}`,
+    )
     .join("");
   const rules =
     immutableRules +
@@ -88,19 +127,25 @@ export async function assembleStaticRelease(source, destination, environment) {
     `${headers}\n# BEGIN PUBLICATION${rules}${conferenceRules}${privateRules}# END PUBLICATION\n`,
     headerPath,
   );
-  const redirectPath = resolve(destination, "_redirects");
-  let redirects = "";
-  try {
-    redirects = await readFile(redirectPath, "utf8");
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-  }
-  redirects = redirects.replace(/\n# BEGIN PUBLICATION[\s\S]*?# END PUBLICATION\n?/g, "");
   await installReleaseBytes(
-    `${redirects}\n# BEGIN PUBLICATION\n${release.redirects.map(({ from, to, status }) => `${from} ${to} ${status}`).join("\n")}\n/news/feed /news/feed.xml 301\n/news/feed/ /news/feed.xml 301\n/news/feed/index.xml /news/feed.xml 301\n# END PUBLICATION\n`,
+    `${redirects}\n# BEGIN PUBLICATION\n${installedRedirects.map(({ from, to, status }) => `${from} ${to} ${status}`).join("\n")}\n# END PUBLICATION\n`,
     redirectPath,
   );
-  await installReleaseBytes(JSON.stringify(release), previousPath);
+  const installed = {
+    ...release,
+    integrity: await createReleaseIntegrity(destination, [...release.files, "_headers", "_redirects"]),
+  };
+  if (release.integrity) {
+    for (const [path, expected] of Object.entries(release.integrity.files)) {
+      // These two policy files are deliberately generated for the complete
+      // target Worker. Every incoming page and synchronized asset stays exact.
+      if (path === "_headers" || path === "_redirects") continue;
+      const actual = installed.integrity.files[path];
+      if (!actual || actual.sha256 !== expected.sha256 || actual.bytes !== expected.bytes)
+        throw new Error(`Publication changed during installation: ${path}`);
+    }
+  }
+  await installReleaseBytes(JSON.stringify(sitePublicationReleaseSchema.parse(installed)), previousPath);
   console.log(`[publication] assembled ${release.files.length} static pages from snapshot ${release.snapshotId}`);
 }
 

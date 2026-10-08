@@ -44,9 +44,22 @@ it("limits payment, assessment, and presentation data permissions to their canon
 it("keeps native Cloudflare headers identical to the canonical policy and within platform line limits", async () => {
   const headers = await readFile("static/_headers", "utf8");
   expect(headers).toBe(siteStaticHeaders());
+  const paths = headers.split("\n").filter((line) => line && !line.startsWith(" ") && !line.startsWith("#"));
+  expect(new Set(paths).size).toBe(paths.length);
   expect(headers.split("\n").every((line) => line.length <= 2000)).toBe(true);
   expect(headers).toContain("Strict-Transport-Security: max-age=31536000");
   expect(headers).toContain("Permissions-Policy: camera=(), microphone=(), geolocation=(), browsing-topics=()");
+});
+
+it("allows a first-party camera only in the portal scanner shell", () => {
+  expect(siteSecurityHeaders("/portal/")["Permissions-Policy"]).toContain("camera=(self)");
+  expect(siteSecurityHeaders("/events/example/")["Permissions-Policy"]).toContain("camera=()");
+  const portalRule = siteStaticHeaders()
+    .split("\n\n")
+    .find((block) => block.startsWith("/portal/*\n"));
+  expect(portalRule).toBe(
+    `/portal/*\n    ! Content-Security-Policy\n    Content-Security-Policy: ${siteContentSecurityPolicy("/portal/")}\n    ! Permissions-Policy\n    Permissions-Policy: ${siteSecurityHeaders("/portal/")["Permissions-Policy"]}`,
+  );
 });
 
 it("allows email styling only in the isolated preview document", () => {

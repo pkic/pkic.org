@@ -142,7 +142,7 @@ async function unnamedThings(page: Page): Promise<string[]> {
  */
 test.describe("portal at every width", () => {
   test("is usable at mobile, tablet and desktop", async ({ page }) => {
-    await signInAsE2eStaff(page, e2eAdminEmail());
+    await signInAsE2eStaff(page, e2eAdminEmail("portal-responsive-widths"));
 
     const failures: string[] = [];
 
@@ -181,7 +181,7 @@ test.describe("portal at every width", () => {
 
   test("opens and closes its navigation on a phone, and returns focus", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
-    await signInAsE2eStaff(page, e2eAdminEmail());
+    await signInAsE2eStaff(page, e2eAdminEmail("portal-responsive-navigation"));
 
     const toggle = page.locator("#portal-sidebar-toggle");
     await expect(toggle).toBeVisible();

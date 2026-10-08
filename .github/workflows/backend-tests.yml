@@ -127,18 +127,19 @@ jobs:
         uses: actions/cache/restore@v5
         with:
           path: |
-            node_modules/.astro/publication-images
-            node_modules/.astro/publication-social
-            node_modules/.astro/publication-diagrams
-            node_modules/.astro/publication-browser
-          key: publication-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
+            node_modules/.astro/publication/local/assets
+            node_modules/.astro/publication/local/publication-social
+            node_modules/.astro/publication/local/publication-diagrams
+            node_modules/.astro/publication/local/publication-browser
+          key: publication-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}-${{ github.sha }}
           restore-keys: |
-            publication-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}-
+            publication-v2-${{ runner.os }}-${{ runner.arch }}-${{ hashFiles('pnpm-lock.yaml') }}-
 
       # Build and publication have their own deadline; the browser server's
       # startup deadline measures serving readiness rather than image encoding.
+      # Cold publication plus isolated fixture setup and release assembly can exceed ten minutes.
       - name: Prepare browser test publication
-        timeout-minutes: 10
+        timeout-minutes: 15
         run: |
           state_dir=$(mktemp -d "$RUNNER_TEMP/pkic-e2e.XXXXXX")
           trap 'rm -rf "$state_dir"' EXIT
@@ -153,10 +154,10 @@ jobs:
         uses: actions/cache/save@v5
         with:
           path: |
-            node_modules/.astro/publication-images
-            node_modules/.astro/publication-social
-            node_modules/.astro/publication-diagrams
-            node_modules/.astro/publication-browser
+            node_modules/.astro/publication/local/assets
+            node_modules/.astro/publication/local/publication-social
+            node_modules/.astro/publication/local/publication-diagrams
+            node_modules/.astro/publication/local/publication-browser
           key: ${{ steps.publication-cache.outputs.cache-primary-key }}
 
       # One Playwright invocation reuses the synthetic release and database.

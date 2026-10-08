@@ -22,7 +22,8 @@ export async function requireAnyActorFromRequest(
   const session = await resolveUserSessionFromRequest(db, request, {
     INTERNAL_SIGNING_SECRET: env?.INTERNAL_SIGNING_SECRET,
   });
-  if (!session.staff && !session.member) throw new AppError(401, "AUTH_REQUIRED", "No active user capacity");
+  if (!session.staff && !session.member && !session.hasActiveAffiliation)
+    throw new AppError(401, "AUTH_REQUIRED", "No active user capacity");
   return {
     kind: "user",
     id: session.identity.id,

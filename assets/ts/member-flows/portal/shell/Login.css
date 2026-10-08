@@ -57,6 +57,7 @@ body:has(.pk-login) > main {
 
 body:has(.pk-login) > main > #portal-app {
   display: flex;
+  flex-direction: column;
   min-width: 0;
   flex: 1;
 }

@@ -1,3 +1,4 @@
+import type { z } from "zod";
 import { parseJsonSafe } from "../utils/json";
 import { buildEventFlowPath } from "../../../assets/shared/event-flow-paths";
 import { proposalSessionTypeSchema } from "../../../assets/shared/schemas/proposal-management";
@@ -19,13 +20,10 @@ interface EventSettings {
   frontend?: { routes?: EventSettingsRoutes };
   venue?: string | null;
   virtualUrl?: string | null;
-  proposal?: { sessionTypes?: Array<{ label: string; requiresPresentation: boolean }> };
+  proposal?: { sessionTypes?: SessionTypeConfig[] };
 }
 
-export interface SessionTypeConfig {
-  label: string;
-  requiresPresentation: boolean;
-}
+export type SessionTypeConfig = z.infer<typeof proposalSessionTypeSchema>;
 
 const DEFAULT_SESSION_TYPES: readonly SessionTypeConfig[] = [
   { label: "talk", requiresPresentation: true },

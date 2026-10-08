@@ -17,6 +17,7 @@ import { listProposalSpeakersWithStatus } from "./proposal-speakers";
 import { getProposalByManageToken, type ProposalRecord, updateProposalForVerifiedOwner } from "./proposals";
 import { getEventById, requireConfiguredSessionType } from "./events";
 import { proposalAccessPath } from "../../../assets/shared/proposal-access-paths";
+import { proposalActingIdentityReadModel } from "./proposal-speaker-identity";
 
 type ProposalAccessInput = z.infer<typeof proposalAccessPatchSchema>;
 type ProposalAccessReadResponse = z.infer<typeof proposalAccessReadResponseSchema>;
@@ -46,6 +47,7 @@ export async function loadProposalAccessView(
     success: true,
     proposal: toAccessibleProposal(proposal),
     speakers: speakers.map((speaker) => ({
+      ...proposalActingIdentityReadModel(speaker),
       userId: speaker.user_id,
       role: speaker.role,
       status: speaker.status,

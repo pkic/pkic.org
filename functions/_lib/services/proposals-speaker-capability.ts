@@ -10,10 +10,21 @@ import {
   type ProposalSpeakerUserProfile,
 } from "./proposal-speakers";
 import { effectiveProposalSpeakerInviteExpirySql, inactiveEffectiveInviteExpirySql } from "../invite-validity";
+import { ownedIdentityLifecycleSql } from "./identities/selection";
+import { nowIso, persistedUtcInstant } from "../utils/time";
+import { parseLinksJson } from "../../../assets/shared/schemas/links";
+import { proposalActingIdentitySnapshotSchema } from "../../../assets/shared/schemas/proposal-acting-identity";
+import { proposalActingIdentityReadModel } from "./proposal-speaker-identity";
+import {
+  speakerCurrentRepresentationSchema,
+  speakerSelfServiceProfileSchema,
+  type SpeakerCurrentRepresentation,
+} from "../../../assets/shared/schemas/speaker-self-service";
 
 export interface SpeakerWithContext {
   speaker: ProposalSpeakerRecord;
   proposal: ProposalRecord;
+  currentRepresentation: SpeakerCurrentRepresentation | null;
   user: ProposalSpeakerUserProfile & {
     id: string;
     proposalProfileOverridesJson: string;
@@ -99,6 +110,9 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
     ps_headshot_override_r2_key: string | null;
     ps_headshot_override_updated_at: string | null;
     ps_profile_overrides_json: string;
+    ps_acting_identity_id: string | null;
+    ps_acting_identity_selected_at: string | null;
+    ps_acting_identity_snapshot_json: string | null;
   }>(
     db,
     `SELECT
@@ -149,6 +163,9 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
        ps.headshot_r2_key AS ps_headshot_override_r2_key,
        ps.headshot_updated_at AS ps_headshot_override_updated_at,
        ps.profile_overrides_json AS ps_profile_overrides_json
+       , ps.acting_identity_id AS ps_acting_identity_id
+       , ps.acting_identity_selected_at AS ps_acting_identity_selected_at
+       , ps.acting_identity_snapshot_json AS ps_acting_identity_snapshot_json
      FROM proposal_speakers ps
      JOIN session_proposals sp ON sp.id = ps.proposal_id AND sp.deleted_at IS NULL
      JOIN events e                ON e.id  = sp.event_id
@@ -164,7 +181,8 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
     throw new AppError(410, "SPEAKER_INVITATION_EXPIRED", "Speaker invitation has expired");
   }
 
-  return {
+  const context: SpeakerWithContext = {
+    currentRepresentation: null,
     speaker: {
       id: row.ps_id,
       proposal_id: row.ps_proposal_id,
@@ -179,6 +197,9 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
       created_at: row.ps_created_at,
       invite_generation: row.ps_invite_generation,
       invite_expires_at: row.ps_invite_expires_at,
+      acting_identity_id: row.ps_acting_identity_id,
+      acting_identity_selected_at: row.ps_acting_identity_selected_at,
+      acting_identity_snapshot_json: row.ps_acting_identity_snapshot_json,
     },
     proposal: {
       id: row.sp_id,
@@ -217,4 +238,104 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
       proposalHeadshotOverrideUpdatedAt: row.ps_headshot_override_updated_at,
     },
   };
+  context.currentRepresentation = await currentSpeakerRepresentation(db, context.speaker);
+  return context;
+}
+
+async function currentSpeakerRepresentation(
+  db: DatabaseLike,
+  speaker: ProposalSpeakerRecord,
+): Promise<SpeakerCurrentRepresentation | null> {
+  if (!speaker.acting_identity_selected_at || !speaker.acting_identity_snapshot_json) return null;
+  let recorded: ReturnType<typeof proposalActingIdentitySnapshotSchema.safeParse>;
+  try {
+    recorded = proposalActingIdentitySnapshotSchema.safeParse(JSON.parse(speaker.acting_identity_snapshot_json));
+  } catch {
+    return null;
+  }
+  if (!recorded.success) return null;
+  const selection = proposalActingIdentityReadModel(speaker);
+  if (speaker.acting_identity_id === null) {
+    if (recorded.data.organizationName !== null || recorded.data.jobTitle !== null) return null;
+    const user = await first<{
+      email: string;
+      biography: string | null;
+      links_json: string | null;
+      updated_at: string;
+    }>(
+      db,
+      `SELECT normalized_email AS email, biography, links_json, updated_at
+       FROM users WHERE id=? AND active=1 AND email_verified_at IS NOT NULL`,
+      [speaker.user_id],
+    );
+    return user
+      ? speakerCurrentRepresentationSchema.parse({
+          ...selection,
+          emailId: null,
+          email: user.email,
+          organizationId: null,
+          organizationName: null,
+          jobTitle: null,
+          biography: user.biography,
+          links: parseLinksJson(user.links_json),
+          updatedAt: persistedUtcInstant(user.updated_at),
+        })
+      : null;
+  }
+  const at = nowIso();
+  const identity = await first<{
+    email_id: string | null;
+    email: string;
+    organization_id: string | null;
+    organization_name: string | null;
+    job_title: string | null;
+    biography: string | null;
+    links_json: string | null;
+    updated_at: string;
+  }>(
+    db,
+    `SELECT identity.email_id,
+      CASE WHEN identity.email_id IS NULL THEN user.normalized_email ELSE selected_email.normalized_email END AS email,
+      identity.organization_id, organization.name AS organization_name,
+      identity.job_title, identity.biography, identity.links_json, identity.updated_at
+    FROM identities identity
+    JOIN users user ON user.id=identity.user_id AND user.active=1
+    LEFT JOIN organizations organization ON organization.id=identity.organization_id
+    LEFT JOIN user_emails selected_email ON selected_email.id=identity.email_id
+      AND selected_email.user_id=identity.user_id AND selected_email.verified_at IS NOT NULL
+    WHERE identity.id=? AND identity.user_id=? AND ${ownedIdentityLifecycleSql("identity", "?")}
+      AND ((identity.email_id IS NULL AND user.email_verified_at IS NOT NULL) OR selected_email.id IS NOT NULL)`,
+    [speaker.acting_identity_id, speaker.user_id, at, at, at],
+  );
+  return identity
+    ? speakerCurrentRepresentationSchema.parse({
+        ...selection,
+        emailId: identity.email_id,
+        email: identity.email,
+        organizationId: identity.organization_id,
+        organizationName: identity.organization_name,
+        jobTitle: identity.job_title,
+        biography: identity.biography,
+        links: parseLinksJson(identity.links_json),
+        updatedAt: persistedUtcInstant(identity.updated_at),
+      })
+    : null;
+}
+
+/** Recorded appearance remains scoped to this roster row; live edits use the separate representation. */
+export function speakerSelfServiceProfileReadModel(context: SpeakerWithContext, headshotUrl: string | null) {
+  const { speaker, user } = context;
+  return speakerSelfServiceProfileSchema.parse({
+    ...proposalActingIdentityReadModel(speaker),
+    firstName: user.first_name,
+    lastName: user.last_name,
+    email: user.email,
+    organizationName: user.organization_name,
+    jobTitle: user.job_title,
+    biography: user.biography,
+    links: parseLinksJson(user.links_json),
+    headshotUploaded: Boolean(user.headshot_r2_key),
+    headshotUpdatedAt: user.headshot_updated_at,
+    headshotUrl,
+  });
 }

@@ -29,6 +29,7 @@ export const eventProposalsListQuerySchema = listQuerySchema(EVENT_PROPOSALS_SOR
   status: proposalAdminStatusFilterSchema.optional(),
   recommendation: proposalRecommendationSchema.optional(),
   presentation: proposalPresentationFilterSchema.optional(),
+  agenda: z.enum(["imported", "unimported"]).optional(),
 });
 export type EventProposalsListQuery = z.infer<typeof eventProposalsListQuerySchema>;
 
@@ -77,6 +78,7 @@ export const eventProposalSummarySchema = eventProposalCoreSchema
     recommendation_needs_work_count: z.number(),
     recommendation_reject_count: z.number(),
     has_presentation: z.boolean(),
+    agendaImported: z.boolean().default(false),
   });
 
 export const eventProposalDetailSchema = eventProposalCoreSchema

@@ -11,7 +11,10 @@ import {
 } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/SpeakerCard";
 import { proposalSpeakerAssetPath } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/ProposalSpeakerHeadshotManager";
 import { ProposalSpeakerCard } from "../../assets/ts/components/proposals/ProposalSpeakerCard";
-import { proposalSpeakerPatchSchema } from "../../assets/shared/schemas/proposal-management";
+import {
+  proposalSpeakerPatchSchema,
+  proposerSpeakerPatchSchema,
+} from "../../assets/shared/schemas/proposal-management";
 import { ProposalManageSpeakerCard, SpeakerList } from "../../assets/ts/components/proposals/ProposerSpeakerList";
 import { PROPOSAL_SPEAKER_ROLES } from "../../assets/shared/schemas/participant-roles";
 import {
@@ -22,6 +25,7 @@ import {
   optionValues,
   submitForm,
   typeMarkdown,
+  typeInto,
 } from "./helpers/labelled-control";
 import { openCardMenu, runCardAction } from "./helpers/row-actions";
 
@@ -45,6 +49,9 @@ function managedSpeaker(
   overrides: Partial<ProposalAccessResponse["speakers"][number]> = {},
 ): ProposalAccessResponse["speakers"][number] {
   return {
+    actingIdentityId: null,
+    actingIdentitySelectedAt: null,
+    actingIdentitySelection: "unrecorded",
     userId: "speaker-1",
     role: "co_speaker",
     status: "confirmed",
@@ -66,6 +73,9 @@ function managedSpeaker(
 
 function proposalSpeaker(overrides: Partial<ProposalSpeaker> = {}): ProposalSpeaker {
   return {
+    actingIdentityId: null,
+    actingIdentitySelectedAt: null,
+    actingIdentitySelection: "unrecorded",
     userId: "speaker-1",
     role: "co_speaker",
     status: "confirmed",
@@ -176,53 +186,38 @@ describe("proposal speaker removal UI", () => {
     expect(requests.every(({ url }) => !url.includes("/api/v1/admin/"))).toBe(true);
   });
 
-  it("lets a proposer remove only non-proposer speakers", async () => {
-    const nonProposer = mount(
-      <ProposalManageSpeakerCard
-        speaker={managedSpeaker()}
+  it("keeps the roster read-only until one speaker is selected and preserves owner role rules", async () => {
+    const root = mount(
+      <SpeakerList
+        speakers={[managedSpeaker(), managedSpeaker({ userId: "proposer-1", role: "moderator", firstName: "Owner" })]}
         token="manage-token"
         apiBase="/api/v1"
-        isCurrentProposer={false}
+        proposerUserId="proposer-1"
         onReload={async () => {}}
         onStatus={() => {}}
       />,
     );
-    expect(nonProposer.querySelector("[data-remove-proposal-speaker]")).not.toBeNull();
-    expect(
-      [...nonProposer.querySelectorAll("select option")].map((option) => option.getAttribute("value")),
-    ).not.toContain("proposer");
-
-    void act(() => render(null, nonProposer));
-    const currentProposer = mount(
-      <ProposalManageSpeakerCard
-        speaker={managedSpeaker({ userId: "proposer-1", role: "proposer" })}
-        token="manage-token"
-        apiBase="/api/v1"
-        isCurrentProposer
-        onReload={async () => {}}
-        onStatus={() => {}}
-      />,
+    expect(root.querySelectorAll("[data-speaker-card]")).toHaveLength(2);
+    expect(root.querySelector("form")).toBeNull();
+    expect(root.textContent).not.toContain("Upload photo");
+    const memberActions = await openCardMenu(root, "Casey Speaker");
+    expect(memberActions.map((action) => action.textContent)).toContain("Remove speaker");
+    await act(() => memberActions.find((action) => action.textContent === "Edit speaker details")!.click());
+    expect(root.querySelectorAll("[data-speaker-card]")).toHaveLength(1);
+    expect(optionValues(controlFor<HTMLSelectElement>(root, "Role"))).not.toContain("proposer");
+    await typeInto(controlFor(root, "Organization"), "Unsaved organization");
+    await act(() => [...root.querySelectorAll("button")].find((button) => button.textContent === "Cancel")!.click());
+    expect(root.querySelector("form")).toBeNull();
+    await runCardAction(root, "Casey Speaker", "Edit speaker details");
+    expect(controlFor<HTMLInputElement>(root, "Organization").value).toBe("");
+    await act(() => [...root.querySelectorAll("button")].find((button) => button.textContent === "Cancel")!.click());
+    const ownerActions = await openCardMenu(root, "Owner Speaker");
+    expect(ownerActions.map((action) => action.textContent)).not.toContain("Remove speaker");
+    await act(() => ownerActions.find((action) => action.textContent === "Edit speaker details")!.click());
+    expect(controlFor<HTMLSelectElement>(root, "Role").value).toBe("moderator");
+    expect(optionValues(controlFor<HTMLSelectElement>(root, "Role"))).toEqual(
+      expect.arrayContaining(["proposer", "moderator", "speaker"]),
     );
-    expect(currentProposer.querySelector("[data-remove-proposal-speaker]")).toBeNull();
-    expect(
-      [...currentProposer.querySelectorAll("select option")].map((option) => option.getAttribute("value")),
-    ).toContain("proposer");
-
-    void act(() => render(null, currentProposer));
-    const presentingProposer = mount(
-      <ProposalManageSpeakerCard
-        speaker={managedSpeaker({ userId: "proposer-1", role: "moderator" })}
-        token="manage-token"
-        apiBase="/api/v1"
-        isCurrentProposer
-        onReload={async () => {}}
-        onStatus={() => {}}
-      />,
-    );
-    expect(presentingProposer.querySelector<HTMLSelectElement>("select")?.value).toBe("moderator");
-    expect(
-      [...presentingProposer.querySelectorAll("select option")].map((option) => option.getAttribute("value")),
-    ).toEqual(expect.arrayContaining(["moderator", "speaker"]));
   });
 
   it("offers admin proposer transfer only to invited or confirmed speakers", async () => {
@@ -403,65 +398,146 @@ describe("proposal speaker removal UI", () => {
     expect(await markdownValue(root, "Biography")).toBe("A biography the server will refuse.");
   });
 
-  it("names the managed speaker's card and ties its biography guidance to the control", async () => {
+  it("names the selected managed speaker and ties its biography guidance to the control", async () => {
     const root = mount(
-      <ProposalManageSpeakerCard
-        speaker={managedSpeaker()}
+      <SpeakerList
+        speakers={[managedSpeaker()]}
         token="manage-token"
         apiBase="/api/v1"
-        isCurrentProposer={false}
+        proposerUserId="proposer-1"
         onReload={async () => {}}
         onStatus={() => {}}
       />,
     );
-
-    // A proposal can carry several of these; an unnamed <section> is not
-    // exposed as a region at all, so each card says whose it is.
-    const card = root.querySelector("section");
-    expect(card?.getAttribute("aria-label")).toBe("Speaker Casey Speaker");
+    expect(root.querySelector("section")?.getAttribute("aria-label")).toBe("Speaker Casey Speaker");
+    await runCardAction(root, "Casey Speaker", "Edit speaker details");
     expect(labelNames(root)).toEqual(["First name", "Last name", "Role", "Organization", "Job title", "Biography"]);
-
+    expect(root.querySelector<HTMLFormElement>("form")?.noValidate).toBe(true);
     const biography = await markdownControl(root, "Biography");
     const help = root.querySelector(`#${biography.getAttribute("aria-describedby")!}`);
     expect(help?.textContent).toBe("Visible to attendees on the event program.");
   });
 
-  it("keeps the removal control focusable while the request is in flight", async () => {
+  it("returns focus to the record menu and prevents duplicate removal while pending", async () => {
     let resolveRemoval: (() => void) | undefined;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Promise<Response>((resolve) => {
-            resolveRemoval = () => resolve(Response.json({ success: true }));
-          }),
-      ),
+    const fetch = vi.fn(
+      async () =>
+        new Promise<Response>((resolve) => {
+          resolveRemoval = () =>
+            resolve(
+              Response.json({
+                success: true,
+                removedUserId: "00000000-0000-4000-8000-000000000001",
+                proposerUserId: "00000000-0000-4000-8000-000000000002",
+                cancelledEmailCount: 0,
+              }),
+            );
+        }),
     );
+    vi.stubGlobal("fetch", fetch);
     vi.stubGlobal("confirm", () => true);
-
     const root = mount(
       <ProposalManageSpeakerCard
         speaker={managedSpeaker()}
         token="manage-token"
         apiBase="/api/v1"
         isCurrentProposer={false}
+        onEdit={() => {}}
         onReload={async () => {}}
         onStatus={() => {}}
       />,
     );
-
-    const remove = root.querySelector<HTMLButtonElement>("[data-remove-proposal-speaker]")!;
-    void act(() => remove.click());
-
-    // A `disabled` control loses focus, which throws a screen-reader user out
-    // of the card mid-request; the busy state is announced instead.
-    expect(remove.disabled).toBe(false);
-    expect(remove.getAttribute("aria-disabled")).toBe("true");
-    expect(remove.getAttribute("aria-busy")).toBe("true");
-    expect(remove.textContent).toBe("Removing…");
-
+    await runCardAction(root, "Casey Speaker", "Remove speaker");
+    const trigger = root.querySelector<HTMLButtonElement>('button[aria-label="Actions for Casey Speaker"]')!;
+    expect(document.activeElement).toBe(trigger);
+    expect(root.textContent).toContain("Removing speaker…");
+    const actions = await openCardMenu(root, "Casey Speaker");
+    expect(actions.find((action) => action.textContent === "Remove speaker")?.disabled).toBe(true);
+    expect(fetch).toHaveBeenCalledTimes(1);
     resolveRemoval?.();
     await settle();
+  });
+
+  it("validates the editorial contract before transport and retains draft on a field refusal", async () => {
+    const requests: Array<{ url: string; body: unknown }> = [];
+    const fetch = vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      requests.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+      return Response.json(
+        {
+          error: {
+            code: "VALIDATION_ERROR",
+            message: "Check the job title",
+            details: { fieldErrors: { jobTitle: ["This title needs correction"] } },
+          },
+        },
+        { status: 400 },
+      );
+    });
+    vi.stubGlobal("fetch", fetch);
+    const reload = vi.fn(async () => {});
+    const root = mount(
+      <SpeakerList
+        speakers={[managedSpeaker({ links: ["https://example.test/profile"] })]}
+        token={{ resourceId: "proposal-1" }}
+        apiBase="/api/v1"
+        proposerUserId="proposer-1"
+        onReload={reload}
+        onStatus={() => {}}
+      />,
+    );
+    await runCardAction(root, "Casey Speaker", "Edit speaker details");
+    await typeInto(controlFor(root, "First name"), "X".repeat(1000));
+    await submitForm(root);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(controlFor(root, "First name").getAttribute("aria-invalid")).toBe("true");
+    await typeInto(controlFor(root, "First name"), "Authored Casey");
+    await typeInto(controlFor(root, "Job title"), "Authored job title");
+    await submitForm(root);
+    expect(requests).toHaveLength(1);
+    expect(requests[0].url).toBe("/api/v1/proposals/proposal-1/submission/speakers/speaker-1");
+    expect(proposerSpeakerPatchSchema.parse(requests[0].body)).toMatchObject({
+      firstName: "Authored Casey",
+      jobTitle: "Authored job title",
+      role: "co_speaker",
+      links: ["https://example.test/profile"],
+    });
+    expect(controlFor(root, "Job title").getAttribute("aria-invalid")).toBe("true");
+    expect(root.textContent).toContain("This title needs correction");
+    expect(controlFor<HTMLInputElement>(root, "First name").value).toBe("Authored Casey");
+    expect(reload).not.toHaveBeenCalled();
+  });
+
+  it("saves the same capability resource and returns to the roster after canonical reload", async () => {
+    const requests: Array<{ url: string; body: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        requests.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+        return Response.json({ success: true });
+      }),
+    );
+    const reload = vi.fn(async () => {});
+    const root = mount(
+      <SpeakerList
+        speakers={[managedSpeaker()]}
+        token="manage-token"
+        apiBase="/api/v1"
+        proposerUserId="proposer-1"
+        onReload={reload}
+        onStatus={() => {}}
+      />,
+    );
+    await runCardAction(root, "Casey Speaker", "Edit speaker details");
+    await typeInto(controlFor(root, "Organization"), "Proposal editorial organization");
+    await submitForm(root);
+    expect(requests[0].url).toBe("/api/v1/proposals/access/manage-token/speakers/speaker-1");
+    expect(proposerSpeakerPatchSchema.parse(requests[0].body)).toMatchObject({
+      organizationName: "Proposal editorial organization",
+    });
+    expect(reload).toHaveBeenCalledTimes(1);
+    expect(root.querySelector("form")).toBeNull();
+    await runCardAction(root, "Casey Speaker", "Edit speaker details");
+    expect(controlFor<HTMLInputElement>(root, "Organization").value).toBe("");
   });
 
   it("says the roster is empty in words rather than rendering nothing", async () => {

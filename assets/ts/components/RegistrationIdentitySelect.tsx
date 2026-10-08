@@ -9,18 +9,10 @@ import { buildServerCollectionUrl } from "../hooks/useServerCollection";
 import { Field } from "../ui/Field";
 import { Alert } from "../ui/Alert";
 import { ServerSearchSelect } from "./ServerSearchSelect";
+import { actingIdentityCatalog } from "../shared/acting-identity-catalog";
 
 const identityLabel = (identity: ActingIdentity) => identity.organizationName ?? "My individual membership";
-const catalog = {
-  endpoint: "/api/v1/users/current/identities",
-  responseSchema: identitiesListResponseSchema,
-  resolveItems: (response: z.infer<typeof identitiesListResponseSchema>) => response.identities,
-  resolvePage: (response: z.infer<typeof identitiesListResponseSchema>) => response.page,
-  itemKey: (identity: ActingIdentity) => identity.id,
-  itemLabel: identityLabel,
-  params: { active: "true" },
-  sort: "organization_name",
-};
+const catalog = actingIdentityCatalog("/api/v1/users/current/identities", identityLabel);
 
 function fillEmptyField(form: HTMLFormElement | undefined, name: string, value: string | null | undefined): void {
   const field = form?.elements.namedItem(name);

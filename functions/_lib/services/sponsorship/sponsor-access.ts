@@ -21,6 +21,7 @@ import { findActiveSponsorCapacityForUser, sponsorAttendeeAuthorizationEvidence 
 import { eventSponsorTierHasAttendeeAccess } from "./event-tiers";
 import { writeAuditLog } from "../audit";
 import type { SponsorAttendeesListQuery } from "../../../../assets/shared/schemas/sponsor-access";
+import { sponsorConsentSql } from "../event-participation/sponsor-consent";
 
 export async function requireSponsorAttendeeAccess(
   db: DatabaseLike,
@@ -67,10 +68,7 @@ const SPONSOR_ATTENDEES_FROM = `
   FROM registrations r
   JOIN users u ON u.id = r.user_id
   WHERE r.event_id = ? AND r.status = 'registered'
-    AND EXISTS (
-      SELECT 1 FROM consent_acceptances ca
-       WHERE ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing'
-    )
+    AND ${sponsorConsentSql("r")}
 `;
 
 function toAttendeeRow(r: {

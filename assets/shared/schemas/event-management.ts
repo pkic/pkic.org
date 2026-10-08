@@ -40,6 +40,7 @@ export const eventProfileCatalogResponseSchema = z.object({
  * generic portal-event setting.
  */
 export const EVENT_MANAGED_SETTING_KEYS = [
+  "agenda",
   "forms",
   "frontend",
   "heroImageUrl",
@@ -183,6 +184,11 @@ export const eventAudienceDetailSchema = eventResourceCoreSchema
     links: linksSchema,
     /** The public page path for this event, when the event has one. */
     basePath: z.string().nullable(),
+    scannerAccess: z
+      .object({ canScan: z.boolean(), sponsors: z.array(z.object({ id: z.string(), name: z.string() })) })
+      .optional(),
+    /** Discovery only; each contact request independently checks the exact live sponsor scope. */
+    sponsorLeadAccess: z.boolean(),
     viewer: eventViewerStateSchema.nullable(),
     registrationPath: z.string().nullable().optional(),
   });

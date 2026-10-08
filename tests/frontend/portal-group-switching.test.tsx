@@ -12,6 +12,7 @@ import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GroupWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupWorkspace";
 import { tabs } from "./helpers/tabs";
+import { groupEventDetailResponseSchema } from "../../assets/shared/schemas/group-events";
 
 const GROUP_X = "10000000-0000-4000-8000-00000000000a";
 const GROUP_Y = "10000000-0000-4000-8000-00000000000b";
@@ -96,6 +97,34 @@ function stubApi(): void {
           },
         });
       }
+      if (url.pathname === `/api/v1/groups/${GROUP_X}/events/EV1`) {
+        return json(
+          groupEventDetailResponseSchema.parse({
+            event: {
+              id: "EV1",
+              ownerGroupId: GROUP_X,
+              seriesId: null,
+              slug: "alpha-workshop",
+              basePath: "/events/2026/alpha-workshop/",
+              name: "Alpha workshop",
+              timezone: "Europe/Amsterdam",
+              startsAt: "2026-10-06T09:00:00.000Z",
+              endsAt: "2026-10-06T10:00:00.000Z",
+              profileKey: "workshop",
+              sourceMode: "portal",
+              registrationPolicy: "optional",
+              visibility: "group_members",
+              inviteLimitAttendee: 0,
+              location: "Online",
+              links: [],
+              nextOccurrenceAt: null,
+              updatedAt: "2026-10-06T08:00:00.000Z",
+              proposalAccess: null,
+              capabilities: ["view"],
+            },
+          }),
+        );
+      }
       if (url.pathname.endsWith("/votes")) return json({ votes: [], page: emptyPage });
       if (url.pathname.endsWith("/events")) return json({ events: [], page: emptyPage });
       if (url.pathname.includes("/users/current/groups")) return json({ groups: [], page: emptyPage });
@@ -116,6 +145,7 @@ beforeEach(async () => {
   await import("../../assets/ts/member-flows/portal/sections/management/GroupOverview");
   await import("../../assets/ts/member-flows/portal/sections/management/GroupVotes");
   await import("../../assets/ts/member-flows/portal/sections/management/GroupEvents");
+  await import("../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace");
 });
 
 let container: HTMLDivElement;
@@ -136,9 +166,9 @@ afterEach(() => {
 // header region the workspace opens with, not by a styling class that a
 // migration can move.
 function contexts(): string[] {
-  return [...container.querySelectorAll("header[aria-labelledby]")].map(
-    (node) => node.querySelector("h2")?.textContent ?? "",
-  );
+  return [...container.querySelectorAll("header[aria-labelledby]")]
+    .map((node) => node.querySelector("h2")?.textContent?.trim() ?? "")
+    .filter((title) => title.length > 0);
 }
 
 // Likewise the tab strip: the shared helper finds a tab of either kind, so
@@ -169,7 +199,11 @@ describe("group workspace switching", () => {
 
     await act(() => render(<GroupWorkspace groupId={GROUP_X} view="events" resourceId="EV1" />, container));
     await settle();
-    expect(contexts()).toContain("Alpha Working Group");
+    // Nested event records own the header; the group remains in the canonical breadcrumb.
+    expect(contexts()).toEqual([]);
+    expect(container.querySelectorAll('[aria-label="Alpha workshop workspace"]')).toHaveLength(1);
+    expect(container.textContent).toContain("Alpha workshop");
+    expect(container.textContent).not.toContain("Beta Working Group");
     expect(container.querySelector('.pk-breadcrumb a[href="#/groups/' + GROUP_X + '"]')?.textContent).toBe(
       "Alpha Working Group",
     );

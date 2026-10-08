@@ -1,16 +1,10 @@
-/**
- * URL-addressed record page for one group-managed event.
- *
- * The event is a record inside the group workspace: its own header under the
- * group's, capability-filtered tabs, and inside two of those tabs — the
- * registrations and the proposals — records of its own, each a routed page
- * with its own address. Nothing opens between the rows of a list.
- */
-import type { ComponentChildren } from "preact";
+import { EventStaffScanner } from "./EventStaffScanner";
+/** URL-addressed event record and nested sections inside its owning group. */
 import { useState } from "preact/hooks";
 import { usePortalHashLocation } from "../../hash-location";
+import { hasEventAgendaPermission } from "../events/event-agenda-access";
+import { portalSession } from "../../state";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
-import type { EventFormsPurpose } from "../../../../../shared/schemas/forms";
 import {
   EVENT_PROFILE_LABELS,
   EVENT_REGISTRATION_POLICY_LABELS,
@@ -28,12 +22,35 @@ import { Menu } from "../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import { formatEventWhen } from "../../ui";
-import { EventStats } from "../events/detail/EventStats";
-import { Promoters } from "../events/detail/Promoters";
-import { Team } from "../events/detail/Team";
+import { lazy, Suspense } from "preact/compat";
+import { Spinner } from "../../../../components/Spinner";
+const RawEvidenceRetentionPolicy = lazy(() =>
+  import("../events/detail/settings/RawEvidenceRetentionPolicy").then((module) => ({
+    default: module.RawEvidenceRetentionPolicy,
+  })),
+);
+const GroupEventScheduling = lazy(() =>
+  import("./GroupEventScheduling").then((module) => ({ default: module.GroupEventScheduling })),
+);
+const BadgeCredentials = lazy(() =>
+  import("../events/detail/badges/BadgeCredentials").then((module) => ({ default: module.BadgeCredentials })),
+);
+const SponsorLeads = lazy(() =>
+  import("../events/detail/agenda/SponsorLeads").then((module) => ({ default: module.SponsorLeads })),
+);
+const AttendanceReport = lazy(() =>
+  import("../events/detail/agenda/AttendanceReport").then((module) => ({ default: module.AttendanceReport })),
+);
+const AgendaEditor = lazy(() =>
+  import("../events/detail/agenda/AgendaEditor").then((module) => ({ default: module.AgendaEditor })),
+);
+const EventStats = lazy(() => import("../events/detail/EventStats").then((module) => ({ default: module.EventStats })));
+
+const EventTeamSettings = lazy(() =>
+  import("../events/detail/settings/EventTeamSettings").then((module) => ({ default: module.EventTeamSettings })),
+);
 import { ProposalDetailPage } from "../events/detail/ProposalDetailPage";
 import { LazySponsorTiersTab } from "../events/detail/settings/LazySponsorTiersTab";
-import { EventFormResponses } from "../../../../components/forms/management/FormManagement";
 import { GroupEventCommunications, NEW_CAMPAIGN_SEGMENT } from "./GroupEventCommunications";
 import { LazyGroupEventConfiguration } from "./LazyGroupEventConfiguration";
 import { GroupEventEditor } from "./GroupEventEditor";
@@ -59,56 +76,40 @@ interface EventWorkspaceTabDef extends TabItem {
 
 export const GROUP_EVENT_OVERVIEW_TAB = "overview";
 const EVENT_RESPONSES_SEGMENT = "responses";
-
-function EventRecordSections({
-  label,
-  basePath,
-  responsesActive,
-  eventSlug,
-  purpose,
-  children,
-  speakers,
-  speakersActive = false,
-}: {
-  label: string;
-  basePath: string;
-  responsesActive: boolean;
-  eventSlug: string;
-  purpose: EventFormsPurpose;
-  children: ComponentChildren;
-  speakers?: ComponentChildren;
-  speakersActive?: boolean;
-}) {
-  const active = speakersActive ? "speakers" : responsesActive ? EVENT_RESPONSES_SEGMENT : "overview";
-  return (
-    <div class="pk pk-stack">
-      <Tabs
-        label={`${label} sections`}
-        items={[
-          { key: "overview", label: "Overview" },
-          ...(speakers ? [{ key: "speakers", label: "Speakers" }] : []),
-          { key: EVENT_RESPONSES_SEGMENT, label: "Responses" },
-        ]}
-        active={active}
-        hrefFor={(key) => (key === "overview" ? basePath : `${basePath}/${key}`)}
-      />
-      {speakersActive ? (
-        speakers
-      ) : responsesActive ? (
-        <EventFormResponses eventSlug={eventSlug} purpose={purpose} />
-      ) : (
-        children
-      )}
-    </div>
-  );
-}
+import { GroupEventRecordSections } from "./GroupEventRecordSections";
 
 const EVENT_WORKSPACE_TABS: readonly EventWorkspaceTabDef[] = [
   { key: GROUP_EVENT_OVERVIEW_TAB, label: "Overview", visible: () => true },
   {
     key: "registrations",
     label: "Registrations",
-    visible: (event) => event.capabilities.includes("manage_attendance"),
+    visible: (event) => event.capabilities.includes("manage_attendance") || event.capabilities.includes("manage"),
+  },
+  { key: "agenda", label: "Agenda", visible: (event) => hasEventAgendaPermission(event.id, "agenda:read") },
+  {
+    key: "scanner",
+    label: "Scanner",
+    visible: (event) =>
+      ["agenda:scan", "agenda:check", "agenda:admit", "agenda:attendance_record"].some((permission) =>
+        hasEventAgendaPermission(event.id, permission as "agenda:scan"),
+      ),
+  },
+  {
+    key: "attendance",
+    label: "Attendance",
+    visible: (event) =>
+      hasEventAgendaPermission(event.id, "agenda:attendance_read") ||
+      hasEventAgendaPermission(event.id, "agenda:attendance_import"),
+  },
+  {
+    key: "leads",
+    label: "Sponsor leads",
+    visible: () =>
+      portalSession.value?.staff?.grants.some(
+        (grant) =>
+          grant.contextType === "event_sponsor" &&
+          ["agenda:leads_view", "agenda:leads_capture", "agenda:leads_export"].includes(grant.permission),
+      ) ?? false,
   },
   { key: "proposals", label: "Proposals", visible: (event) => event.proposalAccess?.canRead === true },
   {
@@ -117,13 +118,12 @@ const EVENT_WORKSPACE_TABS: readonly EventWorkspaceTabDef[] = [
     visible: (event) => event.capabilities.includes("manage") || event.proposalAccess?.canFinalize === true,
   },
   { key: "communications", label: "Communications", visible: (event) => event.capabilities.includes("manage") },
-  { key: "team", label: "Team", visible: (event) => event.capabilities.includes("manage") },
-  // "manage_attendance" is the lowest manager-tier capability for a group event — the same tier
-  // that gates Registrations — mirroring the "read" capability that gates Promoters and Analytics
-  // on the standalone event detail view (its lowest staff-facing tier, not the plain-viewer tier).
-  { key: "promoters", label: "Promoters", visible: (event) => event.capabilities.includes("manage_attendance") },
   { key: "stats", label: "Analytics", visible: (event) => event.capabilities.includes("manage_attendance") },
-  { key: "settings", label: "Settings", visible: (event) => event.capabilities.includes("manage") },
+  {
+    key: "settings",
+    label: "Settings",
+    visible: (event) => event.capabilities.includes("manage") || hasEventAgendaPermission(event.id, "agenda:write"),
+  },
 ];
 
 export function visibleEventWorkspaceTabs(event: GroupEvent): TabItem[] {
@@ -160,6 +160,13 @@ export function GroupEventWorkspace({
   detailSegment?: string;
   onUpdated?: () => void | Promise<void>;
 }) {
+  if (tab === "team" || tab === "promoters" || tab === "badges") {
+    const legacy = tab;
+    detailSegment = detailTab;
+    detailTab = detailId;
+    detailId = legacy;
+    tab = legacy === "team" ? "settings" : legacy === "promoters" ? "stats" : "registrations";
+  }
   const [, navigate] = usePortalHashLocation();
   const [editing, setEditing] = useState(false);
   const canManage = event.capabilities.includes("manage");
@@ -204,7 +211,7 @@ export function GroupEventWorkspace({
     detailId !== undefined &&
     !responsesActive &&
     !speakersActive &&
-    (activeTab === "registrations" || activeTab === "proposals");
+    ((activeTab === "registrations" && detailId !== "badges") || activeTab === "proposals");
 
   return (
     <BreadcrumbBranch
@@ -313,19 +320,42 @@ export function GroupEventWorkspace({
                   key={detailId}
                   groupId={groupId}
                   eventId={event.id}
+                  eventSlug={event.slug}
+                  badgesPath={`${tabPath("registrations")}/badges`}
                   registrationId={detailId}
                   canVip={canManage}
                 />
               ) : (
-                <EventRecordSections
+                <GroupEventRecordSections
                   label="Registration"
                   basePath={tabPath("registrations")}
                   responsesActive={responsesActive}
                   eventSlug={event.slug}
                   purpose="event_registration"
+                  badgesActive={detailId === "badges"}
+                  badges={
+                    canManage ? (
+                      <Suspense fallback={<Spinner />}>
+                        <BadgeCredentials
+                          slug={event.slug}
+                          basePath={`${tabPath("registrations")}/badges`}
+                          credentialId={detailTab}
+                          segment={detailSegment}
+                        />
+                      </Suspense>
+                    ) : detailId === "badges" ? (
+                      <ErrorAlert error="Badge management is not available to your current identity." />
+                    ) : undefined
+                  }
                 >
-                  <GroupEventRegistrations groupId={groupId} eventId={event.id} canManage={canManage} />
-                </EventRecordSections>
+                  <GroupEventRegistrations
+                    groupId={groupId}
+                    eventId={event.id}
+                    eventSlug={event.slug}
+                    badgesPath={`${tabPath("registrations")}/badges`}
+                    canManage={canManage}
+                  />
+                </GroupEventRecordSections>
               ))}
 
             {activeTab === "proposals" &&
@@ -342,7 +372,7 @@ export function GroupEventWorkspace({
                   parentNavigation
                 />
               ) : (
-                <EventRecordSections
+                <GroupEventRecordSections
                   label="Proposal"
                   basePath={tabPath("proposals")}
                   responsesActive={responsesActive}
@@ -359,7 +389,7 @@ export function GroupEventWorkspace({
                   purpose="proposal_submission"
                 >
                   <GroupEventProposals groupId={groupId} eventId={event.id} eventSlug={event.slug} />
-                </EventRecordSections>
+                </GroupEventRecordSections>
               ))}
 
             {activeTab === "invitations" && invitationAudience && (
@@ -392,103 +422,172 @@ export function GroupEventWorkspace({
               />
             )}
 
-            {activeTab === "team" && <Team slug={event.slug} teamSegment={detailId} teamPath={tabPath("team")} />}
-
-            {activeTab === "promoters" && (
-              <Promoters slug={event.slug} subTab={detailId} basePath={tabPath("promoters")} />
+            {activeTab === "agenda" && (
+              <Suspense fallback={<Spinner />}>
+                <AgendaEditor
+                  slug={event.slug}
+                  canEdit={hasEventAgendaPermission(event.id, "agenda:write")}
+                  canReviewAppearances={hasEventAgendaPermission(event.id, "agenda:appearance_approve")}
+                  teamEligibilityPath={`${tabPath("settings")}/team/staffing`}
+                />
+              </Suspense>
             )}
-
-            {activeTab === "stats" && <EventStats slug={event.slug} section={detailId} basePath={tabPath("stats")} />}
+            {activeTab === "scanner" && <EventStaffScanner eventId={event.id} slug={event.slug} />}
+            {activeTab === "attendance" && (
+              <Suspense fallback={<Spinner />}>
+                <AttendanceReport
+                  slug={event.slug}
+                  basePath={tabPath("attendance")}
+                  section={detailId}
+                  detailId={detailTab}
+                  detailTab={detailSegment}
+                  timeZone={event.timezone}
+                  canCorrect={hasEventAgendaPermission(event.id, "agenda:attendance_correct")}
+                  canImport={hasEventAgendaPermission(event.id, "agenda:attendance_import")}
+                  canRead={hasEventAgendaPermission(event.id, "agenda:attendance_read")}
+                />
+              </Suspense>
+            )}
+            {activeTab === "leads" && (
+              <Suspense fallback={<Spinner />}>
+                <SponsorLeads slug={event.slug} timeZone={event.timezone} />
+              </Suspense>
+            )}
+            {activeTab === "stats" && (
+              <Suspense fallback={<Spinner label="Loading analytics…" />}>
+                <EventStats slug={event.slug} section={detailId} subTab={detailTab} basePath={tabPath("stats")} />
+              </Suspense>
+            )}
 
             {activeTab === "settings" && (
               <>
-                {/* The record's own facts, edited where they are read: one
-                    Edit in the panel's header turns them into the form, and
-                    Save or Cancel puts the facts back. An event that belongs
-                    to a meeting series is edited through the series. */}
-                <Panel aria-label={editing ? "Edit event" : "Event details"}>
-                  <PanelHeader title={editing ? "Edit event" : "Event details"}>
-                    {!editing && standalone && (
-                      <Menu
-                        label="Event actions"
-                        align="end"
-                        items={[{ id: "edit", label: "Edit event", onSelect: () => setEditing(true) }]}
-                      />
-                    )}
-                    {/* Going to the meeting series is navigation, not an
-                        action, so it stays an anchor and borrows the button's
-                        appearance rather than its element. */}
-                    {event.seriesId && (
-                      <ButtonLink size="sm" href={`#/groups/${encodeURIComponent(groupId)}/meetings`}>
-                        Manage meeting series
-                      </ButtonLink>
-                    )}
-                  </PanelHeader>
-                  <PanelBody>
-                    {editing ? (
-                      <GroupEventEditor
-                        groupId={groupId}
-                        event={event}
-                        onSaved={async () => {
-                          setEditing(false);
-                          await onUpdated?.();
-                        }}
-                        onCancel={() => setEditing(false)}
-                      />
-                    ) : (
-                      <DescriptionList
-                        items={[
-                          { term: "Name", value: event.name },
-                          { term: "Slug", value: <span class="pk-mono">{event.slug}</span> },
-                          { term: "Profile", value: EVENT_PROFILE_LABELS[event.profileKey ?? "conference"] },
-                          { term: "Starts", value: formatEventWhen(event.startsAt, event.timezone, event.location) },
-                          { term: "Ends", value: formatEventWhen(event.endsAt, event.timezone, event.location) },
-                          { term: "Time zone", value: event.timezone },
-                          { term: "Location", value: event.location },
-                          { term: "Visibility", value: EVENT_VISIBILITY_LABELS[event.visibility] },
-                          {
-                            term: "Peer invitation limit",
-                            value: event.inviteLimitAttendee != null ? String(event.inviteLimitAttendee) : undefined,
-                          },
-                          {
-                            term: "Links",
-                            value:
-                              event.links.length > 0 ? <LinkList links={event.links} label="Event links" /> : undefined,
-                          },
-                        ]}
-                      />
-                    )}
-                  </PanelBody>
-                </Panel>
-
-                {!event.seriesId && (
-                  <LazyGroupEventConfiguration event={event} groupId={groupId} onUpdated={onUpdated} />
-                )}
-
-                <Panel aria-label="Sponsor tiers">
-                  <PanelHeader title="Sponsor tiers" />
-                  <PanelBody>
-                    <LazySponsorTiersTab
+                <Tabs
+                  label="Settings sections"
+                  items={[
+                    ...(canManage ? [{ key: "general", label: "General" }] : []),
+                    { key: "team", label: "Team" },
+                    ...(hasEventAgendaPermission(event.id, "agenda:write")
+                      ? [{ key: "scheduling", label: "Scheduling" }]
+                      : []),
+                  ]}
+                  active={detailId === "team" || detailId === "scheduling" ? detailId : canManage ? "general" : "team"}
+                  hrefFor={(key) => (key === "general" ? tabPath("settings") : `${tabPath("settings")}/${key}`)}
+                />
+                {detailId === "team" || (!canManage && !detailId) ? (
+                  <Suspense fallback={<Spinner label="Loading team…" />}>
+                    <EventTeamSettings
                       slug={event.slug}
-                      canWrite={canManage}
-                      endpoint={
-                        "/api/v1/groups/" +
-                        encodeURIComponent(groupId) +
-                        "/events/" +
-                        encodeURIComponent(event.id) +
-                        "/sponsors/tiers"
-                      }
+                      section={detailTab}
+                      personId={detailSegment}
+                      teamPath={`${tabPath("settings")}/team`}
+                      staffingPath={`${tabPath("agenda")}?view=staffing`}
+                      canManage={canManage}
+                      canEditStaffing={hasEventAgendaPermission(event.id, "agenda:write")}
                     />
-                  </PanelBody>
-                </Panel>
+                  </Suspense>
+                ) : detailId === "scheduling" ? (
+                  <Suspense fallback={<Spinner />}>
+                    <GroupEventScheduling
+                      slug={event.slug}
+                      canEdit={hasEventAgendaPermission(event.id, "agenda:write")}
+                      backPath={tabPath("settings")}
+                    />
+                  </Suspense>
+                ) : !canManage ? (
+                  <ErrorAlert error="Event settings are not available to your current identity." />
+                ) : (
+                  <>
+                    <Panel aria-label={editing ? "Edit event" : "Event details"}>
+                      <PanelHeader title={editing ? "Edit event" : "Event details"}>
+                        {!editing && standalone && (
+                          <Menu
+                            label="Event actions"
+                            align="end"
+                            items={[{ id: "edit", label: "Edit event", onSelect: () => setEditing(true) }]}
+                          />
+                        )}
+                        {event.seriesId && (
+                          <ButtonLink size="sm" href={`#/groups/${encodeURIComponent(groupId)}/meetings`}>
+                            Manage meeting series
+                          </ButtonLink>
+                        )}
+                      </PanelHeader>
+                      <PanelBody>
+                        {editing ? (
+                          <GroupEventEditor
+                            groupId={groupId}
+                            event={event}
+                            onSaved={async () => {
+                              setEditing(false);
+                              await onUpdated?.();
+                            }}
+                            onCancel={() => setEditing(false)}
+                          />
+                        ) : (
+                          <DescriptionList
+                            items={[
+                              { term: "Name", value: event.name },
+                              { term: "Slug", value: <span class="pk-mono">{event.slug}</span> },
+                              { term: "Profile", value: EVENT_PROFILE_LABELS[event.profileKey ?? "conference"] },
+                              {
+                                term: "Starts",
+                                value: formatEventWhen(event.startsAt, event.timezone, event.location),
+                              },
+                              { term: "Ends", value: formatEventWhen(event.endsAt, event.timezone, event.location) },
+                              { term: "Time zone", value: event.timezone },
+                              { term: "Location", value: event.location },
+                              { term: "Visibility", value: EVENT_VISIBILITY_LABELS[event.visibility] },
+                              {
+                                term: "Peer invitation limit",
+                                value:
+                                  event.inviteLimitAttendee != null ? String(event.inviteLimitAttendee) : undefined,
+                              },
+                              {
+                                term: "Links",
+                                value:
+                                  event.links.length > 0 ? (
+                                    <LinkList links={event.links} label="Event links" />
+                                  ) : undefined,
+                              },
+                            ]}
+                          />
+                        )}
+                      </PanelBody>
+                    </Panel>
 
-                {event.ownerGroupId === groupId && (
-                  <ResourceSharingEditor
-                    kind="event"
-                    groupId={groupId}
-                    resourceId={event.id}
-                    ownerGroupId={event.ownerGroupId}
-                  />
+                    {!event.seriesId && (
+                      <LazyGroupEventConfiguration event={event} groupId={groupId} onUpdated={onUpdated} />
+                    )}
+                    <Suspense fallback={<Spinner label="Loading evidence retention…" />}>
+                      <RawEvidenceRetentionPolicy event={event} />
+                    </Suspense>
+
+                    <Panel aria-label="Sponsor tiers">
+                      <PanelHeader title="Sponsor tiers" />
+                      <PanelBody>
+                        <LazySponsorTiersTab
+                          slug={event.slug}
+                          canWrite={canManage}
+                          endpoint={
+                            "/api/v1/groups/" +
+                            encodeURIComponent(groupId) +
+                            "/events/" +
+                            encodeURIComponent(event.id) +
+                            "/sponsors/tiers"
+                          }
+                        />
+                      </PanelBody>
+                    </Panel>
+
+                    {event.ownerGroupId === groupId && (
+                      <ResourceSharingEditor
+                        kind="event"
+                        groupId={groupId}
+                        resourceId={event.id}
+                        ownerGroupId={event.ownerGroupId}
+                      />
+                    )}
+                  </>
                 )}
               </>
             )}

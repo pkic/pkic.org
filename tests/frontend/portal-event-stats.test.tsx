@@ -127,7 +127,7 @@ describe("portal event statistics", () => {
     const tabs = [...container.querySelectorAll('[aria-label="Analytics sections"] a')].map((tab) =>
       tab.textContent?.trim(),
     );
-    expect(tabs).toEqual(["Overview", "Attendance", "Registrations", "Invitations", "Calendar"]);
+    expect(tabs).toEqual(["Overview", "Attendance", "Registrations", "Invitations", "Calendar", "Promoters"]);
     expect([...container.querySelectorAll("caption")].map((node) => node.textContent)).not.toContain(
       "Attendee invites by status",
     );

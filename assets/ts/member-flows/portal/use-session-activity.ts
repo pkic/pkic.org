@@ -14,25 +14,30 @@ export function useSessionActivity(): void {
   const session = portalSession.value;
   useEffect(() => {
     if (!session) return;
-    const identityId = session.identity.id;
+    const sessionId = session.sessionId;
 
     let lastRefreshAt = Date.now();
     let refreshPending = false;
     let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 
     async function refresh(): Promise<void> {
-      if (refreshPending || portalSession.value?.identity.id !== identityId) return;
+      if (refreshPending || portalSession.value?.sessionId !== sessionId) return;
       refreshPending = true;
       clearTimeout(refreshTimer);
       refreshTimer = undefined;
       lastRefreshAt = Date.now();
       try {
         const next = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
-        if (portalSession.value?.identity.id !== next.identity.id) return;
+        if (portalSession.value?.sessionId !== sessionId || next.sessionId !== sessionId) return;
         savePortalSession(next);
         if (!next.member) clearMemberProfile();
       } catch (error) {
-        if (error instanceof ApiClientError && [401, 403].includes(error.status)) expirePortalSession();
+        if (
+          portalSession.value?.sessionId === sessionId &&
+          error instanceof ApiClientError &&
+          [401, 403].includes(error.status)
+        )
+          expirePortalSession();
         // A transient failure leaves the last server-confirmed deadline in
         // place. The expiry hook will fail closed if no later refresh succeeds.
       } finally {
@@ -70,5 +75,5 @@ export function useSessionActivity(): void {
       document.removeEventListener("keydown", acknowledgeInteraction);
       document.removeEventListener("visibilitychange", acknowledgeVisiblePage);
     };
-  }, [session?.identity.id, session?.idleExpiresAt, session?.staff?.idleExpiresAt]);
+  }, [session?.sessionId, session?.idleExpiresAt, session?.staff?.idleExpiresAt]);
 }

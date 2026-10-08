@@ -74,6 +74,18 @@ function speakerCard(overrides: Partial<Parameters<typeof SpeakerFormCard>[0]> =
 }
 
 describe("SpeakerFormCard", () => {
+  it("reuses a verified person summary while keeping session biography, role, and links editable", async () => {
+    const root = mount(
+      speakerCard({ personSummary: <p>Ada Lovelace · Example Labs · Engineer · ada@example.test</p> }),
+    );
+    await settle();
+    expect(root.textContent).toContain("Ada Lovelace · Example Labs · Engineer · ada@example.test");
+    for (const name of ["firstName", "lastName", "email", "organizationName", "jobTitle"])
+      expect(root.querySelector(`[name="speaker.1.${name}"]`)).toBeNull();
+    expect(await markdownControl(root, "Bio")).not.toBeNull();
+    expect(root.querySelector('[name="speaker.1.role"]')).not.toBeNull();
+    expect(root.querySelector('input[type="url"]')).not.toBeNull();
+  });
   it("names every control through its own for/id pair and every group by a legend", async () => {
     const root = mount(speakerCard());
     const form = root.querySelector("form")!;
@@ -213,6 +225,9 @@ describe("SpeakerFormCard", () => {
 
 function rosterSpeaker(overrides: Partial<ProposalSpeaker> = {}): ProposalSpeaker {
   return {
+    actingIdentityId: null,
+    actingIdentitySelectedAt: null,
+    actingIdentitySelection: "unrecorded",
     userId: "30000000-0000-4000-8000-000000000001",
     role: "co_speaker",
     status: "confirmed",

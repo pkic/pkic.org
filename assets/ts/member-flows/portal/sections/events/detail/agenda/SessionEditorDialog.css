@@ -1,0 +1,7 @@
+@layer components {
+  @media (min-width: 48rem) {
+    .pk-dialog:has(> .pk-dialog__body > .pk-session-editor-dialog__content) {
+      width: min(68.75rem, calc(100vw - 2rem));
+    }
+  }
+}

@@ -108,6 +108,7 @@ export function EventRegistrationManagement() {
             </p>
             <div data-day-waitlist />
           </div>
+          <div data-sponsor-contact-sharing />
           <div class="pk-cluster" data-action-buttons>
             <Button type="submit" variant="primary">
               Save changes

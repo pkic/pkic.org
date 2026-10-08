@@ -90,4 +90,7 @@
       padding: var(--pk-3);
     }
   }
+  .pk-panel__body--flush {
+    padding: 0;
+  }
 }

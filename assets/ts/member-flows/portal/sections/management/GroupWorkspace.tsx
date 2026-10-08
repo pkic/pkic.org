@@ -160,6 +160,8 @@ export function GroupWorkspace({
     return `/groups/${encodeURIComponent(groupId)}/${nextView}`;
   }
 
+  const nestedEventRecord = view === "events" && Boolean(resourceId) && resourceId !== "new" && resourceId !== "list";
+
   const trail = group
     ? [
         { label: "Groups", href: usePortalHashLocation.hrefs("/groups") },
@@ -192,14 +194,18 @@ export function GroupWorkspace({
           items={trail}
           label="Group navigation"
         >
-          <GroupContextHeader group={group} />
-          <Tabs
-            items={views.map((item) => ({ key: item.key, label: item.label }))}
-            active={view}
-            label={`${group.name} sections`}
-            onChange={(nextView) => navigate(viewPath(nextView))}
-            hrefFor={viewPath}
-          />
+          {!nestedEventRecord && (
+            <>
+              <GroupContextHeader group={group} />
+              <Tabs
+                items={views.map((item) => ({ key: item.key, label: item.label }))}
+                active={view}
+                label={`${group.name} sections`}
+                onChange={(nextView) => navigate(viewPath(nextView))}
+                hrefFor={viewPath}
+              />
+            </>
+          )}
           <Suspense fallback={<Spinner />}>
             {view === OVERVIEW_VIEW && (
               <div class={canParticipate || portalSession.value?.member ? "pk-record" : "pk-stack"}>

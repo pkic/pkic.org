@@ -14,9 +14,16 @@
  *   PUT /api/v1/proposals/speakers/access/[token]/headshot
  *   PUT /api/v1/proposals/speakers/access/[token]/presentation
  */
+import { AppError } from "../../../../../_lib/errors";
+import { requireIdentityFromRequest } from "../../../../../_lib/auth/user-session";
+import { getUserSessionToken } from "../../../../../_lib/auth/user-session-token";
 import { handleError, json } from "../../../../../_lib/http";
 import type { ParticipantRouteData } from "../../../../../_lib/routes/participant-authority";
 import { getSpeakerByManageToken } from "../../../../../_lib/services/proposals";
+import {
+  speakerSelfServiceProfileReadModel,
+  type SpeakerWithContext,
+} from "../../../../../_lib/services/proposals-speaker-capability";
 import {
   confirmSpeakerParticipation,
   declineSpeakerParticipation,
@@ -28,13 +35,14 @@ import { getRequiredTerms } from "../../../../../_lib/services/events";
 import { speakerPresentationPageUrl } from "../../../../../_lib/services/frontend-links";
 import { requireInternalSecret } from "../../../../../_lib/request";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
-import { parseLinksJson, serializeLinks } from "../../../../../../assets/shared/schemas/links";
+import { serializeLinks } from "../../../../../../assets/shared/schemas/links";
 import { isProposalSpeakerRosterEditableStatus } from "../../../../../../assets/shared/schemas/proposal-status";
 import { getEventById } from "../../../../../_lib/services/events";
 import { requestDb } from "../../../../../_lib/db/context";
 import { requiredTermReadModel } from "../../../../../_lib/services/event-read-models";
 import {
   speakerParticipationResponseSchema,
+  speakerProfileUpdateResponseSchema,
   speakerSelfServiceReadResponseSchema,
 } from "../../../../../../assets/shared/schemas/speaker-self-service";
 import {
@@ -42,7 +50,6 @@ import {
   proposalSpeakerProfileUpdateRouteSchema,
   proposalSpeakerSelfServiceReadRouteSchema,
 } from "../../../../../../assets/shared/schemas/route-contracts-public-proposals";
-import { successResponseSchema } from "../../../../../../assets/shared/schemas/api-common";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { proposalSpeakerAccessPath } from "../../../../../../assets/shared/proposal-access-paths";
 
@@ -54,7 +61,8 @@ export async function onRequestGet(
     const appBaseUrl = resolveAppBaseUrl(c.env, c.req.raw);
     const db = requestDb(c);
     const token = data.params.token;
-    const { speaker, proposal, user } = await getSpeakerByManageToken(db, token, requireInternalSecret(c.env));
+    const context = await getSpeakerByManageToken(db, token, requireInternalSecret(c.env));
+    const { speaker, proposal } = context;
 
     const [coSpeakers, presentationUploader, presentationTerms, event] = await Promise.all([
       getProposalCoSpeakers(db, proposal.id, speaker.user_id),
@@ -69,6 +77,7 @@ export async function onRequestGet(
     return json(
       speakerSelfServiceReadResponseSchema.parse({
         speaker: {
+          userId: speaker.user_id,
           role: speaker.role,
           status: speaker.status,
           confirmedAt: speaker.confirmed_at,
@@ -89,20 +98,8 @@ export async function onRequestGet(
           presentationUrl,
         },
         presentationTerms: presentationTerms.map(requiredTermReadModel),
-        profile: {
-          firstName: user.first_name,
-          lastName: user.last_name,
-          email: user.email,
-          organizationName: user.organization_name,
-          jobTitle: user.job_title,
-          biography: user.biography,
-          links: parseLinksJson(user.links_json),
-          headshotUploaded: Boolean(user.headshot_r2_key),
-          headshotUpdatedAt: user.headshot_updated_at,
-          headshotUrl: user.headshot_r2_key
-            ? `${proposalSpeakerAccessPath(`${appBaseUrl}/api/v1`, token, "headshot")}?v=${encodeURIComponent(user.headshot_updated_at ?? "")}`
-            : null,
-        },
+        profile: speakerProfileView(context, token, appBaseUrl),
+        currentRepresentation: context.currentRepresentation,
       }),
     );
   } catch (error) {
@@ -159,9 +156,22 @@ export async function onRequestProfilePatch(
       );
     }
 
+    const selectionAuthority =
+      (body.continuationToken !== undefined && getUserSessionToken(c.req.raw)) ||
+      (body.continuationToken === undefined && body.actingIdentityId !== undefined)
+        ? await requireIdentityFromRequest(requestDb(c), c.req.raw, c.env)
+        : undefined;
+    if (selectionAuthority && selectionAuthority.userId !== speaker.user_id) {
+      throw new AppError(403, "PROPOSAL_IDENTITY_AUTHORITY_REQUIRED", "Select only your own speaker representation.");
+    }
+
     await updateSpeakerProfile(
       requestDb(c),
       {
+        actingIdentityId: body.actingIdentityId,
+        continuationToken: body.continuationToken,
+        unaffiliatedAttestation: body.unaffiliatedAttestation,
+        consents: body.consents,
         firstName: body.firstName === undefined ? undefined : body.firstName || null,
         lastName: body.lastName === undefined ? undefined : body.lastName || null,
         organizationName: body.organizationName === undefined ? undefined : body.organizationName || null,
@@ -178,13 +188,41 @@ export async function onRequestProfilePatch(
         currentStatus: speaker.status,
         inviteGeneration: speaker.invite_generation,
         expectedProfileOverridesJson: user.proposalProfileOverridesJson,
+        expectedActingIdentityId: speaker.acting_identity_id,
+        expectedActingIdentitySelectedAt: speaker.acting_identity_selected_at,
+        expectedActingIdentitySnapshotJson: speaker.acting_identity_snapshot_json,
+        authority: token,
+        selectionAuthority,
+        signingSecret: requireInternalSecret(c.env),
+        expectedManageLinkSecret: speaker.manage_link_secret,
       },
     );
 
-    return json(successResponseSchema.parse({ success: true }));
+    const saved = await getSpeakerByManageToken(requestDb(c), token, requireInternalSecret(c.env));
+    return json(
+      speakerProfileUpdateResponseSchema.parse({
+        success: true,
+        profile: speakerProfileView(saved, token, resolveAppBaseUrl(c.env, c.req.raw)),
+        currentRepresentation: saved.currentRepresentation,
+      }),
+    );
   } catch (error) {
     return handleError(error);
   }
+}
+
+function speakerProfileView(
+  context: SpeakerWithContext,
+  token: ParticipantRouteData<typeof proposalSpeakerSelfServiceReadRouteSchema>["params"]["token"],
+  appBaseUrl: string,
+) {
+  const { user } = context;
+  return speakerSelfServiceProfileReadModel(
+    context,
+    user.headshot_r2_key
+      ? `${proposalSpeakerAccessPath(`${appBaseUrl}/api/v1`, token, "headshot")}?v=${encodeURIComponent(user.headshot_updated_at ?? "")}`
+      : null,
+  );
 }
 
 function markSensitive(c: any): void {

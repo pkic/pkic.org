@@ -8,6 +8,9 @@ const calendarRsvpSourceSchema = z.object({
   receivedAt: z.iso.datetime().optional(),
 });
 
+/** Signed sub-address tags contain case-sensitive MAC bytes; never normalize the local part. */
+export const signedRsvpMailboxSchema = z.email().max(254);
+
 /** Canonical request contract for the signed calendar RSVP endpoint. */
 export const calendarRsvpIngestSchema = z.union([
   calendarRsvpSourceSchema.extend({
@@ -16,7 +19,10 @@ export const calendarRsvpIngestSchema = z.union([
   }),
   calendarRsvpSourceSchema.extend({
     uid: z.string().trim().min(1).max(500),
+    organizerEmail: signedRsvpMailboxSchema.optional(),
     recurrenceId: utcInstantSchema.optional(),
+    invitationSequence: z.number().int().nonnegative().optional(),
+    claimedReplyAt: utcInstantSchema.optional(),
     partstat: z.enum(["ACCEPTED", "DECLINED", "TENTATIVE"]),
     attendeeEmail: normalizedEmailSchema,
   }),
@@ -28,6 +34,8 @@ export const calendarRsvpStatusSchema = z.enum(["accepted", "declined", "tentati
 export const calendarRsvpEventInputSchema = z.object({
   registrationId: databaseIdSchema,
   recurrenceId: utcInstantSchema.optional(),
+  invitationSequence: z.number().int().nonnegative().optional(),
+  claimedReplyAt: utcInstantSchema.optional(),
   /** Trusted day identity derived from a signed inbound address or calendar UID. */
   eventDayDate: z.iso.date().nullable().optional(),
   icsUid: z.string().trim().min(1).max(500),

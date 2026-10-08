@@ -157,7 +157,7 @@ function MultiSelectCheckboxes({ field }: { field: FormField }) {
 }
 
 function TagPicker({ field, rules, initialValue }: { field: FormField; rules: FieldRules; initialValue?: unknown }) {
-  const options = optionsFor(field);
+  const options = useMemo(() => optionsFor(field), [field.options]);
   const shuffledOptions = useMemo(() => shuffled(options), [options]);
 
   const initial = useMemo(() => {

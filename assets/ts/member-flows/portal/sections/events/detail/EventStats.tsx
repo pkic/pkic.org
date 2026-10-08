@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "preact/compat";
 import { Alert } from "../../../../../ui/Alert";
 import { Badge } from "../../../../../ui/Badge";
 import { Button } from "../../../../../ui/Button";
@@ -19,6 +20,7 @@ import { isoDateRange } from "../../../../../components/analytics/date-range";
 import type { EventStatsResponse } from "../types";
 import { useData } from "../../../../../hooks/useData";
 import { AttendanceChangeDashboard } from "./AttendanceChangeDashboard";
+const Promoters = lazy(() => import("./Promoters").then((module) => ({ default: module.Promoters })));
 
 /**
  * Chart fills read the state tokens rather than brand hexes, so the bars stay
@@ -54,23 +56,26 @@ interface WaitlistDayRow {
 }
 
 /** The page's sections, each a routed tab (#118). */
-type StatsSection = "overview" | "attendance" | "registrations" | "invitations" | "calendar";
+type StatsSection = "overview" | "attendance" | "registrations" | "invitations" | "calendar" | "promoters";
 const STATS_SECTIONS: ReadonlyArray<{ key: StatsSection; label: string }> = [
   { key: "overview", label: "Overview" },
   { key: "attendance", label: "Attendance" },
   { key: "registrations", label: "Registrations" },
   { key: "invitations", label: "Invitations" },
   { key: "calendar", label: "Calendar" },
+  { key: "promoters", label: "Promoters" },
 ];
 
 export function EventStats({
   slug,
   section,
+  subTab,
   basePath = `/events/${encodeURIComponent(slug)}/stats`,
 }: {
   slug: string;
   /** The routed section below the tab; the overview when absent. */
   section?: string;
+  subTab?: string;
   /** Where the sections live, so the tabs stay inside the workspace that rendered them. */
   basePath?: string;
 }) {
@@ -245,6 +250,11 @@ export function EventStats({
         hrefFor={hrefFor}
       />
 
+      {active === "promoters" && (
+        <Suspense fallback={<Spinner label="Loading promoters…" />}>
+          <Promoters slug={slug} subTab={subTab} basePath={`${basePath}/promoters`} />
+        </Suspense>
+      )}
       {active === "overview" && (
         <>
           <Panel>

@@ -2,11 +2,37 @@
 import PublicPage from "../../layouts/PublicPage.astro";
 import { publication } from "../../publication";
 import { VoteDetailView } from "../../../assets/ts/site/PublicVoteDetail";
-export function getStaticPaths() {
-  return publication.votes.map((vote) => ({ params: { slug: vote.slug }, props: { vote } }));
+import { publicationPageInputs } from "../../publication-page-inputs";
+import { publicationRouteCacheKey } from "../../publication-cache";
+export async function getStaticPaths() {
+  return Promise.all(publication.votes.map(async (vote) => {
+    const route = `/votes/${vote.slug}/`;
+    const pageInputs = await publicationPageInputs({ route, title: vote.title, description: vote.description ?? undefined });
+    const result = vote.status === "closed" ? vote.result : null;
+    const renderedResult = result && "rounds" in result ? {
+      winnerCandidateId: result.winnerCandidateId,
+      rounds: result.rounds.map(({ round, counts, eliminatedCandidateIds }) => ({ round, counts, eliminatedCandidateIds })),
+    } : result ? {
+      outcome: "outcome" in result ? result.outcome : undefined,
+      counts: "counts" in result ? result.counts : undefined,
+      totalBallots: "totalBallots" in result ? result.totalBallots : undefined,
+    } : null;
+    const view = {
+      title: vote.title, description: vote.description, voteType: vote.voteType, ownerGroupName: vote.ownerGroupName,
+      electorateMode: vote.electorateMode, opensAt: vote.opensAt, closesAt: vote.closesAt, status: vote.status,
+      cancellationReason: vote.status === "cancelled" ? vote.cancellationReason : undefined,
+      result: renderedResult,
+      candidates: vote.status === "closed" && vote.result && "rounds" in vote.result
+        ? vote.candidates?.map(({ id, candidateName }) => ({ id, candidateName })) : undefined,
+    };
+    return {
+      params: { slug: vote.slug }, props: { vote, pageInputs },
+      ...(vote.description?.includes("![") || !pageInputs.imageInputs.cacheable ? {} : { cacheKey: publicationRouteCacheKey(route, { view, pageInputs }) }),
+    };
+  }));
 }
-const { vote } = Astro.props;
+const { vote, pageInputs } = Astro.props;
 ---
-<PublicPage title={vote.title} description={vote.description ?? undefined}>
+<PublicPage pageInputs={pageInputs} title={vote.title} description={vote.description ?? undefined}>
   <div data-pagefind-body><VoteDetailView vote={vote} indexHref="/votes/" /></div>
 </PublicPage>

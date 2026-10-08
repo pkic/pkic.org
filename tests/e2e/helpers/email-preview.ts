@@ -1,5 +1,17 @@
 import { fileURLToPath } from "node:url";
-import { expect, type Locator, type Page } from "@playwright/test";
+import { expect, type Locator, type Page, type Response } from "@playwright/test";
+import { siteSecurityHeaders } from "../../../assets/shared/site-security-policy";
+
+/** Inspect the native response, not just the policy source or an iframe attribute. */
+export function expectPortalEmailPreviewPolicy(response: Response | null) {
+  expect(response).not.toBeNull();
+  if (!response) throw new Error("Portal navigation returned no document response");
+  expect(response.status()).toBe(200);
+  expect(new URL(response.url()).pathname).toBe("/portal/");
+  const canonical = siteSecurityHeaders("/portal/");
+  expect(response.headers()["content-security-policy"]).toBe(canonical["Content-Security-Policy"]);
+  expect(response.headers()["permissions-policy"]).toBe(canonical["Permissions-Policy"]);
+}
 
 export async function useEmailPreviewLogoFixture(page: Page) {
   await page.route("https://pkic.org/img/logo-white.png", (route) =>

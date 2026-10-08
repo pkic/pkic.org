@@ -129,3 +129,31 @@ export async function queryPage<T>(db: DatabaseLike, query: OffsetPageQuery): Pr
   const [pageResult, countResult] = await db.batch(buildOffsetPageStatements(db, query));
   return decodeOffsetPageResults<T>(pageResult, countResult);
 }
+
+/** Key columns are trusted SQL expressions owned by the caller, never request input. */
+export async function queryKeysetPage<T>(
+  db: DatabaseLike,
+  query: { source: OffsetPageSource; keyColumn: string; cursor?: string; limit: number },
+): Promise<{ rows: T[]; total: number; hasMore: boolean }> {
+  const source = query.source;
+  const bindings = source.bindings ?? [];
+  const prefix = source.withSql ? `${withoutTrailingSemicolon(source.withSql)}\n` : "";
+  const tail = query.cursor === undefined ? "" : ` AND ${query.keyColumn} > ?`;
+  const results = await db.batch([
+    db
+      .prepare(
+        `${prefix}${source.selectSql}
+${source.fromSql}${tail}
+ORDER BY ${query.keyColumn} ASC LIMIT ?`,
+      )
+      .bind(...bindings, ...(query.cursor === undefined ? [] : [query.cursor]), query.limit + 1),
+    db
+      .prepare(
+        `${prefix}${source.countSelectSql ?? "SELECT COUNT(*) AS total"}
+${source.countFromSql ?? source.fromSql}`,
+      )
+      .bind(...(source.countBindings ?? bindings)),
+  ]);
+  const { rows, total } = decodeOffsetPageResults<T>(results[0]!, results[1]!);
+  return { rows: rows.slice(0, query.limit), total, hasMore: rows.length > query.limit };
+}

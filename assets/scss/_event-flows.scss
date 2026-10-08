@@ -4,7 +4,7 @@
 //
 // The container itself no longer styles its controls: labels, inputs and the
 // validation states come from the design system's Field and Button, so the
-// only rule `.event-flow` still owns is its narrow-viewport padding, below.
+// surrounding public page owns the responsive content gutter.
 
 // ── Multi-step wizard ────────────────────────────────────────────────────────
 
@@ -1330,10 +1330,6 @@
 // ── Responsive adjustments ───────────────────────────────────────────────────
 
 @media (max-width: 767px) {
-  .event-flow {
-    padding: 0.95rem;
-  }
-
   .event-flow-success-title {
     font-size: 1.25rem;
   }

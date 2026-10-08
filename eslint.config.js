@@ -3,14 +3,18 @@ import eslintConfigPrettier from "eslint-config-prettier";
 import globals from "globals";
 import tseslint from "typescript-eslint";
 
-const sourceTypeScriptFiles = [
+const backendTypeScriptFiles = [
   "functions/**/*.{ts,tsx}",
-  "assets/ts/**/*.{ts,tsx}",
   "assets/shared/**/*.ts",
-  "assets/design/**/*.ts",
   "tests/**/*.{ts,tsx}",
 ];
-const toolingTypeScriptFiles = ["*.config.ts", "tests/tools/**/*.ts"];
+const frontendTypeScriptFiles = [
+  "assets/ts/**/*.{ts,tsx}",
+  "assets/design/**/*.ts",
+  "tests/frontend/**/*.{ts,tsx}",
+];
+const sourceTypeScriptFiles = [...backendTypeScriptFiles, ...frontendTypeScriptFiles];
+const toolingTypeScriptFiles = ["*.config.ts", "scripts/**/*.ts", "tests/tools/**/*.ts"];
 const astroTypeScriptFiles = ["site/**/*.ts"];
 const allTypeScriptFiles = [...sourceTypeScriptFiles, ...toolingTypeScriptFiles, ...astroTypeScriptFiles];
 
@@ -57,10 +61,20 @@ export default tseslint.config(
   },
   ...typedTypeScriptConfigs,
   {
-    files: sourceTypeScriptFiles,
+    files: backendTypeScriptFiles,
+    ignores: ["tests/frontend/**", "tests/tools/**"],
     languageOptions: {
       parserOptions: {
-        project: ["./tsconfig.json", "./tsconfig.frontend.json"],
+        project: "./tsconfig.json",
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
+  {
+    files: frontendTypeScriptFiles,
+    languageOptions: {
+      parserOptions: {
+        project: "./tsconfig.frontend.json",
         tsconfigRootDir: import.meta.dirname,
       },
     },

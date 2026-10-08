@@ -12,6 +12,9 @@ import {
   serializeRehearsalVars,
 } from "../../scripts/rehearsal/config.mjs";
 
+import { parseEnv } from "node:util";
+import { localBadgePrintKeyring, localBadgePrintEnvValue } from "../../scripts/local-badge-print-keyring.mjs";
+
 import { parseArgs } from "../../scripts/migrate-members/cli.mjs";
 
 const directories: string[] = [];
@@ -76,6 +79,36 @@ describe("local migration rehearsal", () => {
     expect(imported.manualMappingPath).toBe(path.resolve("csv/manual-mapping.csv"));
     expect(() => parseRehearsalOptions(["start", "--state", "/local", "--manual-mapping", "mapping.csv"])).toThrow(
       "Only members",
+    );
+  });
+
+  it("isolates badge printing keys and retains them across Worker restarts", () => {
+    const state = mkdtempSync(path.join(tmpdir(), "rehearsal-badge-"));
+    const other = mkdtempSync(path.join(tmpdir(), "rehearsal-badge-"));
+    directories.push(state, other);
+    const first = localBadgePrintKeyring(state);
+    expect(localBadgePrintKeyring(state)).toBe(first);
+    expect(localBadgePrintKeyring(other)).not.toBe(first);
+    const ring = z
+      .object({
+        activeKeyId: z.literal("local"),
+        keys: z.object({ local: z.string().regex(/^[a-f0-9]{64}$/) }).strict(),
+      })
+      .strict()
+      .parse(JSON.parse(first));
+    expect(ring.activeKeyId).toBe("local");
+    const config = rehearsalConfig(process.cwd(), state, 8788, 8799, "local-signing");
+    expect(config.vars.BADGE_PRINT_ENCRYPTION_KEYS).toBe(first);
+    const serialized = serializeRehearsalVars(config.vars);
+    expect(serialized).toContain(`BADGE_PRINT_ENCRYPTION_KEYS=${localBadgePrintEnvValue(first)}`);
+    // Wrangler dotenv and Node parseEnv strip single quotes without rewriting the JSON inside.
+    expect(parseEnv(serialized).BADGE_PRINT_ENCRYPTION_KEYS).toBe(first);
+    expect(
+      parseEnv(`BADGE_PRINT_ENCRYPTION_KEYS=${localBadgePrintEnvValue(first)}\n`).BADGE_PRINT_ENCRYPTION_KEYS,
+    ).toBe(first);
+    expect(() => localBadgePrintEnvValue("invalid'key")).toThrow();
+    expect(readFileSync("scripts/e2e-start.sh", "utf8")).toContain(
+      'node scripts/local-badge-print-keyring.mjs "$STATE_DIR" "$E2E_ENV_FILE"',
     );
   });
 

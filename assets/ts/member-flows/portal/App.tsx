@@ -1,15 +1,22 @@
 import { Button } from "../../ui/Button";
+import { ScannerCodePreparation } from "./sections/events/detail/scanner/scanner-code-preparation";
+import { prepareScannerDecoder } from "./sections/events/detail/scanner/prepareScannerDecoder";
 /**
  * Portal root — gates on identity authentication, then loads member profile
  * data only when the session advertises member capacity. Staff-only users can
  * therefore enter the portal without being granted member-only API access.
  */
 import { useEffect, useState } from "preact/hooks";
+import { lazy, Suspense } from "preact/compat";
+import {
+  scannerCollectorPath,
+  clearScannerOfflineContexts,
+  scannerTransportUnavailable,
+} from "./sections/events/detail/scanner/scanner-offline-context";
 import { getJson, postJson, ApiClientError } from "../../shared/api-client";
 import {
   authStatus,
   clearUserSession,
-  expirePortalSession,
   finishAuthCheck,
   isAuthed,
   portalSession,
@@ -19,6 +26,7 @@ import {
   clearMemberProfile,
   clearAuth,
   signedInWithLink,
+  logoutNotice,
 } from "./state";
 import { Login } from "./shell/Login";
 import { Alert } from "../../ui/Alert";
@@ -27,7 +35,13 @@ import { PortalShell } from "./shell/PortalShell";
 import { VerifyingOverlay } from "../../components/VerifyingOverlay";
 import { myProfileSchema } from "../../../shared/schemas/me";
 import { userAuthEstablishedResponseSchema, userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth";
-import { successResponseSchema } from "../../../shared/schemas/api-common";
+import {
+  recordCanonicalSession,
+  readActiveUserSession,
+  readPendingUserLogout,
+  subscribeUserSessionState,
+} from "../../shared/pending-user-logout";
+import { resumePendingUserLogout, signOutPortalSession } from "./logout-session";
 import { SponsorAccess } from "./sections/sponsors/Access";
 import { portalHashPath, portalMagicLinkReturnPath, portalMagicLinkToken } from "./hash-route";
 import { IdentityInvitationAcceptance } from "./shell/IdentityInvitationAcceptance";
@@ -39,9 +53,16 @@ import { meetingEntryReturnUrl } from "../../../shared/meeting-entry-navigation"
 import { MeetingEntryReturn } from "./shell/MeetingEntryReturn";
 import { useSessionExpiry } from "./use-session-expiry";
 import { useSessionActivity } from "./use-session-activity";
+const loadOfflineScannerBootstrap = () => import("./sections/events/detail/scanner/OfflineScannerBootstrap");
+const OfflineScannerBootstrap = lazy(() =>
+  loadOfflineScannerBootstrap().then((module) => ({ default: module.OfflineScannerBootstrap })),
+);
+const prepareOfflineScannerCode = (signal: AbortSignal) => prepareScannerDecoder(signal, loadOfflineScannerBootstrap);
 
 async function verifyMagicLink(token: string): Promise<PortalSession> {
   const session = await postJson("/api/v1/auth/verify-link", { token }, userAuthEstablishedResponseSchema);
+  if (!(await recordCanonicalSession({ sessionId: session.sessionId, operatorUserId: session.identity.id })))
+    throw new Error("This session was signed out on this device.");
   savePortalSession(session);
   return session;
 }
@@ -56,9 +77,18 @@ export function App() {
   const [reauthenticating, setReauthenticating] = useState(false);
 
   async function loadPortalSession(): Promise<boolean> {
+    scannerTransportUnavailable.value = false;
     setSessionError(null);
+    const checkedSessionId = portalSession.value?.sessionId;
+    let checkedLocalSession: Awaited<ReturnType<typeof readActiveUserSession>> = null;
     try {
+      checkedLocalSession = await readActiveUserSession();
       const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
+      if (!(await recordCanonicalSession({ sessionId: session.sessionId, operatorUserId: session.identity.id }))) {
+        if (portalSession.value?.sessionId === session.sessionId) clearAuth();
+        finishAuthCheck();
+        return portalSession.value !== null;
+      }
       if (portalSession.value?.identity.id !== session.identity.id) clearMemberProfile();
       savePortalSession(session);
       if (session.member) {
@@ -68,8 +98,16 @@ export function App() {
         clearMemberProfile();
       }
     } catch (error) {
-      if (error instanceof ApiClientError && [401, 403].includes(error.status)) clearUserSession();
-      else setSessionError("We could not refresh your sign-in information. Keep this page open and try again shortly.");
+      if (error instanceof ApiClientError && [401, 403].includes(error.status)) {
+        await clearScannerOfflineContexts(checkedLocalSession).catch(() => {
+          setSessionError("Local scanner preparation could not be cleared. Reconnect before scanning.");
+        });
+        if (portalSession.value?.sessionId === checkedSessionId) clearUserSession();
+      } else {
+        scannerTransportUnavailable.value =
+          error instanceof ApiClientError && error.status === 0 && error.code === "NETWORK_UNAVAILABLE";
+        setSessionError("We could not refresh your sign-in information. Keep this page open and try again shortly.");
+      }
     }
 
     finishAuthCheck();
@@ -83,11 +121,10 @@ export function App() {
     setSessionError(null);
     setReauthenticating(true);
     try {
-      await postJson("/api/v1/auth/logout", {}, successResponseSchema);
-      expirePortalSession();
-    } catch (error) {
-      if (error instanceof ApiClientError && error.status === 401) expirePortalSession();
-      else setSessionError("We could not end your current session. Try again before signing in.");
+      const session = portalSession.value;
+      if (session) await signOutPortalSession(session);
+    } catch {
+      setSessionError("Local sign-out could not be saved. Keep this page open and try again.");
     } finally {
       setReauthenticating(false);
     }
@@ -103,6 +140,11 @@ export function App() {
         return;
       }
       setAuthChecking();
+      if (await resumePendingUserLogout()) {
+        clearAuth();
+        setVerifying(false);
+        return;
+      }
       const userToken = portalMagicLinkToken(window.location.hash);
       if (userToken) {
         try {
@@ -134,11 +176,45 @@ export function App() {
       if (!cancelled) await loadPortalSession();
     }
 
-    void run();
+    void run().catch(() => {
+      if (!cancelled) {
+        clearAuth();
+        setVerifying(false);
+        setSessionError("Local sign-out information could not be checked. Keep this page open and try again.");
+      }
+    });
     return () => {
       cancelled = true;
     };
   }, [isMcpAuthorization, isIdentityInvitation]);
+
+  useEffect(() => {
+    async function changed() {
+      scannerTransportUnavailable.value = false;
+      const current = portalSession.value;
+      if (!current) return;
+      try {
+        const pending = await readPendingUserLogout();
+        const active = await readActiveUserSession();
+        if (portalSession.value?.sessionId !== current.sessionId) return;
+        if (pending?.sessionId === current.sessionId || active?.sessionId !== current.sessionId) clearAuth();
+      } catch {
+        if (portalSession.value?.sessionId === current.sessionId) clearAuth();
+      }
+    }
+    async function reconnect() {
+      if (!(await resumePendingUserLogout()) && !portalSession.value) await loadPortalSession();
+    }
+    const unsubscribe = subscribeUserSessionState(() => {
+      void changed();
+    });
+    window.addEventListener("online", reconnect);
+    return () => {
+      scannerTransportUnavailable.value = false;
+      unsubscribe();
+      window.removeEventListener("online", reconnect);
+    };
+  }, []);
 
   if (isMcpAuthorization) {
     return <McpAuthorization />;
@@ -152,6 +228,12 @@ export function App() {
     return <VerifyingOverlay />;
   }
 
+  const pendingNotice =
+    !isAuthed.value && logoutNotice.value ? (
+      <Alert tone="info" title="Sign-out status">
+        {logoutNotice.value}
+      </Alert>
+    ) : null;
   const sessionNotice = sessionError ? (
     <Alert tone="warn" title="Could not check sign-in">
       <p>{sessionError}</p>
@@ -160,6 +242,15 @@ export function App() {
       </Button>
     </Alert>
   ) : null;
+  const collectorRoute = scannerCollectorPath(window.location.hash);
+  if (sessionError && !isAuthed.value && scannerTransportUnavailable.value && collectorRoute)
+    return (
+      <div class="pk pk-stack">
+        <Suspense fallback={<VerifyingOverlay />}>
+          <OfflineScannerBootstrap route={collectorRoute} onCheckSignIn={() => void loadPortalSession()} />
+        </Suspense>
+      </div>
+    );
   if (sessionError && !isAuthed.value) return <div class="pk pk-stack">{sessionNotice}</div>;
 
   if (isAuthed.value) {
@@ -167,6 +258,7 @@ export function App() {
     if (meetingDestination) return <MeetingEntryReturn destination={meetingDestination} />;
     return (
       <>
+        {pendingNotice}
         {sessionNotice}
         {portalSession.value?.staffReauthenticationRequired && (
           <Alert tone="warn" title="Administrator access expired">
@@ -176,7 +268,9 @@ export function App() {
             </Button>
           </Alert>
         )}
-        <PortalShell key={`${portalSession.value?.identity.id}:${portalSession.value?.member?.identityId ?? ""}`} />
+        <ScannerCodePreparation.Provider value={prepareOfflineScannerCode}>
+          <PortalShell key={`${portalSession.value?.identity.id}:${portalSession.value?.member?.identityId ?? ""}`} />
+        </ScannerCodePreparation.Provider>
         <ConfirmDialogHost />
       </>
     );
@@ -198,6 +292,7 @@ export function App() {
             </div>
           </div>
         )}
+        {pendingNotice}
         <SponsorAccess />
       </>
     );
@@ -214,6 +309,7 @@ export function App() {
           </div>
         </div>
       )}
+      {pendingNotice}
       <Login
         onSignedIn={async () => {
           await loadPortalSession();

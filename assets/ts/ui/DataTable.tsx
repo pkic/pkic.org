@@ -53,6 +53,8 @@ export type DataTableColumnWidth = "content" | "fit" | "compact" | "primary";
 export interface DataTableColumn<Row> {
   id: string;
   header: string;
+  /** Optional visible symbol with the unchanged text name retained for assistive technology. */
+  headerIcon?: ComponentChildren;
   /** Omit to render nothing for this column. */
   cell: (row: Row) => ComponentChildren;
   sortable?: boolean;
@@ -117,6 +119,8 @@ export interface DataTableRowAction {
 }
 
 export interface DataTableSelection {
+  /** Freeze row choices while a guarded bulk command is in progress. */
+  disabled?: boolean;
   selected: ReadonlySet<string>;
   onChange: (next: ReadonlySet<string>) => void;
   /** Names the row in the checkbox's accessible label. */
@@ -135,6 +139,8 @@ export interface DataTableProps<Row> {
   selection?: DataTableSelection;
   loading?: boolean;
   loadingRows?: number;
+  /** Keep a compact comparison in columns on narrow screens instead of labeled record cards. */
+  narrowLayout?: "records" | "columns";
   /** Shown instead of the body when there are no rows and nothing is loading. */
   empty?: ComponentChildren;
   /** Makes the whole row activate one thing. See DataTableRowAction. */
@@ -254,6 +260,7 @@ export function DataTable<Row>({
   selection,
   loading = false,
   loadingRows = 3,
+  narrowLayout = "records",
   empty,
   rowAction,
   detailRow,
@@ -280,7 +287,10 @@ export function DataTable<Row>({
 
   return (
     <div class="pk-table__scroll">
-      <table class="pk-table pk-table--data" aria-busy={loading ? "true" : undefined}>
+      <table
+        class={`pk-table pk-table--data ${narrowLayout === "columns" ? "pk-table--keep-columns" : "pk-table--records"}`}
+        aria-busy={loading ? "true" : undefined}
+      >
         <caption class={showCaption ? "pk-table__caption" : "pk-table__caption pk-table__caption--hidden"}>
           {caption}
         </caption>
@@ -292,6 +302,7 @@ export function DataTable<Row>({
                   type="checkbox"
                   class="pk-table__checkbox"
                   checked={allSelected}
+                  disabled={selection.disabled}
                   // Some-but-not-all is a third state; without it the header
                   // box reads as "nothing selected" while rows are selected.
                   indeterminate={someSelected && !allSelected}
@@ -303,6 +314,18 @@ export function DataTable<Row>({
             {columns.map((column, index) => {
               const sorted = sort?.columnId === column.id;
               const last = index === columns.length - 1;
+              const label = (
+                <>
+                  {column.headerIcon && (
+                    <span title={column.header} aria-hidden="true">
+                      {column.headerIcon}
+                    </span>
+                  )}
+                  <span class={column.headerHidden || column.headerIcon ? "pk-table__sr" : undefined}>
+                    {column.header}
+                  </span>
+                </>
+              );
               const name =
                 column.sortable && onSort ? (
                   <button
@@ -310,7 +333,7 @@ export function DataTable<Row>({
                     class="pk-table__sort"
                     onClick={() => onSort(column.id, nextDirection(sort, column.id))}
                   >
-                    <span class={column.headerHidden ? "pk-table__sr" : undefined}>{column.header}</span>
+                    {label}
                     {/* Only the direction in force is drawn: the column's `…`
                         menu is where sorting is offered, so an idle ↕ beside
                         it would be a second control saying the same thing. */}
@@ -321,7 +344,7 @@ export function DataTable<Row>({
                     )}
                   </button>
                 ) : (
-                  <span class={column.headerHidden ? "pk-table__sr" : undefined}>{column.header}</span>
+                  label
                 );
               return (
                 <th
@@ -378,6 +401,7 @@ export function DataTable<Row>({
                         type="checkbox"
                         class="pk-table__checkbox"
                         checked={selected}
+                        disabled={selection.disabled}
                         aria-label={selection.rowLabel(key)}
                         onChange={() => toggleRow(key)}
                       />
@@ -402,7 +426,9 @@ export function DataTable<Row>({
                 </tr>
                 {detail !== undefined && detail !== null && detail !== false && (
                   <tr class="pk-table__detail">
-                    <td colSpan={columnCount}>{detail}</td>
+                    <td colSpan={columnCount}>
+                      <div class="pk-table__detail-content">{detail}</div>
+                    </td>
                   </tr>
                 )}
               </Fragment>

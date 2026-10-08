@@ -11,11 +11,13 @@ export function RegistrationRosterActions({
   exportsEndpoint,
   onPromoted,
   notify,
+  onPrintAllMatching,
 }: {
   promotionsEndpoint: string;
   exportsEndpoint: string;
   onPromoted: () => void | Promise<void>;
   notify: (message: string, kind: "success" | "error") => void;
+  onPrintAllMatching?: () => void;
 }) {
   const [promoting, setPromoting] = useState(false);
 
@@ -38,6 +40,9 @@ export function RegistrationRosterActions({
         label="Registration actions"
         align="end"
         items={[
+          ...(onPrintAllMatching
+            ? [{ id: "print-all-matching", label: "Create / print all matching badges", onSelect: onPrintAllMatching }]
+            : []),
           {
             id: "waitlist-promotions",
             label: promoting ? "Running promotions…" : "Run waitlist promotions",

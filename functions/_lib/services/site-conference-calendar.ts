@@ -3,15 +3,20 @@ import { conferenceLocation } from "./site-conference-location";
 import type { ConferenceProgram } from "../../../assets/shared/schemas/conference-program";
 import { siteContentSlug } from "../../../assets/shared/site-content-slug";
 
-/** Publish the same session windows as the visible agenda, with stable legacy UIDs. */
-export function conferenceAgendaCalendar(program: ConferenceProgram, eventUrl: string, updatedAt: string): string {
+/** Shared public VCALENDAR metadata for legacy and approved native entries. */
+export function conferenceCalendarComponent(name: string, timeZone: string) {
   const calendar = new ICAL.Component("vcalendar");
   calendar.addPropertyWithValue("version", "2.0");
   calendar.addPropertyWithValue("prodid", "-//PKI Consortium//Conference Agenda//EN");
   calendar.addPropertyWithValue("calscale", "GREGORIAN");
   calendar.addPropertyWithValue("method", "PUBLISH");
-  calendar.addPropertyWithValue("x-wr-calname", program.name);
-  calendar.addPropertyWithValue("x-wr-timezone", program.timezone);
+  calendar.addPropertyWithValue("x-wr-calname", name);
+  calendar.addPropertyWithValue("x-wr-timezone", timeZone);
+  return calendar;
+}
+/** Publish the same session windows as the visible agenda, with stable legacy UIDs. */
+export function conferenceAgendaCalendar(program: ConferenceProgram, eventUrl: string, updatedAt: string): string {
+  const calendar = conferenceCalendarComponent(program.name, program.timezone);
   const utc = (instant: string) => ICAL.Time.fromJSDate(new Date(instant), true);
   for (const [date, slots] of Object.entries(program.agenda)) {
     for (const slot of slots) {
@@ -19,17 +24,20 @@ export function conferenceAgendaCalendar(program: ConferenceProgram, eventUrl: s
         const item = new ICAL.Component("vevent");
         item.addPropertyWithValue(
           "uid",
-          `${siteContentSlug(`${session.locations.join(" ")}-${date}-${slot.time}`)}@ics.pkic.org`,
+          session.id
+            ? `agenda-${session.id}@ics.pkic.org`
+            : `${siteContentSlug(`${session.locations.join(" ")}-${date}-${slot.time}`)}@ics.pkic.org`,
         );
         item.addPropertyWithValue("dtstamp", utc(updatedAt));
         item.addPropertyWithValue("dtstart", utc(slot.startsAt));
-        if (session.endsAt) item.addPropertyWithValue("dtend", utc(session.endsAt));
+        if (!session.endNotRecorded && session.endsAt) item.addPropertyWithValue("dtend", utc(session.endsAt));
         item.addPropertyWithValue("summary", session.title);
         item.addPropertyWithValue(
           "description",
           [
             program.draft ? "This is a preliminary agenda and is subject to change." : "",
             session.description ?? "",
+            session.endNotRecorded ? "End not recorded in the historical source." : "",
             session.speakers.length ? `Speakers: ${session.speakers.join(", ")}` : "",
           ]
             .filter(Boolean)

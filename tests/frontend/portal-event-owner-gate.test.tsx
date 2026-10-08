@@ -119,12 +119,12 @@ describe("standalone event views redirect to the owning group", () => {
     {
       label: "event settings",
       props: { tab: "settings", subTab: "sponsor-tiers" },
-      destination: `/groups/${GROUP_ID}/events/${EVENT_ID}/settings`,
+      destination: `/groups/${GROUP_ID}/events/${EVENT_ID}/settings/sponsor-tiers`,
     },
     {
       label: "the add-team-member page",
       props: { tab: "settings", subTab: "team", detailSegment: "new" },
-      destination: `/groups/${GROUP_ID}/events/${EVENT_ID}/team/new`,
+      destination: `/groups/${GROUP_ID}/events/${EVENT_ID}/settings/team/new`,
     },
   ])("preserves $label when redirecting a legacy event URL", async ({ props, destination }) => {
     stubDetail(GROUP_ID);
@@ -175,6 +175,7 @@ describe("standalone event views redirect to the owning group", () => {
                 registrationPolicy: "public",
                 visibility: "public",
                 accessLevel: "participant",
+                sponsorLeadAccess: false,
                 location: "Amsterdam",
                 links: [],
                 basePath: "/events/summit/",
@@ -213,6 +214,7 @@ describe("standalone event views redirect to the owning group", () => {
                 registrationPolicy: "public",
                 visibility: "public",
                 accessLevel: "participant",
+                sponsorLeadAccess: false,
                 location: "Amsterdam",
                 links: [],
                 basePath: "/events/summit/",
@@ -245,5 +247,58 @@ describe("standalone event views redirect to the owning group", () => {
 
     expect(navigate).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(container.textContent).toContain("Your event proposals"));
+  });
+  it("opens assigned promotion kits in the participant workspace without management requests", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), location.origin);
+        if (url.pathname === "/api/v1/events/summit") {
+          return new Response(
+            JSON.stringify({
+              event: {
+                id: EVENT_ID,
+                slug: "summit",
+                name: "Summit",
+                timezone: "UTC",
+                startsAt: null,
+                endsAt: null,
+                profileKey: "conference",
+                registrationPolicy: "public",
+                visibility: "public",
+                accessLevel: "participant",
+                sponsorLeadAccess: false,
+                location: "Amsterdam",
+                links: [],
+                basePath: "/events/summit/",
+                viewer: null,
+                participation: {
+                  registrationId: null,
+                  registrationStatus: null,
+                  proposals: 1,
+                  speakerProposals: 0,
+                  proposalStates: ["submitted"],
+                  speakerStates: [],
+                },
+              },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.pathname === "/api/v1/events/summit/agenda/promotion") {
+          return new Response(
+            JSON.stringify({ occurrences: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response(JSON.stringify({ error: { code: "NOT_FOUND", message: "nope" } }), { status: 404 });
+      }),
+    );
+
+    await act(() => render(<EventWorkspace view="detail" slug="summit" tab="promotion" />, container));
+    await settle();
+
+    expect(navigate).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(container.textContent).toContain("My promotion kits"));
   });
 });

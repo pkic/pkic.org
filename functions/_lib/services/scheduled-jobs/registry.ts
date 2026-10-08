@@ -1,3 +1,10 @@
+import { runSitePublicationPipeline } from "../site-publication-runtime";
+import { processPendingPromotionRenders } from "../event-agenda/promotion-render-jobs";
+import { runAgendaParticipationDueWork } from "../event-participation/reconciliation";
+import { runAgendaSessionReminders } from "../event-participation/reminders";
+import { webPushConfiguration } from "../event-participation/web-push-configuration";
+import { queueAgendaPushReminders } from "../event-participation/web-push-intents";
+import { processAgendaPushOutbox } from "../event-participation/web-push-outbox";
 import { runMembershipWorkflows } from "../membership/workflows/scheduled";
 import { processMembershipFeeCheckouts } from "../membership/workflows/fee-checkout";
 import { dispatchEventEmailCampaignPages, cleanExpiredCampaignSnapshots } from "../event-email-campaign/dispatch";
@@ -46,6 +53,30 @@ const VOTES_INTERVAL_SECONDS = 900;
  */
 export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
   {
+    key: "site_publication",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["site:publish"],
+    run: async ({ env }) => ({ summary: await runSitePublicationPipeline(env) }),
+  },
+  {
+    key: "agenda_participation",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["agenda:write"],
+    run: async ({ env }) => ({ summary: await runAgendaParticipationDueWork(env.DB, 10) }),
+  },
+  {
+    key: "agenda_reminders",
+    leaseSeconds: DEFAULT_LEASE_SECONDS,
+    requiredPermissions: ["email:manage"],
+    run: async ({ env }) => {
+      const email = await runAgendaSessionReminders(env.DB, 100);
+      if (!(await webPushConfiguration(env))) return { summary: email };
+      const queued = await queueAgendaPushReminders(env.DB, 100);
+      const push = await processAgendaPushOutbox(env.DB, env, 20);
+      return { summary: { email, queued, push } };
+    },
+  },
+  {
     key: "membership_workflows",
     leaseSeconds: DEFAULT_LEASE_SECONDS,
     requiredPermissions: ["membership:approve"],
@@ -78,6 +109,7 @@ export const SCHEDULED_JOB_DEFINITIONS: readonly ScheduledJobDefinition[] = [
     leaseSeconds: DEFAULT_LEASE_SECONDS,
     requiredPermissions: ["email:manage"],
     run: async ({ env, d1QueryBudget }) => {
+      await processPendingPromotionRenders(env.DB, env, 2);
       await runScheduledDueWork(env, { d1QueryBudget });
     },
   },

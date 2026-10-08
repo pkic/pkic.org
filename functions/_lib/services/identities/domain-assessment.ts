@@ -62,10 +62,11 @@ export async function assessIdentityDomain(
   const evidence = await first<EmailEvidenceRow>(
     db,
     `SELECT normalized_email, email_verified_at AS verified_at
-       FROM users WHERE id = ? AND normalized_email = ?
+       FROM users WHERE id = ? AND normalized_email = ? AND active = 1
       UNION ALL
      SELECT normalized_email, verified_at
        FROM user_emails WHERE user_id = ? AND normalized_email = ?
+       AND EXISTS (SELECT 1 FROM users person WHERE person.id = user_emails.user_id AND person.active = 1)
       LIMIT 1`,
     [userId, email, userId, email],
   );
@@ -82,10 +83,8 @@ export async function assessIdentityDomain(
     db,
     `SELECT claim.organization_id
        FROM organization_domain_claims claim
-       JOIN members member
-         ON member.organization_id = claim.organization_id
-        AND member.status = 'active'
-      WHERE claim.domain = ? AND claim.organization_id IS NOT NULL
+       JOIN organizations organization ON organization.id = claim.organization_id
+      WHERE claim.domain = ? AND claim.organization_id IS NOT NULL AND claim.application_id IS NULL
       ORDER BY claim.organization_id
       LIMIT 2`,
     [domain],
@@ -95,7 +94,7 @@ export async function assessIdentityDomain(
       email,
       domain,
       "unclaimed_domain",
-      "No active Member organization has claimed this domain; an organization contact may invite you explicitly.",
+      "No organization has claimed this domain; an organization contact may invite you explicitly.",
     );
   }
   if (organizations.length > 1) {
@@ -137,19 +136,19 @@ export async function listVerifiedIdentityDomainMatches(
        SELECT normalized_email,
               substr(normalized_email, instr(normalized_email, '@') + 1)
          FROM users
-        WHERE id = ? AND email_verified_at IS NOT NULL
+        WHERE id = ? AND active = 1 AND email_verified_at IS NOT NULL
        UNION
        SELECT normalized_email,
               substr(normalized_email, instr(normalized_email, '@') + 1)
          FROM user_emails
         WHERE user_id = ? AND verified_at IS NOT NULL
+          AND EXISTS (SELECT 1 FROM users person WHERE person.id = user_emails.user_id AND person.active = 1)
      )
      SELECT verified.email, verified.domain, claim.organization_id
        FROM verified_emails verified
        JOIN organization_domain_claims claim
-         ON claim.domain = verified.domain AND claim.organization_id IS NOT NULL
-       JOIN members member
-         ON member.organization_id = claim.organization_id AND member.status = 'active'
+         ON claim.domain = verified.domain AND claim.organization_id IS NOT NULL AND claim.application_id IS NULL
+       JOIN organizations organization ON organization.id = claim.organization_id
       ORDER BY verified.domain, claim.organization_id`,
     [userId, userId],
   );

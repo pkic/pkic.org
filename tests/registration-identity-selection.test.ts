@@ -85,7 +85,21 @@ describe("explicit event identity selection", () => {
   it("keeps the selected identity through registration, management, email and export without changing participation or the account profile", async () => {
     const f = await fixture();
     const before = await participationCounts(f.userId);
-    const response = await register(f.body, f.token);
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    await env.DB.prepare(
+      `INSERT INTO event_terms
+       (id, event_id, audience_type, term_key, version, required, active, created_at)
+       VALUES (?, ?, 'attendee', 'sponsor-data-sharing', 'v1', 0, 1, ?)`,
+    )
+      .bind(crypto.randomUUID(), event.id, nowIso())
+      .run();
+    const response = await register(
+      registrationCreateSchema.parse({
+        ...f.body,
+        consents: [...f.body.consents, { termKey: "sponsor-data-sharing", version: "v1" }],
+      }),
+      f.token,
+    );
     expect(response.status, await response.clone().text()).toBe(200);
     const result = registrationSubmissionResponseSchema.parse(await response.json());
     expect(result.status).toBe("registered");
@@ -105,7 +119,6 @@ describe("explicit event identity selection", () => {
         (row) => row.payload_json.includes("Selected organization") && row.payload_json.includes("Selected role"),
       ),
     ).toBe(true);
-    const event = await getEventBySlug(env.DB, "pqc-2026");
     const exported = await buildRegistrationCsv(
       env.DB,
       { id: event.id, source_mode: event.source_mode! },
@@ -113,13 +126,6 @@ describe("explicit event identity selection", () => {
     );
     expect(exported.csv).toContain("Selected organization");
     expect(exported.csv).toContain("Selected role");
-    await env.DB.prepare(
-      `INSERT INTO consent_acceptances
-       (id, registration_id, event_id, user_id, audience_type, term_key, term_version, accepted_at)
-       VALUES (?, ?, ?, ?, 'attendee', 'sponsor-data-sharing', 'v1', datetime('now'))`,
-    )
-      .bind(crypto.randomUUID(), result.registrationId, event.id, f.userId)
-      .run();
     expect(await listSponsorAttendeesForExport(env.DB, event.id, 100)).toEqual([
       expect.objectContaining({ organizationName: "Selected organization", jobTitle: "Selected role" }),
     ]);

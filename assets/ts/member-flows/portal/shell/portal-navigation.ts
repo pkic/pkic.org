@@ -112,7 +112,13 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     label: "Home",
     sidebar: true,
     access: (session) =>
-      Boolean(session?.member || session?.staff || session?.sponsors.length || session?.eventParticipation),
+      Boolean(
+        session?.member ||
+        session?.staff ||
+        session?.sponsors.length ||
+        session?.eventParticipation ||
+        session?.hasActiveAffiliation,
+      ),
   },
   {
     section: "groups",
@@ -131,7 +137,15 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     access: (session) =>
       Boolean(session?.eventParticipation) ||
       portalHasPermissionAtAnyScope(session, "events:read") ||
-      portalHasPermissionAtAnyScope(session, "proposals:read"),
+      portalHasPermissionAtAnyScope(session, "proposals:read") ||
+      portalHasPermissionAtAnyScope(session, "agenda:read") ||
+      ["agenda:scan", "agenda:check", "agenda:admit", "agenda:attendance_record"].some((permission) =>
+        portalHasPermissionAtAnyScope(session, permission),
+      ) ||
+      portalHasPermissionAtAnyScope(session, "agenda:attendance_read") ||
+      ["agenda:leads_capture", "agenda:leads_view", "agenda:leads_export"].some((permission) =>
+        portalHasPermissionAtAnyScope(session, permission),
+      ),
     children: [
       {
         path: "/events/analytics",
@@ -368,7 +382,13 @@ const PORTAL_SECTIONS: readonly PortalSectionDef[] = [
     label: "Account Settings",
     sidebar: false,
     access: (session) =>
-      Boolean(session?.member || session?.staff || session?.pendingIdentityCount || session?.eventParticipation),
+      Boolean(
+        session?.member ||
+        session?.staff ||
+        session?.pendingIdentityCount ||
+        session?.eventParticipation ||
+        session?.hasActiveAffiliation,
+      ),
   },
 ];
 
@@ -460,6 +480,7 @@ export function portalDefaultPath(session: PortalSession | null): string {
   if (session?.eventParticipation) return "/events";
   if (session?.sponsors.length) return "/sponsors";
   if (session?.pendingIdentityCount) return "/account";
+  if (session?.hasActiveAffiliation) return "/account";
   return "/";
 }
 

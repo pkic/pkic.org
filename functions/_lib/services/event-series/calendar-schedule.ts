@@ -1,3 +1,4 @@
+import { prepareMeetingAgendaSchedule } from "./agenda-intervals";
 import {
   MEETING_CALENDAR_OCCURRENCE_LIMIT,
   meetingCalendarThrough,
@@ -74,6 +75,12 @@ export function prepareCalendarSchedule(db: DatabaseLike, series: CalendarSchedu
       )
       .bind(series.id, series.id, series.eventId),
     db.prepare("UPDATE scheduled_jobs SET wake_requested = 1 WHERE job_key = 'meeting_invitations'"),
+    ...prepareMeetingAgendaSchedule(
+      db,
+      series.eventId,
+      series.id,
+      rows.map((occurrence) => occurrence.id),
+    ),
   ];
 }
 

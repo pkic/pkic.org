@@ -17,7 +17,7 @@ import { fetchViewerEventStates } from "../functions/_lib/services/events/viewer
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../functions/_lib/types";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
-import { insertOrgRepresentative } from "./helpers/membership";
+import { insertUser, insertOrgRepresentative } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
 async function request(path: string, token?: string): Promise<Response> {
@@ -405,4 +405,123 @@ describe("event audience viewer state", () => {
     const detail = await requestAudienceDetail("/api/v1/events/cancelled-event", memberToken);
     expect(detail.viewer).toBeNull();
   });
+});
+
+describe("scoped scanner event discovery", () => {
+  beforeEach(async () => {
+    await resetDb();
+  });
+  async function grant(userId: string, permission: string, type: string, id: string) {
+    const grantId = crypto.randomUUID();
+    await env.DB.prepare(
+      "INSERT INTO permission_grants(id,user_id,permission,context_type,context_id,created_at) VALUES(?,?,?,?,?,?)",
+    )
+      .bind(grantId, userId, permission, type, id, new Date().toISOString())
+      .run();
+    return grantId;
+  }
+  it.each(["agenda:scan", "agenda:check", "agenda:admit", "agenda:attendance_record"])(
+    "shows only the private event for %s, exposes no roster and removes access after revocation",
+    async (permission) => {
+      const userId = await insertUser(env.DB);
+      const token = await createAdminSession(env.DB, userId, "regular-scanner-discovery");
+      const own = await insertEvent("scanner-private", "invitation_only");
+      await insertEvent("other-private", "invitation_only");
+      const id = await grant(userId, permission, "event", own);
+      const list = await requestAudienceList("/api/v1/events", token);
+      expect(list.events.map((event) => event.slug)).toEqual(["scanner-private"]);
+      expect(list.events[0].scannerAccess).toEqual({ canScan: true, sponsors: [] });
+      const detail = await requestAudienceDetail("/api/v1/events/scanner-private", token);
+      expect(detail.scannerAccess).toEqual({ canScan: true, sponsors: [] });
+      const raw = JSON.stringify(detail);
+      expect(raw).not.toContain("secret.example.test");
+      expect(raw).not.toContain("@example.test");
+      expect(raw).not.toContain("settings");
+      expect((await request("/api/v1/events/other-private", token)).status).toBe(404);
+      await env.DB.prepare("UPDATE permission_grants SET revoked_at=? WHERE id=?")
+        .bind(new Date().toISOString(), id)
+        .run();
+      expect((await request("/api/v1/events", token)).status).toBe(401);
+      expect((await request("/api/v1/events/scanner-private", token)).status).toBe(401);
+    },
+  );
+  it("discovers only its canonical active sponsor target and hides it when sponsorship lapses", async () => {
+    const userId = await insertUser(env.DB);
+    const token = await createAdminSession(env.DB, userId, "regular-lead-discovery");
+    const own = await insertEvent("sponsor-private", "invitation_only");
+    await insertEvent("other-sponsor-private", "invitation_only");
+    const sponsorId = crypto.randomUUID();
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO sponsorships(id,sponsor_type,event_id,non_member_name,contact_email,pipeline_stage,created_at,updated_at) VALUES(?,'event',?,'Sponsor name','private-contact@example.test','active',?,?)",
+    )
+      .bind(sponsorId, own, now, now)
+      .run();
+    const id = await grant(userId, "agenda:leads_capture", "event_sponsor", sponsorId);
+    const list = await requestAudienceList("/api/v1/events", token);
+    expect(list.events.map((event) => event.slug)).toEqual(["sponsor-private"]);
+    expect(list.events[0].scannerAccess).toEqual({
+      canScan: false,
+      sponsors: [{ id: sponsorId, name: "Sponsor name" }],
+    });
+    const detail = await requestAudienceDetail("/api/v1/events/sponsor-private", token);
+    expect(detail.scannerAccess).toEqual(list.events[0].scannerAccess);
+    expect(detail.sponsorLeadAccess).toBe(false);
+    expect(JSON.stringify(detail)).not.toContain("private-contact");
+    await env.DB.prepare("UPDATE sponsorships SET pipeline_stage='lapsed' WHERE id=?").bind(sponsorId).run();
+    expect((await requestAudienceList("/api/v1/events", token)).events).toHaveLength(0);
+    await env.DB.prepare("UPDATE sponsorships SET pipeline_stage='active' WHERE id=?").bind(sponsorId).run();
+    await env.DB.prepare("UPDATE permission_grants SET revoked_at=? WHERE id=?").bind(now, id).run();
+    expect((await request("/api/v1/events", token)).status).toBe(401);
+  });
+  it.each(["agenda:leads_view", "agenda:leads_export", "agenda:leads_capture"])(
+    "discovers contacts only for an exact active view/export scope, independent of %s capture access",
+    async (permission) => {
+      const userId = await insertUser(env.DB);
+      const token = await createAdminSession(env.DB, userId, "regular-contacts-discovery");
+      const own = await insertEvent("contacts-private", "invitation_only");
+      const other = await insertEvent("contacts-other", "public");
+      await insertEvent("contacts-unavailable", "invitation_only");
+      // Keep the session eligible after revoking its sponsor grant, so false is
+      // a real fresh metadata projection rather than an authentication failure.
+      await grant(userId, "agenda:scan", "event", other);
+      const sponsorId = crypto.randomUUID();
+      const now = new Date().toISOString();
+      await env.DB.prepare(
+        "INSERT INTO sponsorships(id,sponsor_type,event_id,non_member_name,contact_email,pipeline_stage,created_at,updated_at) VALUES(?,'event',?,'Contacts sponsor','private-contact@example.test','active',?,?)",
+      )
+        .bind(sponsorId, own, now, now)
+        .run();
+      const grantId = await grant(userId, permission, "event_sponsor", sponsorId);
+      const list = await requestAudienceList("/api/v1/events", token);
+      const ownRow = list.events.find((event) => event.id === own);
+      expect(ownRow?.sponsorLeadAccess).toBe(permission !== "agenda:leads_capture");
+      expect(list.events.find((event) => event.id === other)?.sponsorLeadAccess).toBe(false);
+      const detail = await requestAudienceDetail("/api/v1/events/contacts-private", token);
+      expect(detail.sponsorLeadAccess).toBe(ownRow?.sponsorLeadAccess);
+      expect(detail.scannerAccess).toEqual(
+        permission === "agenda:leads_capture"
+          ? { canScan: false, sponsors: [{ id: sponsorId, name: "Contacts sponsor" }] }
+          : undefined,
+      );
+      expect(JSON.stringify(detail)).not.toMatch(/private-contact|secret\.example|settings/);
+      expect((await request("/api/v1/events/contacts-unavailable", token)).status).toBe(404);
+      expect((await request("/api/v1/events/contacts-private")).status).toBe(404);
+
+      // Public metadata remains readable after sponsorship termination, but
+      // neither the contacts nor the scanner discovery capability survives.
+      await env.DB.prepare("UPDATE events SET visibility='public' WHERE id=?").bind(own).run();
+      await env.DB.prepare("UPDATE sponsorships SET pipeline_stage='lapsed' WHERE id=?").bind(sponsorId).run();
+      const ended = await requestAudienceDetail("/api/v1/events/contacts-private", token);
+      expect(ended.sponsorLeadAccess).toBe(false);
+      expect(ended.scannerAccess).toBeUndefined();
+      await env.DB.prepare("UPDATE sponsorships SET pipeline_stage='active' WHERE id=?").bind(sponsorId).run();
+      await env.DB.prepare("UPDATE permission_grants SET revoked_at=? WHERE id=?").bind(now, grantId).run();
+      const revoked = await requestAudienceDetail("/api/v1/events/contacts-private", token);
+      expect(revoked.sponsorLeadAccess).toBe(false);
+      expect(revoked.scannerAccess).toBeUndefined();
+      const revokedList = await requestAudienceList("/api/v1/events", token);
+      expect(revokedList.events.every((event) => !event.sponsorLeadAccess)).toBe(true);
+    },
+  );
 });

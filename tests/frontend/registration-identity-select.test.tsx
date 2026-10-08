@@ -18,6 +18,7 @@ function session() {
   // Event participation is an authenticated capacity without membership.
   return userAuthSessionResponseSchema.parse({
     success: true,
+    sessionId: "00000000-0000-4000-8000-000000000045",
     expiresAt: "2099-12-31T23:59:59.000Z",
     idleExpiresAt: "2099-12-31T23:59:59.000Z",
     identity: { id: USER_ID, email: "ada@example.test" },

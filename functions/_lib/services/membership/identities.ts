@@ -93,6 +93,7 @@ export async function buildCreateIdentityStatement(
     organizationId: string | null;
     source: IdentitySource;
     emailId?: string | null;
+    verifiedEmailDomain?: string | null;
     jobTitle?: string | null;
     biography?: string | null;
     linksJson?: string | null;
@@ -103,6 +104,8 @@ export async function buildCreateIdentityStatement(
     condition?: AuthorizationEvidence;
   },
 ): Promise<{ identityId: string; statement: StatementLike }> {
+  if (input.verifiedEmailDomain != null && (input.source !== "verified_email" || input.organizationId === null))
+    throw new AppError(422, "IDENTITY_PROOF_DOMAIN_INVALID", "Only verified-email affiliations retain a proof domain");
   const at = input.now ?? nowIso();
   const scope = sameScopePredicate(input.organizationId);
   const unresolved = await first<{ id: string; started_at: string | null; blocked_at: string | null }>(
@@ -141,6 +144,7 @@ export async function buildCreateIdentityStatement(
     input.userId,
     input.organizationId,
     input.emailId ?? null,
+    input.verifiedEmailDomain ?? null,
     input.organizationId === null ? null : (input.jobTitle ?? null),
     input.biography ?? null,
     input.linksJson ?? null,
@@ -152,14 +156,14 @@ export async function buildCreateIdentityStatement(
     at,
     at,
   ];
-  const columns = `(id, user_id, organization_id, email_id, job_title, biography, links_json,
+  const columns = `(id, user_id, organization_id, email_id, verified_email_domain, job_title, biography, links_json,
     source, show_on_organization_profile, invited_at, started_at,
     predecessor_identity_id, created_at, updated_at)`;
   const statement = input.condition
     ? db
         .prepare(
           `INSERT INTO identities ${columns}
-           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+           SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
             WHERE EXISTS (${input.condition.sql})
               AND NOT EXISTS (
                 SELECT 1 FROM identities existing
@@ -168,7 +172,9 @@ export async function buildCreateIdentityStatement(
               )`,
         )
         .bind(...values, ...input.condition.bindings, input.userId, ...scope.binding)
-    : db.prepare(`INSERT INTO identities ${columns} VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`).bind(...values);
+    : db
+        .prepare(`INSERT INTO identities ${columns} VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+        .bind(...values);
   return { identityId, statement };
 }
 

@@ -15,11 +15,16 @@ import {
   proposalResendSpeakerManageLinkSchema,
   proposerSpeakerPatchSchema,
   speakerParticipationPatchSchema,
-  speakerProfilePatchSchema,
+  speakerSelfProfilePatchSchema,
 } from "./proposal-management";
+import { identitiesListQuerySchema, identitiesListResponseSchema } from "./identity";
 import { jsonResponse, requiredJsonBody } from "./openapi";
 import { speakerReminderPreferencePatchSchema, speakerReminderPreferenceResponseSchema } from "./speaker-reminders";
-import { speakerParticipationResponseSchema, speakerSelfServiceReadResponseSchema } from "./speaker-self-service";
+import {
+  speakerParticipationResponseSchema,
+  speakerProfileUpdateResponseSchema,
+  speakerSelfServiceReadResponseSchema,
+} from "./speaker-self-service";
 import { publicOperation } from "./route-contract";
 
 const genericAcceptedResponse = jsonResponse(
@@ -248,14 +253,37 @@ export const proposalSpeakerProfileUpdateRouteSchema = {
   summary: "Update speaker self-service profile",
   request: {
     params: proposalAccessTokenParamsSchema,
-    body: requiredJsonBody(speakerProfilePatchSchema),
+    body: requiredJsonBody(speakerSelfProfilePatchSchema),
   },
   responses: {
-    "200": jsonResponse("Speaker profile updated.", successResponseSchema),
+    "200": jsonResponse("Speaker profile updated.", speakerProfileUpdateResponseSchema),
     "400": { description: "Invalid speaker profile." },
     "403": { description: "Speaker has declined participation." },
     "404": { description: "Speaker management capability not found." },
     "409": { description: "Proposal or speaker profile changed concurrently." },
+    "410": { description: "Speaker management capability expired." },
+  },
+};
+
+export const proposalSpeakerIdentitiesRouteSchema = {
+  ...publicOperation(),
+  tags: ["Proposals", "Identities"],
+  summary: "List the bound speaker's own available identities",
+  request: {
+    params: proposalAccessTokenParamsSchema,
+    query: identitiesListQuerySchema.omit({
+      userId: true,
+      memberId: true,
+      organizationId: true,
+      active: true,
+      blocked: true,
+    }),
+  },
+  responses: {
+    "200": jsonResponse("Owned speaker identity choices.", identitiesListResponseSchema),
+    "403": { description: "Speaker participation declined." },
+    "404": { description: "Speaker management authority not found." },
+    "409": { description: "Proposal closed." },
     "410": { description: "Speaker management capability expired." },
   },
 };

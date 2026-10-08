@@ -1,8 +1,8 @@
-import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./administrator";
-import { administratorGrants } from "./administrator";
+import { prepareProposalProof } from "./proposal-proof";
+import { ADMINISTRATOR_FIXTURE_USER_SQL, administratorGrants } from "./administrator";
 import { env } from "cloudflare:workers";
 import { queryAll, seedEventAndAdmin } from "./context";
-import app from "../../functions/router";
+import { callApi } from "./app";
 import { createAdminSession } from "./auth";
 import { seedWorkflowEmailTemplates } from "./event-workflow";
 import { addProposalSpeaker } from "../../functions/_lib/services/proposals";
@@ -14,6 +14,11 @@ import {
 import { findOrCreateUser } from "../../functions/_lib/services/users";
 import { issueDatabaseCapability } from "../../functions/_lib/services/capability-links";
 import { createGroup } from "../../functions/_lib/services/groups";
+
+/** Keep mounted fixture effects inside the request lifetime before another test can reset its data. */
+export function requestProposalSpeakerCapacity(request: Request): Promise<Response> {
+  return callApi(env, request);
+}
 
 export async function setupProposalSpeakerCapacityWorkflow(): Promise<{
   eventId: string;
@@ -52,24 +57,20 @@ export async function inviteSpeakerAndSubmitCapacityProposal(adminSessionToken: 
   )[0];
   const invitationBase = `/api/v1/groups/${event.owner_group_id}/events/${event.id}/invites/speakers`;
   const invites = [{ email: "speaker@example.test", firstName: "Speaker", lastName: "Test", sourceType: "direct" }];
-  const previewResponse = await app.fetch(
+  const previewResponse = await requestProposalSpeakerCapacity(
     new Request(`https://app.test${invitationBase}/preview`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
       body: JSON.stringify({ invites }),
     }),
-    env as any,
-    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
   );
   const preview = (await previewResponse.json()) as { previewToken: string; inviteDigest: string };
-  const inviteResponse = await app.fetch(
+  const inviteResponse = await requestProposalSpeakerCapacity(
     new Request(`https://app.test${invitationBase}/bulk`, {
       method: "POST",
       headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
       body: JSON.stringify({ invites, previewToken: preview.previewToken, inviteDigest: preview.inviteDigest }),
     }),
-    env as any,
-    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
   );
   if (inviteResponse.status !== 200) throw new Error(`Speaker invite failed: ${inviteResponse.status}`);
   await inviteResponse.json();
@@ -86,18 +87,25 @@ export async function inviteSpeakerAndSubmitCapacityProposal(adminSessionToken: 
     purpose: "invite",
     resourceId: invite.id,
   });
-  const proposalResponse = await app.fetch(
+  const proof = await prepareProposalProof({
+    environment: env,
+    eventSlug: "pqc-2026",
+    email: "speaker@example.test",
+    consents: [{ termKey: "speaker-terms", version: "v1" }],
+    unaffiliatedAttestation: true,
+  });
+  const proposalResponse = await requestProposalSpeakerCapacity(
     new Request("https://app.test/api/v1/events/pqc-2026/proposals", {
       method: "POST",
       headers: { "content-type": "application/json" },
       body: JSON.stringify({
         inviteToken,
+        ...proof,
         proposer: {
           firstName: "Speaker",
           lastName: "Test",
           email: "speaker@example.test",
-          organizationName: "Test Corp",
-          jobTitle: "Engineer",
+          actingIdentityId: null,
           bio: "Experienced speaker in post-quantum cryptography.",
         },
         proposal: {
@@ -109,10 +117,11 @@ export async function inviteSpeakerAndSubmitCapacityProposal(adminSessionToken: 
         consents: [{ termKey: "speaker-terms", version: "v1" }],
       }),
     }),
-    env as any,
-    { passThroughOnException: () => {}, waitUntil: () => {} } as any,
   );
-  if (proposalResponse.status !== 200) throw new Error(`Proposal submission failed: ${proposalResponse.status}`);
+  if (proposalResponse.status !== 200) {
+    const errorBody = await proposalResponse.text();
+    throw new Error(`Proposal submission failed: ${proposalResponse.status} ${errorBody}`);
+  }
   const { proposalId, manageToken } = (await proposalResponse.json()) as { proposalId: string; manageToken: string };
   const [coSpeakerUser] = await queryAll<{ id: string }>(
     env.DB,

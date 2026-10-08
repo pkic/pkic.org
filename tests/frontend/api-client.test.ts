@@ -317,6 +317,66 @@ describe("shared API client", () => {
     });
     expect(fetcher).toHaveBeenCalledOnce();
   });
+  describe("interrupted response bodies", () => {
+    const interruption = (name: string) =>
+      name === "TypeError" ? new TypeError("Response connection interrupted") : new DOMException("Interrupted", name);
+    const response = (status: number, error: Error) =>
+      new Response(new ReadableStream({ start: (controller) => controller.error(error) }), {
+        status,
+        headers: { "content-type": "application/json" },
+      });
+
+    it.each([401, 403, 503])(
+      "preserves HTTP %i after a body interruption instead of allowing offline fallback",
+      async (status) => {
+        const handler = vi.fn();
+        setUnauthorizedHandler(handler);
+        for (const name of ["AbortError", "TimeoutError", "TypeError"]) {
+          const fetcher = vi.fn(async () => response(status, interruption(name)));
+          vi.stubGlobal("fetch", fetcher);
+          await expect(requestJson("/api/v1/example", successResponseSchema)).rejects.toMatchObject({
+            status,
+            code: "HTTP_ERROR",
+          });
+          expect(fetcher).toHaveBeenCalledOnce();
+        }
+        expect(handler).toHaveBeenCalledTimes(status === 401 ? 3 : 0);
+        if (status === 401) expect(handler).toHaveBeenLastCalledWith(401);
+      },
+    );
+
+    it("classifies an interrupted successful body as connectivity failure without retrying", async () => {
+      for (const name of ["AbortError", "TimeoutError", "TypeError"]) {
+        const fetcher = vi.fn(async () => response(200, interruption(name)));
+        vi.stubGlobal("fetch", fetcher);
+        await expect(requestJson("/api/v1/example", successResponseSchema)).rejects.toMatchObject({
+          status: 0,
+          code: "NETWORK_UNAVAILABLE",
+        });
+        expect(fetcher).toHaveBeenCalledOnce();
+      }
+    });
+
+    it("propagates an explicit caller abort rather than invoking stale authentication or connectivity handling", async () => {
+      const handler = vi.fn();
+      setUnauthorizedHandler(handler);
+      for (const status of [200, 401]) {
+        const controller = new AbortController();
+        const error = new DOMException("Caller cancelled", "AbortError");
+        vi.stubGlobal(
+          "fetch",
+          vi.fn(async () => {
+            controller.abort();
+            return response(status, error);
+          }),
+        );
+        await expect(requestJson("/api/v1/example", successResponseSchema, { signal: controller.signal })).rejects.toBe(
+          error,
+        );
+      }
+      expect(handler).not.toHaveBeenCalled();
+    });
+  });
   it("continues loading static JSON while online API operations are paused", async () => {
     publishAvailability({ mode: "maintenance", message: "Paused", endsAt: null });
     const fetcher = vi.fn(async () => Response.json({ success: true }));

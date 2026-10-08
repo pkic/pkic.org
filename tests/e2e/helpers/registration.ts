@@ -7,8 +7,13 @@ import {
 const REGISTRATION_PAGE = "/events/2026/pqc-conference-amsterdam-nl/register/";
 const REGISTRATION_API = "/api/v1/events/pqc-conference-amsterdam-nl/registrations";
 
-export async function registerInBrowser(page: Page, email: string, identityName?: string) {
-  await page.goto(REGISTRATION_PAGE);
+export async function registerInBrowser(
+  page: Page,
+  email: string,
+  identityName?: string,
+  entryUrl = REGISTRATION_PAGE,
+) {
+  await page.goto(entryUrl);
   if (identityName) {
     await page.getByRole("button", { name: "Use saved profile", exact: true }).click();
     const picker = page.getByRole("combobox", { name: "Event identity", exact: true });

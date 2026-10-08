@@ -13,6 +13,7 @@ import { assertCategoryCompatible, prepareMembershipCategoryGuard } from "./cate
 import { buildCreateIndividualMemberStatements } from "./memberships";
 import { buildMembershipAccessOffboardingStatements } from "./offboarding";
 import { REPRESENTATIVE_ROLE_IDS, buildRevokeRepresentativeRoleStatement } from "./representative-roles";
+import { activeOrganizationMemberRepresentationPredicate } from "./capacity-query";
 
 interface IdentityCapacityRow {
   id: string;
@@ -206,6 +207,14 @@ export async function updateMembershipCapacity(
   return capacityResponse(identity, input);
 }
 
+function individualMembershipIdentityConflictPredicate(userIdSql: string): string {
+  return `(${activeOrganizationMemberRepresentationPredicate(userIdSql)} OR EXISTS (
+    SELECT 1 FROM identities individual
+     WHERE individual.user_id = ${userIdSql} AND individual.organization_id IS NULL
+       AND individual.started_at IS NOT NULL AND individual.ended_at IS NULL AND individual.blocked_at IS NULL
+  ))`;
+}
+
 /** Grants one active identity in a configured individual category to an existing user. */
 export async function grantIndividualMembership(
   db: DatabaseLike,
@@ -226,12 +235,12 @@ export async function grantIndividualMembership(
   if (
     await first<{ id: string }>(
       db,
-      `SELECT id FROM identities
-        WHERE user_id = ? AND started_at IS NOT NULL AND ended_at IS NULL AND blocked_at IS NULL`,
+      `SELECT target.id FROM users target
+        WHERE target.id = ? AND ${individualMembershipIdentityConflictPredicate("target.id")}`,
       [input.userId],
     )
   ) {
-    throw new AppError(409, "IDENTITY_CONFLICT", "This user already has an active acting identity");
+    throw new AppError(409, "IDENTITY_CONFLICT", "This user already has an active Member identity");
   }
 
   const at = nowIso();
@@ -242,13 +251,7 @@ export async function grantIndividualMembership(
              AND target.pii_redacted_at IS NULL AND target.merged_into_user_id IS NULL
              AND target.updated_at = ?
              AND NOT EXISTS (SELECT 1 FROM members WHERE user_id = target.id)
-             AND NOT EXISTS (
-               SELECT 1 FROM identities identity
-                WHERE identity.user_id = target.id
-                  AND identity.started_at IS NOT NULL
-                  AND identity.ended_at IS NULL
-                  AND identity.blocked_at IS NULL
-             )`,
+             AND NOT ${individualMembershipIdentityConflictPredicate("target.id")}`,
     bindings: [input.userId, user.updated_at],
   };
   const {

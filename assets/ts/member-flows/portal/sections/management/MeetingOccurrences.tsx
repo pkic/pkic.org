@@ -1,3 +1,4 @@
+import { MeetingOccurrenceCalendar } from "./MeetingOccurrenceCalendar";
 import { useEffect, useRef, useState } from "preact/hooks";
 import {
   EVENT_OCCURRENCE_STATUSES,
@@ -57,6 +58,7 @@ export function MeetingOccurrences({
   const showCreate = occurrenceSegment === NEW_OCCURRENCE_SEGMENT;
   const actions = useRef<ApiTableActions | null>(null);
   const [draft, setDraft] = useState(() => initialOccurrenceDraft(series.timezone));
+  const [view, setView] = useState<"list" | "calendar">("list");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const base = `/api/v1/groups/${encodeURIComponent(groupId)}/meetings/series/${encodeURIComponent(series.id)}`;
@@ -147,118 +149,131 @@ export function MeetingOccurrences({
 
   return (
     <div class="pk pk-stack">
-      <ApiDataTable
-        caption={`Scheduled occurrences of ${series.eventName}`}
-        endpoint={`${base}/occurrences`}
-        responseSchema={eventOccurrencesListResponseSchema}
-        resolve={(response) => response.occurrences}
-        resolvePage={(response) => response.page}
-        paginate
-        initialSort="starts_at"
-        actionsRef={actions}
-        onData={(response) => cancellation.onRows(response.occurrences)}
-        selection={canManage ? cancellation.selection : undefined}
-        bulkBar={canManage ? cancellation.bulkBar : undefined}
-        createAction={
-          canManage
-            ? { label: "Add occurrence", onSelect: () => navigate(`${occurrencesPath}/${NEW_OCCURRENCE_SEGMENT}`) }
-            : undefined
-        }
-        columns={[
-          {
-            header: "Starts",
-            cell: (occurrence) => fmt(occurrence.startsAt),
-            sort: { asc: "starts_at", desc: "-starts_at", defaultDirection: "asc" },
-          },
-          {
-            header: "Ends",
-            cell: (occurrence) => fmt(occurrence.endsAt),
-            width: "fit",
-            sort: { asc: "ends_at", desc: "-ends_at" },
-          },
-          {
-            header: "Status",
-            cell: (occurrence) => <Badge status={occurrence.status} />,
-            width: "fit",
-            sort: { asc: "status", desc: "-status" },
-            filter: {
-              param: "status",
-              options: [
-                { value: "", label: "All statuses" },
-                ...EVENT_OCCURRENCE_STATUSES.map((status) => ({ value: status, label: statusLabel(status) })),
-              ],
+      <div class="pk-cluster" role="group" aria-label="Occurrence display">
+        <Button size="sm" aria-pressed={view === "list"} onClick={() => setView("list")}>
+          List
+        </Button>
+        <Button size="sm" aria-pressed={view === "calendar"} onClick={() => setView("calendar")}>
+          Calendar
+        </Button>
+      </div>
+      {view === "calendar" ? (
+        <MeetingOccurrenceCalendar groupId={groupId} series={series} />
+      ) : (
+        <ApiDataTable
+          caption={`Scheduled occurrences of ${series.eventName}`}
+          endpoint={`${base}/occurrences`}
+          responseSchema={eventOccurrencesListResponseSchema}
+          resolve={(response) => response.occurrences}
+          resolvePage={(response) => response.page}
+          paginate
+          initialSort="starts_at"
+          actionsRef={actions}
+          onData={(response) => cancellation.onRows(response.occurrences)}
+          selection={canManage ? cancellation.selection : undefined}
+          bulkBar={canManage ? cancellation.bulkBar : undefined}
+          createAction={
+            canManage
+              ? { label: "Add occurrence", onSelect: () => navigate(`${occurrencesPath}/${NEW_OCCURRENCE_SEGMENT}`) }
+              : undefined
+          }
+          columns={[
+            {
+              header: "Starts",
+              cell: (occurrence) => fmt(occurrence.startsAt),
+              sort: { asc: "starts_at", desc: "-starts_at", defaultDirection: "asc" },
             },
-          },
-          // Who was told and what their calendars answered (#126), read from
-          // the end like the other counts.
-          {
-            header: { label: "Invited", className: "pk-end" },
-            cell: (occurrence) => occurrence.invitedCount,
-            width: "fit",
-          },
-          {
-            header: { label: "Accepted", className: "pk-end" },
-            cell: (occurrence) => occurrence.rsvp.accepted,
-            width: "fit",
-          },
-          // Counts are compared down the column, so they read from the end
-          // and hug their content instead of claiming slack.
-          {
-            header: { label: "Guests", className: "pk-end" },
-            cell: (occurrence) => occurrence.guestCount,
-            width: "fit",
-          },
-          {
-            header: { label: "Joined", className: "pk-end" },
-            cell: (occurrence) => occurrence.joinConfirmedCount,
-            width: "fit",
-          },
-          {
-            header: { label: "Verified", className: "pk-end" },
-            cell: (occurrence) => occurrence.attendanceVerifiedCount,
-            width: "fit",
-          },
-          {
-            header: "",
-            cell: (occurrence) => (
-              <RowActions
-                subject={fmt(occurrence.startsAt)}
-                actions={[
-                  {
-                    id: "calendar",
-                    label: "Download calendar",
-                    onSelect: () => downloadMeetingCalendar(groupId, series.id, occurrence.id),
-                  },
-                  ...(canManage
-                    ? [
-                        {
-                          id: "edit",
-                          label: "Change occurrence…",
-                          onSelect: () => navigate(`${occurrencesPath}/${encodeURIComponent(occurrence.id)}/settings`),
-                        },
-                        {
-                          id: "cancel",
-                          label: "Cancel occurrence…",
-                          danger: true,
-                          disabled: cancellation.busy || occurrence.status !== "scheduled",
-                          onSelect: () => void cancellation.cancelRows([occurrence]),
-                        },
-                      ]
-                    : []),
-                ]}
-              />
-            ),
-          },
-        ]}
-        empty="No meeting occurrences have been generated."
-        rowKey={(occurrence) => occurrence.id}
-        // Activating a row opens the occurrence's own page (#126) — a record
-        // with facets, never an expansion between the rows.
-        rowAction={(occurrence) => ({
-          label: `Open the occurrence starting ${fmt(occurrence.startsAt)}`,
-          href: usePortalHashLocation.hrefs(`${occurrencesPath}/${encodeURIComponent(occurrence.id)}`),
-        })}
-      />
+            {
+              header: "Ends",
+              cell: (occurrence) => fmt(occurrence.endsAt),
+              width: "fit",
+              sort: { asc: "ends_at", desc: "-ends_at" },
+            },
+            {
+              header: "Status",
+              cell: (occurrence) => <Badge status={occurrence.status} />,
+              width: "fit",
+              sort: { asc: "status", desc: "-status" },
+              filter: {
+                param: "status",
+                options: [
+                  { value: "", label: "All statuses" },
+                  ...EVENT_OCCURRENCE_STATUSES.map((status) => ({ value: status, label: statusLabel(status) })),
+                ],
+              },
+            },
+            // Who was told and what their calendars answered (#126), read from
+            // the end like the other counts.
+            {
+              header: { label: "Invited", className: "pk-end" },
+              cell: (occurrence) => occurrence.invitedCount,
+              width: "fit",
+            },
+            {
+              header: { label: "Accepted", className: "pk-end" },
+              cell: (occurrence) => occurrence.rsvp.accepted,
+              width: "fit",
+            },
+            // Counts are compared down the column, so they read from the end
+            // and hug their content instead of claiming slack.
+            {
+              header: { label: "Guests", className: "pk-end" },
+              cell: (occurrence) => occurrence.guestCount,
+              width: "fit",
+            },
+            {
+              header: { label: "Joined", className: "pk-end" },
+              cell: (occurrence) => occurrence.joinConfirmedCount,
+              width: "fit",
+            },
+            {
+              header: { label: "Verified", className: "pk-end" },
+              cell: (occurrence) => occurrence.attendanceVerifiedCount,
+              width: "fit",
+            },
+            {
+              header: "",
+              cell: (occurrence) => (
+                <RowActions
+                  subject={fmt(occurrence.startsAt)}
+                  actions={[
+                    {
+                      id: "calendar",
+                      label: "Download calendar",
+                      onSelect: () => downloadMeetingCalendar(groupId, series.id, occurrence.id),
+                    },
+                    ...(canManage
+                      ? [
+                          {
+                            id: "edit",
+                            label: "Change occurrence…",
+                            onSelect: () =>
+                              navigate(`${occurrencesPath}/${encodeURIComponent(occurrence.id)}/settings`),
+                          },
+                          {
+                            id: "cancel",
+                            label: "Cancel occurrence…",
+                            danger: true,
+                            disabled: cancellation.busy || occurrence.status !== "scheduled",
+                            onSelect: () => void cancellation.cancelRows([occurrence]),
+                          },
+                        ]
+                      : []),
+                  ]}
+                />
+              ),
+            },
+          ]}
+          empty="No meeting occurrences have been generated."
+          rowKey={(occurrence) => occurrence.id}
+          // Activating a row opens the occurrence's own page (#126) — a record
+          // with facets, never an expansion between the rows.
+          rowAction={(occurrence) => ({
+            label: `Open the occurrence starting ${fmt(occurrence.startsAt)}`,
+            href: usePortalHashLocation.hrefs(`${occurrencesPath}/${encodeURIComponent(occurrence.id)}`),
+          })}
+        />
+      )}
     </div>
   );
 }

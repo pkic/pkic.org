@@ -11,6 +11,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { z } from "zod";
 import { pageInfoSchema } from "../../assets/shared/schemas/pagination";
 import { ApiDataTable } from "../../assets/ts/components/ApiDataTable";
+import { useUrlTableState } from "../../assets/ts/hooks/useUrlTableState";
 
 const mounted: HTMLElement[] = [];
 
@@ -75,6 +76,22 @@ function table() {
 }
 
 describe("URL-addressed table state", () => {
+  it("lets a namespace owner clean up its query without mounting a table or making requests", async () => {
+    function Owner() {
+      useUrlTableState("things");
+      return <p>Workspace</p>;
+    }
+    history.replaceState(null, "", "/portal/#/things?things.q=kept&things.f.state=active&other.q=other");
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    const container = mount(<Owner />);
+    await settle();
+    expect(location.hash).toContain("things.q=kept");
+    expect(location.hash).toContain("things.f.state=active");
+    expect(fetcher).not.toHaveBeenCalled();
+    await act(() => render(null, container));
+    expect(location.hash).toBe("#/things?other.q=other");
+  });
   it("initializes search, sort, and page from the namespaced query string", async () => {
     history.replaceState(null, "", "/portal/#/things?things.q=alpha&things.sort=-name&things.offset=50");
     const urls: string[] = [];

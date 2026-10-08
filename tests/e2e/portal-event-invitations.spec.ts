@@ -6,7 +6,11 @@ import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { openRow } from "./helpers/data-table";
 import { signInToPortal } from "./helpers/portal-auth";
 import { acceptConfirmDialog } from "./helpers/confirm-dialog";
-import { expectStyledEmailPreview, useEmailPreviewLogoFixture } from "./helpers/email-preview";
+import {
+  expectPortalEmailPreviewPolicy,
+  expectStyledEmailPreview,
+  useEmailPreviewLogoFixture,
+} from "./helpers/email-preview";
 import { tab } from "./helpers/tabs";
 
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
@@ -115,6 +119,8 @@ async function manageInvitation(
   });
 
   await page.goto(`/portal/#/groups/${GROUP_ID}/events`);
+  // Hash navigation may reuse the document; reload inspects the real native shell response.
+  expectPortalEmailPreviewPolicy(await page.reload());
   await page.getByPlaceholder("Search events…").fill(event.slug);
   await page.getByPlaceholder("Search events…").press("Enter");
   const eventRow = page.getByRole("row").filter({ hasText: event.name });

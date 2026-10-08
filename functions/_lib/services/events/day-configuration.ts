@@ -1,3 +1,4 @@
+import { isEventDayCapacityConflict, eventDayCapacityChangedError } from "../../db/event-day-capacity-guard";
 import type { EventDaysReplaceInput } from "../../../../assets/shared/schemas/event-configuration";
 import { all } from "../../db/queries";
 import { AppError } from "../../errors";
@@ -101,9 +102,11 @@ export async function replaceConfiguredEventDays(
       ? []
       : await all<ReferencedDayRow>(
           db,
-          `SELECT DISTINCT event_day_id
-           FROM registration_day_attendance
-           WHERE event_day_id IN (SELECT value FROM json_each(?))`,
+          `SELECT day.id AS event_day_id FROM event_days day
+           WHERE day.id IN (SELECT value FROM json_each(?)) AND (
+             EXISTS(SELECT 1 FROM registration_day_attendance attendance WHERE attendance.event_day_id=day.id)
+             OR EXISTS(SELECT 1 FROM event_offline_admission_grants admission WHERE admission.event_day_id=day.id)
+           )`,
           [stringifyJson(removedDays.map((day) => day.id))],
         );
   const referencedIds = new Set(referencedRows.map((row) => row.event_day_id));
@@ -115,12 +118,20 @@ export async function replaceConfiguredEventDays(
     skipped,
   });
 
-  await db.batch([
-    ...(context.authorizationGuards ?? []),
-    ...deletable.map((day) => db.prepare("DELETE FROM event_days WHERE id = ?").bind(day.id)),
-    ...preparedDays.map((day) => upsertDayStatement(db, event.id, day, now)),
-    ...revision.statements,
-  ]);
+  try {
+    await db.batch([
+      ...(context.authorizationGuards ?? []),
+      ...deletable.map((day) => db.prepare("DELETE FROM event_days WHERE id = ?").bind(day.id)),
+      ...preparedDays.map((day) => upsertDayStatement(db, event.id, day, now)),
+      ...revision.statements,
+    ]);
+  } catch (error) {
+    if (isEventDayCapacityConflict(error))
+      throw eventDayCapacityChangedError(
+        "Capacity is committed to attendees or offline scanners. Reconcile scanner allocations before reducing it.",
+      );
+    throw error;
+  }
 
   return { skipped, updatedAt: revision.updatedAt };
 }

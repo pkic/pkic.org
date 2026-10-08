@@ -304,11 +304,26 @@ export const eventOccurrenceUpdateSchema = eventOccurrenceInputSchema
   });
 
 export const EVENT_OCCURRENCE_SORT_COLUMNS = ["starts_at", "ends_at", "status"] as const;
-export const eventOccurrencesListQuerySchema = listQuerySchema(EVENT_OCCURRENCE_SORT_COLUMNS).extend({
-  status: eventOccurrenceStatusSchema.optional(),
-  from: utcInstantSchema.optional(),
-  to: utcInstantSchema.optional(),
-});
+export const eventOccurrencesListQuerySchema = listQuerySchema(EVENT_OCCURRENCE_SORT_COLUMNS)
+  .extend({
+    status: eventOccurrenceStatusSchema.optional(),
+    from: utcInstantSchema.optional(),
+    to: utcInstantSchema.optional(),
+    overlapsFrom: utcInstantSchema.optional(),
+    overlapsTo: utcInstantSchema.optional(),
+  })
+  .superRefine((query, context) => {
+    if (
+      Boolean(query.overlapsFrom) !== Boolean(query.overlapsTo) ||
+      (query.overlapsFrom && query.overlapsTo && query.overlapsTo <= query.overlapsFrom)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["overlapsTo"],
+        message: "Choose both ends of an increasing calendar range.",
+      });
+    }
+  });
 export const eventOccurrencesListResponseSchema = paginatedResponseSchema("occurrences", eventOccurrenceSchema);
 
 export const eventOccurrenceGuestSchema = z.object({

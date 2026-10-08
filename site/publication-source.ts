@@ -1,13 +1,25 @@
+import {
+  resolvePublishedDocuments,
+  resolveRetainedPublishedDocuments,
+  recordPublishedDocuments,
+} from "../functions/_lib/services/site-publication-documents";
+import { collectDocumentRedirects } from "../scripts/publication/collect-document-redirects.mjs";
+import { verifyPublicDocuments } from "../scripts/publication/verify-public-documents.mjs";
+import { writePublicationDocumentAllow } from "../functions/_lib/services/site-publication-document-projection";
+import { publicationDocumentAllowSchema } from "../assets/shared/schemas/site-publication-documents";
+import { requirePresentationBucket } from "../functions/_lib/services/presentation-upload";
+import { assertPublicationMachineExtraction } from "../functions/_lib/services/site-publication-machine-extraction";
 import { parseEventFlowPath } from "../assets/shared/event-flow-paths";
 import { publicationStagingDirectory } from "../scripts/publication/build-context.mjs";
 import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { getPlatformProxy, unstable_readConfig as readConfig } from "wrangler";
 import { sitePublicationSnapshotSchema } from "../assets/shared/schemas/site-publication";
+import { readSitePublicationSnapshot } from "../functions/_lib/services/site-publication-snapshot";
 import {
-  createSitePublicationSnapshot,
-  readSitePublicationSnapshot,
-} from "../functions/_lib/services/site-publication-snapshot";
+  createRemappedSitePublicationSnapshot,
+  assertSitePublicationSourceUnchanged,
+} from "../functions/_lib/services/site-publication-snapshot-identity";
 import { publishedMediaReferences, resolvePublishedMediaKeys } from "../functions/_lib/services/site-publication-media";
 import { requireProfileImageBucket } from "../functions/_lib/services/profile-image-storage";
 import type { Env } from "../functions/_lib/types";
@@ -46,6 +58,11 @@ export async function readPublicationSource() {
       throw new Error("Remote publication builds cannot use synthetic snapshot files");
     const fixture = sitePublicationSnapshotSchema.parse(JSON.parse(await readFile(resolve(source), "utf8")));
     for (const selection of siteSponsorSelections()) fixture.sponsors[sponsorPublicationKey(selection)] ??= [];
+    await writeFile(
+      resolve(output, "document-routes.json"),
+      JSON.stringify(collectDocumentRedirects({ ...fixture, sourceSequence: null }, [])),
+    );
+    await writeFile(resolve(output, "retained-documents.json"), "[]");
     return fixture;
   }
   if (!environment) throw new Error("Select CLOUDFLARE_ENV or provide a synthetic publication snapshot");
@@ -61,6 +78,7 @@ export async function readPublicationSource() {
     envFiles: [],
   });
   try {
+    const machine = await assertPublicationMachineExtraction(platform.env.DB, process.env);
     const selections = siteSponsorSelections();
     const authoredEventSlugs = [
       ...new Set(
@@ -71,6 +89,13 @@ export async function readPublicationSource() {
       ),
     ];
     const snapshot = await readSitePublicationSnapshot(platform.env.DB, selections, authoredEventSlugs);
+    if (machine && snapshot.sourceSequence !== machine.sourceSequence)
+      throw new Error("PUBLICATION_EXTRACTION_SOURCE_CHANGED");
+    const retainedDocuments = await resolveRetainedPublishedDocuments(platform.env.DB);
+    const documents = await resolvePublishedDocuments(platform.env.DB, snapshot);
+    const verifiedObjects = await verifyPublicDocuments(documents, (key) =>
+      requirePresentationBucket(platform.env).get(key),
+    );
     const references = publishedMediaReferences(snapshot);
     if (references.length && !platform.env.ASSETS_BUCKET)
       throw new Error("Public media requires the native R2 binding");
@@ -79,7 +104,8 @@ export async function readPublicationSource() {
     const manifest = await listPublicMedia(Object.values(keys), (key: string) =>
       requireProfileImageBucket(platform.env, key),
     );
-    const published = await createSitePublicationSnapshot(
+    const published = await createRemappedSitePublicationSnapshot(
+      snapshot,
       await copyPublicMedia({
         snapshot,
         keys,
@@ -91,12 +117,36 @@ export async function readPublicationSource() {
     );
     await cp(resolve(output, "media", "_published"), resolve(output, "public", "_published"), { recursive: true });
     const verified = await readSitePublicationSnapshot(platform.env.DB, selections, authoredEventSlugs);
+    const verifiedRetainedDocuments = await resolveRetainedPublishedDocuments(platform.env.DB);
+    if (JSON.stringify(retainedDocuments) !== JSON.stringify(verifiedRetainedDocuments))
+      throw new Error("Retained PDF provenance changed during extraction");
+    const verifiedDocuments = await resolvePublishedDocuments(platform.env.DB, verified);
+    if (JSON.stringify(documents) !== JSON.stringify(verifiedDocuments))
+      throw new Error("Published PDF sources changed during extraction");
     const verifiedKeys = await resolvePublishedMediaKeys(platform.env.DB, publishedMediaReferences(verified));
     const mediaChanged =
       Object.keys(keys).length !== Object.keys(verifiedKeys).length ||
       Object.entries(keys).some(([reference, key]) => verifiedKeys[reference] !== key);
-    if (verified.snapshotId !== snapshot.snapshotId || mediaChanged)
+    assertSitePublicationSourceUnchanged(snapshot, verified);
+    if (mediaChanged)
       throw new Error("Public content or selected media changed during export; rebuild the publication");
+    await assertPublicationMachineExtraction(platform.env.DB, process.env);
+    await recordPublishedDocuments(platform.env.DB, published, verifiedObjects, process.env);
+    if (verifiedObjects.length && !machine)
+      throw new Error("Published PDF projections require the attested native publication coordinator");
+    for (const document of verifiedObjects) {
+      const projection = { ...document };
+      delete projection.legacyDownload;
+      await writePublicationDocumentAllow(
+        requirePresentationBucket(platform.env),
+        publicationDocumentAllowSchema.parse({ ...projection, version: 1 }),
+      );
+    }
+    await writeFile(
+      resolve(output, "document-routes.json"),
+      JSON.stringify(collectDocumentRedirects(published, verifiedObjects, retainedDocuments)),
+    );
+    await writeFile(resolve(output, "retained-documents.json"), JSON.stringify(retainedDocuments));
     await writeFile(resolve(output, "snapshot.json"), JSON.stringify(published));
     console.log(
       `[publication] snapshot ${published.snapshotId}: ${published.members.length} public profiles, ${references.length} images`,

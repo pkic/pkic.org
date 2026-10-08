@@ -1,3 +1,4 @@
+import { serializeStructuredData } from "../../shared/site-structured-data";
 import type { ComponentChildren } from "preact";
 import type { SiteNavigation } from "../../shared/site-content";
 import type { ClientStylesheet } from "../../shared/schemas/client-assets";
@@ -28,6 +29,7 @@ interface SiteDocumentProps {
   privatePage?: boolean;
   robots?: string;
   title: string;
+  structuredData?: unknown;
 }
 
 /**
@@ -50,6 +52,7 @@ export function SiteDocumentHead({
   socialImage,
   robots,
   title,
+  structuredData,
 }: Pick<
   SiteDocumentProps,
   | "assets"
@@ -61,6 +64,7 @@ export function SiteDocumentHead({
   | "socialImage"
   | "robots"
   | "title"
+  | "structuredData"
 >) {
   // Hugo appended the site name to every page but the home page.
   const fullTitle = currentPath === "/" ? title : `${title} | PKI Consortium`;
@@ -68,6 +72,14 @@ export function SiteDocumentHead({
   const taxonomyFeed = siteTaxonomyFeedHref(currentPath);
   return (
     <>
+      {structuredData && !robots?.includes("noindex") ? (
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: serializeStructuredData(structuredData),
+          }}
+        />
+      ) : null}
       <meta charSet="utf-8" />
       <meta name="viewport" content="width=device-width, initial-scale=1" />
       <title>{fullTitle}</title>

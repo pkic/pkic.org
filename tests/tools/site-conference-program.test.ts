@@ -146,13 +146,26 @@ describe("conference publication outputs", () => {
         resolve(directory, "agenda.ics"),
         conferenceAgendaCalendar(program(), "https://pkic.org/events/synthetic/", "2025-01-01T00:00:00.000Z"),
       );
+      const agendaDirectory = resolve(directory, "agenda");
+      await mkdir(agendaDirectory);
+      await writeFile(resolve(agendaDirectory, "data.json"), JSON.stringify(program()));
+      await writeFile(
+        resolve(agendaDirectory, "calendar.ics"),
+        conferenceAgendaCalendar(program(), "https://pkic.org/events/synthetic/agenda/", "2025-01-01T00:00:00.000Z"),
+      );
       await writeFile(resolve(directory, "unrelated.json"), "{}");
       expect(await collectConferenceOutputs(output)).toEqual([
         "events/synthetic/agenda.ics",
+        "events/synthetic/agenda/calendar.ics",
+        "events/synthetic/agenda/data.json",
         "events/synthetic/event-data.json",
       ]);
       await rm(resolve(directory, "event-data.json"));
-      expect(await collectConferenceOutputs(output)).toEqual(["events/synthetic/agenda.ics"]);
+      expect(await collectConferenceOutputs(output)).toEqual([
+        "events/synthetic/agenda.ics",
+        "events/synthetic/agenda/calendar.ics",
+        "events/synthetic/agenda/data.json",
+      ]);
       await writeFile(resolve(directory, "event-data.json"), "{}");
       await expect(collectConferenceOutputs(output)).rejects.toThrow();
     } finally {

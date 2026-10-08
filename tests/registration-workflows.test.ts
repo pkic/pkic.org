@@ -3,6 +3,7 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { callApi } from "./helpers/app";
+import { registrationManageUpdateResponseSchema } from "../assets/shared/schemas/registration";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createInvite } from "../functions/_lib/services/invites";
@@ -300,7 +301,11 @@ describe("registration workflows", () => {
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ success: true, emailChanged: true });
+    expect(registrationManageUpdateResponseSchema.parse(await response.json())).toEqual({
+      success: true,
+      emailChanged: true,
+      sponsorSharing: { allowed: false, withdrawnAt: null },
+    });
     await expect(
       queryAll<{ email: string; pending_email: string | null }>(
         env.DB,

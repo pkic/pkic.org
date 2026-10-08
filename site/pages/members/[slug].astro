@@ -1,31 +1,56 @@
 ---
 import PublicPage from "../../layouts/PublicPage.astro";
 import { MemberDetailView } from "../../../assets/ts/site/MemberProfile";
+import { memberProfileLinks } from "../../../assets/shared/member-profile-links";
 import { memberProfileHref } from "../../../assets/shared/member-profile-url";
 import { publication } from "../../publication";
 import { publishedSiteRoutes } from "../../../functions/_lib/services/site-content";
-import { renderMemberNewsArticles } from "../../../functions/_lib/services/member-news/render";
-export function getStaticPaths() {
-  return publication.members.map((member) => ({
-    params: { slug: memberProfileHref(member).split("/")[2] },
-    props: { member },
+import { memberNewsCardInputs, renderMemberNewsArticles } from "../../../functions/_lib/services/member-news/render";
+import { publicationPageInputs } from "../../publication-page-inputs";
+import { publicationRouteCacheKey } from "../../publication-cache";
+export async function getStaticPaths() {
+  return Promise.all(publication.members.map(async (member) => {
+    const publishedRoutes = new Set(publishedSiteRoutes());
+    const workingGroups = Object.entries(publication.groupMembers)
+      .filter(([slug, members]) => publishedRoutes.has(`/wg/${slug}/`) && members.some((entry) => entry.id === member.id))
+      .flatMap(([slug]) => {
+        const directory = publication.groups[slug];
+        return directory ? [{ name: directory.group.name, href: `/wg/${slug}/` }] : [];
+      })
+      .sort((left, right) => left.name.localeCompare(right.name, "en-US"));
+    const news = publication.news.filter((article) => article.organizationId === member.id).slice(0, 6).map(memberNewsCardInputs);
+    const route = memberProfileHref(member);
+    const pageInputs = await publicationPageInputs({ route, title: member.name, description: member.description ?? undefined, member,
+      imageRefs: [
+        ...(member.logoUrl ? [{ source: member.logoUrl, portrait: false }] : []),
+        ...member.identities.flatMap((identity) => identity.photoUrl ? [{ source: identity.photoUrl, portrait: true }] : []),
+      ],
+    });
+    const view = {
+      name: member.name, logoUrl: member.logoUrl, jobTitle: member.jobTitle, slogan: member.slogan,
+      description: member.description, content: member.content, memberSince: member.memberSince,
+      website: member.website, pressUrl: member.pressUrl, careersUrl: member.careersUrl, blogUrl: member.blogUrl,
+      links: member.links,
+      identities: member.identities.map((identity) => ({
+        name: identity.name, jobTitle: identity.jobTitle, bio: identity.bio, photoUrl: identity.photoUrl,
+        links: memberProfileLinks(identity),
+      })),
+      workingGroups, news,
+    };
+    const unknownMarkdownImages = [member.content, ...member.identities.map((identity) => identity.bio)]
+      .some((markdown) => markdown?.includes("!["));
+    return {
+      params: { slug: route.split("/")[2] }, props: { member, workingGroups, news, hasNews: news.length > 0, pageInputs },
+      ...(unknownMarkdownImages || !pageInputs.imageInputs.cacheable ? {} : { cacheKey: publicationRouteCacheKey(route, { view, pageInputs }) }),
+    };
   }));
 }
-const { member } = Astro.props;
-const publishedRoutes = new Set(publishedSiteRoutes());
-const workingGroups = Object.entries(publication.groupMembers)
-  .filter(([slug, members]) => publishedRoutes.has(`/wg/${slug}/`) && members.some((entry) => entry.id === member.id))
-  .flatMap(([slug]) => {
-    const directory = publication.groups[slug];
-    return directory ? [{ name: directory.group.name, href: `/wg/${slug}/` }] : [];
-  })
-  .sort((left, right) => left.name.localeCompare(right.name, "en-US"));
-const news = publication.news.filter((article) => article.organizationId === member.id).slice(0, 6);
+const { member, workingGroups, news, hasNews, pageInputs } = Astro.props;
 const newsCards = await renderMemberNewsArticles(news, 3);
 ---
-<PublicPage title={member.name} description={member.description ?? undefined} member={member}>
+<PublicPage pageInputs={pageInputs} title={member.name} description={member.description ?? undefined} member={member}>
   <div data-pagefind-body><MemberDetailView member={member} directoryHref="/members/" workingGroups={workingGroups} /></div>
-  {news.length > 0 && (
+  {hasNews && (
     <section class="pk-section pk-container pk-container--wide" aria-labelledby="member-news-heading" data-pagefind-body>
       <h2 id="member-news-heading">Latest member news</h2>
       <div class="pk-grid pk-grid--roomy" set:html={newsCards} />

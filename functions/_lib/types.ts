@@ -1,25 +1,7 @@
 import type { RateLimitBinding } from "./rate-limit";
 
-export interface D1StatementResult<T = Record<string, unknown>> {
-  success: boolean;
-  results?: T[];
-  meta?: { changes: number };
-}
-
-export interface StatementLike {
-  bind(...values: unknown[]): StatementLike;
-  run<T = Record<string, unknown>>(): Promise<D1StatementResult<T>>;
-  all<T = Record<string, unknown>>(): Promise<{ results: T[] }>;
-  first<T = Record<string, unknown>>(columnName?: string): Promise<T | null>;
-}
-
-export interface DatabaseLike {
-  prepare(query: string): StatementLike;
-  batch(statements: StatementLike[]): Promise<D1StatementResult[]>;
-  exec?(query: string): Promise<unknown>;
-  withSession?(constraintOrBookmark?: string): DatabaseLike & { getBookmark?(): string | null };
-  getBookmark?(): string | null;
-}
+import type { DatabaseLike } from "./db/types";
+export type { D1StatementResult, StatementLike, DatabaseLike } from "./db/types";
 
 export interface R2ObjectLike {
   text(): Promise<string>;
@@ -51,6 +33,18 @@ export type R2BucketLike = R2Bucket;
 
 export interface Env {
   DB: DatabaseLike;
+  /** Optional browser push configuration. Missing keys keep delivery disabled. */
+  VAPID_PUBLIC_KEY?: string;
+  VAPID_PRIVATE_KEY?: string;
+  VAPID_SUBJECT?: string;
+  /** Server-only at-rest key for owned push subscriptions. */
+  WEB_PUSH_ENCRYPTION_KEY?: string;
+  /** Server-only active and retained keys for opaque badge print recovery. */
+  BADGE_PRINT_ENCRYPTION_KEYS?: string;
+  /** Explicit approved publication ownership; absent keeps automatic release dispatch disabled. */
+  SITE_PUBLICATION_COORDINATOR_CONFIG?: string;
+  /** Server-only provider credential. Never included in request ledger or build artifacts. */
+  SITE_PUBLICATION_PROVIDER_TOKEN?: string;
   /** Browser and CDN lifetimes for public dynamic read responses. */
   PUBLIC_READ_BROWSER_TTL_SECONDS?: string;
   PUBLIC_READ_CDN_TTL_SECONDS?: string;

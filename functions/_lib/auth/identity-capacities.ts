@@ -6,6 +6,7 @@ import { normalizeEmail } from "../validation";
 import type { SponsorCapacity } from "../../../assets/shared/schemas/sponsor-access";
 import { findActiveSponsorCapacitiesByUserId } from "./sponsor-capacity";
 import { executiveCouncilSeatSql } from "./executive-council";
+import { activeOrganizationMemberRepresentationPredicate } from "../services/membership/capacity-query";
 
 export const STAFF_ACCESS_CONDITION = `(
   EXISTS (
@@ -102,6 +103,7 @@ export const MEMBER_ELIGIBLE_USER_SELECT = `
    AND selected_email.verified_at IS NOT NULL
   JOIN members m ON m.user_id = u.id AND m.status = 'active'
   JOIN member_category_assignments mca ON mca.member_id = m.id
+  WHERE NOT ${activeOrganizationMemberRepresentationPredicate("u.id")}
 
   UNION ALL
 
@@ -274,6 +276,46 @@ export interface IdentityCapacity {
   email: string;
 }
 
+function activeAffiliationPredicate(userAlias: string): string {
+  return `EXISTS (
+    SELECT 1 FROM identities affiliation
+     WHERE affiliation.user_id = ${userAlias}.id
+       AND affiliation.organization_id IS NOT NULL
+       AND affiliation.started_at IS NOT NULL
+       AND affiliation.ended_at IS NULL
+       AND affiliation.blocked_at IS NULL
+  )`;
+}
+
+/** An owned organization affiliation permits account access without granting membership. */
+export async function hasActiveAffiliation(db: DatabaseLike, userId: string): Promise<boolean> {
+  return (
+    (await first<{ id: string }>(
+      db,
+      `SELECT user.id FROM users user
+       WHERE user.id = ? AND user.active = 1
+         AND user.pii_redacted_at IS NULL AND user.merged_into_user_id IS NULL
+         AND ${activeAffiliationPredicate("user")}`,
+      [userId],
+    )) !== null
+  );
+}
+
+/** Rechecks the live affiliation, canonical user, and proved sign-in address in the session batch. */
+export function affiliationSignInAuthorizationEvidence(userId: string, normalizedEmail: string): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1 FROM users user
+       WHERE user.id = ? AND user.active = 1
+         AND user.pii_redacted_at IS NULL AND user.merged_into_user_id IS NULL
+         AND (user.normalized_email = ? OR EXISTS (
+           SELECT 1 FROM user_emails address
+            WHERE address.user_id = user.id AND address.normalized_email = ? AND address.verified_at IS NOT NULL
+         ))
+         AND ${activeAffiliationPredicate("user")}`,
+    bindings: [userId, normalizedEmail, normalizedEmail],
+  };
+}
+
 export interface IdentityCapacityResolution {
   identity: IdentityCapacity;
   staff: EligibleStaffUser | null;
@@ -281,21 +323,24 @@ export interface IdentityCapacityResolution {
   sponsors: SponsorCapacity[];
   pendingIdentityCount: number;
   eventParticipation: boolean;
+  hasActiveAffiliation: boolean;
 }
 
 export async function resolveIdentityCapacities(
   db: DatabaseLike,
   userId: string,
 ): Promise<IdentityCapacityResolution | null> {
-  const [identity, staff, member, sponsors, pendingIdentityCount, eventParticipation] = await Promise.all([
+  const [identity, staff, member, sponsors, pendingIdentityCount, eventParticipation, affiliation] = await Promise.all([
     first<{ id: string; email: string }>(db, "SELECT id, email FROM users WHERE id = ? AND active = 1", [userId]),
     findEligibleStaffUserById(db, userId),
     findEligibleMemberById(db, userId),
     findActiveSponsorCapacitiesByUserId(db, userId),
     countPendingIdentitiesForUser(db, userId),
     hasEventParticipation(db, userId),
+    hasActiveAffiliation(db, userId),
   ]);
-  return identity && (staff || member || sponsors.length > 0 || pendingIdentityCount > 0 || eventParticipation)
-    ? { identity, staff, member, sponsors, pendingIdentityCount, eventParticipation }
+  return identity &&
+    (staff || member || sponsors.length > 0 || pendingIdentityCount > 0 || eventParticipation || affiliation)
+    ? { identity, staff, member, sponsors, pendingIdentityCount, eventParticipation, hasActiveAffiliation: affiliation }
     : null;
 }

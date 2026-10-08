@@ -33,6 +33,7 @@ import { Menu } from "../../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import { attendanceTypeLabel } from "../../../../shared/attendance";
+import { usePortalHashLocation } from "../../hash-location";
 import { fmt } from "../../ui";
 
 /** The source vocabulary in product words. */
@@ -55,6 +56,8 @@ export function GroupEventRegistrationRecord({
   eventId,
   registrationId,
   canVip,
+  eventSlug,
+  badgesPath,
   onChanged,
 }: {
   groupId: string;
@@ -62,8 +65,11 @@ export function GroupEventRegistrationRecord({
   registrationId: string;
   /** Server-derived effective event manage capability; never inferred here. */
   canVip: boolean;
+  eventSlug?: string;
+  badgesPath?: string;
   onChanged?: () => void | Promise<void>;
 }) {
+  const [, navigate] = usePortalHashLocation();
   const eventEndpoint = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}`;
   const registrationEndpoint = `${eventEndpoint}/registrations/${encodeURIComponent(registrationId)}`;
   const detail = useData(
@@ -144,6 +150,21 @@ export function GroupEventRegistrationRecord({
 
   const commands: MenuItem[] = canVip
     ? [
+        ...(eventSlug && badgesPath
+          ? [
+              {
+                id: "badges",
+                label: "Manage attendee badges",
+                onSelect: () => navigate(`${badgesPath}?userId=${encodeURIComponent(registration.user_id)}`),
+              },
+              {
+                id: "create-badge",
+                label: "Create / print attendee badge",
+                disabled: registration.status !== "registered",
+                onSelect: () => navigate(`${badgesPath}/new?userId=${encodeURIComponent(registration.user_id)}`),
+              },
+            ]
+          : []),
         {
           id: "resend-email",
           label:

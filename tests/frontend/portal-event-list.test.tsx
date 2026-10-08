@@ -71,6 +71,7 @@ function audienceEventRow(overrides: Record<string, unknown> = {}): Record<strin
     registrationPolicy: "public",
     visibility: "public",
     accessLevel: "public",
+    sponsorLeadAccess: false,
     location: null,
     links: [],
     basePath: "/events/pqc-2026",
@@ -257,6 +258,48 @@ describe("portal event list", () => {
     // An audience entry can do nothing to the event, so its row offers no
     // control at all — neither an inline button nor a menu.
     expect(rowActionControlNames(container)).toEqual([]);
+  });
+
+  it("opens sponsor leads from an audience row with canonical view or export access", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({
+          events: [audienceEventRow({ sponsorLeadAccess: true })],
+          page: { limit: 25, offset: 0, total: 1, hasMore: false },
+        }),
+      ),
+    );
+    const container = mount(<EventList />);
+    await settle();
+    await settle();
+    await runRowAction(container, "PQC Conference 2026", "Open sponsor leads");
+    expect(navigateMock).toHaveBeenCalledWith("/events/pqc-2026/leads");
+    expect(navigateMock.mock.calls.some(([path]) => String(path).includes("/groups/"))).toBe(false);
+  });
+
+  it("keeps capture-only scanning available without exposing the contacts route", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({
+          events: [
+            audienceEventRow({
+              sponsorLeadAccess: false,
+              scannerAccess: { canScan: false, sponsors: [{ id: "sponsor-one", name: "Example sponsor" }] },
+            }),
+          ],
+          page: { limit: 25, offset: 0, total: 1, hasMore: false },
+        }),
+      ),
+    );
+    const container = mount(<EventList />);
+    await settle();
+    await settle();
+    await runRowAction(container, "PQC Conference 2026", "Scan leads for Example sponsor");
+    expect(navigateMock).toHaveBeenCalledWith("/events/pqc-2026/sponsors/sponsor-one/scanner");
+    expect(container.textContent).not.toContain("Open sponsor leads");
+    expect(navigateMock.mock.calls.some(([path]) => String(path).endsWith("/leads"))).toBe(false);
   });
 
   it("shows an empty state with no create action when there are no upcoming events", async () => {

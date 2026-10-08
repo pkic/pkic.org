@@ -1,19 +1,36 @@
 ---
+import { publicationImageInputs, publicationRouteCacheKey } from "../publication-cache";
+import { publication } from "../publication";
 import { siteConferencePrograms } from "../../functions/_lib/services/site-content";
+import { preparePublicationImages } from "../../assets/ts/site/SiteImage";
 import { SponsorStripView } from "../../assets/ts/site/SponsorDisplays";
 import { sponsorPublicationKey } from "../../assets/shared/sponsor-publication-query";
 import { formatDateRange } from "../../assets/shared/format-date";
-import { publication } from "../publication";
 import "../../assets/scss/conference-session.scss";
-export function getStaticPaths() {
-  return siteConferencePrograms().filter((event) => event.outputs.includes("event-session"))
-    .map((event) => ({ params: { conferenceSession: `${event.route}event-session`.replace(/^\//, "") }, props: { event } }));
+export async function getStaticPaths() {
+  return Promise.all(siteConferencePrograms(publication).filter((event) => event.outputs.includes("event-session"))
+    .map(async (event) => {
+      const groups = publication.sponsors[sponsorPublicationKey(event.sponsorSelection)];
+      if (!groups) throw new Error("Conference display sponsors are missing from the approved publication");
+      const slots = Object.values(event.program.agenda).flat();
+      const display = {
+        route: event.route, title: event.title, name: event.program.name, timeZone: event.program.timezone,
+        dates: formatDateRange(slots[0]?.startsAt, slots.at(-1)?.startsAt, event.program.timezone),
+        sponsorEventName: event.sponsorSelection.eventName,
+        sponsors: groups.flatMap((group) => group.sponsors).map(({ id, name, website, logoUrl, effectiveTier, weight }) =>
+          ({ id, name, website, logoUrl, effectiveTier, weight, tier: null, eventTier: null })),
+      };
+      const sources = display.sponsors.map((sponsor) => sponsor.logoUrl).filter((source): source is string => Boolean(source));
+      const imageInputs = publicationImageInputs(sources);
+      const imagesPrepared = await preparePublicationImages(sources.map((source) => ({ source, portrait: false })));
+      return {
+        params: { conferenceSession: `${event.route}event-session`.replace(/^\//, "") },
+        props: { display },
+        ...(imageInputs.cacheable && imagesPrepared ? { cacheKey: publicationRouteCacheKey(`${event.route}event-session/`, { display, imageInputs }) } : {}),
+      };
+    }));
 }
-const { event } = Astro.props;
-const groups = publication.sponsors[sponsorPublicationKey(event.sponsorSelection)];
-if (!groups) throw new Error("Conference display sponsors are missing from the approved publication");
-const slots = Object.values(event.program.agenda).flat();
-const dates = formatDateRange(slots[0]?.startsAt, slots.at(-1)?.startsAt, event.program.timezone);
+const { display } = Astro.props;
 ---
 <!doctype html>
 <html lang="en">
@@ -21,18 +38,18 @@ const dates = formatDateRange(slots[0]?.startsAt, slots.at(-1)?.startsAt, event.
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <meta name="robots" content="noindex, nofollow, noarchive" />
-    <title>{event.title} — Session display</title>
+    <title>{display.title} — Session display</title>
   </head>
-  <body data-conference-data={`${event.route}event-data.json`}>
+  <body data-conference-data={`${display.route}event-data.json`}>
     <img src="/img/logo-color.svg" id="logo-element" alt="" />
-    <div id="header"><div class="white-orange">{event.program.name}</div><div class="orange-white">{dates}</div></div>
+    <div id="header"><div class="white-orange">{display.name}</div><div class="orange-white">{display.dates}</div></div>
     <main id="session" class="centered">
       <div id="subject" class="white-blue"><h1 id="title">Loading session…</h1><div id="description"></div></div>
       <div id="speakers" class="blue-white"><div id="speakersList"></div></div>
     </main>
     <footer id="footer">
-      <div id="sponsors"><SponsorStripView sponsors={groups.flatMap((group) => group.sponsors)} eventName={event.sponsorSelection.eventName} containerClass="sponsors-list" linkClass="sponsor-link" logoClass="sponsor-logo" /></div>
-      <div id="textbar" class="yellow-black">{dates} · {event.program.timezone}</div>
+      <div id="sponsors"><SponsorStripView sponsors={display.sponsors} eventName={display.sponsorEventName} containerClass="sponsors-list" linkClass="sponsor-link" logoClass="sponsor-logo" /></div>
+      <div id="textbar" class="yellow-black">{display.dates} · {display.timeZone}</div>
       <div class="dimmed">PKI Consortium · pkic.org</div>
       <img src="/img/logo.svg" id="logo" alt="PKI Consortium" />
     </footer>

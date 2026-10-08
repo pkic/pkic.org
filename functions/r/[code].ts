@@ -292,17 +292,19 @@ export async function onRequestGet(c: any): Promise<Response> {
     return json({ error: { code: "REFERRAL_NOT_FOUND", message: "Unknown referral code" } }, 404);
   }
 
-  // ── For real browsers, record the click (fire-and-forget) ─────────────────
+  // Keep the click write alive after the redirect response has been returned.
   // Scrapers are excluded so they don't inflate click counts.
   if (!isSocialScraper(userAgent)) {
-    void recordReferralClick(c.env.DB, {
-      code,
-      ip: getClientIp(c.req.raw),
-      userAgent,
-      secret: signingSecret,
-    }).catch(() => {
-      /* ignore */
-    });
+    c.executionCtx.waitUntil(
+      recordReferralClick(c.env.DB, {
+        code,
+        ip: getClientIp(c.req.raw),
+        userAgent,
+        secret: signingSecret,
+      }).catch(() => {
+        /* A tracking failure must not prevent registration. */
+      }),
+    );
   }
 
   // ── Resolve redirect URL and person data in parallel ──────────────────────

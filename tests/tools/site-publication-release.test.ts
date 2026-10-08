@@ -6,6 +6,7 @@ import { expect, it } from "vitest";
 import { assembleStaticRelease } from "../../scripts/publication/assemble-static-release.mjs";
 import { preparePublicationPublicAssets } from "../../scripts/publication/prepare-public-assets.mjs";
 import { publicationBindingConfig } from "../../scripts/publication/binding-config.mjs";
+import { createReleaseIntegrity } from "../../scripts/publication/release-integrity.mjs";
 
 it("replaces withdrawn pages and media without removing unrelated Vite assets", async () => {
   const root = await mkdtemp(resolve(tmpdir(), "pkic-release-"));
@@ -54,6 +55,16 @@ it("replaces withdrawn pages and media without removing unrelated Vite assets", 
     await put(source, "js/built/loader.release.js", 'import("./form.release.js")');
     await put(source, "js/built/form.release.js", "published form");
     await put(source, "js/built/manifest.json", '{"loader":{"url":"/js/built/loader.release.js"}}');
+    const incoming = JSON.parse(await readFile(resolve(source, "publication.json"), "utf8"));
+    await put(
+      source,
+      "publication.json",
+      JSON.stringify({
+        ...incoming,
+        sourceSequence: 0,
+        integrity: await createReleaseIntegrity(source, incoming.files),
+      }),
+    );
     await assembleStaticRelease(source, destination, "preview");
     expect((await stat(sharedStylesheet)).ino).toBe(stylesheetIdentity.ino);
     await expect(readFile(resolve(destination, "_assets/withdrawn.css"))).rejects.toMatchObject({ code: "ENOENT" });
@@ -207,6 +218,8 @@ it("keeps conference exports public while excluding them from indexing and remov
         version: 1,
         source: "native",
         snapshotId: "3".repeat(64),
+        sourceSequence: 0,
+        integrity: await createReleaseIntegrity(source, ownedFiles),
         environment: "production",
         files: ownedFiles,
         redirects: [],

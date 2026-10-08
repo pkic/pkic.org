@@ -25,6 +25,9 @@ export function publishedMediaReferences(snapshot: SitePublicationSnapshot): str
   }
   for (const groups of Object.values(snapshot.sponsors))
     for (const group of groups) for (const sponsor of group.sponsors) add(sponsor.logoUrl);
+  for (const agenda of Object.values(snapshot.eventAgendas ?? {}))
+    for (const occurrence of agenda.occurrences)
+      if (occurrence.kind === "break") for (const sponsor of occurrence.sponsors ?? []) add(sponsor.logoUrl);
   for (const entry of snapshot.memberWall) add(entry.logoUrl);
   return [...references].sort();
 }

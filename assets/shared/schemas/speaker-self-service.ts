@@ -14,10 +14,13 @@ import { proposalStatusSchema } from "./proposal-status";
 import { httpUrlSchema } from "./urls";
 import { publicOperation } from "./route-contract";
 import { ALLOWED_PRESENTATION_MIME_TYPES } from "../presentation-upload";
+import { proposalActingIdentitySchema } from "./proposal-acting-identity";
+import { actingIdentitySchema } from "./identity";
 
 const nullableTimestampSchema = z.string().nullable();
 
 export const speakerSelfServiceAccessSchema = z.object({
+  userId: databaseIdSchema.nullable(),
   role: speakerRoleSchema,
   status: proposalAccessSpeakerStatusSchema,
   confirmedAt: nullableTimestampSchema,
@@ -53,7 +56,7 @@ export const speakerSelfServiceProposalSchema = z.object({
   presentationUrl: httpUrlSchema.nullable(),
 });
 
-export const speakerSelfServiceProfileSchema = z.object({
+export const speakerSelfServiceProfileSchema = proposalActingIdentitySchema.extend({
   firstName: z.string().nullable(),
   lastName: z.string().nullable(),
   email: normalizedEmailSchema,
@@ -66,11 +69,45 @@ export const speakerSelfServiceProfileSchema = z.object({
   headshotUrl: httpUrlSchema.nullable(),
 });
 
+/** Current owned representation for editing, independent of the recorded appearance. */
+export const speakerCurrentRepresentationSchema = proposalActingIdentitySchema
+  .extend(
+    actingIdentitySchema.pick({
+      emailId: true,
+      email: true,
+      organizationId: true,
+      organizationName: true,
+      jobTitle: true,
+      biography: true,
+      links: true,
+      updatedAt: true,
+    }).shape,
+  )
+  .refine(
+    (value) =>
+      value.actingIdentitySelectedAt !== null &&
+      (value.actingIdentitySelection === "identity"
+        ? value.actingIdentityId !== null
+        : value.actingIdentitySelection === "individual" &&
+          value.actingIdentityId === null &&
+          value.emailId === null &&
+          value.organizationId === null &&
+          value.organizationName === null &&
+          value.jobTitle === null),
+    "A current speaker representation requires an explicit valid selection",
+  );
+
 export const speakerSelfServiceReadResponseSchema = z.object({
   speaker: speakerSelfServiceAccessSchema,
   proposal: speakerSelfServiceProposalSchema,
   presentationTerms: z.array(requiredTermSchema),
   profile: speakerSelfServiceProfileSchema,
+  currentRepresentation: speakerCurrentRepresentationSchema.nullable(),
+});
+
+export const speakerProfileUpdateResponseSchema = successResponseSchema.extend({
+  profile: speakerSelfServiceProfileSchema,
+  currentRepresentation: speakerCurrentRepresentationSchema.nullable(),
 });
 
 export const speakerParticipationResponseSchema = successResponseSchema.extend({
@@ -116,3 +153,5 @@ export const speakerPresentationDownloadRouteSchema = {
 export type SpeakerSelfServiceAccess = z.infer<typeof speakerSelfServiceAccessSchema>;
 export type SpeakerSelfServiceProposal = z.infer<typeof speakerSelfServiceProposalSchema>;
 export type SpeakerSelfServiceReadResponse = z.infer<typeof speakerSelfServiceReadResponseSchema>;
+export type SpeakerSelfServiceProfile = z.infer<typeof speakerSelfServiceProfileSchema>;
+export type SpeakerCurrentRepresentation = z.infer<typeof speakerCurrentRepresentationSchema>;

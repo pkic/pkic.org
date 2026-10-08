@@ -1,0 +1,36 @@
+.pk-event-scanner {
+  padding: var(--pk-6);
+  border-radius: var(--pk-radius-lg);
+  text-align: center;
+  background: var(--pk-surface);
+}
+.pk-event-scanner__mark {
+  display: block;
+  font-size: var(--pk-text-display);
+  font-weight: 600;
+}
+.pk-event-scanner--eligible {
+  background: var(--pk-ok-soft);
+  color: var(--pk-ok-ink);
+}
+.pk-event-scanner--warning {
+  background: var(--pk-warn-soft);
+  color: var(--pk-warn-ink);
+}
+.pk-event-scanner--denied,
+.pk-event-scanner--unknown {
+  background: var(--pk-danger-soft);
+  color: var(--pk-danger-ink);
+}
+.pk-event-scanner__camera {
+  width: 100%;
+  max-height: 20rem;
+  border-radius: var(--pk-radius);
+}
+.pk-event-scanner__camera.pk-event-scanner__camera--concealed {
+  position: fixed;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}

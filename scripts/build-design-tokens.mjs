@@ -15,9 +15,14 @@ import { readFileSync, writeFileSync, existsSync } from "node:fs";
 import { resolve, dirname, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 
-import { layers } from "../assets/design/tokens.ts";
+import { layers, featureTokenGroups } from "../assets/design/tokens.ts";
 
-import { emitPublicTokenCss, emitTemplateTokenCss, emitTokenCss } from "../assets/design/emit-css.ts";
+import {
+  emitFeatureTokenCss,
+  emitPublicTokenCss,
+  emitTemplateTokenCss,
+  emitTokenCss,
+} from "../assets/design/emit-css.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const checkOnly = process.argv.includes("--check");
@@ -29,6 +34,11 @@ const sheets = [
   },
   { name: "tokens.generated.css", render: emitTokenCss },
   { name: "tokens.public.generated.css", render: emitPublicTokenCss },
+  ...Object.keys(featureTokenGroups).map((feature) => ({
+    name: `tokens.${feature}.generated.css`,
+    render: () => emitFeatureTokenCss(feature),
+  })),
+
   { name: "tokens.template.generated.css", render: emitTemplateTokenCss },
 ];
 

@@ -101,17 +101,10 @@ describe("admin user membership capacities", () => {
       status: 409,
       code: "IDENTITY_CONFLICT",
     });
-    await expect(
-      env.DB.prepare(
-        `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
-         VALUES (?, 'individual', ?, 'active', datetime('now'), datetime('now'))`,
-      )
-        .bind(crypto.randomUUID(), userId)
-        .run(),
-    ).rejects.toThrow("individual and organization identities are mutually exclusive");
+    expect(await env.DB.prepare("SELECT id FROM members WHERE user_id=?").bind(userId).first()).toBeNull();
   });
 
-  it("rejects adding an organization representation to an active individual member", async () => {
+  it("adds an organization identity to an existing individual member without rewriting either relationship", async () => {
     const actorUserId = await insertUser(env.DB, "capacity-admin@example.test");
     const actor: UserBackedAuthAdmin = {
       identityType: "user",
@@ -124,35 +117,35 @@ describe("admin user membership capacities", () => {
     const organizationId = await insertOrganization(env.DB, "Individual Conflict Organization");
     await seedOrganizationAggregate(env.DB, organizationId, "A");
 
-    await expect(
-      createOrganizationIdentity(
-        env.DB,
-        {
-          userId: actorUserId,
-          databaseUserId: actorUserId,
-          actorType: "admin",
-          staffAuthorized: true,
-          immediateActivationAuthorized: true,
-          permissionActor: actor,
-        },
-        {
-          organizationId,
-          userId: individual.userId,
-          showOnOrganizationProfile: true,
-          activation: { mode: "immediate", reason: "Test organization activation" },
-        },
-      ),
-    ).rejects.toMatchObject({ status: 409, code: "IDENTITY_CONFLICT" });
-    await expect(
-      env.DB.prepare(
-        `INSERT INTO identities
-           (id, user_id, organization_id, source, invited_at, started_at, created_at, updated_at)
-         VALUES (?, ?, ?, 'staff', datetime('now'), datetime('now'), datetime('now'), datetime('now'))`,
-      )
-        .bind(crypto.randomUUID(), individual.userId, organizationId)
-        .run(),
-    ).rejects.toThrow("individual and organization identities are mutually exclusive");
-    expect(individual.userId).toBeTruthy();
+    const result = await createOrganizationIdentity(
+      env.DB,
+      {
+        userId: actorUserId,
+        databaseUserId: actorUserId,
+        actorType: "admin",
+        staffAuthorized: true,
+        immediateActivationAuthorized: true,
+        permissionActor: actor,
+      },
+      {
+        organizationId,
+        userId: individual.userId,
+        showOnOrganizationProfile: true,
+        activation: { mode: "immediate", reason: "Test organization activation" },
+      },
+    );
+    expect(result.state).toBe("active");
+    expect(
+      await env.DB.prepare("SELECT organization_id,user_id FROM identities WHERE id=?").bind(result.identityId).first(),
+    ).toEqual({ organization_id: organizationId, user_id: individual.userId });
+    expect(
+      await env.DB.prepare("SELECT user_id,organization_id,ended_at FROM identities WHERE id=?")
+        .bind(individual.identityId)
+        .first(),
+    ).toEqual({ user_id: individual.userId, organization_id: null, ended_at: null });
+    expect(await env.DB.prepare("SELECT status FROM members WHERE id=?").bind(individual.memberId).first()).toEqual({
+      status: "active",
+    });
   });
 
   it("does not create an individual capacity after its target is anonymized during the commit race", async () => {

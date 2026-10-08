@@ -87,6 +87,12 @@ describe("sponsor capacity in the canonical portal session", () => {
   beforeEach(async () => {
     await resetDb();
     ({ eventId } = await seedEventAndAdmin(env.DB));
+    await env.DB.prepare(
+      `INSERT INTO event_terms(id,event_id,audience_type,term_key,version,required,active,created_at)
+       VALUES(?,?,'attendee','sponsor-data-sharing','v1',0,1,?)`,
+    )
+      .bind(crypto.randomUUID(), eventId, new Date().toISOString())
+      .run();
     const [admin] = await queryAll<{ id: string }>(
       env.DB,
       "SELECT id FROM users WHERE email = 'admin@pkic.org' LIMIT 1",

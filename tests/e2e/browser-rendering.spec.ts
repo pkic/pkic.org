@@ -11,8 +11,23 @@ import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { expectStaffSessionLanding, signInAsE2eStaff } from "./helpers/staff-auth";
 import { tab } from "./helpers/tabs";
+import { runRowAction } from "./helpers/data-table";
 import { createPortalWaitlistEvent } from "./helpers/waitlist-event";
 import { publishE2eSite } from "./helpers/site-publication";
+import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
+import {
+  eventProposalProofStartSchema,
+  eventProposalProofStartResponseSchema,
+  eventProposalProofVerifyResponseSchema,
+} from "../../assets/shared/schemas/event-proposal-proof";
+import {
+  speakerSelfProfilePatchSchema,
+  proposalCreateResponseSchema,
+  proposalCreateSchema,
+} from "../../assets/shared/schemas/proposal-management";
+import type { ProposalEntryContext } from "../../assets/shared/schemas/proposal-entry";
+import { defaultedSourceTypeSchema } from "../../assets/shared/schemas/source";
+import { speakerSelfServiceReadResponseSchema } from "../../assets/shared/schemas/speaker-self-service";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 
@@ -119,12 +134,7 @@ function monitorErrors(page: Page, options: ErrorMonitorOptions = {}): ErrorMoni
 // ── Step screenshots ──────────────────────────────────────────────────────────
 function createScreenshotter(page: Page): (label: string) => Promise<void> {
   let n = 0;
-  const dir = `test-results/screenshots/${test
-    .info()
-    .title.replace(/\s+/g, "-")
-    .replace(/[^\w-]/g, "")
-    .replace(/-+/g, "-")
-    .slice(0, 70)}`;
+  const dir = test.info().outputPath("steps");
   mkdirSync(dir, { recursive: true });
   return async (label: string) => {
     n++;
@@ -354,19 +364,125 @@ async function fillInviteRegistration(
   await page.getByRole("button", { name: /Submit registration/i }).click();
 }
 
+/** Follow real email proof; known person details are reused rather than filled again. */
+async function fillProposalParticipant(
+  page: Page,
+  person: { email: string; firstName: string; lastName: string },
+): Promise<ProposalEntryContext | undefined> {
+  const originalQuery = new URL(page.url()).searchParams;
+  await page.context().clearCookies();
+  await agreeToAllTerms(page);
+  await page.getByRole("button", { name: /Continue/i }).click();
+  const identity = page.locator("[data-proposer-identity]");
+  await identity
+    .getByRole("radio", { name: "No — I am not employed by and do not own an organization", exact: true })
+    .check();
+  await identity
+    .getByRole("checkbox", {
+      name: "I am not employed by, do not own, and am not authorized to represent an organization.",
+      exact: true,
+    })
+    .check();
+  await identity.getByRole("textbox", { name: "Your email address", exact: true }).fill(person.email);
+  const since = await capturedEmailCount();
+  const started = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/events/pqc-conference-amsterdam-nl/proposals/proof" &&
+      response.request().method() === "POST",
+  );
+  await identity.getByRole("button", { name: "Verify my email", exact: true }).click();
+  const startResponse = await started;
+  expect(startResponse.status(), await startResponse.text()).toBe(200);
+  expect(eventProposalProofStartSchema.parse(startResponse.request().postDataJSON()).unaffiliatedAttestation).toBe(
+    true,
+  );
+  expect(eventProposalProofStartResponseSchema.parse(await startResponse.json()).status).toBe("verification_sent");
+  const mail = await waitForCapturedEmail(person.email, "Verify your email for", { since });
+  await page.goto(extractEmailUrl(mail, "/propose/"));
+  await agreeToAllTerms(page);
+  const verified = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/events/pqc-conference-amsterdam-nl/proposals/proof/verify" &&
+      response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: /Continue/i }).click();
+  const result = await verified;
+  expect(result.status(), await result.text()).toBe(200);
+  const proof = eventProposalProofVerifyResponseSchema.parse(await result.json());
+  expect(proof.status).toBe("ready");
+  if (proof.status !== "ready") throw new Error("The browser participant requires successful mailbox proof.");
+  if (originalQuery.has("invite")) {
+    expect(proof.entryContext?.inviteToken).toMatch(/^pkc1_/);
+    expect(proof.entryContext?.inviteId).toBe(originalQuery.get("id"));
+    expect(proof.entryContext?.sourceType).toBe(
+      defaultedSourceTypeSchema.parse(originalQuery.get("source") ?? undefined),
+    );
+  }
+  const resolved = page.locator("[data-proposer-identity]");
+  await expect(resolved).toContainText(person.email);
+  for (const [name, value] of [
+    ["First name", person.firstName],
+    ["Last name", person.lastName],
+  ] as const) {
+    const missing = resolved.getByRole("textbox", { name, exact: true });
+    if (await missing.count()) await missing.fill(value);
+  }
+  await expect(resolved.getByRole("textbox", { name: "Your email address", exact: true })).toHaveCount(0);
+  await expect(resolved.locator('input[name="organizationName"]')).toHaveCount(0);
+  return proof.entryContext;
+}
+
+/** Resolve a real guest invitation before confirming it, retaining the original same-person capability boundary. */
+async function resolveInvitedSpeaker(page: Page, email: string): Promise<void> {
+  await page.context().clearCookies();
+  await agreeToAllTerms(page);
+  const confirmation = page.getByRole("button", { name: "Confirm participation", exact: true });
+  if (await confirmation.isEnabled()) return;
+  const identity = page.locator("[data-speaker-identity]");
+  await identity
+    .getByRole("radio", { name: "No — I am not employed by and do not own an organization", exact: true })
+    .check();
+  await identity
+    .getByRole("checkbox", {
+      name: "I am not employed by, do not own, and am not authorized to represent an organization.",
+      exact: true,
+    })
+    .check();
+  await identity.getByRole("textbox", { name: "Your email address", exact: true }).fill(email);
+  const since = await capturedEmailCount();
+  await identity.getByRole("button", { name: "Verify my email", exact: true }).click();
+  const mail = await waitForCapturedEmail(email, "Verify your email for", { since });
+  await page.goto(extractEmailUrl(mail, "/propose/"));
+  await agreeToAllTerms(page);
+  await page.getByRole("button", { name: /Continue/i }).click();
+  await expect(page).toHaveURL(/\/propose\/speaker\/.*#verify=/);
+  await agreeToAllTerms(page);
+  await expect(page.locator("[data-speaker-identity]")).toContainText(email);
+  await expect(page.locator('[data-profile-form] input[name="organizationName"]')).toHaveCount(0);
+  const saved = page.waitForResponse(
+    (response) => new URL(response.url()).pathname.endsWith("/profile") && response.request().method() === "PATCH",
+  );
+  await page.getByRole("button", { name: "Save profile", exact: true }).click();
+  const response = await saved;
+  expect(response.status(), await response.text()).toBe(200);
+  const body = speakerSelfProfilePatchSchema.parse(response.request().postDataJSON());
+  expect(body.unaffiliatedAttestation).toBe(true);
+  expect(body.actingIdentityId).toBeNull();
+  expect(body.continuationToken).toBeTruthy();
+  await expect(confirmation).toBeEnabled();
+  await expect(page).not.toHaveURL(/#verify=/);
+}
+
 async function fillProposal(
   page: Page,
   options: { type?: "talk" | "panel"; proposerPresenting?: boolean; addPanelist?: boolean } = {},
 ): Promise<void> {
   const type = options.type ?? "talk";
-  // Step 1: accept all speaker consent terms
-  await agreeToAllTerms(page);
-  await page.getByRole("button", { name: /Continue/i }).click();
-  await page.getByLabel("First name").fill("Priya");
-  await page.getByLabel("Last name").fill("Proposal");
-  await page.getByLabel("Work email").fill("proposal-speaker@example.test");
-  await page.getByLabel("Organization").fill("Example Org");
-  await page.getByLabel("Job title").fill("Engineer");
+  await fillProposalParticipant(page, {
+    firstName: "Priya",
+    lastName: "Proposal",
+    email: "proposal-speaker@example.test",
+  });
   if (options.proposerPresenting) {
     await setNativeChecked(page, "input#proposal-is-presenting");
   }
@@ -396,6 +512,9 @@ async function fillProposal(
     // name is what a reader actually uses to tell the cards apart.
     const proposerCard = page.getByRole("region", { name: "You — as a speaker", exact: true });
     await expect(proposerCard).toBeVisible();
+    await expect(proposerCard).toContainText("Priya Proposal");
+    await expect(proposerCard.locator('input[name="proposerSpeakerFirstName"]')).toHaveCount(0);
+    await expect(proposerCard.locator('input[name="proposerSpeakerOrg"]')).toHaveCount(0);
     await expect(proposerCard.locator('input[name="proposerSpeakerRole"][value="moderator"]')).toBeChecked();
     await proposerCard
       .getByRole("textbox", { name: "Bio", exact: true })
@@ -484,30 +603,45 @@ test.describe("browser workflows", () => {
     });
 
     await page.goto("/events/2023/pqc-conference-amsterdam-nl/");
-    const watchButton = page.getByRole("button", { name: "Watch recording", exact: true }).first();
-    await watchButton.click();
-
-    // The session detail is a native <dialog>; an open one is the only visible
-    // dialog on the page, so the role locator is enough and survives the next
-    // restyle in a way a class selector would not.
-    const modal = page
-      .getByRole("dialog", { includeHidden: true })
-      .filter({ has: page.locator("iframe") })
+    const recordedSession = page
+      .getByRole("tabpanel", { name: "Tuesday", exact: true })
+      .locator("article[data-agenda-session-dialog]")
+      .filter({ has: page.locator("a[data-agenda-watch-recording]") })
       .first();
+    const watchLink = recordedSession
+      .locator(".pk-content-agenda__card-footer")
+      .getByRole("link", { name: "Watch recording", exact: true });
+    await expect(watchLink).toBeVisible();
+    const watchUrl = new URL((await watchLink.getAttribute("href"))!);
+    expect(watchUrl.origin).toBe("https://www.youtube.com");
+    expect(watchUrl.pathname).toBe("/watch");
+    expect(watchUrl.searchParams.get("v")).toBeTruthy();
+    const modal = recordedSession.getByRole("dialog", { includeHidden: true });
+    await expect(modal).toHaveCount(1);
+    expect(await modal.getAttribute("id")).toBe(await watchLink.getAttribute("data-agenda-open-session"));
+    await expect(modal.locator("iframe")).not.toHaveAttribute("src");
+    const agendaUrl = page.url();
+    await watchLink.click();
+    expect(page.url()).toBe(agendaUrl);
+
     await expect(modal).toBeVisible();
     const iframe = modal.locator("iframe").first();
     await expect(iframe).toBeVisible();
 
     const embedUrl = await iframe.getAttribute("src");
     expect(embedUrl).toBeTruthy();
-    const requestsBeforeClose = embedRequestCounts.get(embedUrl ?? "") ?? 0;
+    const embed = new URL(embedUrl!);
+    expect(embed.origin).toBe("https://www.youtube-nocookie.com");
+    expect(embed.pathname).toBe(`/embed/${watchUrl.searchParams.get("v")}`);
+    await expect.poll(() => embedRequestCounts.get(embedUrl!) ?? 0).toBe(1);
+    const requestsBeforeClose = embedRequestCounts.get(embedUrl!)!;
 
     await modal.getByRole("button", { name: "Close", exact: true }).first().click();
     await expect(modal).toBeHidden();
     await expect(iframe).not.toHaveAttribute("src");
     expect(embedRequestCounts.get(embedUrl ?? "") ?? 0).toBe(requestsBeforeClose);
 
-    await watchButton.click();
+    await watchLink.click();
     await expect(modal).toBeVisible();
     await expect(iframe).toHaveAttribute("src", embedUrl ?? "");
     await expect.poll(() => embedRequestCounts.get(embedUrl ?? "") ?? 0).toBeGreaterThan(requestsBeforeClose);
@@ -757,17 +891,17 @@ test.describe("browser workflows", () => {
     await page.goto(proposalManageRoute);
     await expect(page.getByText(/Open this page from your proposal management link/i)).toBeVisible();
     await expect(page.locator("#manage-proposal-type")).toHaveValue("panel");
-    const proposerSpeakerCard = page
-      .locator("[data-speaker-card]")
-      .filter({ hasText: "proposal-speaker@example.test" });
+    const proposerSpeakerCard = page.locator('[data-speaker-card][data-speaker-email="proposal-speaker@example.test"]');
     await expect(proposerSpeakerCard).toBeVisible();
+    await proposerSpeakerCard.getByRole("button", { name: /^Actions for / }).click();
+    await proposerSpeakerCard.getByRole("menuitem", { name: "Edit speaker details", exact: true }).click();
     await expect(proposerSpeakerCard.getByLabel("Role")).toHaveValue("moderator");
     await proposerSpeakerCard.getByLabel("Role").selectOption("speaker");
     await proposerSpeakerCard.getByRole("button", { name: /Save speaker details/i }).click();
     await expect(page.getByText(/Saved speaker details for proposal-speaker@example.test/i)).toBeVisible({
       timeout: 15_000,
     });
-    await expect(proposerSpeakerCard.getByLabel("Role")).toHaveValue("speaker");
+    await expect(proposerSpeakerCard.getByText("Speaker", { exact: true })).toBeVisible();
     await page.locator("#manage-proposal-title").fill("Operational Trust in a Post-Quantum Transition, Revised");
     await page
       .locator("#manage-proposal-abstract")
@@ -793,9 +927,10 @@ test.describe("browser workflows", () => {
     const speakerManageRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/speaker/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(new URL(speakerManageUrl).searchParams.get("token") ?? "")}`;
     await page.goto(speakerManageRoute);
     await expect(page.getByText(/Please confirm whether you would like to participate/i)).toBeVisible();
-    // Accept all speaker consent terms
-    await agreeToAllTerms(page);
-    await page.getByRole("button", { name: /Confirm participation/i }).click();
+    const participationConfirmation = page.getByRole("button", { name: /Confirm participation/i });
+    await expect(participationConfirmation).toBeDisabled();
+    await resolveInvitedSpeaker(page, "speaker@example.test");
+    await participationConfirmation.click();
     await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
     await screenshot("04-speaker-participation-confirmed");
 
@@ -1016,8 +1151,7 @@ test.describe("browser workflows", () => {
     // Confirm the real speaker and verify their bio was NOT tampered with
     const spkRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/speaker/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(spkToken)}`;
     await page.goto(spkRoute);
-    // Accept all speaker consent terms
-    await agreeToAllTerms(page);
+    await resolveInvitedSpeaker(page, "speaker-sec@example.test");
     await page.getByRole("button", { name: /Confirm participation/i }).click();
     await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
 
@@ -1181,14 +1315,11 @@ test.describe("browser workflows", () => {
     const samProposalUrl = extractUrlFromEmail(samInviteEmail, "/propose/");
     await page.goto(samProposalUrl);
     await expect(page).toHaveTitle(/Submit a Session Proposal/);
-    // Accept all speaker consent terms
-    await agreeToAllTerms(page);
-    await page.getByRole("button", { name: /Continue/i }).click();
-    await page.getByLabel("First name").fill("Sam");
-    await page.getByLabel("Last name").fill("Speaker");
-    await page.getByLabel("Work email").fill("sam-speaker@example.test");
-    await page.getByLabel("Organization").fill("Speaker Org");
-    await page.getByLabel("Job title").fill("Security Researcher");
+    const samEntry = await fillProposalParticipant(page, {
+      firstName: "Sam",
+      lastName: "Speaker",
+      email: "sam-speaker@example.test",
+    });
     await page.getByRole("button", { name: /Continue/i }).click();
     await page.getByRole("radio", { name: /^Talk$/i }).check();
     await page.locator("#proposal-title").fill("Speaker-Nominated Session on Post-Quantum Readiness");
@@ -1200,7 +1331,18 @@ test.describe("browser workflows", () => {
     await page.getByLabel("Preferred track").selectOption("Technical Deep Dive");
     await page.getByLabel("Target audience level").selectOption("Intermediate");
     await page.getByRole("button", { name: /Continue/i }).click();
+    const samSubmitted = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/v1/events/pqc-conference-amsterdam-nl/proposals" &&
+        response.request().method() === "POST",
+    );
     await page.getByRole("button", { name: /Submit proposal/i }).click();
+    const samResponse = await samSubmitted;
+    expect(samResponse.status(), await samResponse.text()).toBe(200);
+    const samPayload = proposalCreateSchema.parse(samResponse.request().postDataJSON());
+    expect(samPayload.inviteId).toBe(samEntry?.inviteId);
+    expect(samPayload.inviteToken).toBe(samEntry?.inviteToken);
+    expect(samPayload.sourceType).toBe(samEntry?.sourceType);
     await expect(page.getByRole("heading", { name: /Proposal submitted, Sam!/i })).toBeVisible();
     await screenshot("04-proposal-submitted-via-invite-link");
 
@@ -1222,8 +1364,10 @@ test.describe("browser workflows", () => {
     await nominationInviteForm.getByRole("button", { name: /Send invite/i }).click();
     await expect(page.getByText(/Invite sent to co-sam-speaker@example.test/i)).toBeVisible();
 
-    const coSpeakerCard = page.locator("[data-speaker-card]").filter({ hasText: "co-sam-speaker@example.test" });
+    const coSpeakerCard = page.locator('[data-speaker-card][data-speaker-email="co-sam-speaker@example.test"]');
     await expect(coSpeakerCard).toBeVisible();
+    await coSpeakerCard.getByRole("button", { name: /^Actions for / }).click();
+    await coSpeakerCard.getByRole("menuitem", { name: "Edit speaker details", exact: true }).click();
     await coSpeakerCard.getByLabel("First name").fill("Co");
     await coSpeakerCard.getByLabel("Last name").fill("Sam Speaker");
     await coSpeakerCard.getByLabel("Organization").fill("PKIC Partner Org");
@@ -1238,9 +1382,7 @@ test.describe("browser workflows", () => {
       timeout: 15_000,
     });
 
-    const speakerUserId = await coSpeakerCard
-      .locator("form[data-speaker-user-id]")
-      .getAttribute("data-speaker-user-id");
+    const speakerUserId = await coSpeakerCard.getAttribute("data-speaker-user-id");
     if (!speakerUserId) throw new Error("the co-speaker card names no user id");
     const proposerHeadshotResult = await page.evaluate(
       async ({ token, userId }) => {
@@ -1308,16 +1450,20 @@ test.describe("browser workflows", () => {
     await expect(page.getByText(/Please confirm whether you would like to participate/i)).toBeVisible();
     await expect(page.locator("[data-profile-section]")).toBeVisible();
     await expect(page.locator("[data-headshot-preview] img")).toBeVisible();
-    await expect(page.getByLabel("Organization (optional)", { exact: true })).toHaveValue("PKIC Partner Org");
-    await expect(page.getByLabel("Job title (optional)", { exact: true })).toHaveValue("Applied Cryptography Lead");
-    await page.getByLabel("Job title (optional)", { exact: true }).fill("Cryptography Programme Manager");
+    const drafted = await page.request.get(`/api/v1/proposals/speakers/access/${encodeURIComponent(refreshedToken)}`);
+    expect(drafted.status()).toBe(200);
+    const draftedProfile = speakerSelfServiceReadResponseSchema.parse(await drafted.json()).profile;
+    expect(draftedProfile.organizationName).toBe("PKIC Partner Org");
+    expect(draftedProfile.jobTitle).toBe("Applied Cryptography Lead");
+    await resolveInvitedSpeaker(page, "co-sam-speaker@example.test");
+    await page.getByRole("button", { name: "Edit profile", exact: true }).click();
+    await expect(page.locator('[data-profile-form] input[name="firstName"]')).toHaveCount(0);
+    await expect(page.locator('[data-profile-form] input[name="organizationName"]')).toHaveCount(0);
     await page
       .locator("#speaker-bio")
       .fill("Updated by the invited speaker after reviewing the proposer-provided draft.");
     await page.getByRole("button", { name: /Save profile/i }).click();
     await expect(page.getByText(/Profile updated./i)).toBeVisible({ timeout: 10_000 });
-    // Accept all speaker consent terms
-    await agreeToAllTerms(page);
     await page.getByRole("button", { name: /Confirm participation/i }).click();
     await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
     await screenshot("08-co-speaker-confirmed-via-refreshed-link");
@@ -1338,11 +1484,14 @@ test.describe("browser workflows", () => {
 
     // Capture the proposalId from the submission API response before the page redirects
     const submitResponsePromise = page.waitForResponse(
-      (res) => res.url().includes("/api/v1/events/pqc-conference-amsterdam-nl/proposals") && res.status() === 200,
+      (res) =>
+        new URL(res.url()).pathname === "/api/v1/events/pqc-conference-amsterdam-nl/proposals" &&
+        res.request().method() === "POST" &&
+        res.status() === 200,
     );
     await page.getByRole("button", { name: /Submit proposal/i }).click();
     const submitResponse = await submitResponsePromise;
-    const submitData = (await submitResponse.json()) as { proposalId?: string; manageToken?: string };
+    const submitData = proposalCreateResponseSchema.parse(await submitResponse.json());
     const proposalId = submitData.proposalId ?? "";
     expect(proposalId).toBeTruthy();
 
@@ -1379,6 +1528,17 @@ test.describe("browser workflows", () => {
     const speakerToken = new URL(speakerManageUrl).searchParams.get("token") ?? "";
     expect(speakerToken).toBeTruthy();
 
+    // Keep the staff session separate while the invited speaker confirms through their own capability.
+    const staffCookies = await page.context().cookies();
+    await page.context().clearCookies();
+    await page.goto(speakerManageUrl);
+    await expect(page.locator("[data-speaker-content]")).toBeVisible();
+    if (await page.locator("[data-confirm-panel]").isVisible()) {
+      await resolveInvitedSpeaker(page, "proposal-speaker@example.test");
+      await page.getByRole("button", { name: "Confirm participation", exact: true }).click();
+      await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
+    }
+
     // ── 5. Speaker uploads a presentation ─────────────────────────────────────
 
     await page.goto(
@@ -1414,6 +1574,8 @@ test.describe("browser workflows", () => {
     });
     await screenshot("05-presentation-uploaded");
 
+    await page.context().addCookies(staffCookies);
+
     // ── 6. Admin views the Presentation tab and submits a review ──────────────
     await page.goto(`/portal/#/events/pqc-conference-amsterdam-nl/proposals/detail/${proposalId}`);
     await expect(page.getByRole("heading", { name: /Operational Trust in a Post-Quantum Transition/i })).toBeVisible({
@@ -1425,11 +1587,13 @@ test.describe("browser workflows", () => {
     await expect(page.getByText(/pqc-migration-talk\.pdf/i)).toBeVisible();
     await screenshot("06-admin-presentation-tab");
 
-    // Open the review form and submit a "needs_revision" review
+    // Open the version action menu and its dedicated review form.
     const versionRow = page.getByRole("row", { name: /Version 1/i });
-    await versionRow.getByRole("button", { name: /^Review$/i }).click();
-    const reviewForm = page.locator(".pk-table__detail form");
-    const statusSelect = reviewForm.locator("select");
+    await runRowAction(page, versionRow, "Review");
+    await expect(page.getByRole("heading", { name: "Review presentation version", exact: true })).toBeVisible();
+    const reviewForm = page.locator('form[id^="presentation-review-"]');
+    await expect(reviewForm).toHaveCount(1);
+    const statusSelect = reviewForm.getByRole("combobox", { name: "Review outcome", exact: true });
     await expect(statusSelect).toBeVisible({ timeout: 5_000 });
     await statusSelect.selectOption("needs_revision");
     const noteInput = reviewForm.getByRole("textbox", { name: "Note for the speaker", exact: true });

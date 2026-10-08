@@ -14,6 +14,8 @@ https://:project.pages.dev/*
 /portal/*
     ! Content-Security-Policy
     Content-Security-Policy: default-src 'none'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval' https://challenges.cloudflare.com; script-src-attr 'none'; style-src 'self'; style-src-attr 'none'; font-src 'self'; connect-src 'self'; img-src 'self' data: https://i.ytimg.com; frame-src https://challenges.cloudflare.com https://www.youtube-nocookie.com https://www.youtube.com https://player.vimeo.com 'self'; worker-src 'self' blob:; media-src 'self' https://www.rovid.nl/def/dco/2016/def-dco-20160823-idoa9bivg-web-hd.mp4
+    ! Permissions-Policy
+    Permissions-Policy: camera=(self), microphone=(), geolocation=(), browsing-topics=()
 
 /donate/*
     ! Content-Security-Policy
@@ -57,3 +59,7 @@ https://:project.pages.dev/*
 /js/built/*
     ! Cache-Control
     Cache-Control: public, max-age=31536000, immutable
+    Service-Worker-Allowed: /portal/
+
+/_assets/*
+    Service-Worker-Allowed: /portal/

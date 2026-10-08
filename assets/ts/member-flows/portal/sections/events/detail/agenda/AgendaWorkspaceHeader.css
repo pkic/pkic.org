@@ -1,0 +1,21 @@
+.pk-agenda-workspace-header {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  border-block-end: 1px solid var(--pk-line);
+}
+.pk-agenda-workspace-header > .pk-tabs {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  border: 0;
+}
+.pk-agenda-workspace-header__actions {
+  flex: none;
+  padding-inline: var(--pk-2);
+}
+
+/* The event's Agenda subviews connect to its main tab strip. */
+.pk-tabs + section.pk-stack:has(> .pk-agenda-editor) {
+  margin-block-start: calc(-1 * var(--pk-gap, var(--pk-4)));
+}

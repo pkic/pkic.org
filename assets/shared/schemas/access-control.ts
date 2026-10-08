@@ -9,7 +9,7 @@ import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { permissionSchema } from "./permissions";
 import { userCatalogListQuerySchema, userCatalogListResponseSchema } from "./user-catalog";
 
-export const authorizationContextTypeSchema = z.enum(["event", "group", "organization"]);
+export const authorizationContextTypeSchema = z.enum(["event", "group", "organization", "event_sponsor"]);
 
 /** Stable identifiers for system roles seeded by the membership migration. */
 export const SYSTEM_ROLE_IDS = {

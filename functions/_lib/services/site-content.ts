@@ -33,6 +33,13 @@ import { buildSiteNavigation } from "./site-navigation";
 import { createSiteTaxonomy } from "./site-taxonomy";
 import { islandForRoute } from "./site-islands";
 import { loadPublishedEventFlow } from "./site-event-flows";
+import {
+  createSiteContentResolution,
+  decodedPath,
+  plainDocumentMarkdown,
+  renderSiteContentHero,
+  type SiteContentMetadata,
+} from "./site-content-resolution";
 import { collectDocumentSponsorSelections } from "./site-sponsor-selections";
 import { readMembershipAgreementDocuments } from "./site-membership-agreements";
 import { sponsorPublicationKey } from "../../../assets/shared/sponsor-publication-query";
@@ -48,11 +55,7 @@ import {
   type ContentDocument,
 } from "./site-documents";
 import { contentAssetUrl, createSitePresentation, plainText, portalLoginCopy } from "./site-presentation";
-import {
-  siteContentLanguageForPath,
-  siteContentLanguagePrefix,
-  type SiteContentLanguage,
-} from "../../../assets/shared/site-content-language";
+import { siteContentLanguagePrefix, type SiteContentLanguage } from "../../../assets/shared/site-content-language";
 
 export { contentPathToRoute, normalizeSitePath, parseFrontMatter } from "./site-markdown";
 export type { SiteContentPage, SiteMapEntry } from "../../../assets/shared/site-content";
@@ -374,14 +377,6 @@ function searchPage(query: string): SiteContentPage {
   };
 }
 
-function decodedPath(pathname: string): string {
-  try {
-    return decodeURI(pathname);
-  } catch {
-    return pathname;
-  }
-}
-
 /**
  * The working-group payload, with the group's own intro rendered.
  *
@@ -397,31 +392,51 @@ async function workingGroupPayload(document: ContentDocument, renderedHtml: stri
   return introHtml ? { ...section, introHtml } : section;
 }
 
-async function heroWithRenderedDescription(document: ContentDocument) {
-  const hero = heroFor(document);
-  const raw = rawDescriptionFor(document);
-  return raw ? { ...hero, descriptionHtml: await inlineMarkdownHtml(raw) } : hero;
+function documentMetadata(document: ContentDocument, route: string, pageNumber: number) {
+  const metadata: SiteContentMetadata = {
+    title: document.data.title ?? titleFor(document),
+    webinarSponsor: webinarSponsors[normalizedContentPath(document.sourcePath)],
+    socialCard: socialCardFor(document),
+    description: descriptionFor(document),
+    blog: blogSidebarFor(document),
+    draft: document.data.draft === true,
+    fullwidth: document.data.fullwidth === true,
+    keywords: document.data.keywords,
+    pageAccent: pageAccentFor(document),
+    lastModified: document.data.lastmod ? String(document.data.lastmod) : undefined,
+    hero: heroFor(document),
+    workingGroup: workingGroupSectionFor(document),
+    island: islandForRoute(route),
+    listing: sectionListing(document, pageNumber),
+    meta: document.isSection
+      ? undefined
+      : {
+          authors: document.data.authors,
+          date: document.data.date ? String(document.data.date) : undefined,
+          tags: document.data.tags,
+        },
+    redirect: document.data.redirect,
+    robots: document.data.robots,
+    route,
+    sectionNavigation: sectionNavigationFor(document),
+  };
+  const rawDescription = rawDescriptionFor(document);
+  return { metadata, rawDescription, plainMarkdown: plainDocumentMarkdown(document, metadata, rawDescription) };
 }
+
+const contentResolution = createSiteContentResolution({ documentsByRoute, searchPage, taxonomyPage, documentMetadata });
+export const loadSiteContentMetadata = contentResolution.enumerate;
 
 export async function loadSiteContent(
   pathname: string,
   options: SiteContentOptions = {},
 ): Promise<SiteContentPage | null> {
-  const route = normalizeSitePath(decodedPath(pathname));
-  if (route === "/search/") return searchPage(options.query ?? "");
-  if (route === "/authors/") return taxonomyPage(route);
-  const prefix = siteContentLanguagePrefix(siteContentLanguageForPath(route));
-  const blogPageMatch = /^\/blog\/page\/(\d+)\/$/.exec(route.slice(prefix.length));
-  const pageNumber = blogPageMatch ? Number(blogPageMatch[1]) : 1;
-  const sourceRoute = blogPageMatch ? `${prefix}/blog/` : route;
-  const document = documentsByRoute.get(sourceRoute);
-  if (!document)
-    return (
-      taxonomyPage(route) ??
-      loadPublishedEventFlow(route, options.publication, (path) => loadSiteContent(path, options))
-    );
-
-  const island = islandForRoute(route);
+  const resolved = contentResolution.resolve(pathname, options.query);
+  if (!resolved) return null;
+  if (resolved.kind === "synthetic") return resolved.page;
+  if (resolved.kind === "event-flow")
+    return loadPublishedEventFlow(resolved.route, options.publication, (path) => loadSiteContent(path, options));
+  const { route, document, pageNumber } = resolved;
   const eventDocument = inheritedEventDocument(document, documents);
   const rendered = await renderContentMarkdown(document.body, {
     publication: options.publication,
@@ -429,6 +444,8 @@ export async function loadSiteContent(
     assetUrls: (pattern) => matchingContentAssetUrls(document.sourcePath, contentMediaPaths, pattern),
     data: document.data,
     eventData: eventDocument?.data.data,
+    eventSlug: eventDocument?.route.split("/").filter(Boolean).at(-1),
+    eventRoute: eventDocument?.route,
     eventAssetUrls: (pattern) =>
       matchingContentAssetUrls(eventDocument?.sourcePath ?? document.sourcePath, contentMediaPaths, pattern),
     listing: (kind, limit) =>
@@ -448,7 +465,8 @@ export async function loadSiteContent(
     route,
     sourcePath: document.sourcePath,
   });
-  const hero = await heroWithRenderedDescription(document);
+  const page = documentMetadata(document, route, pageNumber);
+  const hero = await renderSiteContentHero(page.metadata, page.rawDescription);
   if (hero.sponsor && options.publication) {
     const groups =
       options.publication.sponsors[
@@ -463,36 +481,14 @@ export async function loadSiteContent(
     hero.sponsor.publishedSponsors = groups.flatMap((group) => group.sponsors);
   }
   return {
-    title: document.data.title ?? titleFor(document),
-    webinarSponsor: webinarSponsors[normalizedContentPath(document.sourcePath)],
-    socialCard: socialCardFor(document),
-    description: descriptionFor(document),
-    blog: blogSidebarFor(document),
-    events: route === "/events/" ? await eventsIndex(document.body) : undefined,
-    draft: document.data.draft === true,
-    fullwidth: document.data.fullwidth === true,
-    keywords: document.data.keywords,
-    pageAccent: pageAccentFor(document),
-    lastModified: document.data.lastmod ? String(document.data.lastmod) : undefined,
+    ...page.metadata,
     hero,
+    html: rendered,
+    events: route === "/events/" ? await eventsIndex(document.body) : undefined,
     workingGroup: await workingGroupPayload(document, rendered),
     home: document.isSection && !document.nodePath ? homeContent(document.language) : undefined,
-    html: rendered,
-    island,
     portalLogin:
       route === "/portal/" ? portalLoginCopy(document.data.login, homeContent().workingGroups.length) : undefined,
-    listing: sectionListing(document, pageNumber),
-    meta: document.isSection
-      ? undefined
-      : {
-          authors: document.data.authors,
-          date: document.data.date ? String(document.data.date) : undefined,
-          tags: document.data.tags,
-        },
-    redirect: document.data.redirect,
-    robots: document.data.robots,
-    route,
-    sectionNavigation: sectionNavigationFor(document),
   };
 }
 
