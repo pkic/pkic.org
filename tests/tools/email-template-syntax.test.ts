@@ -24,6 +24,7 @@ import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { DEFAULT_TEMPLATES } from "../../scripts/seed-email-templates.mjs";
+import { renderEmail } from "../../functions/_lib/email/render";
 
 /** The block helpers `functions/_lib/email/render.ts` opens and closes. */
 const SUPPORTED_BLOCKS = new Set(["if", "unless", "each"]);
@@ -58,6 +59,36 @@ function blockTags(text: string): Array<{ tag: string; name: string; line: numbe
 }
 
 describe("seeded email templates", () => {
+  it.each(["Example Reviewer", ""])("keeps multiline objections quoted with author %j", async (author) => {
+    const template = DEFAULT_TEMPLATES.find((item) => item.key === "partial_membership_review_details");
+    expect(template).toBeDefined();
+    const { html, text } = await renderEmail(
+      template!.content,
+      {
+        applicationName: "Example Organization",
+        categoryCode: "A",
+        categoryLabel: "Example Category",
+        applicantName: "Example Applicant",
+        applicantEmail: "applicant@example.test",
+        answerRows: [],
+        objections: [{ author, body: "First concern.\r\n\r\nSecond paragraph.\r\nFinal line." }],
+        reviewUrl: "https://example.test/review",
+      },
+      "{{{body_html}}}",
+    );
+    const quotes = [...html.matchAll(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/g)];
+    expect(quotes).toHaveLength(1);
+    const quote = quotes[0][1];
+    expect(quote).toContain("First concern.");
+    expect(quote).toContain("Second paragraph.");
+    expect(quote).toContain("Final line.");
+    expect(quote).not.toContain("Read the application form and respond");
+    if (author) expect(html.match(/<strong>Example Reviewer:<\/strong>/g)).toHaveLength(1);
+    expect(text).toContain("First concern.");
+    expect(text).toContain("Second paragraph.");
+    expect(text).toContain("Final line.");
+  });
+
   it("open and close only the blocks the renderer implements", () => {
     const offenders: string[] = [];
     for (const { file, text } of templateSources()) {

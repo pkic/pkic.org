@@ -453,7 +453,8 @@ function compileSimpleTemplateWithBudget(
       const lineStart = result.lastIndexOf("\n", match.index - 1) + 1;
       const prefix = result.slice(lineStart, match.index);
       // Continue template-authored quote nesting across every interpolated line.
-      return /^(?: {0,3}>[ \t]*)+$/.test(prefix) ? text.replace(/\r?\n/g, `\n${prefix}`) : text;
+      const quotePrefix = prefix.match(/^(?: {0,3}>[ \t]*)+/)?.[0];
+      return quotePrefix ? text.replace(/\r?\n/g, `\n${quotePrefix}`) : text;
     },
     budget,
   );
