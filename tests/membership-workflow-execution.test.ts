@@ -6,6 +6,7 @@ import { beforeEach, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
+import { seedMembershipReviewDigestTemplates } from "./helpers/membership-review-email-templates";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createApplicationFormSubmission, seedMemberApplication } from "./helpers/member-applications";
@@ -17,7 +18,10 @@ import { requireMembershipCategory } from "../functions/_lib/services/membership
 import { getMembershipWorkflowVersion } from "../functions/_lib/services/membership/workflows/catalog";
 import { membershipWorkflowDefinitionSchema } from "../assets/shared/schemas/membership-workflows";
 
-beforeEach(resetDb);
+beforeEach(async () => {
+  await resetDb();
+  await seedMembershipReviewDigestTemplates(env.DB);
+});
 
 it("requires an authorized staff review, a sent notice and a full window, then resolves the last objection and provisions atomically", async () => {
   await seedEventAndAdmin(env.DB);

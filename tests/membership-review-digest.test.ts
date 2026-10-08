@@ -1,5 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { DEFAULT_TEMPLATES } from "../scripts/seed-email-templates.mjs";
+import { seedMembershipReviewDigestTemplates } from "./helpers/membership-review-email-templates";
 import { env } from "cloudflare:workers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import app from "../functions/router";
@@ -26,7 +26,7 @@ import { gateBatchGroup, gateNextFirst } from "./helpers/d1-batch-gate";
 let today: string;
 beforeEach(async () => {
   await resetDb();
-  await seedDigestTemplates();
+  await seedMembershipReviewDigestTemplates(env.DB);
   const future = new Date();
   future.setUTCDate(future.getUTCDate() + 1);
   future.setUTCHours(12, 0, 0, 0);
@@ -58,31 +58,6 @@ async function reviewedApplication(name: string, council = false) {
     .bind(today, id, council ? 2 : 1)
     .run();
   return id;
-}
-
-async function seedDigestTemplates() {
-  for (const template of DEFAULT_TEMPLATES.filter(
-    (item) => item.key === "membership-workflow-review-digest" || item.key.startsWith("partial_membership_review_"),
-  )) {
-    const existing = await env.DB.prepare("SELECT id FROM email_template_versions WHERE template_key = ?")
-      .bind(template.key)
-      .first();
-    if (existing) continue;
-    const version = await createTemplateVersion(env.DB, {
-      templateKey: template.key,
-      content: template.content,
-      contentType: template.contentType,
-      subjectTemplate: template.subjectTemplate,
-      createdByUserId: null,
-    });
-    await activateTemplateVersion(env.DB, { templateKey: template.key, version: version.version });
-  }
-  const layout = await createTemplateVersion(env.DB, {
-    templateKey: "email_layout",
-    content: "{{{body_html}}}",
-    createdByUserId: null,
-  });
-  await activateTemplateVersion(env.DB, { templateKey: "email_layout", version: layout.version });
 }
 
 async function prepareWorkflowRestart(id: string, changePolicy = false) {
@@ -208,7 +183,7 @@ it("combines concurrent organization reviews and starts both full windows only a
       return new Response(null, { status: 202, headers: { "x-message-id": "digest-message" } });
     });
   vi.stubGlobal("fetch", send);
-  await seedDigestTemplates();
+  await seedMembershipReviewDigestTemplates(env.DB);
   const baseline = await resolveTemplate(env.DB, "membership-workflow-review-digest");
   const customized = await createTemplateVersion(env.DB, {
     templateKey: "membership-workflow-review-digest",
@@ -223,7 +198,7 @@ it("combines concurrent organization reviews and starts both full windows only a
     version: customized.version,
   });
   // Reapplying the seed must preserve the administrator's active version.
-  await seedDigestTemplates();
+  await seedMembershipReviewDigestTemplates(env.DB);
   expect(await processPendingOutbox(env.DB, env as Env)).toEqual({ processed: 0, failed: 0 });
   expect(send).not.toHaveBeenCalled();
   vi.setSystemTime(new Date(digest.send_after));
@@ -411,7 +386,7 @@ it("uses the cleaned payload when delivery selected a shared digest before the r
   const peer = await reviewedApplication("Remaining Organization");
   for (const id of [moved, peer]) await evaluateMembershipApplication(env.DB, id, "https://app.test");
   const [digest] = await digests();
-  await seedDigestTemplates();
+  await seedMembershipReviewDigestTemplates(env.DB);
   const send = vi
     .fn()
     .mockResolvedValue(new Response(null, { status: 202, headers: { "x-message-id": "cleaned-digest" } }));
@@ -437,7 +412,7 @@ it("refuses a workflow restart during an active send and preserves a sent notice
   const id = await reviewedApplication("Sending Organization");
   await evaluateMembershipApplication(env.DB, id, "https://app.test");
   const [digest] = await digests();
-  await seedDigestTemplates();
+  await seedMembershipReviewDigestTemplates(env.DB);
   vi.setSystemTime(new Date(digest.send_after));
   let reached!: () => void;
   let accept!: (response: Response) => void;
@@ -502,7 +477,7 @@ it.each([
   const execution = await getMembershipExecution(env.DB, id);
   expect(execution.application.stage).toBe(stage);
   if (stage === "on_hold") expect(execution.steps[1]).toMatchObject({ state: "waiting", notice_outbox_id: null });
-  await seedDigestTemplates();
+  await seedMembershipReviewDigestTemplates(env.DB);
   const send = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
   vi.stubGlobal("fetch", send);
   vi.setSystemTime(new Date(original.send_after));
@@ -532,7 +507,7 @@ it("queues a fresh daily notice and full review window when an unsent held revie
     opened_at: null,
     deadline_at: null,
   });
-  await seedDigestTemplates();
+  await seedMembershipReviewDigestTemplates(env.DB);
   vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(null, { status: 202 })));
   vi.setSystemTime(new Date(replacement.send_after));
   await processOutboxById(env.DB, env as Env, replacement.id);
