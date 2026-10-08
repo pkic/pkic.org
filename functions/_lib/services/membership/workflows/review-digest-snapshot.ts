@@ -52,7 +52,7 @@ export async function membershipReviewDigestSnapshot(
     "markdown",
   );
   return {
-    summary: `${compileSimpleTemplate(templates.get(keys[0])!.content, data)}\n\n`,
-    details: `${compileSimpleTemplate(templates.get(keys[1])!.content, data)}\n\n`,
+    summary: `${compileSimpleTemplate(templates.get(keys[0])!.content, data, "markdown")}\n\n`,
+    details: `${compileSimpleTemplate(templates.get(keys[1])!.content, data, "markdown")}\n\n`,
   };
 }

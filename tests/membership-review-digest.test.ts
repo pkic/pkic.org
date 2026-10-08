@@ -562,6 +562,53 @@ it("refuses stage changes while a digest is sending and preserves sent review ev
   expect((await digests())[0].payload_json).toBe(original.payload_json);
 });
 
+it.each([true, false])(
+  "keeps multi-paragraph objections quoted through snapshot storage and delivery (author: %s)",
+  async (withAuthor) => {
+    const id = await reviewedApplication("Example Organization");
+    await seedEventAndAdmin(env.DB);
+    const [reviewer] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'");
+    await env.DB.prepare("UPDATE users SET first_name = 'Example', last_name = 'Reviewer' WHERE id = ?")
+      .bind(reviewer.id)
+      .run();
+    await env.DB.prepare(
+      `INSERT INTO membership_application_objections
+      (id, application_id, generation, step_position, author_user_id, body, state, created_at)
+      VALUES (?, ?, 1, 1, ?, ?, 'unresolved', ?)`,
+    )
+      .bind(
+        crypto.randomUUID(),
+        id,
+        withAuthor ? reviewer.id : null,
+        "First concern.\r\n\r\nSecond paragraph.\r\nFinal line. [Untrusted link](https://hostile.test/) {{instructions}}",
+        today,
+      )
+      .run();
+    await evaluateMembershipApplication(env.DB, id, "https://app.test");
+    const [digest] = await digests();
+    const payload = JSON.parse(digest.payload_json);
+    expect(payload.applicationDetails).toMatch(/\n>[ \t]*\n> Second paragraph/);
+    expect(payload.reviewApplications[id].details).toContain("\n> Final line");
+    const send = vi.fn().mockResolvedValue(new Response(null, { status: 202 }));
+    vi.stubGlobal("fetch", send);
+    vi.setSystemTime(new Date(digest.send_after));
+    await processOutboxById(env.DB, env as Env, digest.id);
+    expect(send).toHaveBeenCalledOnce();
+    const message = JSON.parse(String(send.mock.calls[0][1].body));
+    const html = message.content.find((part: { type: string }) => part.type === "text/html").value;
+    const quotes = [...html.matchAll(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/g)];
+    expect(quotes).toHaveLength(1);
+    for (const paragraph of ["First concern.", "Second paragraph.", "Final line."])
+      expect(quotes[0][1]).toContain(paragraph);
+    expect(quotes[0][1]).not.toContain("Read the application form and respond");
+    expect(html.match(/<strong>Example Reviewer:<\/strong>/g) ?? []).toHaveLength(withAuthor ? 1 : 0);
+    expect(html).not.toContain('href="https://hostile.test/"');
+    expect(quotes[0][1]).toContain("{{instructions}}");
+    const text = message.content.find((part: { type: string }) => part.type === "text/plain").value;
+    for (const paragraph of ["First concern.", "Second paragraph.", "Final line."]) expect(text).toContain(paragraph);
+  },
+);
+
 it("renders three complete application forms with current labels and literal applicant text", async () => {
   const ids = await Promise.all(
     ["Example Trust Software", "Example Key Systems", "Example Identity Tools"].map((name) =>

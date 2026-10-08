@@ -18,6 +18,18 @@ function expectRenderLimit(action: () => unknown): void {
 
 describe("email template engine (compileSimpleTemplate)", () => {
   describe("variable substitution", () => {
+    it("continues fragment blockquotes only in Markdown mode", () => {
+      const template = "> **{{author}}:** {{body}}";
+      const data = { author: "Reviewer", body: "First concern\r\n\r\nSecond paragraph" };
+      expect(compileSimpleTemplate(template, data, "markdown")).toBe(
+        "> **Reviewer:** First concern\n> \n> Second paragraph",
+      );
+      const literal = "> **Reviewer:** First concern\r\n\r\nSecond paragraph";
+      expect(compileSimpleTemplate(template, data)).toBe(literal);
+      expect(compileSimpleTemplate(template, data, "text")).toBe(literal);
+      expect(compileSimpleTemplate(template, data, "html")).toBe(literal);
+    });
+
     it("replaces simple variables", () => {
       const result = compileSimpleTemplate("Hello {{name}}", { name: "Alice" });
       expect(result).toBe("Hello Alice");

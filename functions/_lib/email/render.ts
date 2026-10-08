@@ -2,61 +2,22 @@ import { marked } from "marked";
 import type { EmailContentType } from "../../../assets/shared/schemas/email-templates";
 import { resolveEmailTemplateData } from "./plain-text";
 import {
-  assertEmailTemplateRenderLength,
-  EMAIL_TEMPLATE_RENDER_MAX_CHARS,
-  throwEmailTemplateRenderLimitExceeded,
+  assertTemplateRenderDepth,
+  assertTemplateRenderLength,
+  consumeTemplateExpansions,
+  consumeTemplateWork,
+  createTemplateRenderBudget,
+  EMAIL_SUBJECT_RENDER_MAX_CHARS,
+  type TemplateRenderBudget,
 } from "./render-limit";
 import { inlineEmailComponentStyles, resolveEmailBrandBaseUrl } from "./render-components";
 
-export { EMAIL_TEMPLATE_RENDER_MAX_CHARS } from "./render-limit";
-
-export const EMAIL_TEMPLATE_RENDER_MAX_EXPANSIONS = 1_000;
-export const EMAIL_TEMPLATE_RENDER_MAX_WORK_CHARS = 8_000_000;
-export const EMAIL_SUBJECT_RENDER_MAX_CHARS = 8_192;
-const EMAIL_TEMPLATE_RENDER_MAX_DEPTH = 32;
-
-interface TemplateRenderBudget {
-  markdown?: boolean;
-  maxChars: number;
-  maxExpansions: number;
-  maxWorkChars: number;
-  expansions: number;
-  workChars: number;
-}
-
-function createTemplateRenderBudget(
-  maxChars = EMAIL_TEMPLATE_RENDER_MAX_CHARS,
-  maxExpansions = EMAIL_TEMPLATE_RENDER_MAX_EXPANSIONS,
-  maxWorkChars = EMAIL_TEMPLATE_RENDER_MAX_WORK_CHARS,
-): TemplateRenderBudget {
-  return { maxChars, maxExpansions, maxWorkChars, expansions: 0, workChars: 0 };
-}
-
-function throwTemplateRenderLimitExceeded(): never {
-  return throwEmailTemplateRenderLimitExceeded();
-}
-
-function assertTemplateRenderLength(length: number, budget: TemplateRenderBudget): void {
-  assertEmailTemplateRenderLength(length, budget.maxChars);
-}
-
-function assertTemplateRenderDepth(depth: number): void {
-  if (depth > EMAIL_TEMPLATE_RENDER_MAX_DEPTH) throwTemplateRenderLimitExceeded();
-}
-
-function consumeTemplateExpansions(budget: TemplateRenderBudget, count: number): void {
-  if (!Number.isSafeInteger(count) || count < 0 || budget.expansions + count > budget.maxExpansions) {
-    throwTemplateRenderLimitExceeded();
-  }
-  budget.expansions += count;
-}
-
-function consumeTemplateWork(budget: TemplateRenderBudget, characters: number): void {
-  if (!Number.isSafeInteger(characters) || characters < 0 || budget.workChars + characters > budget.maxWorkChars) {
-    throwTemplateRenderLimitExceeded();
-  }
-  budget.workChars += characters;
-}
+export {
+  EMAIL_TEMPLATE_RENDER_MAX_CHARS,
+  EMAIL_TEMPLATE_RENDER_MAX_EXPANSIONS,
+  EMAIL_TEMPLATE_RENDER_MAX_WORK_CHARS,
+  EMAIL_SUBJECT_RENDER_MAX_CHARS,
+} from "./render-limit";
 
 function replaceTemplateBounded(
   input: string,
@@ -465,8 +426,15 @@ function compileSimpleTemplateWithBudget(
   return result;
 }
 
-export function compileSimpleTemplate(template: string, data: Record<string, unknown>): string {
-  return compileSimpleTemplateWithBudget(template, data, createTemplateRenderBudget(), 0);
+/** Compile a fragment in its destination format, preserving Markdown blockquotes when requested. */
+export function compileSimpleTemplate(
+  template: string,
+  data: Record<string, unknown>,
+  contentType: EmailContentType = "text",
+): string {
+  const budget = createTemplateRenderBudget();
+  budget.markdown = contentType === "markdown";
+  return compileSimpleTemplateWithBudget(template, data, budget, 0);
 }
 
 /**
