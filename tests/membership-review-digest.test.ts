@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
+import { DEFAULT_TEMPLATES } from "../scripts/seed-email-templates.mjs";
 import { env } from "cloudflare:workers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import app from "../functions/router";
@@ -60,8 +61,22 @@ async function reviewedApplication(name: string, council = false) {
 }
 
 async function seedDigestTemplates() {
-  const migration = env.TEST_MIGRATIONS.find((item) => item.name === "0038_membership_review_digest_template.sql")!;
-  for (const query of migration.queries) await env.DB.prepare(query).run();
+  for (const template of DEFAULT_TEMPLATES.filter(
+    (item) => item.key === "membership-workflow-review-digest" || item.key.startsWith("partial_membership_review_"),
+  )) {
+    const existing = await env.DB.prepare("SELECT id FROM email_template_versions WHERE template_key = ?")
+      .bind(template.key)
+      .first();
+    if (existing) continue;
+    const version = await createTemplateVersion(env.DB, {
+      templateKey: template.key,
+      content: template.content,
+      contentType: template.contentType,
+      subjectTemplate: template.subjectTemplate,
+      createdByUserId: null,
+    });
+    await activateTemplateVersion(env.DB, { templateKey: template.key, version: version.version });
+  }
   const layout = await createTemplateVersion(env.DB, {
     templateKey: "email_layout",
     content: "{{{body_html}}}",
