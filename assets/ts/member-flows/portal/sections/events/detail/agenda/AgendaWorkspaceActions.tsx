@@ -5,8 +5,6 @@ export function AgendaWorkspaceActions({
   canEdit,
   busy,
   onUndo,
-  calendarLocked,
-  onToggleCalendarLock,
   onNewSession,
   onNewBreak,
   onSettings,
@@ -21,8 +19,6 @@ export function AgendaWorkspaceActions({
   canEdit: boolean;
   busy: boolean;
   onUndo?: () => void;
-  calendarLocked: boolean;
-  onToggleCalendarLock: () => void;
   onNewSession: () => void;
   onNewBreak: () => void;
   onSettings: () => void;
@@ -42,11 +38,6 @@ export function AgendaWorkspaceActions({
         ...(canEdit
           ? [
               ...(onUndo ? [{ id: "undo", label: "Undo last session edit", disabled: busy, onSelect: onUndo }] : []),
-              {
-                id: "calendar-lock",
-                label: calendarLocked ? "Unlock calendar" : "Lock calendar",
-                onSelect: onToggleCalendarLock,
-              },
               { id: "new-session", label: "New session", onSelect: onNewSession },
               { id: "new-break", label: "Add break or lunch", onSelect: onNewBreak },
               { id: "rules", label: "Scheduling rules", onSelect: onSettings },

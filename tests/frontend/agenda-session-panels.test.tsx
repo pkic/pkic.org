@@ -35,7 +35,7 @@ afterEach(() => {
   host.remove();
   vi.unstubAllGlobals();
 });
-it("opens archive and promotion panels directly from the loaded agenda before any local mutation", async () => {
+it("opens archive and promotion panels directly from the loaded agenda in view mode and enables their editing only after unlocking", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn(
@@ -59,6 +59,19 @@ it("opens archive and promotion panels directly from the loaded agenda before an
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
   await vi.waitFor(() => expect(host.textContent).toContain("Cryptographic operations"));
+  expect(host.querySelector('button[aria-label="Enable agenda editing"]')).not.toBeNull();
+  await runRowAction(host, "Cryptographic operations", "Session archive / materials");
+  expect(host.querySelector("form")).toBeNull();
+  expect(host.textContent).not.toContain("Save archive details");
+  await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Session archive actions"]')!.click());
+  await act(() => menuItemNamed(host, "Close")!.click());
+  await runRowAction(host, "Cryptographic operations", "Speaker promotion kit");
+  expect(host.querySelector("form")).toBeNull();
+  await act(() =>
+    [...host.querySelectorAll<HTMLButtonElement>("button")].find((button) => button.textContent === "Close")!.click(),
+  );
+  await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Enable agenda editing"]')!.click());
+  await new Promise((resolve) => setTimeout(resolve, 0));
   await runRowAction(host, "Cryptographic operations", "Session archive / materials");
   expect([...host.querySelectorAll("label")].some((label) => label.textContent?.startsWith("Prerequisites"))).toBe(
     true,

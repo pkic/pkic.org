@@ -1,0 +1,9 @@
+/* Shared pressed styling is loaded with toggle controls rather than signed-out entry screens. */
+@layer components {
+  .pk-btn--secondary[aria-pressed="true"],
+  .pk-btn--secondary[aria-pressed="true"]:hover:not(:disabled, [aria-disabled="true"]) {
+    background: var(--pk-accent-soft);
+    border-color: var(--pk-accent);
+    color: var(--pk-accent-ink);
+  }
+}

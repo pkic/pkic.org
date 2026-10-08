@@ -129,6 +129,8 @@ describe("canonical scheduling preview", () => {
       }),
     );
     await mount(<AgendaEditor slug="event" canEdit />);
+    await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Enable agenda editing"]')!.click());
+    await settle();
     await act(() =>
       [...host.querySelectorAll<HTMLButtonElement>("button")]
         .find((button) => button.textContent === "Schedule")!
@@ -228,6 +230,8 @@ describe("canonical scheduling preview", () => {
       }),
     );
     await mount(<AgendaEditor slug="event" canEdit />);
+    await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Enable agenda editing"]')!.click());
+    await settle();
     await act(() =>
       [...host.querySelectorAll<HTMLButtonElement>("button")]
         .find((button) => button.textContent === "Schedule")!
@@ -493,6 +497,8 @@ it("undoes a primary-room move through a reviewed reverse proposal with exact sp
     }),
   );
   await mount(<AgendaEditor slug="event" canEdit />);
+  await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Enable agenda editing"]')!.click());
+  await settle();
   await runRowAction(host, "Session 10", "Move to day / location");
   await act(() => {
     const room = host.querySelector<HTMLSelectElement>('[name="changes.0.roomId"]')!;

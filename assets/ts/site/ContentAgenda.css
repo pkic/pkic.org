@@ -35,10 +35,6 @@
     gap: var(--pk-1);
   }
 
-  .pk-content-agenda[data-agenda-time-display="browser"] [data-agenda-clock="browser"] {
-    order: -1;
-  }
-
   .pk-agenda-dialog .pk-content-agenda__controls {
     top: 0;
   }
@@ -96,7 +92,7 @@
     overflow-x: auto;
   }
 
-  .pk-content-agenda__tabs button {
+  .pk-content-agenda__tabs button[aria-selected] {
     padding: var(--pk-2) var(--pk-3);
     border: 0;
     border-block-start: 1px solid var(--pk-line);
@@ -978,4 +974,57 @@
 }
 .pk-agenda-editor__card-actions:has(.pk-menu__trigger[aria-expanded="true"]) {
   z-index: 7;
+}
+
+/* Explicit time tracks do not absorb spare room-grid width. */
+.pk-content-agenda {
+  --agenda-clock-width: 5rem;
+  --agenda-time-width: 6rem;
+}
+.pk-content-agenda[data-agenda-distinct-zones="true"] {
+  --agenda-time-width: 11rem;
+}
+.pk-content-agenda__timeline {
+  table-layout: fixed;
+}
+.pk-content-agenda__time-column {
+  width: var(--agenda-time-width);
+}
+.pk-content-agenda .pk-content-agenda__timeline .pk-content-agenda__time,
+.pk-content-agenda .pk-content-agenda__timeline .pk-content-agenda__time-heading {
+  width: var(--agenda-time-width);
+  min-width: var(--agenda-time-width);
+  max-width: var(--agenda-time-width);
+  box-sizing: border-box;
+  padding-inline: var(--pk-1);
+}
+.pk-content-agenda .pk-content-agenda__clocks {
+  gap: var(--pk-1);
+  flex-direction: row;
+  justify-content: flex-start;
+}
+.pk-content-agenda__clock {
+  width: var(--agenda-clock-width);
+  flex-shrink: 0;
+}
+.pk-content-agenda__time-heading > small {
+  display: inline-block;
+  width: var(--agenda-clock-width);
+  vertical-align: top;
+}
+.pk-content-agenda__time-heading > small[hidden] {
+  display: none;
+}
+.pk-agenda-editor .pk-content-agenda__timeline {
+  width: 100%;
+}
+
+.pk-content-agenda .pk-content-agenda__clock > time {
+  font-size: var(--pk-text-md);
+  font-weight: 700;
+  color: var(--pk-ink);
+}
+
+.pk-agenda-editor .pk-content-agenda__room-column {
+  width: auto;
 }

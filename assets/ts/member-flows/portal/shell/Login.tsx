@@ -81,13 +81,16 @@ export function Login({
    * A browser with no passkey support has no primary action to fold behind,
    * so the email form is the screen rather than a disclosure inside it.
    *
-   * A sent link takes the form away. The design leaves it up beside the
-   * confirmation, but a form that still invites a submit after "check your
-   * inbox" contradicts it — and the third send inside a minute is refused by
-   * the rate limiter, so the invitation is to an error. The passkey button
-   * stays: giving up on the email and using a passkey is a real thing to do.
+   * A sent link replaces the form with confirmation and an explicit way to
+   * request another link. Returning to email preserves the address; choosing
+   * a passkey clears the previous email feedback before its ceremony starts.
    */
   const emailShown = (emailOpen || !passkeysSupported) && !magicLink.sent;
+
+  function openEmail(): void {
+    magicLink.clearFeedback();
+    setEmailOpen(true);
+  }
 
   async function handleSubmit(e: Event): Promise<void> {
     e.preventDefault();
@@ -106,7 +109,7 @@ export function Login({
 
   async function handlePasskeySignIn(): Promise<void> {
     if (busy || passkeySubmitting || magicLink.submitting) return;
-    magicLink.setError(null);
+    magicLink.clearFeedback();
     setPasskeySubmitting(true);
     try {
       await signInWithPasskey();
@@ -162,8 +165,14 @@ export function Login({
                   </div>
                 )}
 
-                {passkeysSupported && !emailShown && (
-                  <Button variant="secondary" block onClick={() => setEmailOpen(true)}>
+                {magicLink.sent && (
+                  <Button variant="secondary" block onClick={openEmail}>
+                    Request another link
+                  </Button>
+                )}
+
+                {passkeysSupported && !emailShown && !magicLink.sent && (
+                  <Button variant="secondary" block onClick={openEmail}>
                     Sign in with an email link
                   </Button>
                 )}
@@ -192,7 +201,15 @@ export function Login({
                     </Field>
                     <MagicLinkSubmitButton submitting={magicLink.submitting} />
                     {passkeysSupported && (
-                      <Button variant="ghost" size="sm" block onClick={() => setEmailOpen(false)}>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        block
+                        onClick={() => {
+                          magicLink.clearFeedback();
+                          setEmailOpen(false);
+                        }}
+                      >
                         Back to passkey
                       </Button>
                     )}

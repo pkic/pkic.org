@@ -102,10 +102,11 @@ function browserZone(zone: string) {
   });
 }
 
-function publishedAgenda(startsAt = "2026-12-01T23:30:00.000Z") {
+function publishedAgenda(startsAt = "2026-12-01T23:30:00.000Z", editor = false) {
   document.body.innerHTML = renderToString(
     <ContentAgenda
       timeZone="Europe/Amsterdam"
+      editor={editor ? { session: () => ({ controls: null }), dropTarget: () => null } : undefined}
       speakers={[]}
       days={[
         {
@@ -182,4 +183,26 @@ describe("progressive public agenda clocks", () => {
     expect(local.textContent).toBe(agendaLocalClock("2026-12-02T18:30:00.000Z", "Europe/Amsterdam", "Asia/Tokyo").date);
     expect(root.querySelector("[data-agenda-panel]")?.getAttribute("data-agenda-panel")).toBe("2026-12-02");
   });
+});
+
+it("updates editor clocks without a public picker after the agenda mounts again", () => {
+  browserZone("Asia/Tokyo");
+  let root = publishedAgenda("2026-12-02T18:30:00.000Z", true);
+  initLocalTime(root);
+  expect(root.querySelector("[data-agenda-time-select]")).toBeNull();
+  expect(root.dataset.agendaDistinctZones).toBe("true");
+  expect(root.querySelector<HTMLElement>('[data-agenda-clock="browser"]')!.hidden).toBe(false);
+  expect(root.querySelector("[data-agenda-local-date]")!.textContent).toBe(
+    agendaLocalClock("2026-12-02T18:30:00.000Z", "Europe/Amsterdam", "Asia/Tokyo").date,
+  );
+  root = publishedAgenda("2026-03-20T18:30:00.000Z", true);
+  initLocalTime(root);
+  expect(root.querySelector('[data-agenda-clock="browser"] time')!.textContent).toBe(
+    formatClockInZone("2026-03-20T18:30:00.000Z", "Asia/Tokyo"),
+  );
+  vi.restoreAllMocks();
+  browserZone("Europe/Amsterdam");
+  initLocalTime(root);
+  expect(root.dataset.agendaDistinctZones).toBe("false");
+  expect(root.querySelector<HTMLElement>('[data-agenda-clock="browser"]')!.hidden).toBe(true);
 });

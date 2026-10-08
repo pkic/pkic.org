@@ -1,3 +1,4 @@
+import "../ui/ButtonToggle.css";
 import { useEffect, useRef } from "preact/hooks";
 import "../../design/tokens.agenda.generated.css";
 import { formatTimeRangeInZone } from "../../shared/format-date";
@@ -60,7 +61,6 @@ export function ContentAgenda({
     };
   }, []);
   useEffect(() => {
-    if (editor) return;
     let active = true;
     let dispose: (() => void) | undefined;
     void import("../../js/modules/local-time.js").then(({ initLocalTime }) => {
@@ -80,8 +80,8 @@ export function ContentAgenda({
       class="pk-content-agenda"
       aria-label="Event agenda"
       data-module="site/agenda"
-      data-agenda-time-zone={editor ? undefined : timeZone}
-      data-agenda-time-display={editor ? undefined : "venue"}
+      data-agenda-time-zone={timeZone}
+      data-agenda-time-display="venue"
       data-agenda-public-fragments={fragmentNavigation && !editor ? "" : undefined}
     >
       <h2 class="pk-sr-only">Event agenda</h2>
@@ -164,6 +164,7 @@ export function ContentAgenda({
           variant="secondary"
           icon
           data-agenda-expand
+          aria-pressed="false"
           aria-expanded="false"
           aria-label="Expand agenda"
           title="Expand agenda"
@@ -248,20 +249,27 @@ export function ContentAgenda({
                 </span>
               </div>
             )}
-            <table class="pk-content-agenda__timeline">
+            <table class="pk-content-agenda__timeline" data-agenda-has-rooms={day.locations.length ? "true" : "false"}>
               <caption class="pk-sr-only">
                 Agenda for {day.date}, times in {timeZone}
               </caption>
+              <colgroup>
+                <col class="pk-content-agenda__time-column" />
+                {day.locations.map((location) => (
+                  <col key={location.id} class="pk-content-agenda__room-column" />
+                ))}
+                {(editor?.addLocation || (editor && !day.locations.length)) && (
+                  <col class="pk-content-agenda__add-column" />
+                )}
+              </colgroup>
               <thead>
                 <tr>
                   <th scope="col" class="pk-content-agenda__time-heading">
-                    Time
+                    <span class="pk-sr-only">Time</span>
                     <small title={timeZone}>Event · {venueLabel}</small>
-                    {!editor && (
-                      <small data-agenda-browser-zone hidden>
-                        Your time
-                      </small>
-                    )}
+                    <small data-agenda-browser-zone hidden>
+                      Your time
+                    </small>
                   </th>
                   {day.locations.map((location, index) => (
                     <th
@@ -272,9 +280,9 @@ export function ContentAgenda({
                       {editor?.roomHeader ? editor.roomHeader(location) : location.label}
                     </th>
                   ))}
-                  {editor?.addLocation && (
+                  {(editor?.addLocation || (editor && !day.locations.length)) && (
                     <th scope="col" class="pk-agenda-editor__add-room">
-                      {editor.addLocation}
+                      {editor?.addLocation}
                     </th>
                   )}
                 </tr>
@@ -303,19 +311,17 @@ export function ContentAgenda({
                         <div class="pk-content-agenda__clock" aria-label="Event time" data-agenda-clock="venue">
                           <time dateTime={slot.startsAt}>{slot.time}</time>
                         </div>
-                        {!editor && (
-                          <div
-                            class="pk-content-agenda__clock"
-                            aria-label="Your time"
-                            data-agenda-clock="browser"
-                            data-local-time-container
-                            data-event-time-zone={timeZone}
-                            hidden
-                          >
-                            <LocalTime value={slot.startsAt} format="time" />
-                            <small data-agenda-local-date hidden />
-                          </div>
-                        )}
+                        <div
+                          class="pk-content-agenda__clock"
+                          aria-label="Your time"
+                          data-agenda-clock="browser"
+                          data-local-time-container
+                          data-event-time-zone={timeZone}
+                          hidden
+                        >
+                          <LocalTime value={slot.startsAt} format="time" />
+                          <small data-agenda-local-date hidden />
+                        </div>
                       </div>
                       {editor?.dropTarget(slot.startsAt, "")}
                     </th>
@@ -389,7 +395,9 @@ export function ContentAgenda({
                         ) : null}
                       </td>
                     )}
-                    {editor?.addLocation && <td class="pk-agenda-editor__add-room" />}
+                    {(editor?.addLocation || (editor && !day.locations.length)) && (
+                      <td class="pk-agenda-editor__add-room" />
+                    )}
                   </tr>
                 ))}
               </tbody>

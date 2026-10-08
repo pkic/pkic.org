@@ -67,6 +67,8 @@ it("keeps agenda actions at card scope and list creation in the table toolbar an
   vi.stubGlobal("fetch", fetcher);
   await act(() => render(<AgendaEditor slug="event" canEdit />, host));
   await settle();
+  await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Enable agenda editing"]')!.click());
+  await settle();
   await act(() =>
     [...host.querySelectorAll<HTMLButtonElement>("button")]
       .find((button) => button.textContent === "Schedule")!

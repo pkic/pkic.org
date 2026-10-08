@@ -59,6 +59,8 @@ async function mount() {
   document.body.append(host);
   await act(() => render(<AgendaEditor slug="synthetic" canEdit />, host));
   await settle();
+  await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Enable agenda editing"]')!.click());
+  await settle();
 }
 function agendaReads(url: string, data = snapshot) {
   if (url.includes("/occurrences/filters"))
@@ -106,8 +108,11 @@ async function runRowAction(root: ParentNode, subject: string, action: string) {
   await settle();
 }
 async function openUnscheduledSources() {
-  const source = host.querySelector<HTMLButtonElement>('[aria-label="Session sources"]')!;
+  const source = host.querySelector<HTMLButtonElement>('button[aria-controls^="agenda-sources-"]')!;
   if (source.getAttribute("aria-expanded") !== "true") await act(() => source.click());
+  expect(source.getAttribute("aria-pressed")).toBe("true");
+  expect(source.getAttribute("aria-label")).toBe("Hide session sources");
+  expect(source.querySelector("svg path")?.getAttribute("d")).toBe("M10 2v12M4 5l3 3-3 3");
   await settle();
   await act(() => {
     [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')]

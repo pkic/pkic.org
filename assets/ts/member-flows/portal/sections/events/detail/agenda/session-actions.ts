@@ -4,6 +4,7 @@ import type { useAgendaScheduling } from "./useAgendaScheduling";
 
 interface AgendaSessionActionContext {
   canEdit: boolean;
+  canInspect?: boolean;
   canReviewAppearances: boolean;
   busy: boolean;
   scheduling: Pick<ReturnType<typeof useAgendaScheduling>, "actions" | "move" | "resize" | "timeStep">;
@@ -22,13 +23,18 @@ export function agendaCardActions(actions: RowActionsProps["actions"]) {
 /** Cards, rows and details offer the same authorized commands for the same occurrence. */
 export function agendaSessionActions(
   occurrence: AgendaOccurrence,
-  { canEdit, canReviewAppearances, busy, scheduling, open, select }: AgendaSessionActionContext,
+  { canEdit, canInspect, canReviewAppearances, busy, scheduling, open, select }: AgendaSessionActionContext,
   beforeSelect?: () => void,
 ): RowActionsProps["actions"] {
   const actions: RowActionsProps["actions"] = !canEdit
-    ? canReviewAppearances
-      ? [{ id: "history", label: "Review historical representation", onSelect: () => open.history(occurrence) }]
-      : []
+    ? canInspect
+      ? [
+          { id: "history", label: "Session archive / materials", onSelect: () => open.history(occurrence) },
+          { id: "promotion", label: "Speaker promotion kit", onSelect: () => open.promotion(occurrence) },
+        ]
+      : canReviewAppearances
+        ? [{ id: "history", label: "Review historical representation", onSelect: () => open.history(occurrence) }]
+        : []
     : [
         { id: "edit", label: "Edit session", disabled: busy, onSelect: () => open.edit(occurrence) },
         ...(open.locations

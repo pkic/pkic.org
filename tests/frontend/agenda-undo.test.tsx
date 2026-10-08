@@ -58,6 +58,8 @@ async function edit() {
   document.body.append(host);
   await act(() => render(<AgendaEditor slug="synthetic" canEdit />, host));
   await settle();
+  await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Enable agenda editing"]')!.click());
+  await settle();
   await runRowAction(host, "Original workshop", "Edit session");
   await vi.waitFor(() => expect(host.querySelector('[name="title"]')).not.toBeNull());
   await act(() => {

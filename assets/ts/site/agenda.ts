@@ -193,7 +193,14 @@ export function initializeContentAgenda(root: HTMLElement): () => void {
   const compact = root.querySelector<HTMLButtonElement>("[data-agenda-compact]");
   if (compact)
     listen(compact, "click", () => {
-      compact.setAttribute("aria-pressed", String(root.classList.toggle("is-compact")));
+      const collapsed = root.classList.toggle("is-compact");
+      compact.setAttribute("aria-pressed", String(collapsed));
+      const label = collapsed ? "Show session descriptions" : "Compact agenda";
+      compact.setAttribute("aria-label", label);
+      compact.setAttribute("title", label);
+      compact
+        .querySelector("svg path")
+        ?.setAttribute("d", collapsed ? "m4 6 4-4 4 4M4 10l4 4 4-4" : "m4 2 4 4 4-4M4 14l4-4 4 4");
     });
   const expand = root.querySelector<HTMLButtonElement>("[data-agenda-expand]");
   if (expand) {
@@ -212,6 +219,7 @@ export function initializeContentAgenda(root: HTMLElement): () => void {
     listen(dialog, "close", () => {
       position.replaceWith(root);
       expand.setAttribute("aria-expanded", "false");
+      expand.setAttribute("aria-pressed", "false");
       expand.setAttribute("aria-label", "Expand agenda");
       expand.setAttribute("title", "Expand agenda");
       if (enterIconPath) expandIcon?.setAttribute("d", enterIconPath);
@@ -224,11 +232,12 @@ export function initializeContentAgenda(root: HTMLElement): () => void {
       }
       root.parentNode?.insertBefore(position, root);
       dialog.appendChild(root);
-      expand.setAttribute("aria-expanded", "true");
+      dialog.showModal();
+      expand.setAttribute("aria-expanded", String(dialog.open));
+      expand.setAttribute("aria-pressed", String(dialog.open));
       expand.setAttribute("aria-label", "Exit fullscreen");
       expand.setAttribute("title", "Exit fullscreen");
       expandIcon?.setAttribute("d", "M6 2v4H2m12 0h-4V2M2 10h4v4m4 0v-4h4");
-      dialog.showModal();
       expand.focus();
     });
   }

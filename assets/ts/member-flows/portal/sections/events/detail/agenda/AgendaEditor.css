@@ -136,7 +136,7 @@
 @media (max-width: 46rem) {
   .pk-agenda-editor .pk-content-agenda__timeline {
     display: table;
-    width: max-content;
+    width: 100%;
     min-width: 100%;
   }
   .pk-agenda-editor .pk-content-agenda__timeline thead {
@@ -157,8 +157,8 @@
   }
   .pk-agenda-editor .pk-content-agenda__time {
     display: table-cell;
-    width: 7.5rem;
-    min-width: 7.5rem;
+    width: var(--agenda-time-width);
+    min-width: var(--agenda-time-width);
     vertical-align: top;
   }
 }
@@ -263,15 +263,15 @@
 }
 
 .pk-agenda-editor .pk-content-agenda__timeline {
-  width: max-content;
+  width: 100%;
   min-width: 100%;
   table-layout: fixed;
 }
 .pk-agenda-editor .pk-content-agenda__timeline thead th:first-child,
 .pk-agenda-editor .pk-content-agenda__time {
-  width: 7.5rem;
-  min-width: 7.5rem;
-  max-width: 7.5rem;
+  width: var(--agenda-time-width);
+  min-width: var(--agenda-time-width);
+  max-width: var(--agenda-time-width);
   border-block-start: 0;
 }
 .pk-agenda-editor .pk-content-agenda__timeline thead th:not(:first-child),
@@ -375,4 +375,24 @@
 
 .pk-agenda-editor > [role="tabpanel"] > .pk-content-agenda__tabs {
   margin-block-start: var(--pk-2);
+}
+
+.pk-agenda-editor .pk-content-agenda__timeline thead th.pk-agenda-editor__add-room,
+.pk-agenda-editor .pk-content-agenda__slot td.pk-agenda-editor__add-room {
+  width: auto;
+}
+
+.pk-agenda-editor .pk-content-agenda__timeline thead th.pk-content-agenda__location {
+  width: auto;
+}
+.pk-agenda-editor .pk-content-agenda__timeline[data-agenda-has-rooms="true"] .pk-content-agenda__add-column {
+  width: 3.5rem;
+}
+
+.pk-agenda-editor .pk-content-agenda__timeline[data-agenda-has-rooms="false"] thead th.pk-agenda-editor__add-room,
+.pk-agenda-editor
+  .pk-content-agenda__timeline[data-agenda-has-rooms="false"]
+  .pk-content-agenda__slot
+  td.pk-agenda-editor__add-room {
+  width: auto;
 }

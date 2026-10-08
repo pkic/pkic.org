@@ -384,7 +384,7 @@ it("renders supplied staffing track scope beside its location", () => {
   expect(render(<ContentAgenda days={source} speakers={[]} timeZone="Europe/Amsterdam" />)).not.toContain("Track:");
 });
 
-it("keeps the shared editor on venue time without a browser-choice control", () => {
+it("retains both shared editor clocks without a browser-choice control", () => {
   const output = render(
     <ContentAgenda
       days={days}
@@ -396,7 +396,10 @@ it("keeps the shared editor on venue time without a browser-choice control", () 
   const container = document.createElement("div");
   container.innerHTML = output;
   expect(container.querySelector('[data-agenda-clock="venue"]')?.textContent).toContain("11:45");
-  expect(container.querySelector('[data-agenda-clock="browser"]')).toBeNull();
+  expect(container.querySelector('[data-agenda-clock="browser"]')).not.toBeNull();
+  expect(container.querySelector("[data-agenda-time-zone]")?.getAttribute("data-agenda-time-zone")).toBe(
+    "Europe/Amsterdam",
+  );
   expect(container.querySelector("[data-agenda-time-choice]")).toBeNull();
 });
 

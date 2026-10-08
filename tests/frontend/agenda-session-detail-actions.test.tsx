@@ -67,6 +67,10 @@ async function mount(canEdit = true, canReviewAppearances = false) {
     ),
   );
   await settle();
+  if (canEdit) {
+    await act(() => host!.querySelector<HTMLButtonElement>('button[aria-label="Enable agenda editing"]')!.click());
+    await settle();
+  }
 }
 function reads(input: RequestInfo | URL) {
   const url = new URL(String(input), "https://example.test");
