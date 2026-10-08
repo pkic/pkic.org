@@ -32,7 +32,6 @@ import {
 import { Login } from "./shell/Login";
 import { Alert } from "../../ui/Alert";
 import { ConfirmDialogHost } from "../../components/ConfirmDialog";
-import { PortalShell } from "./shell/PortalShell";
 import { VerifyingOverlay } from "../../components/VerifyingOverlay";
 import { myProfileSchema } from "../../../shared/schemas/me";
 import { userAuthEstablishedResponseSchema, userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth";
@@ -54,6 +53,7 @@ import { meetingEntryReturnUrl } from "../../../shared/meeting-entry-navigation"
 import { MeetingEntryReturn } from "./shell/MeetingEntryReturn";
 import { useSessionExpiry } from "./use-session-expiry";
 import { useSessionActivity } from "./use-session-activity";
+const PortalShell = lazy(() => import("./shell/PortalShell").then((module) => ({ default: module.PortalShell })));
 const loadOfflineScannerBootstrap = () => import("./sections/events/detail/scanner/OfflineScannerBootstrap");
 const OfflineScannerBootstrap = lazy(() =>
   loadOfflineScannerBootstrap().then((module) => ({ default: module.OfflineScannerBootstrap })),
@@ -230,7 +230,15 @@ export function App() {
   }
 
   if (verifying || authStatus.value === "loading") {
-    return <VerifyingOverlay />;
+    return (
+      <Login
+        busy
+        status={verifying ? "Verifying your sign-in link…" : "Checking your sign-in…"}
+        onSignedIn={async () => {
+          await loadPortalSession();
+        }}
+      />
+    );
   }
 
   const pendingNotice =
@@ -256,7 +264,20 @@ export function App() {
         </Suspense>
       </div>
     );
-  if (sessionError && !isAuthed.value) return <div class="pk pk-stack">{sessionNotice}</div>;
+  if (sessionError && !isAuthed.value)
+    return (
+      <Login
+        notice={
+          <>
+            {pendingNotice}
+            {sessionNotice}
+          </>
+        }
+        onSignedIn={async () => {
+          await loadPortalSession();
+        }}
+      />
+    );
 
   if (isAuthed.value) {
     const meetingDestination = meetingEntryReturnUrl(window.location.hash);
@@ -274,7 +295,9 @@ export function App() {
           </Alert>
         )}
         <ScannerCodePreparation.Provider value={prepareOfflineScannerCode}>
-          <PortalShell key={`${portalSession.value?.identity.id}:${portalSession.value?.member?.identityId ?? ""}`} />
+          <Suspense fallback={<Login busy status="Opening your portal…" onSignedIn={() => {}} />}>
+            <PortalShell key={`${portalSession.value?.identity.id}:${portalSession.value?.member?.identityId ?? ""}`} />
+          </Suspense>
         </ScannerCodePreparation.Provider>
         <ConfirmDialogHost />
       </>
@@ -304,22 +327,20 @@ export function App() {
   }
 
   return (
-    <>
-      {verifyError && (
-        <div class="pk pk-container pk-section pk-cluster pk-cluster--center">
-          <div class="content-width-sm">
+    <Login
+      notice={
+        <>
+          {verifyError && (
             <Alert tone="danger" title="Sign-in failed">
               {verifyError}
             </Alert>
-          </div>
-        </div>
-      )}
-      {pendingNotice}
-      <Login
-        onSignedIn={async () => {
-          await loadPortalSession();
-        }}
-      />
-    </>
+          )}
+          {pendingNotice}
+        </>
+      }
+      onSignedIn={async () => {
+        await loadPortalSession();
+      }}
+    />
   );
 }

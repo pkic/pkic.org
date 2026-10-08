@@ -219,3 +219,11 @@ body:has(.pk-login) > main > #portal-app {
     display: none;
   }
 }
+
+/* Native disabling keeps every sign-in method unavailable during the same authority check. */
+.pk-login__controls {
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}

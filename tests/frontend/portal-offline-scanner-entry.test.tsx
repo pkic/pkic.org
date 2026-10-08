@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { render } from "preact";
+import { render, type ComponentProps } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AVAILABILITY_ERROR_CODE } from "../../assets/shared/schemas/availability";
@@ -42,7 +42,18 @@ vi.mock("../../assets/ts/member-flows/portal/logout-session", () => ({
 vi.mock("../../assets/ts/member-flows/portal/shell/PortalShell", () => ({
   PortalShell: () => <div>Authenticated portal content</div>,
 }));
-vi.mock("../../assets/ts/member-flows/portal/shell/Login", () => ({ Login: () => <div>Sign in</div> }));
+vi.mock("../../assets/ts/member-flows/portal/shell/Login", () => ({
+  Login: ({
+    busy,
+    status,
+    notice,
+  }: ComponentProps<typeof import("../../assets/ts/member-flows/portal/shell/Login").Login>) => (
+    <div>
+      {busy ? status : "Sign in"}
+      {notice}
+    </div>
+  ),
+}));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/OfflineScannerBootstrap", () => ({
   OfflineScannerBootstrap: ({ route, onCheckSignIn }: { route: string; onCheckSignIn: () => void }) => (
     <div data-scanner-route={route}>

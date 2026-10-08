@@ -340,4 +340,34 @@ describe("portal login", () => {
       copy.remove();
     }
   });
+
+  it("keeps the brand and status inside the busy card and refuses concurrent email and passkey ceremonies", async () => {
+    const fetcher = vi.fn();
+    vi.stubGlobal("fetch", fetcher);
+    await act(() => render(<Login busy status="Checking your sign-in…" onSignedIn={vi.fn()} />, container));
+    expect(container.querySelector(".pk-login__backdrop")).not.toBeNull();
+    expect(container.querySelector(".pk-login__card [role='status']")?.textContent).toContain("Checking your sign-in…");
+    expect(controlLabeled("Work email").matches(":disabled")).toBe(true);
+    await enterEmail("synthetic@example.test");
+    await submitForm();
+    expect(fetcher).not.toHaveBeenCalled();
+    browserSupportsWebAuthn.mockReturnValue(true);
+    await act(() => render(<Login busy status="Verifying your sign-in link…" onSignedIn={vi.fn()} />, container));
+    expect(buttonLabeled("Sign in with a passkey").matches(":disabled")).toBe(true);
+    await act(() => buttonLabeled("Sign in with a passkey").click());
+    expect(authenticateWithPasskey).not.toHaveBeenCalled();
+  });
+
+  it("keeps a verification notice in the existing card and enables the same email field after checking", async () => {
+    const onSignedIn = vi.fn();
+    await act(() => render(<Login busy status="Checking your sign-in…" onSignedIn={onSignedIn} />, container));
+    await enterEmail("synthetic@example.test");
+    await act(() =>
+      render(<Login notice={<p role="alert">The link has expired.</p>} onSignedIn={onSignedIn} />, container),
+    );
+    expect(container.querySelector(".pk-login__card [role='alert']")?.textContent).toBe("The link has expired.");
+    expect(controlLabeled("Work email").value).toBe("synthetic@example.test");
+    expect(controlLabeled("Work email").matches(":disabled")).toBe(false);
+    expect(container.querySelector("[role='status']")).toBeNull();
+  });
 });
