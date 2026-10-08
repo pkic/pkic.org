@@ -1,3 +1,4 @@
+import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
 /**
  * Bounded, set-based event-registration read model. Both the retiring admin
  * routes and group-context routes consume this one query and projection.
@@ -135,7 +136,7 @@ export function buildEventRegistrationsPageQuery(eventId: string, params: EventR
               u.email AS user_email,
               COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
               u.headshot_r2_key AS headshot_r2_key,
-              u.organization_name AS organization_name, u.job_title AS job_title,
+              ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title,
               ${registrationReferralCodeSql} AS referral_code,
               COALESCE(${latestOutboxStatusForRegistrationSql} = 'bounced', 0) AS has_bounced,
               ${sponsorConsentSql("r")} AS sponsor_consent,

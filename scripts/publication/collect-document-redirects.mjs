@@ -1,3 +1,7 @@
+import { publicationRepairAliasPaths } from "../../assets/shared/schemas/site-publication-repair-aliases.ts";
+import { sessionPresentationPublicUrl } from "../../assets/shared/session-presentation-public-url.ts";
+import { publicationDocumentFilePath as documentFilePath } from "../../assets/shared/publication-document-path.ts";
+import { verifyCurrentDocumentRepairAliases, appendDocumentRepairAliases } from "./document-repair-aliases.mjs";
 import { constants } from "node:fs";
 import { lstat, open, readFile, rm } from "node:fs/promises";
 import { createHash } from "node:crypto";
@@ -12,31 +16,7 @@ import { parseSessionPresentationPublicUrl } from "../../assets/shared/session-p
 import { verifiedSessionMaterialLegacyDownload } from "../../assets/shared/session-material-legacy-download.ts";
 import { publicationDocumentGrantHashInput } from "../../assets/shared/schemas/site-publication-documents.ts";
 
-/** Preserve the authored encoding while giving filesystem checks one unambiguous path. */
-export function documentFilePath(url) {
-  if (
-    typeof url !== "string" ||
-    !/^\/(?:content-media\/)?events\//u.test(url) ||
-    /[\\?#\s*]/u.test(url) ||
-    /:[a-z]/iu.test(url) ||
-    /%(?:2f|5c|00)/iu.test(url)
-  )
-    throw new Error("Unsafe document redirect path");
-  if (new URL(url, "https://pkic.org").pathname !== url)
-    throw new Error("Document redirects require exact encoded paths");
-  const decoded = decodeURIComponent(url);
-  if (
-    !/\.pdf$/iu.test(decoded) ||
-    /[\\?#\p{Cc}]/u.test(decoded) ||
-    /%(?:2e|2f|5c|00)/iu.test(decoded) ||
-    decoded
-      .split("/")
-      .slice(1)
-      .some((part) => !part || part === "." || part === "..")
-  )
-    throw new Error("Unsafe decoded document path");
-  return decoded.slice(1);
-}
+export { documentFilePath };
 
 function snapshotDocumentRoutes(snapshot, verify) {
   const redirects = [];
@@ -141,7 +121,14 @@ function snapshotDocumentRoutes(snapshot, verify) {
 }
 
 /** Only native verified documents can turn an explicitly selected receipt into redirects. */
-export function collectDocumentRedirects(snapshot, documents, retained = [], recordings = []) {
+export function collectDocumentRedirects(
+  snapshot,
+  documents,
+  retained = [],
+  recordings = [],
+  repairs = [],
+  retainedRepairs = [],
+) {
   const current = snapshotDocumentRoutes(snapshot, (occurrence, material, receipt, target) => {
     const matches = documents.filter(
       (document) => document.occurrenceId === occurrence.id && document.materialId === material.id,
@@ -180,7 +167,14 @@ export function collectDocumentRedirects(snapshot, documents, retained = [], rec
           : "Published PDF selection lacks exact native verification",
       );
   }
-  return appendRetainedDocumentRoutes(current, documents, retained);
+  const aliases = verifyCurrentDocumentRepairAliases(snapshot, repairs, documents);
+  return appendDocumentRepairAliases(
+    appendRetainedDocumentRoutes(current, documents, retained),
+    aliases,
+    retainedRepairs,
+    documentFilePath,
+    validateDocumentRoutes,
+  );
 }
 
 function appendRetainedDocumentRoutes(current, documents, retained) {
@@ -224,12 +218,19 @@ function appendRetainedDocumentRoutes(current, documents, retained) {
 }
 
 /** Recheck staged public metadata against the selected snapshot before any static retirement. */
-export function assertDocumentRoutesSnapshot(snapshot, value, retained = []) {
+export function assertDocumentRoutesSnapshot(snapshot, value, retained = [], repairs = [], retainedRepairs = []) {
   const routes = validateDocumentRoutes(value);
-  const expected = appendRetainedDocumentRoutes(
-    snapshotDocumentRoutes(snapshot, () => {}),
-    [],
-    retained,
+  const aliases = verifyCurrentDocumentRepairAliases(snapshot, repairs);
+  const expected = appendDocumentRepairAliases(
+    appendRetainedDocumentRoutes(
+      snapshotDocumentRoutes(snapshot, () => {}),
+      [],
+      retained,
+    ),
+    aliases,
+    retainedRepairs,
+    documentFilePath,
+    validateDocumentRoutes,
   );
   if (JSON.stringify(routes) !== JSON.stringify(expected))
     throw new Error("Document routes do not match the selected publication snapshot");
@@ -242,6 +243,20 @@ export function validateDocumentRoutes(value, release) {
   const paths = new Map(routes.retiredPaths.map((entry) => [entry.path, entry]));
   const rules = new Map(routes.redirects.map((entry) => [entry.from, entry]));
   const decoded = new Set();
+  for (const alias of routes.repairAliases) {
+    for (const from of publicationRepairAliasPaths(alias)) {
+      const rule = rules.get(from);
+      const bytes = paths.get(documentFilePath(from));
+      if (
+        !rule ||
+        rule.to !== sessionPresentationPublicUrl(alias) ||
+        !bytes ||
+        bytes.sha256 !== alias.digest ||
+        bytes.bytes !== alias.bytes
+      )
+        throw new Error("Repair alias evidence disagrees with its owned document routes");
+    }
+  }
   for (const rule of routes.redirects) {
     const path = documentFilePath(rule.from);
     const key = path.toLowerCase();

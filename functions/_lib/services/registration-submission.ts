@@ -85,10 +85,10 @@ export async function prepareRegistrationSubmission(
     verifiedIdentity: payload.verifiedIdentity,
     eventOrganizationName: payload.verifiedIdentity?.selectedIdentity
       ? (payload.verifiedIdentity.selectedIdentity.organizationName ?? payload.user.organizationName ?? null)
-      : null,
+      : (payload.user.organizationName ?? null),
     eventJobTitle: payload.verifiedIdentity?.selectedIdentity
       ? (payload.verifiedIdentity.selectedIdentity.jobTitle ?? payload.user.jobTitle ?? null)
-      : null,
+      : (payload.user.jobTitle ?? null),
   });
   const existingReferral = await first<{ code: string }>(db, firstReferralCodeQuerySql("registration", "?"), [
     builtRegistration.registration.id,
@@ -170,13 +170,11 @@ export async function prepareRegistrationSubmission(
   );
 
   return {
-    user: payload.verifiedIdentity?.selectedIdentity
-      ? {
-          ...preparedUser.user,
-          organization_name: builtRegistration.registration.registration_organization_name,
-          job_title: builtRegistration.registration.registration_job_title,
-        }
-      : preparedUser.user,
+    user: {
+      ...preparedUser.user,
+      organization_name: builtRegistration.registration.registration_organization_name,
+      job_title: builtRegistration.registration.registration_job_title,
+    },
     identityWasCreated: preparedUser.created,
     registration: builtRegistration.registration,
     manageToken: builtRegistration.manageToken,

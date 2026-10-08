@@ -71,10 +71,8 @@ export function prepareSelectedRegistrationIdentityGuard(
 }
 
 /** The event keeps the details confirmed at registration, independently of later profile edits. */
-export function registrationOrganizationSql(registration: "r" | "source_registration"): string {
-  return `CASE WHEN ${registration}.registration_identity_id IS NOT NULL
-    THEN ${registration}.registration_organization_name ELSE u.organization_name END`;
+export function registrationOrganizationSql(registration: "r" | "source_registration" | "reg"): string {
+  return `${registration}.registration_organization_name`;
 }
 export const REGISTRATION_ORGANIZATION_SQL = registrationOrganizationSql("r");
-export const REGISTRATION_JOB_TITLE_SQL = `CASE WHEN r.registration_identity_id IS NOT NULL
-  THEN r.registration_job_title ELSE u.job_title END`;
+export const REGISTRATION_JOB_TITLE_SQL = "r.registration_job_title";

@@ -5,6 +5,8 @@ import { prepareAgendaRoomOrder } from "./room-order-settings";
 import { preparePublicAgendaSnapshot } from "./public-snapshot";
 import { occurrenceRepresentationReferences, prepareRepresentationEligibility } from "./representation-eligibility";
 import { assertPublicationRepresentations } from "./publication-representations";
+import { agendaHistoricalPublicationReview } from "../../../../assets/shared/agenda-historical-publication-review";
+import { prepareScopedAuditLog } from "../audit";
 import { prepareSitePublicationRequest } from "../site-publication-requests";
 import { operationalDays, prepareOperationalDays } from "./operational-days";
 import { operationalPeople, prepareOperationalPeople } from "./operational-people";
@@ -368,6 +370,7 @@ export async function publishAgenda(
   eventSlug: string,
   revision: number,
   userId: string,
+  acknowledgeArchiveRepresentation = false,
 ) {
   const snapshot = await getAgenda(db, eventId, eventSlug);
   if (snapshot.publishedRevision === snapshot.revision)
@@ -377,7 +380,12 @@ export async function publishAgenda(
   const event = await first<{ visibility: string }>(db, "SELECT visibility FROM events WHERE id=?", [eventId]);
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
   const approvedSnapshot = preparePublicAgendaSnapshot(snapshot, nextRevision, nowIso(), event.visibility === "public");
-  await assertPublicationRepresentations(db, eventId, approvedSnapshot);
+  const historicalGuards = await assertPublicationRepresentations(
+    db,
+    eventId,
+    approvedSnapshot,
+    acknowledgeArchiveRepresentation,
+  );
   const representationGuards = await prepareRepresentationEligibility(
     db,
     occurrenceRepresentationReferences(approvedSnapshot.occurrences),
@@ -397,6 +405,22 @@ export async function publishAgenda(
         bindings: [eventId, event.visibility],
       }),
       ...representationGuards,
+      ...historicalGuards,
+      ...(acknowledgeArchiveRepresentation && agendaHistoricalPublicationReview(approvedSnapshot).occurrenceIds.length
+        ? [
+            prepareScopedAuditLog(
+              db,
+              { type: "event", id: eventId },
+              "user",
+              userId,
+              "agenda.archive.representation.acknowledged",
+              "event_agenda",
+              eventId,
+              { revision: nextRevision, ...agendaHistoricalPublicationReview(approvedSnapshot) },
+              approvedSnapshot.approvedAt,
+            ),
+          ]
+        : []),
       ...(await prepareAgendaSponsorApproval(db, eventId, approvedSnapshot.occurrences)),
       preparePublicationCapacityGuard(db, snapshot),
       prepareOperationalPeople(db, eventId, nextRevision, privatePeople),

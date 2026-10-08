@@ -1,3 +1,4 @@
+import { registrationOrganizationSql } from "../registrations/selected-identity";
 import {
   sponsorLeadListSchema,
   sponsorLeadSponsorsSchema,
@@ -38,10 +39,11 @@ export async function listSponsorLeads(
     throw new AppError(403, "LEAD_VIEW_SCOPE_REQUIRED", "An active sponsor-specific lead viewing grant is required.");
   await assertEventContactAccess(db, eventId);
   const name = "TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,''))";
-  const search = query.q ? buildD1TextSearchFilter(query.q, [name, "u.email", "u.organization_name"]) : null;
+  const organization = registrationOrganizationSql("reg");
+  const search = query.q ? buildD1TextSearchFilter(query.q, [name, "u.email", organization]) : null;
   const { rows, total } = await queryPage<SponsorLead>(db, {
     source: {
-      selectSql: `SELECT lead.id,lead.user_id AS userId,${name} AS name,u.email,u.organization_name AS organization,
+      selectSql: `SELECT lead.id,lead.user_id AS userId,${name} AS name,u.email,${organization} AS organization,
         lead.observed_at AS capturedAt,lead.operator_user_id AS operatorUserId,
         TRIM(COALESCE(capturer.first_name,'') || ' ' || COALESCE(capturer.last_name,'')) AS operatorName`,
       fromSql: `FROM event_sponsor_leads lead JOIN users u ON u.id=lead.user_id
@@ -55,7 +57,7 @@ export async function listSponsorLeads(
     },
     orderBy: resolveMappedOrderBy(
       query.sort,
-      { name, email: "u.email", organization: "u.organization_name", capturedAt: "lead.observed_at" },
+      { name, email: "u.email", organization, capturedAt: "lead.observed_at" },
       "lead.observed_at DESC",
       "lead.id ASC",
     ),

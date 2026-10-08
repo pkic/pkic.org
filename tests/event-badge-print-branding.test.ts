@@ -380,6 +380,25 @@ describe("Event-owned authenticated badge print metadata and branding", () => {
     expect(fresh.revision).toBe(initial.revision);
     expect(fresh.branding).not.toEqual(initial.branding);
   });
+  it("keeps the recorded print organization when the account employer changes in flight", async () => {
+    await env.DB.prepare(
+      "UPDATE registrations SET registration_organization_name='Recorded event organization' WHERE id=?",
+    )
+      .bind(await registrationId())
+      .run();
+    const captured = await context();
+    const response = await print(captured.revision, {
+      DB: printRace(() =>
+        env.DB.prepare("UPDATE users SET organization_name='Later employer' WHERE id=?").bind(fixture.userId).run(),
+      ) as D1Database,
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(badgePrintResponseSchema.parse(await response.json())).toMatchObject({
+      organization: "Recorded event organization",
+    });
+    expect(await printAudits()).toHaveLength(1);
+  });
+
   it.each(["logo", "role", "organization", "event_name"] as const)(
     "refuses an in-flight %s change atomically before releasing personal print data",
     async (kind) => {
@@ -403,8 +422,10 @@ describe("Event-owned authenticated badge print metadata and branding", () => {
           if (kind === "event_name")
             await env.DB.prepare("UPDATE events SET name='Changed name' WHERE id=?").bind(fixture.eventId).run();
           if (kind === "organization")
-            await env.DB.prepare("UPDATE users SET organization_name='Changed organization' WHERE id=?")
-              .bind(fixture.userId)
+            await env.DB.prepare(
+              "UPDATE registrations SET registration_organization_name='Changed organization' WHERE id=?",
+            )
+              .bind(registration)
               .run();
         }) as D1Database,
       });

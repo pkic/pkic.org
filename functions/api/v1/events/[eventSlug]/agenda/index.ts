@@ -74,7 +74,16 @@ export const AgendaAllocation = openApiRoute(contracts.agendaAllocationRouteSche
 });
 export const AgendaPublication = openApiRoute(contracts.agendaPublicationRouteSchema, async (c, data) => {
   const { db, event, actor } = await authorize(c, data.params.eventSlug, true);
-  return json(await publishAgenda(db, event.id, event.slug, data.body.expectedRevision, actor.id));
+  return json(
+    await publishAgenda(
+      db,
+      event.id,
+      event.slug,
+      data.body.expectedRevision,
+      actor.id,
+      data.body.acknowledgeArchiveRepresentation,
+    ),
+  );
 });
 
 export const AgendaImport = openApiRoute(contracts.agendaImportRouteSchema, async (c, data) => {

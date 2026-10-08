@@ -574,6 +574,7 @@ ALTER TABLE event_agenda_occurrences ADD COLUMN public_anchor TEXT;
 CREATE UNIQUE INDEX event_agenda_occurrences_public_anchor ON event_agenda_occurrences(event_id,public_anchor) WHERE public_anchor IS NOT NULL;
 CREATE TABLE event_agenda_import_provenance (
  occurrence_id TEXT PRIMARY KEY REFERENCES event_agenda_occurrences(id) ON DELETE CASCADE,
+ import_mode TEXT NOT NULL,
  source_format TEXT NOT NULL, source_version INTEGER NOT NULL, source_path TEXT NOT NULL,
  source_ref TEXT NOT NULL, source_anchor TEXT, source_digest TEXT NOT NULL,
  timing_json TEXT NOT NULL, media_json TEXT NOT NULL, people_json TEXT NOT NULL,
@@ -1429,6 +1430,7 @@ CREATE TABLE site_publication_document_manifests (
  object_etag TEXT NOT NULL,
  grant_id TEXT,
  legacy_download_json TEXT,
+ repair_aliases_json TEXT,
  PRIMARY KEY(build_id,event_id,occurrence_id,material_id),
  FOREIGN KEY(event_id,occurrence_id,version_id) REFERENCES session_presentation_versions(event_id,occurrence_id,id),
  FOREIGN KEY(event_id,occurrence_id) REFERENCES event_agenda_occurrences(event_id,id)
@@ -1437,7 +1439,7 @@ CREATE INDEX site_publication_document_lookup ON site_publication_document_manif
 CREATE TRIGGER site_publication_document_manifest_immutable BEFORE UPDATE ON site_publication_document_manifests
 BEGIN SELECT RAISE(ABORT,'PUBLICATION_DOCUMENT_MANIFEST_IMMUTABLE'); END;
 CREATE TRIGGER site_publication_document_manifest_conflict BEFORE INSERT ON site_publication_document_manifests
-WHEN EXISTS(SELECT 1 FROM site_publication_document_manifests old WHERE old.build_id=NEW.build_id AND old.event_id=NEW.event_id AND old.occurrence_id=NEW.occurrence_id AND old.material_id=NEW.material_id AND (old.snapshot_id<>NEW.snapshot_id OR old.version_id<>NEW.version_id OR old.digest<>NEW.digest OR old.object_etag<>NEW.object_etag OR old.grant_id IS NOT NEW.grant_id OR old.legacy_download_json IS NOT NEW.legacy_download_json))
+WHEN EXISTS(SELECT 1 FROM site_publication_document_manifests old WHERE old.build_id=NEW.build_id AND old.event_id=NEW.event_id AND old.occurrence_id=NEW.occurrence_id AND old.material_id=NEW.material_id AND (old.snapshot_id<>NEW.snapshot_id OR old.version_id<>NEW.version_id OR old.digest<>NEW.digest OR old.object_etag<>NEW.object_etag OR old.grant_id IS NOT NEW.grant_id OR old.legacy_download_json IS NOT NEW.legacy_download_json OR old.repair_aliases_json IS NOT NEW.repair_aliases_json))
 BEGIN SELECT RAISE(ABORT,'PUBLICATION_DOCUMENT_MANIFEST_CONFLICT'); END;
 
 -- Recipient session calendar reply evidence; original receipts are append-only.

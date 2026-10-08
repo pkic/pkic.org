@@ -129,6 +129,7 @@ export async function prepareHistoricalMappingReview(
       incoming,
       entry.people,
       content.speakerUserIds,
+      entry.originalSource,
     );
     if (issues.length)
       throw new AppError(

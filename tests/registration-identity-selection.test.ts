@@ -1,3 +1,9 @@
+import {
+  eventAttendanceRegistrationsQuerySchema,
+  eventRegistrationsListResponseSchema,
+} from "../assets/shared/schemas/event-registrations";
+import { badgeAttendeesResponseSchema } from "../assets/shared/schemas/route-contracts-event-badges";
+import { listEventAttendanceRegistrations } from "../functions/_lib/services/registrations/event-attendance-registrations";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
@@ -6,7 +12,7 @@ import {
   registrationSubmissionResponseSchema,
 } from "../assets/shared/schemas/registration";
 import { callApi } from "./helpers/app";
-import { createMemberSession } from "./helpers/auth";
+import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin, createTestRateLimiter } from "./helpers/context";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
@@ -23,6 +29,7 @@ import {
 import { listSponsorAttendeesForExport } from "../functions/_lib/services/sponsorship/sponsor-access";
 import { nowIso, addHours } from "../functions/_lib/utils/time";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
+import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { findEligibleMemberById } from "../functions/_lib/auth/identity-capacities";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import type { DatabaseLike, Env } from "../functions/_lib/types";
@@ -100,6 +107,24 @@ async function managePath(registrationId: string) {
     resourceId: registrationId,
   });
   return `/api/v1/registrations/access/${encodeURIComponent(token)}`;
+}
+
+async function readAttribution(registrationId: string) {
+  const response = await callApi(env, await managePath(registrationId));
+  expect(response.status, await response.clone().text()).toBe(200);
+  return registrationManageReadResponseSchema.parse(await response.json());
+}
+
+async function emailAttribution(userId: string, templateKey: string) {
+  const rows = await queryAll<{ payload_json: string }>(
+    env.DB,
+    "SELECT payload_json FROM email_outbox WHERE recipient_user_id = ? AND template_key = ?",
+    [userId, templateKey],
+  );
+  return rows.map((row) => {
+    const payload = JSON.parse(row.payload_json);
+    return { organizationName: payload.organizationName, jobTitle: payload.jobTitle };
+  });
 }
 
 async function affiliationAuthorityCounts(userId: string, organizationId: string) {
@@ -188,6 +213,248 @@ describe("explicit event identity selection", () => {
       body: JSON.stringify({ action: "update", organizationName: "Different organization" }),
     });
     expect(edited.status).toBe(422);
+  });
+
+  it.each([
+    {
+      label: "explicit event details",
+      organizationName: "Recorded event organization",
+      jobTitle: "Recorded event role",
+    },
+    { label: "unknown event details", organizationName: null, jobTitle: null },
+  ])(
+    "keeps $label without a selected identity through account changes and authorized reads",
+    async ({ organizationName, jobTitle }) => {
+      const f = await fixture();
+      const before = await participationCounts(f.userId);
+      const event = await getEventBySlug(env.DB, "pqc-2026");
+      await env.DB.prepare(
+        `INSERT INTO event_terms
+       (id, event_id, audience_type, term_key, version, required, active, created_at)
+       VALUES (?, ?, 'attendee', 'sponsor-data-sharing', 'v1', 0, 1, ?)`,
+      )
+        .bind(crypto.randomUUID(), event.id, nowIso())
+        .run();
+      const response = await register(
+        registrationCreateSchema.parse({
+          ...f.body,
+          identityId: undefined,
+          organizationName: organizationName ?? undefined,
+          jobTitle: jobTitle ?? undefined,
+          consents: [...f.body.consents, { termKey: "sponsor-data-sharing", version: "v1" }],
+        }),
+      );
+      expect(response.status, await response.clone().text()).toBe(200);
+      const result = registrationSubmissionResponseSchema.parse(await response.json());
+      expect(result.status).toBe("pending_email_confirmation");
+      expect(await getRegistrationById(env.DB, result.registrationId)).toMatchObject({
+        registration_identity_id: null,
+        registration_organization_name: organizationName,
+        registration_job_title: jobTitle,
+      });
+      expect(await emailAttribution(f.userId, "registration_confirm_email")).toEqual([
+        { organizationName: organizationName ?? "", jobTitle: jobTitle ?? "" },
+      ]);
+      await env.DB.prepare(
+        "UPDATE users SET organization_name = 'Later employer', job_title = 'Later account role' WHERE id = ?",
+      )
+        .bind(f.userId)
+        .run();
+      expect((await readAttribution(result.registrationId)).user).toMatchObject({
+        organization_name: organizationName,
+        job_title: jobTitle,
+      });
+      const confirmationToken = await issueDatabaseCapability({
+        db: env.DB,
+        signingSecret: env.INTERNAL_SIGNING_SECRET!,
+        purpose: "registration_confirm",
+        resourceId: result.registrationId,
+      });
+      const confirmed = await callApi(registrationEnvironment, "/api/v1/events/pqc-2026/registrations/confirm-email", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ id: result.registrationId, token: confirmationToken }),
+      });
+      expect(confirmed.status, await confirmed.clone().text()).toBe(200);
+      const exported = await buildRegistrationCsv(
+        env.DB,
+        { id: event.id, source_mode: event.source_mode! },
+        { maxRows: 100, maxBytes: 100000 },
+      );
+      expect(exported.csv).toContain(`,${organizationName ?? ""},${jobTitle ?? ""},registered,`);
+      expect(await listSponsorAttendeesForExport(env.DB, event.id, 100)).toEqual([
+        expect.objectContaining({ organizationName, jobTitle }),
+      ]);
+      const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'");
+      const adminToken = await createAdminSession(env.DB, admin.id, crypto.randomUUID());
+      const headers = { authorization: `Bearer ${adminToken}` };
+      const listResponse = await callApi(env, "/api/v1/events/pqc-2026/registrations", { headers });
+      expect(listResponse.status, await listResponse.clone().text()).toBe(200);
+      expect(eventRegistrationsListResponseSchema.parse(await listResponse.json()).registrations).toEqual([
+        expect.objectContaining({
+          id: result.registrationId,
+          organization_name: organizationName,
+          job_title: jobTitle,
+        }),
+      ]);
+      const attendance = await listEventAttendanceRegistrations(
+        env.DB,
+        event.id,
+        eventAttendanceRegistrationsQuerySchema.parse({}),
+      );
+      expect(attendance.registrations).toEqual([
+        expect.objectContaining({
+          id: result.registrationId,
+          organization_name: organizationName,
+          job_title: jobTitle,
+        }),
+      ]);
+      const badgeResponse = await callApi(env, "/api/v1/events/pqc-2026/badges/attendees", { headers });
+      expect(badgeResponse.status, await badgeResponse.clone().text()).toBe(200);
+      expect(badgeAttendeesResponseSchema.parse(await badgeResponse.json()).users).toEqual([
+        expect.objectContaining({ id: f.userId, organization_name: organizationName }),
+      ]);
+      expect(await participationCounts(f.userId)).toEqual(before);
+    },
+  );
+
+  it("keeps an explicit individual representation empty instead of inheriting the account employer", async () => {
+    const f = await fixture();
+    const membership = buildCreateIndividualMemberStatements(env.DB, f.userId, "H6", nowIso());
+    const identity = await buildCreateIdentityStatement(env.DB, {
+      userId: f.userId,
+      organizationId: null,
+      source: "staff",
+      startImmediately: true,
+    });
+    await env.DB.batch([...membership.statements, identity.statement]);
+    const response = await register({ ...f.body, identityId: identity.identityId }, f.token);
+    expect(response.status, await response.clone().text()).toBe(200);
+    const result = registrationSubmissionResponseSchema.parse(await response.json());
+    expect(await getRegistrationById(env.DB, result.registrationId)).toMatchObject({
+      registration_identity_id: identity.identityId,
+      registration_organization_name: null,
+      registration_job_title: null,
+    });
+    await env.DB.prepare("UPDATE users SET organization_name = 'Later employer', job_title = 'Later role' WHERE id = ?")
+      .bind(f.userId)
+      .run();
+    expect((await readAttribution(result.registrationId)).user).toMatchObject({
+      organization_name: null,
+      job_title: null,
+    });
+    expect(await emailAttribution(f.userId, "registration_confirmed")).toEqual([
+      { organizationName: "", jobTitle: "" },
+    ]);
+  });
+
+  it("corrects only explicitly supplied event attribution and keeps notifications consistent with later reads", async () => {
+    const f = await fixture();
+    const response = await register({
+      ...f.body,
+      identityId: undefined,
+      organizationName: "Original event organization",
+      jobTitle: "Original event role",
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    const result = registrationSubmissionResponseSchema.parse(await response.json());
+    const path = await managePath(result.registrationId);
+    const patched = await callApi(env, path, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "update", organizationName: "Corrected event organization" }),
+    });
+    expect(patched.status, await patched.clone().text()).toBe(200);
+    expect(await getRegistrationById(env.DB, result.registrationId)).toMatchObject({
+      registration_organization_name: "Corrected event organization",
+      registration_job_title: "Original event role",
+    });
+    expect(await emailAttribution(f.userId, "registration_updated")).toEqual([
+      { organizationName: "Corrected event organization", jobTitle: "Original event role" },
+    ]);
+    await env.DB.prepare("UPDATE users SET organization_name = 'Later employer', job_title = 'Later role' WHERE id = ?")
+      .bind(f.userId)
+      .run();
+    const nameOnly = await callApi(env, path, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "update", firstName: "Corrected" }),
+    });
+    expect(nameOnly.status, await nameOnly.clone().text()).toBe(200);
+    expect((await readAttribution(result.registrationId)).user).toMatchObject({
+      organization_name: "Corrected event organization",
+      job_title: "Original event role",
+    });
+    expect(await emailAttribution(f.userId, "registration_updated")).toEqual([
+      { organizationName: "Corrected event organization", jobTitle: "Original event role" },
+      { organizationName: "Corrected event organization", jobTitle: "Original event role" },
+    ]);
+  });
+
+  it("rolls back an event attribution correction, account patch and notification when registration authority changes", async () => {
+    const f = await fixture();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const { registration } = await createRegistration(env.DB, {
+      event,
+      userId: f.userId,
+      attendanceType: "virtual",
+      sourceType: "direct",
+      signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      verifiedIdentity: { userId: f.userId },
+      eventOrganizationName: "Recorded event organization",
+      eventJobTitle: "Recorded event role",
+    });
+    const raced = mutateBeforeMatchingQuery(
+      env.DB,
+      (sql) => sql.includes("INSERT INTO registration_transition_guards"),
+      () => env.DB.prepare("UPDATE registrations SET status = 'cancelled' WHERE id = ?").bind(registration.id).run(),
+    );
+    const response = await callApi({ ...registrationEnvironment, DB: raced }, await managePath(registration.id), {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "update", organizationName: "Rejected organization", jobTitle: "Rejected role" }),
+    });
+    expect(response.status, await response.clone().text()).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "REGISTRATION_CHANGED" } });
+    expect(await getRegistrationById(env.DB, registration.id)).toMatchObject({
+      status: "cancelled",
+      registration_organization_name: "Recorded event organization",
+      registration_job_title: "Recorded event role",
+    });
+    expect(await queryAll(env.DB, "SELECT organization_name, job_title FROM users WHERE id = ?", [f.userId])).toEqual([
+      { organization_name: "Account organization", job_title: "Account role" },
+    ]);
+    expect(await emailAttribution(f.userId, "registration_updated")).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM audit_log WHERE entity_type = 'registration' AND entity_id = ?", [
+        registration.id,
+      ]),
+    ).toEqual([]);
+  });
+
+  it("clears event attribution from the same unauthorized-registration notification that clears the stored record", async () => {
+    const f = await fixture();
+    const response = await register({
+      ...f.body,
+      identityId: undefined,
+      organizationName: "Recorded event organization",
+      jobTitle: "Recorded event role",
+    });
+    expect(response.status, await response.clone().text()).toBe(200);
+    const result = registrationSubmissionResponseSchema.parse(await response.json());
+    const reported = await callApi(env, await managePath(result.registrationId), {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ action: "report_unauthorized" }),
+    });
+    expect(reported.status, await reported.clone().text()).toBe(200);
+    expect(await getRegistrationById(env.DB, result.registrationId)).toMatchObject({
+      registration_organization_name: null,
+      registration_job_title: null,
+    });
+    expect(await emailAttribution(f.userId, "registration_unauthorized")).toEqual([
+      { organizationName: "", jobTitle: "" },
+    ]);
   });
 
   it("keeps missing identity details specific to the event and rejects conflicting identity answers", async () => {

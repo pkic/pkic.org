@@ -292,6 +292,15 @@ describe("group event workspace", () => {
     expect(proposalSections?.querySelector('a[href$="/proposals/responses"]')).not.toBeNull();
   });
 
+  it("preserves the Attendance deep link under the Analytics permission gate", () => {
+    const event = baseEvent({ capabilities: ["view"] });
+    const container = mount(
+      <GroupEventWorkspace event={event} groupId={GROUP_ID} tab="attendance" detailId="imports" />,
+    );
+    expect(container.textContent).toContain("This event section is not available to your current identity.");
+    expect(tabLabels(container)).not.toContain("Attendance");
+  });
+
   it("shows the not-available pattern for a capability-less tab request instead of falling back", () => {
     const event = baseEvent({ capabilities: ["view"] });
     const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" />);

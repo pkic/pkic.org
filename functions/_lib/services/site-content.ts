@@ -1,4 +1,5 @@
 /// <reference types="vite/client" />
+import { readAuthoredAgendaSources } from "./site-authored-agenda-sources";
 
 import type { SitePublicationSnapshot } from "../../../assets/shared/schemas/site-publication";
 import { parse as parseYaml } from "yaml";
@@ -116,6 +117,8 @@ documents.push(...generatedSectionDocuments(documents));
 documents.push(...workingGroupSectionDocuments(documents));
 
 const documentsByRoute = new Map(documents.map((document) => [document.route, document]));
+
+export const siteAuthoredAgendaSources = () => readAuthoredAgendaSources(documents);
 
 export const siteConferencePrograms = createSiteConferencePrograms(documents, (sourcePath, pattern) =>
   matchingContentAssetUrls(sourcePath, contentMediaPaths, pattern),

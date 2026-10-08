@@ -69,11 +69,34 @@ export function historicalMetadataReviewIssues(
   incoming: HistoricalReviewMetadata,
   people: readonly HistoricalReviewPerson[],
   speakerUserIds: readonly string[],
+  verifiedSource?: z.infer<typeof historicalReviewSourceSchema>,
 ) {
+  const retainedSourceFacts =
+    verifiedSource !== undefined &&
+    original.sourceDecisions.length > 0 &&
+    original.sourceDecisions.every(
+      (decision) =>
+        decision.sourcePath === verifiedSource.sourcePath && decision.sourceDigest === verifiedSource.sourceDigest,
+    ) &&
+    incoming.sourceDecisions.every(
+      (decision) =>
+        decision.sourcePath === verifiedSource.sourcePath &&
+        decision.sourceDigest === verifiedSource.sourceDigest &&
+        decision.sourceLocator === verifiedSource.sourceRef,
+    ) &&
+    JSON.stringify({
+      ...original,
+      sourceDecisions: original.sourceDecisions.map((decision) => ({
+        ...decision,
+        sourceLocator: verifiedSource.sourceRef,
+      })),
+    }) === JSON.stringify(incoming);
   const issues = new Set<z.infer<typeof historicalReviewIssueSchema>>();
-  if (incoming.archivalCredits.length) issues.add("archival_credit_unmapped");
-  if (incoming.sourceDecisions.some((item) => item.decision === "title_not_recorded")) issues.add("title_unresolved");
-  if (incoming.sourceDecisions.some((item) => item.decision === "credit_not_recorded")) issues.add("credit_unresolved");
+  if (!retainedSourceFacts && incoming.archivalCredits.length) issues.add("archival_credit_unmapped");
+  if (!retainedSourceFacts && incoming.sourceDecisions.some((item) => item.decision === "title_not_recorded"))
+    issues.add("title_unresolved");
+  if (!retainedSourceFacts && incoming.sourceDecisions.some((item) => item.decision === "credit_not_recorded"))
+    issues.add("credit_unresolved");
   if (
     speakerUserIds.some(
       (id) =>
@@ -92,6 +115,7 @@ export function historicalMetadataReviewIssues(
     )
   )
     issues.add("approved_appearance_conflict");
+  if (retainedSourceFacts) return [...issues];
   const mapped = (ref: string) =>
     people.some(
       (person) =>

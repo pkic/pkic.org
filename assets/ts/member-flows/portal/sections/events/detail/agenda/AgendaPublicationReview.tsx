@@ -1,3 +1,7 @@
+import { agendaHistoricalPublicationReview } from "../../../../../../../shared/agenda-historical-publication-review";
+import { Field } from "../../../../../../ui/Field";
+import type { FieldPresentation } from "../../../../../../hooks/useContractForm";
+import { Checkbox } from "../../../../../../ui/Checkbox";
 import type { AgendaSnapshot } from "../../../../../../../shared/schemas/event-agenda";
 import { formatNumber } from "../../../../../../../shared/format-number";
 import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
@@ -10,17 +14,24 @@ export function AgendaPublicationReview({
   snapshot,
   canEdit,
   busy,
+  acknowledgeArchiveRepresentation,
+  onArchiveAcknowledgment,
+  acknowledgmentField,
   onClose,
   onPreview,
-  onApprove,
 }: {
   snapshot: AgendaSnapshot;
   canEdit: boolean;
   busy: boolean;
+  acknowledgeArchiveRepresentation: boolean;
+  onArchiveAcknowledgment: (value: boolean) => void;
+  acknowledgmentField: FieldPresentation;
   onClose: () => void;
   onPreview: () => void;
-  onApprove: () => void;
 }) {
+  const { occurrenceIds, sourceOnlyCredits, titlesNotRecorded, creditsNotRecorded, endsNotRecorded } =
+    agendaHistoricalPublicationReview(snapshot);
+  const requiresArchiveReview = occurrenceIds.length > 0;
   return (
     <Panel>
       <PanelHeader title="Review for publication">
@@ -30,7 +41,10 @@ export function AgendaPublicationReview({
         <div class="pk-stack">
           <DescriptionList
             items={[
-              { term: "Draft revision", value: formatNumber(snapshot.revision) },
+              {
+                term: "Draft revision",
+                value: formatNumber(snapshot.revision),
+              },
               {
                 term: "Approved revision",
                 value: snapshot.publishedRevision === null ? "None" : formatNumber(snapshot.publishedRevision),
@@ -48,12 +62,42 @@ export function AgendaPublicationReview({
           <div class="pk-cluster">
             <Button onClick={onPreview}>Public preview</Button>
           </div>
+          {requiresArchiveReview && (
+            <div class="pk-stack">
+              <p>
+                {formatNumber(sourceOnlyCredits)} speaker credits from the original agenda,{" "}
+                {formatNumber(titlesNotRecorded)} titles not recorded, {formatNumber(creditsNotRecorded)} speaker names
+                not recorded and {formatNumber(endsNotRecorded)} session end times not recorded. Publish these
+                historical details as recorded. Slides and recordings need separate approval.
+              </p>
+              {canEdit && (
+                <Field label="Historical speaker and timing review" {...acknowledgmentField}>
+                  {(control) => (
+                    <Checkbox
+                      {...control}
+                      name="acknowledgeArchiveRepresentation"
+                      label="I reviewed the historical speaker and timing details, including missing information."
+                      checked={acknowledgeArchiveRepresentation}
+                      disabled={busy}
+                      onChange={(event) => onArchiveAcknowledgment(event.currentTarget.checked)}
+                    >
+                      I reviewed the historical speaker and timing details, including missing information.
+                    </Checkbox>
+                  )}
+                </Field>
+              )}
+            </div>
+          )}
           {canEdit && (
             <div class="pk-cluster">
               <Button
                 variant="primary"
-                disabled={busy || snapshot.revision === snapshot.publishedRevision}
-                onClick={onApprove}
+                disabled={
+                  busy ||
+                  snapshot.revision === snapshot.publishedRevision ||
+                  (requiresArchiveReview && !acknowledgeArchiveRepresentation)
+                }
+                type="submit"
               >
                 Approve for publication
               </Button>

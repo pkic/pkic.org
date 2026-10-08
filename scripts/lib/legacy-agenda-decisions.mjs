@@ -24,7 +24,7 @@ export function resolveLegacyAgendaRow(session, context, mappings) {
     kind,
     sourcePath: context.sourcePath,
     sourceDigest: context.sourceDigest,
-    sourceLocator,
+    sourceLocator: sourceKey,
     authoredValue,
     decision,
     resolvedValue,

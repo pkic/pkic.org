@@ -76,11 +76,12 @@ export async function assembleStaticRelease(source, destination, environment) {
   }
   // Asset responses carry the selected publication identity without running application code.
   const headerPath = resolve(destination, "_headers");
-  let headers = "";
+  let headers;
   try {
     headers = await readFile(headerPath, "utf8");
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
+    headers = await readFile(new URL("../../static/_headers", import.meta.url), "utf8");
   }
   headers = headers
     .replace(/\n# BEGIN PUBLICATION[\s\S]*?# END PUBLICATION\n?/g, "")
@@ -91,18 +92,26 @@ export async function assembleStaticRelease(source, destination, environment) {
   headers = /^\/\*\r?\n/m.test(headers)
     ? headers.replace(/^\/\*\r?\n/m, (rule) => rule + global)
     : `${headers}\n/*\n${global}`;
-  const privateRules = release.privatePaths
+  const privateHeaderPaths = new Set(release.privatePaths);
+  // The asset service canonicalizes the generic error file to this extensionless path.
+  if (privateHeaderPaths.has("/404.html")) privateHeaderPaths.add("/404");
+  const privateRules = [...privateHeaderPaths]
     .map(
       (path) =>
         `\n${path}\n    ! Cache-Control\n    Cache-Control: no-store, max-age=0\n    ! Referrer-Policy\n    Referrer-Policy: no-referrer\n    ! X-Robots-Tag\n    X-Robots-Tag: noindex, nofollow, noarchive\n`,
     )
     .join("");
-  const conferenceRules = release.files
-    .filter((file) =>
-      /^(?:events\/.*\/(?:event-data\.json|agenda\.ics)|.*\/agenda\/(?:data\.json|calendar\.ics|calendar\/[^/]+\.ics))$/.test(
-        file,
-      ),
-    )
+  const conferenceRules = [
+    ...new Set(
+      release.files
+        .filter((file) =>
+          /^(?:events\/.*\/(?:event-data\.json|agenda\.ics)|.*\/agenda\/(?:data\.json|calendar\.ics|calendar\/[^/]+\.ics))$/.test(
+            file,
+          ),
+        )
+        .map((file) => file.replace(/(\/agenda\/calendar)\/[^/]+\.ics$/, "$1/*")),
+    ),
+  ]
     .map((file) => `\n/${file}\n    ! X-Robots-Tag\n    X-Robots-Tag: noindex, nofollow, noarchive\n`)
     .join("");
   const immutableRules = [
@@ -121,10 +130,11 @@ export async function assembleStaticRelease(source, destination, environment) {
   const rules =
     immutableRules +
     "\n/_published/news/*\n    ! Cache-Control\n    Cache-Control: public, max-age=300, must-revalidate\n\n/feed/*\n    Content-Type: application/rss+xml; charset=UTF-8\n\n/ms/feed/*\n    Content-Type: application/rss+xml; charset=UTF-8\n\n/news/feed.xml\n    Content-Type: application/rss+xml; charset=UTF-8\n";
-  await installReleaseBytes(
-    `${headers}\n# BEGIN PUBLICATION${rules}${conferenceRules}${privateRules}# END PUBLICATION\n`,
-    headerPath,
-  );
+  const installedHeaders = `${headers}\n# BEGIN PUBLICATION${rules}${conferenceRules}${privateRules}# END PUBLICATION\n`;
+  // Cloudflare ignores rules beyond this limit, which could silently drop private-page protections.
+  const headerRuleCount = installedHeaders.split(/\r?\n/).filter((line) => line && !/^(?:\s|#)/.test(line)).length;
+  if (headerRuleCount > 100) throw new Error("Publication exceeds Cloudflare's 100 header-rule limit");
+  await installReleaseBytes(installedHeaders, headerPath);
   await installReleaseBytes(
     `${redirects}\n# BEGIN PUBLICATION\n${installedRedirects.map(({ from, to, status }) => `${from} ${to} ${status}`).join("\n")}\n# END PUBLICATION\n`,
     redirectPath,

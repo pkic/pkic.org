@@ -3,6 +3,7 @@ import { publicationRouteCacheKey, PUBLICATION_SITE_ORIGIN } from "../publicatio
 import { publicationPageInputs } from "../publication-page-inputs";
 import { publicSessionCalendarPath } from "../../functions/_lib/services/site-public-agenda-calendar";
 import { agendaSpeakerContent } from "../../assets/shared/public-agenda-content";
+import { eventParticipationLink } from "../../assets/shared/event-participation-link";
 import { publicSessionTiming } from "../../assets/shared/session-public-timing";
 import { sessionHistoryStructuredData } from "../../functions/_lib/services/site-history-structured-data";
 import PublicPage from "../layouts/PublicPage.astro";
@@ -36,7 +37,7 @@ export async function getStaticPaths() {
         };
       }),
       materials: item.materials.map(({ title, url, kind, version }) => ({ title, url, kind, version })),
-      admissionText: session.admissionPolicy === "preference" ? "Saving this session expresses a preference. In-person admission remains first come, first served." : session.admissionPolicy === "approval" ? "Attendance requires approval. Request a place in your personal agenda." : "Reserve a place in your personal agenda. Admission depends on your confirmed reservation.",
+      participation: eventParticipationLink(agenda.eventSlug, session.id, session.admissionPolicy, session.accessPolicy),
       sessionCalendar: calendar?.entries.some((entry) => entry.occurrenceId === session.id && entry.status === "confirmed")
         ? publicSessionCalendarPath(agendaPath, session.id) : undefined,
     };
@@ -64,8 +65,8 @@ const { view, pageInputs } = Astro.props;
     <p><time datetime={view.timing?.startAt}>{view.date}</time> · {view.times}{view.timing?.endNotRecorded && " · End not recorded"} · {view.timeZone}{view.rooms.length > 0 && ` · ${view.rooms.join(" / ")}`}</p>
     <Markdown className="pk-session-abstract" markdown={view.description} />
     {view.prerequisites && <section><h2>Before attending</h2><Markdown markdown={view.prerequisites} /></section>}
-    <section><h2>Speakers</h2><div class="pk-content-agenda__speakers">{view.credits.map((credit) => <article><AgendaSpeaker speaker={credit.speaker} personPath={credit.personPath} detail /></article>)}</div></section>
-    {!view.timing?.endNotRecorded && <section><h2>Attendance</h2><p>{view.admissionText}</p><a href={`/portal/events/${encodeURIComponent(view.eventSlug)}`}>Open my agenda</a></section>}
+    {view.credits.length > 0 && <section><h2>Speakers</h2><div class="pk-content-agenda__speakers">{view.credits.map((credit) => <article><AgendaSpeaker speaker={credit.speaker} personPath={credit.personPath} detail /></article>)}</div></section>}
+    {!view.timing?.endNotRecorded && <section><h2>Attendance</h2><p>{view.participation.policyLabel}</p><p>{view.participation.message}</p><a href={view.participation.url}>{view.participation.label}</a></section>}
     {view.materials.length > 0 && <section><h2>Session materials</h2><ul>{view.materials.map((material) => <li><a href={material.url} rel="noopener noreferrer">{material.title}</a> · {material.kind} · version {material.version}</li>)}</ul></section>}
     <p><a href={`${view.agendaPath}calendar.ics`}>Event calendar</a>{view.sessionCalendar && <> · <a href={view.sessionCalendar} download>Download session calendar</a></>} · <a href={view.agendaPath}>Full agenda</a></p>
   </article>

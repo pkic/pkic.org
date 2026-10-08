@@ -230,6 +230,46 @@ describe("sponsor live lead viewing through the mounted API", () => {
     expect(await queryAll(env.DB, "SELECT id FROM event_attendance_observations")).toEqual([]);
     expect(await queryAll(env.DB, "SELECT id FROM event_session_admissions")).toEqual([]);
   });
+  it("reads, searches, sorts and exports the recorded event organization without inheriting a later employer", async () => {
+    await env.DB.prepare(
+      `UPDATE registrations SET registration_organization_name = CASE
+      WHEN user_id = (SELECT id FROM users WHERE email = 'attendee0@synthetic.test') THEN 'Zulu event organization'
+      WHEN user_id = (SELECT id FROM users WHERE email = 'attendee1@synthetic.test') THEN 'Alpha event organization'
+      ELSE NULL END WHERE event_id = ?`,
+    )
+      .bind(eventId)
+      .run();
+    await env.DB.prepare(
+      "UPDATE users SET organization_name = 'Later employer' WHERE id IN (SELECT user_id FROM registrations WHERE event_id = ?)",
+    )
+      .bind(eventId)
+      .run();
+    const searched = await request(undefined, "?q=Zulu%20event&sort=organization");
+    expect(searched.status, await searched.clone().text()).toBe(200);
+    const page = sponsorLeadListSchema.parse(await searched.json());
+    expect(page.page.total).toBe(1);
+    expect(page.leads).toEqual([
+      expect.objectContaining({ email: "attendee0@synthetic.test", organization: "Zulu event organization" }),
+    ]);
+    const ordered = sponsorLeadListSchema.parse(await (await request(undefined, "?sort=organization")).json());
+    expect(ordered.leads.map((lead) => lead.organization)).toEqual([
+      null,
+      "Alpha event organization",
+      "Zulu event organization",
+    ]);
+    const unrelated = sponsorLeadListSchema.parse(await (await request(undefined, "?q=Later%20employer")).json());
+    expect(unrelated.leads).toEqual([]);
+    expect(unrelated.page.total).toBe(0);
+    await grant("agenda:leads_export");
+    const response = await request(`/sponsors/${sponsorId}/leads.csv`);
+    expect(response.status, await response.clone().text()).toBe(200);
+    const csv = await response.text();
+    expect(csv).toContain(",attendee0@synthetic.test,Zulu event organization,");
+    expect(csv).toContain(",attendee1@synthetic.test,Alpha event organization,");
+    expect(csv).toContain(",attendee2@synthetic.test,,");
+    expect(csv).not.toContain("Later employer");
+  });
+
   it("paginates unique live contacts, searches and attributes capture without creating attendance", async () => {
     const response = await request(undefined, "?limit=2&sort=name");
     expect(response.status).toBe(200);

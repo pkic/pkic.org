@@ -235,6 +235,9 @@ export const agendaSnapshotSchema = z.object({
   staffingReport: agendaStaffingReportSchema.optional(),
 });
 export const agendaRevisionSchema = z.object({ expectedRevision: z.number().int().min(0) });
+export const agendaPublicationSchema = agendaRevisionSchema.extend({
+  acknowledgeArchiveRepresentation: z.boolean().default(false),
+});
 export const agendaRoomCreateSchema = agendaRoomSchema.omit({ id: true }).extend(agendaRevisionSchema.shape);
 export const agendaOccurrenceCreateSchema = agendaOccurrenceFieldsSchema.extend({
   ...agendaRevisionSchema.shape,

@@ -199,7 +199,7 @@ describe("authenticated public agenda preview", () => {
       const refused = await callApi(env, "/api/v1/events/pqc-2026/agenda/publications", {
         method: "POST",
         headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
-        body: JSON.stringify({ expectedRevision: initial.revision }),
+        body: JSON.stringify({ expectedRevision: initial.revision, acknowledgeArchiveRepresentation: true }),
       });
       expect(refused.status).toBe(422);
       expect(await refused.json()).toMatchObject({ error: { code: "AGENDA_HISTORICAL_MAPPING_REQUIRED" } });

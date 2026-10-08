@@ -1,3 +1,4 @@
+import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
 import {
   eventAttendanceRegistrationSummarySchema,
   eventAttendanceRegistrationsStatsSchema,
@@ -48,7 +49,7 @@ export function buildEventAttendanceRegistrationsPageQuery(eventId: string, para
                          u.email AS user_email,
                          COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
                          u.headshot_r2_key AS headshot_r2_key,
-                         u.organization_name AS organization_name, u.job_title AS job_title`,
+                         ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title`,
       ...population,
     },
     orderBy: resolveEventRegistrationOrderBy(params.sort),

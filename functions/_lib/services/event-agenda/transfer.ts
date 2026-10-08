@@ -107,15 +107,16 @@ export async function reviewAgendaTransfer(db: DatabaseLike, eventId: string, ev
     const legacyFragments = row.archive?.legacyFragments ?? [];
     const legacyDownloads = row.archive?.legacyDownloads ?? [];
     const sourceLocatorMatches = (metadata: { sourcePath: string; sourceDigest: string; sourceLocator: string }) =>
-      provenanceMatches(metadata) &&
-      (metadata.sourceLocator === row.ref ||
-        (input.document.source.kind === "portable" &&
-          row.retainedSourceEvidence.some(
-            (receipt) =>
-              receipt.sourcePath === metadata.sourcePath &&
-              receipt.sourceDigest === metadata.sourceDigest &&
-              receipt.sourceRef === metadata.sourceLocator,
-          )));
+      (metadata.sourcePath === row.sourcePath &&
+        metadata.sourceDigest === sourceDigest &&
+        metadata.sourceLocator === row.ref) ||
+      (input.document.source.kind === "portable" &&
+        row.retainedSourceEvidence.some(
+          (receipt) =>
+            receipt.sourcePath === metadata.sourcePath &&
+            receipt.sourceDigest === metadata.sourceDigest &&
+            receipt.sourceRef === metadata.sourceLocator,
+        ));
     const ownedOccurrence = snapshot.occurrences.find((occurrence) =>
       existingSources.some((source) => source.source_key === row.sourceKey && source.id === occurrence.id),
     );
@@ -191,7 +192,7 @@ export async function reviewAgendaTransfer(db: DatabaseLike, eventId: string, ev
     if (
       sourceDecisions.some(
         (decision) =>
-          !provenanceMatches(decision) ||
+          !sourceLocatorMatches(decision) ||
           decision.reviewedAt > archiveClock ||
           (decision.kind === "title" && decision.resolvedValue !== row.fields.title) ||
           (decision.decision === "credit_not_recorded" &&
@@ -510,10 +511,11 @@ export async function applyAgendaTransfer(
       const statements = [
         db
           .prepare(
-            "INSERT INTO event_agenda_import_provenance(occurrence_id,source_format,source_version,source_path,source_ref,source_anchor,source_digest,timing_json,media_json,people_json,imported_by,imported_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO event_agenda_import_provenance(occurrence_id,import_mode,source_format,source_version,source_path,source_ref,source_anchor,source_digest,timing_json,media_json,people_json,imported_by,imported_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
           )
           .bind(
             item.id,
+            input.mode,
             input.document.source.kind,
             input.document.version,
             row.sourcePath,

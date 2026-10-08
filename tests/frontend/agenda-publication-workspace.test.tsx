@@ -1,10 +1,11 @@
 // @vitest-environment jsdom
+import { AgendaPublicationWorkspace } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/AgendaPublicationWorkspace";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, expect, it, vi } from "vitest";
 import type { ComponentChildren } from "preact";
 import { AgendaEditor } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/AgendaEditor";
-import { agendaRevisionSchema, agendaSnapshotSchema } from "../../assets/shared/schemas/event-agenda";
+import { agendaPublicationSchema, agendaSnapshotSchema } from "../../assets/shared/schemas/event-agenda";
 import { runRowAction } from "./helpers/row-actions";
 vi.mock("../../assets/ts/components/ApiDataTable", () => ({
   ApiDataTable: ({
@@ -116,7 +117,10 @@ it("keeps agenda actions at card scope and list creation in the table toolbar an
   await settle();
   const writes = fetcher.mock.calls.filter(([, init]) => init?.method === "POST");
   expect(writes).toHaveLength(1);
-  expect(agendaRevisionSchema.parse(JSON.parse(String(writes[0]![1]?.body)))).toEqual({ expectedRevision: 1 });
+  expect(agendaPublicationSchema.parse(JSON.parse(String(writes[0]![1]?.body)))).toEqual({
+    expectedRevision: 1,
+    acknowledgeArchiveRepresentation: false,
+  });
   await act(() =>
     [...host.querySelectorAll<HTMLButtonElement>("button")]
       .find((button) => button.textContent === "Back to agenda")!
@@ -126,4 +130,109 @@ it("keeps agenda actions at card scope and list creation in the table toolbar an
   expect(host.querySelector("table")).not.toBeNull();
   expect(host.textContent).not.toContain("Draft revision");
   expect(host.textContent).not.toContain("Approve for publication");
+});
+
+it("requires explicit historical source acknowledgment and does not carry it to a changed review", async () => {
+  host = document.createElement("div");
+  document.body.append(host);
+  const historical = agendaSnapshotSchema.parse({
+    ...snapshot,
+    occurrences: [
+      {
+        id: "10000000-0000-4000-8000-000000000001",
+        title: "Historical talk",
+        startAt: "2023-11-07T09:00:00.000Z",
+        endAt: "2023-11-07T09:30:00.000Z",
+        roomId: null,
+        speakers: [],
+        history: {
+          archivalCredits: [
+            {
+              sourceRef: "source-speaker",
+              sourcePath: "content/events/2023/agenda.md",
+              sourceDigest: "a".repeat(64),
+              provenance: "authored_public",
+              displayName: "Recorded speaker",
+              jobTitle: null,
+              organizationName: null,
+              photoUrl: null,
+            },
+          ],
+        },
+      },
+    ],
+  });
+  const creditlessUnknown = agendaSnapshotSchema.parse({
+    ...historical,
+    occurrences: [
+      {
+        id: "10000000-0000-4000-8000-000000000002",
+        title: "Closing",
+        startAt: null,
+        endAt: null,
+        roomId: null,
+        speakers: [],
+        history: {
+          archivalTiming: {
+            sourcePath: "content/events/2023/agenda.md",
+            sourceDigest: "a".repeat(64),
+            provenance: "authored_public",
+            timeZone: "UTC",
+            authoredDate: "2023-11-07",
+            authoredStart: "17:00",
+            startAt: "2023-11-07T17:00:00.000Z",
+            endAt: null,
+          },
+        },
+      },
+    ],
+  });
+  const bodies: unknown[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (_url: string, init?: RequestInit) => {
+      bodies.push(agendaPublicationSchema.parse(JSON.parse(String(init?.body))));
+      return new Response(JSON.stringify(historical), {
+        headers: { "content-type": "application/json" },
+      });
+    }),
+  );
+  const saved = vi.fn();
+  await act(() =>
+    render(<AgendaPublicationWorkspace snapshot={historical} canEdit onSaved={saved} onClose={() => {}} />, host),
+  );
+  await settle();
+  const approve = () =>
+    [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+      (button) => button.textContent === "Approve for publication",
+    )!;
+  expect(approve().disabled).toBe(true);
+  expect(host.textContent).toContain("Slides and recordings need separate approval");
+  const acknowledgment = host.querySelector<HTMLInputElement>('input[name="acknowledgeArchiveRepresentation"]')!;
+  expect(acknowledgment.checked).toBe(false);
+  await act(() => acknowledgment.click());
+  await settle();
+  expect(approve().disabled).toBe(false);
+  await act(() => approve().click());
+  await settle();
+  expect(bodies).toEqual([{ expectedRevision: 1, acknowledgeArchiveRepresentation: true }]);
+  expect(saved).toHaveBeenCalledOnce();
+  await act(() =>
+    render(
+      <AgendaPublicationWorkspace
+        snapshot={{ ...creditlessUnknown, revision: 2 }}
+        canEdit
+        onSaved={saved}
+        onClose={() => {}}
+      />,
+      host,
+    ),
+  );
+  expect(host.querySelector<HTMLInputElement>('input[name="acknowledgeArchiveRepresentation"]')!.checked).toBe(false);
+  await settle();
+  expect(host.querySelector<HTMLInputElement>('input[name="acknowledgeArchiveRepresentation"]')!.checked).toBe(false);
+  expect(approve().disabled).toBe(true);
+  expect(host.textContent).toContain("1 session end times not recorded");
+  expect(host.textContent).toContain("0 speaker credits from the original agenda");
+  expect(bodies).toHaveLength(1);
 });

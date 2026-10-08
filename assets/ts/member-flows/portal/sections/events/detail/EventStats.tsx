@@ -84,6 +84,7 @@ export function EventStats({
   basePath = `/events/${encodeURIComponent(slug)}/stats`,
   canViewAnalytics = true,
   attendance,
+  legacyAttendanceBasePath,
 }: {
   slug: string;
   section?: string;
@@ -91,6 +92,7 @@ export function EventStats({
   basePath?: string;
   canViewAnalytics?: boolean;
   attendance?: AttendanceAccess;
+  legacyAttendanceBasePath?: string;
 }) {
   const [location, navigate] = usePortalHashLocation();
   const canViewAttendance = Boolean(attendance?.canRead || attendance?.canImport);
@@ -101,9 +103,13 @@ export function EventStats({
   const active = sections.some((item) => item.key === section) ? section! : sections[0]?.key;
   const hrefFor = (key: string) => (key === "overview" ? basePath : `${basePath}/${key}`);
   const attendanceBase = `${basePath}/attendance`;
-  const attendanceParts = location.startsWith(`${attendanceBase}/`)
+  const requestedAttendanceBase =
+    legacyAttendanceBasePath && location.startsWith(`${legacyAttendanceBasePath}/`)
+      ? legacyAttendanceBasePath
+      : attendanceBase;
+  const attendanceParts = location.startsWith(`${requestedAttendanceBase}/`)
     ? location
-        .slice(attendanceBase.length + 1)
+        .slice(requestedAttendanceBase.length + 1)
         .split("/")
         .filter(Boolean)
         .map(decodeURIComponent)

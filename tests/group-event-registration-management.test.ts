@@ -1,3 +1,8 @@
+import { eventAttendanceRegistrationsListResponseSchema } from "../assets/shared/schemas/event-registrations";
+import {
+  attendeeRegistrationParticipationSchema,
+  registrationSubmissionResponseSchema,
+} from "../assets/shared/schemas/registration";
 import { grantAdministrator } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
@@ -136,6 +141,71 @@ async function seedAttendees(eventId: string): Promise<{ registrationId: string;
 
 describe("group event attendee management", () => {
   beforeEach(resetDb);
+
+  it("records an explicitly selected individual without inheriting the group member's account employer", async () => {
+    const fixture = await createFixture();
+    const event = await createEvent(fixture);
+    await env.DB.prepare("UPDATE events SET registration_mode='optional' WHERE id=?").bind(event.id).run();
+    await env.DB.prepare(
+      "INSERT INTO event_terms(id,event_id,audience_type,term_key,version,required,active,created_at) VALUES(?,?,'attendee','privacy-policy','v1',1,1,?)",
+    )
+      .bind(crypto.randomUUID(), event.id, new Date().toISOString())
+      .run();
+    await env.DB.prepare(
+      "UPDATE users SET first_name='Individual',last_name='Attendee',organization_name='Unrelated employer',job_title='Unrelated role' WHERE id=?",
+    )
+      .bind(fixture.ownerLeader.id)
+      .run();
+    const identity = await env.DB.prepare(
+      "SELECT id FROM identities WHERE user_id=? AND organization_id IS NULL AND started_at IS NOT NULL AND ended_at IS NULL",
+    )
+      .bind(fixture.ownerLeader.id)
+      .first<{ id: string }>();
+    expect(identity).not.toBeNull();
+    const response = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations`,
+      {
+        method: "POST",
+        body: JSON.stringify(
+          attendeeRegistrationParticipationSchema.parse({
+            identityId: identity!.id,
+            attendanceType: "virtual",
+            consents: [{ termKey: "privacy-policy", version: "v1" }],
+          }),
+        ),
+      },
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+    const created = registrationSubmissionResponseSchema.parse(await response.json());
+    expect(
+      await env.DB.prepare(
+        "SELECT registration_identity_id,registration_organization_name,registration_job_title FROM registrations WHERE id=?",
+      )
+        .bind(created.registrationId)
+        .first(),
+    ).toEqual({
+      registration_identity_id: identity!.id,
+      registration_organization_name: null,
+      registration_job_title: null,
+    });
+    expect(
+      await env.DB.prepare("SELECT organization_name,job_title FROM users WHERE id=?")
+        .bind(fixture.ownerLeader.id)
+        .first(),
+    ).toEqual({
+      organization_name: "Unrelated employer",
+      job_title: "Unrelated role",
+    });
+    const list = await request(
+      fixture.ownerLeaderToken,
+      `/api/v1/groups/${fixture.ownerGroupId}/events/${event.id}/registrations`,
+    );
+    expect(list.status, await list.clone().text()).toBe(200);
+    expect(eventAttendanceRegistrationsListResponseSchema.parse(await list.json()).registrations).toEqual([
+      expect.objectContaining({ organization_name: null, job_title: null }),
+    ]);
+  });
 
   it("lets the event manager resend registration email and refuses other groups", async () => {
     const fixture = await createFixture();

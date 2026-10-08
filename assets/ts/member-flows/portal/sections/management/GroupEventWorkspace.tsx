@@ -162,12 +162,13 @@ export function GroupEventWorkspace({
   detailSegment?: string;
   onUpdated?: () => void | Promise<void>;
 }) {
-  if (tab === "team" || tab === "promoters" || tab === "badges") {
+  if (tab === "team" || tab === "promoters" || tab === "badges" || tab === "attendance") {
     const legacy = tab;
     detailSegment = detailTab;
     detailTab = detailId;
     detailId = legacy;
-    tab = legacy === "team" ? "settings" : legacy === "promoters" ? "stats" : "registrations";
+    tab =
+      legacy === "team" ? "settings" : legacy === "promoters" || legacy === "attendance" ? "stats" : "registrations";
   }
   const [, navigate] = usePortalHashLocation();
   const [editing, setEditing] = useState(false);
@@ -410,6 +411,7 @@ export function GroupEventWorkspace({
                   section={detailId}
                   subTab={detailTab}
                   basePath={tabPath("stats")}
+                  legacyAttendanceBasePath={tabPath("attendance")}
                   canViewAnalytics={event.capabilities.includes("manage_attendance")}
                   attendance={{
                     timeZone: event.timezone,

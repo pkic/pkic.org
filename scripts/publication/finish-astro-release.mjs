@@ -21,6 +21,7 @@ import { publishedNewsPages } from "../../site/news-pages.ts";
 import { XMLValidator } from "fast-xml-parser";
 import { optimizePublicSvgFiles, publicInlineSvgOptimizer } from "./optimize-public-svg.mjs";
 import { publicDownloadPublisher } from "./publish-linked-downloads.mjs";
+import { publishAuthoredAgendaDownloads } from "./publish-authored-agenda-downloads.mjs";
 import { publicSocialCardPublisher } from "./publish-social-cards.mjs";
 import { publishAgendaLayout } from "./publish-agenda-layout.mjs";
 import { publicDiagramPublisher } from "./publish-diagrams.mjs";
@@ -62,6 +63,8 @@ async function finishRelease(output, pages, timings) {
     { ...snapshot, sourceSequence: source ? null : snapshot.sourceSequence },
     JSON.parse(await readFile(resolve(publicationStagingDirectory(), "document-routes.json"), "utf8")),
     JSON.parse(await readFile(resolve(publicationStagingDirectory(), "retained-documents.json"), "utf8")),
+    JSON.parse(await readFile(resolve(publicationStagingDirectory(), "repair-aliases.json"), "utf8")),
+    JSON.parse(await readFile(resolve(publicationStagingDirectory(), "retained-repair-aliases.json"), "utf8")),
   );
   if (!source)
     await cp(resolve(publicationStagingDirectory(), "media", "_published"), resolve(output, "_published"), {
@@ -73,7 +76,11 @@ async function finishRelease(output, pages, timings) {
     const svgFiles = await timings.measure("SVG file optimization", () => optimizePublicSvgFiles(output));
     const optimizeInlineSvg = publicInlineSvgOptimizer();
     const publishDownloads = publicDownloadPublisher(output, documentRoutes);
-    const downloads = new Set();
+    const downloads = new Set(
+      await timings.measure("authored public downloads", () =>
+        publishAuthoredAgendaDownloads(output, snapshot, documentRoutes),
+      ),
+    );
     const files = svgFiles.map((file) => relative(output, file).split("\\").join("/"));
     const privatePaths = [];
     const memberData = resolve(output, "_published", "members");

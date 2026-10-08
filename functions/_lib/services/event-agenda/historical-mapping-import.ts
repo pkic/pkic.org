@@ -29,9 +29,12 @@ export type HistoricalSourceRow = {
   content_id: string;
   source_key: string;
   start_at: string | null;
+  end_at: string | null;
+  title: string;
   metadata_json: string | null;
   source_review_json: string | null;
   source_snapshot_json: string | null;
+  import_mode: string | null;
   source_format: string;
   source_version: number;
   source_path: string;
@@ -45,23 +48,49 @@ export type HistoricalSourceRow = {
   imported_at: string;
 };
 /** Exact stored source evidence is guarded independently of the agenda revision. */
-export async function readHistoricalSources(db: DatabaseLike, eventId: string, sourceKeys: string[]) {
-  return all<HistoricalSourceRow>(
-    db,
-    `SELECT occurrence.id,occurrence.content_id,occurrence.source_key,occurrence.start_at,
+async function readHistoricalSourcePages(
+  db: DatabaseLike,
+  eventId: string,
+  references: string[],
+  field: "source_key" | "id",
+) {
+  const distinct = [...new Set(references)],
+    rows: HistoricalSourceRow[] = [];
+  for (let offset = 0; offset < distinct.length; offset += 100) {
+    const page = await all<HistoricalSourceRow>(
+      db,
+      `SELECT occurrence.id,occurrence.content_id,occurrence.source_key,occurrence.start_at,occurrence.end_at,content.title,
     history.metadata_json,content.source_review_json,content.source_snapshot_json,
-    source.source_format,source.source_version,source.source_path,source.source_ref,source.source_anchor,
+    source.import_mode,source.source_format,source.source_version,source.source_path,source.source_ref,source.source_anchor,
     source.source_digest,source.timing_json,source.media_json,source.people_json,source.imported_by,source.imported_at
     FROM event_agenda_occurrences occurrence
     JOIN event_agenda_contents content ON content.id=occurrence.content_id AND content.event_id=occurrence.event_id
     JOIN event_agenda_import_provenance source ON source.occurrence_id=occurrence.id
     LEFT JOIN event_agenda_session_history history ON history.occurrence_id=occurrence.id
-    WHERE occurrence.event_id=? AND occurrence.source_key IN(SELECT value FROM json_each(?)) LIMIT 101`,
-    [eventId, JSON.stringify(sourceKeys)],
-  );
+    WHERE occurrence.event_id=? AND occurrence.${field} IN(SELECT value FROM json_each(?))
+    ORDER BY occurrence.id LIMIT 101`,
+      [eventId, JSON.stringify(distinct.slice(offset, offset + 100))],
+    );
+    if (page.length > 100)
+      throw new AppError(
+        422,
+        "AGENDA_HISTORICAL_REVIEW_LIMIT",
+        "Review at most 100 historical sessions per source page.",
+      );
+    rows.push(...page);
+  }
+  return rows;
+}
+export async function readHistoricalSources(db: DatabaseLike, eventId: string, sourceKeys: string[]) {
+  return readHistoricalSourcePages(db, eventId, sourceKeys, "source_key");
+}
+/** Publication resolves each exact occurrence, including agendas spanning several transfer parts. */
+export async function readHistoricalOccurrenceSources(db: DatabaseLike, eventId: string, occurrenceIds: string[]) {
+  return readHistoricalSourcePages(db, eventId, occurrenceIds, "id");
 }
 export function historicalSourceProvenance(row: HistoricalSourceRow) {
   return {
+    importMode: row.import_mode,
     sourceFormat: row.source_format,
     sourceVersion: row.source_version,
     sourcePath: row.source_path,
@@ -83,6 +112,8 @@ export function historicalSourceGuard(db: DatabaseLike, eventId: string, rows: H
       sourceKey: row.source_key,
       contentId: row.content_id,
       startAt: row.start_at,
+      endAt: row.end_at,
+      title: row.title,
       metadataJson: row.metadata_json,
       reviewJson: row.source_review_json,
       snapshotJson: row.source_snapshot_json,
@@ -92,16 +123,17 @@ export function historicalSourceGuard(db: DatabaseLike, eventId: string, rows: H
     sql: `SELECT 1 WHERE NOT EXISTS(
       SELECT 1 FROM json_each(?) expected WHERE NOT EXISTS(
         SELECT 1 FROM event_agenda_occurrences occurrence
-        JOIN event_agenda_contents content ON content.id=occurrence.content_id
+        JOIN event_agenda_contents content ON content.id=occurrence.content_id AND content.event_id=occurrence.event_id
         JOIN event_agenda_import_provenance source ON source.occurrence_id=occurrence.id
         LEFT JOIN event_agenda_session_history history ON history.occurrence_id=occurrence.id
         WHERE occurrence.event_id=? AND occurrence.id=json_extract(expected.value,'$.occurrence.occurrenceId') AND json_object(
-          'provenance',json_object('sourceFormat',source.source_format,'sourceVersion',source.source_version,
+          'provenance',json_object('importMode',source.import_mode,'sourceFormat',source.source_format,'sourceVersion',source.source_version,
             'sourcePath',source.source_path,'sourceRef',source.source_ref,'sourceAnchor',source.source_anchor,
             'sourceDigest',source.source_digest,'timingJson',source.timing_json,'mediaJson',source.media_json,
             'peopleJson',source.people_json,'importedBy',source.imported_by,'importedAt',source.imported_at),
           'occurrence',json_object('occurrenceId',occurrence.id,'sourceKey',occurrence.source_key,
-            'contentId',occurrence.content_id,'startAt',occurrence.start_at,'metadataJson',history.metadata_json,
+            'contentId',occurrence.content_id,'startAt',occurrence.start_at,'endAt',occurrence.end_at,
+            'title',content.title,'metadataJson',history.metadata_json,
             'reviewJson',content.source_review_json,'snapshotJson',content.source_snapshot_json)) IS expected.value))`,
     bindings: [JSON.stringify(expected), eventId],
   });
@@ -147,6 +179,7 @@ export async function prepareHistoricalMappingImports(
         mapping.incomingMetadata,
         mapping.people,
         content.speakerUserIds,
+        { sourcePath: row.source_path, sourceDigest: row.source_digest, sourceRef: row.source_ref },
       ),
     });
     const review = JSON.stringify({ reason: "source_changed", incoming: content, incomingHistoricalMetadata: [entry] });

@@ -284,10 +284,13 @@
     border: 2px solid color-mix(in srgb, var(--agenda-color) 55%, transparent);
     border-radius: var(--pk-radius);
     background: var(--pk-surface-sunk);
-    cursor: pointer;
     transition:
       border-color 150ms ease,
       box-shadow 150ms ease;
+  }
+
+  .pk-content-agenda__session[data-agenda-session-dialog] {
+    cursor: pointer;
   }
 
   .pk-content-agenda__session-body {
@@ -507,6 +510,10 @@
   .pk-content-agenda .session-modal {
     max-width: 71.25rem;
     border: 1px solid var(--pk-line);
+  }
+
+  .pk-content-agenda .session-modal--summary {
+    height: fit-content;
   }
 
   .pk-content-agenda .session-modal__header > button {
@@ -841,6 +848,7 @@
   box-shadow: var(--pk-shadow-2);
 }
 .pk-content-agenda__session--break h3,
+.pk-content-agenda__session--break .pk-content-agenda__unknown-end,
 .pk-content-agenda__session--break .pk-content-agenda__duration {
   color: inherit;
 }

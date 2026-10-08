@@ -1,3 +1,4 @@
+import type { PublicationRepairAlias } from "../../assets/shared/schemas/site-publication-repair-aliases";
 import type { SitePublicationSnapshot } from "../../assets/shared/schemas/site-publication";
 import type {
   SitePublicationDocumentRoutes,
@@ -16,11 +17,15 @@ export function collectDocumentRedirects(
   documents: readonly VerifiedPublishedDocument[],
   retained?: readonly RetainedPublishedDocument[],
   recordings?: readonly PublishedRecording[],
+  repairs?: readonly PublicationRepairAlias[],
+  retainedRepairs?: readonly PublicationRepairAlias[],
 ): SitePublicationDocumentRoutes;
 export function assertDocumentRoutesSnapshot(
   snapshot: SitePublicationSnapshot,
   value: unknown,
   retained?: readonly RetainedPublishedDocument[],
+  repairs?: readonly PublicationRepairAlias[],
+  retainedRepairs?: readonly PublicationRepairAlias[],
 ): SitePublicationDocumentRoutes;
 export function validateDocumentRoutes(value: unknown, release?: SitePublicationRelease): SitePublicationDocumentRoutes;
 export function boundDocumentRedirect(

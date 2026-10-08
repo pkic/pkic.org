@@ -1,3 +1,4 @@
+import { registrationOrganizationSql } from "../registrations/selected-identity";
 import { all, first } from "../../db/queries";
 import { encodeBoundedCsv } from "../../csv";
 import { AppError } from "../../errors";
@@ -30,7 +31,7 @@ export async function exportSponsorLeads(db: DatabaseLike, eventId: string, spon
   await assertEventContactAccess(db, eventId);
   const rows = await all<LeadExportRow>(
     db,
-    `SELECT lead.user_id,TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')) AS name,u.email,u.organization_name AS organization,lead.observed_at
+    `SELECT lead.user_id,TRIM(COALESCE(u.first_name,'') || ' ' || COALESCE(u.last_name,'')) AS name,u.email,${registrationOrganizationSql("reg")} AS organization,lead.observed_at
     FROM event_sponsor_leads lead JOIN users u ON u.id=lead.user_id
     JOIN registrations reg ON reg.event_id=lead.event_id AND reg.user_id=lead.user_id
     JOIN sponsorships sponsor ON sponsor.id=lead.sponsor_id AND sponsor.event_id=lead.event_id

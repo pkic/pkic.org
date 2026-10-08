@@ -1,3 +1,4 @@
+import { publicationAuthoredAgendaRoutes } from "../../assets/shared/publication-agenda-routes.ts";
 import { publishedSessionRoute } from "../../assets/shared/session-public-route.ts";
 
 /** Archived session aliases belong to the same immutable release as their target pages. */
@@ -26,6 +27,17 @@ export function collectSessionRedirects(snapshot, files) {
         redirects.set(from, { from, to, status: 301 });
       }
     }
+  }
+  for (const owner of publicationAuthoredAgendaRoutes(snapshot)) {
+    const agenda = snapshot.eventAgendas[owner.eventSlug];
+    const from = `${owner.route}agenda/`;
+    const to = agenda.publicAgendaPath ?? `/events/${encodeURIComponent(agenda.eventSlug)}/agenda/`;
+    if (!owned.has(to)) throw new Error(`Authored agenda alias target was not generated: ${to}`);
+    if (from === to) continue;
+    if (owned.has(from)) throw new Error(`Authored agenda alias collides with a generated page: ${from}`);
+    const previous = redirects.get(from);
+    if (previous && previous.to !== to) throw new Error(`Authored agenda alias has multiple destinations: ${from}`);
+    redirects.set(from, { from, to, status: 301 });
   }
   return [...redirects.values()].sort((a, b) => a.from.localeCompare(b.from));
 }

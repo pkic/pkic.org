@@ -1,3 +1,6 @@
+import { resolveAuthoredAgendaRouteOwners } from "./site-publication-agenda-routes";
+import { publicationAuthoredAgendaRoutes } from "../../../assets/shared/publication-agenda-routes";
+import type { AuthoredAgendaSource } from "../../../assets/shared/schemas/site-publication-agenda-routes";
 import { storedAgendaSnapshotSchema } from "../../../assets/shared/schemas/event-agenda-stored";
 import { readPublicAgendaCalendars } from "./site-publication-agenda-calendars";
 import { publicAgendaProjection } from "./event-agenda/public-projection";
@@ -53,6 +56,7 @@ export async function readSitePublicationSnapshot(
   db: DatabaseLike,
   sponsorSelections: Array<Record<string, string | undefined>>,
   authoredEventSlugs: readonly string[] = [],
+  authoredAgendaSources: readonly AuthoredAgendaSource[] = [],
 ): Promise<SitePublicationSnapshot> {
   const sourceSequence = await publicationHighwater(db);
   const snapshot: z.infer<typeof sitePublicationContentSchema> = {
@@ -206,6 +210,7 @@ export async function readSitePublicationSnapshot(
     eventAfter = events[events.length - 1]!.slug;
   }
   snapshot.eventAgendas = {};
+  snapshot.authoredAgendaRoutes = [];
   const agendaTables = await all<{ name: string }>(
     db,
     "SELECT name FROM sqlite_master WHERE type='table' AND name IN ('event_agenda_publications','event_agenda_state')",
@@ -233,10 +238,15 @@ export async function readSitePublicationSnapshot(
     );
     for (const [index, row] of agendas.entries()) {
       const approved = projected[index]!;
-      snapshot.eventAgendas[row.slug] = publicAgendaProjection(approved, row.base_path);
+      const publicAgenda = publicAgendaProjection(approved, row.base_path);
+      snapshot.eventAgendas[row.slug] = publicAgenda;
+      snapshot.authoredAgendaRoutes.push(
+        ...(await resolveAuthoredAgendaRouteOwners(db, row.event_id, approved, authoredAgendaSources)),
+      );
     }
     agendaAfter = agendas[agendas.length - 1]!.slug;
   }
+  snapshot.authoredAgendaRoutes = publicationAuthoredAgendaRoutes(snapshot);
   snapshot.eventAgendaCalendars = await readPublicAgendaCalendars(db, new Date().toISOString());
   if ((await publicationHighwater(db)) !== sourceSequence)
     throw new Error("Site publication source changed during extraction; rebuild from the newest requested state");

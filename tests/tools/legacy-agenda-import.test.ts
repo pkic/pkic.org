@@ -475,7 +475,7 @@ it.each(["None", "TBC", "TBD", "", " "])(
       authoredValue: placeholder,
       decision: "reviewed_credit",
       resolvedValue: "Verified speaker",
-      sourceLocator: "2023-11-07:0:0",
+      sourceLocator: row.ref,
       sourcePath: config.sourcePath,
       sourceDigest: result.document.source.sourceDigest,
     });

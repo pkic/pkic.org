@@ -166,7 +166,9 @@ export async function exportAgendaTransfer(
         ...new Map(
           [
             ...(sourceSnapshots.get(r.id)?.retainedSourceEvidence ?? []),
-            ...((r.history?.legacyFragments.length || r.history?.legacyDownloads.length) &&
+            ...((r.history?.legacyFragments.length ||
+              r.history?.legacyDownloads.length ||
+              r.history?.sourceDecisions.length) &&
             records.get(r.id)?.source_path &&
             records.get(r.id)?.source_digest &&
             records.get(r.id)?.source_ref

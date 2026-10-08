@@ -18,6 +18,9 @@ import {
 } from "./site-publication-machine-extraction";
 import { publicationDocumentGrantId } from "../../../assets/shared/schemas/site-publication-documents";
 
+import { preparePublicationRepairAliases } from "./site-publication-repair-aliases";
+import type { PublicationRepairAlias } from "../../../assets/shared/schemas/site-publication-repair-aliases";
+
 export interface PublishedDocument {
   eventId: string;
   occurrenceId: string;
@@ -27,6 +30,7 @@ export interface PublishedDocument {
   r2Key: string;
   fileSize: number;
   legacyDownload?: LegacyAgendaDownload;
+  repairAliases?: PublicationRepairAlias[];
   eventSlug?: string;
   fileName?: string;
   versionNumber?: number;
@@ -44,13 +48,18 @@ function documentIdentity(document: PublishedDocument) {
     document.r2Key,
     document.fileSize,
     ...(document.legacyDownload ? [document.legacyDownload] : []),
+    ...(document.repairAliases?.length ? [document.repairAliases] : []),
   ]);
 }
 export interface VerifiedPublishedDocument extends PublishedDocument {
   objectEtag: string;
 }
 /** Resolve only explicitly released, authorized direct-session PDF references. */
-async function resolveDocumentSelections(db: DatabaseLike, snapshot: SitePublicationSnapshot) {
+async function resolveDocumentSelections(
+  db: DatabaseLike,
+  snapshot: SitePublicationSnapshot,
+  repairs: PublicationRepairAlias[] = [],
+) {
   const requested = Object.entries(snapshot.eventAgendas ?? {}).flatMap(([eventSlug, agenda]) =>
     agenda.occurrences.flatMap((occurrence) =>
       (occurrence.history?.materials ?? [])
@@ -157,13 +166,31 @@ async function resolveDocumentSelections(db: DatabaseLike, snapshot: SitePublica
       });
     }
   }
-  return result.sort((a, b) => documentIdentity(a.document).localeCompare(documentIdentity(b.document)));
+  const repairEvidence = await preparePublicationRepairAliases(
+    db,
+    result.map(({ document }) => ({ ...document, eventSlug: document.eventSlug! })),
+    repairs,
+  );
+  for (const selection of result) {
+    const aliases = repairEvidence.aliases.filter(
+      (alias) =>
+        alias.eventId === selection.document.eventId &&
+        alias.occurrenceId === selection.document.occurrenceId &&
+        alias.materialId === selection.document.materialId,
+    );
+    if (aliases.length) selection.document.repairAliases = aliases;
+  }
+  return {
+    selections: result.sort((a, b) => documentIdentity(a.document).localeCompare(documentIdentity(b.document))),
+    repairGuards: repairEvidence.guards,
+  };
 }
 export async function resolvePublishedDocuments(
   db: DatabaseLike,
   snapshot: SitePublicationSnapshot,
+  repairs: PublicationRepairAlias[] = [],
 ): Promise<PublishedDocument[]> {
-  return (await resolveDocumentSelections(db, snapshot)).map(({ document }) => document);
+  return (await resolveDocumentSelections(db, snapshot, repairs)).selections.map(({ document }) => document);
 }
 export interface RetainedPublishedDocument {
   eventId: string;
@@ -255,10 +282,15 @@ export async function recordPublishedDocuments(
   }
   if (snapshot.sourceSequence !== machine.sourceSequence) throw new Error("PUBLICATION_EXTRACTION_SOURCE_CHANGED");
   if (documents.length > 10000) throw new Error("Publication document inventory exceeds its bounded extraction limit");
-  const selections = await resolveDocumentSelections(db, snapshot);
+  const { selections, repairGuards } = await resolveDocumentSelections(
+    db,
+    snapshot,
+    documents.flatMap((document) => document.repairAliases ?? []),
+  );
   const selected = selections.map(({ document }) => document);
   const normalized = documents.map((document) => ({
     ...document,
+    repairAliases: document.repairAliases?.length ? document.repairAliases : undefined,
     grantId: selected.find(
       (item) =>
         item.eventId === document.eventId &&
@@ -269,7 +301,7 @@ export async function recordPublishedDocuments(
   const claimed = documents.map(documentIdentity).sort();
   if (JSON.stringify(selected.map(documentIdentity).sort()) !== JSON.stringify(claimed))
     throw new Error("Published PDF selection does not match the approved snapshot");
-  const statements = [preparePublicationMachineExtractionGuard(db, machine)];
+  const statements = [preparePublicationMachineExtractionGuard(db, machine), ...repairGuards];
   for (let offset = 0; offset < selections.length; offset += 100) {
     const page = selections
       .slice(offset, offset + 100)
@@ -280,6 +312,7 @@ export async function recordPublishedDocuments(
         SELECT 1 FROM session_presentation_versions version LEFT JOIN event_agenda_session_history history ON history.occurrence_id=version.occurrence_id
         WHERE version.id=json_extract(expected.value,'$.versionId') AND version.event_id=json_extract(expected.value,'$.eventId')
         AND version.occurrence_id=json_extract(expected.value,'$.occurrenceId') AND version.deleted_at IS NULL AND version.mime_type='application/pdf'
+        AND EXISTS(SELECT 1 FROM events event WHERE event.id=version.event_id AND event.slug=json_extract(expected.value,'$.eventSlug'))
         AND version.version_number=json_extract(expected.value,'$.versionNumber') AND version.source_digest=json_extract(expected.value,'$.digest')
         AND version.file_size=json_extract(expected.value,'$.fileSize') AND version.r2_key=json_extract(expected.value,'$.r2Key')
         AND (SELECT id FROM session_presentation_reviews WHERE version_id=version.id ORDER BY reviewed_at DESC,id DESC LIMIT 1)=json_extract(expected.value,'$.latestReviewId')
@@ -293,7 +326,7 @@ export async function recordPublishedDocuments(
     statements.push(
       db
         .prepare(
-          `INSERT INTO site_publication_document_manifests(build_id,snapshot_id,event_id,occurrence_id,material_id,version_id,digest,object_etag,legacy_download_json,grant_id) SELECT ?,?,json_extract(value,'$.eventId'),json_extract(value,'$.occurrenceId'),json_extract(value,'$.materialId'),json_extract(value,'$.versionId'),json_extract(value,'$.digest'),json_extract(value,'$.objectEtag'),json_extract(value,'$.legacyDownload'),json_extract(value,'$.grantId') FROM json_each(?) WHERE 1 ON CONFLICT(build_id,event_id,occurrence_id,material_id) DO NOTHING`,
+          `INSERT INTO site_publication_document_manifests(build_id,snapshot_id,event_id,occurrence_id,material_id,version_id,digest,object_etag,legacy_download_json,repair_aliases_json,grant_id) SELECT ?,?,json_extract(value,'$.eventId'),json_extract(value,'$.occurrenceId'),json_extract(value,'$.materialId'),json_extract(value,'$.versionId'),json_extract(value,'$.digest'),json_extract(value,'$.objectEtag'),json_extract(value,'$.legacyDownload'),json_extract(value,'$.repairAliases'),json_extract(value,'$.grantId') FROM json_each(?) WHERE 1 ON CONFLICT(build_id,event_id,occurrence_id,material_id) DO NOTHING`,
         )
         .bind(machine.buildId, snapshot.snapshotId, JSON.stringify(normalized.slice(offset, offset + 100))),
     );

@@ -114,6 +114,18 @@ export function AgendaSession({
     : session.youtube
       ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(session.youtube)}`
       : approvedEmbed?.replace("https://www.youtube.com/embed/", "https://www.youtube-nocookie.com/embed/");
+  const hasDetails = Boolean(
+    editor ||
+    session.sessionUrl ||
+    session.speakers.length ||
+    (session.descriptionMarkdown !== undefined ? session.descriptionMarkdown.trim() : session.descriptionHtml.trim()) ||
+    recordingUrl ||
+    recordingEmbed ||
+    session.presentationUrl ||
+    session.participation ||
+    onlineAccessUrl,
+  );
+  const retainDialog = hasDetails || legacyFragments.length > 0;
   const hasMedia = Boolean(
     session.plannedMedia?.recording ||
     session.plannedMedia?.liveStreaming ||
@@ -179,7 +191,7 @@ export function AgendaSession({
         ? locations.map((location) => location.id)
         : session.locations
       ).join(" ")}
-      data-agenda-session-dialog={dialogId}
+      data-agenda-session-dialog={hasDetails ? dialogId : undefined}
     >
       {legacyFragments.map((fragment) => (
         <span key={fragment.anchor} id={fragment.anchor} hidden data-agenda-fragment-dialog={dialogId} />
@@ -202,7 +214,9 @@ export function AgendaSession({
       ) : null}
       <div class="pk-content-agenda__session-body">
         <h3 aria-label={session.title}>
-          {!editor && session.sessionUrl ? (
+          {!hasDetails ? (
+            session.title
+          ) : !editor && session.sessionUrl ? (
             <a
               class="pk-content-agenda__title-action"
               href={session.sessionUrl}
@@ -339,113 +353,118 @@ export function AgendaSession({
         {editor?.moveControls ? <div class="pk-content-agenda__move-controls">{editor.moveControls}</div> : null}
       </div>
       {editor?.resizeHandle}
-      {session.endNotRecorded ? <p class="pk-muted">End not recorded</p> : null}
-      <dialog
-        ref={detail}
-        class="session-modal"
-        id={dialogId}
-        aria-labelledby={`${dialogId}-title`}
-        onClose={editor ? (event) => pauseAgendaSessionMedia(event.currentTarget) : undefined}
-      >
-        <div class="session-modal__header">
-          <div class="session-modal__heading pk-stack pk-stack--snug">
-            <h2 class="session-modal__title" id={`${dialogId}-title`}>
-              {session.title}
-            </h2>
-            <div class="pk-cluster pk-content-agenda__metadata">
-              <span>
-                <ClockIcon /> {slot ? formatTimeRangeInZone(slot.startsAt, session.endsAt, timeZone) : "Not scheduled"}
-              </span>
-              {roomNames ? <span>{roomNames}</span> : null}
-              {session.endNotRecorded ? (
-                <span>End not recorded</span>
-              ) : session.durationMinutes ? (
-                <span>{formatNumber(session.durationMinutes)} min</span>
+      {session.endNotRecorded ? <p class="pk-content-agenda__unknown-end">End not recorded</p> : null}
+      {retainDialog && (
+        <dialog
+          ref={detail}
+          class={`session-modal${hasDetails ? "" : " session-modal--summary"}`}
+          id={dialogId}
+          aria-labelledby={`${dialogId}-title`}
+          onClose={editor ? (event) => pauseAgendaSessionMedia(event.currentTarget) : undefined}
+        >
+          <div class="session-modal__header">
+            <div class="session-modal__heading pk-stack pk-stack--snug">
+              <h2 class="session-modal__title" id={`${dialogId}-title`}>
+                {session.title}
+              </h2>
+              <div class="pk-cluster pk-content-agenda__metadata">
+                <span>
+                  <ClockIcon />{" "}
+                  {slot ? formatTimeRangeInZone(slot.startsAt, session.endsAt, timeZone) : "Not scheduled"}
+                </span>
+                {roomNames ? <span>{roomNames}</span> : null}
+                {session.endNotRecorded ? (
+                  <span>End not recorded</span>
+                ) : session.durationMinutes ? (
+                  <span>{formatNumber(session.durationMinutes)} min</span>
+                ) : null}
+              </div>
+            </div>
+            {editor?.detailControls?.(() => detail.current?.close())}
+            <Button
+              variant="ghost"
+              icon
+              data-agenda-close-session
+              onClick={editor ? (event) => event.currentTarget.closest("dialog")?.close() : undefined}
+              aria-label="Close session details"
+            >
+              ×
+            </Button>
+          </div>
+          {hasDetails && (
+            <div class="session-modal__body">
+              {ownedRecording ? (
+                <div class="session-modal__video" data-agenda-media-recording>
+                  <video
+                    src={ownedRecording}
+                    controls
+                    playsInline
+                    preload="none"
+                    aria-label={`Recording: ${session.title}`}
+                  />
+                </div>
+              ) : recordingEmbed ? (
+                <div class="session-modal__video" data-agenda-media-recording>
+                  <iframe loading="lazy" data-video-src={recordingEmbed} title={session.title} allowFullScreen />
+                </div>
+              ) : null}
+              {(
+                session.descriptionMarkdown !== undefined ? session.descriptionMarkdown.trim() : session.descriptionHtml
+              ) ? (
+                <section class="pk-stack pk-stack--snug">
+                  <h3>Abstract</h3>
+                  {session.descriptionMarkdown !== undefined ? (
+                    <Markdown markdown={session.descriptionMarkdown} />
+                  ) : (
+                    <div dangerouslySetInnerHTML={{ __html: session.descriptionHtml }} />
+                  )}
+                </section>
+              ) : null}
+              {session.speakers.length ? (
+                <section class="pk-stack pk-stack--snug">
+                  <h3>Speakers</h3>
+                  {session.speakers.map((speaker) => (
+                    <article class="speaker-card session-modal__speaker" key={speaker.name}>
+                      <AgendaSpeaker speaker={speaker} detail />
+                    </article>
+                  ))}
+                </section>
               ) : null}
             </div>
+          )}
+          <div class="session-modal__footer pk-cluster pk-cluster--end">
+            {!editor && session.participation && (
+              <AgendaParticipationControls participation={session.participation} title={session.title} detail />
+            )}
+            {recordingUrl && (
+              <ButtonLink
+                href={recordingUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                data-agenda-media-recording={session.recordingApproved ? "" : undefined}
+              >
+                Watch recording
+              </ButtonLink>
+            )}
+            {session.presentationUrl ? (
+              <ButtonLink
+                href={session.presentationUrl}
+                data-legacy-download-url={session.legacyPresentationUrl}
+                variant="primary"
+                download
+              >
+                Download Slides
+              </ButtonLink>
+            ) : null}
+            <Button
+              data-agenda-close-session
+              onClick={editor ? (event) => event.currentTarget.closest("dialog")?.close() : undefined}
+            >
+              Close
+            </Button>
           </div>
-          {editor?.detailControls?.(() => detail.current?.close())}
-          <Button
-            variant="ghost"
-            icon
-            data-agenda-close-session
-            onClick={editor ? (event) => event.currentTarget.closest("dialog")?.close() : undefined}
-            aria-label="Close session details"
-          >
-            ×
-          </Button>
-        </div>
-        <div class="session-modal__body">
-          {ownedRecording ? (
-            <div class="session-modal__video" data-agenda-media-recording>
-              <video
-                src={ownedRecording}
-                controls
-                playsInline
-                preload="none"
-                aria-label={`Recording: ${session.title}`}
-              />
-            </div>
-          ) : recordingEmbed ? (
-            <div class="session-modal__video" data-agenda-media-recording>
-              <iframe loading="lazy" data-video-src={recordingEmbed} title={session.title} allowFullScreen />
-            </div>
-          ) : null}
-          {(
-            session.descriptionMarkdown !== undefined ? session.descriptionMarkdown.trim() : session.descriptionHtml
-          ) ? (
-            <section class="pk-stack pk-stack--snug">
-              <h3>Abstract</h3>
-              {session.descriptionMarkdown !== undefined ? (
-                <Markdown markdown={session.descriptionMarkdown} />
-              ) : (
-                <div dangerouslySetInnerHTML={{ __html: session.descriptionHtml }} />
-              )}
-            </section>
-          ) : null}
-          {session.speakers.length ? (
-            <section class="pk-stack pk-stack--snug">
-              <h3>Speakers</h3>
-              {session.speakers.map((speaker) => (
-                <article class="speaker-card session-modal__speaker" key={speaker.name}>
-                  <AgendaSpeaker speaker={speaker} detail />
-                </article>
-              ))}
-            </section>
-          ) : null}
-        </div>
-        <div class="session-modal__footer pk-cluster pk-cluster--end">
-          {!editor && session.participation && (
-            <AgendaParticipationControls participation={session.participation} title={session.title} detail />
-          )}
-          {recordingUrl && (
-            <ButtonLink
-              href={recordingUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-agenda-media-recording={session.recordingApproved ? "" : undefined}
-            >
-              Watch recording
-            </ButtonLink>
-          )}
-          {session.presentationUrl ? (
-            <ButtonLink
-              href={session.presentationUrl}
-              data-legacy-download-url={session.legacyPresentationUrl}
-              variant="primary"
-              download
-            >
-              Download Slides
-            </ButtonLink>
-          ) : null}
-          <Button
-            data-agenda-close-session
-            onClick={editor ? (event) => event.currentTarget.closest("dialog")?.close() : undefined}
-          >
-            Close
-          </Button>
-        </div>
-      </dialog>
+        </dialog>
+      )}
     </article>
   );
 }
