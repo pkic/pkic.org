@@ -132,6 +132,7 @@ function panelNamed(container: HTMLElement, title: string): HTMLElement {
 }
 
 afterEach(() => {
+  vi.useRealTimers();
   portalSession.value = null;
   profile.value = null;
   for (const container of mounted.splice(0)) {
@@ -160,6 +161,9 @@ describe("portal landing", () => {
   });
 
   it("names every panel as a heading and every list for assistive technology", async () => {
+    // The fixture's next meeting is 9 October 13:00 UTC; read it from a week before so it is "next", not "now".
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-02T09:00:00.000Z"));
     portalSession.value = portalSessionFixture({ member: true });
     stubFeeds(
       feeds({
