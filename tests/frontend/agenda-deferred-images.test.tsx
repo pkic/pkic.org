@@ -207,4 +207,23 @@ describe("deferred agenda images", () => {
     expect(image.getAttribute("srcset")).toContain("/_assets/portrait.webp 384w");
     expect(loaded(image)).toBe("/_assets/portrait.webp");
   });
+
+  it("gives a reader without scripts the deferred image from a noscript copy after the picture", async () => {
+    configureSiteImages(async () => ({
+      src: "/_assets/portrait.webp",
+      srcSet: "/_assets/portrait-128.webp 128w",
+      avifSrcSet: "/_assets/portrait-128.avif 128w",
+      width: 128,
+      height: 128,
+    }));
+    const markup = await renderToStringAsync(
+      h(
+        Suspense,
+        { fallback: null },
+        h(DeferredImages, null, h(SiteImage, { src: "/portrait.jpg", alt: "Portrait", portrait: true })),
+      ),
+    );
+    expect(markup).toMatch(/<\/picture><noscript><img src="\/_assets\/portrait\.webp"[^>]*alt="Portrait"/);
+    expect(markup).not.toMatch(/<picture[^>]*>[^]*<noscript>[^]*<\/picture>/);
+  });
 });

@@ -35,6 +35,35 @@ export function deferImageSources<T extends ImageSources>({ src, srcSet, sizes, 
   };
 }
 
+const NOSCRIPT_ATTRIBUTES: ReadonlyArray<[string, string]> = [
+  ["src", "src"],
+  ["srcSet", "srcset"],
+  ["sizes", "sizes"],
+  ["alt", "alt"],
+  ["width", "width"],
+  ["height", "height"],
+  ["class", "class"],
+];
+
+function escapeAttribute(value: string): string {
+  return value.replaceAll("&", "&amp;").replaceAll('"', "&quot;").replaceAll("<", "&lt;");
+}
+
+/**
+ * The `<img>` markup a `<noscript>` carries for a deferred image, so a reader
+ * without scripts still sees it. With scripts on, a browser parses `noscript`
+ * content as text, so this never downloads anything next to the deferred copy.
+ */
+export function noscriptImageHtml(props: Record<string, unknown>): string {
+  const attributes = NOSCRIPT_ATTRIBUTES.flatMap(([prop, name]) => {
+    const value = props[prop];
+    return typeof value === "string" || typeof value === "number"
+      ? [`${name}="${escapeAttribute(String(value))}"`]
+      : [];
+  });
+  return `<img ${attributes.join(" ")} loading="lazy" decoding="async">`;
+}
+
 /**
  * Give the deferred images that `container` shows their real sources. Images in
  * a surface that is still closed inside it wait for that surface; `all` reveals
