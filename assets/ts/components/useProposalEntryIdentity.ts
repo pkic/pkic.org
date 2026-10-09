@@ -42,7 +42,6 @@ export function useProposalEntryIdentity(
   speakerProposalId?: string,
 ) {
   const [kind, setKindState] = useState<MemberJoinApplicantKind>();
-  const [attested, setAttested] = useState(false);
   const [person, setPerson] = useState<ParticipationPerson | null>(null);
   const [knownPerson, setKnownPerson] = useState<ParticipationPerson | null>(null);
   const [authenticated, setAuthenticated] = useState(false);
@@ -54,6 +53,8 @@ export function useProposalEntryIdentity(
   const [missingDetails, setMissingDetails] = useState<ProposalEntrySelection["missingDetails"]>({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string>();
+  /** A proved address that signs in to another account; nothing was linked. */
+  const [signInEmail, setSignInEmail] = useState<string>();
   const [email, setEmailState] = useState("");
   const initialized = useRef(false);
   const proofScope = [endpoint, speakerManagementToken, speakerProposalId, expectedSpeakerUserId].join("|");
@@ -70,8 +71,12 @@ export function useProposalEntryIdentity(
   function setKind(value: MemberJoinApplicantKind): void {
     clearResolution();
     setKindState(value);
-    setAttested(false);
-    setPerson(knownPerson);
+    setSignInEmail(undefined);
+    // A signed-in individual takes part with the account itself; no organization is selected.
+    if (authenticated && knownPerson && value === "individual") {
+      setSelected(null);
+      setPerson({ ...knownPerson, organizationName: null, jobTitle: null });
+    } else setPerson(knownPerson);
   }
   function setEmail(value: string): void {
     clearResolution();
@@ -103,13 +108,6 @@ export function useProposalEntryIdentity(
         bio: identity?.biography ?? knownPerson.bio,
         links: identity?.links ?? knownPerson.links,
       });
-  }
-  function attest(value: boolean): void {
-    setAttested(value);
-    if (authenticated && knownPerson && kind === "individual") {
-      setSelected(value ? null : undefined);
-      setPerson({ ...knownPerson, organizationName: null, jobTitle: null });
-    }
   }
   function complete(field: keyof ProposalEntrySelection["missingDetails"], value: string): void {
     setMissingDetails((current) => ({ ...current, [field]: value }));
@@ -158,6 +156,7 @@ export function useProposalEntryIdentity(
     const currentGeneration = generation.current;
     setLoading(true);
     setError(undefined);
+    setSignInEmail(undefined);
     try {
       const result = await postJson(
         `${endpoint}/verify`,
@@ -165,6 +164,11 @@ export function useProposalEntryIdentity(
         eventProposalProofVerifyResponseSchema,
       );
       if (currentGeneration !== generation.current) return;
+      if (result.status === "sign_in_required") {
+        proofAttempt.current = null;
+        setSignInEmail(result.email);
+        return;
+      }
       if (result.status !== "ready") {
         proofAttempt.current = null;
         setError("We need to review this email address before you can continue.");
@@ -199,7 +203,6 @@ export function useProposalEntryIdentity(
       if (result.organization) resolved.organizationName = result.organization.name;
       proofAttempt.current = { scope: proofScope, token, state: "verified" };
       setKindState(result.applicantKind);
-      setAttested(result.applicantKind === "individual");
       setEmailState(result.email);
       setPerson(resolved);
       setKnownPerson(resolved);
@@ -297,7 +300,6 @@ export function useProposalEntryIdentity(
   const ready = Boolean(
     person &&
     kind &&
-    (kind !== "individual" || attested) &&
     (continuationToken ||
       (authenticated && (kind === "organization" ? Boolean(selected?.organizationId) : selected === null))),
   );
@@ -308,19 +310,18 @@ export function useProposalEntryIdentity(
             authenticated,
             continuationToken,
             entryContext,
-            unaffiliatedAttestation: kind === "individual" && attested,
+            unaffiliatedAttestation: kind === "individual",
             actingIdentityId: selected?.id ?? (selected === null ? null : undefined),
             person,
             missingDetails,
           }
         : null,
-    [ready, person, authenticated, continuationToken, entryContext, kind, attested, selected, missingDetails],
+    [ready, person, authenticated, continuationToken, entryContext, kind, selected, missingDetails],
   );
   return {
     kind,
     setKind,
-    attested,
-    attest,
+    signInEmail,
     person,
     knownPerson,
     authenticated,

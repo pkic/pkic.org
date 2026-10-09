@@ -14,12 +14,11 @@ import { useContractForm } from "../hooks/useContractForm";
 import { actingIdentityCatalog, actingIdentityLabel } from "../shared/acting-identity-catalog";
 import { postJson, requestJson } from "../shared/api-client";
 import { Alert } from "../ui/Alert";
-import { Button } from "../ui/Button";
-import { Checkbox } from "../ui/Checkbox";
+import { Button, ButtonLink } from "../ui/Button";
 import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
 import { FormSection } from "../ui/FormSection";
-import { ParticipationQualifier } from "../site/ParticipationQualifier";
+import { ProposalCapacityChoice } from "./ProposalCapacityChoice";
 import { ParticipationRepresentation } from "./ParticipationRepresentation";
 import { ParticipationPersonalDetails } from "./ParticipationPersonalDetails";
 import { ParticipationIdentitySummary } from "./ParticipationIdentitySummary";
@@ -70,7 +69,7 @@ export function EventProposalIdentityStep({
   const [changing, setChanging] = useState(false);
   const proofForm = useContractForm(eventProposalProofStartSchema, {
     email: identity.email,
-    unaffiliatedAttestation: identity.kind === "individual" && identity.attested,
+    unaffiliatedAttestation: identity.kind === "individual",
     consents: consents(),
     speakerManagementToken: identity.proofOwnerToken ? undefined : speakerManagementToken,
     continuationToken: identity.proofOwnerToken,
@@ -103,10 +102,6 @@ export function EventProposalIdentityStep({
   );
   if (!enabled) return null;
   async function sendProof(): Promise<void> {
-    if (identity.kind === "individual" && !identity.attested) {
-      identity.setError("Confirm that you are not employed by, do not own, and are not acting for an organization.");
-      return;
-    }
     const checked = proofForm.submit();
     if (!checked.data) {
       identity.setError(checked.message);
@@ -115,10 +110,8 @@ export function EventProposalIdentityStep({
     setSending(true);
     identity.setError(undefined);
     try {
-      const result = await postJson(endpoint, checked.data, eventProposalProofStartResponseSchema);
-      if (result.status === "unaffiliated_attestation_required")
-        identity.setError("Confirm that you are not employed by, do not own, and are not acting for an organization.");
-      else setSent(true);
+      await postJson(endpoint, checked.data, eventProposalProofStartResponseSchema);
+      setSent(true);
     } catch (error) {
       identity.setError(proofForm.refuse(error));
     } finally {
@@ -203,31 +196,19 @@ export function EventProposalIdentityStep({
           {personalDetails}
           {(!resolved || changing) && (
             <>
-              <ParticipationQualifier
-                name="applicantKind"
+              <ProposalCapacityChoice
+                question={
+                  speakerManagementToken || speakerProposalId
+                    ? "In what capacity are you presenting?"
+                    : "In what capacity are you submitting this proposal?"
+                }
                 value={identity.kind}
-                onChange={(event) => {
-                  const kind = event.currentTarget.value;
-                  if (kind === "organization" || kind === "individual") {
-                    identity.setKind(kind);
-                    setSent(false);
-                    proofForm.reset();
-                  }
+                onChange={(kind) => {
+                  identity.setKind(kind);
+                  setSent(false);
+                  proofForm.reset();
                 }}
               />
-              {identity.kind === "individual" && (
-                <Checkbox
-                  name="unaffiliatedAttestation"
-                  checked={identity.attested}
-                  onChange={(event) => identity.attest(event.currentTarget.checked)}
-                  label="I am not employed by, do not own, and am not authorized to represent an organization."
-                />
-              )}
-              {identity.kind === "organization" && (
-                <p class="pk-muted">
-                  Use your official work or organization email address to confirm your relationship to the organization.
-                </p>
-              )}
               {identity.kind === "organization" &&
                 (identity.authenticated || (identity.continuationToken && identity.storedPerson)) &&
                 selector}
@@ -251,10 +232,11 @@ export function EventProposalIdentityStep({
                     </Alert>
                   ) : (
                     <Field
-                      label={
+                      label={identity.kind === "organization" ? "Work email address" : "Email address"}
+                      help={
                         identity.kind === "organization"
-                          ? "Your official work or organization email address"
-                          : "Your email address"
+                          ? "Your address at the organization, not a personal address such as gmail.com."
+                          : undefined
                       }
                       {...proofForm.of("email")}
                       errorSlot="email"
@@ -279,8 +261,8 @@ export function EventProposalIdentityStep({
                       {sent
                         ? "Send another verification email"
                         : identity.kind === "organization"
-                          ? "Verify organization email"
-                          : "Verify my email"}
+                          ? "Verify work email"
+                          : "Verify email"}
                     </Button>
                     {sent && (
                       <Button
@@ -410,6 +392,17 @@ export function EventProposalIdentityStep({
             </>
           )}
         </>
+      )}
+      {identity.signInEmail && (
+        <Alert tone="warn" title="This address belongs to another account">
+          <p>
+            Sign in with {identity.signInEmail} and return to this page to continue. Nothing was added to your current
+            account. If both accounts are yours, the secretariat can merge them.
+          </p>
+          <ButtonLink href="/portal/" variant="secondary">
+            Sign in
+          </ButtonLink>
+        </Alert>
       )}
       {identity.error && <Alert tone="danger">{identity.error}</Alert>}
     </div>

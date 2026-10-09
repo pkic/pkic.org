@@ -11,8 +11,18 @@ import { jsonResponse, requiredJsonBody } from "./openapi";
 import { databaseIdSchema } from "./identifiers";
 import { httpCapabilityUrlSchema } from "./urls";
 import { proposalEntryContextSchema } from "./proposal-entry";
+import { emailDomainOf, isDisposableEmailDomain, isPersonalEmailDomain } from "../constants/email-domains";
 
 export const eventProposalContinuationTokenSchema = z.string().min(32).max(EMAIL_AUTH_TOKEN_MAX_LENGTH);
+export const ORGANIZATION_WORK_EMAIL_REQUIRED =
+  "Use your work email address at the organization. A personal address, such as gmail.com, cannot show that you take part on its behalf.";
+export const DISPOSABLE_EMAIL_REFUSED = "Disposable email providers are not accepted.";
+
+/**
+ * Starts mailbox proof for a proposal contact or speaker. `unaffiliatedAttestation`
+ * is the capacity: `true` takes part as an individual, `false` on behalf of an
+ * organization, which only that organization's own mailbox can show.
+ */
 export const eventProposalProofStartSchema = z
   .object({
     email: normalizedEmailSchema,
@@ -23,11 +33,15 @@ export const eventProposalProofStartSchema = z
     entryContext: proposalEntryContextSchema.optional(),
     consents: z.array(consentItemSchema).max(20),
   })
-  .strict();
-export const eventProposalProofStartResponseSchema = z.discriminatedUnion("status", [
-  z.object({ status: z.literal("verification_sent") }),
-  z.object({ status: z.literal("unaffiliated_attestation_required") }),
-]);
+  .strict()
+  .superRefine((input, context) => {
+    const domain = emailDomainOf(input.email);
+    if (isDisposableEmailDomain(domain))
+      context.addIssue({ code: "custom", path: ["email"], message: DISPOSABLE_EMAIL_REFUSED });
+    else if (!input.unaffiliatedAttestation && isPersonalEmailDomain(domain))
+      context.addIssue({ code: "custom", path: ["email"], message: ORGANIZATION_WORK_EMAIL_REQUIRED });
+  });
+export const eventProposalProofStartResponseSchema = z.object({ status: z.literal("verification_sent") });
 export const eventProposalProofVerifySchema = z
   .object({
     token: eventProposalContinuationTokenSchema,
@@ -104,6 +118,8 @@ export const eventProposalProofVerifyResponseSchema = z.discriminatedUnion("stat
     entryContext: proposalEntryContextSchema.optional(),
   }),
   z.object({ status: z.literal("support_required") }),
+  /** The proved address belongs to another account: sign in with it; nothing was linked or created. */
+  z.object({ status: z.literal("sign_in_required"), email: normalizedEmailSchema }),
 ]);
 export const eventProposalProofIdentitiesSchema = z
   .object({

@@ -58,7 +58,6 @@ export async function chooseIndividual(root: HTMLElement): Promise<void> {
     });
   }
   await toggleChoice(root.querySelector<HTMLInputElement>('input[name="applicantKind"][value="individual"]')!);
-  await toggleChoice(root.querySelector<HTMLInputElement>('input[name="unaffiliatedAttestation"]')!);
 }
 
 interface Captured {

@@ -1,9 +1,4 @@
 import type { z } from "zod";
-import {
-  emailDomainOf,
-  isDisposableEmailDomain,
-  isPersonalEmailDomain,
-} from "../../../assets/shared/constants/email-domains";
 import type { eventProposalProofStartSchema } from "../../../assets/shared/schemas/event-proposal-proof";
 import type { IdentitiesListQuery } from "../../../assets/shared/schemas/identity";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
@@ -29,7 +24,7 @@ import {
   resumeEventProposalSpeakerProof,
 } from "./event-proposal-proof-context";
 import { listUserIdentities } from "./identities/read-model";
-import { resolveProposalProofPerson } from "./event-proposal-proof-person";
+import { isProposalProofAddressOwnedElsewhere, resolveProposalProofPerson } from "./event-proposal-proof-person";
 import {
   captureEventProposalEntry,
   resumeEventProposalEntry,
@@ -57,11 +52,6 @@ export async function startEventProposalProof(
   const audience = "speaker";
   const terms = await getRequiredTerms(db, input.event.id, audience);
   await validateRequiredConsents(terms, input.body.consents);
-  const domain = emailDomainOf(input.body.email);
-  if (isDisposableEmailDomain(domain))
-    throw new AppError(422, "DISPOSABLE_EMAIL_NOT_ALLOWED", "Disposable email providers are not accepted");
-  if (isPersonalEmailDomain(domain) && !input.body.unaffiliatedAttestation)
-    return { status: "unaffiliated_attestation_required" as const, outboxId: null };
   const speakerAuthority = eventProposalSpeakerAuthority({ ...input.body, actor: input.actor });
   if (speakerAuthority && input.body.entryContext)
     throw new AppError(
@@ -246,7 +236,10 @@ export async function verifyEventProposalProof(
       speakerId: payload.context?.kind === "speaker" ? payload.context.speakerId : undefined,
     });
   const resolved = await resolveProposalProofPerson(db, payload.email, payload.context?.userId);
-  if (!resolved) return { status: "support_required" as const };
+  if (!resolved)
+    return (await isProposalProofAddressOwnedElsewhere(db, payload.email, payload.context?.userId))
+      ? { status: "sign_in_required" as const, email: payload.email }
+      : { status: "support_required" as const };
   const entryContext = await resumeEventProposalEntry(db, {
     eventId: input.eventId,
     entryContext: payload.entryContext,

@@ -72,14 +72,12 @@ describe("event proposal mailbox proof", () => {
     ).toHaveLength(0);
   });
 
-  it("allows an event with no speaker terms while retaining the joining qualifier's personal-email attestation", async () => {
+  it("allows an event with no speaker terms and a personal address only for an individual", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     await env.DB.prepare("UPDATE event_terms SET active=0 WHERE event_id=? AND audience_type='speaker'")
       .bind(eventId)
       .run();
-    expect(await (await request("/proof", { email: "guest@gmail.com", consents: [] })).json()).toEqual({
-      status: "unaffiliated_attestation_required",
-    });
+    expect((await request("/proof", { email: "guest@gmail.com", consents: [] })).status).toBe(400);
     const proof = await prepareProposalProof({
       environment: env,
       eventSlug: "pqc-2026",
@@ -250,7 +248,8 @@ describe("event proposal mailbox proof", () => {
     await insertUser(env.DB, "foreign@another.example");
     const foreignToken = await start("foreign@another.example", { session });
     expect(await (await request("/proof/verify", { token: foreignToken }, session)).json()).toEqual({
-      status: "support_required",
+      status: "sign_in_required",
+      email: "foreign@another.example",
     });
   });
 

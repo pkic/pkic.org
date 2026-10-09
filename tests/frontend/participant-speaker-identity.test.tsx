@@ -154,9 +154,6 @@ it("requires speaker terms before resolving identity, preserves refusal, and sav
   await act(() => {
     host.querySelector<HTMLInputElement>('input[value="individual"]')!.click();
   });
-  await act(() => {
-    host.querySelector<HTMLInputElement>('input[name="unaffiliatedAttestation"]')!.click();
-  });
   await act(async () => {
     forms[1]!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   });

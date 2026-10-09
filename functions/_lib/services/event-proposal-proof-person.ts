@@ -47,6 +47,29 @@ export async function resolveProposalProofPerson(
   return { user, emailId: emailSelection.emailId };
 }
 
+/**
+ * The proved address signs in to a different active account than the person
+ * continuing. Nothing may be linked or created: that person signs in with the
+ * address instead (accounts are merged only by the secretariat).
+ */
+export async function isProposalProofAddressOwnedElsewhere(
+  db: DatabaseLike,
+  email: string,
+  expectedUserId: string | undefined,
+): Promise<boolean> {
+  if (!expectedUserId) return false;
+  const owner = await findUserEmailOwner(db, email);
+  if (!owner || owner.userId === expectedUserId || owner.kind === "pending") return false;
+  if (owner.kind === "secondary" && owner.verified !== 1) return false;
+  return Boolean(
+    await first(
+      db,
+      "SELECT 1 AS active FROM users WHERE id=? AND active=1 AND pii_redacted_at IS NULL AND merged_into_user_id IS NULL",
+      [owner.userId],
+    ),
+  );
+}
+
 export async function prepareProposalProofPerson(
   db: DatabaseLike,
   payload: EventProposalContinuationPayload,

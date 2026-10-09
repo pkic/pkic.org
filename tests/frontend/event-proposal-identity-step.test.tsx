@@ -448,7 +448,7 @@ describe("verified event entry", () => {
     });
     await act(async () => {
       Array.from(host!.querySelectorAll("button"))
-        .find((button) => button.textContent === "Verify organization email")!
+        .find((button) => button.textContent === "Verify work email")!
         .click();
     });
     await vi.waitFor(() => expect(addRequests).toHaveLength(1));
@@ -504,7 +504,7 @@ describe("verified event entry", () => {
     });
     await act(async () => {
       Array.from(host!.querySelectorAll("button"))
-        .find((button) => button.textContent === "Verify organization email")!
+        .find((button) => button.textContent === "Verify work email")!
         .click();
     });
     await vi.waitFor(() => expect(captured).toHaveLength(1));
