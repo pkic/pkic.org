@@ -12,6 +12,19 @@ const { sitePublicationReleaseSchema } = await import("../../assets/shared/schem
 const { createReleaseIntegrity, verifyReleaseIntegrity, synchronizedPublicationDirectories } =
   await import("./release-integrity.mjs");
 
+/** Permanent moves of public URLs whose old paths no source document owns. */
+const movedRouteRedirects = [
+  ...["/news/feed", "/news/feed/", "/news/feed/index.xml"].map((from) => ({
+    from,
+    to: "/news/feed.xml",
+    status: 301,
+  })),
+  // PKIMM 2.0.0 removed the Excel and web tools; the 1.0.0 release still publishes them.
+  // A splat does not match the path without its trailing slash.
+  { from: "/wg/pkimm/model/tools", to: "/wg/pkimm/1.0.0/tools/", status: 301 },
+  { from: "/wg/pkimm/model/tools/*", to: "/wg/pkimm/1.0.0/tools/:splat", status: 301 },
+];
+
 /** Merge a complete publication into the complete Worker build, never a partial asset upload. */
 export async function assembleStaticRelease(source, destination, environment) {
   const release = sitePublicationReleaseSchema.parse(
@@ -42,12 +55,7 @@ export async function assembleStaticRelease(source, destination, environment) {
     if (error.code !== "ENOENT") throw error;
   }
   redirects = redirects.replace(/\n# BEGIN PUBLICATION[\s\S]*?# END PUBLICATION\n?/g, "");
-  const feedRedirects = ["/news/feed", "/news/feed/", "/news/feed/index.xml"].map((from) => ({
-    from,
-    to: "/news/feed.xml",
-    status: 301,
-  }));
-  const installedRedirects = [...release.redirects, ...feedRedirects];
+  const installedRedirects = [...release.redirects, ...movedRouteRedirects];
   validateDocumentRedirectRules(installedRedirects, documentRoutes, redirects);
   const retire = await prepareDocumentRetirement([source, destination], documentRoutes);
   await retire();

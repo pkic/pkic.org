@@ -8,6 +8,7 @@ import { preparePublicationPublicAssets } from "../../scripts/publication/prepar
 import { publicationBindingConfig } from "../../scripts/publication/binding-config.mjs";
 import { createReleaseIntegrity } from "../../scripts/publication/release-integrity.mjs";
 import { createTemporaryDirectory } from "./helpers/temporary-directory";
+import { createTestHarness, unstable_readConfig as readConfig } from "wrangler";
 
 it("protects the generic error asset and its canonical path without adding application routes", async () => {
   const root = await createTemporaryDirectory("publication-error-headers");
@@ -49,6 +50,68 @@ it("protects the generic error asset and its canonical path without adding appli
       expect(await readFile(resolve(destination, "404.html"), "utf8")).toBe("Generic page not found");
     }
   } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+it("moves retired PKIMM model tool links to the 1.0.0 release tools", async () => {
+  const root = await createTemporaryDirectory("publication-pkimm-tools");
+  const source = resolve(root, "source"),
+    destination = resolve(root, "destination");
+  const files = [
+    "wg/pkimm/1.0.0/tools/index.html",
+    "wg/pkimm/1.0.0/tools/self-assessment/index.html",
+    "wg/pkimm/1.0.0/tools/PKI_Maturity_Assessment_Tool_v240318.xlsx",
+  ];
+  const main = resolve(root, "worker.mjs");
+  const config = readConfig({ config: resolve("wrangler.jsonc"), env: "local" });
+  const server = createTestHarness({
+    workers: [
+      {
+        config: {
+          name: "pkimm-tool-redirects",
+          main,
+          compatibility_date: config.compatibility_date,
+          assets: { ...config.assets, directory: destination },
+        },
+      },
+    ],
+  });
+  try {
+    for (const file of files) {
+      await mkdir(dirname(resolve(source, file)), { recursive: true });
+      await writeFile(resolve(source, file), `Published ${file}`);
+    }
+    const release = sitePublicationReleaseSchema.parse({
+      version: 1,
+      source: "native",
+      snapshotId: "5".repeat(64),
+      sourceSequence: 1,
+      environment: "production",
+      files,
+      integrity: await createReleaseIntegrity(source, files),
+    });
+    await writeFile(resolve(source, "publication.json"), JSON.stringify(release));
+    await assembleStaticRelease(source, destination, "production");
+    await writeFile(main, 'export default { fetch() { return new Response("Worker invoked", { status: 599 }); } };');
+    await server.listen();
+    for (const [from, to] of [
+      ["/wg/pkimm/model/tools", "/wg/pkimm/1.0.0/tools/"],
+      ["/wg/pkimm/model/tools/", "/wg/pkimm/1.0.0/tools/"],
+      ["/wg/pkimm/model/tools/self-assessment/", "/wg/pkimm/1.0.0/tools/self-assessment/"],
+      [
+        "/wg/pkimm/model/tools/PKI_Maturity_Assessment_Tool_v240318.xlsx",
+        "/wg/pkimm/1.0.0/tools/PKI_Maturity_Assessment_Tool_v240318.xlsx",
+      ],
+    ]) {
+      const moved = await server.fetch(from, { redirect: "manual" });
+      expect(moved.status, from).toBe(301);
+      const target = new URL(moved.headers.get("location")!, "https://pkic.org").pathname;
+      expect(target, from).toBe(to);
+      expect((await server.fetch(target)).status, to).toBe(200);
+    }
+  } finally {
+    await server.close();
     await rm(root, { recursive: true, force: true });
   }
 });
