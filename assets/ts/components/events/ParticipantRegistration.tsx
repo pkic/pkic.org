@@ -11,26 +11,29 @@ import { eventFormsResponseSchema } from "../../../shared/schemas/forms";
 import { useData } from "../../hooks/useData";
 import { getJson, patchJson, postJson } from "../../shared/api-client";
 import { normalizeValidation } from "../../shared/form/validation-map";
-import { RegistrationDayStatusSummary } from "../RegistrationDayStatusSummary";
 import { Spinner } from "../Spinner";
 import { Badge } from "../Badge";
 import { confirmAction } from "../ConfirmDialog";
 import { Alert } from "../../ui/Alert";
 import { Button } from "../../ui/Button";
-import { Menu } from "../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import type { EventFormsResponse } from "../../shared/types";
 import { ParticipantRegistrationDetails } from "./ParticipantRegistrationDetails";
 import { ParticipantRegistrationForm, type RegistrationChange } from "./ParticipantRegistrationForm";
+import { CopyLinkRow } from "../../shared/widgets/copy-link-row";
+import { RegistrationDays } from "./RegistrationDays";
 
 export function ParticipantRegistration({
   registrationId,
   eventId,
   slug,
+  focusDay = null,
 }: {
   registrationId: string;
   eventId: string;
   slug: string;
+  /** A day to open the choices for, when a link such as "Can't make it?" led here. */
+  focusDay?: string | null;
 }) {
   const endpoint = `/api/v1/registrations/${encodeURIComponent(registrationId)}`;
   const loaded = useData(async () => {
@@ -53,6 +56,7 @@ export function ParticipantRegistration({
       data={loaded.data.registration}
       forms={loaded.data.forms}
       reload={loaded.reload}
+      focusDay={focusDay}
     />
   );
 }
@@ -71,11 +75,13 @@ function RegistrationRecord({
   data,
   forms,
   reload,
+  focusDay,
 }: {
   endpoint: string;
   data: RegistrationManageReadResponse;
   forms: EventFormsResponse;
   reload: () => Promise<void>;
+  focusDay: string | null;
 }) {
   const [editing, setEditing] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -84,10 +90,9 @@ function RegistrationRecord({
   const status = data.registration.status;
   const cancelled = status === "cancelled";
   const restorable = cancelled && data.registration.cancellation_reason_code !== "unauthorized_registration";
-  const offered = data.dayWaitlist.filter((day) => day.status === "offered").map((day) => day.dayDate);
 
   /** Sends one change and returns to the read view on success; rejects with the refusal. */
-  async function save(change: RegistrationChange): Promise<void> {
+  async function save(change: RegistrationChange, outcome?: string): Promise<void> {
     setError("");
     setMessage("");
     const result = await patchJson(
@@ -96,7 +101,7 @@ function RegistrationRecord({
       registrationManageUpdateResponseSchema,
     );
     setEditing(false);
-    setMessage(outcomeOf(change, result.emailChanged));
+    setMessage(result.emailChanged ? outcomeOf(change, true) : (outcome ?? outcomeOf(change, false)));
     await reload();
   }
 
@@ -135,48 +140,37 @@ function RegistrationRecord({
     setMessage("A new confirmation link has been requested. Check your email before continuing.");
   }
 
+  async function saveDays(dayAttendance: Array<{ dayDate: string; attendanceType: string }>): Promise<void> {
+    // Leaving no day at all is a cancellation, with its own confirmation.
+    if (dayAttendance.length === 0) return cancelRegistration();
+    await run(() => save({ action: "update", dayAttendance }, "Your days are updated. Thank you for letting us know."));
+  }
+
+  function claimSeat(dayDate: string): void {
+    void run(() =>
+      save(
+        {
+          action: "update",
+          dayAttendance: data.dayAttendance.map(({ dayDate: date, attendanceType }) => ({
+            dayDate: date,
+            attendanceType,
+          })),
+          claimDayWaitlistOffers: [dayDate],
+        },
+        "The seat is yours. See you there!",
+      ),
+    );
+  }
+
   return (
     <Panel aria-label="Registration">
-      <PanelHeader title="Registration">
-        {!editing && !cancelled && (
-          <>
-            <Button
-              size="sm"
-              variant="secondary"
-              disabled={busy}
-              onClick={() => {
-                setMessage("");
-                setError("");
-                setEditing(true);
-              }}
-            >
-              Edit
-            </Button>
-            <Menu
-              label="Registration actions"
-              align="end"
-              items={[
-                {
-                  id: "cancel",
-                  label: "Cancel my registration…",
-                  danger: true,
-                  disabled: busy,
-                  onSelect: () => void cancelRegistration(),
-                },
-              ]}
-            />
-          </>
-        )}
-      </PanelHeader>
+      <PanelHeader title="Registration" />
       <PanelBody>
-        <div class="pk-stack">
+        <div class="pk-stack pk-stack--loose">
           <div class="pk-cluster">
             <Badge status={status} />
             <span>{data.registration.isEmailVerified ? "Email confirmed" : "Email confirmation pending"}</span>
           </div>
-          {status === "registered" && (
-            <RegistrationDayStatusSummary dayAttendance={data.dayAttendance} dayWaitlist={data.dayWaitlist} />
-          )}
           {error && <Alert tone="danger">{error}</Alert>}
           {message && <Alert tone="ok">{message}</Alert>}
           {cancelled && (
@@ -191,27 +185,64 @@ function RegistrationRecord({
             <ParticipantRegistrationForm data={data} forms={forms} save={save} onDiscard={() => setEditing(false)} />
           ) : (
             <>
-              <ParticipantRegistrationDetails data={data} form={forms.form} daysSummarized={status === "registered"} />
               <RecordCommands
                 busy={busy}
                 restorable={restorable}
                 pendingConfirmation={status === "pending_email_confirmation"}
-                offered={offered.length > 0}
                 onRestore={() => void run(() => save({ action: "update" }))}
                 onResend={() => void run(resendConfirmation)}
-                onClaim={() =>
-                  void run(() =>
-                    save({
-                      action: "update",
-                      dayAttendance: data.dayAttendance.map(({ dayDate, attendanceType }) => ({
-                        dayDate,
-                        attendanceType,
-                      })),
-                      claimDayWaitlistOffers: offered,
-                    }),
-                  )
-                }
               />
+              <RegistrationDays
+                data={data}
+                busy={busy}
+                editable={status === "registered"}
+                focusDay={focusDay}
+                onSave={(dayAttendance) => void saveDays(dayAttendance)}
+                onClaim={claimSeat}
+              />
+              <section class="pk-stack pk-stack--snug" aria-label="Your details">
+                <h3>Your details</h3>
+                <ParticipantRegistrationDetails data={data} form={forms.form} daysSummarized />
+                {!cancelled && (
+                  <div class="pk-cluster">
+                    <Button
+                      variant="primary"
+                      disabled={busy}
+                      onClick={() => {
+                        setMessage("");
+                        setError("");
+                        setEditing(true);
+                      }}
+                    >
+                      Edit details
+                    </Button>
+                  </div>
+                )}
+              </section>
+              {data.shareUrl && !cancelled && (
+                <section class="pk-stack pk-stack--snug" aria-label="Invite a colleague">
+                  <h3>Invite a colleague</h3>
+                  <CopyLinkRow
+                    url={data.shareUrl}
+                    label="Your personal invitation link"
+                    help="Anyone who registers through it is credited to you."
+                  />
+                </section>
+              )}
+              {!cancelled && (
+                <section class="pk-stack pk-stack--snug" aria-label="Cancel registration">
+                  <h3>Not coming at all?</h3>
+                  <p class="pk-small pk-muted">
+                    Cancel and your place goes to someone on the waiting list. To skip only one day, change that day
+                    above instead.
+                  </p>
+                  <div class="pk-cluster">
+                    <Button variant="danger-quiet" disabled={busy} onClick={() => void cancelRegistration()}>
+                      Cancel my registration…
+                    </Button>
+                  </div>
+                </section>
+              )}
             </>
           )}
         </div>
@@ -225,30 +256,21 @@ function RecordCommands({
   busy,
   restorable,
   pendingConfirmation,
-  offered,
   onRestore,
   onResend,
-  onClaim,
 }: {
   busy: boolean;
   restorable: boolean;
   pendingConfirmation: boolean;
-  offered: boolean;
   onRestore: () => void;
   onResend: () => void;
-  onClaim: () => void;
 }) {
-  if (!restorable && !pendingConfirmation && !offered) return null;
+  if (!restorable && !pendingConfirmation) return null;
   return (
     <div class="pk-cluster">
       {restorable && (
         <Button variant="primary" loading={busy} onClick={onRestore}>
           Restore registration
-        </Button>
-      )}
-      {offered && (
-        <Button variant="primary" loading={busy} onClick={onClaim}>
-          Claim offered spots
         </Button>
       )}
       {pendingConfirmation && (

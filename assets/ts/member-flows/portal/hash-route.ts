@@ -19,6 +19,11 @@ function hashQuery(hash: string): URLSearchParams {
   return new URLSearchParams(hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "");
 }
 
+/** One named query parameter of a hash location: `#/a?day=2026-12-01` → `2026-12-01`. */
+export function portalHashParam(hash: string, name: string): string | null {
+  return hashQuery(hash).get(name);
+}
+
 /** The sign-in token a verify link carries, when the location is one. */
 export function portalMagicLinkToken(hash: string): string | null {
   if (portalHashPath(hash) !== "/verify") return null;

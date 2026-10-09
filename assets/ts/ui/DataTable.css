@@ -206,11 +206,29 @@
       width: max-content;
       min-width: 100%;
     }
+    .pk-table--records thead {
+      padding: var(--pk-2) var(--pk-3);
+      border-bottom: 1px solid var(--pk-line);
+    }
+    .pk-table--records thead tr {
+      gap: var(--pk-2);
+      align-items: center;
+    }
+    /* In the strip a heading is a control, not a column title: a compact chip
+       in sentence case rather than the desktop's shaded uppercase band. */
     .pk-table--records th {
       flex: 0 0 auto;
       min-width: 0;
       width: auto;
       white-space: nowrap;
+      padding: var(--pk-1) var(--pk-1) var(--pk-1) var(--pk-3);
+      background: none;
+      border: 1px solid var(--pk-line);
+      border-radius: var(--pk-radius-pill);
+      color: var(--pk-ink-muted);
+      font-size: var(--pk-text-sm);
+      text-transform: none;
+      letter-spacing: normal;
     }
     /* Keep static table headers available to assistive technology; their
        visible names are already repeated beside each record value. */

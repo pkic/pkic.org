@@ -21,6 +21,7 @@ import { Tabs } from "../../../../ui/Tabs";
 import { ParticipantEventNavigation, ParticipantLeadScanner } from "./ParticipantEventNavigation";
 import { Alert } from "../../../../ui/Alert";
 import { usePortalHashLocation } from "../../hash-location";
+import { portalHashParam } from "../../hash-route";
 import { EventAppHero, EventHome } from "./app/EventHome";
 import { EventHero } from "./app/EventHero";
 import { EventTicket } from "./app/EventTicket";
@@ -139,7 +140,12 @@ export function ParticipantEvent({ event, kind, resourceId, tab }: Selection & {
     <div class="pk-stack">
       {kind !== "proposal" && header()}
       {kind === "registration" && resourceId ? (
-        <ParticipantRegistration registrationId={resourceId} eventId={event.id} slug={event.slug} />
+        <ParticipantRegistration
+          registrationId={resourceId}
+          eventId={event.id}
+          slug={event.slug}
+          focusDay={portalHashParam(window.location.hash, "day")}
+        />
       ) : kind === "proposal" && resourceId ? (
         <ParticipantProposal event={event} proposalId={resourceId} facet={tab} header={header} />
       ) : tab === "agenda" ? (

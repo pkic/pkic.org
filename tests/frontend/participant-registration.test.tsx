@@ -5,9 +5,10 @@
  * It opened as a form with "Save changes" and "Cancel registration" side by
  * side, and "Cancel registration" read as "go back without saving". What is
  * asserted here is the separation the page now keeps: it opens read-only,
- * editing is an explicit command whose way out is "Discard changes", and
- * cancelling the registration is reachable only through the record's actions
- * menu and the shared confirmation.
+ * editing is an explicit command whose way out is "Discard changes", each
+ * day carries its own change (an in-person seat leads with "Can't make it in
+ * person?"), and cancelling sits apart at the end behind the shared
+ * confirmation.
  */
 import { render } from "preact";
 import { act } from "preact/test-utils";
@@ -21,7 +22,6 @@ import {
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { ParticipantRegistration } from "../../assets/ts/components/events/ParticipantRegistration";
 import { confirmationButton, openConfirmation } from "./helpers/confirm-dialog";
-import { menuItemNamed } from "./helpers/row-actions";
 
 const REGISTRATION_ID = "11111111-1111-4111-8111-111111111111";
 const ENDPOINT = `/api/v1/registrations/${REGISTRATION_ID}`;
@@ -165,10 +165,6 @@ async function click(target: HTMLElement | null): Promise<void> {
   await settle();
 }
 
-async function openRecordMenu(root: HTMLElement): Promise<void> {
-  await click(root.querySelector<HTMLButtonElement>('button[aria-label="Registration actions"]'));
-}
-
 afterEach(() => {
   for (const container of mounted.splice(0)) {
     void act(() => render(null, container));
@@ -192,25 +188,28 @@ describe("ParticipantRegistration", () => {
     });
     // The confirmed-days summary already states each day; the fact list does not repeat it.
     expect(facts(container)).not.toHaveProperty("Day 1");
-    expect(button(container, "Edit")).not.toBeNull();
+    expect(button(container, "Edit details")?.classList.contains("pk-btn--primary")).toBe(true);
     expect(button(container, "Save changes")).toBeNull();
-    // The destructive command is not a button on the page, only a menu item.
-    expect(button(container, "Cancel registration")).toBeNull();
-    expect(button(container, "Cancel my registration…")).toBeNull();
+    // Each day is a card with its state in words and the change it allows.
+    const day = container.querySelector(".pk-reg-day");
+    expect(day?.textContent).toContain("1");
+    expect(day?.textContent).toContain("In-person");
+    expect(button(container, "Can't make it in person?")).not.toBeNull();
+    // Cancelling is findable on the page, set apart and quiet, never the main action.
+    expect(button(container, "Cancel my registration…")?.classList.contains("pk-btn--danger-quiet")).toBe(true);
   });
 
   it("swaps the read view for the form on Edit, and Discard resets the draft and returns", async () => {
     const requests = installApi();
     const container = await mount();
 
-    await click(button(container, "Edit"));
+    await click(button(container, "Edit details"));
     const jobTitle = container.querySelector<HTMLInputElement>('input[name="jobTitle"]');
     expect(jobTitle?.value).toBe("Engineer");
     expect(button(container, "Save changes")?.type).toBe("submit");
     expect(button(container, "Save changes")?.classList.contains("pk-btn--primary")).toBe(true);
     expect(button(container, "Discard changes")).not.toBeNull();
-    expect(container.querySelector('button[aria-label="Registration actions"]')).toBeNull();
-    expect(button(container, "Cancel registration")).toBeNull();
+    expect(button(container, "Cancel my registration…")).toBeNull();
 
     await act(async () => {
       jobTitle!.value = "Countess";
@@ -220,7 +219,7 @@ describe("ParticipantRegistration", () => {
 
     expect(container.querySelectorAll("input, select, textarea")).toHaveLength(0);
     expect(facts(container)["Job title"]).toBe("Engineer");
-    await click(button(container, "Edit"));
+    await click(button(container, "Edit details"));
     expect(container.querySelector<HTMLInputElement>('input[name="jobTitle"]')?.value).toBe("Engineer");
     expect(requests.some(({ method }) => method === "PATCH")).toBe(false);
   });
@@ -229,7 +228,7 @@ describe("ParticipantRegistration", () => {
     const requests = installApi();
     const container = await mount();
 
-    await click(button(container, "Edit"));
+    await click(button(container, "Edit details"));
     const jobTitle = container.querySelector<HTMLInputElement>('input[name="jobTitle"]');
     await act(async () => {
       jobTitle!.value = "Countess";
@@ -247,20 +246,18 @@ describe("ParticipantRegistration", () => {
     expect(container.textContent).toContain("Registration updated.");
   });
 
-  it("cancels only through the record menu and the confirmation, and Keep registration sends nothing", async () => {
+  it("cancels only after the confirmation, and Keep registration sends nothing", async () => {
     const requests = installApi();
     const container = await mount();
 
-    await openRecordMenu(container);
-    await click(menuItemNamed(container, "Cancel my registration…"));
+    await click(button(container, "Cancel my registration…"));
     expect(openConfirmation()?.textContent).toContain("Cancel your registration?");
     expect(openConfirmation()?.textContent).toContain("restore");
     await click(confirmationButton("Keep registration"));
     expect(openConfirmation()).toBeNull();
     expect(requests.some(({ method }) => method === "PATCH")).toBe(false);
 
-    await openRecordMenu(container);
-    await click(menuItemNamed(container, "Cancel my registration…"));
+    await click(button(container, "Cancel my registration…"));
     await click(confirmationButton("Cancel registration"));
     await settle();
 
@@ -277,8 +274,9 @@ describe("ParticipantRegistration", () => {
     );
     const container = await mount();
 
-    expect(button(container, "Edit")).toBeNull();
-    expect(container.querySelector('button[aria-label="Registration actions"]')).toBeNull();
+    expect(button(container, "Edit details")).toBeNull();
+    expect(button(container, "Cancel my registration…")).toBeNull();
+    expect(button(container, "Can't make it in person?")).toBeNull();
     const restore = button(container, "Restore registration");
     expect(restore?.classList.contains("pk-btn--primary")).toBe(true);
     await click(restore);
@@ -302,11 +300,61 @@ describe("ParticipantRegistration", () => {
     );
     const container = await mount();
 
-    await click(button(container, "Claim offered spots"));
+    await click(button(container, "Claim seat"));
     expect(registrationManageSchema.parse(requests.find(({ method }) => method === "PATCH")?.body)).toEqual({
       action: "update",
       dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
       claimDayWaitlistOffers: ["2026-12-01"],
     });
+  });
+  it("releases an in-person day through one form of every day's choices, keeping the other days", async () => {
+    const twoDays = readResponse({
+      eventDays: [
+        ...readResponse().eventDays,
+        { ...readResponse().eventDays[0]!, dayDate: "2026-12-02", label: "Day 2" },
+      ],
+      dayAttendance: [
+        { dayDate: "2026-12-01", attendanceType: "in_person", label: "Day 1" },
+        { dayDate: "2026-12-02", attendanceType: "in_person", label: "Day 2" },
+      ],
+    });
+    const requests = installApi(twoDays);
+    const container = await mount();
+
+    await click(button(container, "Can't make it in person?"));
+    expect(container.querySelectorAll("fieldset.pk-reg-days__choice")).toHaveLength(2);
+    await click(container.querySelector<HTMLInputElement>('input[name="day-2026-12-01"][value="on_demand"]'));
+    expect(container.textContent).toContain("waiting list as soon as you save");
+    await act(async () => {
+      container
+        .querySelector("form.pk-reg-days__form")!
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await settle();
+
+    expect(registrationManageSchema.parse(requests.find(({ method }) => method === "PATCH")?.body)).toEqual({
+      action: "update",
+      dayAttendance: [
+        { dayDate: "2026-12-01", attendanceType: "on_demand" },
+        { dayDate: "2026-12-02", attendanceType: "in_person" },
+      ],
+    });
+  });
+
+  it("treats leaving no day at all as cancelling, behind the cancellation confirmation", async () => {
+    const requests = installApi();
+    const container = await mount();
+
+    await click(button(container, "Can't make it in person?"));
+    await click(container.querySelector<HTMLInputElement>('input[name="day-2026-12-01"][value=""]'));
+    await act(async () => {
+      container
+        .querySelector("form.pk-reg-days__form")!
+        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await settle();
+    expect(openConfirmation()?.textContent).toContain("Cancel your registration?");
+    await click(confirmationButton("Keep registration"));
+    expect(requests.some(({ method }) => method === "PATCH")).toBe(false);
   });
 });

@@ -30,6 +30,7 @@ import { hasEventProposals } from "./event-app-tabs";
 import { eventAgendaRoute } from "../../../../../../shared/event-participation-link";
 import { RegistrationOfferNotice } from "./RegistrationOfferNotice";
 import { useEventNow, type AgendaSession } from "./useEventNow";
+import { AttendanceCheckCard, SupportCard, WelcomeBanner } from "./EventWelcome";
 
 const href = usePortalHashLocation.hrefs;
 
@@ -218,6 +219,8 @@ export function EventHome({ event }: { event: ParticipantEventDetail }) {
   const now = useEventNow(event.slug, current);
   return (
     <div class="pk-event-home pk-grid pk-grid--cards">
+      <WelcomeBanner event={event} />
+      {!ended && <AttendanceCheckCard event={event} />}
       {current &&
         (now.loading ? (
           <Spinner label="Loading your agenda…" />
@@ -231,6 +234,7 @@ export function EventHome({ event }: { event: ParticipantEventDetail }) {
         ))}
       <TicketCard event={event} ended={ended} />
       <ProposalsCard event={event} />
+      <SupportCard />
     </div>
   );
 }

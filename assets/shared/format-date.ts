@@ -71,6 +71,18 @@ export function formatDayAndMonth(value: string | null | undefined): string {
 }
 
 /**
+ * A `YYYY-MM-DD` calendar date split for a calendar tile: short weekday, day
+ * number and short month, in the viewer's locale. Day-precise like
+ * `formatDayAndMonth`; an unreadable value yields empty markers.
+ */
+export function calendarDateParts(value: string): { weekday: string; day: string; month: string } {
+  const date = toDate(DATE_ONLY.test(value) ? `${value}T00:00:00Z` : value);
+  if (!date) return { weekday: EMPTY, day: EMPTY, month: EMPTY };
+  const part = (options: Intl.DateTimeFormatOptions) => date.toLocaleString(undefined, { ...options, timeZone: "UTC" });
+  return { weekday: part({ weekday: "short" }), day: part({ day: "numeric" }), month: part({ month: "short" }) };
+}
+
+/**
  * An instant that stands for a calendar day — a seat's start, a leadership
  * term's end. A manager picks "1 June 2022" and it is stored as that day's
  * midnight UTC, so the UTC calendar is the value's meaning; rendering it in

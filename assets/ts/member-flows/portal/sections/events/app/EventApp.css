@@ -53,6 +53,31 @@
     align-items: start;
   }
 
+  /* The greeting spans the whole home: it is the page's opening line, not a card. */
+  .pk-event-welcome {
+    grid-column: 1 / -1;
+    display: grid;
+    gap: var(--pk-1);
+  }
+
+  .pk-event-welcome p {
+    margin: 0;
+  }
+
+  .pk-event-welcome__greeting {
+    font-size: var(--pk-text-xl);
+    font-weight: 600;
+    line-height: 1.2;
+  }
+
+  .pk-event-welcome__status {
+    color: var(--pk-accent-strong);
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-sm);
+    letter-spacing: var(--pk-tracking-label);
+    text-transform: uppercase;
+  }
+
   .pk-event-venue {
     font-style: normal;
   }
