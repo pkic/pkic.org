@@ -65,7 +65,10 @@ export const eventWebPushStatusSchema = z
   })
   .strict();
 export const webPushNotificationKindSchema = z.enum(["session_reminder", "agenda_changed"]);
-export const webPushDestinationSchema = z.string().regex(/^\/portal\/#\/events\/[a-z0-9]+(?:-[a-z0-9]+)*\/agenda$/);
+/** The event app's agenda; reminders and changes open it filtered to the reader's own sessions (`?mine=1`). */
+export const webPushDestinationSchema = z
+  .string()
+  .regex(/^\/portal\/#\/events\/[a-z0-9]+(?:-[a-z0-9]+)*\/agenda(?:\?mine=1)?$/);
 export const webPushNotificationSchema = z
   .object({
     notificationId: databaseIdSchema,

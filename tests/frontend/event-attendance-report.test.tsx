@@ -338,11 +338,11 @@ describe("event and day attendance report", () => {
     await settle();
     expect(picker.value).toBe("Opening session");
     for (const [label, schema] of [
-      ["Export observed people", attendancePeopleExportQuerySchema],
-      ["Export attendance summary", attendanceSummaryExportQuerySchema],
+      ["Download observed people (CSV)", attendancePeopleExportQuerySchema],
+      ["Download attendance summary (CSV)", attendanceSummaryExportQuerySchema],
     ] as const) {
-      await mount(label === "Export observed people" ? "attendees" : "summary");
-      const link = [...host.querySelectorAll<HTMLAnchorElement>("a")].find((item) => item.textContent === label)!;
+      await mount(label === "Download observed people (CSV)" ? "attendees" : "summary");
+      const link = host.querySelector<HTMLAnchorElement>(`a[aria-label="${label}"]`)!;
       const url = new URL(link.href);
       const parsed = schema.parse(Object.fromEntries(url.searchParams));
       expect(parsed.occurrenceId).toBe(id);
@@ -393,9 +393,7 @@ describe("event and day attendance report", () => {
       expect(choices.some((item) => item.textContent?.trim() === attendanceActionLabel(action))).toBe(true);
     await act(() => choices.find((item) => item.textContent?.trim() === attendanceActionLabel("checkout"))!.click());
     await settle();
-    const link = [...host.querySelectorAll<HTMLAnchorElement>("a")].find(
-      (item) => item.textContent === "Export scan log",
-    )!;
+    const link = host.querySelector<HTMLAnchorElement>('a[aria-label="Download scan log (CSV)"]')!;
     const url = new URL(link.href);
     const query = attendanceAttemptsExportQuerySchema.parse(Object.fromEntries(url.searchParams));
     expect(query.action).toBe("checkout");
@@ -461,13 +459,13 @@ describe("event and day attendance report", () => {
     await settle();
     expect(host.textContent).toContain("Attendee contact access has ended");
     expect(host.textContent).not.toContain("Private attendee");
-    expect(host.textContent).not.toContain("Export observed people");
-    expect(host.textContent).not.toContain("Export scan attempts");
-    expect(host.textContent).toContain("Export attendance summary");
+    expect(host.querySelector('a[aria-label="Download observed people (CSV)"]')).toBeNull();
+    expect(host.querySelector('a[aria-label="Download scan log (CSV)"]')).toBeNull();
+    expect(host.querySelector('a[aria-label="Download attendance summary (CSV)"]')).not.toBeNull();
     await mount("attendees");
     expect(host.textContent).toContain("Contact access has expired");
     expect(host.textContent).not.toContain("Private attendee");
-    expect(host.textContent).not.toContain("Export observed people");
+    expect(host.querySelector('a[aria-label="Download observed people (CSV)"]')).toBeNull();
     await mount("diagnostics", true);
     expect(host.textContent).toContain("Scan reason breakdown");
   });

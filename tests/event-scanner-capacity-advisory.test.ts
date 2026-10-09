@@ -5,9 +5,9 @@ import { resetDb } from "./helpers/reset-db";
 import { seedLegacyOfflineGrant } from "./helpers/legacy-offline-grant";
 import { getAgenda } from "../functions/_lib/services/event-agenda/read";
 import {
-  assertPublicationCapacity,
-  preparePublicationCapacityGuard,
-} from "../functions/_lib/services/event-agenda/publication-capacity";
+  assertPublicationAllocations,
+  preparePublicationAllocationGuard,
+} from "../functions/_lib/services/event-agenda/publication-allocations";
 import { physicalOccupiedSql } from "../functions/_lib/services/event-participation/capacity-accounting";
 let eventId: string, operatorId: string, occurrenceId: string, deviceId: string, userId: string;
 async function occupied() {
@@ -58,10 +58,10 @@ describe("Scanner evidence never reserves registration capacity", () => {
       .bind(crypto.randomUUID(), eventId, JSON.stringify(snapshot), operatorId, now)
       .run();
   });
-  it("allows publication and time changes with open or revoked scanner grants", async () => {
+  it("allows publication and time changes with scanner grants and a session capacity below its reservations", async () => {
     const rights = await seedLegacyOfflineGrant({ eventId, occurrenceId, operatorId, deviceId });
     const snapshot = await getAgenda(env.DB, eventId, "offline-rights-test");
-    await assertPublicationCapacity(env.DB, snapshot);
+    await assertPublicationAllocations(env.DB, snapshot);
     const moved = {
       ...snapshot,
       occurrences: snapshot.occurrences.map((item) => ({
@@ -70,15 +70,15 @@ describe("Scanner evidence never reserves registration capacity", () => {
         endAt: "2030-01-01T11:00:00.000Z",
       })),
     };
-    await assertPublicationCapacity(env.DB, moved);
-    await env.DB.batch([preparePublicationCapacityGuard(env.DB, moved)]);
+    await assertPublicationAllocations(env.DB, moved);
+    await env.DB.batch([preparePublicationAllocationGuard(env.DB, moved)]);
     await env.DB.prepare("UPDATE event_offline_admission_grants SET revoked_at=? WHERE id=?")
       .bind(new Date().toISOString(), rights.id)
       .run();
-    await assertPublicationCapacity(env.DB, moved);
+    await assertPublicationAllocations(env.DB, moved);
     expect(await occupied()).toBe(0);
-    await assertPublicationCapacity(env.DB, moved);
-    // A real session reservation continues to enforce the configured capacity.
+    await assertPublicationAllocations(env.DB, moved);
+    // A real session reservation occupies a seat, but agenda approval never enforces capacity.
     await env.DB.prepare(
       "INSERT INTO agenda_session_participations(id,event_id,occurrence_id,user_id,attendance_mode,status,created_at,updated_at) VALUES(?,?,?,?,'physical','reserved',?,?)",
     )
@@ -86,9 +86,7 @@ describe("Scanner evidence never reserves registration capacity", () => {
       .run();
     expect(await occupied()).toBe(1);
     const tooSmall = { ...moved, occurrences: moved.occurrences.map((item) => ({ ...item, capacity: 0 })) };
-    await expect(assertPublicationCapacity(env.DB, tooSmall)).rejects.toMatchObject({
-      code: "AGENDA_RESERVED_CAPACITY",
-    });
-    await expect(env.DB.batch([preparePublicationCapacityGuard(env.DB, tooSmall)])).rejects.toThrow();
+    await assertPublicationAllocations(env.DB, tooSmall);
+    await env.DB.batch([preparePublicationAllocationGuard(env.DB, tooSmall)]);
   });
 });

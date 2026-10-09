@@ -1,3 +1,4 @@
+import { formatDateTimeInZone } from "../../../../../../../shared/format-date";
 import { Field } from "../../../../../../ui/Field";
 import { Select } from "../../../../../../ui/TextControl";
 import type { FieldPresentation } from "../../../../../../hooks/useContractForm";
@@ -17,6 +18,9 @@ export function ScannerLocationSelect({
   roomField,
   onTarget,
   onRoom,
+  params,
+  timeZone,
+  disabled = false,
 }: {
   slug: string;
   targetId: string | null;
@@ -27,10 +31,14 @@ export function ScannerLocationSelect({
   roomField: FieldPresentation;
   onTarget: (item: ScannerTarget | null) => void;
   onRoom: (roomId: string | null) => void;
+  params?: Record<string, string>;
+  timeZone?: string;
+  disabled?: boolean;
+  onTimeZone?: (timeZone: string) => void;
 }) {
   return (
     <>
-      <Field label="Session" {...targetField} help="Choose a session to record session attendance.">
+      <Field label="Session" {...targetField}>
         {(control) => (
           <ServerSearchSelect<ScannerTarget, ScannerTargetsResponse>
             {...control}
@@ -39,6 +47,7 @@ export function ScannerLocationSelect({
             selectedLabel={label}
             placeholder="Event entrance"
             searchPlaceholder="Event entrance"
+            disabled={disabled}
             allowEmpty
             onChange={onTarget}
             catalog={{
@@ -47,22 +56,26 @@ export function ScannerLocationSelect({
               resolveItems: (value) => value.sessions,
               resolvePage: (value) => value.page,
               itemKey: (item) => item.id,
-              itemLabel: (item) => item.title,
-              sort: "title",
+              itemLabel: (item) =>
+                [
+                  item.title,
+                  item.startAt && timeZone ? formatDateTimeInZone(item.startAt, timeZone) : "Time not scheduled",
+                  item.rooms?.map((room) => room.name).join(" / "),
+                ]
+                  .filter(Boolean)
+                  .join(" · "),
+              params,
+              sort: "startAt",
             }}
           />
         )}
       </Field>
       {rooms.length > 0 && (
-        <Field
-          label="Physical room"
-          {...roomField}
-          required={rooms.length > 1}
-          help="Registration feedback and attendance observations use this selected room."
-        >
+        <Field label="Physical room" {...roomField} required={rooms.length > 1}>
           {(control) => (
             <Select
               {...control}
+              disabled={disabled}
               name="roomId"
               value={roomId ?? ""}
               onChange={(event) => onRoom(event.currentTarget.value || null)}

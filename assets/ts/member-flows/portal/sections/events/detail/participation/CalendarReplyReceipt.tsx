@@ -2,7 +2,7 @@ import type { z } from "zod";
 import type { sessionBookingRowSchema } from "../../../../../../../shared/schemas/event-participation-reporting";
 import { Badge } from "../../../../../../ui/Badge";
 import { DescriptionList } from "../../../../../../ui/DescriptionList";
-import { StatusBadge } from "../../../../../../site/StatusBadge";
+import { Badge as StatusBadge } from "../../../../../../components/Badge";
 import { LocalTime } from "../../../../../../site/SiteDate";
 type Participant = z.infer<typeof sessionBookingRowSchema>;
 const receipts = {

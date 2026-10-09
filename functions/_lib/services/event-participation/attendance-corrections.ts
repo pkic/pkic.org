@@ -10,6 +10,7 @@ import {
 } from "../../../../assets/shared/schemas/event-attendance-corrections";
 import { buildPageInfo } from "../../../../assets/shared/schemas/pagination";
 import { first, all } from "../../db/queries";
+import { resolveMappedOrderBy } from "../../db/sort";
 import { prepareScopedAuditLog } from "../audit";
 import type { DatabaseLike } from "../../types";
 import { AppError } from "../../errors";
@@ -131,6 +132,8 @@ export async function correctAttendance(
     createdAt,
   });
 }
+/** Newest evidence first unless the reader asks for the original capture order. */
+const ATTENDANCE_EVIDENCE_SORT_EXPRESSIONS = { observedAt: "o.observed_at" } as const;
 export async function attendanceEvidence(db: DatabaseLike, eventId: string, raw: unknown) {
   const query = attendanceEvidenceQuerySchema.parse(raw);
   await assertEventContactAccess(db, eventId);
@@ -145,7 +148,7 @@ export async function attendanceEvidence(db: DatabaseLike, eventId: string, raw:
   const count = await first<{ total: number }>(db, `SELECT COUNT(*) AS total ${from}`, bindings);
   const rows = await all<Record<string, unknown>>(
     db,
-    `SELECT ${attendanceCaptureProjection("o")},o.id,o.user_id AS userId,NULLIF(TRIM(COALESCE(person.preferred_name,person.first_name,'')||' '||COALESCE(person.last_name,'')),'') AS displayName,o.occurrence_id AS occurrenceId,o.observed_at AS observedAt,COALESCE(attempt.created_at,imported.received_at) AS receivedAt,COALESCE(attempt.operator_user_id,imported.actor_user_id) AS operatorUserId,attempt.device_id AS deviceId,COALESCE(provenance.verification,'unverified') AS providerVerification,provenance.source_reference AS sourceReference,o.attendance_mode AS attendanceMode,CASE WHEN provenance.observation_id IS NOT NULL THEN provenance.source WHEN EXISTS(SELECT 1 FROM event_offline_admission_spends spent WHERE spent.operation_id=attempt.operation_id) THEN 'offline_authorized_scan' ELSE 'browser_scan' END AS source,COALESCE(attempt.action,'import') AS action,COALESCE(state.revision,0) AS revision,COALESCE(state.voided,0) AS voided ${from} ORDER BY o.observed_at ${query.sort === "-observedAt" ? "DESC" : "ASC"},o.id LIMIT ? OFFSET ?`,
+    `SELECT ${attendanceCaptureProjection("o")},o.id,o.user_id AS userId,NULLIF(TRIM(COALESCE(person.preferred_name,person.first_name,'')||' '||COALESCE(person.last_name,'')),'') AS displayName,o.occurrence_id AS occurrenceId,o.observed_at AS observedAt,COALESCE(attempt.created_at,imported.received_at) AS receivedAt,COALESCE(attempt.operator_user_id,imported.actor_user_id) AS operatorUserId,attempt.device_id AS deviceId,COALESCE(provenance.verification,'unverified') AS providerVerification,provenance.source_reference AS sourceReference,o.attendance_mode AS attendanceMode,CASE WHEN provenance.observation_id IS NOT NULL THEN provenance.source WHEN EXISTS(SELECT 1 FROM event_offline_admission_spends spent WHERE spent.operation_id=attempt.operation_id) THEN 'offline_authorized_scan' ELSE 'browser_scan' END AS source,COALESCE(attempt.action,'import') AS action,COALESCE(state.revision,0) AS revision,COALESCE(state.voided,0) AS voided ${from} ${resolveMappedOrderBy(query.sort, ATTENDANCE_EVIDENCE_SORT_EXPRESSIONS, "o.observed_at DESC", "o.id ASC")} LIMIT ? OFFSET ?`,
     [...bindings, query.limit, query.offset],
   );
   return attendanceEvidenceResponseSchema.parse({

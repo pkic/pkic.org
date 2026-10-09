@@ -18,7 +18,7 @@ export function prepareAgendaPushChangeNotifications(
       .prepare(
         `INSERT INTO agenda_push_outbox(id,event_id,device_id,user_id,kind,source_version,idempotency_key,destination,due_at,expires_at,next_attempt_at,created_at,updated_at)
  SELECT lower(hex(randomblob(16))),event.id,device.id,device.user_id,'agenda_changed',?,'agenda-change:'||event.id||':'||CAST(? AS INTEGER)||':'||device.id,
-   '/portal/#/events/'||event.slug||'/agenda',?,?,?,?,?
+   '/portal/#/events/'||event.slug||'/agenda?mine=1',?,?,?,?,?
  FROM agenda_push_event_preferences preference JOIN agenda_push_devices device ON device.id=preference.device_id
  JOIN users user ON user.id=device.user_id JOIN events event ON event.id=preference.event_id
  WHERE preference.event_id=? AND preference.enabled=1 AND device.revoked_at IS NULL AND user.active=1 AND (device.expires_at IS NULL OR device.expires_at>?)
@@ -76,7 +76,7 @@ export async function queueAgendaPushReminders(db: DatabaseLike, limit = 100) {
     WHERE 1 ON CONFLICT(idempotency_key) DO NOTHING`,
       )
       .bind(
-        `/portal/#/events/${row.slug}/agenda`,
+        `/portal/#/events/${row.slug}/agenda?mine=1`,
         now,
         now,
         now,

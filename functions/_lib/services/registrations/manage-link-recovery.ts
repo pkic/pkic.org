@@ -5,6 +5,7 @@ import { buildEventEmailVariables, type EventRecord } from "../events";
 import { normalizeEmail } from "../../validation";
 import { REGISTRATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
 import { registrationManageCapability } from "./capability-urls";
+import { myAgendaPageUrl } from "../frontend-links";
 
 interface RegistrationManageLinkMatch {
   registration_id: string;
@@ -70,6 +71,7 @@ export async function queueRegistrationManageLinkRecovery(
         lastName: registration.last_name ?? "",
         email: registration.email,
         manageUrl,
+        myAgendaUrl: myAgendaPageUrl(appBaseUrl, event),
         status: registration.registration_status,
       },
     },

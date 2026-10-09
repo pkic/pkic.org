@@ -13,7 +13,10 @@ import {
   eventAttendanceReasons,
 } from "../functions/_lib/services/event-participation/attendance-attempt-report";
 import { eventAttendancePeople } from "../functions/_lib/services/event-participation/attendance-people-report";
-import { correctAttendance } from "../functions/_lib/services/event-participation/attendance-corrections";
+import {
+  attendanceEvidence,
+  correctAttendance,
+} from "../functions/_lib/services/event-participation/attendance-corrections";
 const eventId = crypto.randomUUID(),
   operatorId = crypto.randomUUID(),
   personId = crypto.randomUUID(),
@@ -299,7 +302,7 @@ describe("Bounded attendance reporting with original provenance", () => {
     );
   });
   it("keeps denial/check evidence bounded and attributable without counting it as presence", async () => {
-    const first = await eventAttendanceAttempts(env.DB, eventId, { dayDate, limit: 1 });
+    const first = await eventAttendanceAttempts(env.DB, eventId, { dayDate, limit: 1, sort: "observedAt" });
     expect(first.page).toMatchObject({ total: 6, hasMore: true });
     expect(first.attempts[0]).toMatchObject({ userId: personId, clockVerification: "unverified", receivedAt });
     const denied = await eventAttendanceAttempts(env.DB, eventId, {
@@ -315,6 +318,28 @@ describe("Bounded attendance reporting with original provenance", () => {
     expect(
       (await eventAttendanceSummary(env.DB, eventId, { dayDate, occurrenceId: sessionId })).observed,
     ).toMatchObject({ uniquePeople: 1, entryObservations: 1, reentryObservations: 0 });
+  });
+
+  it("lists the most recently received attempt first unless another order is requested", async () => {
+    const latest = await attempt(deniedId, "check", "eligible", "registered", "2025-11-02T07:00:00.000Z");
+    await env.DB.prepare("UPDATE event_scan_attempts SET created_at='2025-11-03T07:00:00.000Z' WHERE id=?")
+      .bind(latest)
+      .run();
+    expect((await eventAttendanceAttempts(env.DB, eventId, { limit: 1 })).attempts[0]).toMatchObject({ id: latest });
+    expect(
+      (await eventAttendanceAttempts(env.DB, eventId, { limit: 1, sort: "receivedAt" })).attempts[0],
+    ).not.toMatchObject({ id: latest });
+  });
+
+  it("lists the most recent attendance evidence first unless another order is requested", async () => {
+    expect((await attendanceEvidence(env.DB, eventId, {})).observations[0]).toMatchObject({
+      userId: deniedId,
+      observedAt: "2025-11-03T05:00:00.000Z",
+    });
+    expect((await attendanceEvidence(env.DB, eventId, { sort: "observedAt" })).observations[0]).toMatchObject({
+      userId: personId,
+      observedAt: "2025-11-02T04:10:00.000Z",
+    });
   });
 
   it("searches grouped safe reasons and exceptions consistently for count, pages and expired contact privacy", async () => {

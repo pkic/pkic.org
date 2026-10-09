@@ -2,7 +2,6 @@ import { HeadshotDialogTemplates } from "./HeadshotDialogTemplates";
 import { Button } from "../ui/Button";
 import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
-import { FileInput } from "../ui/FileInput";
 import { EventPersonalFields } from "./EventPersonalFields";
 
 /** Registration management markup consumed by the existing token-bound controller. */
@@ -46,29 +45,30 @@ export function EventRegistrationManagement() {
         Loading your registration…
       </p>
       <div data-manage-share />
-      <div data-manage-form hidden>
-        <form class="pk-form pk-stack--loose needs-validation" noValidate>
+      <div data-manage-form class="pk-stack pk-stack--loose" hidden>
+        <div data-headshot-section id="manage-headshot" class="pk-stack pk-stack--snug">
+          <h3>Your photo</h3>
+          {/* The photo tile is rendered here by the page module. */}
+          <div data-headshot-tile />
+          <p data-headshot-status class="pk-muted pk-small" role="status" />
+        </div>
+        <div class="pk-stack pk-stack--snug" data-day-waitlist-section hidden>
+          <h3>Waitlist status</h3>
+          <p class="pk-muted pk-small">
+            These days are still pending. You can keep your registration, change those days to on-demand, or cancel the
+            whole registration.
+          </p>
+          <div data-day-waitlist />
+        </div>
+        <div data-sponsor-contact-sharing />
+        {/* The read view — details, the edit command and the whole-record
+            commands — is rendered here by the page module; the form below
+            stays hidden until the attendee chooses to edit. */}
+        <div data-manage-summary />
+        <form class="pk-form pk-stack--loose needs-validation" noValidate hidden>
           <p data-registration-identity-note class="pk-muted pk-small" hidden>
             This registration keeps the identity details you confirmed for this event.
           </p>
-          <div data-headshot-section class="pk-stack pk-stack--snug">
-            <h3>Your photo</h3>
-            <div data-headshot-preview class="pkic-headshot-preview" />
-            <p data-headshot-status class="pk-muted pk-small" />
-            <Field id="manage-headshot-file" label="Upload photo">
-              {(control) => (
-                <FileInput
-                  {...control}
-                  accept="image/jpeg,image/png,image/webp"
-                  data-headshot-file
-                  buttonLabel="Upload photo"
-                />
-              )}
-            </Field>
-            <Button type="button" variant="secondary" size="sm" data-headshot-delete hidden>
-              Remove photo
-            </Button>
-          </div>
           <div class="pk-stack pk-stack--snug">
             <h3>Your details</h3>
             <Field id="manage-email" label="Email address" errorSlot="email">
@@ -100,71 +100,16 @@ export function EventRegistrationManagement() {
               )}
             </Field>
           </div>
-          <div class="pk-stack pk-stack--snug" data-day-waitlist-section hidden>
-            <h3>Waitlist status</h3>
-            <p class="pk-muted pk-small">
-              These days are still pending. You can keep your registration, change those days to on-demand, or cancel
-              the whole registration.
-            </p>
-            <div data-day-waitlist />
-          </div>
-          <div data-sponsor-contact-sharing />
           <div class="pk-cluster" data-action-buttons>
             <Button type="submit" variant="primary">
               Save changes
             </Button>
-            <Button type="button" data-action="cancel" variant="secondary">
-              Cancel registration
-            </Button>
-            <Button type="button" data-action="report-unauthorized" variant="danger-quiet" class="pk-push">
-              I did not request this registration
+            <Button type="button" data-action="discard" variant="secondary">
+              Discard changes
             </Button>
           </div>
-          <p data-flow-status class="pk-alert pk-sr-only" role="status" aria-live="polite" />
         </form>
-      </div>
-      <div data-confirm-cancel hidden>
-        <div class="pk-alert pk-alert--warn">
-          <h4 class="pk-alert__title">Cancel your registration?</h4>
-          <div class="pk-alert__body pk-stack pk-stack--snug">
-            <p>
-              Are you sure you want to cancel your registration for <strong data-confirm-event-name />?
-            </p>
-            <p class="pk-muted pk-small">You can re-register later. Waitlisted spots may be released immediately.</p>
-            <div class="pk-cluster">
-              <Button type="button" data-confirm-cancel-yes variant="danger" size="sm">
-                Yes, cancel my registration
-              </Button>
-              <Button type="button" data-confirm-cancel-no variant="secondary" size="sm">
-                No, keep my registration
-              </Button>
-            </div>
-          </div>
-        </div>
-      </div>
-      <div data-confirm-unauthorized hidden>
-        <div class="pk-alert pk-alert--danger">
-          <h4 class="pk-alert__title">Report unauthorized registration</h4>
-          <div class="pk-alert__body pk-stack pk-stack--snug">
-            <p>You are reporting that you did not request this registration. We will:</p>
-            <ul>
-              <li>Cancel and flag this registration as unauthorized</li>
-              <li>Remove the personal data stored with this registration</li>
-              <li>Notify the event organizer, who may investigate potential misuse</li>
-            </ul>
-            <p class="pk-muted pk-small">
-              Your account and email address will not be deleted. Only this registration record will be anonymized.
-            </p>
-            <div class="pk-cluster">
-              <Button type="button" data-unauthorized-yes variant="danger" size="sm">
-                Confirm — I did not request this
-              </Button>
-              <Button type="button" data-unauthorized-no variant="secondary" size="sm">
-                Go back
-              </Button>
-            </div>
-          </div>
-        </div>
+        <p data-flow-status class="pk-alert pk-sr-only" role="status" aria-live="polite" />
       </div>
       <HeadshotDialogTemplates />
       <div data-post-action hidden>

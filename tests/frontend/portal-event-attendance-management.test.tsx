@@ -20,18 +20,21 @@ import { GroupEventRegistrations } from "../../assets/ts/member-flows/portal/sec
 import { chooseColumnFilter, columnFilterOptions } from "./helpers/column-menu";
 import { menuItemNamed } from "./helpers/row-actions";
 import { controlFor } from "./helpers/labelled-control";
+import {
+  GROUP_ID,
+  EVENT_ID,
+  REGISTRATION_ID,
+  REGISTRATION_ENDPOINT,
+  EVENT_SLUG,
+  MANAGE_ACCESS_ENDPOINT,
+  json,
+  registrationList,
+  attendanceDetail,
+} from "./helpers/group-event-attendance-fixtures";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
 
-const GROUP_ID = "10000000-0000-4000-8000-000000000001";
-const EVENT_ID = "20000000-0000-4000-8000-000000000001";
-const REGISTRATION_ID = "30000000-0000-4000-8000-000000000001";
-const REGISTRATION_ENDPOINT = `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/registrations/${REGISTRATION_ID}`;
 const mounted: HTMLElement[] = [];
-
-function json(value: unknown, status = 200): Response {
-  return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
-}
 
 function mount(node: ComponentChildren): HTMLElement {
   const container = document.createElement("div");
@@ -45,7 +48,7 @@ function mountRoster(): HTMLElement {
   return mount(<GroupEventRegistrations groupId={GROUP_ID} eventId={EVENT_ID} />);
 }
 
-function mountRecord(canVip = false): HTMLElement {
+function mountRecord(canVip = false, eventSlug?: string): HTMLElement {
   return mount(
     <>
       <ConfirmDialogHost />
@@ -54,6 +57,7 @@ function mountRecord(canVip = false): HTMLElement {
         eventId={EVENT_ID}
         registrationId={REGISTRATION_ID}
         canVip={canVip}
+        eventSlug={eventSlug}
       />
     </>,
   );
@@ -63,74 +67,6 @@ async function settle(): Promise<void> {
   await act(async () => {
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
-}
-
-function registrationList() {
-  return {
-    event: { id: EVENT_ID, slug: "architecture-workshop", name: "Architecture workshop" },
-    registrations: [
-      {
-        id: REGISTRATION_ID,
-        user_id: "40000000-0000-4000-8000-000000000001",
-        user_email: "member@example.test",
-        display_name: "Group Member",
-        headshot_url: null,
-        organization_name: null,
-        job_title: null,
-        status: "registered",
-        attendance_type: "in_person",
-        days: [
-          { dayDate: "2026-09-01", label: "Day one", attendanceType: "in_person", waitlistStatus: null },
-          { dayDate: "2026-09-02", label: "Day two", attendanceType: "in_person", waitlistStatus: "waiting" },
-          { dayDate: "2026-09-03", label: "Day three", attendanceType: "virtual", waitlistStatus: null },
-        ],
-        created_at: "2026-08-01T00:00:00.000Z",
-        updated_at: "2026-08-01T00:00:00.000Z",
-      },
-    ],
-    stats: {
-      byAttendanceType: { in_person: 1 },
-      attendanceStatusByType: { in_person: { accepted: 1, waitlisted: 1 } },
-      byStatus: { registered: 1 },
-    },
-    page: { limit: 50, offset: 0, total: 1, hasMore: false },
-  };
-}
-
-function attendanceDetail(waitlisted: boolean) {
-  return {
-    registration: {
-      id: REGISTRATION_ID,
-      event_id: EVENT_ID,
-      user_id: "40000000-0000-4000-8000-000000000001",
-      user_email: "member@example.test",
-      display_name: "Group Member",
-      status: "registered",
-      attendance_type: "in_person",
-      source_type: "direct",
-      created_at: "2026-08-01T00:00:00.000Z",
-      updated_at: "2026-08-01T00:00:00.000Z",
-    },
-    dayAttendance: [{ dayDate: "2026-09-01", attendanceType: "in_person", label: "Day one" }],
-    dayWaitlist: waitlisted
-      ? [{ dayDate: "2026-09-01", status: "waiting", priorityLane: "general", offerExpiresAt: null }]
-      : [],
-    eventDays: [
-      {
-        id: "50000000-0000-4000-8000-000000000001",
-        date: "2026-09-01",
-        label: "Day one",
-        startsAt: null,
-        endsAt: null,
-        sortOrder: 0,
-        attendanceOptions: [
-          { value: "in_person", label: "In-person", capacity: 10 },
-          { value: "livestream", label: "Live stream", capacity: null },
-        ],
-        attendanceCounts: { in_person: 10 },
-      },
-    ],
-  };
 }
 
 function installApi(waitlisted: boolean) {
@@ -155,6 +91,9 @@ function installApi(waitlisted: boolean) {
       if (method === "PATCH" && url.pathname === REGISTRATION_ENDPOINT) {
         const detail = attendanceDetail(waitlisted);
         return json({ success: true, ...detail, registration: { ...detail.registration, status: "cancelled" } });
+      }
+      if (method === "POST" && url.pathname === MANAGE_ACCESS_ENDPOINT) {
+        return json({ manageUrl: "https://portal.example.test/events/architecture-workshop/manage#token" });
       }
       if (method === "POST" && url.pathname === `${REGISTRATION_ENDPOINT}/admissions`) {
         return json({
@@ -206,6 +145,31 @@ function statFigures(root: Element | null): Record<string, { value: string; note
 }
 
 describe("group event registrations roster", () => {
+  it("hands the filtered print population to the dedicated Badges view instead of replacing the roster", async () => {
+    installApi(false);
+    const onPrint = vi.fn();
+    const container = mount(
+      <GroupEventRegistrations
+        groupId={GROUP_ID}
+        eventId={EVENT_ID}
+        eventSlug="architecture-workshop"
+        canManage
+        onPrint={onPrint}
+      />,
+    );
+    await settle();
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Registration actions"]');
+    expect(trigger).not.toBeNull();
+    await act(async () => trigger!.click());
+    await act(async () => menuItemNamed(container, "Create / print all matching badges")!.click());
+    expect(onPrint).toHaveBeenCalledWith({
+      kind: "filtered",
+      endpoint: `/api/v1/groups/${GROUP_ID}/events/${EVENT_ID}/registrations/badges/population`,
+      filters: {},
+    });
+    expect(container.querySelector("caption")?.textContent).toBe("Registrations");
+    expect(container.textContent).not.toContain("Print all matching attendee badges");
+  });
   it("names the roster and every one of its columns, with no blank action column", async () => {
     installApi(false);
     const container = mountRoster();
@@ -217,17 +181,21 @@ describe("group event registrations roster", () => {
     );
     // Organization joins the row and the job title waits in the columns
     // menu, hidden by default (#119).
-    expect(headers).toEqual(["Attendee", "Organization", "Status", "Attendance", "Registered"]);
+    // Type is the whole-registration attendance type, the filter a badge print run is scoped by.
+    expect(headers).toEqual(["Attendee", "Organization", "Status", "Attendance", "Type", "Registered"]);
     for (const header of headers) expect(header).not.toBe("");
   });
 
   it("makes each row a link to the registration's own page, never an expansion between the rows", async () => {
-    installApi(false);
+    const requests = installApi(false);
     const container = mountRoster();
     await settle();
 
     const link = container.querySelector<HTMLAnchorElement>("tbody a.pk-table__row-link");
     expect(link?.textContent).toBe("Open registration for Group Member");
+    // The roster opens on the newest registrations, as the API orders it by default.
+    const rosterRequest = requests.find((request) => request.path.endsWith(`/events/${EVENT_ID}/registrations`));
+    expect(new URLSearchParams(rosterRequest?.search).get("sort")).toBe("-created_at");
     expect(link?.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/events/${EVENT_ID}/registrations/${REGISTRATION_ID}`);
     expect(container.querySelector("button.pk-table__row-link")).toBeNull();
     expect(container.querySelector(".pk-table__detail")).toBeNull();
@@ -247,6 +215,18 @@ describe("group event registrations roster", () => {
     expect(badges[2]).toContain("Virtual");
     // The raw token never reaches the page.
     expect(container.textContent).not.toContain("in_person");
+  });
+
+  it("offers the attendance type as the Type column's filter so a badge print run can take in-person attendees", async () => {
+    const requests = installApi(false);
+    const container = mountRoster();
+    await settle();
+
+    expect(columnFilterOptions(container, "Type")).toEqual(["All types", "In-person", "Virtual", "On-demand"]);
+    await chooseColumnFilter(container, "Type", "In-person");
+    await settle();
+    const last = requests.filter(({ method }) => method === "GET").at(-1);
+    expect(new URLSearchParams(last?.search).get("attendance_type")).toBe("in_person");
   });
 
   it("offers the waitlist as the Attendance column's filter and sends it to the query", async () => {
@@ -523,6 +503,38 @@ describe("group event registration record", () => {
     expect(requests).toContainEqual(
       expect.objectContaining({ path: REGISTRATION_ENDPOINT, method: "PATCH", body: { action: "cancel" } }),
     );
+  });
+
+  it("opens the attendee's own manage page through the event's signed access route", async () => {
+    const requests = installApi(false);
+    const opened = vi.fn();
+    vi.stubGlobal("open", opened);
+    const container = mountRecord(true, EVENT_SLUG);
+    await settle();
+    await settle();
+
+    const commands = container.querySelector<HTMLButtonElement>('button[aria-label="Registration actions"]');
+    await act(async () => commands!.click());
+    await act(async () => menuItemNamed(container, "Open attendee manage page")!.click());
+    await settle();
+
+    const access = requests.find(({ method, path }) => method === "POST" && path === MANAGE_ACCESS_ENDPOINT);
+    expect(access).toBeDefined();
+    expect(opened).toHaveBeenCalledWith(
+      "https://portal.example.test/events/architecture-workshop/manage#token",
+      "_blank",
+      "noopener",
+    );
+  });
+
+  it("offers the manage page only with event manage", async () => {
+    installApi(false);
+    const container = mountRecord(false, EVENT_SLUG);
+    await settle();
+    await settle();
+
+    expect(container.querySelector('button[aria-label="Registration actions"]')).toBeNull();
+    expect(container.textContent).not.toContain("Open attendee manage page");
   });
 
   it("states the failure when the registration cannot be loaded", async () => {

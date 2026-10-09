@@ -239,6 +239,10 @@ describe("Opt-in browser agenda notifications", () => {
         }),
       );
     expect(queued).toEqual({ queued: 1 });
+    // A reminder opens the event app's agenda filtered to the reader's own sessions.
+    expect(await env.DB.prepare("SELECT destination FROM agenda_push_outbox").first("destination")).toMatch(
+      /^\/portal\/#\/events\/[a-z0-9-]+\/agenda\?mine=1$/,
+    );
     expect(await queueAgendaPushReminders(env.DB)).toEqual({ queued: 0 });
     await env.DB.prepare("UPDATE agenda_calendar_entries SET sequence=2 WHERE occurrence_id=?")
       .bind(occurrenceId)

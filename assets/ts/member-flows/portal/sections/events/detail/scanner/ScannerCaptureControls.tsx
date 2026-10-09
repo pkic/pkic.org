@@ -1,4 +1,5 @@
 import type { ComponentProps } from "preact";
+import { useState } from "preact/hooks";
 import type { FieldPresentation } from "../../../../../../hooks/useContractForm";
 import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
 import { Button } from "../../../../../../ui/Button";
@@ -7,9 +8,9 @@ import { Field } from "../../../../../../ui/Field";
 import { Alert } from "../../../../../../ui/Alert";
 import { ScannerSetup } from "./ScannerSetup";
 import { ScannerManualEntry } from "./ScannerManualEntry";
-import { ScannerModeSelect } from "./ScannerModeSelect";
-import { CollapsiblePanel } from "../../../../../../ui/CollapsiblePanel";
-import { PanelBody } from "../../../../../../ui/Panel";
+import { ScannerModeSelect, scannerActionLabel } from "./ScannerModeSelect";
+import type { EventScanRequest } from "../../../../../../../shared/schemas/event-participation-scanning";
+import { Dialog } from "../../../../../../ui/Dialog";
 import { ScannerSessionControls } from "./ScannerSessionControls";
 import { ScannerPacing } from "./ScannerPacing";
 import { ScannerPreparationStatus } from "./ScannerPreparationStatus";
@@ -25,19 +26,45 @@ export function ScannerDiagnostics({
   preparation: ComponentProps<typeof ScannerPreparationStatus>;
   unverifiedStart?: () => void;
 }) {
+  const [open, setOpen] = useState(false);
+  function close() {
+    setOpen(false);
+    session.capturePause(false);
+  }
   return (
-    <CollapsiblePanel title="Recovery and diagnostics">
-      <PanelBody class="pk-stack">
-        <ScannerSessionControls {...session} />
-        <ScannerPacing {...pacing} />
-        <ScannerPreparationStatus {...preparation} />
-        {unverifiedStart && (
-          <Button type="button" variant="secondary" onClick={unverifiedStart}>
-            Start with unverified feedback
-          </Button>
+    <>
+      <Button
+        type="button"
+        variant="secondary"
+        onClick={() => {
+          session.capturePause(true);
+          setOpen(true);
+        }}
+      >
+        Recovery and diagnostics
+      </Button>
+      <Dialog open={open} title="Recovery and diagnostics" confirmLabel="Done" onConfirm={close} onCancel={close}>
+        {open && (
+          <div class="pk-stack">
+            <ScannerSessionControls {...session} />
+            <ScannerPacing {...pacing} />
+            <ScannerPreparationStatus {...preparation} />
+            {unverifiedStart && (
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => {
+                  close();
+                  unverifiedStart();
+                }}
+              >
+                Start with unverified feedback
+              </Button>
+            )}
+          </div>
         )}
-      </PanelBody>
-    </CollapsiblePanel>
+      </Dialog>
+    </>
   );
 }
 
@@ -46,9 +73,6 @@ export function ScannerCaptureControls({
   setup,
   mode,
   collector,
-  consent,
-  consentField,
-  onConsent,
   canStart,
   preparing,
   cameraError,
@@ -58,9 +82,6 @@ export function ScannerCaptureControls({
   setup: ComponentProps<typeof ScannerSetup>;
   mode: ComponentProps<typeof ScannerModeSelect>;
   collector?: ScannerOfflineContext;
-  consent: boolean;
-  consentField: FieldPresentation;
-  onConsent: (checked: boolean) => void;
   canStart: boolean;
   preparing: boolean;
   cameraError: string;
@@ -88,19 +109,6 @@ export function ScannerCaptureControls({
           <ScannerModeSelect {...mode} />
         </>
       )}
-      {!collector && mode.action === "lead" && (
-        <Field label="Attendee consent" {...consentField} group>
-          {(control) => (
-            <Checkbox
-              {...control}
-              name="consentConfirmed"
-              checked={consent}
-              onChange={(event) => onConsent(event.currentTarget.checked)}
-              label="The attendee agrees to share their contact details with this sponsor."
-            />
-          )}
-        </Field>
-      )}
       {mode.allowedActions?.includes(mode.action) && (
         <Button type="button" variant="primary" disabled={!canStart} onClick={start}>
           Start scanning
@@ -113,20 +121,57 @@ export function ScannerCaptureControls({
 }
 
 export function ScannerManualControls({
+  action,
+  busy,
+  ready,
+  onCapture,
   entry,
-  sync,
+  open,
+  onOpen,
+  onClose,
+  consent,
 }: {
+  action: EventScanRequest["action"];
+  busy: boolean;
+  ready: boolean;
+  onCapture: () => void;
+  open: boolean;
+  onOpen: () => void;
+  onClose: () => void;
   entry: ComponentProps<typeof ScannerManualEntry>;
-  sync?: () => void;
+  consent?: { confirmed: boolean; field: FieldPresentation; onChange: (confirmed: boolean) => void };
 }) {
   return (
     <>
-      <ScannerManualEntry {...entry} />
-      {sync && (
-        <Button type="button" variant="ghost" onClick={sync}>
-          Sync now
-        </Button>
-      )}
+      <Button type="button" variant="secondary" onClick={onOpen}>
+        Enter code
+      </Button>
+      <Dialog
+        open={open}
+        title={action === "lead" ? "Review sponsor lead" : "Enter badge code"}
+        confirmLabel={action === "lead" ? "Confirm lead" : scannerActionLabel(action)}
+        confirmDisabled={busy || !ready}
+        onConfirm={onCapture}
+        onCancel={onClose}
+      >
+        {open && (
+          <ScannerManualEntry {...entry}>
+            {action === "lead" && consent && (
+              <Field label="Attendee consent" {...consent.field} required group>
+                {(control) => (
+                  <Checkbox
+                    {...control}
+                    name="consentConfirmed"
+                    checked={consent.confirmed}
+                    onChange={(event) => consent.onChange(event.currentTarget.checked)}
+                    label="The attendee agrees to share their contact details with this sponsor."
+                  />
+                )}
+              </Field>
+            )}
+          </ScannerManualEntry>
+        )}
+      </Dialog>
     </>
   );
 }

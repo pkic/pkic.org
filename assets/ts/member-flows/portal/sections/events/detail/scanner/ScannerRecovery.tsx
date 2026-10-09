@@ -4,6 +4,8 @@ import { Field } from "../../../../../../ui/Field";
 import { FileInput } from "../../../../../../ui/FileInput";
 import { importScanRecovery, CANONICAL_RECOVERY_EXPORT_BYTE_LIMIT } from "./scan-recovery-import";
 import { Button } from "../../../../../../ui/Button";
+import { DownloadAction } from "../../../../../../ui/DownloadAction";
+import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { scanRecoverySchema } from "../../../../../../../shared/schemas/event-scan-recovery";
 import {
   restoreScanHistory,
@@ -133,13 +135,9 @@ export function ScannerRecovery({
     }
   }
   return (
-    <details
-      onToggle={() => {
-        void refresh().catch(() => {});
-      }}
-    >
-      <summary>Recovery backup</summary>
-      <div class="pk-form">
+    <Panel>
+      <PanelHeader title="Recovery backup" />
+      <PanelBody class="pk-form">
         <p>
           Uploaded scan records remain on this phone for {formatNumber(14)} days, including badge codes and minimal scan
           context. Pending uploads remain until the server acknowledges them. Browser storage can be cleared; download a
@@ -148,41 +146,41 @@ export function ScannerRecovery({
         </p>
         <p>{formatNumber(count)} uploaded scans available for this event and your account.</p>
         <p>{formatNumber(pendingCount)} pending scans included in recovery downloads.</p>
-        <Button
-          type="button"
-          loading={busy}
-          disabled={!count}
-          onClick={() => {
-            void restore();
-          }}
-        >
-          Restore uploaded scans
-        </Button>{" "}
-        <Button
-          type="button"
-          loading={busy}
-          disabled={!count && !pendingCount && !epochCount}
-          onClick={() => {
-            void download();
-          }}
-        >
-          Download recovery file
-        </Button>{" "}
-        <Button
-          type="button"
-          onClick={() => {
-            void navigator.storage
-              ?.persist?.()
-              .then((kept) =>
-                setMessage(
-                  kept ? "Browser storage retention enabled." : "The browser manages storage retention on this phone.",
-                ),
-              )
-              .catch(() => setMessage("The browser manages storage retention on this phone."));
-          }}
-        >
-          Keep browser storage
-        </Button>
+        <div class="pk-cluster">
+          <Button
+            type="button"
+            loading={busy}
+            disabled={!count}
+            onClick={() => {
+              void restore();
+            }}
+          >
+            Restore uploaded scans
+          </Button>
+          <DownloadAction
+            label="Download recovery file (JSON)"
+            busy={busy}
+            disabled={!count && !pendingCount && !epochCount}
+            onDownload={download}
+          />
+          <Button
+            type="button"
+            onClick={() => {
+              void navigator.storage
+                ?.persist?.()
+                .then((kept) =>
+                  setMessage(
+                    kept
+                      ? "Browser storage retention enabled."
+                      : "The browser manages storage retention on this phone.",
+                  ),
+                )
+                .catch(() => setMessage("The browser manages storage retention on this phone."));
+            }}
+          >
+            Keep browser storage
+          </Button>
+        </div>
         <Field
           label="Recovery file"
           help="Choose a recovery JSON file downloaded for this event and your account. An internet connection is required to verify it."
@@ -200,7 +198,7 @@ export function ScannerRecovery({
           Import recovery file
         </Button>
         {message && <p role="status">{message}</p>}
-      </div>
-    </details>
+      </PanelBody>
+    </Panel>
   );
 }

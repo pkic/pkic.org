@@ -808,8 +808,11 @@ describe("registration workflows", () => {
       isWaitlisted: boolean;
       hasActiveDayWaitlist: boolean;
       waitlistedDayCount: number;
+      myAgendaUrl: string;
     };
     expect(emailPayload.status).toBe("registered");
+    // The confirmation links the attendee's own portal agenda.
+    expect(new URL(emailPayload.myAgendaUrl).hash).toMatch(/^#\/events\/[^/]+\/agenda\?mine=1$/);
     expect(emailPayload.registrationStatus).toBe("registered");
     expect(emailPayload.isWaitlisted).toBe(true);
     expect(emailPayload.hasActiveDayWaitlist).toBe(true);

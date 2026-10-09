@@ -35,12 +35,13 @@ export async function attendanceAttemptsQuery(db: DatabaseLike, eventId: string,
     query.unsuccessful === undefined ? null : Number(query.unsuccessful),
     query.q ?? "",
   ];
-  const column = query.sort?.replace("-", "") === "receivedAt" ? "a.created_at" : "a.observed_at",
-    direction = query.sort?.startsWith("-") ? "DESC" : "ASC";
+  // Newest receipt first unless the reader asks for another order.
+  const sortKey = query.sort?.replace(/^-/, "") === "observedAt" ? "observedAt" : "receivedAt",
+    direction = query.sort && !query.sort.startsWith("-") ? "ASC" : "DESC";
   return {
     sql: `SELECT ${attendanceCaptureProjection("a")},a.id AS id,a.user_id AS userId,NULLIF(TRIM(COALESCE(person.preferred_name,person.first_name,'')||' '||COALESCE(person.last_name,'')),'') AS displayName,a.occurrence_id AS occurrenceId,a.operator_user_id AS operatorUserId,a.device_id AS deviceId,a.action,a.outcome,a.reason,a.exception_reason AS exceptionReason,a.admission_decision AS admissionDecision,a.observed_at AS observedAt,a.created_at AS receivedAt,EXISTS(SELECT 1 FROM event_offline_admission_spends spent WHERE spent.operation_id=a.operation_id) AS offlineReconciled ${from}`,
     bindings: values,
-    order: `${column === "a.created_at" ? "receivedAt" : "observedAt"} ${direction},id`,
+    order: `${sortKey} ${direction},id`,
   };
 }
 export async function eventAttendanceAttempts(db: DatabaseLike, eventId: string, raw: unknown) {

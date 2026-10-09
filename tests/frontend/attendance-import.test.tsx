@@ -19,7 +19,13 @@ const review = {
     publicationRevision: 7,
     eventStartAt: null,
     eventEndAt: null,
-    occurrences: [],
+    occurrences: [
+      {
+        occurrenceId: "33333333-3333-4333-8333-333333333333",
+        startAt: "2026-01-01T10:00:00.000Z",
+        endAt: "2026-01-01T11:00:00.000Z",
+      },
+    ],
     capturedDays: ["2026-01-01"],
   },
   reviewedAt: "2030-01-01T10:00:00.000Z",
@@ -47,6 +53,11 @@ describe("Reviewed attendance import", () => {
     document.body.append(host);
     await act(() => render(<AttendanceImport slug="test" timeZone="UTC" onChanged={() => {}} />, host));
     expect(host.textContent).toContain("does not create admission");
+    const format = host.querySelector('section[aria-label="Import format"]')!;
+    expect(format.querySelector("h4")?.textContent).toBe("Import format");
+    expect(format.textContent).toContain('"sourceRecordId"');
+    expect(format.textContent).toContain("manual_evidence for reviewed physical evidence");
+    expect(format.closest("details")).toBeNull();
     const textarea = host.querySelector("textarea")!;
     await act(() => {
       textarea.value = JSON.stringify(input);
@@ -60,6 +71,12 @@ describe("Reviewed attendance import", () => {
     expect(host.textContent).toContain("Confirm import of 1 observations");
     expect(host.textContent).toContain("Europe/Amsterdam");
     expect(host.textContent).toContain("2026-01-01");
+    const intervals = host.querySelector('section[aria-label="Reviewed session intervals"]')!;
+    expect(intervals.querySelector("h4")?.textContent).toBe("Reviewed session intervals");
+    expect(intervals.textContent).toContain(review.captureContext.occurrences[0]!.occurrenceId);
+    expect(intervals.querySelectorAll("dd")).toHaveLength(1);
+    expect(intervals.closest("details")).toBeNull();
+    expect(host.querySelector("details, summary")).toBeNull();
     await act(() => {
       textarea.value = JSON.stringify({ ...input, sourceReference: "changed" });
       textarea.dispatchEvent(new Event("input", { bubbles: true }));

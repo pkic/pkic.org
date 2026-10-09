@@ -1,5 +1,5 @@
 import { ScannerPreparationStatus } from "./ScannerPreparationStatus";
-import type { ComponentProps, ComponentChildren } from "preact";
+import type { ComponentProps } from "preact";
 import { scanFeedbackLabel, scanFeedbackOutcome, scanEligibilityLabel } from "./scan-stream";
 import "../../../../../../../design/tokens.scanner.generated.css";
 import { ScannerExceptionReview } from "./ScannerExceptionReview";
@@ -10,14 +10,8 @@ import type {
   EventScanRequest,
 } from "../../../../../../../shared/schemas/event-participation-scanning";
 import { Button } from "../../../../../../ui/Button";
-import {
-  IconCheckOutline,
-  IconRemoveOutline,
-  IconClock,
-  IconTools,
-  IconRefreshOutline,
-} from "../../../../../../components/icons/indicators";
-import { IconInfoCircle } from "../../../../../../components/icons";
+import { IconClock, IconTools } from "../../../../../../components/icons/indicators";
+import { IconCheckmark, IconInfoCircle, IconRefresh, IconRemove } from "../../../../../../components/icons";
 import { scannerSwipeDirection, trapScannerDrawerTab } from "./scanner-gestures";
 import "../../../../shell/Login.css";
 import "./FastScannerView.css";
@@ -34,7 +28,7 @@ export function FastScannerView({
   cameraError = "",
   onCameraRetry,
   onManual,
-  recentScans,
+  onRecentScans,
   preview,
   onPreview,
   onExit,
@@ -57,7 +51,7 @@ export function FastScannerView({
   cameraError?: string;
   onCameraRetry?: () => void;
   onManual?: () => void;
-  recentScans?: (visible: boolean) => ComponentChildren;
+  onRecentScans?: () => void;
   preview: boolean;
   onPreview: () => void;
   onExit: () => void;
@@ -144,9 +138,9 @@ export function FastScannerView({
         <div class="pk-fast-scanner__feedback" role="status" aria-live="polite" aria-atomic="true">
           <span class="pk-fast-scanner__mark" aria-hidden="true" key={result?.operationId ?? "ready"}>
             {outcome === "eligible" ? (
-              <IconCheckOutline />
+              <IconCheckmark />
             ) : outcome === "denied" || outcome === "unknown" ? (
-              <IconRemoveOutline />
+              <IconRemove />
             ) : outcome === "warning" ? (
               <IconInfoCircle />
             ) : (
@@ -185,8 +179,8 @@ export function FastScannerView({
               Enter or paste code
             </Button>
           )}
-          {recentScans && (
-            <Button variant="secondary" onClick={() => setOperatorOpen(true)}>
+          {onRecentScans && (
+            <Button variant="secondary" onClick={onRecentScans}>
               Recent scans
             </Button>
           )}
@@ -212,7 +206,7 @@ export function FastScannerView({
                 aria-label="Scan next now"
                 onClick={cooldown.skip}
               >
-                <IconRefreshOutline />
+                <IconRefresh />
               </button>
             )}
             <button
@@ -249,7 +243,7 @@ export function FastScannerView({
         <header>
           <h2>Scanner operator controls</h2>
           <Button variant="ghost" onClick={() => setOperatorOpen(false)} aria-label="Close operator controls">
-            <IconRemoveOutline />
+            <IconRemove />
           </Button>
         </header>
         <dl>
@@ -292,12 +286,11 @@ export function FastScannerView({
             <dd>{readiness}</dd>
           </div>
         </dl>
-        {recentScans?.(operatorOpen)}
         {preparation && (
-          <details>
-            <summary>Preparation details</summary>
+          <section aria-label="Preparation details">
+            <h3>Preparation details</h3>
             <ScannerPreparationStatus {...preparation} />
-          </details>
+          </section>
         )}
         <p>
           {cameraActive

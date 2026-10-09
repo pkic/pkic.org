@@ -1,6 +1,6 @@
 import type { ComponentType, JSX } from "preact";
 import type { EventFormsResponse } from "../shared/types";
-import { IconInPerson, IconVirtual, IconOnDemand, IconCalendarCheck } from "./icons";
+import { IconMapPin, IconVirtual, IconOnDemand, IconCalendarCheck } from "./icons";
 
 type EventDay = EventFormsResponse["eventDays"][number];
 
@@ -12,7 +12,7 @@ interface OptionConfig {
 
 const OPTION_CONFIG: Record<string, OptionConfig> = {
   in_person: {
-    Icon: IconInPerson,
+    Icon: IconMapPin,
     themeClass: "event-flow-attendance-card--in-person",
     description: "Join us at the venue in person",
   },
@@ -66,7 +66,7 @@ function AttendanceOption({ day, option, index, lowCapacityThreshold }: Attendan
       />
       <label class={`event-flow-attendance-card ${config.themeClass}`} htmlFor={inputId}>
         <span class="event-flow-attendance-icon">
-          <Icon />
+          <Icon width="18" height="18" />
         </span>
         <span class="event-flow-attendance-text">
           <span class="event-flow-attendance-title">{option.label}</span>

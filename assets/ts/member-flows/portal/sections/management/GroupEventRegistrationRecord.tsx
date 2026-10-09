@@ -8,7 +8,11 @@
  * the group's own attendance route, so a copied URL opens the same record
  * the list row did.
  */
-import { eventRegistrationNotificationResponseSchema } from "../../../../../shared/schemas/route-contracts-event-registration-management";
+import {
+  eventRegistrationAccessResponseSchema,
+  eventRegistrationNotificationResponseSchema,
+} from "../../../../../shared/schemas/route-contracts-event-registration-management";
+import { eventRegistrationResourcePath } from "../events/detail/registration-paths";
 import { useState } from "preact/hooks";
 import {
   eventRegistrationAttendanceDetailResponseSchema,
@@ -35,6 +39,10 @@ import { ProfileHeader } from "../../../../ui/ProfileHeader";
 import { attendanceTypeLabel } from "../../../../shared/attendance";
 import { usePortalHashLocation } from "../../hash-location";
 import { fmt } from "../../ui";
+import { AttendeeParticipationSections } from "../events/detail/registration-detail/AttendeeParticipationSections";
+import { ButtonLink } from "../../../../ui/Button";
+import { portalSession } from "../../state";
+import { portalHasGlobalPermission } from "../../shell/portal-navigation";
 
 /** The source vocabulary in product words. */
 const SOURCE_LABELS: Record<string, string> = {
@@ -74,11 +82,14 @@ export function GroupEventRegistrationRecord({
   const registrationEndpoint = `${eventEndpoint}/registrations/${encodeURIComponent(registrationId)}`;
   const detail = useData(
     () => getJson(registrationEndpoint, eventRegistrationAttendanceDetailResponseSchema),
-    [registrationEndpoint],
+    [registrationEndpoint, portalSession.value?.sessionId],
   );
   // While another registration loads, useData still holds the previous one;
   // showing it would put one attendee's name over another's days.
-  const loaded = detail.data?.registration.id === registrationId ? detail.data : null;
+  const loaded =
+    detail.data?.registration.id === registrationId && detail.data.registration.event_id === eventId
+      ? detail.data
+      : null;
   // The record's header menu holds what concerns the registration as a
   // whole. Anything about a day — its method, its seat, leaving it — is done
   // on the day's row, or on several rows at once through the list's
@@ -148,6 +159,23 @@ export function GroupEventRegistrationRecord({
     }
   }
 
+  /** Opens the registrant-facing manage page through a short-lived signed link. */
+  async function openManagePage(slug: string): Promise<void> {
+    setBusy(true);
+    try {
+      const { manageUrl } = await postJson(
+        eventRegistrationResourcePath(slug, registrationId, "access"),
+        {},
+        eventRegistrationAccessResponseSchema,
+      );
+      window.open(manageUrl, "_blank", "noopener");
+    } catch (error) {
+      toast((error as Error).message, "error");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   const commands: MenuItem[] = canVip
     ? [
         ...(eventSlug && badgesPath
@@ -162,6 +190,16 @@ export function GroupEventRegistrationRecord({
                 label: "Create / print attendee badge",
                 disabled: registration.status !== "registered",
                 onSelect: () => navigate(`${badgesPath}/new?userId=${encodeURIComponent(registration.user_id)}`),
+              },
+            ]
+          : []),
+        ...(eventSlug
+          ? [
+              {
+                id: "open-manage-page",
+                label: "Open attendee manage page",
+                disabled: busy,
+                onSelect: () => void openManagePage(eventSlug),
               },
             ]
           : []),
@@ -199,43 +237,65 @@ export function GroupEventRegistrationRecord({
             `Registered ${fmt(registration.created_at)}`,
             sourceLabel(registration.source_type),
           ]}
-          actions={commands.length > 0 ? <Menu label="Registration actions" align="end" items={commands} /> : undefined}
+          actions={
+            <div class="pk-cluster">
+              {portalHasGlobalPermission(portalSession.value, "users:read") && (
+                <ButtonLink
+                  size="sm"
+                  href={usePortalHashLocation.hrefs(`/users/${encodeURIComponent(registration.user_id)}`)}
+                >
+                  Account
+                </ButtonLink>
+              )}
+              {commands.length > 0 && <Menu label="Registration actions" align="end" items={commands} />}
+            </div>
+          }
         />
-        <div class="pk-record">
-          {/* The list sits flush under the panel's header, the way every
+        <AttendeeParticipationSections
+          slug={eventSlug}
+          eventId={eventId}
+          registrationId={registrationId}
+          userId={registration.user_id}
+          canManage={canVip}
+          badgesPath={badgesPath}
+          registration={
+            <div class="pk-record">
+              {/* The list sits flush under the panel's header, the way every
               list panel draws its rows: no body padding around a table. */}
-          <Panel aria-label="Attendance by day">
-            <PanelHeader title="Attendance by day" />
-            <DayAttendanceManager
-              dayAttendance={loaded.dayAttendance}
-              dayWaitlist={loaded.dayWaitlist}
-              eventDays={loaded.eventDays}
-              registrationEndpoint={registrationEndpoint}
-              canVip={canVip}
-              onReload={async () => {
-                await detail.reload();
-                await onChanged?.();
-              }}
-            />
-          </Panel>
-          <aside class="pk-stack pk-datalist-aligned">
-            <Panel aria-label="Registration facts">
-              <PanelHeader title="Registration" />
-              <PanelBody>
-                <DescriptionList
-                  density="compact"
-                  items={[
-                    { term: "Status", value: <Badge status={registration.status} /> },
-                    { term: "Attendance", value: attendanceTypeLabel(registration.attendance_type) },
-                    { term: "Source", value: sourceLabel(registration.source_type) },
-                    { term: "Registered", value: fmt(registration.created_at) },
-                    { term: "Last updated", value: fmt(registration.updated_at) },
-                  ]}
+              <Panel aria-label="Attendance by day">
+                <PanelHeader title="Attendance by day" />
+                <DayAttendanceManager
+                  dayAttendance={loaded.dayAttendance}
+                  dayWaitlist={loaded.dayWaitlist}
+                  eventDays={loaded.eventDays}
+                  registrationEndpoint={registrationEndpoint}
+                  canVip={canVip}
+                  onReload={async () => {
+                    await detail.reload();
+                    await onChanged?.();
+                  }}
                 />
-              </PanelBody>
-            </Panel>
-          </aside>
-        </div>
+              </Panel>
+              <aside class="pk-stack pk-datalist-aligned">
+                <Panel aria-label="Registration facts">
+                  <PanelHeader title="Registration" />
+                  <PanelBody>
+                    <DescriptionList
+                      density="compact"
+                      items={[
+                        { term: "Status", value: <Badge status={registration.status} /> },
+                        { term: "Attendance", value: attendanceTypeLabel(registration.attendance_type) },
+                        { term: "Source", value: sourceLabel(registration.source_type) },
+                        { term: "Registered", value: fmt(registration.created_at) },
+                        { term: "Last updated", value: fmt(registration.updated_at) },
+                      ]}
+                    />
+                  </PanelBody>
+                </Panel>
+              </aside>
+            </div>
+          }
+        />
       </section>
     </BreadcrumbBranch>
   );

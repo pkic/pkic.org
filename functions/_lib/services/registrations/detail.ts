@@ -13,6 +13,7 @@ import { resolveEventFormResponse } from "../forms";
 import { getEventById } from "../events";
 import { firstReferralCodeForOwnerSql } from "../referral-code-projection";
 import { listDayWaitlistForRegistration } from "./day-waitlist";
+import { loadRegistrationAttendanceChanges } from "./attendance-history";
 
 const registrationReferralCodeSql = firstReferralCodeForOwnerSql("registration", "r.id");
 
@@ -138,9 +139,10 @@ export async function getRegistrationDetail(
   const registration = await fetchRegistrationWithDetails(db, eventId, registrationId);
   if (!registration) return null;
 
-  const [dayAttendance, dayWaitlist] = await Promise.all([
+  const [dayAttendance, dayWaitlist, histories] = await Promise.all([
     getRegistrationDayAttendance(db, registration.id),
     listDayWaitlistForRegistration(db, registration.id),
+    loadRegistrationAttendanceChanges(db, eventId, [registration.id]),
   ]);
   const event = await getEventById(db, eventId);
   const formResponse = await resolveEventFormResponse(db, {
@@ -164,6 +166,7 @@ export async function getRegistrationDetail(
           },
     dayAttendance,
     dayWaitlist,
+    attendanceChangeHistory: histories.get(registration.id) ?? [],
   });
 }
 

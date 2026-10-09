@@ -1,4 +1,6 @@
 import { saveScannerOfflineContext } from "./scanner-offline-context";
+import type { ScannerOfflineContext } from "../../../../../../../shared/schemas/event-scanner-offline-context";
+import { scannerCollectorPath, scannerContextCurrent } from "./scanner-offline-context";
 import type { EventScanRequest } from "../../../../../../../shared/schemas/event-participation-scanning";
 import type { PortalSession } from "../../../../types";
 import type { ScannerEpoch } from "./scanner-device-ledger";
@@ -93,18 +95,56 @@ export function useScannerOfflinePreparation(
   action: EventScanRequest["action"],
 ) {
   const prepareCode = useContext(ScannerCodePreparation);
+  const route = scannerCollectorPath(window.location.hash);
+  const [retry, setRetry] = useState(0);
+  const [prepared, setPrepared] = useState<ScannerOfflineContext | null>(null);
+  const [preparing, setPreparing] = useState(false);
+  const [error, setError] = useState("");
+  const [, tick] = useState(0);
   useEffect(() => {
     const controller = new AbortController();
-    if (prepareCode && session && epoch && manifest)
-      void saveScannerOfflineContext({
-        slug,
-        session,
-        epoch,
-        manifest,
-        action,
-        signal: controller.signal,
-        prepareCode,
-      }).catch(() => {});
+    setPrepared(null);
+    setError("");
+    setPreparing(false);
+    if (prepareCode && session && epoch && manifest) {
+      setPreparing(true);
+      void saveScannerOfflineContext({ slug, session, epoch, manifest, action, signal: controller.signal, prepareCode })
+        .then((context) => {
+          if (!controller.signal.aborted) {
+            setPrepared(context);
+            if (!context) setError("Offline preparation is not ready. Reconnect, check sign-in, and retry.");
+          }
+        })
+        .catch(() => {
+          if (!controller.signal.aborted) setError("Offline preparation could not finish. Reconnect and retry.");
+        })
+        .finally(() => {
+          if (!controller.signal.aborted) setPreparing(false);
+        });
+    }
     return () => controller.abort();
-  }, [slug, action, session, epoch?.epochId, epoch?.state, manifest, prepareCode]);
+  }, [slug, action, session, epoch?.epochId, epoch?.state, manifest, prepareCode, retry, route]);
+  useEffect(() => {
+    if (!prepared) return;
+    const timer = window.setInterval(() => tick((value) => value + 1), 1000);
+    return () => window.clearInterval(timer);
+  }, [prepared]);
+  const current =
+    prepared &&
+    session &&
+    epoch?.state === "open" &&
+    prepared.route === route &&
+    prepared.slug === slug &&
+    prepared.action === action &&
+    prepared.operatorUserId === session.identity.id &&
+    prepared.sessionId === session.sessionId &&
+    prepared.epochId === epoch.epochId &&
+    prepared.deviceId === epoch.deviceId &&
+    prepared.occurrenceId === manifest?.occurrenceId &&
+    prepared.roomId === (manifest?.roomId ?? null) &&
+    prepared.serverNow === manifest?.serverNow &&
+    scannerContextCurrent(prepared)
+      ? prepared
+      : null;
+  return { context: current, preparing, error, retry: () => setRetry((value) => value + 1) };
 }

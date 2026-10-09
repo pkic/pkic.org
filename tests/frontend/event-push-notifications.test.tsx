@@ -1,3 +1,5 @@
+import { webcrypto } from "node:crypto";
+import { capturePortalWorkerPageAssets } from "../../assets/ts/member-flows/portal/portal-worker-release";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { beforeEach, afterEach, expect, it, vi } from "vitest";
@@ -28,6 +30,8 @@ async function flush() {
   });
 }
 beforeEach(() => {
+  vi.stubGlobal("crypto", webcrypto);
+  capturePortalWorkerPageAssets(`${location.origin}/_assets/portal-test.js`);
   for (const mock of Object.values(api)) mock.mockReset();
   const stored = new Map<string, string>();
   vi.stubGlobal("localStorage", {
@@ -88,7 +92,10 @@ it("requires a deliberate action and reuses the scanner worker scope before subs
   expect(current.reminderMinutes).toBe(25);
   expect(permission).not.toHaveBeenCalled();
   await act(async () => current.enable(25));
-  expect(register).toHaveBeenCalledWith("/_assets/portal-worker.js", { scope: "/portal/", type: "module" });
+  expect(register).toHaveBeenCalledWith(
+    expect.stringMatching(/\/_assets\/portal-worker\.js\?portalRelease=[a-f0-9]{64}$/),
+    { scope: "/portal/", type: "module", updateViaCache: "none" },
+  );
   expect(subscribe).toHaveBeenCalledWith(expect.objectContaining({ userVisibleOnly: true }));
   expect(api.postJson).toHaveBeenCalledWith(
     "/api/v1/events/pqc-2026/push/devices",

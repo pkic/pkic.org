@@ -75,6 +75,7 @@ function LocationHarness({ lead }: { lead: boolean }) {
     <>
       <ScannerSetup
         {...location}
+        timeZone={location.timeZone ?? undefined}
         label={location.targetLabel}
         slug="conference"
         operatorUserId={operator}
@@ -97,6 +98,10 @@ function targetResponse() {
   return new Response(
     JSON.stringify(
       scannerTargetsResponseSchema.parse({
+        timeZone: "Europe/Amsterdam",
+        serverNow: "2026-12-01T10:05:00.000Z",
+        rooms: candidate.occurrence.rooms,
+        roomsTruncated: false,
         sessions: [candidate.occurrence],
         page: { limit: 50, offset: 0, total: 1, hasMore: false },
       }),
@@ -194,6 +199,8 @@ describe("assigned scanner setup", () => {
     });
     vi.stubGlobal("fetch", fetcher);
     await showLocation(false);
+    await click("Choose session or room");
+    expect(host.querySelector("dialog[open]")?.textContent).toContain("Choose check-in session");
     expect(host.textContent).toContain("Session");
     expect(fetcher.mock.calls.some(([url]) => String(url).includes("/scans/targets"))).toBe(true);
     await showLocation(true);
@@ -261,9 +268,12 @@ describe("assigned scanner setup", () => {
     await settle();
     expect(choose).toHaveBeenCalledExactlyOnceWith(candidate.occurrence);
     expect(selectRoom).toHaveBeenCalledExactlyOnceWith(room);
-    expect(host.textContent).toContain("Europe/Amsterdam");
-    expect(host.textContent).toContain("11:00");
-    expect(host.textContent).toContain("Quantum readiness · Main hall");
+    await click("Choose session or room");
+    await click("My shifts");
+    const dialog = host.querySelector("dialog[open]");
+    expect(dialog?.textContent).toContain("Europe/Amsterdam");
+    expect(dialog?.textContent).toContain("11:00");
+    expect(dialog?.textContent).toContain("Quantum readiness · Main hall");
   });
 
   it("prefills one unique target once after the pending outbox has been checked", async () => {

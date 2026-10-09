@@ -44,51 +44,56 @@ export async function scannerStorage(page: Page) {
 }
 
 function scannerDiagnostics(page: Page) {
-  return page.locator("details.pk-panel").filter({
-    has: page.getByText("Recovery and diagnostics", { exact: true }),
-  });
+  return page.getByRole("dialog", { name: "Recovery and diagnostics", exact: true });
 }
 
 export async function openScannerDiagnostics(page: Page) {
   const diagnostics = scannerDiagnostics(page);
+  if (!(await diagnostics.isVisible()))
+    await page.getByRole("button", { name: "Recovery and diagnostics", exact: true }).click();
   await expect(diagnostics).toBeVisible();
-  if (!(await diagnostics.evaluate((element) => (element as HTMLDetailsElement).open)))
-    await diagnostics.getByText("Recovery and diagnostics", { exact: true }).click();
   await expect(diagnostics).toHaveJSProperty("open", true);
   return diagnostics;
 }
 
 export async function closeScannerDiagnostics(page: Page): Promise<void> {
   const diagnostics = scannerDiagnostics(page);
-  if (await diagnostics.evaluate((element) => (element as HTMLDetailsElement).open))
-    await diagnostics.getByText("Recovery and diagnostics", { exact: true }).click();
-  await expect(diagnostics).toHaveJSProperty("open", false);
+  if (await diagnostics.isVisible()) await diagnostics.getByRole("button", { name: "Done", exact: true }).click();
+  await expect(diagnostics).not.toBeVisible();
 }
 
 export async function openScannerManualEntry(page: Page): Promise<void> {
-  const manual = page.locator("details").filter({
-    has: page.getByText("Enter or paste badge code", { exact: true }),
-  });
+  const manual = page.getByRole("dialog", { name: /^(Enter badge code|Review sponsor lead)$/ });
+  if (!(await manual.isVisible())) {
+    await closeScannerDiagnostics(page);
+    const continuous = page.getByRole("dialog", { name: "Continuous badge scanner", exact: true });
+    if (await continuous.isVisible()) {
+      const controls = page.getByRole("dialog", { name: "Scanner operator controls", exact: true });
+      if (await controls.isVisible())
+        await controls.getByRole("button", { name: "Close operator controls", exact: true }).click();
+      await continuous.getByRole("button", { name: "Enter or paste code", exact: true }).click();
+    } else {
+      const scan = page.getByRole("tab", { name: "Scan", exact: true });
+      if ((await scan.isVisible()) && (await scan.getAttribute("aria-selected")) === "false") await scan.click();
+      await page.getByRole("button", { name: "Enter code", exact: true }).click();
+    }
+  }
   await expect(manual).toBeVisible();
-  if (!(await manual.evaluate((element) => (element as HTMLDetailsElement).open)))
-    await manual.getByText("Enter or paste badge code", { exact: true }).click();
   await expect(manual).toHaveJSProperty("open", true);
-  await expect(page.getByLabel("Badge code", { exact: true })).toBeVisible();
+  await expect(manual.getByRole("heading", { name: "Enter or paste badge code", exact: true })).toBeVisible();
+  await expect(manual.getByLabel("Badge code", { exact: true })).toBeVisible();
 }
 
 export async function openScannerRecovery(page: Page): Promise<void> {
   const diagnostics = await openScannerDiagnostics(page);
-  const recovery = diagnostics.locator("details").filter({
-    has: page.getByText("Recovery backup", { exact: true }),
-  });
-  if (!(await recovery.evaluate((element) => (element as HTMLDetailsElement).open)))
-    await recovery.getByText("Recovery backup", { exact: true }).click();
+  await expect(diagnostics.getByRole("heading", { name: "Recovery backup", exact: true })).toBeVisible();
+  await expect(diagnostics.getByRole("button", { name: "Download recovery file (JSON)", exact: true })).toBeVisible();
 }
 
 /** Parse the actual download through the same canonical recovery-file contract. */
 export async function downloadScannerRecoveryFile(page: Page) {
   const downloading = page.waitForEvent("download");
-  await page.getByRole("button", { name: "Download recovery file", exact: true }).click();
+  await page.getByRole("button", { name: "Download recovery file (JSON)", exact: true }).click();
   const download = await downloading;
   expect(await download.failure()).toBeNull();
   const path = await download.path();

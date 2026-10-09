@@ -65,7 +65,7 @@ beforeEach(async () => {
     url === "/api/v1/auth/session" ? sessionFetcher(url, options) : fetcher(url, options),
   );
   vi.stubGlobal("self", {
-    location: { origin: "https://pkic.example" },
+    location: { origin: "https://pkic.example", href: "https://pkic.example/_assets/scanner-worker-sync.js" },
     clients: { claim: vi.fn(), matchAll: vi.fn(async () => [{ postMessage: messages }]) },
     addEventListener: (type: string, listener: (event: SyncEvent) => void) => listeners.set(type, listener),
   });

@@ -1,16 +1,20 @@
 // @vitest-environment jsdom
-import { render } from "preact";
+import { render, type ComponentProps } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { AVAILABILITY_ERROR_CODE } from "../../assets/shared/schemas/availability";
 import { serviceAvailability } from "../../assets/ts/shared/availability-state";
 import { clearAuth, portalSession, isAuthed } from "../../assets/ts/member-flows/portal/state";
 const mocks = vi.hoisted(() => ({
+  registerWorker: vi.fn(),
   clearPreparation: vi.fn(),
   recordSession: vi.fn(),
   pendingLogout: vi.fn(),
   activeSession: vi.fn(),
   sessionListeners: new Set<() => void>(),
+}));
+vi.mock("../../assets/ts/member-flows/portal/portal-worker-registration", () => ({
+  registerPortalServiceWorker: mocks.registerWorker,
 }));
 vi.mock(
   "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context",
@@ -38,7 +42,18 @@ vi.mock("../../assets/ts/member-flows/portal/logout-session", () => ({
 vi.mock("../../assets/ts/member-flows/portal/shell/PortalShell", () => ({
   PortalShell: () => <div>Authenticated portal content</div>,
 }));
-vi.mock("../../assets/ts/member-flows/portal/shell/Login", () => ({ Login: () => <div>Sign in</div> }));
+vi.mock("../../assets/ts/member-flows/portal/shell/Login", () => ({
+  Login: ({
+    busy,
+    status,
+    notice,
+  }: ComponentProps<typeof import("../../assets/ts/member-flows/portal/shell/Login").Login>) => (
+    <div>
+      {busy ? status : "Sign in"}
+      {notice}
+    </div>
+  ),
+}));
 vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/OfflineScannerBootstrap", () => ({
   OfflineScannerBootstrap: ({ route, onCheckSignIn }: { route: string; onCheckSignIn: () => void }) => (
     <div data-scanner-route={route}>
@@ -60,6 +75,7 @@ import { scannerTransportUnavailable } from "../../assets/ts/member-flows/portal
 let host: HTMLElement;
 let fetchMock: ReturnType<typeof vi.fn>;
 beforeEach(() => {
+  mocks.registerWorker.mockReset().mockResolvedValue(null);
   clearAuth();
   scannerTransportUnavailable.value = false;
   mocks.sessionListeners.clear();
@@ -87,6 +103,30 @@ afterEach(async () => {
 async function mount() {
   await act(async () => render(<App />, host));
 }
+it("registers the public worker on ordinary app startup without diagnostics or notification enrollment", async () => {
+  fetchMock.mockResolvedValue(
+    new Response(JSON.stringify({ error: { code: "AUTH_REQUIRED", message: "Sign in required" } }), {
+      status: 401,
+      headers: { "content-type": "application/json" },
+    }),
+  );
+  await mount();
+  expect(mocks.registerWorker).toHaveBeenCalledOnce();
+  expect(host.textContent).not.toContain("Recovery and diagnostics");
+});
+it("keeps ordinary sign-in usable after startup worker registration fails", async () => {
+  mocks.registerWorker.mockRejectedValueOnce(new Error("Offline files unavailable"));
+  fetchMock.mockResolvedValue(
+    new Response(JSON.stringify({ error: { code: "AUTH_REQUIRED", message: "Sign in required" } }), {
+      status: 401,
+      headers: { "content-type": "application/json" },
+    }),
+  );
+  await mount();
+  await vi.waitFor(() => expect(host.textContent).toContain("Sign in"));
+  expect(mocks.registerWorker).toHaveBeenCalledOnce();
+  expect(host.textContent).not.toContain("Offline files unavailable");
+});
 it.each([true, false])(
   "enters after a real disconnected fetch with navigator online=%s without authenticating",
   async (online) => {

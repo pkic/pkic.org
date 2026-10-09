@@ -5,6 +5,7 @@ import {
   eventScanResponseSchema,
 } from "../../../assets/shared/schemas/event-participation-scanning";
 import { z } from "zod";
+import { scannerOfflineContextSchema } from "../../../assets/shared/schemas/event-scanner-offline-context";
 import { SCAN_STORAGE_VERSION } from "../../../assets/ts/member-flows/portal/sections/events/detail/scanner/outbox-storage";
 import {
   scannerRecoveryEpochSchema,
@@ -22,7 +23,7 @@ import {
 type Scan = ReturnType<typeof enrolledEventScanRequestSchema.parse>;
 type Receipt = ReturnType<typeof eventScanResponseSchema.parse>;
 
-async function storedEpochs(page: Page) {
+export async function storedEpochs(page: Page) {
   const rows = await page.evaluate(async (version): Promise<unknown[]> => {
     const opening = indexedDB.open("pkic-scanner-outbox", version);
     const db = await new Promise<IDBDatabase>((resolve, reject) => {
@@ -39,7 +40,11 @@ async function storedEpochs(page: Page) {
       db.close();
     }
   }, SCAN_STORAGE_VERSION);
-  return rows.map((row) => scannerRecoveryEpochSchema.extend({ key: z.string() }).parse(row));
+  return rows.map((row) =>
+    scannerRecoveryEpochSchema
+      .safeExtend({ key: z.string(), collectorContext: scannerOfflineContextSchema.optional() })
+      .parse(row),
+  );
 }
 
 /** Real module URL revision: this exercises replacement, not a changed-code/database migration. */

@@ -1,17 +1,26 @@
 import type { EventAttendanceRegistrationsQuery } from "../../../../assets/shared/schemas/event-registrations";
 import { buildD1TextSearchFilter } from "../../db/search";
+import { registrationBadgeDisplayRoleSql } from "./badge-role";
 import { activeDayWaitlistExistsSql } from "./day-states";
 
 /** One predicate for the group registration table and its badge-print population. */
 export function registrationPopulationFilter(
   eventId: string,
-  params: Pick<EventAttendanceRegistrationsQuery, "q" | "status" | "waitlisted">,
+  params: Pick<EventAttendanceRegistrationsQuery, "q" | "status" | "waitlisted" | "attendance_type" | "badge_role">,
 ) {
   const conditions = ["r.event_id = ?"];
   const bindings: unknown[] = [eventId];
   if (params.status) {
     conditions.push("r.status = ?");
     bindings.push(params.status);
+  }
+  if (params.attendance_type) {
+    conditions.push("r.attendance_type = ?");
+    bindings.push(params.attendance_type);
+  }
+  if (params.badge_role) {
+    conditions.push(`${registrationBadgeDisplayRoleSql("r")} = ?`);
+    bindings.push(params.badge_role);
   }
   if (params.waitlisted === "true") conditions.push(activeDayWaitlistExistsSql("r"));
   else if (params.waitlisted === "false") conditions.push(`NOT ${activeDayWaitlistExistsSql("r")}`);

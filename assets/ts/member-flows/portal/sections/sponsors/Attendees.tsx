@@ -4,8 +4,7 @@ import { ApiClientError, getJson } from "../../../../shared/api-client";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
 import type { CollectionLoader } from "../../../../hooks/useServerCollection";
 import { Alert } from "../../../../ui/Alert";
-import { IconDownload } from "../../../../components/icons";
-import { ButtonLink } from "../../../../ui/Button";
+import { DownloadAction } from "../../../../ui/DownloadAction";
 import type { Column } from "../../../../components/Table";
 import { EmptyState } from "../../../../ui/EmptyState";
 import type { SponsorAttendee, SponsorCapacity } from "../../../../../shared/schemas/sponsor-access";
@@ -107,21 +106,11 @@ export function SponsorAttendees({
         load={load}
         rowKey={(attendee) => attendee.registrationId}
         toolbar={() => (
-          <>
-            {" "}
-            {/* A download is a navigation to a representation of this list, so it
-            is an anchor wearing the button's clothes rather than a button that
-            fakes one. */}
-            <ButtonLink
-              icon
-              aria-label="Download CSV"
-              title="Download CSV"
-              href={`/api/v1/sponsors/${encodeURIComponent(capacity.sponsorId)}/events/${encodeURIComponent(capacity.eventSlug)}/attendees?format=csv`}
-              download={`attendees-${capacity.eventSlug}.csv`}
-            >
-              <IconDownload />
-            </ButtonLink>
-          </>
+          <DownloadAction
+            label="Download consenting attendees (CSV)"
+            href={`/api/v1/sponsors/${encodeURIComponent(capacity.sponsorId)}/events/${encodeURIComponent(capacity.eventSlug)}/attendees?format=csv`}
+            filename={`attendees-${capacity.eventSlug}.csv`}
+          />
         )}
         empty={
           <EmptyState

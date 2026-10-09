@@ -521,6 +521,7 @@ describe("resend-manage-link endpoint", () => {
       JSON.parse(queued.payload_json) as Record<string, unknown>,
     );
     const freshToken = new URL(delivered.manageUrl as string).searchParams.get("token") as string;
+    expect(new URL(delivered.myAgendaUrl as string).hash).toMatch(/^#\/events\/[^/]+\/agenda\?mine=1$/);
     const [earlierRegistration, freshRegistration] = await Promise.all([
       getRegistrationByManageToken(env.DB, manageToken, signingSecret),
       getRegistrationByManageToken(env.DB, freshToken, signingSecret),

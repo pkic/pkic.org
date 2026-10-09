@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { successResponseSchema } from "./api-common";
-import { eventSummarySchema } from "./event-read-models";
+import { eventAttendanceTypeValueSchema, eventSummarySchema } from "./event-read-models";
+import { badgeDisplayRoleSchema } from "./participant-roles";
 import { databaseIdSchema } from "./identifiers";
 import { paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
 import { registrationRecordContextSchema } from "./registration-record";
@@ -118,14 +119,21 @@ export type EventRegistrationsListResponse = z.infer<typeof eventRegistrationsLi
  * Referral, form-answer, RSVP payload, delivery, and sponsor-consent fields
  * deliberately remain exclusive to the full administrator read model above.
  */
-export const eventAttendanceRegistrationsQuerySchema = eventRegistrationsQuerySchema.pick({
-  q: true,
-  limit: true,
-  offset: true,
-  sort: true,
-  status: true,
-  waitlisted: true,
-});
+export const eventAttendanceRegistrationsQuerySchema = eventRegistrationsQuerySchema
+  .pick({
+    q: true,
+    limit: true,
+    offset: true,
+    sort: true,
+    status: true,
+    waitlisted: true,
+  })
+  .extend({
+    /** The whole-registration attendance type: in-person when any day is. */
+    attendance_type: eventAttendanceTypeValueSchema.optional(),
+    /** The role band the registration's badge prints. */
+    badge_role: badgeDisplayRoleSchema.optional(),
+  });
 export type EventAttendanceRegistrationsQuery = z.infer<typeof eventAttendanceRegistrationsQuerySchema>;
 
 export const eventAttendanceRegistrationSummarySchema = registrationRecordContextSchema

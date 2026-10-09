@@ -1,3 +1,6 @@
+import { scannerOfflineAssets } from "./scanner-offline-install";
+import { PORTAL_OFFLINE_STATIC_ASSETS } from "../../../../../../../shared/schemas/portal-offline-assets";
+import { portalWorkerCacheIdentity } from "../../../../portal-worker-release";
 import { userAuthSessionResponseSchema } from "../../../../../../../shared/schemas/user-auth";
 import { readActiveUserSession, scannerUploadSuspended } from "../../../../../../shared/pending-user-logout";
 import { scannerReceiptMatches } from "./scanner-receipt";
@@ -20,30 +23,62 @@ interface WorkerScope {
 }
 declare const self: WorkerScope;
 const worker = self;
-const CACHE = "pkic-scanner-shell-v1";
-const BRANDING_ASSETS = new Set(["/img/logo.svg", "/img/icon-180x180-white-trans.png"]);
+// Vite emits a content-fingerprinted module URL. A waiting generation must not
+// overwrite the public shell still used by active clients.
+const CACHE_PREFIX = "pkic-scanner-shell-";
+const CACHE = `${CACHE_PREFIX}v2:${portalWorkerCacheIdentity(worker.location.href)}`;
+// Public images the shell precaches; anything else (attendee photos, badges) never enters the cache.
+const BRANDING_ASSETS = new Set<string>(PORTAL_OFFLINE_STATIC_ASSETS.filter((path) => path.startsWith("/img/")));
 worker.addEventListener("install", (event) =>
   event.waitUntil(
     (async () => {
+      // Query-only registrations and retries of the same immutable worker must
+      // not rewrite or delete an already complete active generation.
+      if ((await caches.keys()).includes(CACHE) && (await (await caches.open(CACHE)).match("/portal/"))) return;
       const response = await fetch("/portal/", { credentials: "omit" });
-      if (response.ok && response.headers.get("content-type")?.includes("text/html")) {
+      if (!response.ok || !response.headers.get("content-type")?.includes("text/html"))
+        throw new Error("Scanner offline shell could not be prepared");
+      const html = await response.clone().text();
+      const paths = await scannerOfflineAssets(html);
+      try {
         const cache = await caches.open(CACHE);
-        const html = await response.clone().text();
-        await cache.put("/portal/", response);
-        const paths = [...html.matchAll(/(?:src|href)="((?:\/js\/built\/|\/_assets\/)[^"?#]+\.(?:js|css))"/g)].map(
-          (match) => match[1],
-        );
-        await Promise.all(
-          [...new Set([...paths, ...BRANDING_ASSETS])].map(async (path) => {
-            const asset = await fetch(path, { credentials: "omit" });
-            if (asset.ok) await cache.put(path, asset);
+        // Bound memory and connections while writing only this uncommitted generation.
+        const pending = [...paths];
+        const workers = await Promise.allSettled(
+          Array.from({ length: 4 }, async () => {
+            while (pending.length) {
+              const path = pending.shift()!;
+              const asset = await fetch(path, { credentials: "omit" });
+              if (!asset.ok) throw new Error("Scanner offline files could not be prepared");
+              await cache.put(path, asset);
+            }
           }),
         );
+        const failed = workers.find((result) => result.status === "rejected");
+        if (failed?.status === "rejected") throw failed.reason;
+        await cache.put("/portal/", response);
+      } catch (error) {
+        await caches.delete(CACHE);
+        throw error;
       }
     })(),
   ),
 );
-worker.addEventListener("activate", (event) => event.waitUntil(worker.clients.claim()));
+worker.addEventListener("activate", (event) =>
+  event.waitUntil(
+    (async () => {
+      // No skipWaiting: old controlled clients release their worker before
+      // activation. Keep the immediate prior public generation for exact old
+      // module requests, and discard older generations only after activation.
+      await worker.clients.claim();
+      const previous = (await caches.keys()).filter((name) => name.startsWith(CACHE_PREFIX) && name !== CACHE);
+      const complete = [];
+      for (const name of previous) if (await (await caches.open(name)).match("/portal/")) complete.push(name);
+      const retained = complete.at(-1);
+      await Promise.all(previous.filter((name) => name !== retained).map((name) => caches.delete(name)));
+    })(),
+  ),
+);
 const allowed = (request: Request) => {
   const url = new URL(request.url);
   return (
@@ -72,6 +107,13 @@ worker.addEventListener("fetch", (raw) => {
       const cache = await caches.open(CACHE);
       const existing = await cache.match(event.request);
       if (existing) return existing;
+      // Existing controlled pages can still request their exact older hashed
+      // modules after activation. Keep earlier public generations available;
+      // never use another generation's shell as the current shell.
+      for (const name of (await caches.keys()).filter((name) => name.startsWith(CACHE_PREFIX) && name !== CACHE)) {
+        const retained = await (await caches.open(name)).match(event.request);
+        if (retained) return retained;
+      }
       const response = await fetch(event.request);
       if (response.ok && response.type === "basic") await cache.put(event.request, response.clone());
       return response;

@@ -14,7 +14,7 @@ import { buildAttendanceEmailData, buildRegistrationEmailStatusData } from "../.
 import { buildAcceptedTermsText, getCustomAnswerRows } from "../../utils/registration-email";
 import { prepareValidatedAttendeeRegistration } from "../attendee-registration";
 import { buildEventEmailVariables, getEventBySlug, recordHugoEventBasePath } from "../events";
-import { registrationManagePageUrl } from "../frontend-links";
+import { myAgendaPageUrl, registrationManagePageUrl } from "../frontend-links";
 import { findInviteByToken, type InviteRecord } from "../invites";
 import { prepareBadgeRenderJob } from "../badge-render-job-statements";
 import { seedGravatarAndProcessBadgeRenderJob } from "../registration-badge-regeneration";
@@ -216,7 +216,11 @@ export async function submitEventRegistration(
           lastName: user.last_name ?? "",
         }),
       ],
-      data: { ...commonData, attendanceType: registration.attendance_type },
+      data: {
+        ...commonData,
+        attendanceType: registration.attendance_type,
+        myAgendaUrl: myAgendaPageUrl(metadata.appBaseUrl, event),
+      },
       bounceAddress: rsvpEmail,
       calendar: {
         registrationId: registration.id,

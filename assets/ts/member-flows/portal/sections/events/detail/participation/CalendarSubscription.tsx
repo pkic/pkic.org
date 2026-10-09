@@ -1,161 +1,135 @@
-import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
-import { useEffect, useState } from "preact/hooks";
-import { z } from "zod";
+import type { ComponentChildren } from "preact";
+import { useState } from "preact/hooks";
 import {
-  agendaCalendarSettingsSchema,
-  agendaCalendarSubscriptionSchema,
-} from "../../../../../../../shared/schemas/event-agenda-calendar";
-import { postJson, deleteJson, getJson, putJson } from "../../../../../../shared/api-client";
-import { useContractForm } from "../../../../../../hooks/useContractForm";
-import { Button } from "../../../../../../ui/Button";
+  calendarSubscriptionLink,
+  calendarSubscriptionProviderDetails,
+  calendarSubscriptionProviders,
+  type CalendarSubscriptionProvider,
+} from "../../../../../../../shared/calendar-subscription-links";
+import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import { Checkbox } from "../../../../../../ui/Checkbox";
-import { TextInput } from "../../../../../../ui/TextControl";
-import { Field } from "../../../../../../ui/Field";
-import { ErrorAlert } from "../../../../../../components/ErrorAlert";
-import { EventPushNotifications } from "../../../../notifications/EventPushNotifications";
-export function CalendarSubscription({ slug }: { slug: string }) {
-  const [includeTentative, setTentative] = useState(false),
-    [reminderEnabled, setEnabled] = useState(false),
-    [reminderMinutes, setMinutes] = useState(10);
-  const [url, setUrl] = useState(""),
-    [message, setMessage] = useState(""),
-    [error, setError] = useState(""),
-    [busy, setBusy] = useState(false);
-  const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/calendar/subscriptions`;
-  const settingsEndpoint = `/api/v1/events/${encodeURIComponent(slug)}/calendar/settings`;
-  const form = useContractForm(agendaCalendarSettingsSchema, { includeTentative, reminderEnabled, reminderMinutes });
-  useEffect(() => {
-    const controller = new AbortController();
-    setUrl("");
-    setMessage("");
-    void getJson(settingsEndpoint, agendaCalendarSettingsSchema, { signal: controller.signal })
-      .then((settings) => {
-        setTentative(settings.includeTentative);
-        setEnabled(settings.reminderEnabled);
-        setMinutes(settings.reminderMinutes);
-      })
-      .catch((error) => {
-        if (!controller.signal.aborted)
-          setError(error instanceof Error ? error.message : "Unable to load calendar preferences.");
-      });
-    return () => controller.abort();
-  }, [settingsEndpoint]);
-  async function change(action: "save" | "rotate") {
-    const checked = form.submit();
-    if (!checked.data) {
-      setError(checked.message);
-      return;
-    }
-    setBusy(true);
-    setError("");
+import { StrokeIcon } from "../../../../../../ui/MediaIcons";
+import { toast } from "../../../../ui";
+import { CalendarPrivateLink, copyCalendarLink } from "./CalendarPrivateLink";
+import type { AgendaCalendar } from "./useAgendaCalendar";
+import type { AgendaCalendarAutosave } from "./useAgendaCalendarAutosave";
+import "./AgendaCalendar.css";
+
+const icons: Record<CalendarSubscriptionProvider | "copy", ComponentChildren> = {
+  google: <path d="M2.5 3.5h11v10h-11zM2.5 6.5h11M5.5 2v3M10.5 2v3M5.5 9.5h2M5.5 11.5h5" />,
+  "outlook-com": <path d="M2 4h12v8.5H2zM2 4.5l6 4.5 6-4.5" />,
+  "microsoft-365": <path d="M2.5 5.5h11v8h-11zM6 5.5V3.5h4v2M2.5 9h11" />,
+  apple: <path d="M5 1.5h6a1 1 0 0 1 1 1v11a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1v-11a1 1 0 0 1 1-1zM7 12.5h2" />,
+  copy: <path d="M6.5 9.5l3-3M7 4.5l1.5-1.5a2.5 2.5 0 0 1 3.5 3.5L10.5 8M9 11.5L7.5 13a2.5 2.5 0 0 1-3.5-3.5L5.5 8" />,
+};
+
+function TileContent({ icon, label, hint }: { icon: ComponentChildren; label: string; hint: string }) {
+  return (
+    <>
+      <StrokeIcon class="pk-calendar-tile__icon" width="20" height="20">
+        {icon}
+      </StrokeIcon>
+      <span class="pk-calendar-tile__label">{label}</span>
+      <span class="pk-calendar-tile__hint">{hint}</span>
+    </>
+  );
+}
+
+/** One tap per calendar app. Without a link yet, the first tap creates it and then opens the app. */
+export function CalendarSubscription({
+  calendar,
+  autosave,
+  calendarName,
+}: {
+  calendar: AgendaCalendar;
+  autosave: AgendaCalendarAutosave;
+  calendarName: string;
+}) {
+  const url = calendar.link?.subscription?.url ?? null;
+  const [creating, setCreating] = useState<string | null>(null);
+  async function addWithNewLink(provider: CalendarSubscriptionProvider) {
+    const inBrowser = calendarSubscriptionProviderDetails[provider].opensInBrowser;
+    // Open the tab inside the tap so a popup blocker allows it, then send it on once the link exists.
+    const tab = inBrowser ? window.open("", "_blank") : null;
+    if (tab) tab.opener = null;
+    setCreating(provider);
     try {
-      if (action === "rotate") {
-        const subscription = await postJson(endpoint, checked.data, agendaCalendarSubscriptionSchema);
-        setUrl(subscription.url);
-        setMessage("New private calendar URL created. Previous URLs have been revoked.");
-      } else {
-        await putJson(settingsEndpoint, checked.data, agendaCalendarSettingsSchema);
-        setMessage("Calendar and reminder preferences saved.");
-      }
+      const href = calendarSubscriptionLink(provider, await calendar.createLink(autosave.settings), calendarName);
+      if (tab) tab.location.href = href;
+      else if (!inBrowser) window.location.assign(href);
+      else toast("Your calendar link is ready. Choose your calendar again to open it.", "info");
     } catch (error) {
-      setError(form.refuse(error));
+      tab?.close();
+      toast(error instanceof Error ? error.message : "Your calendar link could not be created.", "error");
     } finally {
-      setBusy(false);
+      setCreating(null);
     }
   }
-  async function revoke() {
-    setBusy(true);
-    setError("");
+  async function copy() {
+    setCreating("copy");
     try {
-      await deleteJson(endpoint, z.object({ revoked: z.literal(true) }));
-      setUrl("");
-      setMessage("Private calendar URLs revoked. Remove the old subscription from your calendar app.");
+      await copyCalendarLink(url ?? (await calendar.createLink(autosave.settings)));
     } catch (error) {
-      setError(form.refuse(error));
+      toast(error instanceof Error ? error.message : "Your calendar link could not be created.", "error");
     } finally {
-      setBusy(false);
+      setCreating(null);
     }
   }
   return (
-    <Panel aria-label="Private calendar subscription">
-      <PanelHeader title="Your calendar" />
-      <PanelBody>
-        <p>
-          Subscribe to your reserved sessions. Calendar apps choose when to refresh; changes can take time to appear.
-        </p>
-        <form
-          class="pk-form"
-          noValidate
-          {...form.handlers}
-          onSubmit={(event) => {
-            event.preventDefault();
-            void change("save");
-          }}
-        >
-          <Field label="Tentative sessions" {...form.of("includeTentative")}>
-            {(control) => (
-              <Checkbox
-                {...control}
-                name="includeTentative"
-                label="Include saved preferences, pending approval and waitlisted sessions"
-                checked={includeTentative}
-                onInput={(event) => setTentative(event.currentTarget.checked)}
-              />
-            )}
-          </Field>
-          <Field label="Email reminders" {...form.of("reminderEnabled")}>
-            {(control) => (
-              <Checkbox
-                {...control}
-                name="reminderEnabled"
-                label="Email me before my reserved sessions"
-                checked={reminderEnabled}
-                onInput={(event) => setEnabled(event.currentTarget.checked)}
-              />
-            )}
-          </Field>
-          {reminderEnabled && (
-            <Field label="Minutes before the session" {...form.of("reminderMinutes")}>
-              {(control) => (
-                <TextInput
-                  {...control}
-                  name="reminderMinutes"
-                  type="number"
-                  value={reminderMinutes}
-                  onInput={(event) => setMinutes(event.currentTarget.valueAsNumber)}
-                />
-              )}
-            </Field>
-          )}
-          <Button type="submit" loading={busy}>
-            Save preferences
-          </Button>
-        </form>
-        <Button type="button" onClick={() => void change("rotate")} disabled={busy}>
-          Create or replace calendar URL
-        </Button>
-        <Button type="button" onClick={() => void revoke()} disabled={busy}>
-          Revoke calendar URLs
-        </Button>
-        {url && (
-          <div>
-            <a href={url} rel="noreferrer">
-              Open private calendar
-            </a>
-            <br />
-            <Field
-              label="Private calendar URL"
-              help="Keep this URL private. Copy it into your calendar app’s subscription setting."
+    <Panel aria-label="Add My agenda to your calendar">
+      <PanelHeader title="Add My agenda to your calendar" />
+      <PanelBody class="pk-stack">
+        <p>Your sessions appear in your calendar app and stay up to date.</p>
+        <ul class="pk-grid pk-calendar-tiles">
+          {calendarSubscriptionProviders.map((provider) => {
+            const details = calendarSubscriptionProviderDetails[provider];
+            const content = <TileContent icon={icons[provider]} label={details.label} hint={details.hint} />;
+            return (
+              <li key={provider}>
+                {url ? (
+                  <a
+                    class="pk-calendar-tile"
+                    href={calendarSubscriptionLink(provider, url, calendarName)}
+                    {...(details.opensInBrowser ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+                  >
+                    {content}
+                  </a>
+                ) : (
+                  <button
+                    type="button"
+                    class="pk-calendar-tile"
+                    aria-busy={creating === provider ? "true" : undefined}
+                    disabled={creating !== null}
+                    onClick={() => void addWithNewLink(provider)}
+                  >
+                    {content}
+                  </button>
+                )}
+              </li>
+            );
+          })}
+          <li>
+            <button
+              type="button"
+              class="pk-calendar-tile"
+              aria-busy={creating === "copy" ? "true" : undefined}
+              disabled={creating !== null}
+              onClick={() => void copy()}
             >
-              {(control) => (
-                <TextInput {...control} value={url} readOnly onFocus={(event) => event.currentTarget.select()} />
-              )}
-            </Field>
-          </div>
-        )}
-        {message && <p role="status">{message}</p>}
-        {error && <ErrorAlert error={error} />}
-        <EventPushNotifications key={slug} slug={slug} />
+              <TileContent icon={icons.copy} label="Copy link" hint="For any other calendar app" />
+            </button>
+          </li>
+        </ul>
+        <Checkbox
+          role="switch"
+          name="includeTentative"
+          label="Include sessions you have not confirmed"
+          hint="Starred sessions, and sessions waiting for approval or a free place."
+          checked={autosave.settings.includeTentative}
+          disabled={autosave.saving}
+          onChange={(event) => autosave.change({ includeTentative: event.currentTarget.checked })}
+        />
+        <CalendarPrivateLink calendar={calendar} settings={autosave.settings} />
       </PanelBody>
     </Panel>
   );

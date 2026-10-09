@@ -5,8 +5,8 @@ import { getJson, patchJson } from "../shared/api-client";
 import { formatDateTime } from "../shared/ui";
 import type { EventFormsResponse, RegistrationManageResponse } from "../shared/types";
 import { eventFormsResponseSchema } from "../../shared/schemas/forms";
-import { normalizeValidation } from "../shared/form/validation-map";
-import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
+import { clearFieldErrors, normalizeValidation } from "../shared/form/validation-map";
+import { clearStatus, installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import {
   readCustomFieldValues,
   renderCustomFields,
@@ -16,7 +16,7 @@ import { readDayAttendance, renderDayAttendance, writeDayAttendance } from "../s
 import { renderSharePanel, refreshSharePanelBadge } from "../shared/widgets/share-panel";
 import { withLoadingButton, handleSubmitError } from "../shared/form/submit";
 import { bootstrap, setStatus } from "./boot";
-import { wireHeadshotSection } from "./registration-manage-headshot";
+import { mountTokenHeadshot } from "./token-headshot";
 import {
   registrationManageReadResponseSchema,
   registrationManageSchema,
@@ -29,40 +29,17 @@ import {
   hasPendingRegistrationDayWaitlist,
   isPendingRegistrationDayWaitlistStatus,
 } from "../components/RegistrationDayStatusSummary";
-import { Badge, type BadgeTone } from "../ui/Badge";
+import { Badge } from "../ui/Badge";
+import { attendanceTypeLabel, dayConfirmation, statusLabel, waitlistTone } from "./registration-manage-status";
+import { eventMyAgendaPath } from "../../shared/event-participation-link";
 import { Kicker } from "../ui/Kicker";
+import { confirmAction } from "../components/ConfirmDialog";
+import { RegistrationManageSummary } from "./registration-manage-summary";
 // `pk-datalist` is defined in Content.css, which ships in a lazy chunk rather
 // than the entry stylesheet. `pk-btn` and `pk-badge` are written by the two
 // imperative branches below and ship with the entry, because the public
 // shortcodes this page renders into write them too.
 import "../ui/Content.css";
-
-function attendanceTypeLabel(attendanceType: string): string {
-  switch (attendanceType) {
-    case "in_person":
-      return "In-person attendance";
-    case "virtual":
-      return "Virtual attendance";
-    case "on_demand":
-      return "On-demand attendance";
-    default:
-      return attendanceType;
-  }
-}
-
-/** The tone of a day-waitlist entry. The words beside it carry the meaning. */
-function waitlistTone(status: string): BadgeTone {
-  if (status === "offered") return "info";
-  if (status === "accepted") return "ok";
-  return "neutral";
-}
-
-/** What one day's waitlist state says, and the tone that agrees with it. */
-function dayConfirmation(waitlistStatus: string | undefined): { label: string; tone: BadgeTone } {
-  if (waitlistStatus === "offered") return { label: "Spot available", tone: "info" };
-  if (waitlistStatus === "waiting") return { label: "Waitlisted", tone: "warn" };
-  return { label: "Confirmed", tone: "ok" };
-}
 
 function RegistrationStatusBanner({
   dayAttendance,
@@ -125,22 +102,6 @@ function RegistrationStatusBanner({
   );
 }
 
-function statusLabel(status: string, cancellationReasonCode: string | null): { label: string; cssClass: string } {
-  switch (status) {
-    case "registered":
-      return { label: "Confirmed", cssClass: "pk-badge--ok" };
-    case "pending_email_confirmation":
-      return { label: "Pending confirmation", cssClass: "pk-badge--neutral" };
-    case "cancelled":
-      return {
-        label: cancellationReasonCode === "unauthorized_registration" ? "Cancelled (unauthorized)" : "Cancelled",
-        cssClass: "pk-badge--danger",
-      };
-    default:
-      return { label: status, cssClass: "pk-badge--neutral" };
-  }
-}
-
 // ── Main ────────────────────────────────────────────────────────────────────
 
 async function main(): Promise<void> {
@@ -170,10 +131,7 @@ async function main(): Promise<void> {
   const dayWaitlistSection = root.querySelector<HTMLElement>("[data-day-waitlist-section]");
   const customFieldsContainer = root.querySelector<HTMLElement>("[data-custom-fields]");
   const customFieldsSection = root.querySelector<HTMLElement>("[data-custom-fields-section]");
-  const actionButtons = root.querySelector<HTMLElement>("[data-action-buttons]");
-  const cancelConfirmPanel = root.querySelector<HTMLElement>("[data-confirm-cancel]");
-  const cancelEventNameEl = root.querySelector<HTMLElement>("[data-confirm-event-name]");
-  const unauthorizedPanel = root.querySelector<HTMLElement>("[data-confirm-unauthorized]");
+  const summaryEl = root.querySelector<HTMLElement>("[data-manage-summary]");
 
   // ── Load data (manage API + forms API in parallel) ───────────────────────
   let manageData: RegistrationManageResponse;
@@ -217,15 +175,28 @@ async function main(): Promise<void> {
     const { label, cssClass } = statusLabel(registration.status, registration.cancellation_reason_code);
     statusBadge.textContent = label;
     statusBadge.className = `pk-badge ${cssClass}`;
+    // The attendee's own agenda lives in the portal; a cancelled
+    // registration has no sessions to plan.
+    if (!isCancelled && !greetingEl.querySelector("[data-manage-agenda-link]")) {
+      const agendaLink = document.createElement("a");
+      agendaLink.href = eventMyAgendaPath(event?.slug ?? eventSlug);
+      agendaLink.textContent = "My agenda";
+      agendaLink.dataset.manageAgendaLink = "";
+      greetingEl.append(agendaLink);
+    }
     greetingEl.hidden = false;
   }
 
   // ── Pre-fill personal details ─────────────────────────────────────────────
-  setField(form, "email", user?.email);
-  setField(form, "firstName", user?.first_name);
-  setField(form, "lastName", user?.last_name);
-  setField(form, "organizationName", user?.organization_name);
-  setField(form, "jobTitle", user?.job_title);
+  // Also how "Discard changes" returns the form to the registration as loaded.
+  const fillPersonalDetails = () => {
+    setField(form, "email", user?.email);
+    setField(form, "firstName", user?.first_name);
+    setField(form, "lastName", user?.last_name);
+    setField(form, "organizationName", user?.organization_name);
+    setField(form, "jobTitle", user?.job_title);
+  };
+  fillPersonalDetails();
 
   // ── Email change notice ───────────────────────────────────────────────────
   const originalEmail = user?.email?.toLowerCase() ?? "";
@@ -334,19 +305,8 @@ async function main(): Promise<void> {
     }
   }
 
-  // ── Lock the form if cancelled ──
-  if (isCancelled && actionButtons) {
-    const allButtons = actionButtons.querySelectorAll<HTMLButtonElement>("button");
-    for (const btn of Array.from(allButtons)) {
-      btn.disabled = true;
-    }
-    const fields = form.querySelectorAll<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>(
-      "input, textarea, select",
-    );
-    for (const field of Array.from(fields)) {
-      field.disabled = true;
-    }
-
+  // ── A cancelled registration has nothing to edit; say why, and offer restore when it can be ──
+  if (isCancelled) {
     // Show different message and options based on email verification status
     const isEmailVerified = manageData.registration.isEmailVerified;
     if (registration.cancellation_reason_code === "unauthorized_registration") {
@@ -398,11 +358,6 @@ async function main(): Promise<void> {
       statusEl?.parentElement?.insertBefore(restoreBtn, statusEl?.nextSibling);
       setStatus(statusEl, "This registration has been cancelled. Your email address is verified.", true);
     } else {
-      // Email not verified → allow user to correct it
-      const emailInput = form.querySelector<HTMLInputElement>("input[name='email']");
-      if (emailInput) {
-        emailInput.disabled = false;
-      }
       setStatus(
         statusEl,
         "This registration has been cancelled because your email address could not be verified. Please check or correct your email address and try again to restore your registration.",
@@ -411,9 +366,10 @@ async function main(): Promise<void> {
     }
   }
 
-  // ── Show the form ─────────────────────────────────────────────────────────
+  // ── Show the registration, read-only until the attendee asks to edit ──────
   if (loadingEl) loadingEl.hidden = true;
   if (manageFormEl) manageFormEl.hidden = false;
+  form.hidden = true;
 
   // ── Share panel ───────────────────────────────────────────────────────────
   const sharePanelEl = root.querySelector<HTMLElement>("[data-manage-share]");
@@ -430,13 +386,57 @@ async function main(): Promise<void> {
   }
 
   // ── Headshot section ──────────────────────────────────────────────────────
+  const headshotSection = root.querySelector<HTMLElement>("[data-headshot-section]");
   if (!isCancelled) {
-    wireHeadshotSection(root, token, apiBase, manageData.headshotUrl, statusEl, () => {
-      if (sharePanelEl) refreshSharePanelBadge(sharePanelEl);
+    mountTokenHeadshot({
+      section: headshotSection,
+      name: [firstName, user?.last_name].filter(Boolean).join(" ") || (user?.email ?? "You"),
+      initialUrl: manageData.headshotUrl,
+      url: `${apiBase}/registrations/access/${encodeURIComponent(token)}/headshot`,
+      successNote: "Your social badge has been updated.",
+      onChanged: () => {
+        if (sharePanelEl) refreshSharePanelBadge(sharePanelEl);
+      },
     });
-  } else {
-    const headshotSection = root.querySelector<HTMLElement>("[data-headshot-section]");
-    if (headshotSection) headshotSection.hidden = true;
+  } else if (headshotSection) {
+    headshotSection.hidden = true;
+  }
+
+  // ── Read view, and the edit command that swaps it for the form ────────────
+  const showEditor = (editing: boolean) => {
+    if (summaryEl) summaryEl.hidden = editing;
+    form.hidden = !editing;
+    if (editing) form.querySelector<HTMLInputElement>("input:not([type='hidden']):not([readonly])")?.focus();
+  };
+  const discardChanges = () => {
+    fillPersonalDetails();
+    if (customFields) customFields.setValues(registration.custom_answers ?? {});
+    if (dayAttendanceContainer) writeDayAttendance(form, dayAttendance);
+    if (emailChangeNotice) emailChangeNotice.hidden = true;
+    form.classList.remove("was-validated");
+    clearFieldErrors(form);
+    clearStatus(statusEl);
+    showEditor(false);
+  };
+  form.querySelector<HTMLButtonElement>("[data-action='discard']")?.addEventListener("click", discardChanges);
+  if (summaryEl) {
+    render(
+      <RegistrationManageSummary
+        data={manageData}
+        form={formsData?.form ?? null}
+        editable={!isCancelled}
+        // The photo tile mounts the page's confirmation host when it is shown;
+        // a page without it still needs one for the commands below.
+        dialogHost={isCancelled || !headshotSection?.querySelector("[data-headshot-tile]")}
+        onEdit={() => {
+          clearStatus(statusEl);
+          showEditor(true);
+        }}
+        onCancel={() => void cancelRegistration()}
+        onReport={() => void reportUnauthorized()}
+      />,
+      summaryEl,
+    );
   }
 
   // Re-apply custom field visibility when day attendance changes.
@@ -463,8 +463,8 @@ async function main(): Promise<void> {
     if (!validateBeforeSubmit(form, statusEl)) return;
 
     const submitBtn = findSubmitButton(form);
-    const cancelBtn = form.querySelector<HTMLButtonElement>("[data-action='cancel']");
-    if (cancelBtn) cancelBtn.disabled = true;
+    const discardBtn = form.querySelector<HTMLButtonElement>("[data-action='discard']");
+    if (discardBtn) discardBtn.disabled = true;
 
     await withLoadingButton(submitBtn, async () => {
       try {
@@ -498,96 +498,63 @@ async function main(): Promise<void> {
         }
       } catch (error) {
         handleSubmitError(error, form, statusEl);
-        if (cancelBtn) cancelBtn.disabled = false;
+        if (discardBtn) discardBtn.disabled = false;
       }
     });
   });
 
-  // ── Cancel flow ───────────────────────────────────────────────────────────
-  const cancelBtn = root.querySelector<HTMLButtonElement>("[data-action='cancel']");
-  cancelBtn?.addEventListener("click", () => {
-    if (isCancelled) return;
-    if (cancelEventNameEl) cancelEventNameEl.textContent = eventName;
-    if (manageFormEl) manageFormEl.hidden = true;
-    if (cancelConfirmPanel) cancelConfirmPanel.hidden = false;
-  });
+  // ── Whole-record commands, each confirmed in the shared dialog ────────────
+  const accessUrl = `${apiBase}/registrations/access/${encodeURIComponent(token)}`;
+  async function sendRecordCommand(
+    action: "cancel" | "report_unauthorized",
+    outcome: { title: string; message: string },
+  ): Promise<void> {
+    try {
+      await patchJson(accessUrl, registrationManageSchema.parse({ action }), registrationManageUpdateResponseSchema);
+      if (manageFormEl) showPostAction(root, manageFormEl, outcome);
+    } catch (error) {
+      setStatus(statusEl, normalizeValidation(error).globalMessage, true);
+    }
+  }
 
-  root.querySelector<HTMLButtonElement>("[data-confirm-cancel-no]")?.addEventListener("click", () => {
-    if (cancelConfirmPanel) cancelConfirmPanel.hidden = true;
-    if (manageFormEl) manageFormEl.hidden = false;
-  });
-
-  root.querySelector<HTMLButtonElement>("[data-confirm-cancel-yes]")?.addEventListener("click", async () => {
-    const yesBtn = root.querySelector<HTMLButtonElement>("[data-confirm-cancel-yes]");
-    const noBtn = root.querySelector<HTMLButtonElement>("[data-confirm-cancel-no]");
-    if (noBtn) noBtn.disabled = true;
-
-    await withLoadingButton(yesBtn, async () => {
-      try {
-        await patchJson(
-          `${apiBase}/registrations/access/${encodeURIComponent(token)}`,
-          { action: "cancel" },
-          registrationManageUpdateResponseSchema,
-        );
-        if (cancelConfirmPanel) cancelConfirmPanel.hidden = true;
-        if (manageFormEl) {
-          showPostAction(root, manageFormEl, {
-            title: "Registration cancelled",
-            message: "Your registration has been cancelled. You can re-register at any time if you change your mind.",
-          });
-        }
-      } catch (error) {
-        const normalized = normalizeValidation(error);
-        if (cancelConfirmPanel) cancelConfirmPanel.hidden = true;
-        if (manageFormEl) manageFormEl.hidden = false;
-        setStatus(statusEl, normalized.globalMessage, true);
-        if (noBtn) noBtn.disabled = false;
-      }
+  async function cancelRegistration(): Promise<void> {
+    const confirmed = await confirmAction({
+      title: "Cancel your registration?",
+      body:
+        `Your place at ${eventName} is released for someone else. You can register again later while ` +
+        "registration is open, but a released in-person place or waitlisted spot is not held for you.",
+      confirmLabel: "Cancel registration",
+      cancelLabel: "Keep registration",
     });
-  });
-
-  // ── Report unauthorized flow ──────────────────────────────────────────────
-  root.querySelector<HTMLButtonElement>("[data-action='report-unauthorized']")?.addEventListener("click", () => {
-    if (isCancelled) return;
-    if (manageFormEl) manageFormEl.hidden = true;
-    if (unauthorizedPanel) unauthorizedPanel.hidden = false;
-  });
-
-  root.querySelector<HTMLButtonElement>("[data-unauthorized-no]")?.addEventListener("click", () => {
-    if (unauthorizedPanel) unauthorizedPanel.hidden = true;
-    if (manageFormEl) manageFormEl.hidden = false;
-  });
-
-  root.querySelector<HTMLButtonElement>("[data-unauthorized-yes]")?.addEventListener("click", async () => {
-    const yesBtn = root.querySelector<HTMLButtonElement>("[data-unauthorized-yes]");
-    const noBtn = root.querySelector<HTMLButtonElement>("[data-unauthorized-no]");
-    if (noBtn) noBtn.disabled = true;
-
-    await withLoadingButton(yesBtn, async () => {
-      try {
-        await patchJson(
-          `${apiBase}/registrations/access/${encodeURIComponent(token)}`,
-          { action: "report_unauthorized" },
-          registrationManageUpdateResponseSchema,
-        );
-        if (unauthorizedPanel) unauthorizedPanel.hidden = true;
-        if (manageFormEl) {
-          showPostAction(root, manageFormEl, {
-            title: "Report received",
-            message:
-              "Your registration has been cancelled and your event-specific data removed. " +
-              "The organizer has been notified and will review for potential misuse.",
-          });
-        }
-      } catch (error) {
-        const normalized = normalizeValidation(error);
-        if (unauthorizedPanel) unauthorizedPanel.hidden = true;
-        if (manageFormEl) manageFormEl.hidden = false;
-        setStatus(statusEl, normalized.globalMessage, true);
-        if (noBtn) noBtn.disabled = false;
-      }
+    if (!confirmed) return;
+    await sendRecordCommand("cancel", {
+      title: "Registration cancelled",
+      message: "Your registration has been cancelled. You can re-register at any time if you change your mind.",
     });
-  });
+  }
+
+  async function reportUnauthorized(): Promise<void> {
+    const confirmed = await confirmAction({
+      title: "Report an unauthorized registration?",
+      body:
+        "You are reporting that you did not request this registration. Your account and email address are not " +
+        "deleted; only this registration record is anonymized.",
+      consequences: [
+        "Cancel and flag this registration as unauthorized",
+        "Remove the personal data stored with this registration",
+        "Notify the event organizer, who may investigate potential misuse",
+      ],
+      confirmLabel: "Report unauthorized registration",
+      cancelLabel: "Keep registration",
+    });
+    if (!confirmed) return;
+    await sendRecordCommand("report_unauthorized", {
+      title: "Report received",
+      message:
+        "Your registration has been cancelled and your event-specific data removed. " +
+        "The organizer has been notified and will review for potential misuse.",
+    });
+  }
 }
 
 void main();

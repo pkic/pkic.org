@@ -104,7 +104,12 @@ export function buildOccurrenceAttendancePageQuery(occurrenceId: string, query: 
       fromSql: `FROM event_occurrence_join_confirmations confirmation WHERE ${conditions.join(" AND ")}`,
       bindings,
     },
-    orderBy: resolveMappedOrderBy(query.sort, SORT_EXPRESSIONS, SORT_EXPRESSIONS.name, "confirmation.id ASC"),
+    orderBy: resolveMappedOrderBy(
+      query.sort,
+      SORT_EXPRESSIONS,
+      `${SORT_EXPRESSIONS.confirmed_at} DESC`,
+      "confirmation.id ASC",
+    ),
     limit: query.limit,
     offset: query.offset,
   };

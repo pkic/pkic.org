@@ -1,4 +1,6 @@
 import { lazy, Suspense } from "preact/compat";
+import { useHashLocation } from "wouter/use-hash-location";
+import { eventAgendaRoute, isMyAgendaQuery } from "../../../../../shared/event-participation-link";
 import type { ComponentChildren } from "preact";
 import { eventParticipantRecordPath } from "./event-participant-paths";
 import { useData } from "../../../../hooks/useData";
@@ -15,13 +17,16 @@ import { ParticipantSubmission } from "../../../../components/events/Participant
 import { ParticipantSpeaker } from "../../../../components/events/ParticipantSpeaker";
 import { Spinner } from "../../../../components/Spinner";
 import { Badge } from "../../../../components/Badge";
-import { PageHeader } from "../../../../ui/PageHeader";
-import { Panel, PanelHeader, PanelBody } from "../../../../ui/Panel";
 import { Tabs } from "../../../../ui/Tabs";
+import { ParticipantEventNavigation, ParticipantLeadScanner } from "./ParticipantEventNavigation";
 import { Alert } from "../../../../ui/Alert";
-import { DescriptionList } from "../../../../ui/DescriptionList";
-import { formatDateRange } from "../../ui";
 import { usePortalHashLocation } from "../../hash-location";
+import { EventAppHero, EventHome } from "./app/EventHome";
+import { EventHero } from "./app/EventHero";
+import { EventTicket } from "./app/EventTicket";
+import { EventMore } from "./app/EventMore";
+import { eventRegistrationStanding } from "./app/event-app-model";
+import { participantEventAppSubject } from "./app/event-app-tabs";
 
 const MyAgenda = lazy(() => import("./detail/participation/MyAgenda").then((module) => ({ default: module.MyAgenda })));
 const MyPromotionKits = lazy(() =>
@@ -33,6 +38,17 @@ const MySessionManagement = lazy(() =>
 type EventDetail = z.infer<typeof eventDetailResponseSchema>["event"];
 type Selection = { kind?: "registration" | "proposal"; resourceId?: string; tab?: string };
 const href = usePortalHashLocation.hrefs;
+/** The compact header's title for each participant page other than the event home. */
+const PAGE_LABELS: Record<string, string> = {
+  registration: "Registration",
+  programme: "Agenda",
+  agenda: "My agenda",
+  promotion: "Promotion kits",
+  "lead-scanner": "Lead scanner",
+  "session-management": "My sessions",
+  ticket: "Ticket",
+  more: "More",
+};
 
 export function ParticipantEventPage({ slug, ...selection }: Selection & { slug: string }) {
   const loaded = useData(
@@ -45,6 +61,9 @@ export function ParticipantEventPage({ slug, ...selection }: Selection & { slug:
 }
 
 export function ParticipantEvent({ event, kind, resourceId, tab }: Selection & { event: EventDetail }) {
+  const [location] = useHashLocation();
+  // One agenda route: the whole programme, or with `?mine=1` the same view filtered to the reader's sessions.
+  const mine = isMyAgendaQuery(new URLSearchParams(location.split("?", 2)[1] ?? ""));
   const base = `/events/${encodeURIComponent(event.slug)}`;
   const registrationId = event.participation?.registrationId;
   const hasProposals = Boolean(event.participation?.proposals || event.participation?.speakerProposals);
@@ -54,15 +73,25 @@ export function ParticipantEvent({ event, kind, resourceId, tab }: Selection & {
       : kind === "proposal" || tab === "submissions"
         ? "proposals"
         : tab === "agenda"
-          ? "agenda"
+          ? mine
+            ? "agenda"
+            : "programme"
           : tab === "promotion"
             ? "promotion"
-            : tab === "session-management"
-              ? "session-management"
-              : "overview";
+            : tab === "lead-scanner"
+              ? "lead-scanner"
+              : tab === "session-management"
+                ? "session-management"
+                : tab === "ticket" || tab === "more"
+                  ? tab
+                  : "overview";
   const tabs = [
     { id: "overview", label: "Overview", href: href(base) },
-    { id: "agenda", label: "My agenda", href: href(base + "/agenda") },
+    { id: "programme", label: "Agenda", href: href(eventAgendaRoute(event.slug)) },
+    { id: "agenda", label: "My agenda", href: href(eventAgendaRoute(event.slug, { mine: true })) },
+    ...(eventRegistrationStanding(event).registered
+      ? [{ id: "ticket", label: "Ticket", href: href(base + "/ticket") }]
+      : []),
     ...(registrationId
       ? [
           {
@@ -84,34 +113,26 @@ export function ParticipantEvent({ event, kind, resourceId, tab }: Selection & {
         ]
       : []),
   ];
+  const navigation = (
+    <ParticipantEventNavigation event={participantEventAppSubject(event)} activeId={active} items={tabs} />
+  );
+  // The event home opens with the event's key visual; every other page with the same field, compact,
+  // titled by the page itself and leading back one level, so the event's name is shown once.
   const header = (recordTitle?: string) => (
     <>
-      <PageHeader
-        title={event.name}
-        trail={[
-          { label: "Events", href: href("/events") },
-          { label: event.name, ...(active !== "overview" ? { href: href(base) } : {}) },
-          ...(active !== "overview"
-            ? [
-                {
-                  label:
-                    active === "registration"
-                      ? "Registration"
-                      : active === "agenda"
-                        ? "My agenda"
-                        : active === "promotion"
-                          ? "Promotion kits"
-                          : active === "session-management"
-                            ? "My sessions"
-                            : "Proposals",
-                  ...(kind === "proposal" ? { href: href(base + "/submissions") } : {}),
-                },
-              ]
-            : []),
-          ...(kind === "proposal" ? [{ label: recordTitle ?? "Proposal" }] : []),
-        ]}
-      />
-      <Tabs label="Event" activeId={active} items={tabs} />
+      {active === "overview" ? (
+        <EventAppHero event={event} />
+      ) : kind === "proposal" ? (
+        <EventHero
+          compact
+          back={{ href: href(base + "/submissions"), label: "Proposals" }}
+          eyebrow={event.name}
+          title={recordTitle ?? "Proposal"}
+        />
+      ) : (
+        <EventHero compact back={{ href: href(base), label: event.name }} title={PAGE_LABELS[active] ?? "Proposals"} />
+      )}
+      {navigation}
     </>
   );
   return (
@@ -123,7 +144,7 @@ export function ParticipantEvent({ event, kind, resourceId, tab }: Selection & {
         <ParticipantProposal event={event} proposalId={resourceId} facet={tab} header={header} />
       ) : tab === "agenda" ? (
         <Suspense fallback={<Spinner />}>
-          <MyAgenda slug={event.slug} />
+          <MyAgenda slug={event.slug} eventId={event.id} eventName={event.name} mine={mine} />
         </Suspense>
       ) : tab === "session-management" ? (
         <Suspense fallback={<Spinner />}>
@@ -133,32 +154,16 @@ export function ParticipantEvent({ event, kind, resourceId, tab }: Selection & {
         <Suspense fallback={<Spinner />}>
           <MyPromotionKits slug={event.slug} />
         </Suspense>
+      ) : tab === "lead-scanner" ? (
+        <ParticipantLeadScanner eventId={event.id} slug={event.slug} scannerAccess={event.scannerAccess} />
       ) : tab === "submissions" ? (
         <ParticipantProposals event={event} />
+      ) : tab === "ticket" ? (
+        <EventTicket event={event} />
+      ) : tab === "more" ? (
+        <EventMore event={event} />
       ) : (
-        <Panel>
-          <PanelHeader title="Event details" />
-          <PanelBody>
-            <div class="pk-stack">
-              <DescriptionList
-                items={[
-                  { term: "When", value: formatDateRange(event.startsAt, event.endsAt, event.timezone) },
-                  { term: "Location", value: event.location ?? "Not specified" },
-                ]}
-              />
-              {registrationId && (
-                <div class="pk-cluster">
-                  <Badge status={event.participation?.registrationStatus ?? "pending"} />
-                  <a href={href(eventParticipantRecordPath(event.slug, "registration", registrationId))}>
-                    Manage registration
-                  </a>
-                </div>
-              )}
-              {hasProposals && <a href={href(base + "/submissions")}>View your proposals and speaker participation</a>}
-              {event.basePath && <a href={event.basePath}>Public event information</a>}
-            </div>
-          </PanelBody>
-        </Panel>
+        <EventHome event={event} />
       )}
     </div>
   );
@@ -247,7 +252,6 @@ function ParticipantProposal({
   return (
     <div class="pk-stack">
       {header(submission?.proposal.title ?? speaker?.proposal.title)}
-      <h2>{submission?.proposal.title ?? speaker?.proposal.title}</h2>
       <Tabs
         label="Proposal"
         activeId={active}

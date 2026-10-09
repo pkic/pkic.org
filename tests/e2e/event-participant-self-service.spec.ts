@@ -8,6 +8,7 @@ import {
   registrationManageUpdateResponseSchema,
 } from "../../assets/shared/schemas/registration";
 import { speakerSelfProfilePatchSchema } from "../../assets/shared/schemas/proposal-management";
+import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 import { signInToPortal } from "./helpers/portal-auth";
 import { submitProposal, inviteCoSpeaker, PROPOSAL_EVENT_SLUG } from "./helpers/proposals";
 import { registerInBrowser } from "./helpers/registration";
@@ -37,8 +38,14 @@ test("attendee manages a registration and downloads a personal event calendar", 
   await page.goto("/portal/#/events");
   await page.getByRole("link", { name: "Open Post-Quantum Cryptography Conference", exact: true }).click();
   await page.getByRole("link", { name: "Manage registration", exact: true }).click();
+  // The registration opens read-only: its details are facts, not fields.
+  const registration = page.getByRole("region", { name: "Registration", exact: true });
+  await expect(registration.getByText(email, { exact: true })).toBeVisible();
+  await expect(registration.getByRole("textbox")).toHaveCount(0);
+  await registration.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(page.getByLabel("Email address", { exact: true })).toHaveValue(email);
   await expect(page.getByLabel("Country", { exact: true })).toHaveValue("US");
+  await expect(registration.getByRole("button", { name: "Registration actions" })).toHaveCount(0);
   await page.getByLabel("Job title", { exact: true }).fill("Updated attendee");
   const savedResponse = page.waitForResponse(
     (response) =>
@@ -54,15 +61,26 @@ test("attendee manages a registration and downloads a personal event calendar", 
   });
   registrationManageUpdateResponseSchema.parse(await saved.json());
   await expect(page.getByText("Registration updated.", { exact: true })).toBeVisible();
+  await expect(registration.getByText("Updated attendee", { exact: true })).toBeVisible();
+  await expect(registration.getByRole("textbox")).toHaveCount(0);
   await page.reload();
+  await expect(registration.getByText("Updated attendee", { exact: true })).toBeVisible();
+  // Discarding an edit sends nothing and returns to the saved facts.
+  await registration.getByRole("button", { name: "Edit", exact: true }).click();
   await expect(page.getByLabel("Job title", { exact: true })).toHaveValue("Updated attendee");
-  page.once("dialog", (dialog) => dialog.accept());
-  await page.getByRole("button", { name: "Cancel registration", exact: true }).click();
+  await page.getByLabel("Job title", { exact: true }).fill("Discarded title");
+  await registration.getByRole("button", { name: "Discard changes", exact: true }).click();
+  await expect(registration.getByText("Updated attendee", { exact: true })).toBeVisible();
+  await expect(registration.getByText("Discarded title")).toHaveCount(0);
+  // Cancelling is a whole-record command: the record menu, then the confirmation.
+  await registration.getByRole("button", { name: "Registration actions" }).click();
+  await page.getByRole("menuitem", { name: "Cancel my registration…" }).click();
+  await acceptConfirmDialog(page, "Cancel registration");
   await expect(page.getByRole("button", { name: "Restore registration" })).toBeVisible();
   await page.getByRole("button", { name: "Restore registration" }).click();
-  await expect(page.getByRole("button", { name: "Cancel registration", exact: true })).toBeEnabled();
+  await expect(registration.getByRole("button", { name: "Registration actions" })).toBeEnabled();
   await page.setViewportSize({ width: 390, height: 844 });
-  await expect(page.getByLabel("Email address", { exact: true })).toBeVisible();
+  await expect(registration.getByText(email, { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: testInfo.outputPath("registration-mobile.png"), fullPage: true });
@@ -95,11 +113,20 @@ test("proposer and invited speaker manage their own event records without emaile
   await page.getByRole("link", { name: "Open Post-Quantum Cryptography Conference", exact: true }).click();
   await page.getByRole("link", { name: "View your proposals and speaker participation" }).click();
   await page.getByRole("link", { name: title, exact: true }).click();
+  // The submission opens read-only; withdrawal lives in its menu, never beside saving.
+  const submission = page.getByRole("region", { name: "Submission", exact: true });
+  await expect(page.getByLabel("Title", { exact: true })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /Withdraw proposal/ })).toHaveCount(0);
+  await page.getByRole("button", { name: "Submission actions", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: "Withdraw proposal…", exact: true })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await submission.getByRole("button", { name: "Edit", exact: true }).click();
   await page.getByLabel("Title", { exact: true }).fill(title + " edited");
   await page.getByRole("button", { name: "Save proposal", exact: true }).click();
   await expect(page.getByText("Proposal updated.", { exact: true })).toBeVisible();
+  await expect(page.getByLabel("Title", { exact: true })).toHaveCount(0);
   await page.reload();
-  await expect(page.getByLabel("Title", { exact: true })).toHaveValue(title + " edited");
+  await expect(page.getByRole("definition").filter({ hasText: title + " edited" })).toBeVisible();
   await page.screenshot({ path: testInfo.outputPath("proposal-desktop.png"), fullPage: true });
   const context = await browser.newContext({ baseURL: new URL(page.url()).origin });
   const speaker = await context.newPage();
@@ -147,12 +174,24 @@ test("proposer and invited speaker manage their own event records without emaile
     await speaker.getByRole("button", { name: "Confirm participation", exact: true }).click();
     await expect(speaker.getByText("Participation confirmed.", { exact: true })).toBeVisible();
     await expect(speaker.getByRole("button", { name: "Save proposal", exact: true })).toHaveCount(0);
+    // The saved profile reads back as text until the reader chooses to edit it.
     const bio = speaker.getByRole("textbox", { name: "Biography", exact: true });
+    await expect(bio).toHaveCount(0);
+    await expect(speaker.getByRole("button", { name: "Save speaker profile", exact: true })).toHaveCount(0);
+    await speaker
+      .getByRole("region", { name: "Speaker profile", exact: true })
+      .getByRole("button", { name: "Edit", exact: true })
+      .click();
     await bio.fill("Guest speaker biography saved through authenticated self-service.");
     await speaker.getByRole("button", { name: "Save speaker profile", exact: true }).click();
     await expect(speaker.getByText("Speaker profile saved.", { exact: true })).toBeVisible();
+    await expect(bio).toHaveCount(0);
     await speaker.reload();
-    await expect(bio).toHaveText("Guest speaker biography saved through authenticated self-service.");
+    await expect(
+      speaker
+        .getByRole("definition")
+        .filter({ hasText: "Guest speaker biography saved through authenticated self-service." }),
+    ).toBeVisible();
     const restored = speakerSelfServiceReadResponseSchema.parse(
       await (await speaker.request.get(`/api/v1/proposals/${proposal.proposalId}/participation`)).json(),
     );

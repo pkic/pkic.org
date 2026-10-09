@@ -98,8 +98,8 @@ function NextSteps({ manageUrl, hasPartialDayWaitlist }: { manageUrl: string; ha
             <ButtonLink href={manageUrl} size="sm">
               Manage registration
             </ButtonLink>
-            <ButtonLink href={`${manageUrl}#manage-headshot-file`} size="sm">
-              Upload headshot
+            <ButtonLink href={`${manageUrl}#manage-headshot`} size="sm">
+              Add your photo
             </ButtonLink>
           </div>
         )}

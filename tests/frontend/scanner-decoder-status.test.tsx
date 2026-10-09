@@ -1,3 +1,5 @@
+import { webcrypto } from "node:crypto";
+import { capturePortalWorkerPageAssets } from "../../assets/ts/member-flows/portal/portal-worker-release";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
@@ -14,12 +16,14 @@ function Harness({ scope = "event:operator" }: { scope?: string }) {
   return <p role="status">{useScannerDecoderPreparation(scope)}</p>;
 }
 beforeEach(() => {
+  vi.stubGlobal("crypto", webcrypto);
+  capturePortalWorkerPageAssets(`${location.origin}/_assets/portal-test.js`);
   prepare.mockReset();
   host = document.createElement("div");
   document.body.append(host);
 });
-afterEach(() => {
-  render(null, host);
+afterEach(async () => {
+  await act(() => render(null, host));
   host.remove();
   vi.unstubAllGlobals();
   vi.useRealTimers();
@@ -28,10 +32,7 @@ it("reports failed decoder preparation without claiming offline camera readiness
   vi.stubGlobal("navigator", { serviceWorker: { register: vi.fn(async () => ({})) } });
   prepare.mockResolvedValue(false);
   await act(async () => render(<Harness />, host));
-  await act(async () => {
-    await new Promise((resolve) => setTimeout(resolve, 0));
-  });
-  expect(host.textContent).toContain("Offline camera files are not prepared");
+  await vi.waitFor(() => expect(host.textContent).toContain("Offline camera files are not prepared"));
   expect(host.textContent).toContain("manual entry or a hardware scanner");
 });
 it("reports success only after the controlled decoder preparation completes", async () => {
@@ -44,7 +45,9 @@ it("reports success only after the controlled decoder preparation completes", as
       }),
   );
   await act(async () => render(<Harness />, host));
+  await vi.waitFor(() => expect(prepare).toHaveBeenCalledTimes(1));
   expect(host.textContent).toBe("Preparing offline camera files…");
+  expect(prepare.mock.calls[0]![0].aborted).toBe(false);
   await act(async () => resolve(true));
   expect(host.textContent).toBe("Offline camera files prepared.");
 });
@@ -65,7 +68,11 @@ it("ignores a preparation response from the previous operator scope", async () =
   const resolvers: Array<(value: boolean) => void> = [];
   prepare.mockImplementation(() => new Promise<boolean>((resolve) => resolvers.push(resolve)));
   await act(async () => render(<Harness />, host));
+  await vi.waitFor(() => expect(resolvers).toHaveLength(1));
   await act(async () => render(<Harness scope="event:next-operator" />, host));
+  await vi.waitFor(() => expect(resolvers).toHaveLength(2));
+  expect(prepare.mock.calls[0]![0].aborted).toBe(true);
+  expect(prepare.mock.calls[1]![0].aborted).toBe(false);
   await act(async () => resolvers[0]!(true));
   expect(host.textContent).toBe("Preparing offline camera files…");
   await act(async () => resolvers[1]!(false));

@@ -13,6 +13,7 @@ import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { createMember } from "./helpers/member-provisioning";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
+import { acceptConfirmDialog } from "./helpers/confirm-dialog";
 
 test("event confirmation joins nobody; explicit organization consent joins once and an identity can then be selected for the event", async ({
   page,
@@ -100,8 +101,8 @@ test("event confirmation joins nobody; explicit organization consent joins once 
     ).toHaveLength(1);
 
     await attendee.goto(manageUrl);
-    await attendee.getByRole("button", { name: "Cancel registration", exact: true }).click();
-    await attendee.getByRole("button", { name: "Yes, cancel my registration", exact: true }).click();
+    await attendee.getByRole("button", { name: "Cancel my registration…", exact: true }).click();
+    await acceptConfirmDialog(attendee, "Cancel registration");
     await expect(attendee.getByRole("heading", { name: "Registration cancelled", exact: true })).toBeVisible();
     const sinceSelected = await capturedEmailCount();
     const selected = await registerInBrowser(attendee, email, organizationName);
@@ -111,6 +112,9 @@ test("event confirmation joins nobody; explicit organization consent joins once 
     await expect(attendee.getByRole("heading", { name: /You're registered/i })).toBeVisible();
     const selectedEmail = await waitForCapturedEmail(email, "registration is confirmed", { since: sinceSelected });
     await attendee.goto(extractEmailUrl(selectedEmail, "/register/manage/"));
+    // The manage page opens read-only; the confirmed identity stays locked once editing.
+    await expect(attendee.getByRole("definition").filter({ hasText: organizationName })).toBeVisible();
+    await attendee.getByRole("button", { name: "Edit details", exact: true }).click();
     await expect(attendee.getByLabel("Organization", { exact: true })).toHaveValue(organizationName);
     await expect(attendee.getByLabel("Organization", { exact: true })).toHaveAttribute("readonly", "");
     const badge = attendee.locator("[data-og-badge-img]");

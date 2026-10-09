@@ -1,10 +1,8 @@
 import { useState } from "preact/hooks";
 import { eventRegistrationPromotionsResponseSchema } from "../../../shared/schemas/event-registrations";
 import { postJson } from "../../shared/api-client";
-import { ButtonLink } from "../../ui/Button";
-
+import { DownloadAction } from "../../ui/DownloadAction";
 import { Menu } from "../../ui/Menu";
-import { IconDownload } from "../icons";
 
 export function RegistrationRosterActions({
   promotionsEndpoint,
@@ -51,9 +49,7 @@ export function RegistrationRosterActions({
           },
         ]}
       />
-      <ButtonLink href={exportsEndpoint} icon aria-label="Download CSV" title="Download CSV">
-        <IconDownload />
-      </ButtonLink>
+      <DownloadAction label="Download registrations (CSV)" href={exportsEndpoint} />
     </>
   );
 }
