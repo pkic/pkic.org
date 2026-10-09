@@ -1,3 +1,7 @@
+// One address per test, not per file. The email limiter allows three requests
+// a minute for an address, so a file whose tests all sign in as one scope
+// eventually fails on a rule the application is right to enforce.
+// `check-e2e-signin-budget.mjs` keeps it that way.
 export const E2E_ADMIN_SCOPES = Object.freeze([
   "default",
   "scanner-recovery-owner",
@@ -35,27 +39,15 @@ export const E2E_ADMIN_SCOPES = Object.freeze([
   "portal-event-attendee-management",
   "portal-event-invitations",
   "portal-event-proposals",
-  "portal-access-control",
   "portal-analytics",
-  "portal-donations",
   "portal-email-templates",
   "portal-leadership",
   "portal-group-leadership",
   "public-members-signed-in",
   "portal-mailing-lists",
   "portal-organizations",
-  // One address per test, not per file. The email limiter allows three
-  // requests a minute for an address, so a file whose tests all sign in as
-  // `portal-organizations` failed its fourth test on a rule the application
-  // is right to enforce. `check-e2e-signin-budget.mjs` keeps it that way.
-  "portal-organizations-representatives",
-  "portal-organizations-users-view",
-  "portal-organizations-profile",
-  "portal-organizations-logo",
   "portal-user-record-self",
-  "portal-users",
   "portal-user-create",
-  "portal-users-list",
   "portal-users-role-management",
   "portal-forms-management",
   "portal-forms-filters",
@@ -70,7 +62,6 @@ export const E2E_ADMIN_SCOPES = Object.freeze([
   "portal-join-existing-organization",
   "portal-sponsor-filters",
   "portal-sponsor-tier-pricing",
-  "portal-system-operations",
   "portal-membership-settings",
   "membership-workflows",
   "membership-workflows-categories",
@@ -111,8 +102,6 @@ export const E2E_ADMIN_SCOPES = Object.freeze([
   "portal-persona-interested",
   "portal-persona-voting",
   "portal-persona-reader",
-  "portal-system-audit-list",
-  "portal-system-audit-states",
   "sponsor-workspace",
   "votes",
 ]);

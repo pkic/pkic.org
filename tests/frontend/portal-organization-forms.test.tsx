@@ -446,6 +446,10 @@ describe("portal organization profile", () => {
     expect(controlFor<HTMLSelectElement>(container, "Primary contact").tagName).toBe("SELECT");
     expect((await markdownControl(container, "Description")).closest(".pk-markdown-editor")).not.toBeNull();
 
+    // A stored date goes back into the date input in its normalized form,
+    // whatever locale formats it for display.
+    expect(controlFor(container, "Member since").value).toBe("2026-01-01");
+
     await typeInto(controlFor(container, "Slogan"), "Trust, verified");
     await typeInto(controlFor(container, "Blog"), "https://example.test/blog");
     // The title follows the name as it is typed.

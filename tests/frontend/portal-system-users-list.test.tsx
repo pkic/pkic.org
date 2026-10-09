@@ -3,6 +3,7 @@ import { openColumnFilterMenu } from "./helpers/column-menu";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { usersListResponseSchema } from "../../assets/shared/schemas/user-management";
 import { UsersList } from "../../assets/ts/member-flows/portal/sections/system-users/UsersList";
 import { rowActionControlNames } from "./helpers/row-actions";
 
@@ -113,6 +114,58 @@ describe("portal System Users list permissions", () => {
     expect(open?.tagName).toBe("A");
     expect(open?.textContent).toContain("Ada");
     expect(open?.getAttribute("href")).toBe("#/users/00000000-0000-4000-8000-000000000001");
+  });
+});
+
+describe("portal System Users list representation", () => {
+  it("names the organizations a member represents, not the category, and has no Role column", async () => {
+    const row = (email: string, organizationNames: string[], organizationCount: number) => ({
+      id: crypto.randomUUID(),
+      email,
+      first_name: "Ada",
+      last_name: "Lovelace",
+      organization_name: null,
+      active: 1,
+      created_at: "2026-01-01T00:00:00.000Z",
+      headshotUrl: null,
+      member_id: null,
+      member_category: null,
+      member_status: null,
+      member_organization_id: null,
+      member_organization_name: null,
+      links: [],
+      membership: null,
+      type: "member",
+      organizationNames,
+      organizationCount,
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(
+        async () =>
+          new Response(
+            JSON.stringify(
+              usersListResponseSchema.parse({
+                users: [row("one@example.test", ["Example Org"], 1), row("many@example.test", ["Entrust", "HID"], 4)],
+                page: { limit: 50, offset: 0, total: 2, hasMore: false },
+              }),
+            ),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+      ),
+    );
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    void act(() => render(<UsersList canWrite canGrantAccess />, container));
+    await settle();
+
+    const cells = [...container.querySelectorAll("tbody tr")].map((tr) => tr.textContent ?? "");
+    expect(cells[0]).toContain("Example Org");
+    expect(cells[1]).toContain("Entrust, HID + 2 more");
+    expect(
+      [...container.querySelectorAll("th")].map((th) => th.textContent?.replace(/[↑↓↕]/g, "").trim()),
+    ).not.toContain("Role");
   });
 });
 

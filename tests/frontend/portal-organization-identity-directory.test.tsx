@@ -17,6 +17,7 @@ import {
   type ActiveActingIdentity,
 } from "../../assets/ts/member-flows/portal/sections/OrganizationIdentityDirectory";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
+import { rowActionControlNames } from "./helpers/row-actions";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/organizations", vi.fn()] }));
 vi.mock("wouter", () => ({
@@ -142,6 +143,46 @@ describe("ActingIdentityDirectory", () => {
     );
     expect(headers).toEqual(["Name", "Status", "Contact role", "On profile", "Actions"]);
     for (const header of headers) expect(header).not.toBe("");
+  });
+
+  it("says each state in words and offers row commands only to an identity that is active", async () => {
+    const [template] = identitiesPage().identities;
+    const states = ["active", "pending", "ended"] as const;
+    const people = ["Active Person", "Pending Person", "Ended Person"];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(() =>
+        Promise.resolve(
+          new Response(
+            JSON.stringify(
+              identitiesListResponseSchema.parse({
+                identities: states.map((state, index) => ({
+                  ...template,
+                  id: `00000000-0000-4000-8000-00000000002${index + 1}`,
+                  userId: `00000000-0000-4000-8000-00000000001${index + 1}`,
+                  userName: people[index],
+                  email: `person-${index}@example.test`,
+                  state,
+                })),
+                page: { limit: 25, offset: 0, total: 3, hasMore: false },
+              }),
+            ),
+            { status: 200, headers: { "content-type": "application/json" } },
+          ),
+        ),
+      ),
+    );
+    const root = await mount(true);
+
+    const rows = [...root.querySelectorAll("tbody tr")];
+    expect(rows.map((row) => row.querySelector(".pk-badge")?.textContent)).toEqual([
+      "Active",
+      "Invitation pending",
+      "Ended",
+    ]);
+    // An invitation not yet accepted and an identity already ended have
+    // nothing to do: no menu and no inline button.
+    expect(rowActionControlNames(root)).toEqual(["Actions for Active Person"]);
   });
 
   it("says each contact role in words, not only as a tinted pill", async () => {

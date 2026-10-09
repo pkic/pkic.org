@@ -10,15 +10,15 @@ export const SYSTEM_FLOW = {
   steps: [
     {
       id: "12.1",
-      title: "Staff manage users, filter and sort the list, and grant or revoke the administrator role",
-      status: "covered",
-      note: "Granting administrator from a list row is walked with its revocation, because the row is where it is easiest to do by accident.",
+      title: "Staff manage users, filter and sort the list, and edit a record in place",
+      status: "unit",
+      note: "Covered in portal-system-users-list, portal-user-record and portal-system-users: the list filters and sorts on the server, the record arrives stating its facts and edits them in the card that states them, and no legacy role control exists. Persistence is covered in admin-user-management.",
     },
     {
       id: "12.2",
       title: "The audit log is read only through the portal, and pages through its states",
-      status: "covered",
-      note: "Loading, empty and paginated. An audit log that renders nothing on an empty page is indistinguishable from one that failed to load.",
+      status: "unit",
+      note: "Covered in portal-system-audit-log: loading, empty, paginated and failed states, each distinguishable, with the filters served by the canonical audit-log route. An audit log that renders nothing on an empty page is indistinguishable from one that failed to load.",
     },
     {
       id: "12.3",
@@ -29,18 +29,19 @@ export const SYSTEM_FLOW = {
       id: "12.3.a",
       title: "Each domain answers for its own numbers, on a page under it",
       status: "covered",
-      note: "The figures used to be one system-wide panel inside Settings, which put the membership numbers under a heading that named none of them and three clicks from the roll they describe (#39). Members, organizations and users each have an analytics page under their own section now, beside the event and donation pages that already did. Every one of those addresses is a reserved segment matched before its section's `:id` route, or \"analytics\" is read as the id of a record.",
+      note: 'The figures used to be one system-wide panel inside Settings, which put the membership numbers under a heading that named none of them and three clicks from the roll they describe (#39). Members, organizations and users each have an analytics page under their own section now, beside the event and donation pages that already did. Every one of those addresses is a reserved segment matched before its section\'s `:id` route, or "analytics" is read as the id of a record.',
     },
     {
       id: "12.4",
       title: "Staff manage donations, filter by status, and reach the badge and sync controls",
-      status: "covered",
+      status: "unit",
+      note: "Covered in portal-system-donations and portal-donation-analytics: the status filter is a server query, the sync controls follow what is syncable, and a settled donation offers its badge. The donations routes themselves are covered in admin-donations.",
     },
     {
       id: "12.5",
       title: "The outbox, the due queue and the job registry are each read and driven from their own page",
-      status: "covered",
-      note: 'They were three tabs inside one "Operations" bucket, so none of them could be linked to and the entry named none of them. The walk now reaches each by its own name in the sidebar and asserts its address.',
+      status: "unit",
+      note: 'Covered in portal-settings-section, portal-capability-navigation and portal-scheduled-jobs. They were three tabs inside one "Operations" bucket, so none of them could be linked to and the entry named none of them; each is now a page at its own address, gated by its own grant, and the job registry pauses and resumes through the canonical state resource.',
     },
     {
       id: "12.6",

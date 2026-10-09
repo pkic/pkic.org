@@ -1,9 +1,8 @@
 /**
  * Home — the sign-in landing: participation that needs the reader's voice,
  * then upcoming activity, with the represented organization in the header.
- * Every panel reads its own bounded server page; this was
- * previously exercised only through `portal-personas.spec.ts`'s intercepted
- * fixtures, never against the real API a signed-in member actually gets.
+ * Every panel reads its own bounded server page, here against the real API a
+ * signed-in member actually gets rather than intercepted fixtures.
  * @covers profile.11.5
  * @covers profile.11.6
  */

@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { UserPicker, type PickedUser } from "../../assets/ts/components/UserPicker";
 import { getJson } from "../../assets/ts/shared/api-client";
 import type { UserCatalogItem } from "../../assets/shared/schemas/user-catalog";
+import { usersListResponseSchema } from "../../assets/shared/schemas/user-management";
 
 vi.mock("../../assets/ts/shared/api-client", () => ({ getJson: vi.fn() }));
 
@@ -232,12 +233,32 @@ describe("UserPicker response contract", () => {
     // refused every reply and reported "Could not search users."
     const [url, schema] = vi.mocked(getJson).mock.calls[0];
     expect(url).toContain("/api/v1/users?");
-    const usersListReply = {
+    // Built through the list's own response contract, so the picker is held to
+    // what the endpoint can actually answer with rather than to a literal.
+    const usersListReply = usersListResponseSchema.parse({
       users: [
-        { id: "00000000-0000-4000-8000-000000000001", email: "admin@pkic.org", first_name: "PKIC", last_name: "Admin" },
+        {
+          id: "00000000-0000-4000-8000-000000000001",
+          email: "admin@pkic.org",
+          first_name: "PKIC",
+          last_name: "Admin",
+          active: 1,
+          created_at: "2026-01-01T00:00:00.000Z",
+          headshotUrl: null,
+          member_id: null,
+          member_category: null,
+          member_status: null,
+          member_organization_id: null,
+          member_organization_name: null,
+          links: [],
+          membership: null,
+          type: "contact_only",
+          organizationNames: [],
+          organizationCount: 0,
+        },
       ],
       page: { limit: 8, offset: 0, total: 1, hasMore: false },
-    };
+    });
     expect(schema.safeParse(usersListReply).success).toBe(true);
     const catalogReply = {
       users: [{ ...usersListReply.users[0], organization_name: "PKI Consortium" }],

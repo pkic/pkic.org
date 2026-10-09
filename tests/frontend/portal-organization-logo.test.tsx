@@ -3,6 +3,8 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type { OrganizationDetail } from "../../assets/shared/schemas/organization-management";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
+import { confirmationButton } from "./helpers/confirm-dialog";
 import { OrganizationLogo } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationLogo";
 
 let container: HTMLDivElement | null = null;
@@ -132,5 +134,76 @@ describe("OrganizationLogo", () => {
     const toast = document.querySelector(".my-toast");
     expect(toast?.textContent).toContain("That file is not an SVG.");
     expect(changed).not.toHaveBeenCalled();
+  });
+
+  it("uploads the chosen SVG to the organization's own logo route and reports the change", async () => {
+    const requests: Array<{ method: string; path: string; type: string | null }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push({
+          method: init?.method ?? "GET",
+          path: url.pathname,
+          type: new Headers(init?.headers).get("content-type"),
+        });
+        return new Response(JSON.stringify({ success: true, r2Key: "logos/org-1.svg", logoUrl: "/logo.svg" }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+    const changed = vi.fn(() => Promise.resolve());
+    const root = mount(<OrganizationLogo organization={organization(null)} canWrite onChanged={changed} />);
+    const input = root.querySelector<HTMLInputElement>("input[type=file]")!;
+
+    Object.defineProperty(input, "files", {
+      value: [new File(["<svg/>"], "logo.svg", { type: "image/svg+xml" })],
+    });
+    await act(async () => {
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+      await Promise.resolve();
+    });
+    await settle();
+
+    expect(requests).toEqual([{ method: "PUT", path: "/api/v1/organizations/org-1/logo", type: "image/svg+xml" }]);
+    expect(document.querySelector(".my-toast")?.textContent).toContain("Logo uploaded");
+    expect(changed).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes the logo only after the confirmation is accepted", async () => {
+    const methods: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        methods.push(init?.method ?? "GET");
+        return new Response(JSON.stringify({ success: true }), {
+          status: 200,
+          headers: { "content-type": "application/json" },
+        });
+      }),
+    );
+    const changed = vi.fn(() => Promise.resolve());
+    const root = mount(
+      <>
+        <ConfirmDialogHost />
+        <OrganizationLogo organization={organization("/logo.svg")} canWrite onChanged={changed} />
+      </>,
+    );
+    const remove = root.querySelector<HTMLButtonElement>('button[aria-label="Remove logo of Example Corp"]')!;
+
+    await act(async () => remove.click());
+    await act(async () => confirmationButton("Cancel", root)?.click());
+    await settle();
+    expect(methods).toEqual([]);
+
+    await act(async () => remove.click());
+    await act(async () => confirmationButton("Remove logo", root)?.click());
+    await settle();
+    expect(methods).toEqual(["DELETE"]);
+    expect(changed).toHaveBeenCalledTimes(1);
   });
 });

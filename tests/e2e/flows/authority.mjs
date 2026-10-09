@@ -17,12 +17,14 @@ export const AUTHORITY_FLOW = {
     {
       id: "9.2",
       title: "A participant sees collaboration sections and no management sections",
-      status: "covered",
+      status: "unit",
+      note: "Covered in group-context-navigation, portal-group-workspace and portal-group-management-resources: the section list follows the group's capabilities, and a participant's Members tab is the read-only roster with no add action and no row commands. Backend capability resolution is walked against the real Worker in portal-personas-real.",
     },
     {
       id: "9.3",
       title: "A direct chair sees the complete group management surface",
-      status: "covered",
+      status: "unit",
+      note: "Covered in group-context-navigation and portal-navigation-shell: a manage capability lists every management section, and the sidebar lists the chair's groups under Groups.",
     },
     {
       id: "9.4",
@@ -39,8 +41,8 @@ export const AUTHORITY_FLOW = {
     {
       id: "9.6",
       title: "A staff-only manager enters the portal without member navigation",
-      status: "covered",
-      note: "Staff capacity is not membership. Showing member navigation to staff would invite them to act as a member they are not.",
+      status: "unit",
+      note: "Covered in portal-capability-navigation: a staff-only identity gets the group workspace and Settings and no member entries, because staff capacity is not membership. Showing member navigation to staff would invite them to act as a member they are not.",
     },
     {
       id: "9.7",
@@ -67,8 +69,8 @@ export const AUTHORITY_FLOW = {
     {
       id: "9.11",
       title: "Staff manage a custom role, and grant and revoke a permission",
-      status: "covered",
-      note: "Revoking is walked as well as granting: a grant that cannot be taken back is not a grant, it is a promotion.",
+      status: "unit",
+      note: "Covered in portal-access-control-surfaces and portal-system-access-control for the screens (create, edit, delete, assign with an event scope, unassign, grant, revoke, each behind its confirmation or contract) and in roles, permission-grants and system-access-control-catalogs for the routes, including rollback when authority is lost mid-command. Revoking is covered as well as granting: a grant that cannot be taken back is not a grant, it is a promotion.",
     },
     {
       id: "9.12",

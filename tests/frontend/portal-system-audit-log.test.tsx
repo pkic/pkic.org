@@ -147,6 +147,69 @@ describe("portal system audit log", () => {
     expect(requests.at(-1)?.searchParams.get("entityType")).toBe("custom_interest");
   });
 
+  it("says no entry matches on an empty page, then pages the next entries by offset", async () => {
+    const entry = (id: string, action: string) => ({
+      id,
+      actor_type: "admin",
+      actor_id: "user-1",
+      actor_display: "Audit Manager",
+      action,
+      entity_type: "system_setting",
+      entity_id: "setting-1",
+      details: { title: "Annual workshop" },
+      created_at: "2026-08-27T12:00:00.000Z",
+    });
+    const offsets: number[] = [];
+    let empty = true;
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname.endsWith("/filters")) {
+          return json({ options: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
+        }
+        const offset = Number(url.searchParams.get("offset") ?? "0");
+        offsets.push(offset);
+        if (empty) return json({ entries: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
+        return offset === 0
+          ? json({
+              entries: [entry("a-1", "page_one_action")],
+              page: { limit: 50, offset: 0, total: 51, hasMore: true },
+            })
+          : json({
+              entries: [entry("a-2", "page_two_action")],
+              page: { limit: 50, offset, total: 51, hasMore: false },
+            });
+      }),
+    );
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<SystemAuditLog />, container!));
+    await settle();
+
+    // An empty page says why it is empty, and offers no pager over nothing.
+    expect(container.textContent).toContain("No entries match the current filters.");
+    expect(container.querySelector('nav[aria-label="Pagination"]')).toBeNull();
+
+    empty = false;
+    const refresh = [...container.querySelectorAll("button")].find((button) => button.textContent === "Refresh")!;
+    await act(async () => refresh.click());
+    await settle();
+    const pager = container.querySelector('nav[aria-label="Pagination"]')!;
+    expect(container.textContent).toContain("page_one_action");
+    expect(pager.textContent).toContain("1–1 of 51");
+
+    await act(async () => pager.querySelector<HTMLButtonElement>('button[aria-label="Next page"]')!.click());
+    await settle();
+    expect(container.textContent).toContain("page_two_action");
+    expect(container.textContent).not.toContain("page_one_action");
+    expect(container.querySelector('nav[aria-label="Pagination"]')!.textContent).toContain("51–51 of 51");
+    expect(offsets.at(-1)).toBe(50);
+  });
+
   it("announces a failed load as an alert rather than an empty table", async () => {
     vi.stubGlobal(
       "fetch",

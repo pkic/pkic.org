@@ -43,8 +43,8 @@ export const ORGANIZATION_FLOW = {
     {
       id: "10.7",
       title: "Staff manage organizations, link a representative, edit the record, and remove a logo",
-      status: "covered",
-      note: "Through the canonical organizations resource, with the representative chosen from a real user search rather than typed as an id.",
+      status: "unit",
+      note: "Covered in portal-system-organizations, portal-organization-forms, portal-identity-linking and portal-organization-logo: creation has its own address and opens the new record, the representative is chosen from a user search rather than typed as an id, the record edits in place through one update, and the logo uploads and removes behind a confirmation. Worker behavior is covered in organization-management and admin-organizations.",
     },
     {
       id: "10.8",

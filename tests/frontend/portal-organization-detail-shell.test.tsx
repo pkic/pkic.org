@@ -186,6 +186,39 @@ describe("organization detail shell", () => {
     expect(representatives!.compareDocumentPosition(activity!) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
   });
 
+  it("states the slogan once, as the lede under the name", async () => {
+    const withSlogan = organizationDetailResponseSchema.parse({
+      organization: { ...detail().organization, slogan: "Security, standardized." },
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn((input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        return Promise.resolve(json(url.pathname.endsWith("/identities") ? identityPage() : withSlogan));
+      }),
+    );
+
+    const container = mount(
+      <OrganizationDetail
+        organizationId={organizationId}
+        canRead
+        canWrite={false}
+        canManageIdentities={false}
+        canReadSponsorships={false}
+      />,
+    );
+    await settle();
+    await settle();
+
+    expect(container.querySelector(".pk-profile-header__lede")?.textContent).toBe("Security, standardized.");
+    expect(container.querySelector('section[aria-label="About"]')?.textContent).not.toContain(
+      "Security, standardized.",
+    );
+  });
+
   it("loads the account in bounded queries: the record, its representatives, its sponsorships", async () => {
     const requests: string[] = [];
     vi.stubGlobal(
