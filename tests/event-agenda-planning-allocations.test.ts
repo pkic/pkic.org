@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import {
   agendaOccurrenceCreateSchema,
   agendaOccurrencePatchSchema,
+  agendaPublicationSchema,
   agendaRoomCreateSchema,
   agendaSnapshotSchema,
   type AgendaSnapshot,
@@ -13,12 +14,12 @@ import {
   agendaScheduleReviewSchema,
 } from "../assets/shared/schemas/event-agenda-schedule";
 import { createAgendaOccurrence } from "../functions/_lib/services/event-agenda/mutations";
-import { assertPublicationCapacity } from "../functions/_lib/services/event-agenda/publication-capacity";
 import type { DatabaseLike } from "../functions/_lib/types";
 import { callApi } from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { mutateBeforeMatchingQuery } from "./helpers/database-races";
+import { individualAppearanceFixture, seedApprovedSessionAppearances } from "./helpers/agenda-appearances";
 import { resetDb } from "./helpers/reset-db";
 
 const base = "/api/v1/events/pqc-2026/agenda";
@@ -70,14 +71,14 @@ async function fixture(dayCapacity = 1, secondRegistered = false) {
       "pqc-2026",
       agendaOccurrenceCreateSchema.parse({
         expectedRevision: snapshot?.revision ?? 0,
-        title: `Planning capacity session ${index + 1}`,
+        title: `Planning allocation session ${index + 1}`,
         description: "An independent session about reliable certificate lifecycle operations and interoperability.",
         startAt: index === 0 ? "2026-12-01T09:00:00.000Z" : null,
         endAt: index === 0 ? "2026-12-01T10:00:00.000Z" : null,
         roomId: index === 0 ? roomId : null,
       }),
     );
-    ids.push(snapshot.occurrences.find((item) => item.title === `Planning capacity session ${index + 1}`)!.id);
+    ids.push(snapshot.occurrences.find((item) => item.title === `Planning allocation session ${index + 1}`)!.id);
   }
   await env.DB.batch([
     env.DB.prepare(
@@ -139,37 +140,57 @@ async function fixture(dayCapacity = 1, secondRegistered = false) {
     expect(response.status, await response.clone().text()).toBe(200);
     return agendaScheduleReviewSchema.parse(await response.json());
   }
-  return { eventId, ids, people, roomId, otherRoomId, raw, read, proposal, review, register };
+  async function apply(input: ReturnType<typeof proposal>) {
+    const reviewed = await review(input);
+    const response = await raw(
+      `${base}/schedule`,
+      agendaScheduleApplySchema.parse({ ...input, reviewHash: reviewed.reviewHash }),
+    );
+    expect(response.status, await response.clone().text()).toBe(200);
+    return agendaSnapshotSchema.parse(await response.json());
+  }
+  /** Approval needs reviewed public credits; the people and their placements are unchanged. */
+  async function approve(snapshot: AgendaSnapshot) {
+    for (const session of snapshot.occurrences)
+      if (session.speakers.length)
+        await seedApprovedSessionAppearances(env.DB, {
+          occurrenceId: session.id,
+          reviewerId: admin.id,
+          appearances: session.speakers.map((speaker) =>
+            individualAppearanceFixture({
+              userId: speaker.userId,
+              displayName: `Presenter ${speaker.userId.slice(0, 8)}`,
+              approvedAt: "2026-10-04T00:00:00.000Z",
+            }),
+          ),
+        });
+    return raw(`${base}/publications`, agendaPublicationSchema.parse({ expectedRevision: snapshot.revision }));
+  }
+  async function approved(snapshot: AgendaSnapshot) {
+    const response = await approve(snapshot);
+    expect(response.status, await response.clone().text()).toBe(200);
+    const published = agendaSnapshotSchema.parse(await response.json());
+    expect(published.publishedRevision).toBe(published.revision);
+    return published;
+  }
+  return { eventId, ids, people, roomId, otherRoomId, raw, read, proposal, review, apply, approve, approved, register };
 }
 
-describe("draft schedule preserves existing event-day overage without adding demand", () => {
-  it("reviews and applies an unchanged slot and a room/time move without touching allocations; publication remains strict", async () => {
+describe("agenda planning and approval never enforce attendance capacity", () => {
+  it("applies an unchanged slot and a room/time move on an overfull day without touching allocations, then approves", async () => {
     const f = await fixture();
     let snapshot = await f.read();
     const registrations = await queryAll(env.DB, "SELECT * FROM registrations ORDER BY id");
     const dayAttendance = await queryAll(env.DB, "SELECT * FROM registration_day_attendance ORDER BY id");
-    for (const input of [
+    snapshot = await f.apply(
       agendaScheduleProposalSchema.parse({
         expectedRevision: snapshot.revision,
         changes: [
-          {
-            id: f.ids[0],
-            startAt: "2026-12-01T09:00:00.000Z",
-            endAt: "2026-12-01T10:00:00.000Z",
-            roomId: f.roomId,
-          },
+          { id: f.ids[0], startAt: "2026-12-01T09:00:00.000Z", endAt: "2026-12-01T10:00:00.000Z", roomId: f.roomId },
         ],
       }),
-      f.proposal({ ...snapshot, revision: snapshot.revision + 1 }, f.ids[0], f.otherRoomId),
-    ]) {
-      const reviewed = await f.review(input);
-      const response = await f.raw(
-        `${base}/schedule`,
-        agendaScheduleApplySchema.parse({ ...input, reviewHash: reviewed.reviewHash }),
-      );
-      expect(response.status, await response.clone().text()).toBe(200);
-      snapshot = agendaSnapshotSchema.parse(await response.json());
-    }
+    );
+    snapshot = await f.apply(f.proposal(snapshot, f.ids[0], f.otherRoomId));
     expect(snapshot.occurrences.find((item) => item.id === f.ids[0])).toMatchObject({
       roomId: f.otherRoomId,
       startAt: "2026-12-01T10:00:00.000Z",
@@ -180,59 +201,76 @@ describe("draft schedule preserves existing event-day overage without adding dem
     expect(await queryAll(env.DB, "SELECT * FROM agenda_session_holds")).toEqual([]);
     expect(await queryAll(env.DB, "SELECT * FROM email_outbox")).toEqual([]);
     expect(await queryAll(env.DB, "SELECT * FROM agenda_push_outbox")).toEqual([]);
-    await expect(assertPublicationCapacity(env.DB, snapshot)).rejects.toMatchObject({
-      code: "AGENDA_RESERVED_CAPACITY",
-    });
+    await f.approved(snapshot);
+    expect(await queryAll(env.DB, "SELECT * FROM registrations ORDER BY id")).toEqual(registrations);
   });
 
-  it("places an unscheduled presenter already registered for the day without adding day demand", async () => {
+  it("places an unscheduled presenter already registered for the day", async () => {
     const f = await fixture(1, true);
-    const input = f.proposal(await f.read(), f.ids[1], f.roomId, "11");
-    const reviewed = await f.review(input);
-    const response = await f.raw(`${base}/schedule`, { ...input, reviewHash: reviewed.reviewHash });
-    expect(response.status, await response.clone().text()).toBe(200);
-    expect(
-      agendaSnapshotSchema.parse(await response.json()).occurrences.find((item) => item.id === f.ids[1])!.startAt,
-    ).toBe("2026-12-01T11:00:00.000Z");
+    const saved = await f.apply(f.proposal(await f.read(), f.ids[1], f.roomId, "11"));
+    expect(saved.occurrences.find((item) => item.id === f.ids[1])!.startAt).toBe("2026-12-01T11:00:00.000Z");
     expect(await queryAll(env.DB, "SELECT * FROM agenda_session_participations")).toEqual([]);
   });
 
-  it("refuses a new unregistered presenter on the overfull day with every agenda effect unchanged", async () => {
+  it("accepts a new unregistered presenter on the overfull day and approves the agenda", async () => {
     const f = await fixture();
-    const before = await effects();
-    const response = await f.raw(`${base}/schedule/reviews`, f.proposal(await f.read(), f.ids[1], f.roomId, "11"));
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ error: { code: "AGENDA_RESERVED_CAPACITY" } });
-    expect(await effects()).toEqual(before);
+    const saved = await f.apply(f.proposal(await f.read(), f.ids[1], f.roomId, "11"));
+    expect(saved.occurrences.find((item) => item.id === f.ids[1])!.startAt).toBe("2026-12-01T11:00:00.000Z");
+    const published = await f.approved(saved);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT user_id FROM event_agenda_operational_days WHERE event_id=? AND revision=? ORDER BY user_id",
+        [f.eventId, published.publishedRevision],
+      ),
+    ).toEqual([f.people[0]!, f.people[2]!].sort().map((user_id) => ({ user_id })));
+    expect(await queryAll(env.DB, "SELECT * FROM registrations")).toHaveLength(2);
   });
 
   it("allows removing the existing operational person from the day without altering their registration", async () => {
     const f = await fixture();
     const snapshot = await f.read();
-    const input = agendaScheduleProposalSchema.parse({
-      expectedRevision: snapshot.revision,
-      changes: [{ id: f.ids[0], startAt: null, endAt: null, roomId: null }],
-    });
-    const reviewed = await f.review(input);
-    const response = await f.raw(`${base}/schedule`, { ...input, reviewHash: reviewed.reviewHash });
-    expect(response.status, await response.clone().text()).toBe(200);
-    expect(
-      agendaSnapshotSchema.parse(await response.json()).occurrences.find((item) => item.id === f.ids[0])!.startAt,
-    ).toBeNull();
+    const saved = await f.apply(
+      agendaScheduleProposalSchema.parse({
+        expectedRevision: snapshot.revision,
+        changes: [{ id: f.ids[0], startAt: null, endAt: null, roomId: null }],
+      }),
+    );
+    expect(saved.occurrences.find((item) => item.id === f.ids[0])!.startAt).toBeNull();
     expect(await queryAll(env.DB, "SELECT * FROM registrations")).toHaveLength(2);
   });
 
-  it("keeps finite session capacity strict even when a move adds no day demand", async () => {
+  it("moves a session whose finite capacity is below its operational presenters", async () => {
     const f = await fixture();
     await env.DB.prepare("UPDATE event_agenda_occurrences SET capacity=0 WHERE id=?").bind(f.ids[0]).run();
-    const before = await effects();
-    const response = await f.raw(`${base}/schedule/reviews`, f.proposal(await f.read()));
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ error: { code: "AGENDA_RESERVED_CAPACITY" } });
-    expect(await effects()).toEqual(before);
+    const saved = await f.apply(f.proposal(await f.read()));
+    expect(saved.occurrences.find((item) => item.id === f.ids[0])).toMatchObject({
+      capacity: 0,
+      startAt: "2026-12-01T10:00:00.000Z",
+    });
+    await f.approved(saved);
   });
 
-  it("preserves an existing reservation's physical room and mode despite the relaxed day-overage comparison", async () => {
+  it("saves a room with more seats than the event day capacity and approves the agenda", async () => {
+    const f = await fixture();
+    const snapshot = await f.read();
+    const input = agendaRoomCreateSchema.parse({
+      expectedRevision: snapshot.revision,
+      name: "Main hall",
+      capacity: 900,
+      setupMinutes: 0,
+    });
+    const response = await f.raw(`${base}/rooms/${f.roomId}`, input, undefined, "PUT");
+    expect(response.status, await response.clone().text()).toBe(200);
+    const saved = agendaSnapshotSchema.parse(await response.json());
+    expect(saved.rooms.find((room) => room.id === f.roomId)).toMatchObject({ name: "Main hall", capacity: 900 });
+    const published = await f.approved(saved);
+    expect(published.rooms.find((room) => room.id === f.roomId)!.capacity).toBe(900);
+  });
+});
+
+describe("agenda planning and approval preserve existing allocations", () => {
+  it("refuses moving an existing reservation to another room or attendance mode", async () => {
     const f = await fixture();
     await env.DB.prepare(
       "INSERT INTO agenda_session_participations(id,event_id,occurrence_id,user_id,attendance_mode,room_id,status,created_at,updated_at) VALUES(?,?,?,?,'physical',?,'reserved',datetime('now'),datetime('now'))",
@@ -256,35 +294,58 @@ describe("draft schedule preserves existing event-day overage without adding dem
     for (const input of [move, changeMode]) {
       const response = await f.raw(`${base}/schedule/reviews`, input);
       expect(response.status).toBe(409);
-      expect(await response.json()).toMatchObject({ error: { code: "AGENDA_RESERVED_CAPACITY" } });
+      expect(await response.json()).toMatchObject({ error: { code: "AGENDA_RESERVED_ALLOCATION" } });
       expect(await effects()).toEqual(before);
     }
   });
 
-  it("recounts a concurrent day registration inside the actual schedule-write batch and rolls back all schedule effects", async () => {
-    const f = await fixture(3);
-    const input = f.proposal(await f.read(), f.ids[1], f.roomId, "11");
+  it("refuses approval when a reservation was made in a room the draft no longer uses", async () => {
+    const f = await fixture();
+    const moved = await f.apply(f.proposal(await f.read(), f.ids[0], f.otherRoomId));
+    await env.DB.prepare(
+      "INSERT INTO agenda_session_participations(id,event_id,occurrence_id,user_id,attendance_mode,room_id,status,created_at,updated_at) VALUES(?,?,?,?,'physical',?,'reserved',datetime('now'),datetime('now'))",
+    )
+      .bind(crypto.randomUUID(), f.eventId, f.ids[0], f.people[1], f.roomId)
+      .run();
+    const response = await f.approve(moved);
+    expect(response.status).toBe(409);
+    expect(await response.json()).toMatchObject({ error: { code: "AGENDA_RESERVED_ALLOCATION" } });
+    expect((await f.read()).publishedRevision).toBeNull();
+  });
+
+  it("rechecks a reservation committed after review inside the schedule-write batch and rolls back all schedule effects", async () => {
+    const f = await fixture();
+    const input = f.proposal(await f.read(), f.ids[0], f.otherRoomId);
     const reviewed = await f.review(input);
     const before = await effects();
+    const reservationId = crypto.randomUUID();
     let raced = false;
     const db = mutateBeforeMatchingQuery(
       env.DB,
       (sql) => sql.startsWith("UPDATE event_agenda_occurrences SET start_at="),
       async () => {
         raced = true;
-        await f.register(f.people[3]!);
+        await env.DB.prepare(
+          "INSERT INTO agenda_session_participations(id,event_id,occurrence_id,user_id,attendance_mode,room_id,status,created_at,updated_at) VALUES(?,?,?,?,'physical',?,'reserved',datetime('now'),datetime('now'))",
+        )
+          .bind(reservationId, f.eventId, f.ids[0], f.people[1], f.roomId)
+          .run();
       },
     );
     const response = await f.raw(`${base}/schedule`, { ...input, reviewHash: reviewed.reviewHash }, db);
     expect(raced).toBe(true);
     expect(response.status, await response.clone().text()).toBe(409);
-    expect(await effects()).toEqual(before);
-    expect(await queryAll(env.DB, "SELECT * FROM registrations")).toHaveLength(3);
-    expect(await queryAll(env.DB, "SELECT * FROM registration_day_attendance")).toHaveLength(3);
+    const after = await effects();
+    // Only the independently committed reservation survives the rejected schedule write.
+    const participationIndex = effectTables.indexOf("agenda_session_participations");
+    expect(after[participationIndex]).toHaveLength(1);
+    expect(after[participationIndex]![0]).toMatchObject({ id: reservationId, room_id: f.roomId, status: "reserved" });
+    after[participationIndex] = [];
+    expect(after).toEqual(before);
   });
 });
 
-describe("draft session and room edits preserve independent capacity limits", () => {
+describe("draft session and room edits ignore event-day and room capacity", () => {
   it("saves a title-only edit on an overfull event day while null session and room capacities stay unlimited", async () => {
     const f = await fixture();
     const snapshot = await f.read();
@@ -310,13 +371,11 @@ describe("draft session and room edits preserve independent capacity limits", ()
     expect(saved.rooms.find((room) => room.id === f.roomId)!.capacity).toBeNull();
     expect(await queryAll(env.DB, "SELECT * FROM registrations")).toHaveLength(2);
     expect(await queryAll(env.DB, "SELECT * FROM agenda_session_participations")).toEqual([]);
-    await expect(assertPublicationCapacity(env.DB, saved)).rejects.toMatchObject({ code: "AGENDA_RESERVED_CAPACITY" });
   });
 
-  it("refuses adding a new physical presenter through session editing to an overfull day without side effects", async () => {
+  it("adds a new physical presenter through session editing on an overfull day", async () => {
     const f = await fixture();
-    const snapshot = await f.read(),
-      before = await effects();
+    const snapshot = await f.read();
     const response = await f.raw(
       `${base}/occurrences/${f.ids[0]}`,
       agendaOccurrencePatchSchema.parse({
@@ -326,12 +385,17 @@ describe("draft session and room edits preserve independent capacity limits", ()
       undefined,
       "PATCH",
     );
-    expect(response.status).toBe(409);
-    expect(await response.json()).toMatchObject({ error: { code: "AGENDA_RESERVED_CAPACITY" } });
-    expect(await effects()).toEqual(before);
+    expect(response.status, await response.clone().text()).toBe(200);
+    const saved = agendaSnapshotSchema.parse(await response.json());
+    expect(
+      saved.occurrences
+        .find((item) => item.id === f.ids[0])!
+        .speakers.map((speaker) => speaker.userId)
+        .sort(),
+    ).toEqual([f.people[0]!, f.people[2]!].sort());
   });
 
-  it("renames an unlimited room on an overfull day but refuses a finite limit below its operational occupancy", async () => {
+  it("saves a room capacity below its operational occupancy", async () => {
     const f = await fixture();
     const snapshot = await f.read();
     const input = agendaRoomCreateSchema.parse({
@@ -344,25 +408,28 @@ describe("draft session and room edits preserve independent capacity limits", ()
     expect(response.status, await response.clone().text()).toBe(200);
     const saved = agendaSnapshotSchema.parse(await response.json());
     expect(saved.rooms.find((room) => room.id === f.roomId)).toMatchObject({ name: input.name, capacity: null });
-    const before = await effects();
     const downsize = await f.raw(
       `${base}/rooms/${f.roomId}`,
       { ...input, expectedRevision: saved.revision, capacity: 0 },
       undefined,
       "PUT",
     );
-    expect(downsize.status).toBe(409);
-    expect(await downsize.json()).toMatchObject({ error: { code: "AGENDA_RESERVED_CAPACITY" } });
-    expect(await effects()).toEqual(before);
+    expect(downsize.status, await downsize.clone().text()).toBe(200);
+    expect(agendaSnapshotSchema.parse(await downsize.json()).rooms.find((room) => room.id === f.roomId)!.capacity).toBe(
+      0,
+    );
   });
 
-  it("does not relax the session physical or remote pool when editing a draft with null room capacity", async () => {
+  it("refuses a session capacity edit below confirmed physical or remote reservations", async () => {
     const f = await fixture();
-    await env.DB.prepare(
-      "INSERT INTO agenda_session_participations(id,event_id,occurrence_id,user_id,attendance_mode,status,created_at,updated_at) VALUES(?,?,?,?,'remote','reserved',datetime('now'),datetime('now'))",
-    )
-      .bind(crypto.randomUUID(), f.eventId, f.ids[0], f.people[1])
-      .run();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO agenda_session_participations(id,event_id,occurrence_id,user_id,attendance_mode,room_id,status,created_at,updated_at) VALUES(?,?,?,?,'physical',?,'reserved',datetime('now'),datetime('now'))",
+      ).bind(crypto.randomUUID(), f.eventId, f.ids[0], f.people[1], f.roomId),
+      env.DB.prepare(
+        "INSERT INTO agenda_session_participations(id,event_id,occurrence_id,user_id,attendance_mode,status,created_at,updated_at) VALUES(?,?,?,?,'remote','reserved',datetime('now'),datetime('now'))",
+      ).bind(crypto.randomUUID(), f.eventId, f.ids[0], f.people[3]),
+    ]);
     const snapshot = await f.read(),
       before = await effects();
     for (const limits of [{ capacity: 0 }, { remoteCapacity: 0 }]) {
@@ -378,38 +445,33 @@ describe("draft session and room edits preserve independent capacity limits", ()
     }
   });
 
-  it("guards a presenter edit against a day registration committed after preflight and rolls back every edit effect", async () => {
-    const f = await fixture(3);
-    const snapshot = await f.read(),
-      before = await effects();
-    let raced = false;
-    const db = mutateBeforeMatchingQuery(
-      env.DB,
-      (sql) => sql.startsWith("UPDATE event_agenda_occurrences SET title="),
-      async () => {
-        raced = true;
-        await f.register(f.people[3]!);
-      },
-    );
+  it("saves a title edit on a session already over its physical and remote limits", async () => {
+    const f = await fixture();
+    await env.DB.batch([
+      env.DB.prepare(
+        "INSERT INTO agenda_session_participations(id,event_id,occurrence_id,user_id,attendance_mode,room_id,status,created_at,updated_at) VALUES(?,?,?,?,'physical',?,'reserved',datetime('now'),datetime('now'))",
+      ).bind(crypto.randomUUID(), f.eventId, f.ids[0], f.people[1], f.roomId),
+      env.DB.prepare(
+        "INSERT INTO agenda_session_participations(id,event_id,occurrence_id,user_id,attendance_mode,status,created_at,updated_at) VALUES(?,?,?,?,'remote','reserved',datetime('now'),datetime('now'))",
+      ).bind(crypto.randomUUID(), f.eventId, f.ids[0], f.people[3]),
+      env.DB.prepare("UPDATE event_agenda_occurrences SET capacity=0,remote_capacity=0 WHERE id=?").bind(f.ids[0]),
+    ]);
+    const snapshot = await f.read();
     const response = await f.raw(
       `${base}/occurrences/${f.ids[0]}`,
-      agendaOccurrencePatchSchema.parse({
-        expectedRevision: snapshot.revision,
-        speakerUserIds: [f.people[0], f.people[2]],
-      }),
-      db,
+      agendaOccurrencePatchSchema.parse({ expectedRevision: snapshot.revision, title: "Renamed while full" }),
+      undefined,
       "PATCH",
     );
-    expect(raced).toBe(true);
-    expect(response.status, await response.clone().text()).toBe(409);
-    expect(await effects()).toEqual(before);
-    expect(await queryAll(env.DB, "SELECT * FROM registrations")).toHaveLength(3);
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(
+      agendaSnapshotSchema.parse(await response.json()).occurrences.find((item) => item.id === f.ids[0]),
+    ).toMatchObject({ title: "Renamed while full", capacity: 0, remoteCapacity: 0 });
   });
 
-  it("guards a room edit against an allocation committed after preflight and preserves both the old room and competing reservation", async () => {
+  it("saves a room capacity edit while an allocation is committed concurrently and preserves the reservation", async () => {
     const f = await fixture();
     const snapshot = await f.read();
-    const before = await effects();
     const reservationId = crypto.randomUUID();
     let raced = false;
     const db = mutateBeforeMatchingQuery(
@@ -436,13 +498,9 @@ describe("draft session and room edits preserve independent capacity limits", ()
       "PUT",
     );
     expect(raced).toBe(true);
-    expect(response.status, await response.clone().text()).toBe(409);
-    const after = await effects();
-    // Only the independently committed reservation survives the rejected edit.
-    const participationIndex = effectTables.indexOf("agenda_session_participations");
-    expect(after[participationIndex]).toHaveLength(1);
-    expect(after[participationIndex]![0]).toMatchObject({ id: reservationId, room_id: f.roomId, status: "reserved" });
-    after[participationIndex] = [];
-    expect(after).toEqual(before);
+    expect(response.status, await response.clone().text()).toBe(200);
+    expect(await queryAll(env.DB, "SELECT id,room_id,status FROM agenda_session_participations")).toEqual([
+      { id: reservationId, room_id: f.roomId, status: "reserved" },
+    ]);
   });
 });

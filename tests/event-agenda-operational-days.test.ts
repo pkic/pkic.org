@@ -99,7 +99,7 @@ describe("Private approved event-day operational capacity", () => {
         .first(),
     ).toMatchObject({ day_date: "2027-01-20", user_id: staffId });
   });
-  it("refuses a publication that adds a presenter beyond existing event-day capacity", async () => {
+  it("approves a publication that adds a presenter beyond existing event-day capacity", async () => {
     await registration(attendeeId);
     await env.DB.prepare(
       "INSERT INTO event_agenda_occurrence_speakers(occurrence_id,user_id,role) VALUES(?,?,'speaker')",
@@ -117,17 +117,14 @@ describe("Private approved event-day operational capacity", () => {
         }),
       ],
     });
-    await expect(publishAgenda(env.DB, eventId, "operational-days", 0, admin)).rejects.toMatchObject({
-      code: "AGENDA_RESERVED_CAPACITY",
-    });
+    // The agenda never enforces attendance capacity; registration owns it and no-shows absorb the overage.
+    await publishAgenda(env.DB, eventId, "operational-days", 0, admin);
     expect(
       await env.DB.prepare("SELECT published_revision FROM event_agenda_state WHERE event_id=?").bind(eventId).first(),
-    ).toMatchObject({ published_revision: null });
+    ).toMatchObject({ published_revision: 1 });
     expect(
-      await env.DB.prepare("SELECT COUNT(*) AS count FROM event_agenda_operational_days WHERE event_id=?")
-        .bind(eventId)
-        .first(),
-    ).toMatchObject({ count: 0 });
+      await env.DB.prepare(`SELECT ${eventEntryOccupiedSql(`'${eventId}'`, "'2027-01-20'")} AS occupied`).first(),
+    ).toMatchObject({ occupied: 2 });
   });
   it("excludes remote credits and staff while deduplicating physical credit and block duties", async () => {
     const snapshot = await getAgenda(env.DB, eventId, "operational-days");

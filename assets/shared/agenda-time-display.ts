@@ -44,3 +44,52 @@ export function agendaLocalClock(value: string, eventZone: string, browserZone: 
     return { time: EMPTY_DATE, date: undefined };
   }
 }
+
+/** A short zone name for a clock ("CST", "CET"), falling back to an offset ("GMT+8"). */
+export function agendaZoneAbbreviation(value: string, zone: string): string {
+  const name = (locale: string) => {
+    try {
+      return new Intl.DateTimeFormat(locale, { timeZone: zone, timeZoneName: "short" })
+        .formatToParts(new Date(value))
+        .find((part) => part.type === "timeZoneName")?.value;
+    } catch {
+      return undefined;
+    }
+  };
+  const american = name("en-US");
+  if (american && !american.startsWith("GMT")) return american;
+  const british = name("en-GB");
+  return british && !british.startsWith("GMT") ? british : (american ?? "");
+}
+
+/** The design's short list of zones offered beside the event and device zones. */
+export const AGENDA_COMMON_TIME_ZONES = [
+  "Europe/London",
+  "Europe/Amsterdam",
+  "America/New_York",
+  "America/Chicago",
+  "America/Los_Angeles",
+  "America/Sao_Paulo",
+  "Asia/Dubai",
+  "Asia/Kolkata",
+  "Asia/Singapore",
+  "Asia/Tokyo",
+  "Australia/Sydney",
+  "UTC",
+] as const;
+
+export function agendaZoneCity(zone: string): string {
+  return zone === "UTC" ? "UTC" : (zone.split("/").pop() ?? zone).replaceAll("_", " ");
+}
+
+/** "UTC+1" / "UTC−5" for a zone on the agenda's own date, so DST matches the event. */
+export function agendaZoneOffset(zone: string, referenceDate: string): string {
+  try {
+    const value = new Intl.DateTimeFormat("en-US", { timeZone: zone, timeZoneName: "shortOffset" })
+      .formatToParts(new Date(`${referenceDate}T12:00:00Z`))
+      .find((part) => part.type === "timeZoneName")?.value;
+    return (value ?? "UTC").replace("GMT", "UTC").replace("-", "−");
+  } catch {
+    return "UTC";
+  }
+}

@@ -14,6 +14,7 @@ import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { uploadThroughControl } from "./helpers/file-upload";
+import { agendaWorkspacePath } from "./helpers/agenda-workspace";
 import { agendaSnapshotSchema } from "../../assets/shared/schemas/event-agenda";
 import {
   agendaTransferSchema,
@@ -78,7 +79,7 @@ test("organizer resolves a reviewed versioned copy and imports only to the draft
   expect(person).toBeDefined();
   expect(person!.canonicalUserId).toBe(identity.id);
   person!.canonicalUserId = null;
-  await page.goto(`/portal/#/events/${slug}/agenda`);
+  await page.goto(await agendaWorkspacePath(page, slug));
   await runAgendaAction(page, "Import sessions");
   await page.getByRole("button", { name: "Import or export versioned agenda", exact: true }).click();
   await uploadThroughControl(page, page.getByLabel("Versioned agenda JSON", { exact: true }), {

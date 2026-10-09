@@ -63,10 +63,21 @@ describe("participant availability projection", () => {
     expect(link.label).toBe("Invitation required");
     expect(link.message).toContain("Sign in");
     expect(eventParticipationLink("event", "id", "preference")).toMatchObject({
-      label: "Save preference",
+      label: "Save favorite",
       preference: true,
     });
     expect(eventParticipationLink("event", "id", "reservation").preference).toBe(false);
     expect(link.preference).toBe(false);
+    for (const policy of ["preference", "optional_reservation", "reservation", "approval"] as const) {
+      const candidate = eventParticipationLink("event", "id", policy, "invitation");
+      expect(candidate.favorite.label).toBe("Save favorite");
+      expect(candidate.favorite.message).toContain("does not register");
+      expect(candidate.label).toBe("Invitation required");
+    }
+    expect(eventParticipationLink("event", "id", "optional_reservation")).toMatchObject({
+      policyLabel: "Registration optional",
+      preference: false,
+    });
+    expect(eventParticipationLink("event", "id", "reservation").label).toBe("Register for session");
   });
 });

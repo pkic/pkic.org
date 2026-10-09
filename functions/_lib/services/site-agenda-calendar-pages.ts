@@ -1,5 +1,9 @@
 import type { SitePublicationSnapshot } from "../../../assets/shared/schemas/site-publication";
-import { publishedEventAgendas, approvedEventProgram } from "./site-published-event-agendas";
+import {
+  publishedEventAgendas,
+  approvedEventProgram,
+  approvedEventAgendaForRoute,
+} from "./site-published-event-agendas";
 import { applyApprovedAgenda } from "./site-approved-agenda";
 import { conferenceAgendaCalendar } from "./site-conference-calendar";
 import { publicAgendaCalendar, publicSessionCalendarPath } from "./site-public-agenda-calendar";
@@ -51,19 +55,25 @@ export function publicConferenceAgendaCalendar(
   publication: SitePublicationSnapshot,
   event: { route: string; program: Parameters<typeof conferenceAgendaCalendar>[0]; updatedAt: string },
 ) {
-  const agendaPath = `${event.route}agenda/`;
+  const authoredAgendaPath = `${event.route}agenda/`;
+  const direct = publishedEventAgendas(publication).filter(({ route }) => route === authoredAgendaPath);
+  if (direct.length > 1) throw new Error("PUBLIC_CALENDAR_ROUTE_CONFLICT");
+  const snapshot = direct[0]?.snapshot ?? approvedEventAgendaForRoute(publication, event.route);
+  const agendaPath = snapshot?.publicAgendaPath ?? authoredAgendaPath;
   const calendars = Object.values(publication.eventAgendaCalendars ?? {}).filter(
     (calendar) => calendar.agendaPath === agendaPath,
   );
-  const current = publishedEventAgendas(publication).filter(({ route }) => route === agendaPath);
-  if (calendars.length > 1 || current.length > 1) throw new Error("PUBLIC_CALENDAR_ROUTE_CONFLICT");
+  if (calendars.length > 1) throw new Error("PUBLIC_CALENDAR_ROUTE_CONFLICT");
   const calendar = calendars[0];
-  const snapshot = current[0]?.snapshot;
   const program = applyApprovedAgenda(event.program, snapshot);
   return calendar
     ? publicAgendaCalendar(calendar, "https://pkic.org", {
         current: snapshot
-          ? { program, updatedAt: snapshot.approvedAt ?? event.updatedAt, eventUrl: `https://pkic.org${event.route}` }
+          ? {
+              program,
+              updatedAt: snapshot.approvedAt ?? event.updatedAt,
+              eventUrl: new URL(agendaPath, "https://pkic.org").href,
+            }
           : undefined,
       })
     : conferenceAgendaCalendar(program, `https://pkic.org${event.route}`, event.updatedAt);

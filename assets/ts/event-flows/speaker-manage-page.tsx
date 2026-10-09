@@ -8,7 +8,7 @@ import { renderProfileLinks, normalizeProfileLinks, type ProfileLinksWidget } fr
 import { renderConsentInputs, readConsentValues, syncConsentValidation } from "../shared/widgets/consents";
 import { withLoadingButton } from "../shared/form/submit";
 import { setStatus } from "./boot";
-import { wireTokenHeadshotSection } from "./registration-manage-headshot";
+import { mountTokenHeadshot } from "./token-headshot";
 import { eventTermsResponseSchema, type RequiredTerm } from "../../shared/schemas/forms";
 import { readField, formatStatusLabel, statusBadgeToneClass, findSubmitButton } from "../shared/form/helpers";
 import { loadSpeakerPageData } from "./speaker-link-recovery";
@@ -363,16 +363,11 @@ async function main(): Promise<void> {
     toggleEditableSections(false);
   } else {
     toggleEditableSections(true);
-    wireTokenHeadshotSection({
-      root: boot.root,
-      initialHeadshotUrl: data.profile.headshotUrl,
-      statusEl: boot.statusEl,
-      uploadUrl: proposalSpeakerAccessPath(boot.apiBase, token, "headshot"),
-      deleteUrl: proposalSpeakerAccessPath(boot.apiBase, token, "headshot"),
-      emptyLabel: "No headshot uploaded yet.",
-      uploadSuccessStatus: "Headshot uploaded successfully.",
-      deleteSuccessStatus: "Headshot removed successfully.",
-      confirmDeleteMessage: "Remove your headshot?",
+    mountTokenHeadshot({
+      section: headshotSection,
+      name: [data.profile.firstName, data.profile.lastName].filter(Boolean).join(" ") || data.profile.email,
+      initialUrl: data.profile.headshotUrl,
+      url: proposalSpeakerAccessPath(boot.apiBase, token, "headshot"),
     });
   }
 

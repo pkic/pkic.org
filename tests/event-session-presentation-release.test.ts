@@ -20,7 +20,7 @@ import {
 } from "../assets/shared/schemas/site-publication-release";
 import {
   publicationDocumentAllowSchema,
-  publicationDocumentEffectSchema,
+  publicationPdfEffectSchema,
   publicationDocumentGrantId,
   publicationDocumentStorageKey,
 } from "../assets/shared/schemas/site-publication-documents";
@@ -226,7 +226,7 @@ describe("Static selected public PDF with private terminal authority", () => {
     expect(await full.text()).toBe(pdf);
     await writePublicationDocumentDenial(
       requirePresentationBucket(env),
-      publicationDocumentEffectSchema.strip().parse(allow),
+      publicationPdfEffectSchema.strip().parse(allow),
     );
     const revokedCases: RequestInit[] = [
       {},

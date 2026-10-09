@@ -42,7 +42,6 @@ export function useAgendaSessionLocations(
           globalAll={session.kind === "break"}
           value={session.kind === "break" && !selected.length ? null : selected}
           onChange={(ids) => setSelected(ids ?? [])}
-          help="Choose one or more locations. Use Ctrl or Command to select several."
         />
       </Dialog>
     ),

@@ -15,6 +15,7 @@ import {
   attendanceAttemptsExportQuerySchema,
 } from "../../../../../../../shared/schemas/event-attendance-exports";
 import { Button, ButtonLink } from "../../../../../../ui/Button";
+import { DownloadAction } from "../../../../../../ui/DownloadAction";
 import { useCallback, useEffect, useState } from "preact/hooks";
 import type { z } from "zod";
 import { attendanceAttemptSchema } from "../../../../../../../shared/schemas/event-attendance-reporting";
@@ -121,11 +122,10 @@ export function EventAttendanceDetails({
           load={loadIdentityRows}
           toolbar={(_actions, query) =>
             identityExportReady && (
-              <ButtonLink
+              <DownloadAction
+                label="Download observed people (CSV)"
                 href={`${base}/people/exports?${new URLSearchParams(attendancePeopleExportQuerySchema.parse(exportQuery(query)))}`}
-              >
-                Export observed people
-              </ButtonLink>
+              />
             )
           }
           columns={[
@@ -228,11 +228,12 @@ export function EventAttendanceDetails({
                 <ButtonLink href={allScansHref}>View all scans</ButtonLink>
               )}
               {identityExportReady && (
-                <ButtonLink
+                <DownloadAction
+                  label={
+                    params.unsuccessful === "true" ? "Download unsuccessful scans (CSV)" : "Download scan log (CSV)"
+                  }
                   href={`${base}/attempts/exports?${new URLSearchParams(Object.entries(attendanceAttemptsExportQuerySchema.parse(exportQuery(query))).map(([key, value]) => [key, String(value)]))}`}
-                >
-                  Export scan log
-                </ButtonLink>
+                />
               )}
             </div>
           )}

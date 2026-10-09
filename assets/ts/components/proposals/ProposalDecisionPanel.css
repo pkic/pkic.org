@@ -1,9 +1,0 @@
-@layer components {
-  .pk-proposal-email-choice {
-    white-space: normal;
-  }
-
-  .pk-proposal-email-choice > span {
-    width: 100%;
-  }
-}

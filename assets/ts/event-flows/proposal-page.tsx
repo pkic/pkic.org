@@ -21,6 +21,7 @@ import { EventProposalIdentityStep } from "../components/EventProposalIdentitySt
 import type { ProposalEntrySelection } from "../components/useProposalEntryIdentity";
 import { ParticipationIdentitySummary } from "../components/ParticipationIdentitySummary";
 import { SpeakerFormCard } from "../components/SpeakerFormCard";
+import { ConfirmDialogHost } from "../components/ConfirmDialog";
 import { SuccessPanel } from "../components/SuccessPanel";
 import { ButtonLink } from "../ui/Button";
 import { Radio } from "../ui/Checkbox";
@@ -154,6 +155,7 @@ function createSpeakerCard(index: number): {
         bio: `speakers.${index}.bio`,
       }}
       onRemove={handleRemove}
+      removeLabel={`Remove speaker ${index}`}
     />,
     container,
   );
@@ -248,6 +250,10 @@ async function main(): Promise<void> {
   if (!boot) return;
 
   const { form, statusEl, eventSlug, eventPagePath, apiBase, query } = boot;
+  // Removing a filled-in speaker card confirms in the shared dialog, which needs a host on this public page.
+  const confirmHost = document.createElement("div");
+  boot.root.append(confirmHost);
+  render(<ConfirmDialogHost />, confirmHost);
   const eventPathHeaders = eventPagePath ? { "x-event-base-path": eventPagePath } : undefined;
   const originalEntryContext = proposalEntryContextSchema.parse({
     inviteToken: query.inviteToken ?? undefined,

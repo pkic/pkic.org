@@ -19,6 +19,7 @@ import {
   agendaStaffingSchema,
   agendaAllocationSchema,
   agendaRevisionSchema,
+  agendaPublicationSchema,
   agendaOccurrenceQuerySchema,
   agendaOccurrenceListSchema,
 } from "./event-agenda";
@@ -90,7 +91,7 @@ export const agendaPublicationRouteSchema = {
   summary: "Freeze public agenda revision",
   request: {
     params: eventSlugParamsSchema,
-    body: { content: { "application/json": { schema: agendaRevisionSchema } } },
+    body: { content: { "application/json": { schema: agendaPublicationSchema } } },
   },
 };
 

@@ -1,3 +1,4 @@
+import { publicationAuthoredAgendaRoutes } from "../../../assets/shared/publication-agenda-routes";
 import type { AgendaSnapshot } from "../../../assets/shared/schemas/event-agenda";
 import type { SitePublicationSnapshot } from "../../../assets/shared/schemas/site-publication";
 import { publishedConferenceProgram } from "./site-conference-program";
@@ -35,8 +36,14 @@ export function approvedEventAgendaForRoute(
   eventRoute?: string,
 ): AgendaSnapshot | undefined {
   if (!publication) return undefined;
+  const originals = publicationAuthoredAgendaRoutes(publication).filter(
+    (owner) => owner.route === (eventRoute ?? route),
+  );
   const owners = publishedEventAgendas(publication).filter(
-    (entry) => route === entry.route || `${eventRoute ?? route}agenda/` === entry.route,
+    (entry) =>
+      route === entry.route ||
+      `${eventRoute ?? route}agenda/` === entry.route ||
+      originals.some((owner) => owner.eventSlug === entry.snapshot.eventSlug),
   );
   if (owners.length > 1) throw new Error(`Ambiguous approved agenda ownership for route ${route}`);
   return owners[0]?.snapshot;

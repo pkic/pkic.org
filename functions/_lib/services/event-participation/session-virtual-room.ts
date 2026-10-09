@@ -3,6 +3,9 @@ import { instantToDateTimeLocal } from "../../../../assets/shared/timezone";
 import { first } from "../../db/queries";
 import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
+import { publishedSessionsSql } from "./published-schedule";
+import { registrationDayAttendanceSql, sessionAccessEligibleSql } from "./session-access";
+import { approvedVirtualRoomUrlSql, draftVirtualRoomUrlSql } from "../event-agenda/virtual-room-links";
 
 /** An attendee link is a private read, never an allocation or admission grant. */
 export async function readSessionVirtualRoom(
@@ -27,22 +30,19 @@ export async function readSessionVirtualRoom(
   const destination = await first<{ url: string }>(
     db,
     `
-    SELECT json_extract(approved.payload_json,'$.virtualRoomUrl') AS url
+    SELECT ${approvedVirtualRoomUrlSql("approved")} AS url
     FROM event_agenda_state state
     JOIN event_agenda_published_occurrences approved ON approved.event_id=state.event_id AND approved.revision=state.published_revision
     JOIN events event ON event.id=state.event_id
     JOIN sessions session ON session.id=? AND session.user_id=? AND session.revoked_at IS NULL AND session.expires_at>strftime('%Y-%m-%dT%H:%M:%fZ','now')
     JOIN users person ON person.id=session.user_id AND person.active=1
     JOIN registrations registration ON registration.event_id=event.id AND registration.user_id=person.id AND registration.status='registered'
-    LEFT JOIN agenda_session_participations participation ON participation.occurrence_id=approved.occurrence_id AND participation.user_id=person.id
     WHERE state.event_id=? AND approved.occurrence_id=? AND approved.revision=? AND event.timezone=?
     AND json_extract(approved.payload_json,'$.startAt')=?
-    AND json_extract(approved.payload_json,'$.virtualRoomUrl') IS NOT NULL
-    AND json_extract(approved.payload_json,'$.virtualRoomUrl') IS json_extract(event.settings_json,'$.agenda.sessionMedia.'||json_quote(approved.occurrence_id)||'.joinUrl')
-    AND COALESCE((SELECT attendance.attendance_type FROM registration_day_attendance attendance JOIN event_days selected ON selected.id=attendance.event_day_id WHERE attendance.registration_id=registration.id AND selected.event_id=event.id AND selected.day_date=?),CASE WHEN EXISTS(SELECT 1 FROM event_days configured WHERE configured.event_id=event.id AND configured.day_date=?) THEN 'none' ELSE registration.attendance_type END) IN ('in_person','virtual')
-    AND (COALESCE(json_extract(approved.payload_json,'$.admissionPolicy'),'preference')='preference' OR participation.status='reserved')
-    AND (json_extract(approved.payload_json,'$.visibility')='public' OR participation.status='reserved' OR EXISTS(SELECT 1 FROM agenda_session_invitations invitation WHERE invitation.occurrence_id=approved.occurrence_id AND invitation.user_id=person.id AND invitation.revoked_at IS NULL))
-    AND (COALESCE(json_extract(approved.payload_json,'$.accessPolicy'),'open')='open' OR EXISTS(SELECT 1 FROM agenda_session_invitations invitation WHERE invitation.occurrence_id=approved.occurrence_id AND invitation.user_id=person.id AND invitation.revoked_at IS NULL))`,
+    AND ${approvedVirtualRoomUrlSql("approved")} IS NOT NULL
+    AND ${approvedVirtualRoomUrlSql("approved")} IS ${draftVirtualRoomUrlSql("approved.occurrence_id", "event.settings_json")}
+    AND ${registrationDayAttendanceSql("registration", "?")} IN ('in_person','virtual')
+    AND EXISTS(SELECT 1 FROM (${publishedSessionsSql}) access_session WHERE access_session.id=approved.occurrence_id AND access_session.event_id=event.id AND access_session.published_revision=approved.revision AND ${sessionAccessEligibleSql("access_session", "person.id", null, "NULL")})`,
     [actor.sessionId, actor.userId, eventId, occurrenceId, basis.revision, basis.timezone, basis.start_at, day, day],
   );
   if (!destination) throw unavailable();

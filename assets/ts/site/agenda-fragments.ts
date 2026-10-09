@@ -31,11 +31,13 @@ export function agendaFragmentRegistry(
           if (session.publicAnchor) claim(primary, session.publicAnchor, owner);
           for (const fragment of session.legacyFragments ?? []) {
             if (
-              day.locations
-                .slice(roomIndex, roomIndex + cell.colSpan)
-                .some((room, offset) =>
-                  legacyAgendaFragmentMatchesPlacement(fragment, session, room.id, roomIndex + offset),
-                )
+              !day.locations.length
+                ? legacyAgendaFragmentMatchesPlacement(fragment, session, undefined, roomIndex)
+                : day.locations
+                    .slice(roomIndex, roomIndex + cell.colSpan)
+                    .some((room, offset) =>
+                      legacyAgendaFragmentMatchesPlacement(fragment, session, room.id, roomIndex + offset),
+                    )
             )
               claim(aliases, fragment.anchor, `${dialogId}:${fragment.roomId ?? "unassigned"}`);
           }

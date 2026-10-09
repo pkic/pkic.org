@@ -24,7 +24,8 @@ import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { Alert } from "../../../../../../ui/Alert";
 import { Badge as ToneBadge } from "../../../../../../ui/Badge";
 import { RowActions } from "../../../../../../ui/RowActions";
-import { Button, ButtonLink } from "../../../../../../ui/Button";
+import { Button } from "../../../../../../ui/Button";
+import { DownloadAction } from "../../../../../../ui/DownloadAction";
 import { Field } from "../../../../../../ui/Field";
 import { Select } from "../../../../../../ui/TextControl";
 import type { PresentationVersion, PresentationVersionReview } from "./model";
@@ -375,9 +376,12 @@ function PresentationVersions({
             header: "Actions",
             cell: (version) => (
               <span class="pk-cluster">
-                <ButtonLink href={`${endpoint}/${encodeURIComponent(version.id)}/content`} size="sm" download>
-                  Download
-                </ButtonLink>
+                <DownloadAction
+                  label={`Download version ${formatNumber(version.versionNumber)}, ${version.fileName ?? "presentation"}`}
+                  href={`${endpoint}/${encodeURIComponent(version.id)}/content`}
+                  filename
+                  size="sm"
+                />
                 {canManage && (
                   <RowActions
                     subject={`Version ${formatNumber(version.versionNumber)}, ${version.fileName ?? "presentation"}`}

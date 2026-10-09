@@ -1,7 +1,7 @@
 import { grantAdministrator } from "./helpers/administrator";
 import { staffingFixture } from "./helpers/agenda-staffing";
 import { roomRecommendations } from "../functions/_lib/services/event-participation/room-recommendations";
-import { personalAgenda } from "../functions/_lib/services/event-participation/personal-agenda";
+import { personalAgenda, personalAgendaProgram } from "../functions/_lib/services/event-participation/personal-agenda";
 import { publishAgenda } from "../functions/_lib/services/event-agenda/mutations";
 import { individualAppearanceFixture, seedApprovedSessionAppearances } from "./helpers/agenda-appearances";
 import { operationalPeople } from "../functions/_lib/services/event-agenda/operational-people";
@@ -11,6 +11,10 @@ import { createTemplateVersion, activateTemplateVersion } from "../functions/_li
 import type { Env } from "../functions/_lib/types";
 import { setSessionInvitation, setSessionDelegation } from "../functions/_lib/services/event-participation/invitations";
 import { callApi } from "./helpers/app";
+import {
+  agendaCalendarCurrentSubscriptionSchema,
+  agendaCalendarSubscriptionSchema,
+} from "../assets/shared/schemas/event-agenda-calendar";
 import { createAdminSession } from "./helpers/auth";
 import { beforeEach, afterEach, describe, it, expect, vi } from "vitest";
 import { env } from "cloudflare:workers";
@@ -25,6 +29,8 @@ import {
 import { promoteSessionWaitlist } from "../functions/_lib/services/event-participation/waitlist";
 import { reviewSessionParticipation } from "../functions/_lib/services/event-participation/approval";
 import {
+  currentAgendaCalendarSubscription,
+  revokeAgendaCalendarSubscriptions,
   rotateAgendaCalendarSubscription,
   resolveAgendaCalendarSubscription,
   updateAgendaCalendarSettings,
@@ -37,6 +43,7 @@ const eventId = crypto.randomUUID(),
   admin = crypto.randomUUID(),
   firstUser = crypto.randomUUID(),
   secondUser = crypto.randomUUID();
+const feedOrigin = { baseUrl: "https://pkic.org", eventSlug: "calendar-test", signingSecret: "test-feed-secret" };
 let start: string;
 async function publish(policy = "reservation") {
   const snapshot = await getAgenda(env.DB, eventId, "calendar-test");
@@ -193,7 +200,7 @@ describe("Participation capacity and private calendar lifecycle", () => {
     expect(result.sessions[0]!.overlaps).toHaveLength(5);
     expect(result.sessions[0]!.overlaps.every((overlap) => overlap.title.startsWith("Parallel"))).toBe(true);
   });
-  it("rejects publication when physical presenters exceed the session pool", async () => {
+  it("publishes when physical presenters exceed the session pool", async () => {
     for (const user of [firstUser, secondUser])
       await env.DB.prepare(
         "INSERT INTO event_agenda_occurrence_speakers(occurrence_id,user_id,role) VALUES(?,?,'speaker')",
@@ -217,17 +224,15 @@ describe("Participation capacity and private calendar lifecycle", () => {
         }),
       ],
     });
-    await expect(publishAgenda(env.DB, eventId, "calendar-test", 1, admin)).rejects.toMatchObject({
-      code: "AGENDA_RESERVED_CAPACITY",
-    });
+    await publishAgenda(env.DB, eventId, "calendar-test", 1, admin);
     expect(
       await env.DB.prepare("SELECT published_revision FROM event_agenda_state WHERE event_id=?").bind(eventId).first(),
-    ).toMatchObject({ published_revision: 0 });
+    ).toMatchObject({ published_revision: 2 });
     expect(
       await env.DB.prepare("SELECT COUNT(*) AS count FROM event_agenda_operational_people WHERE event_id=?")
         .bind(eventId)
         .first(),
-    ).toMatchObject({ count: 0 });
+    ).toMatchObject({ count: 2 });
   });
   it("publishes private presenter capacity authority and keeps draft mode changes operationally inert", async () => {
     await env.DB.prepare(
@@ -454,6 +459,99 @@ describe("Participation capacity and private calendar lifecycle", () => {
         .first("count"),
     ).toBe(0);
   });
+  it("projects the approved public agenda with only the viewer's active marks", async () => {
+    await publish("preference");
+    const event = { id: eventId, slug: "calendar-test" };
+    const empty = await personalAgendaProgram(env.DB, event, firstUser);
+    expect(empty.agenda?.occurrences.map((occurrence) => occurrence.id)).toContain(occurrenceId);
+    expect(empty.agenda?.shifts).toEqual([]);
+    expect(empty.agenda?.roleMembers).toEqual([]);
+    expect(empty.marks).toEqual([]);
+    await setSessionParticipation(env.DB, eventId, occurrenceId, firstUser, {
+      action: "save",
+      attendanceMode: "physical",
+    });
+    expect((await personalAgendaProgram(env.DB, event, firstUser)).marks).toEqual([
+      { id: occurrenceId, saved: true, status: null },
+    ]);
+    expect((await personalAgendaProgram(env.DB, event, secondUser)).marks).toEqual([]);
+    // Unstarring an unbooked session stores "canceled"; it is simply no longer on the viewer's agenda.
+    expect(
+      await setSessionParticipation(env.DB, eventId, occurrenceId, firstUser, {
+        action: "unsave",
+        attendanceMode: "physical",
+      }),
+    ).toMatchObject({ status: "canceled" });
+    expect((await personalAgendaProgram(env.DB, event, firstUser)).marks).toEqual([]);
+    await env.DB.prepare("DELETE FROM event_agenda_publications WHERE event_id=?").bind(eventId).run();
+    expect(await personalAgendaProgram(env.DB, event, firstUser)).toEqual({ agenda: null, marks: [] });
+  });
+  it("adds to one viewer's program only the private sessions they are invited to or hold a place on", async () => {
+    const later = (minutes: number) => new Date(Date.now() + minutes * 60000).toISOString();
+    const [invited, booked, hidden] = [crypto.randomUUID(), crypto.randomUUID(), crypto.randomUUID()];
+    for (const [id, title] of [
+      [invited, "Invited roundtable"],
+      [booked, "Booked briefing"],
+      [hidden, "Hidden private title"],
+    ] as const)
+      await env.DB.prepare(
+        "INSERT INTO event_agenda_occurrences(id,event_id,title,start_at,end_at,admission_policy,visibility,capacity) VALUES(?,?,?,?,?,'reservation','private',5)",
+      )
+        .bind(id, eventId, title, later(120), later(180))
+        .run();
+    await publish("preference");
+    const now = new Date().toISOString();
+    await env.DB.prepare(
+      "INSERT INTO agenda_session_invitations(id,event_id,occurrence_id,user_id,invited_by,reason_code,created_at) VALUES(?,?,?,?,?,'organizer_invitation',?)",
+    )
+      .bind(crypto.randomUUID(), eventId, invited, firstUser, admin, now)
+      .run();
+    await env.DB.prepare(
+      "INSERT INTO agenda_session_participations(id,event_id,occurrence_id,user_id,attendance_mode,status,saved,created_at,updated_at) VALUES(?,?,?,?,'physical','reserved',0,?,?)",
+    )
+      .bind(crypto.randomUUID(), eventId, booked, firstUser, now, now)
+      .run();
+    const event = { id: eventId, slug: "calendar-test" };
+    const own = await personalAgendaProgram(env.DB, event, firstUser);
+    const ids = own.agenda?.occurrences.map((occurrence) => occurrence.id) ?? [];
+    expect(ids).toEqual(expect.arrayContaining([occurrenceId, invited, booked]));
+    expect(ids).not.toContain(hidden);
+    expect(own.marks).toEqual([{ id: booked, saved: false, status: "reserved" }]);
+    // Sanitized like the public projection: no private room link travels with it.
+    expect(own.agenda?.occurrences.find((occurrence) => occurrence.id === invited)?.virtualRoomUrl).toBeUndefined();
+    const other = await personalAgendaProgram(env.DB, event, secondUser);
+    expect(other.agenda?.occurrences.map((occurrence) => occurrence.id)).toEqual([occurrenceId]);
+    // The listing applies the same rule: an invitation alone admits a private session.
+    const listed = await personalAgenda(env.DB, eventId, firstUser, { limit: 10 });
+    expect(listed.sessions.map((session) => session.id).sort()).toEqual([occurrenceId, invited, booked].sort());
+  });
+
+  it("bounds the listing to sessions still running or ahead and to the reader's own agenda", async () => {
+    const ended = crypto.randomUUID(),
+      ahead = crypto.randomUUID();
+    const at = (minutes: number) => new Date(Date.now() + minutes * 60000).toISOString();
+    await env.DB.prepare(
+      "INSERT INTO event_agenda_occurrences(id,event_id,title,start_at,end_at,admission_policy,capacity) VALUES(?,?,'Ended',?,?,'preference',NULL),(?,?,'Ahead',?,?,'preference',NULL)",
+    )
+      .bind(ended, eventId, at(-120), at(-60), ahead, eventId, at(90), at(150))
+      .run();
+    await publish("preference");
+    await setSessionParticipation(env.DB, eventId, ended, firstUser, { action: "save", attendanceMode: "physical" });
+    await setSessionParticipation(env.DB, eventId, ahead, firstUser, { action: "save", attendanceMode: "physical" });
+    const from = new Date().toISOString();
+    const upcoming = await personalAgenda(env.DB, eventId, firstUser, { from, sort: "startAt" });
+    expect(upcoming.sessions.map((session) => session.id)).toEqual([occurrenceId, ahead]);
+    const mine = await personalAgenda(env.DB, eventId, firstUser, { from, mine: "true", sort: "startAt", limit: 1 });
+    expect(mine.sessions.map((session) => session.id)).toEqual([ahead]);
+    expect(mine.page).toMatchObject({ total: 1, hasMore: false });
+    expect(
+      (await personalAgenda(env.DB, eventId, firstUser, { mine: "true", sort: "startAt" })).sessions.map(
+        (session) => session.id,
+      ),
+    ).toEqual([ended, ahead]);
+    expect((await personalAgenda(env.DB, eventId, secondUser, { from, mine: "true" })).sessions).toEqual([]);
+  });
+
   it("separately enforces physical room pools and preserves a full-room switch", async () => {
     const firstRoom = crypto.randomUUID(),
       secondRoom = crypto.randomUUID();
@@ -725,14 +823,7 @@ describe("Participation capacity and private calendar lifecycle", () => {
       action: "reserve",
     });
     const settings = { includeTentative: false, reminderEnabled: false, reminderMinutes: 10 };
-    const original = await rotateAgendaCalendarSubscription(
-      env.DB,
-      eventId,
-      firstUser,
-      "https://pkic.org",
-      "calendar-test",
-      settings,
-    );
+    const original = await rotateAgendaCalendarSubscription(env.DB, eventId, firstUser, feedOrigin, settings);
     const token = new URL(original.url).pathname.split("/").at(-2)!;
     expect((await resolveAgendaCalendarSubscription(env.DB, eventId, token)).user_id).toBe(firstUser);
     const active = await personalAgendaCalendar(env.DB, eventId, firstUser, false);
@@ -745,13 +836,64 @@ describe("Participation capacity and private calendar lifecycle", () => {
     expect(canceled).toContain(`UID:agenda-${occurrenceId}@ics.pkic.org`);
     expect(canceled).toContain("STATUS:CANCELLED");
     expect(canceled).toContain("SEQUENCE:1");
-    await rotateAgendaCalendarSubscription(env.DB, eventId, firstUser, "https://pkic.org", "calendar-test", settings);
+    const replacement = await rotateAgendaCalendarSubscription(env.DB, eventId, firstUser, feedOrigin, settings);
     await expect(resolveAgendaCalendarSubscription(env.DB, eventId, token)).rejects.toThrow("not found");
+    expect(replacement.url).not.toBe(original.url);
     expect(
       await env.DB.prepare("SELECT COUNT(*) AS count FROM agenda_calendar_subscriptions WHERE token_hash=?")
         .bind(token)
         .first("count"),
     ).toBe(0);
+  });
+  it("shows the owner's active link again from its hash without storing the token", async () => {
+    const settings = { includeTentative: false, reminderEnabled: false, reminderMinutes: 10 };
+    expect(await currentAgendaCalendarSubscription(env.DB, eventId, firstUser, feedOrigin)).toEqual({
+      active: false,
+      subscription: null,
+    });
+    const created = await rotateAgendaCalendarSubscription(env.DB, eventId, firstUser, feedOrigin, settings);
+    const current = await currentAgendaCalendarSubscription(env.DB, eventId, firstUser, feedOrigin);
+    expect(current).toEqual({ active: true, subscription: created });
+    const token = new URL(created.url).pathname.split("/").at(-2)!;
+    expect(
+      await env.DB.prepare("SELECT COUNT(*) AS count FROM agenda_calendar_subscriptions WHERE token_hash=?")
+        .bind(token)
+        .first("count"),
+    ).toBe(0);
+    expect(await currentAgendaCalendarSubscription(env.DB, eventId, secondUser, feedOrigin)).toMatchObject({
+      active: false,
+    });
+    // A different secret cannot reproduce the link, so the active link is reported but never guessed.
+    expect(
+      await currentAgendaCalendarSubscription(env.DB, eventId, firstUser, { ...feedOrigin, signingSecret: "other" }),
+    ).toEqual({ active: true, subscription: null });
+    await revokeAgendaCalendarSubscriptions(env.DB, eventId, firstUser);
+    expect(await currentAgendaCalendarSubscription(env.DB, eventId, firstUser, feedOrigin)).toEqual({
+      active: false,
+      subscription: null,
+    });
+  });
+  it("serves the active link to its owner through the mounted router", async () => {
+    const endpoint = "/api/v1/events/calendar-test/calendar/subscriptions";
+    expect((await callApi(env, `${endpoint}/current`)).status).toBe(401);
+    const token = await createAdminSession(env.DB, firstUser, crypto.randomUUID());
+    const headers = { authorization: `Bearer ${token}`, "content-type": "application/json" };
+    const created = await callApi(env, endpoint, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ includeTentative: true, reminderEnabled: false, reminderMinutes: 10 }),
+    });
+    expect(created.status).toBe(200);
+    const link = agendaCalendarSubscriptionSchema.parse(await created.json());
+    const current = await callApi(env, `${endpoint}/current`, { headers });
+    expect(current.status).toBe(200);
+    expect(current.headers.get("cache-control")).toContain("no-store");
+    expect(agendaCalendarCurrentSubscriptionSchema.parse(await current.json())).toEqual({
+      active: true,
+      subscription: link,
+    });
+    const feed = await callApi(env, new URL(link.url).pathname);
+    expect(feed.status).toBe(200);
   });
   it("delivers an eligible reminder through the real outbox provider path", async () => {
     await setSessionParticipation(env.DB, eventId, occurrenceId, firstUser, {

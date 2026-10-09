@@ -67,6 +67,10 @@ async function mount(canEdit = true, canReviewAppearances = false) {
     ),
   );
   await settle();
+  if (canEdit) {
+    await act(() => host!.querySelector<HTMLButtonElement>('button[aria-label="Enable agenda editing"]')!.click());
+    await settle();
+  }
 }
 function reads(input: RequestInfo | URL) {
   const url = new URL(String(input), "https://example.test");
@@ -212,16 +216,22 @@ describe("shared session actions in details", () => {
           const input = dialog.querySelector<HTMLInputElement>('[name="changes.0.startAt"]')!;
           input.value = "2026-12-01T12:00";
           input.dispatchEvent(new Event("input", { bubbles: true }));
-        } else {
-          const select = dialog.querySelector<HTMLSelectElement>(
-            action === "swap" ? '[name="secondId"]' : "select[multiple]",
-          )!;
-          for (const option of select.options)
-            option.selected =
-              action === "swap" ? option.value === "second" : ["second-room", "third-room"].includes(option.value);
+        } else if (action === "swap") {
+          const select = dialog.querySelector<HTMLSelectElement>('[name="secondId"]')!;
+          for (const option of select.options) option.selected = option.value === "second";
           select.dispatchEvent(new Event("change", { bubbles: true }));
         }
       });
+      if (action === "locations") {
+        const rooms = [...dialog.querySelectorAll<HTMLInputElement>('input[type="checkbox"][value]')].filter(
+          (box) => box.value,
+        );
+        const wanted = ["second-room", "third-room"];
+        for (const box of rooms.filter((item) => wanted.includes(item.value) && !item.checked))
+          await act(() => box.click());
+        for (const box of rooms.filter((item) => !wanted.includes(item.value) && item.checked))
+          await act(() => box.click());
+      }
       const submit = async () => {
         await act(async () =>
           [...dialog.querySelectorAll<HTMLButtonElement>("button")]
@@ -302,6 +312,37 @@ describe("shared session actions in details", () => {
     actions.find((action) => action.id === "move")!.onSelect?.();
     expect(order).toEqual(["close", "move"]);
   });
+  it("offers calendar selection commands only while calendar editing is enabled", () => {
+    const noop = () => {};
+    const context = {
+      canEdit: true,
+      canReviewAppearances: false,
+      busy: false,
+      scheduling: { actions: () => [], timeStep: 5, move: noop, resize: noop },
+      open: {
+        duplicate: noop,
+        history: noop,
+        promotion: noop,
+        participation: noop,
+        move: noop,
+        swap: noop,
+        edit: noop,
+      },
+      select: noop,
+    };
+    const selection = (selectionLocked: boolean) =>
+      agendaSessionActions(snapshot.occurrences[0], { ...context, selectionLocked })
+        .filter((action) => action.id === "select" || action.id === "resize")
+        .map((action) => [action.id, Boolean(action.disabled)]);
+    expect(selection(true)).toEqual([
+      ["select", true],
+      ["resize", true],
+    ]);
+    expect(selection(false)).toEqual([
+      ["select", false],
+      ["resize", !snapshot.occurrences[0].startAt],
+    ]);
+  });
   it("uses the same card and detail commands and closes details before opening the existing move view", async () => {
     vi.stubGlobal(
       "fetch",
@@ -346,7 +387,7 @@ describe("shared session actions in details", () => {
     await inputTitle("Unsaved workshop draft");
     await act(() => {
       [...editor.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
-        .find((button) => button.textContent === "Optional / settings")!
+        .find((button) => button.textContent === "Publishing")!
         .click();
     });
     expect(editor.querySelector<HTMLInputElement>('[name="title"]')?.value).toBe("Unsaved workshop draft");

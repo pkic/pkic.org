@@ -79,12 +79,14 @@ export function StaffingCatalog({
               </Field>
             </div>
           ))}
-          <Button
-            type="button"
-            onClick={() => setRoles([...roles, { id: crypto.randomUUID(), name: "", showOnAgenda: false }])}
-          >
-            Add role
-          </Button>
+          <div class="pk-cluster">
+            <Button
+              type="button"
+              onClick={() => setRoles([...roles, { id: crypto.randomUUID(), name: "", showOnAgenda: false }])}
+            >
+              Add role
+            </Button>
+          </div>
           {posts.map((post, index) => (
             <div class="pk-grid" key={post.id}>
               <Field label="Post name" {...form.of(`staffingPosts.${index}.name`)}>
@@ -124,12 +126,14 @@ export function StaffingCatalog({
               </Field>
             </div>
           ))}
-          <Button
-            type="button"
-            onClick={() => setPosts([...posts, { id: crypto.randomUUID(), name: "", roomId: null }])}
-          >
-            Add physical post
-          </Button>
+          <div class="pk-cluster">
+            <Button
+              type="button"
+              onClick={() => setPosts([...posts, { id: crypto.randomUUID(), name: "", roomId: null }])}
+            >
+              Add physical post
+            </Button>
+          </div>
           <div class="pk-cluster pk-cluster--end">
             <Button disabled={busy} onClick={onClose}>
               Cancel

@@ -366,6 +366,23 @@ describe("Multi-room registration and advisory scan reporting", () => {
     )
       .bind(crypto.randomUUID(), eventId, occurrenceId, users[0], operatorId, new Date().toISOString(), rooms[0])
       .run();
+    const allocations = async () => ({
+      participation: await env.DB.prepare(
+        "SELECT COUNT(*) AS total FROM agenda_session_participations WHERE event_id=?",
+      )
+        .bind(eventId)
+        .first<number>("total"),
+      admissions: await env.DB.prepare("SELECT COUNT(*) AS total FROM event_session_admissions WHERE event_id=?")
+        .bind(eventId)
+        .first<number>("total"),
+      occupied: await env.DB.prepare(
+        `WITH target AS(SELECT ? AS id) SELECT ${physicalOccupiedSql("target.id")} AS occupied FROM target`,
+      )
+        .bind(occurrenceId)
+        .first<number>("occupied"),
+    });
+    const before = await allocations();
+    expect(before).toEqual({ participation: 0, admissions: 0, occupied: 0 });
     expect(await scan(0, rooms[1], { action: "check" })).toMatchObject({
       outcome: "warning",
       reason: "missing_registration",
@@ -375,10 +392,14 @@ describe("Multi-room registration and advisory scan reporting", () => {
       reason: "missing_registration",
     });
     const manifest = await offlineEligibility(env.DB, eventId, operatorId, { occurrenceId, roomId: rooms[0] });
-    expect(manifest.entries.find((entry) => entry.userId === users[0])?.privateAccess).toBe(true);
+    expect(manifest.entries.find((entry) => entry.userId === users[0])).toMatchObject({
+      privateAccess: true,
+      sessionEligible: true,
+      sessionStatus: null,
+    });
     expect(await scan(0, rooms[0])).toMatchObject({
-      outcome: "warning",
-      reason: "missing_registration",
+      outcome: "eligible",
+      reason: "eligible",
       attendanceRecorded: true,
       admissionRecorded: false,
     });
@@ -389,5 +410,6 @@ describe("Multi-room registration and advisory scan reporting", () => {
       outcome: "warning",
       reason: "missing_registration",
     });
+    expect(await allocations()).toEqual(before);
   });
 });

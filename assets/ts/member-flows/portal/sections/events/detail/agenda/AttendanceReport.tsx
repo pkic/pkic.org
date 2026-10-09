@@ -8,7 +8,6 @@ import { SessionAttendancePeople } from "./SessionAttendancePeople";
 import { attendanceReportSchema } from "../../../../../../../shared/schemas/event-participation-reporting";
 import { ApiDataTable } from "../../../../../../components/ApiDataTable";
 import { Tabs } from "../../../../../../ui/Tabs";
-import { ButtonLink } from "../../../../../../ui/Button";
 import { RowActions } from "../../../../../../ui/RowActions";
 import { Alert } from "../../../../../../ui/Alert";
 import { formatNumber } from "../../../../../../../shared/format-number";
@@ -95,7 +94,6 @@ export function AttendanceReport({
             canRead &&
             (detailId ? (
               <div class="pk-stack">
-                <ButtonLink href={attendancePath(basePath, "sessions")}>Back to sessions</ButtonLink>
                 <Tabs
                   label="Session attendance sections"
                   activeId={detailTab === "evidence" ? "evidence" : "attendees"}

@@ -82,9 +82,13 @@ it("initializes a later-mounted agenda once, switches days by keyboard, and rele
   document.adoptedStyleSheets = [];
   const disconnect = vi.fn();
   const observe = vi.fn();
+  let observers = 0;
   vi.stubGlobal(
     "ResizeObserver",
     class {
+      constructor() {
+        observers++;
+      }
       observe = observe;
       disconnect = disconnect;
     },
@@ -97,17 +101,25 @@ it("initializes a later-mounted agenda once, switches days by keyboard, and rele
     '<button data-agenda-tab="one">Day one</button><button data-agenda-tab="two">Day two</button><div class="pk-content-agenda__day" data-agenda-panel="one"><div data-agenda-height="320"></div></div><div class="pk-content-agenda__day" data-agenda-panel="two" hidden></div>';
   document.body.append(root);
   const dispose = initializeContentAgenda(root);
-  expect(replaceSync).toHaveBeenLastCalledWith(agendaLayoutCss([320]));
+  // The NOW line shares the adopted-stylesheet mechanism, so layout is one of several sheet writes.
+  expect(replaceSync).toHaveBeenCalledWith(agendaLayoutCss([320]));
+  const created = observers;
   expect(initializeContentAgenda(root)).toBe(dispose);
-  expect(observe).toHaveBeenCalledTimes(2);
-  expect(observe.mock.calls.every(([element]) => element === root)).toBe(true);
+  expect(observers).toBe(created);
+  // Sticky/scroll observers watch the root; the NOW line also watches each day panel.
+  expect(observe.mock.calls.filter(([element]) => element === root)).toHaveLength(3);
+  expect(
+    observe.mock.calls.every(
+      ([element]) => element === root || (element as HTMLElement).matches(".pk-content-agenda__day"),
+    ),
+  ).toBe(true);
   const buttons = root.querySelectorAll<HTMLButtonElement>("button");
   buttons[0].dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true }));
   expect(buttons[1].getAttribute("aria-selected")).toBe("true");
   expect(document.activeElement).toBe(buttons[1]);
   expect(root.querySelector<HTMLElement>('[data-agenda-panel="one"]')!.hidden).toBe(true);
   dispose();
-  expect(disconnect).toHaveBeenCalledTimes(2);
+  expect(disconnect).toHaveBeenCalledTimes(created);
   expect(document.adoptedStyleSheets).toEqual([]);
   buttons[0].click();
   expect(buttons[1].getAttribute("aria-selected")).toBe("true");
@@ -162,4 +174,29 @@ it("progressively opens canonical title links while preserving native navigation
   expect(showModal).toHaveBeenCalledTimes(1);
   dispose();
   document.body.classList.remove("agenda-modal-open");
+});
+
+it("pauses native playback and releases YouTube playback on public session close", async () => {
+  vi.stubGlobal(
+    "ResizeObserver",
+    class {
+      observe = vi.fn();
+      disconnect = vi.fn();
+    },
+  );
+  const { initializeContentAgenda } = await import("../../assets/ts/site/agenda");
+  root = document.createElement("section");
+  root.innerHTML =
+    '<dialog><video controls preload="none"></video><iframe data-video-src="https://www.youtube-nocookie.com/embed/example" src="https://www.youtube-nocookie.com/embed/example"></iframe></dialog>';
+  document.body.append(root);
+  const pause = vi.fn();
+  Object.defineProperty(root.querySelector("video")!, "pause", { value: pause });
+  const dispose = initializeContentAgenda(root);
+  try {
+    root.querySelector("dialog")!.dispatchEvent(new Event("close"));
+    expect(pause).toHaveBeenCalledTimes(1);
+    expect(root.querySelector("iframe")!.hasAttribute("src")).toBe(false);
+  } finally {
+    dispose();
+  }
 });

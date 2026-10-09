@@ -11,6 +11,7 @@ import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { runRowAction } from "./helpers/data-table";
 import { uploadThroughControl } from "./helpers/file-upload";
+import { agendaWorkspacePath } from "./helpers/agenda-workspace";
 const slug = "pqc-conference-amsterdam-nl";
 const artifacts = process.env.AGENDA_SCREENSHOT_DIR ?? "test-results/session-presentation";
 test.use({ actionTimeout: 20_000 });
@@ -39,7 +40,7 @@ test("session without a proposal uploads, reviews and explicitly binds a private
   const snapshot = agendaSnapshotSchema.parse(await created.json());
   const occurrence = snapshot.occurrences.find((row) => row.title === title)!;
   const endpoint = `/api/v1/events/${slug}/agenda/occurrences/${occurrence.id}/materials/presentations`;
-  await page.goto(`/portal/#/events/${slug}/agenda`);
+  await page.goto(await agendaWorkspacePath(page, slug));
   await page
     .getByRole("tablist", { name: "Agenda views", exact: true })
     .getByRole("tab", { name: "Schedule", exact: true })
@@ -108,14 +109,15 @@ test("session without a proposal uploads, reviews and explicitly binds a private
   await page.getByRole("button", { name: "Back to archive details", exact: true }).click();
   await page.getByRole("button", { name: "Add material release", exact: true }).click();
   await page.getByLabel("Material title", { exact: true }).fill("Direct session slides");
-  const choice = page.getByLabel("Uploaded presentation version", { exact: true });
+  const choice = page.getByLabel("Uploaded slides", { exact: true });
   await expect(choice.locator(`option[value="session:${version.id}"]`)).toContainText("approved");
   await choice.selectOption(`session:${version.id}`);
   const historicalLink = page.getByLabel("Historical download link", { exact: true });
   await expect(historicalLink).toHaveValue("");
   await expect(historicalLink.locator("option")).toHaveCount(1);
   await expect(historicalLink.locator("option:checked")).toHaveText("No historical download link");
-  await expect(page.getByLabel("Public delivery URL", { exact: true })).toHaveCount(0);
+  // An uploaded file is delivered through its own reviewed download, never a typed public link.
+  await expect(page.getByLabel("Slides link", { exact: true })).toHaveCount(0);
   await page.getByLabel("Release status", { exact: true }).selectOption("approved");
   const refusedResponse = page.waitForResponse(
     (response) =>
@@ -125,7 +127,11 @@ test("session without a proposal uploads, reviews and explicitly binds a private
   await page.getByRole("button", { name: "Save archive details", exact: true }).click();
   expect([400, 409]).toContain((await refusedResponse).status());
   await expect(page.getByRole("button", { name: "Save archive details", exact: true })).toBeVisible();
-  for (const label of ["Rights confirmed", "Speaker consent confirmed", "File and accessibility reviewed"])
+  for (const label of [
+    "We have permission to publish this material",
+    "Speaker has agreed to publication",
+    "File and accessibility have been reviewed",
+  ])
     await page.getByLabel(label, { exact: true }).check();
   await page.setViewportSize({ width: 1280, height: 900 });
   await page.evaluate(() => window.scrollTo(0, 0));

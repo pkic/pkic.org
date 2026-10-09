@@ -9,7 +9,7 @@ import {
   proposalSpeakerEndpoints,
   SpeakerCard,
 } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/SpeakerCard";
-import { proposalSpeakerAssetPath } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/ProposalSpeakerHeadshotManager";
+import { proposalSpeakerAssetPath } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/proposal-api";
 import { ProposalSpeakerCard } from "../../assets/ts/components/proposals/ProposalSpeakerCard";
 import {
   proposalSpeakerPatchSchema,
@@ -28,6 +28,8 @@ import {
   typeInto,
 } from "./helpers/labelled-control";
 import { openCardMenu, runCardAction } from "./helpers/row-actions";
+import { confirmationButton, confirmationConsequences } from "./helpers/confirm-dialog";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 
 let container: HTMLElement | null = null;
 
@@ -131,12 +133,14 @@ describe("proposal speaker removal UI", () => {
       />,
     );
 
-    expect(root.querySelector<HTMLImageElement>('img[alt="Casey Speaker"]')?.src).toContain(
+    expect(root.querySelector<HTMLImageElement>(`img[alt="Casey Speaker's photo"]`)?.src).toContain(
       "/api/v1/proposals/proposal-1/speakers/speaker-1/headshot",
     );
-    expect(root.textContent).not.toContain("Upload headshot");
+    // The read-only tile is the photo alone: it is not a control, and nothing
+    // beside it changes or removes it.
+    expect(root.querySelector('button[aria-label$="photo of Casey Speaker"]')).toBeNull();
+    expect(root.querySelector('input[type="file"]')).toBeNull();
     expect(root.textContent).not.toContain("Fetch from Gravatar");
-    expect(root.textContent).not.toContain("Remove headshot");
   });
 
   it("uses canonical speaker reminder and headshot resources with natural JSON bodies", async () => {
@@ -199,11 +203,14 @@ describe("proposal speaker removal UI", () => {
     );
     expect(root.querySelectorAll("[data-speaker-card]")).toHaveLength(2);
     expect(root.querySelector("form")).toBeNull();
-    expect(root.textContent).not.toContain("Upload photo");
+    // The roster shows each photo read-only; changing it belongs to the editor.
+    expect(root.querySelector('button[aria-label^="Upload photo"]')).toBeNull();
     const memberActions = await openCardMenu(root, "Casey Speaker");
     expect(memberActions.map((action) => action.textContent)).toContain("Remove speaker");
     await act(() => memberActions.find((action) => action.textContent === "Edit speaker details")!.click());
     expect(root.querySelectorAll("[data-speaker-card]")).toHaveLength(1);
+    // In the editor the photo itself is the control, named for the speaker.
+    expect(root.querySelector('button[aria-label="Upload photo of Casey Speaker"]')).not.toBeNull();
     expect(optionValues(controlFor<HTMLSelectElement>(root, "Role"))).not.toContain("proposer");
     await typeInto(controlFor(root, "Organization"), "Unsaved organization");
     await act(() => [...root.querySelectorAll("button")].find((button) => button.textContent === "Cancel")!.click());
@@ -435,19 +442,28 @@ describe("proposal speaker removal UI", () => {
         }),
     );
     vi.stubGlobal("fetch", fetch);
-    vi.stubGlobal("confirm", () => true);
     const root = mount(
-      <ProposalManageSpeakerCard
-        speaker={managedSpeaker()}
-        token="manage-token"
-        apiBase="/api/v1"
-        isCurrentProposer={false}
-        onEdit={() => {}}
-        onReload={async () => {}}
-        onStatus={() => {}}
-      />,
+      <>
+        <ProposalManageSpeakerCard
+          speaker={managedSpeaker()}
+          token="manage-token"
+          apiBase="/api/v1"
+          isCurrentProposer={false}
+          onEdit={() => {}}
+          onReload={async () => {}}
+          onStatus={() => {}}
+        />
+        <ConfirmDialogHost />
+      </>,
     );
     await runCardAction(root, "Casey Speaker", "Remove speaker");
+    // The removal is confirmed in the in-page dialog, which keeps the profile and history.
+    expect(confirmationConsequences()).toEqual(["Their user profile and proposal history are kept."]);
+    expect(fetch).not.toHaveBeenCalled();
+    await act(async () => {
+      confirmationButton("Remove speaker")!.click();
+      await Promise.resolve();
+    });
     const trigger = root.querySelector<HTMLButtonElement>('button[aria-label="Actions for Casey Speaker"]')!;
     expect(document.activeElement).toBe(trigger);
     expect(root.textContent).toContain("Removing speaker…");

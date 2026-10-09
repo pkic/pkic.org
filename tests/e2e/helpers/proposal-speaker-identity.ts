@@ -44,7 +44,7 @@ export async function captureResponsive(page: Page, info: TestInfo, phase: strin
       const confirmation = page.getByRole("button", { name: "Confirm participation", exact: true });
       await expect(confirmation).toHaveAttribute("form", "speaker-participation-confirm");
       await expect(confirmation).toBeDisabled();
-      await expect(page.getByRole("button", { name: "Decline", exact: true })).toBeEnabled();
+      await expect(page.getByRole("button", { name: "Decline participation…", exact: true })).toBeEnabled();
     }
     await page.screenshot({ path: info.outputPath(`${phase}-${device}.png`), fullPage: true });
   }

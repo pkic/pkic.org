@@ -1,5 +1,5 @@
 import { agendaSessionPresentationTiming } from "./event-agenda-transition";
-import { agendaMediaCapabilities } from "./event-agenda-media";
+import { agendaOccurrenceMedia } from "./event-agenda-media";
 import { publicSessionTiming } from "./session-public-timing";
 import { statusLabel } from "./status-display";
 import { sessionDisplayCredits, publicSessionCreditRole } from "./session-public-credits";
@@ -11,14 +11,57 @@ import { agendaOccurrenceRoomIds } from "./event-agenda-rooms";
 import type { AgendaSnapshot, AgendaOccurrence } from "./schemas/event-agenda";
 import type { ContentAgendaDay, ContentAgendaSpeaker } from "./site-agenda";
 import { instantToDateTimeLocal } from "./timezone";
+import { agendaSessionFormatContent } from "./event-agenda-format";
 import { authoredAgendaDayFragments, authoredAgendaSpeakerFragments } from "./legacy-agenda-fragments";
+import { agendaCreditOrganization } from "./agenda-speaker-organizations";
 import type { ContentAgendaSpeakerFragment } from "./site-agenda";
+
+type AgendaSpeakerCredit = Parameters<typeof publicSessionCreditRole>[1];
+interface AgendaSpeakerPresentation {
+  sourceKeys: Map<string, string>;
+  personPaths: Map<string, string>;
+}
+
+function speakerPresentationKey(credit: AgendaSpeakerCredit, sourceKeys: Map<string, string>): string {
+  if ("userId" in credit) return `user:${credit.userId}`;
+  const sourceIdentity = JSON.stringify([credit.sourcePath, credit.sourceDigest, credit.sourceRef]);
+  let key = sourceKeys.get(sourceIdentity);
+  if (!key) {
+    key = `source:${sourceKeys.size + 1}`;
+    sourceKeys.set(sourceIdentity, key);
+  }
+  return key;
+}
+
+/** Source tuples identify credits internally; public keys reveal only an agenda-local ordinal. */
+function agendaSpeakerPresentation(snapshot: AgendaSnapshot, organizer: boolean): AgendaSpeakerPresentation {
+  const presentation: AgendaSpeakerPresentation = { sourceKeys: new Map(), personPaths: new Map() };
+  const published = !organizer && snapshot.approvedAt && snapshot.publishedRevision === snapshot.revision;
+  for (const occurrence of snapshot.occurrences) {
+    if (!organizer && occurrence.visibility !== "public") continue;
+    for (const credit of sessionDisplayCredits(occurrence, organizer)) {
+      speakerPresentationKey(credit, presentation.sourceKeys);
+      if (published && "userId" in credit && publishedSessionRoute(snapshot.eventSlug, occurrence)) {
+        presentation.personPaths.set(credit.userId, `/people/${encodeURIComponent(credit.userId)}/`);
+      }
+    }
+  }
+  return presentation;
+}
 
 /** A supplied credit keeps the same frozen/source presentation on every public surface. */
 export function agendaSpeakerContent(
   occurrence: AgendaOccurrence,
   credit: Parameters<typeof publicSessionCreditRole>[1],
+  organizations?: AgendaSnapshot["speakerOrganizations"],
 ): ContentAgendaSpeaker {
+  const organization =
+    "biography" in credit
+      ? agendaCreditOrganization(organizations, {
+          actingIdentityId: "actingIdentityId" in credit ? credit.actingIdentityId : null,
+          organizationName: credit.organizationName,
+        })
+      : undefined;
   return {
     name: credit.displayName,
     ...("biography" in credit
@@ -28,9 +71,24 @@ export function agendaSpeakerContent(
           imageSrc: credit.photoUrl ?? undefined,
         }
       : {}),
+    ...(organization ? { organization } : {}),
     moderator: publicSessionCreditRole(occurrence, credit) === "moderator",
     ...(publicSessionCreditRole(occurrence, credit) === "panelist" ? { roleLabel: statusLabel("panelist") } : {}),
   };
+}
+
+/**
+ * A signed-in participant's projection: the server already scoped it to the
+ * public programme plus only the private sessions this reader is invited to
+ * or booked on, so every occurrence it carries is listed and actionable. A
+ * private session still gets no public session page or speaker profile link.
+ */
+export interface AgendaContentOptions {
+  participant?: boolean;
+}
+
+function listedOccurrence(organizer: boolean, options: AgendaContentOptions) {
+  return (item: AgendaOccurrence) => organizer || Boolean(options.participant) || item.visibility === "public";
 }
 
 /** The canonical session card projection, including occurrences whose placement is not yet known. */
@@ -38,11 +96,15 @@ export function agendaSessionContent(
   snapshot: AgendaSnapshot,
   occurrence: AgendaOccurrence,
   organizer = false,
+  speakerPresentation = agendaSpeakerPresentation(snapshot, organizer),
+  options: AgendaContentOptions = {},
 ): ContentAgendaDay["slots"][number]["sessions"][number] {
+  const listed = listedOccurrence(organizer, options);
   const timing = publicSessionTiming(occurrence);
   const credits = sessionDisplayCredits(occurrence, organizer).map((credit) => ({
-    key: "userId" in credit ? `user:${credit.userId}` : `source:${credit.sourceRef}`,
-    ...agendaSpeakerContent(occurrence, credit),
+    ...agendaSpeakerContent(occurrence, credit, snapshot.speakerOrganizations),
+    speakerKey: speakerPresentationKey(credit, speakerPresentation.sourceKeys),
+    personPath: "userId" in credit ? speakerPresentation.personPaths.get(credit.userId) : undefined,
   }));
   const materials = publicSessionMaterials(occurrence.history?.materials ?? []);
   const currentRoomIds = agendaOccurrenceRoomIds(occurrence);
@@ -56,6 +118,7 @@ export function agendaSessionContent(
       });
   const presentation = materials.find((material) => material.kind === "presentation");
   const releasedUrls = publicSessionMediaUrls(materials);
+  const media = agendaOccurrenceMedia(snapshot.rooms, occurrence);
   const presentationUrl =
     releasedUrls.presentationUrl || (organizer ? occurrence.presentationUrl : undefined) || undefined;
   return {
@@ -65,7 +128,10 @@ export function agendaSessionContent(
     publicAnchor: occurrence.publicAnchor ?? undefined,
     legacyFragments,
     participation:
-      timing && !timing.endNotRecorded && occurrence.kind !== "break" && occurrence.visibility === "public"
+      timing &&
+      !timing.endNotRecorded &&
+      occurrence.kind !== "break" &&
+      (occurrence.visibility === "public" || options.participant)
         ? eventParticipationLink(snapshot.eventSlug, occurrence.id, occurrence.admissionPolicy, occurrence.accessPolicy)
         : undefined,
     presentationUrl,
@@ -82,25 +148,23 @@ export function agendaSessionContent(
     recordingUrl: releasedUrls.recordingUrl || (organizer ? occurrence.recordingUrl : undefined) || undefined,
     recordingApproved: Boolean(releasedUrls.recordingUrl),
     onlineAccessUrl:
-      occurrence.virtualRoomUrl || occurrence.onlineAccessAvailable
+      media.virtualRoomUrl || occurrence.onlineAccessAvailable
         ? eventParticipationLink(snapshot.eventSlug, occurrence.id, occurrence.admissionPolicy, occurrence.accessPolicy)
             .url
         : undefined,
-    plannedMedia: agendaMediaCapabilities(occurrence.requiredEquipment),
+    plannedMedia: { recording: media.recording, liveStreaming: media.liveStreaming },
     title: occurrence.title,
     track: occurrence.track ?? undefined,
+    format: agendaSessionFormatContent(snapshot.formats, occurrence.format),
+    placeholder: occurrence.placeholder || undefined,
     descriptionHtml: "",
     descriptionMarkdown: occurrence.description,
     endsAt: timing?.endAt,
     endNotRecorded: timing?.endNotRecorded,
     durationMinutes: timing?.endAt ? (Date.parse(timing.endAt) - Date.parse(timing.startAt)) / 60000 : undefined,
-    ...agendaSessionPresentationTiming(
-      occurrence,
-      snapshot.occurrences.filter((item) => organizer || item.visibility === "public"),
-      snapshot.timeZone,
-    ),
+    ...agendaSessionPresentationTiming(occurrence, snapshot.occurrences.filter(listed), snapshot.timeZone),
     locations: agendaOccurrenceRoomIds(occurrence),
-    speakers: credits.map(({ key: _key, ...speaker }) => speaker),
+    speakers: credits,
   };
 }
 
@@ -108,13 +172,15 @@ export function agendaSessionContent(
 export function agendaContent(
   snapshot: AgendaSnapshot,
   organizer = false,
+  options: AgendaContentOptions = {},
 ): {
   days: ContentAgendaDay[];
   speakers: ContentAgendaSpeaker[];
   legacySpeakerFragments: ContentAgendaSpeakerFragment[];
 } {
   const catalogue = new Map<string, ContentAgendaSpeaker>();
-  const occurrences = snapshot.occurrences.filter((item) => organizer || item.visibility === "public");
+  const presentation = agendaSpeakerPresentation(snapshot, organizer);
+  const occurrences = snapshot.occurrences.filter(listedOccurrence(organizer, options));
   const days = new Map<string, ContentAgendaDay>();
   for (const occurrence of occurrences) {
     const timing = publicSessionTiming(occurrence);
@@ -131,12 +197,10 @@ export function agendaContent(
       slot = { startsAt: timing.startAt, time: wall.slice(11), sessions: [] };
       day.slots.push(slot);
     }
-    const session = agendaSessionContent(snapshot, occurrence, organizer);
-    sessionDisplayCredits(occurrence, organizer).forEach((credit, index) => {
-      const key = "userId" in credit ? `user:${credit.userId}` : `source:${credit.sourceRef}`;
-      const speaker = session.speakers[index];
-      if (speaker && !catalogue.has(key)) catalogue.set(key, speaker);
-    });
+    const session = agendaSessionContent(snapshot, occurrence, organizer, presentation, options);
+    for (const speaker of session.speakers) {
+      if (speaker.speakerKey && !catalogue.has(speaker.speakerKey)) catalogue.set(speaker.speakerKey, speaker);
+    }
     const legacyFragments = session.legacyFragments ?? [];
     if (legacyFragments.length) {
       const incoming = (occurrence.history?.legacyFragments ?? []).flatMap((fragment) =>

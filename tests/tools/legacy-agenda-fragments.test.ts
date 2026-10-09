@@ -103,8 +103,13 @@ describe("authored legacy agenda fragment preservation", () => {
         ],
       },
     };
+    // A new agenda keeps the first row for a repeated anchor, as the single Hugo page did, and records the rest.
+    const current = prepareLegacyAgendaImport(source, { sourcePath: "event.md" });
+    expect(current.unresolved.filter((finding) => finding.kind === "legacy_fragment")).toEqual([]);
+    expect(current.shadowedFragments.length).toBeGreaterThan(0);
+    // An archive must reproduce every published anchor exactly, so the collision still blocks it.
     expect(
-      prepareLegacyAgendaImport(source, { sourcePath: "event.md" }).unresolved.filter(
+      prepareLegacyAgendaImport(source, { sourcePath: "event.md", archivePublicSource: true }).unresolved.filter(
         (finding) => finding.kind === "legacy_fragment",
       ),
     ).toHaveLength(2);

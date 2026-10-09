@@ -4,14 +4,13 @@ import { render as mount } from "preact";
 import { act } from "preact/test-utils";
 import { describe, expect, it, vi } from "vitest";
 import { AgendaSession } from "../../assets/ts/site/AgendaSession";
-import { AgendaSpeaker } from "../../assets/ts/site/AgendaSpeaker";
 import { eventParticipationLink } from "../../assets/shared/event-participation-link";
-import { agendaContent, agendaSpeakerContent } from "../../assets/shared/public-agenda-content";
-import { publicSessionCredits } from "../../assets/shared/session-public-credits";
+import { agendaContent } from "../../assets/shared/public-agenda-content";
 import { agendaOccurrenceSchema } from "../../assets/shared/schemas/event-agenda";
 import { approvedAgendaSnapshot } from "../fixtures/approved-agenda";
 import { ContentAgenda } from "../../assets/ts/site/ContentAgenda";
 import type { ContentAgendaDay, ContentAgendaSpeaker } from "../../assets/shared/site-agenda";
+import { sessionRecordingPublicUrl } from "../../assets/shared/session-recording-public-url";
 
 const moderator: ContentAgendaSpeaker = {
   name: "Synthetic Moderator",
@@ -52,60 +51,32 @@ function agenda(): HTMLElement {
 }
 
 describe("published agenda presentation", () => {
-  it("shares frozen portraits, attribution and person links with static session history", async () => {
-    const snapshot = structuredClone(approvedAgendaSnapshot);
-    const occurrence = snapshot.occurrences[0]!;
-    occurrence.speakers[0] = {
-      ...occurrence.speakers[0]!,
-      displayName: "Later current profile name",
-      profileCandidate: { biography: "Later current biography", photoUrl: "/unapproved-photo.jpg" },
-    };
-    occurrence.history!.archivalCredits.push({
-      sourceRef: "authored-speaker",
-      sourcePath: "synthetic-public-agenda.yaml",
-      sourceDigest: "a".repeat(64),
-      provenance: "authored_public",
-      role: "panelist",
-      displayName: "Retained source speaker",
-      jobTitle: "Recorded researcher",
-      organizationName: "Recorded employer",
-      biography: "Source-authored biography.",
-      photoUrl: null,
-    });
-    const credits = publicSessionCredits(occurrence);
-    const host = document.createElement("div");
-    host.innerHTML = await renderToStringAsync(
-      <div class="pk-content-agenda__speakers">
-        {credits.map((credit, index) => (
-          <article key={index}>
-            <AgendaSpeaker
-              speaker={agendaSpeakerContent(occurrence, credit)}
-              personPath={"userId" in credit ? `/people/${encodeURIComponent(credit.userId)}/` : undefined}
-              detail
-            />
-          </article>
-        ))}
-      </div>,
-    );
-    const [approved, source] = host.querySelectorAll("article");
-    expect(approved.querySelector("h3 a")?.textContent).toBe("Historical speaker");
-    expect(approved.querySelector("h3 a")?.getAttribute("href")).toBe("/people/person/");
-    expect(approved.querySelector("img")?.getAttribute("src")).toBe("/approved-photo.jpg");
-    expect(approved.textContent).toContain("Engineer at Historical organization");
-    expect(approved.textContent).toContain("Moderator");
-    expect(approved.querySelector("details summary")?.textContent).toBe("Biography");
-    expect(approved.querySelector("details strong")?.textContent).toBe("Approved biography");
-    expect(source.querySelector("h3")?.textContent).toBe("Retained source speaker");
-    expect(source.querySelector("h3 a")).toBeNull();
-    expect(source.querySelector("img")).toBeNull();
-    expect(source.querySelector(".pk-avatar__initials")).not.toBeNull();
-    expect(source.textContent).toContain("Panelist");
-    expect(source.textContent).toContain("Recorded researcher at Recorded employer");
-    expect(source.textContent).toContain("Source-authored biography.");
-    expect(host.textContent).not.toContain("Later current");
-    expect(host.querySelector('[src="/unapproved-photo.jpg"]')).toBeNull();
-    expect(host.querySelector("script")).toBeNull();
-    expect(occurrence.history!.appearances).toEqual(approvedAgendaSnapshot.occurrences[0]!.history!.appearances);
+  it("shows each full biography in a speaker card in public and editor session details", () => {
+    const day = days[0]!;
+    const session = day.slots[0]!.sessions[0]!;
+    for (const editor of [undefined, { controls: <span>Session actions</span> }]) {
+      const host = document.createElement("div");
+      host.innerHTML = render(
+        <AgendaSession
+          session={session}
+          slot={day.slots[0]}
+          locations={day.locations}
+          dialogId="visible-speaker-details"
+          timeZone="Europe/Amsterdam"
+          editor={editor}
+        />,
+      );
+      const dialog = host.querySelector("dialog.session-modal")!;
+      const speaker = dialog.querySelector(".speaker-card")!;
+      expect(speaker).not.toBeNull();
+      expect(speaker.textContent).toContain(moderator.name);
+      expect(speaker.textContent).toContain(moderator.title);
+      expect(speaker.querySelector(".pk-content-agenda__speaker-bio")?.textContent).toContain(
+        "Researches cryptographic transitions.",
+      );
+      expect(dialog.querySelector("details, summary")).toBeNull();
+      expect(speaker.querySelector("[hidden]")).toBeNull();
+    }
   });
   it.each([false, true])("keeps native footers and occupied boundary cells in editor=%s cards", async (editing) => {
     const fixture = structuredClone(days);
@@ -124,7 +95,7 @@ describe("published agenda presentation", () => {
       durationMinutes: 45,
       endsAt: "2026-12-01T10:00:00.000Z",
       sessionUrl: "/sessions/canonical-session/",
-      participation: { label: "Save preference", url: "/portal/events/example", message: "Save this session" },
+      participation: eventParticipationLink("example", "canonical-session", "reservation"),
     });
     day.slots = [
       {
@@ -249,21 +220,23 @@ describe("published agenda presentation", () => {
     const eventClock = content.querySelector('[aria-label="Event time"]')!;
     expect(eventClock.textContent).toContain("11:45");
     expect(content.querySelector('.pk-content-agenda__time-heading small[title="Europe/Amsterdam"]')?.textContent).toBe(
-      "Event · Amsterdam",
+      "Time Amsterdam",
     );
     expect(eventClock.textContent).not.toContain("Amsterdam");
     expect(eventClock.querySelector("time")?.getAttribute("datetime")).toBe("2026-12-01T10:45:00.000Z");
     expect(content.querySelector('[aria-label="Your time"]')?.hasAttribute("hidden")).toBe(true);
     expect(content.querySelector("[data-agenda-controls]")?.hasAttribute("hidden")).toBe(true);
     expect(content.querySelector("[data-agenda-time-choice]")?.hasAttribute("hidden")).toBe(true);
-    expect(content.querySelector('[aria-label="Agenda time display"]')).not.toBeNull();
+    // The approved zone picker offers event time, the viewer's device and other IANA zones.
+    const zones = content.querySelector<HTMLSelectElement>('select[aria-label="Show the agenda in a time zone"]')!;
+    expect([...zones.options].slice(0, 2).map((option) => option.value)).toEqual(["venue", "browser"]);
     expect(content.querySelector<HTMLElement>(".pk-content-agenda")?.dataset.agendaTimeDisplay).toBe("venue");
   });
 
   it("preserves moderator attribution, speaker links and slides in accessible session details", () => {
     const content = agenda();
     const opener = content.querySelector<HTMLButtonElement>("[data-agenda-open-session]")!;
-    const dialog = content.querySelector("dialog")!;
+    const dialog = content.querySelector("dialog.session-modal")!;
     expect(opener.getAttribute("aria-label")).toBe("Open session details: Synthetic transition session");
     expect(dialog.id).toBe(opener.dataset.agendaOpenSession);
     expect(dialog.textContent).toContain("Moderator");
@@ -281,7 +254,8 @@ describe("published agenda presentation", () => {
     const container = document.createElement("div");
     container.innerHTML = render(<ContentAgenda days={generic} speakers={[]} timeZone="Europe/Amsterdam" />);
     const recording = container.querySelector<HTMLAnchorElement>('a[href="https://media.example.test/session"]')!;
-    expect(recording.textContent).toContain("Watch recording");
+    expect(recording.getAttribute("aria-label")).toBe("Watch recording");
+    expect(recording.textContent).toContain("Recording");
     expect(recording.rel).toContain("noopener");
     expect(recording.rel).toContain("noreferrer");
     expect(container.querySelector("iframe")).toBeNull();
@@ -293,6 +267,105 @@ describe("published agenda presentation", () => {
     unsafe[0].slots[0].sessions[0].recordingUrl = "javascript:alert(1)";
     const output = render(<ContentAgenda days={unsafe} speakers={[]} timeZone="Europe/Amsterdam" />);
     expect(output).not.toContain("javascript:");
+  });
+
+  it.each([false, true])(
+    "embeds only approved owned recordings in the shared session dialog (editor=%s)",
+    (editing) => {
+      const fixture = structuredClone(days);
+      const session = fixture[0]!.slots[0]!.sessions[0]!;
+      session.id = "10000000-0000-4000-8000-000000000001";
+      session.youtube = undefined;
+      session.recordingApproved = true;
+      session.recordingUrl = sessionRecordingPublicUrl({
+        eventSlug: "recording-event",
+        occurrenceId: session.id,
+        materialId: "recording original",
+        versionId: "10000000-0000-4000-8000-000000000002",
+        digest: "a".repeat(64),
+      });
+      const host = document.createElement("div");
+      const output = () =>
+        render(
+          <ContentAgenda
+            days={fixture}
+            speakers={[]}
+            timeZone="Europe/Amsterdam"
+            editor={editing ? { session: () => ({ controls: null }), dropTarget: () => null } : undefined}
+          />,
+        );
+      host.innerHTML = output();
+      const video = host.querySelector("dialog video")!;
+      expect(video.getAttribute("src")).toBe(session.recordingUrl);
+      expect(video.getAttribute("preload")).toBe("none");
+      expect(video.hasAttribute("controls")).toBe(true);
+      expect(video.hasAttribute("playsinline")).toBe(true);
+      expect(video.hasAttribute("autoplay")).toBe(false);
+      expect(host.querySelector("iframe")).toBeNull();
+      const watch = host.querySelector<HTMLAnchorElement>("[data-agenda-watch-recording]")!;
+      expect(watch.dataset.agendaOpenSession).toBe(video.closest("dialog")!.id);
+      expect(watch.hasAttribute("target")).toBe(false);
+      session.recordingApproved = false;
+      host.innerHTML = output();
+      expect(host.querySelector("video,iframe")).toBeNull();
+      session.recordingApproved = true;
+      for (const url of [
+        "https://media.example.test/unknown.mp4",
+        "/api/v1/events/recording-event/meetings/join?token=private",
+      ]) {
+        session.recordingUrl = url;
+        host.innerHTML = output();
+        expect(host.querySelector("video,iframe")).toBeNull();
+      }
+    },
+  );
+
+  it("pauses owned recording playback when the portal session dialog closes", async () => {
+    const session = {
+      ...days[0]!.slots[0]!.sessions[0]!,
+      youtube: undefined,
+      recordingApproved: true,
+      recordingUrl: sessionRecordingPublicUrl({
+        eventSlug: "recording-event",
+        occurrenceId: "10000000-0000-4000-8000-000000000001",
+        materialId: "recording",
+        versionId: "10000000-0000-4000-8000-000000000002",
+        digest: "a".repeat(64),
+      }),
+    };
+    const host = document.createElement("div");
+    document.body.append(host);
+    try {
+      await act(() =>
+        mount(
+          <AgendaSession
+            session={session}
+            locations={days[0]!.locations}
+            dialogId="owned-playback"
+            timeZone="Europe/Amsterdam"
+            editor={{ controls: null }}
+          />,
+          host,
+        ),
+      );
+      const video = host.querySelector("video")!;
+      const pause = vi.fn();
+      Object.defineProperty(video, "pause", { value: pause });
+      const sessionDialog = host.querySelector<HTMLDialogElement>("dialog.session-modal")!;
+      const speakerDialog = sessionDialog.querySelector<HTMLDialogElement>("[data-agenda-speaker-dialog]")!;
+      expect(speakerDialog).not.toBeNull();
+      await act(() => {
+        speakerDialog.dispatchEvent(new Event("close", { bubbles: true }));
+      });
+      expect(pause).not.toHaveBeenCalled();
+      await act(() => {
+        sessionDialog.dispatchEvent(new Event("close"));
+      });
+      expect(pause).toHaveBeenCalledTimes(1);
+    } finally {
+      await act(() => mount(null, host));
+      host.remove();
+    }
   });
 });
 
@@ -321,7 +394,7 @@ it("renders supplied staffing track scope beside its location", () => {
   expect(render(<ContentAgenda days={source} speakers={[]} timeZone="Europe/Amsterdam" />)).not.toContain("Track:");
 });
 
-it("keeps the shared editor on venue time without a browser-choice control", () => {
+it("retains both shared editor clocks with the shared native choice inside the time header", () => {
   const output = render(
     <ContentAgenda
       days={days}
@@ -333,8 +406,16 @@ it("keeps the shared editor on venue time without a browser-choice control", () 
   const container = document.createElement("div");
   container.innerHTML = output;
   expect(container.querySelector('[data-agenda-clock="venue"]')?.textContent).toContain("11:45");
-  expect(container.querySelector('[data-agenda-clock="browser"]')).toBeNull();
-  expect(container.querySelector("[data-agenda-time-choice]")).toBeNull();
+  expect(container.querySelector('[data-agenda-clock="browser"]')).not.toBeNull();
+  expect(container.querySelector("[data-agenda-time-zone]")?.getAttribute("data-agenda-time-zone")).toBe(
+    "Europe/Amsterdam",
+  );
+  const choice = container.querySelector<HTMLSelectElement>(
+    "th.pk-content-agenda__time-heading [data-agenda-time-select]",
+  );
+  expect(choice).not.toBeNull();
+  expect(choice!.title).toBe("Europe/Amsterdam");
+  expect(choice!.value).toBe("venue");
 });
 
 it("preserves derived presentation and transition times while displaying one full-slot duration", async () => {
@@ -444,14 +525,46 @@ it("renders an accessible outline preference star linking to authenticated parti
       timeZone="Europe/Amsterdam"
     />,
   );
-  const stars = host.querySelectorAll<HTMLAnchorElement>(`a[aria-label="Save preference for ${session.title}"]`);
+  const stars = host.querySelectorAll<HTMLAnchorElement>(`a[aria-label="Save favorite for ${session.title}"]`);
   expect(stars).toHaveLength(2);
   for (const star of stars) {
     expect(star.getAttribute("href")).toBe("/portal/#/events/workshop/agenda?session=session-id");
-    expect(star.title).toContain("does not reserve a place");
+    expect(star.title).toContain("does not register you, reserve a place, or grant an invitation");
     expect(star.textContent).toBe("");
     expect(star.querySelector("svg")?.getAttribute("aria-hidden")).toBe("true");
     expect(star.querySelector("path")?.getAttribute("fill")).toBe("none");
     expect(star.hasAttribute("aria-pressed")).toBe(false);
   }
 });
+
+it.each([
+  ["reservation", "open", "Registration required", "Register for session"],
+  ["optional_reservation", "open", "Registration optional", "Register if you wish"],
+  ["approval", "open", "Approval required", "Request approval"],
+  ["reservation", "invitation", "Invitation required", "Invitation required"],
+] as const)(
+  "keeps favorites separate from %s/%s registration on cards and details",
+  (policy, access, policyLabel, actionLabel) => {
+    const day = days[0]!;
+    const session = {
+      ...day.slots[0]!.sessions[0]!,
+      participation: eventParticipationLink("workshop", "session-id", policy, access),
+    };
+    const host = document.createElement("div");
+    host.innerHTML = render(
+      <AgendaSession
+        session={session}
+        slot={day.slots[0]}
+        locations={day.locations}
+        dialogId="registration-detail"
+        timeZone="Europe/Amsterdam"
+      />,
+    );
+    expect(host.querySelectorAll(`a[aria-label="Save favorite for ${session.title}"]`)).toHaveLength(2);
+    const registrations = [...host.querySelectorAll("a")].filter((link) => link.textContent === actionLabel);
+    expect(registrations).toHaveLength(2);
+    for (const link of registrations) expect(link.querySelector("svg")).toBeNull();
+    expect(host.textContent).toContain(policyLabel);
+    expect(host.querySelectorAll('[aria-pressed="true"]')).toHaveLength(0);
+  },
+);

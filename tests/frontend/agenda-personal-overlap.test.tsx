@@ -22,9 +22,9 @@ describe("Personal agenda preference warnings", () => {
   it("distinguishes confirmed allocation and saved interest while explaining overlap without forbidding preferences", () => {
     render(<PersonalAgendaStatus session={session} />, host);
     expect(host.textContent).toContain("Reserved");
-    expect(host.textContent).toContain("Saved preference");
+    expect(host.textContent).toContain("Starred");
     expect(host.querySelector('[role="note"]')?.textContent).toContain("Overlaps with your agenda");
-    expect(host.textContent).toContain("Parallel panel — Saved preference");
+    expect(host.textContent).toContain("Parallel panel — Starred");
     expect(host.textContent).toContain("And 1 more");
     expect(host.textContent).toContain("You can keep overlapping preferences");
   });
@@ -37,5 +37,16 @@ describe("Personal agenda preference warnings", () => {
     );
     expect(host.textContent).toBe("Awaiting approval");
     expect(host.querySelector('[role="note"]')).toBeNull();
+  });
+  it("reads an unstarred session without a booking as not starred rather than canceled", () => {
+    // The server records "canceled" when a star is removed from a session that was never booked.
+    render(
+      <PersonalAgendaStatus
+        session={{ ...session, status: "canceled", saved: false, overlapCount: 0, overlaps: [] }}
+      />,
+      host,
+    );
+    expect(host.textContent).toBe("Not starred");
+    expect(host.textContent).not.toContain("Canceled");
   });
 });

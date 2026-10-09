@@ -9,7 +9,6 @@ import { eventProposalsResponseSchema } from "../../assets/shared/schemas/event-
 import { proposalSpeakersResponseSchema } from "../../assets/shared/schemas/proposal-speakers";
 import { proposalDecisionPreviewResponseSchema } from "../../assets/shared/schemas/proposal-decisions";
 import { finalizeProposalSchema } from "../../assets/shared/schemas/proposal-management";
-import { expectButtonTextContrast } from "./helpers/button-contrast";
 import { definitionFor } from "./helpers/definition-list";
 import { tab } from "./helpers/tabs";
 
@@ -735,22 +734,16 @@ test("renders the portal proposal detail workflow with submission answers and op
     await page.emulateMedia({ colorScheme: theme });
     for (const width of [1440, 768, 390]) {
       await page.setViewportSize({ width, height: 1000 });
+      const outgoing = page.getByRole("group", { name: "Outgoing emails", exact: true });
       for (const name of ["Alex", "Jordan", "Taylor"]) {
-        const choice = page.getByRole("button", {
-          name: `Decision email ${name} Example ${name.toLowerCase()}@example.test`,
+        const choice = outgoing.getByRole("radio", {
+          name: `Decision email ${name} Example <${name.toLowerCase()}@example.test>`,
           exact: true,
         });
         await choice.focus();
         await choice.press("Space");
-        await expect(choice).toHaveAttribute("aria-pressed", "true");
-        for (const button of await page
-          .getByRole("group", { name: "Outgoing emails", exact: true })
-          .getByRole("button")
-          .all()) {
-          await expectButtonTextContrast(button);
-          await button.hover();
-          await expectButtonTextContrast(button);
-        }
+        await expect(choice).toBeChecked();
+        await expect(outgoing.getByRole("radio", { checked: true })).toHaveCount(1);
         await expect(email.getByText(`${name}, your session on accessible forms has been rejected.`)).toBeVisible();
         await preview.scrollIntoViewIfNeeded();
         const dimensions = await preview.evaluate((frame) => {

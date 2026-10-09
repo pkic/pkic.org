@@ -82,7 +82,7 @@ export function agendaSessionInteractions({
             ?.onSelect?.()
       : undefined,
     moveControls:
-      canEdit && occurrence.startAt ? (
+      canEdit && !locked && occurrence.startAt ? (
         <div
           class="pk-cluster"
           data-agenda-card-control
@@ -115,7 +115,9 @@ export function agendaSessionInteractions({
       ) : null,
     detailControls: (close) => <RowActions subject={occurrence.title} actions={agendaCardActions(actions(close))} />,
     onDurationChange:
-      canEdit && occurrence.startAt ? (minutes) => scheduling.setDuration(occurrence.id, minutes) : undefined,
+      canEdit && !locked && occurrence.startAt
+        ? (minutes) => scheduling.setDuration(occurrence.id, minutes)
+        : undefined,
     durationDisabled: locked || busy,
     durationOptions: scheduling.durationOptions,
   };

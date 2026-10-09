@@ -1,6 +1,5 @@
 import { Field } from "../ui/Field";
 import { Textarea } from "../ui/TextControl";
-import { FileInput } from "../ui/FileInput";
 import { Button, ButtonLink } from "../ui/Button";
 import { HeadshotDialogTemplates } from "./HeadshotDialogTemplates";
 import { SpeakerLinkRecovery } from "./SpeakerLinkRecovery";
@@ -94,32 +93,26 @@ export function EventSpeakerManagement() {
         <div class="pk-stack pk-stack--snug" data-headshot-section hidden>
           <h4>Your photo</h4>
           <p class="pk-muted">
-            Upload a professional headshot photo. It will appear on the event website alongside your session.
+            Add a professional headshot photo. It will appear on the event website alongside your session.
           </p>
-          <Field id="speaker-headshot-file" label="Upload photo">
-            {(control) => (
-              <FileInput
-                {...control}
-                accept="image/jpeg,image/png,image/webp"
-                data-headshot-file
-                buttonLabel="Upload photo"
-                preview={<div data-headshot-preview class="pkic-speaker-headshot-preview" />}
-              />
-            )}
-          </Field>
-          <p data-headshot-status class="pk-muted pk-small" />
-          <Button type="button" size="sm" variant="secondary" data-headshot-delete hidden>
-            Remove photo
-          </Button>
+          {/* The photo tile is rendered here by the page module. */}
+          <div data-headshot-tile />
+          <p data-headshot-status class="pk-muted pk-small" role="status" />
         </div>
         <div class="pk-stack pk-stack--snug" data-participation-actions hidden>
           <div class="pk-cluster">
-            <Button type="submit" form="speaker-participation-confirm" data-confirm-participation>
+            <Button type="submit" variant="primary" form="speaker-participation-confirm" data-confirm-participation>
               Confirm participation
             </Button>
-            <Button type="button" variant="secondary" data-decline-open>
-              Decline
-            </Button>
+          </div>
+          {/* Declining is a separate decision, kept apart from the main action. */}
+          <div class="pk-stack pk-stack--tight">
+            <p class="pk-muted pk-small">Unable to take part in this session?</p>
+            <div class="pk-cluster">
+              <Button type="button" variant="danger-quiet" data-decline-open>
+                Decline participation…
+              </Button>
+            </div>
           </div>
           <div class="pk-stack pk-stack--snug" data-decline-panel hidden>
             <Field id="decline-reason" label="Reason (optional)">
@@ -134,10 +127,10 @@ export function EventSpeakerManagement() {
             </Field>
             <div class="pk-cluster">
               <Button type="button" variant="danger" size="sm" data-decline-confirm>
-                Confirm — I cannot participate
+                Decline participation
               </Button>
               <Button type="button" variant="secondary" size="sm" data-decline-cancel>
-                Go back
+                Keep participating
               </Button>
             </div>
           </div>

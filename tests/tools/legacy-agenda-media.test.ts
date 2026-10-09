@@ -78,6 +78,8 @@ describe("legacy agenda local media inventory", () => {
       ...inventoryFixture.document,
       occurrences: inventoryFixture.document.occurrences.map((row) => ({
         ...row,
+        // The Welcome slot names no format and is a real session, not a placeholder.
+        fields: { ...row.fields, format: null, placeholder: false },
         personRoles: Object.fromEntries(
           inventoryFixture.document.people
             .filter((person) => row.personRefs.includes(person.ref))
@@ -165,9 +167,15 @@ describe("legacy agenda local media inventory", () => {
     "abcdefghijk?start=1&token=x",
     "abcdefghijk?start=1.5",
     "abcdefghijk?start=01",
+    "abcdefghijk?start=10000000000",
     "short",
   ])("rejects invalid recording reference %s", (reference) => {
     expect(canonicalLegacyRecordingUrl(reference)).toBeNull();
+  });
+  it("preserves the existing ten-digit offset boundary in the shared codec", () => {
+    expect(canonicalLegacyRecordingUrl("abcdefghijk?start=9999999999")).toBe(
+      "https://www.youtube.com/watch?v=abcdefghijk&start=9999999999",
+    );
   });
   it("keeps explicit recording mapping and valid zero offset", async () => {
     const { options } = await fixture();

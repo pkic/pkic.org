@@ -1,6 +1,7 @@
+import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { useState } from "preact/hooks";
 import {
-  agendaRevisionSchema,
+  agendaPublicationSchema,
   agendaSnapshotSchema,
   type AgendaSnapshot,
 } from "../../../../../../../shared/schemas/event-agenda";
@@ -24,19 +25,25 @@ export function AgendaPublicationWorkspace({
   const [preview, setPreview] = useState(false);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
-  async function approve() {
+  const [acknowledgedSnapshot, setAcknowledgedSnapshot] = useState<AgendaSnapshot | null>(null);
+  const acknowledgeArchiveRepresentation = acknowledgedSnapshot === snapshot;
+  const form = useContractForm(agendaPublicationSchema, {
+    expectedRevision: snapshot.revision,
+    acknowledgeArchiveRepresentation,
+  });
+  async function approve(body: ReturnType<typeof agendaPublicationSchema.parse>) {
     setBusy(true);
     setError("");
     try {
       onSaved(
         await postJson(
           `/api/v1/events/${encodeURIComponent(snapshot.eventSlug)}/agenda/publications`,
-          agendaRevisionSchema.parse({ expectedRevision: snapshot.revision }),
+          body,
           agendaSnapshotSchema,
         ),
       );
     } catch (failure) {
-      setError(failure instanceof Error ? failure.message : "Publication approval failed");
+      setError(form.refuse(failure));
     } finally {
       setBusy(false);
     }
@@ -45,14 +52,30 @@ export function AgendaPublicationWorkspace({
   return (
     <div class="pk-stack">
       {error && <ErrorAlert error={error} />}
-      <AgendaPublicationReview
-        snapshot={snapshot}
-        canEdit={canEdit}
-        busy={busy}
-        onClose={onClose}
-        onPreview={() => setPreview(true)}
-        onApprove={() => void approve()}
-      />
+      <form
+        noValidate
+        {...form.handlers}
+        onSubmit={(event) => {
+          event.preventDefault();
+          const checked = form.submit();
+          if (!checked.data) {
+            setError(checked.message);
+            return;
+          }
+          void approve(checked.data);
+        }}
+      >
+        <AgendaPublicationReview
+          snapshot={snapshot}
+          canEdit={canEdit}
+          busy={busy}
+          acknowledgeArchiveRepresentation={acknowledgeArchiveRepresentation}
+          onArchiveAcknowledgment={(value) => setAcknowledgedSnapshot(value ? snapshot : null)}
+          acknowledgmentField={form.of("acknowledgeArchiveRepresentation")}
+          onClose={onClose}
+          onPreview={() => setPreview(true)}
+        />
+      </form>
     </div>
   );
 }

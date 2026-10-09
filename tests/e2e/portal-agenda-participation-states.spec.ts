@@ -1,5 +1,5 @@
 import { writeFile } from "node:fs/promises";
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 import type { z } from "zod";
 import { personalAgendaResponseSchema } from "../../assets/shared/schemas/event-personal-agenda";
 import {
@@ -9,7 +9,6 @@ import {
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { signInToPortal } from "./helpers/portal-auth";
-import { definitionFor } from "./helpers/definition-list";
 import { prepareParticipationStates, registerStateAttendee } from "./helpers/participation-state-fixture";
 
 type Fixture = Awaited<ReturnType<typeof prepareParticipationStates>>;
@@ -28,6 +27,18 @@ async function readSession(page: Page, fixture: Fixture, occurrence: Occurrence)
   return session;
 }
 
+/** The live participation section inside the event app's session details. */
+function participation(page: Page) {
+  return page.getByRole("dialog").getByRole("region", { name: "My participation", exact: true });
+}
+
+/** Activate a control with the keyboard, as an assistive-technology user would. */
+async function press(page: Page, control: Locator) {
+  await control.focus();
+  await expect(control).toBeFocused();
+  await page.keyboard.press("Enter");
+}
+
 /** Follow the actual static link, using native keyboard activation rather than a portal shortcut. */
 async function followPublic(page: Page, fixture: Fixture, occurrence: Occurrence, label: string) {
   const response = await page.goto(fixture.agenda.publicAgendaPath!);
@@ -43,12 +54,14 @@ async function followPublic(page: Page, fixture: Fixture, occurrence: Occurrence
   await expect(page).toHaveURL(
     new URL(`/portal/#/events/${fixture.slug}/agenda?session=${occurrence.id}`, page.url()).href,
   );
-  await expect(page.getByRole("heading", { name: occurrence.title, exact: true })).toBeVisible();
-  await expect(page.getByRole("region", { name: "Manage participation", exact: true })).toBeVisible();
+  // The deep link opens the session's own details over the whole programme.
+  const dialog = page.getByRole("dialog", { name: occurrence.title, exact: true });
+  await expect(dialog.getByRole("heading", { name: occurrence.title, exact: true })).toBeVisible();
+  await expect(participation(page)).toBeVisible();
 }
 
 async function submit(page: Page, fixture: Fixture, occurrence: Occurrence, action: Participation["action"]) {
-  const detail = page.getByRole("region", { name: "Manage participation", exact: true });
+  const detail = participation(page);
   await detail.getByLabel("Participation", { exact: true }).selectOption(action);
   const update = detail.getByRole("button", { name: "Update", exact: true });
   await expect(update).toBeEnabled();
@@ -71,6 +84,29 @@ async function submit(page: Page, fixture: Fixture, occurrence: Occurrence, acti
   return { request: body, receipt: sessionParticipationResponseSchema.parse(await response.json()) };
 }
 
+/** Canceling is a separate, confirmed command; the participation choice never offers it. */
+async function cancelRegistration(page: Page, fixture: Fixture, occurrence: Occurrence) {
+  const detail = participation(page);
+  await expect(detail.getByLabel("Participation", { exact: true }).locator('option[value="cancel"]')).toHaveCount(0);
+  const received = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === `${fixture.base}/${occurrence.id}/participation` &&
+      response.request().method() === "PUT",
+  );
+  await press(page, detail.getByRole("button", { name: "Cancel my session registration…", exact: true }));
+  // The session details are themselves a dialog, so the destructive confirmation is reached by its own role.
+  const confirmation = page.getByRole("alertdialog");
+  await expect(confirmation).toContainText(`Cancel your registration for ${occurrence.title}?`);
+  await confirmation.getByRole("button", { name: "Cancel registration", exact: true }).click();
+  const response = await received;
+  expect(response.status()).toBe(200);
+  const body = sessionParticipationRequestSchema.parse(response.request().postDataJSON());
+  expect(body.action).toBe("cancel");
+  expect(body.attendanceMode).toBe("physical");
+  expect(body.roomId).toBe(fixture.room.id);
+  return { request: body, receipt: sessionParticipationResponseSchema.parse(await response.json()) };
+}
+
 async function capture(page: Page, info: TestInfo, name: string) {
   for (const [device, width, height] of [
     ["desktop", 1280, 900],
@@ -80,7 +116,7 @@ async function capture(page: Page, info: TestInfo, name: string) {
     await page.evaluate(() => window.scrollTo(0, 0));
     await expect.poll(() => page.evaluate(() => window.scrollY)).toBe(0);
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-    const panel = page.getByRole("region", { name: "Manage participation", exact: true });
+    const panel = participation(page);
     const bounds = await panel.boundingBox();
     expect(bounds).not.toBeNull();
     for (const control of await panel.locator("select, button").all()) {
@@ -96,7 +132,9 @@ async function capture(page: Page, info: TestInfo, name: string) {
   await page.setViewportSize({ width: 390, height: 844 });
 }
 
-/** Both dedicated detail and the bounded My agenda table must expose the same state after reload. */
+const BOOKED: ReadonlyArray<Personal["status"]> = ["reserved", "waitlisted", "approval_pending"];
+
+/** Both the session details and the event app's My agenda tab must expose the same state after reload. */
 async function inspectState(
   page: Page,
   fixture: Fixture,
@@ -107,34 +145,43 @@ async function inspectState(
 ) {
   const before = await readSession(page, fixture, occurrence);
   expect(before.status).toBe(status);
-  const metadata = definitionFor(page, "My agenda");
+  const panel = participation(page);
+  // A booking is the reader's own status; without one the live availability is the state.
   const stateLabel =
     status === null
-      ? page
-          .getByRole("region", { name: "Manage participation", exact: true })
-          .getByRole("status")
-          .getByText(label, { exact: true })
-      : metadata.getByText(label, { exact: true });
-  await expect(metadata).toContainText(label);
+      ? panel.getByRole("status").getByText(label, { exact: true })
+      : panel.getByText(label, { exact: true });
+  await expect(panel).toContainText(label);
   await expect(stateLabel).toBeVisible();
+  // Details opened from a card are not part of the URL; reload the session's own deep link.
+  await page.goto(`/portal/#/events/${fixture.slug}/agenda?session=${occurrence.id}`);
   await page.reload();
-  await expect(metadata).toContainText(label);
+  await expect(panel).toContainText(label);
   await expect(stateLabel).toBeVisible();
   const persisted = await readSession(page, fixture, occurrence);
   expect(persisted.status).toBe(status);
   await capture(page, info, label.toLowerCase().replaceAll(" ", "-"));
-  const back = page.getByRole("link", { name: "Back to My agenda", exact: true });
-  await back.focus();
-  await expect(back).toBeFocused();
-  await page.keyboard.press("Enter");
-  const table = page.getByRole("table", { name: "My event agenda", exact: true });
-  const row = table.getByRole("row").filter({ hasText: occurrence.title });
-  await expect(row).toContainText(label);
-  const selected = row.getByRole("link", { name: occurrence.title, exact: true });
-  await selected.focus();
-  await expect(selected).toBeFocused();
-  await page.keyboard.press("Enter");
-  await expect(page.getByRole("heading", { name: occurrence.title, exact: true })).toBeVisible();
+  const dialog = page.getByRole("dialog", { name: occurrence.title, exact: true });
+  await press(page, dialog.getByRole("button", { name: "Close session details", exact: true }));
+  await expect(dialog).toBeHidden();
+  // Phones reach My agenda through the event app's bottom tabs.
+  const tabs = page.getByRole("navigation", { name: "Event app", exact: true });
+  await press(page, tabs.getByRole("link", { name: "My agenda", exact: true }));
+  await expect(page).toHaveURL(new URL(`/portal/#/events/${fixture.slug}/agenda?mine=1`, page.url()).href);
+  const card = page.locator(`article[data-agenda-occurrence="${occurrence.id}"]`);
+  if (BOOKED.includes(status)) {
+    await expect(card).toBeVisible();
+    await expect(card).toContainText(label);
+  } else {
+    // Only starred and booked sessions are on My agenda; the whole programme still lists this one.
+    await expect(card).toBeHidden();
+    await press(page, tabs.getByRole("link", { name: "Agenda", exact: true }));
+    await expect(page).toHaveURL(new URL(`/portal/#/events/${fixture.slug}/agenda`, page.url()).href);
+    await expect(card).toBeVisible();
+  }
+  await press(page, card.getByLabel(`Open session details: ${occurrence.title}`, { exact: true }));
+  await expect(dialog.getByRole("heading", { name: occurrence.title, exact: true })).toBeVisible();
+  await expect(stateLabel).toBeVisible();
   return persisted;
 }
 
@@ -163,7 +210,7 @@ test("public session links expose all seven participation states through accessi
       await signInToPortal(attendee, email);
     }
 
-    await followPublic(first, fixture, reservation, "Save or reserve session");
+    await followPublic(first, fixture, reservation, "Register for session");
     const reserved = await submit(first, fixture, reservation, "reserve");
     expect(reserved.receipt.status).toBe("reserved");
     evidence.push({
@@ -172,7 +219,7 @@ test("public session links expose all seven participation states through accessi
       personal: await inspectState(first, fixture, reservation, "Reserved", "reserved", info),
     });
 
-    await followPublic(second, fixture, reservation, "Save or reserve session");
+    await followPublic(second, fixture, reservation, "Register for session");
     const full = await readSession(second, fixture, reservation);
     expect(full.availability).toEqual(
       expect.arrayContaining([
@@ -184,11 +231,11 @@ test("public session links expose all seven participation states through accessi
         }),
       ]),
     );
-    const participation = second.getByRole("region", { name: "Manage participation", exact: true });
-    await expect(
-      participation.getByLabel("Participation", { exact: true }).locator('option[value="reserve"]'),
-    ).toHaveText("Join waiting list");
-    await expect(participation).toContainText("no place is reserved");
+    const fullPanel = participation(second);
+    await expect(fullPanel.getByLabel("Participation", { exact: true }).locator('option[value="reserve"]')).toHaveText(
+      "Join waiting list",
+    );
+    await expect(fullPanel).toContainText("no place is reserved");
     evidence.push({ label: "Full", personal: await inspectState(second, fixture, reservation, "Full", null, info) });
     const waiting = await submit(second, fixture, reservation, "reserve");
     expect(waiting.receipt.status).toBe("waitlisted");
@@ -209,7 +256,7 @@ test("public session links expose all seven participation states through accessi
 
     for (const [occurrence, label, publicLabel, state] of [
       [invitation, "Invitation required", "Invitation required", "invitation_required"],
-      [closed, "Closed", "Save or reserve session", "closed"],
+      [closed, "Closed", "Register for session", "closed"],
     ] as const) {
       await followPublic(second, fixture, occurrence, publicLabel);
       const current = await readSession(second, fixture, occurrence);
@@ -224,22 +271,29 @@ test("public session links expose all seven participation states through accessi
           }),
         ]),
       );
-      const panel = second.getByRole("region", { name: "Manage participation", exact: true });
+      const panel = participation(second);
       await expect(
         panel.getByLabel("Participation", { exact: true }).locator('option[value="reserve"]'),
       ).toBeDisabled();
-      await expect(panel.getByRole("button", { name: "Update", exact: true })).toBeEnabled();
+      // Nothing can be booked, so the booking command stays unavailable while saving interest remains open.
+      await expect(panel.getByRole("button", { name: "Update", exact: true })).toBeDisabled();
+      await expect(
+        second
+          .getByRole("dialog", { name: occurrence.title, exact: true })
+          .getByRole("button", { name: `Star ${occurrence.title}`, exact: true }),
+      ).toBeEnabled();
       evidence.push({ label, personal: await inspectState(second, fixture, occurrence, label, null, info) });
     }
 
     // Release only after the full/waitlisted evidence: normal waitlist promotion must not invalidate that earlier proof.
-    await followPublic(first, fixture, reservation, "Save or reserve session");
-    const canceled = await submit(first, fixture, reservation, "cancel");
+    await followPublic(first, fixture, reservation, "Register for session");
+    const canceled = await cancelRegistration(first, fixture, reservation);
     expect(canceled.receipt.status).toBe("canceled");
     evidence.push({
       label: "Canceled",
       operation: canceled,
-      personal: await inspectState(first, fixture, reservation, "Canceled", "canceled", info),
+      // A canceled registration leaves the reader's agenda; the session reads as not starred.
+      personal: await inspectState(first, fixture, reservation, "Not starred", "canceled", info),
     });
     expect(evidence).toHaveLength(7);
     const receiptPath = info.outputPath("participation-states-receipt.json");

@@ -11,10 +11,13 @@ import PublicPage from "../layouts/PublicPage.astro";
 import { publication } from "../publication";
 import { publishedEventAgendas, publishedAgendaCalendarLinks } from "../../functions/_lib/services/site-published-event-agendas";
 import { markdownImageSources } from "../publication-markdown-images";
+import { publicationAuthoredAgendaRoutes } from "../../assets/shared/publication-agenda-routes";
 
 export async function getStaticPaths() {
   const authored = new Set(publishedSiteRoutes());
-  return Promise.all(publishedEventAgendas(publication).filter(({ route }) => !authored.has(route)).map(async ({ snapshot, route }) => {
+  // Authored event pages already present these agendas with their hero; their agenda URLs redirect there.
+  const embedded = new Set(publicationAuthoredAgendaRoutes(publication).map((owner) => owner.eventSlug));
+  return Promise.all(publishedEventAgendas(publication).filter(({ route, snapshot }) => !authored.has(route) && !embedded.has(snapshot.eventSlug)).map(async ({ snapshot, route }) => {
     const view = {
       route, title: `${snapshot.eventName ?? "Event"} agenda`, timeZone: snapshot.timeZone,
       content: agendaContent(snapshot),
@@ -25,6 +28,7 @@ export async function getStaticPaths() {
     const imageRefs = [
       ...speakers.map((speaker) => speaker.imageSrc).filter((source): source is string => Boolean(source))
         .map((source) => ({ source, portrait: true })),
+      ...speakers.flatMap((speaker) => speaker.organization?.logoSrc ? [{ source: speaker.organization.logoSrc, portrait: true }] : []),
       ...markdownImageSources([...sessions.map((session) => session.descriptionMarkdown), ...speakers.map((speaker) => speaker.bioMarkdown)])
         .map((source) => ({ source, portrait: false })),
     ];

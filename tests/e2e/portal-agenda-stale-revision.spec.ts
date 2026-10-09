@@ -14,15 +14,15 @@ import {
   sessionParticipationResponseSchema,
 } from "../../assets/shared/schemas/event-participation-scanning";
 import { roomRecommendationsResponseSchema } from "../../assets/shared/schemas/event-room-recommendations";
-import { registrationCreateSchema } from "../../assets/shared/schemas/registration";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { registerInBrowser } from "./helpers/registration";
 import { signInToPortal } from "./helpers/portal-auth";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
-import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
+import { createRegistrationEvent, registerStateAttendee } from "./helpers/participation-state-fixture";
 
-const slug = "pqc-conference-amsterdam-nl";
-const agendaApi = `/api/v1/events/${slug}/agenda`;
+/** The session dialog's live participation controls, opened over the event app's agenda. */
+function participationPanel(page: Page) {
+  return page.getByRole("dialog").getByRole("region", { name: "My participation", exact: true });
+}
 
 async function capture(page: Page, info: TestInfo, stage: string) {
   for (const [device, width, height] of [
@@ -36,7 +36,7 @@ async function capture(page: Page, info: TestInfo, stage: string) {
     });
     expect(await page.evaluate(() => window.scrollY)).toBe(0);
     await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
-    const panel = page.getByRole("region", { name: "Manage participation", exact: true });
+    const panel = participationPanel(page);
     const panelBox = await panel.boundingBox();
     expect(panelBox).not.toBeNull();
     for (const field of await panel.locator("select, input, button, [role=alert]").all()) {
@@ -61,22 +61,11 @@ test("a stale My agenda reservation refreshes the approved session and requires 
   const title = `Revision workshop ${suffix.slice(0, 8)}`;
   const revisedTitle = `${title} — revised`;
   const email = `revision-attendee-${suffix}@example.test`;
-  const template = await registerInBrowser(page, `revision-template-${suffix}@example.test`);
-  const since = await capturedEmailCount();
-  const registration = await page.request.post(`/api/v1/events/${slug}/registrations`, {
-    data: registrationCreateSchema.parse({
-      ...template.request,
-      email,
-      attendanceType: "in_person",
-      dayAttendance: template.request.dayAttendance?.map((day) => ({ ...day, attendanceType: "in_person" })),
-    }),
-  });
-  expect(registration.status(), await registration.text()).toBe(200);
-  const confirmation = await waitForCapturedEmail(email, "Confirm your registration", { since });
-  await page.goto(extractEmailUrl(confirmation, "/register/confirm"));
-  await page.getByRole("button", { name: /Confirm my registration/i }).click();
-  await waitForCapturedEmail(email, "registration is confirmed", { since });
   await signInAsE2eStaff(page, e2eAdminEmail("default"));
+  // A fresh event: approving the shared conference agenda would also approve other specs' sessions.
+  const event = await createRegistrationEvent(page, "stale-revision");
+  const slug = event.slug;
+  const agendaApi = `/api/v1/events/${slug}/agenda`;
 
   const draft = await page.request.get(agendaApi);
   expect(draft.status(), await draft.text()).toBe(200);
@@ -98,8 +87,8 @@ test("a stale My agenda reservation refreshes the approved session and requires 
       title,
       description:
         "A substantive synthetic workshop whose approved time and location change while its participant page remains open.",
-      startAt: "2026-12-01T10:00:00.000Z",
-      endAt: "2026-12-01T11:00:00.000Z",
+      startAt: "2027-09-10T10:00:00.000Z",
+      endAt: "2027-09-10T11:00:00.000Z",
       roomId: rooms[0],
       admissionPolicy: "reservation",
       capacity: 10,
@@ -121,6 +110,8 @@ test("a stale My agenda reservation refreshes the approved session and requires 
   const attendeeContext = await browser.newContext({ baseURL: new URL(page.url()).origin });
   try {
     const attendee = await attendeeContext.newPage();
+    // The fresh event is never released to the static site; only its portal agenda is exercised.
+    await registerStateAttendee(attendee, event, email, { staticRelease: false });
     await signInToPortal(attendee, email);
     const focusedPath = `/portal/#/events/${slug}/agenda?session=${occurrence.id}`;
     const initialList = attendee.waitForResponse((response) => {
@@ -139,10 +130,11 @@ test("a stale My agenda reservation refreshes the approved session and requires 
       status: null,
       saved: false,
     });
-    const detail = attendee.getByRole("region", { name: "Manage participation", exact: true });
-    await expect(attendee.getByRole("heading", { name: title, exact: true })).toBeVisible();
-    await expect(attendee.getByRole("table", { name: "My event agenda", exact: true })).toHaveCount(0);
-    await expect(attendee.getByText(`Original hall ${suffix}`, { exact: true })).toBeVisible();
+    // The focused link opens the session's own details over the programme.
+    const dialog = attendee.getByRole("dialog");
+    const detail = participationPanel(attendee);
+    await expect(dialog.getByRole("heading", { name: title, exact: true })).toBeVisible();
+    await expect(dialog.getByText(`Original hall ${suffix}`, { exact: true })).toBeVisible();
     await detail.getByLabel("Participation", { exact: true }).selectOption("reserve");
     await expect(detail.getByRole("button", { name: "Update", exact: true })).toBeEnabled();
     await capture(attendee, info, "my-agenda-original-publication");
@@ -151,8 +143,8 @@ test("a stale My agenda reservation refreshes the approved session and requires 
       data: agendaOccurrencePatchSchema.parse({
         expectedRevision: snapshot.revision,
         title: revisedTitle,
-        startAt: "2026-12-01T11:00:00.000Z",
-        endAt: "2026-12-01T12:00:00.000Z",
+        startAt: "2027-09-10T11:00:00.000Z",
+        endAt: "2027-09-10T12:00:00.000Z",
         roomId: rooms[1],
       }),
     });
@@ -167,7 +159,7 @@ test("a stale My agenda reservation refreshes the approved session and requires 
     expect(revisedRevision).toBe(snapshot.revision);
     expect(revisedRevision).toBeGreaterThan(originalRevision!);
     // The participant page is still displaying the old approved session.
-    await expect(attendee.getByRole("heading", { name: title, exact: true })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: title, exact: true })).toBeVisible();
     await expect(attendee.getByRole("heading", { name: revisedTitle, exact: true })).toHaveCount(0);
     const writes: ReturnType<typeof sessionParticipationRequestSchema.parse>[] = [];
     const participationPath = `${agendaApi}/${occurrence.id}/participation`;
@@ -201,12 +193,12 @@ test("a stale My agenda reservation refreshes the approved session and requires 
       publishedRevision: revisedRevision,
       roomId: null,
       rooms: [{ id: rooms[1], name: `Revised hall ${suffix}` }],
-      startAt: "2026-12-01T11:00:00.000Z",
+      startAt: "2027-09-10T11:00:00.000Z",
       status: null,
       saved: false,
     });
-    await expect(attendee.getByRole("heading", { name: revisedTitle, exact: true })).toBeVisible();
-    await expect(attendee.getByText(`Revised hall ${suffix}`, { exact: true })).toBeVisible();
+    await expect(dialog.getByRole("heading", { name: revisedTitle, exact: true })).toBeVisible();
+    await expect(dialog.getByText(`Revised hall ${suffix}`, { exact: true })).toBeVisible();
     await expect(detail).toContainText("confirm your choice again");
     await expect(detail.getByRole("button", { name: "Update", exact: true })).toBeEnabled();
     const demandResponse = await page.request.get(`${agendaApi}/occurrences/${occurrence.id}/room-recommendations`);
@@ -238,7 +230,7 @@ test("a stale My agenda reservation refreshes the approved session and requires 
       expectedPublishedRevision: revisedRevision,
       roomId: rooms[1],
     });
-    await expect(attendee.getByText("Reserved", { exact: true })).toBeVisible();
+    await expect(detail.getByText("Reserved", { exact: true })).toBeVisible();
     const reloadResponse = attendee.waitForResponse((response) => {
       const url = new URL(response.url());
       return url.pathname === `${agendaApi}/participation` && url.searchParams.get("occurrenceId") === occurrence.id;
@@ -251,7 +243,7 @@ test("a stale My agenda reservation refreshes the approved session and requires 
       status: "reserved",
       roomId: rooms[1],
     });
-    await expect(attendee.getByText("Reserved", { exact: true })).toBeVisible();
+    await expect(detail.getByText("Reserved", { exact: true })).toBeVisible();
     const finalDemandResponse = await page.request.get(
       `${agendaApi}/occurrences/${occurrence.id}/room-recommendations`,
     );

@@ -72,6 +72,14 @@ export function StaffingOverview({
           caption="Staffing positions"
           data={snapshot.staffingPositions.filter((row) => row.requirementId === requirement.id)}
           rowKey={(row) => row.id}
+          rowAction={
+            canEdit
+              ? (row) => ({
+                  label: `Edit assignment for position ${formatNumber(row.index)}`,
+                  onSelect: () => editAssignment(row.id),
+                })
+              : undefined
+          }
           columns={[
             { header: "Position", cell: (row) => formatNumber(row.index), align: "end", width: "fit" },
             {
@@ -94,18 +102,6 @@ export function StaffingOverview({
                   </Badge>
                 );
               },
-              width: "fit",
-            },
-            {
-              header: "Actions",
-              cell: (row) => (
-                <RowActions
-                  subject={`Position ${formatNumber(row.index)}`}
-                  actions={
-                    canEdit ? [{ id: "edit", label: "Edit assignment", onSelect: () => editAssignment(row.id) }] : []
-                  }
-                />
-              ),
               width: "fit",
             },
           ]}
@@ -152,16 +148,6 @@ export function StaffingOverview({
               header: "Unfilled",
               cell: (row) => formatNumber(coverage.find((value) => value.requirementId === row.id)?.missingCount ?? 0),
               align: "end",
-              width: "fit",
-            },
-            {
-              header: "Actions",
-              cell: (row) => (
-                <RowActions
-                  subject={`${roleName(row.roleId)} · ${postName(row.postId)}`}
-                  actions={[{ id: "review", label: "Review positions", onSelect: () => setRequirement(row.id) }]}
-                />
-              ),
               width: "fit",
             },
           ]}
@@ -255,24 +241,23 @@ export function StaffingOverview({
                 ),
                 width: "fit",
               },
-              {
-                header: "Actions",
-                cell: (row) => (
-                  <RowActions
-                    subject={row.name}
-                    actions={[
-                      { id: "review", label: "Review staffing", onSelect: () => setShift(row.id) },
-                      ...(canEdit
-                        ? [
+              ...(canEdit
+                ? [
+                    {
+                      header: "Actions",
+                      cell: (row: AgendaSnapshot["shifts"][number]) => (
+                        <RowActions
+                          subject={row.name}
+                          actions={[
                             { id: "edit", label: "Edit shift", onSelect: () => editShift(row.id) },
                             { id: "needs", label: "Staffing needs", onSelect: () => editNeeds(row.id) },
-                          ]
-                        : []),
-                    ]}
-                  />
-                ),
-                width: "fit",
-              },
+                          ]}
+                        />
+                      ),
+                      width: "fit" as const,
+                    },
+                  ]
+                : []),
             ]}
           />
         ) : (
@@ -288,24 +273,17 @@ export function StaffingOverview({
               caption="Duty workload"
               data={snapshot.staffingReport?.people ?? []}
               rowKey={(row) => row.userId}
+              rowAction={
+                canEdit
+                  ? (row) => ({ label: `Edit ${row.displayName}`, onSelect: () => editPerson(row.userId) })
+                  : undefined
+              }
               empty="No eligible people configured."
               columns={[
                 { header: "Person", cell: (row) => row.displayName, width: "primary" },
                 { header: "Minutes", cell: (row) => formatNumber(row.minutes), align: "end", width: "fit" },
                 { header: "Pinned", cell: (row) => formatNumber(row.pinnedCount), align: "end", width: "fit" },
                 { header: "Manual", cell: (row) => formatNumber(row.manualCount), align: "end", width: "fit" },
-                {
-                  header: "Actions",
-                  cell: (row) => (
-                    <RowActions
-                      subject={row.displayName}
-                      actions={
-                        canEdit ? [{ id: "edit", label: "Edit person", onSelect: () => editPerson(row.userId) }] : []
-                      }
-                    />
-                  ),
-                  width: "fit",
-                },
               ]}
             />
           </TableList>

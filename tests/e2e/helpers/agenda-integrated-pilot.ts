@@ -51,9 +51,19 @@ import { acceptVisibleTerms, fieldLabel } from "./proposal-entry-ui";
 import { confirmSpeakerWithReceipt } from "./speaker-participation-receipt";
 import { runRowAction } from "./data-table";
 import { sponsorEventSlug } from "./sponsor-live-fixture";
+import { agendaWorkspacePath } from "./agenda-workspace";
 
 export const pilotAgendaApi = `/api/v1/events/${sponsorEventSlug}/agenda`;
-export const pilotAgendaPage = `/portal/#/events/${sponsorEventSlug}/agenda`;
+/**
+ * Organizers edit the pilot agenda in its owning group's event workspace. The pilot changes the
+ * agenda through the API between visits, so each visit loads a fresh document rather than reusing
+ * an already open workspace whose snapshot predates those changes.
+ */
+export async function openPilotAgenda(staff: Page) {
+  const path = await agendaWorkspacePath(staff, sponsorEventSlug);
+  await staff.goto("about:blank");
+  await staff.goto(path);
+}
 
 export async function readPilotAgenda(page: Page) {
   const response = await page.request.get(pilotAgendaApi);
@@ -356,7 +366,7 @@ export async function preparePilotConference(staff: Page, speaker: Awaited<Retur
 }
 
 export async function editAndSwapPilot(staff: Page, first: AgendaOccurrence, second: AgendaOccurrence, info: TestInfo) {
-  await staff.goto(pilotAgendaPage);
+  await openPilotAgenda(staff);
   await staff.getByRole("tab", { name: "Schedule", exact: true }).click();
   await runRowAction(staff, staff.getByRole("row").filter({ hasText: first.title }), "Edit session");
   await staff
@@ -467,16 +477,11 @@ export async function staffPilot(staff: Page, seniorUserId: string, info: TestIn
     }),
   });
   expect(configured.status(), await configured.text()).toBe(200);
-  await staff.goto(pilotAgendaPage);
+  await openPilotAgenda(staff);
   await staff.getByRole("tab", { name: "Shifts", exact: true }).click();
-  for (const [menu, action] of [
-    ["Pilot day 1 opening", "Review staffing"],
-    ["Pilot MC · Event", "Review positions"],
-    ["Position 1", "Edit assignment"],
-  ]) {
-    await staff.getByRole("button", { name: `Actions for ${menu}`, exact: true }).click();
-    await staff.getByRole("menuitem", { name: action, exact: true }).click();
-  }
+  // Shift, duty and position rows open through the table's own row controls.
+  for (const row of ["Review Pilot day 1 opening", "Review Pilot MC · Event", "Edit assignment for position 1"])
+    await staff.getByRole("button", { name: row, exact: true }).click();
   await staff.getByLabel("Assigned person", { exact: true }).selectOption(seniorUserId);
   await staff.getByRole("checkbox", { name: "Pin assignment during rotation", exact: true }).check();
   await staff.getByRole("button", { name: "Save assignment", exact: true }).click();
@@ -512,7 +517,7 @@ export async function grantPilotDoor(staff: Page, userId: string, eventId: strin
 }
 
 export async function releasePilotArchive(staff: Page, occurrence: AgendaOccurrence, info: TestInfo) {
-  await staff.goto(pilotAgendaPage);
+  await openPilotAgenda(staff);
   await staff.getByRole("tab", { name: "Schedule", exact: true }).click();
   await runRowAction(
     staff,
@@ -528,8 +533,12 @@ export async function releasePilotArchive(staff: Page, occurrence: AgendaOccurre
   const fields = staff.getByRole("group", { name: title, exact: true });
   const url = "https://www.youtube.com/watch?v=AbCdEf12345&start=90";
   await fields.getByLabel("Material type", { exact: true }).selectOption("recording");
-  await fields.getByLabel("Public delivery URL", { exact: true }).fill(url);
-  for (const name of ["Rights confirmed", "Speaker consent confirmed", "File and accessibility reviewed"])
+  await fields.getByLabel("Recording link", { exact: true }).fill(url);
+  for (const name of [
+    "We have permission to publish this material",
+    "Speaker has agreed to publication",
+    "File and accessibility have been reviewed",
+  ])
     await fields.getByLabel(name, { exact: true }).check();
   await fields.getByLabel("Release status", { exact: true }).selectOption("approved");
   const path = `${pilotAgendaApi}/occurrences/${occurrence.id}/history`;
@@ -557,7 +566,7 @@ export async function releasePilotArchive(staff: Page, occurrence: AgendaOccurre
 }
 
 export async function approvePilotAppearance(staff: Page, occurrence: AgendaOccurrence, userId: string) {
-  await staff.goto(pilotAgendaPage);
+  await openPilotAgenda(staff);
   await staff.getByRole("tab", { name: "Schedule", exact: true }).click();
   await runRowAction(
     staff,
@@ -568,6 +577,11 @@ export async function approvePilotAppearance(staff: Page, occurrence: AgendaOccu
     actingIdentityId: null,
     snapshot: { organizationName: null, jobTitle: null },
   });
+  // The archive editor groups representation review in its own section tab.
+  await staff
+    .getByRole("tablist", { name: "Session archive sections", exact: true })
+    .getByRole("tab", { name: "Speaker representation", exact: true })
+    .click();
   for (const credit of occurrence.speakers) {
     const appearance = staff.getByRole("group", { name: credit.displayName, exact: true });
     await appearance

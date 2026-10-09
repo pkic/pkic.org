@@ -260,3 +260,52 @@ describe("live archive material release projection", () => {
     await expect(projectLiveAgendaMaterials(db, "event", snapshot())).rejects.toThrow("Authority unavailable");
   });
 });
+
+it("projects only the explicitly approved owned recording and never retains its provider URL", async () => {
+  const { projectLiveAgendaMaterials } = await import(source);
+  const input = snapshot();
+  input.occurrences = input.occurrences.slice(0, 1);
+  input.occurrences[0]!.id = "11111111-1111-4111-8111-111111111111";
+  const versionId = "22222222-2222-4222-8222-222222222222";
+  const selected = sessionMaterialSchema.parse({
+    ...material("recording"),
+    kind: "recording",
+    presentationVersionId: null,
+    recordingVersionId: versionId,
+    url: "https://example.test/private-provider",
+  });
+  input.occurrences[0]!.history!.materials = [selected];
+  let enabled = true;
+  const db = {
+    prepare: (sql: string) => ({
+      bind: () => ({
+        all: async () => ({
+          results: sql.includes("event_recording_versions")
+            ? enabled
+              ? [
+                  {
+                    event_id: "event",
+                    id: versionId,
+                    event_slug: "synthetic",
+                    digest: "a".repeat(64),
+                    file_size: 50,
+                    mime_type: "video/mp4",
+                  },
+                ]
+              : []
+            : currentRows("event", input),
+        }),
+      }),
+    }),
+  };
+  const projected = await projectLiveAgendaMaterials(db, "event", input);
+  expect(projected.occurrences[0]!.recordingUrl).toBe(
+    `/api/v1/events/synthetic/agenda/occurrences/${input.occurrences[0]!.id}/materials/recording/recordings/${versionId}/releases/${"a".repeat(64)}/content`,
+  );
+  expect(JSON.stringify(projected)).not.toContain("private-provider");
+  enabled = false;
+  const revoked = await projectLiveAgendaMaterials(db, "event", input);
+  expect(revoked.occurrences[0]!.recordingUrl).toBeNull();
+  expect(revoked.occurrences[0]!.history!.materials).toEqual([]);
+  expect(input.occurrences[0]!.history!.materials).toHaveLength(1);
+});

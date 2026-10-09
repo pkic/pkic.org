@@ -300,7 +300,7 @@ describe("durable historical portable export", () => {
         kind: "title",
         sourcePath: latestPath,
         sourceDigest: latestDigest,
-        sourceLocator: "2023-04-01:0:0",
+        sourceLocator: row.ref,
         authoredValue: "Historical talk",
         decision: "reviewed_title",
         resolvedValue: row.fields.title,
@@ -333,10 +333,16 @@ describe("durable historical portable export", () => {
       targetSlug,
       agendaOccurrenceQuerySchema.parse({ limit: 100 }),
     );
+    const ownedSource = await env.DB.prepare(
+      "SELECT source_path,source_digest,source_ref FROM event_agenda_import_provenance WHERE occurrence_id=?",
+    )
+      .bind(initial.agenda.occurrences[0].id)
+      .first<{ source_path: string; source_digest: string; source_ref: string }>();
+    expect(ownedSource).toEqual({ source_path: latestPath, source_digest: latestDigest, source_ref: row.ref });
     expect(document.occurrences[0]).toMatchObject({
       sourcePath: latestPath,
       sourceDigest: latestDigest,
-      retainedSourceEvidence: receipts,
+      retainedSourceEvidence: [...receipts, { sourcePath: latestPath, sourceDigest: latestDigest, sourceRef: row.ref }],
     });
     expect(document.occurrences[0].archive!.archivalTiming).toEqual(row.archive!.archivalTiming);
     expect(document.occurrences[0].archive!.archivalCredits).toEqual(row.archive!.archivalCredits);
@@ -362,7 +368,10 @@ describe("durable historical portable export", () => {
       targetSlug,
       agendaOccurrenceQuerySchema.parse({ limit: 100 }),
     );
-    expect(secondExport.occurrences[0].retainedSourceEvidence).toEqual(receipts);
+    expect(secondExport.occurrences[0].retainedSourceEvidence).toEqual([
+      ...receipts,
+      { sourcePath: latestPath, sourceDigest: latestDigest, sourceRef: row.ref },
+    ]);
     expect(
       (
         await reviewAgendaTransfer(
@@ -421,7 +430,7 @@ describe("durable historical portable export", () => {
           kind: "credit",
           sourcePath,
           sourceDigest,
-          sourceLocator: "2023-04-01:0:0",
+          sourceLocator: row.ref,
           authoredValue: "TBC",
           decision: "reviewed_credit",
           resolvedValue: "Verified person reference",
@@ -504,7 +513,7 @@ describe("durable historical portable export", () => {
             kind: "title",
             sourcePath: latestPath,
             sourceDigest: latestDigest,
-            sourceLocator: "2023-04-01:0:0",
+            sourceLocator: row.ref,
             authoredValue: "Historical talk",
             decision: "reviewed_title",
             resolvedValue: row.fields.title,

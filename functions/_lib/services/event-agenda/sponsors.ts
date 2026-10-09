@@ -1,4 +1,5 @@
 import type { z } from "zod";
+import { BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT } from "../../../../assets/shared/schemas/event-badge-template";
 import {
   agendaSponsorChoicesQuerySchema,
   agendaBreakSponsorDisplaySchema,
@@ -27,7 +28,10 @@ function source(eventId: string) {
         'weight',public.effective_weight) AS source_json FROM sponsorships sp JOIN enriched_sponsors public
         ON public.id=COALESCE(sp.organization_id,sp.id)
       WHERE sp.event_id=? AND sp.sponsor_type='event' AND sp.pipeline_stage='active'
-        AND public.event_tier IS NOT NULL AND public.effective_weight>0`,
+        AND public.event_tier IS NOT NULL AND public.effective_weight>0
+        AND EXISTS(SELECT 1 FROM sponsorship_tier_catalog event_catalog
+          WHERE event_catalog.sponsor_type='event' AND event_catalog.tier=public.event_tier
+            AND event_catalog.active=1 AND event_catalog.display_weight>0)`,
     bindings: [...read.bindings, eventId],
   };
 }
@@ -119,4 +123,59 @@ export async function prepareAgendaSponsorApproval(
   )
     throw new AppError(409, "AGENDA_SPONSOR_CHANGED", "Sponsor branding changed. Refresh before approving the agenda.");
   return prepareSponsorRowsGuard(db, eventId, ids, rows);
+}
+
+/** Complete bounded branding population for configured event tiers, using the agenda's canonical visibility policy. */
+export async function prepareAgendaSponsorTierRead(db: DatabaseLike, eventId: string, tiers: readonly string[]) {
+  const read = source(eventId);
+  return prepareSponsorBrandingRead(
+    db,
+    `${read.sql} AND public.event_tier IN(SELECT value FROM json_each(?)) ORDER BY sp.id`,
+    [...read.bindings, JSON.stringify([...new Set(tiers)])],
+  );
+}
+
+/**
+ * Current PKI Consortium sponsors of the given consortium tiers for badge branding: exactly the public sponsor
+ * wall's consortium population (an organization's active consortium tier, or an active non-member consortium
+ * sponsorship) limited to visible catalog tiers. Event sponsorships never enter this population.
+ */
+export async function prepareConsortiumSponsorTierRead(db: DatabaseLike, eventId: string, tiers: readonly string[]) {
+  const read = buildPublicSponsorReadModel({ eventId });
+  return prepareSponsorBrandingRead(
+    db,
+    `${read.sql} SELECT public.id,public.name,public.website,public.logo_r2_key,public.sponsorship_logo_r2_key,
+      public.tier,public.event_tier,public.effective_tier,consortium_catalog.display_weight AS effective_weight,
+      public.id AS sponsor_id,
+      json_object('publicId',public.id,'name',public.name,'website',public.website,'logo',public.logo_r2_key,
+        'sponsorLogo',public.sponsorship_logo_r2_key,'tier',public.tier,'weight',consortium_catalog.display_weight)
+        AS source_json
+      FROM enriched_sponsors public
+      JOIN sponsorship_tier_catalog consortium_catalog
+        ON consortium_catalog.sponsor_type='consortium' AND consortium_catalog.tier=public.tier
+       AND consortium_catalog.active=1 AND consortium_catalog.display_weight>0
+     WHERE public.tier IN(SELECT value FROM json_each(?)) ORDER BY public.name,public.id`,
+    [...read.bindings, JSON.stringify([...new Set(tiers)])],
+  );
+}
+
+/** Generic event badges discover actual visible event tiers from the same canonical population. */
+export async function prepareAgendaSponsorBrandingRead(db: DatabaseLike, eventId: string) {
+  const read = source(eventId);
+  return prepareSponsorBrandingRead(db, `${read.sql} ORDER BY sp.id`, read.bindings);
+}
+
+async function prepareSponsorBrandingRead(db: DatabaseLike, sql: string, bindings: readonly unknown[]) {
+  const rows = await all<AgendaSponsorRow>(db, `${sql} LIMIT ${BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT + 1}`, [
+    ...bindings,
+  ]);
+  if (rows.length > BADGE_TEMPLATE_SPONSOR_LOGOS_MAX_COUNT)
+    throw new AppError(422, "BADGE_SPONSOR_LIMIT", "Use at most 40 sponsors in one badge template.");
+  return {
+    rows,
+    guard: prepareAuthorizationGuard(db, {
+      sql: `SELECT 1 WHERE (SELECT json_group_array(json(source_json)) FROM (${sql}))=?`,
+      bindings: [...bindings, JSON.stringify(rows.map((row) => JSON.parse(row.source_json)))],
+    }),
+  };
 }

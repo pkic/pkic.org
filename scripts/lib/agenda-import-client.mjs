@@ -7,13 +7,14 @@ import {
   transferApplyResponseSchema,
 } from "../../assets/shared/schemas/event-agenda-transfer.ts";
 import { agendaSnapshotSchema } from "../../assets/shared/schemas/event-agenda.ts";
+import { agendaTransferModePolicy } from "../../assets/shared/event-agenda-transfer.ts";
 
 /** @typedef {import('zod').infer<typeof agendaTransferSchema>} Document */
 /** @typedef {import('zod').infer<typeof transferResolutionSchema>} Resolutions */
 /** @typedef {{part:number, revision:number, ready:boolean, imported:number, skipped:number, applied:boolean, findings:Array<{code:string,severity:string,count:number}>}} ImportSummary */
 /**
  * Review sequential bounded documents; writes require explicit application and acknowledgements.
- * @param {{baseUrl:string,eventSlug:string,token:string,documents:Document[],resolutions?:Resolutions,mode?:'archive'|'copy_as_new',apply?:boolean,acknowledgeInferredTiming?:boolean,acknowledgeArchiveRepresentation?:boolean,fetcher?:typeof fetch,onSummary?:(summary:ImportSummary)=>void}} options
+ * @param {{baseUrl:string,eventSlug:string,token:string,documents:Document[],resolutions?:Resolutions,mode?:import('zod').infer<typeof transferPrepareSchema>['mode'],apply?:boolean,acknowledgeInferredTiming?:boolean,acknowledgeArchiveRepresentation?:boolean,fetcher?:typeof fetch,onSummary?:(summary:ImportSummary)=>void}} options
  */
 export async function importPreparedAgenda(options) {
   const origin = new URL(options.baseUrl);
@@ -101,7 +102,7 @@ export async function importPreparedAgenda(options) {
       if (review.findings.some((finding) => finding.code === "timing_inferred") && !options.acknowledgeInferredTiming)
         throw new Error("Explicit --acknowledge-inferred-timing is required.");
       if (
-        prepared.mode === "archive" &&
+        agendaTransferModePolicy[prepared.mode].retainsSource &&
         document.occurrences.some((row) => row.archive) &&
         !options.acknowledgeArchiveRepresentation
       )

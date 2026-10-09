@@ -16,6 +16,7 @@ interface RoomRow {
   setup_minutes: number;
   equipment_json: string;
   available_periods_json: string;
+  virtual_room_url: string | null;
 }
 
 export async function listAgendaRooms(
@@ -33,7 +34,7 @@ export async function listAgendaRooms(
   const { rows, total } = await queryPage<RoomRow>(db, {
     source: {
       selectSql:
-        "SELECT room.id,room.name,room.capacity,room.setup_minutes,room.equipment_json,room.available_periods_json",
+        "SELECT room.id,room.name,room.capacity,room.setup_minutes,room.equipment_json,room.available_periods_json,room.virtual_room_url",
       fromSql: `FROM event_agenda_rooms room WHERE room.event_id=?${search ? ` AND ${search.sql}` : ""}`,
       bindings: [eventId, ...(search?.bindings ?? [])],
     },
@@ -52,6 +53,7 @@ export async function listAgendaRooms(
       setupMinutes: room.setup_minutes,
       equipment: JSON.parse(room.equipment_json),
       availablePeriods: JSON.parse(room.available_periods_json),
+      ...(room.virtual_room_url !== null ? { virtualRoomUrl: room.virtual_room_url } : {}),
     })),
     page: buildPageInfo(query.limit, query.offset, total, rows.length),
   });

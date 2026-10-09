@@ -1,3 +1,4 @@
+import { openOrganizerAgenda } from "./helpers/organizer-agenda";
 import { mkdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { expect, test } from "@playwright/test";
@@ -26,7 +27,7 @@ test("publication is an ellipsis action opening a dedicated review, with no acti
     }),
   });
   expect(created.status(), await created.text()).toBe(200);
-  await page.goto("/portal/#/events/pqc-conference-amsterdam-nl/agenda");
+  await openOrganizerAgenda(page, "pqc-conference-amsterdam-nl");
   await page.getByRole("tab", { name: "Schedule", exact: true }).click();
   const controls = page.getByRole("toolbar", { name: "Event sessions controls", exact: true });
   const menu = page.getByRole("button", { name: "Actions for Agenda", exact: true });

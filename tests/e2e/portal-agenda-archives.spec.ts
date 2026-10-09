@@ -70,6 +70,70 @@ test("approved archive corrections and promotion exports remain tied to a frozen
   snapshot = agendaSnapshotSchema.parse(await create.json());
   const occurrence = snapshot.occurrences.find((item) => item.title === title)!;
   const reviewedOldPath = `/events/${slug}/sessions/previous-archive-title-${occurrence.id}/`;
+  const attendancePages = [
+    {
+      id: occurrence.id,
+      policyLabel: "No session registration",
+      action: "Save favorite",
+      message: "Saving interest does not reserve a place. Admission remains first come, first served.",
+    },
+  ];
+  for (const policy of [
+    {
+      admissionPolicy: "optional_reservation",
+      accessPolicy: "open",
+      hour: "08",
+      policyLabel: "Registration optional",
+      action: "Register if you wish",
+    },
+    {
+      admissionPolicy: "reservation",
+      accessPolicy: "open",
+      hour: "09",
+      policyLabel: "Registration required",
+      action: "Register for session",
+    },
+    {
+      admissionPolicy: "preference",
+      accessPolicy: "invitation",
+      hour: "10",
+      policyLabel: "Invitation required",
+      action: "Invitation required",
+    },
+    {
+      admissionPolicy: "approval",
+      accessPolicy: "open",
+      hour: "11",
+      policyLabel: "Approval required",
+      action: "Request approval",
+    },
+  ] as const) {
+    const policyTitle = `Archive attendance · ${policy.policyLabel}`;
+    const created = await page.request.post(`/api/v1/events/${slug}/agenda/occurrences`, {
+      data: agendaOccurrenceCreateSchema.parse({
+        expectedRevision: snapshot.revision,
+        title: policyTitle,
+        description: "A substantive public session explaining cryptographic operations and its attendance policy.",
+        startAt: `2026-12-02T${policy.hour}:00:00.000Z`,
+        endAt: `2026-12-02T${policy.hour}:30:00.000Z`,
+        roomId,
+        admissionPolicy: policy.admissionPolicy,
+        accessPolicy: policy.accessPolicy,
+      }),
+    });
+    expect(created.status()).toBe(200);
+    snapshot = agendaSnapshotSchema.parse(await created.json());
+    attendancePages.push({
+      id: snapshot.occurrences.find((item) => item.title === policyTitle)!.id,
+      policyLabel: policy.policyLabel,
+      action: policy.action,
+      message:
+        policy.accessPolicy === "invitation"
+          ? "Sign in to check your invitation and current session availability."
+          : "Sign in to check current availability and your session registration.",
+    });
+  }
+
   const privateTitle = "Private archive planning notes";
   const privateCreate = await page.request.post(`/api/v1/events/${slug}/agenda/occurrences`, {
     data: agendaOccurrenceCreateSchema.parse({
@@ -261,6 +325,28 @@ test("approved archive corrections and promotion exports remain tied to a frozen
   const target = await publicContext.request.get(sessionPath);
   expect(target.status(), await target.text()).toBe(200);
   expect(target.headers()["x-pkic-publication"]).toMatch(/^static; snapshot=/);
+  for (const expected of attendancePages) {
+    const response = await publicContext.request.get(`/events/${slug}/sessions/${expected.id}/`);
+    expect(response.status()).toBe(200);
+    expect(response.headers()["x-pkic-publication"]).toMatch(/^static; snapshot=/);
+    const document = new JSDOM(await response.text()).window.document;
+    if (expected.id !== occurrence.id) {
+      expect([...document.querySelectorAll("section h2")].map((heading) => heading.textContent)).not.toContain(
+        "Speakers",
+      );
+    }
+    const attendance = [...document.querySelectorAll("section")].find(
+      (section) => section.querySelector("h2")?.textContent === "Attendance",
+    );
+    expect(attendance).toBeDefined();
+    expect([...attendance!.querySelectorAll("p")].map((p) => p.textContent)).toEqual([
+      expected.policyLabel,
+      expected.message,
+    ]);
+    const action = attendance!.querySelector("a")!;
+    expect(action.textContent).toBe(expected.action);
+    expect(action.getAttribute("href")).toBe(`/portal/#/events/${slug}/agenda?session=${expected.id}`);
+  }
   const publicPage = await publicContext.newPage();
   const followed = await publicPage.goto(reviewedOldPath);
   expect(followed!.status()).toBe(200);

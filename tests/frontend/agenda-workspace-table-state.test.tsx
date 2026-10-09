@@ -99,6 +99,7 @@ it("restores the server query and selection across workspace views without fetch
   await act(() => render(<AgendaEditor slug={snapshot.eventSlug} canEdit />, host!));
   await settle();
   expect(requests.some((url) => url.pathname.endsWith("/occurrences"))).toBe(false);
+  await click("Enable agenda editing");
   await click("Schedule");
   const query = () =>
     agendaOccurrenceQuerySchema.parse(

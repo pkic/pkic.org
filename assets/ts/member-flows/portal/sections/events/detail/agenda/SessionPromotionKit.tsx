@@ -12,6 +12,8 @@ import {
 } from "../../../../../../../shared/schemas/event-agenda";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
 import { getJson, postJson } from "../../../../../../shared/api-client";
+import { copyText } from "../../../../../../shared/clipboard";
+import { toast } from "../../../../ui";
 import { Button } from "../../../../../../ui/Button";
 import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
 import { Field } from "../../../../../../ui/Field";
@@ -155,7 +157,11 @@ export function SessionPromotionKit({
             </p>
             <Button
               onClick={() =>
-                void navigator.clipboard.writeText(`${occurrence.title}\n${kit.copy.whyAttend}\n${kit.registrationUrl}`)
+                void copyText(`${occurrence.title}\n${kit.copy.whyAttend}\n${kit.registrationUrl}`, {
+                  copied: "Post and registration link copied",
+                  failed: "Your browser would not let the page copy the post",
+                  notify: toast,
+                })
               }
             >
               Copy post and registration link

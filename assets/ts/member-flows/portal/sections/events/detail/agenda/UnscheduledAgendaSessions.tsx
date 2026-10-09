@@ -2,7 +2,8 @@ import { agendaSessionContent } from "../../../../../../../shared/public-agenda-
 import { publicSessionTiming } from "../../../../../../../shared/session-public-timing";
 import type { AgendaOccurrence, AgendaSnapshot } from "../../../../../../../shared/schemas/event-agenda";
 import { AgendaSession } from "../../../../../../site/AgendaSession";
-import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
+import { Panel, PanelBody } from "../../../../../../ui/Panel";
+import { EmptyState } from "../../../../../../ui/EmptyState";
 import { RowActions, type RowActionsProps } from "../../../../../../ui/RowActions";
 import "../../../../../../site/ContentAgenda.css";
 import "./AgendaSourceCards.css";
@@ -26,11 +27,19 @@ export function UnscheduledAgendaSessions({
   const occurrences = snapshot.occurrences.filter((occurrence) => !occurrence.startAt || !occurrence.endAt);
   const locations = snapshot.rooms.map((room) => ({ id: room.id, label: room.name }));
   return (
-    <Panel class="pk-agenda-source-panel">
-      <PanelHeader title="Unscheduled sessions" />
+    <Panel class="pk-agenda-source-panel" aria-label="Unscheduled sessions">
       <PanelBody>
         <div class="pk-stack pk-agenda-source-cards" aria-label="Unscheduled sessions">
-          {occurrences.length === 0 && <p class="pk-muted">All sessions are scheduled.</p>}
+          {occurrences.length === 0 && (
+            <EmptyState
+              title="All sessions are scheduled."
+              body={
+                canEdit
+                  ? "Sessions you unschedule, reuse or create without a time wait here until you place them."
+                  : undefined
+              }
+            />
+          )}
           {occurrences.map((occurrence) => {
             const timing = publicSessionTiming(occurrence);
             return (

@@ -407,7 +407,7 @@ describe("join destinations stay private and require live actual attendee entitl
       let raced = false;
       const db = mutateBeforeMatchingQuery(
         env.DB,
-        (sql) => sql.includes("SELECT json_extract(approved.payload_json,'$.virtualRoomUrl') AS url"),
+        (sql) => sql.includes("SELECT COALESCE(json_extract(approved.payload_json,'$.virtualRoomUrl')"),
         async () => {
           raced = true;
           if (change === "registration")
@@ -423,5 +423,112 @@ describe("join destinations stay private and require live actual attendee entitl
       expect(response.status).toBe(403);
       expect(await response.text()).not.toContain(joinUrl);
     }
+  });
+});
+
+describe("sessions follow their location's virtual room unless they override it", () => {
+  const roomLink = "https://example.test/location-room";
+  async function inheritedFixture() {
+    const f = await fixture();
+    const room = await f.raw(`${base}/rooms`, {
+      expectedRevision: 0,
+      name: "Streaming hall",
+      capacity: 50,
+      equipment: ["recording"],
+      virtualRoomUrl: roomLink,
+    });
+    expect(room.status, await room.clone().text()).toBe(200);
+    let snapshot = agendaSnapshotSchema.parse(await room.json());
+    const roomId = snapshot.rooms[0]!.id;
+    expect(snapshot.rooms[0]!.virtualRoomUrl).toBe(roomLink);
+    const created = await f.raw(`${base}/occurrences`, {
+      ...f.createBody(),
+      expectedRevision: snapshot.revision,
+      roomId,
+    });
+    expect(created.status, await created.clone().text()).toBe(200);
+    snapshot = agendaSnapshotSchema.parse(await created.json());
+    const occurrence = snapshot.occurrences[0]!;
+    expect(occurrence).not.toHaveProperty("virtualRoomUrl");
+    expect(occurrence).not.toHaveProperty("plannedMedia");
+    const published = await f.raw(`${base}/publications`, { expectedRevision: snapshot.revision });
+    expect(published.status, await published.clone().text()).toBe(200);
+    snapshot = agendaSnapshotSchema.parse(await published.json());
+    const registrationId = crypto.randomUUID();
+    await env.DB.prepare(
+      "INSERT INTO registrations(id,event_id,user_id,status,attendance_type,source_type,manage_link_secret,created_at,updated_at) VALUES(?,?,?,'registered','virtual','test',?,datetime('now'),datetime('now'))",
+    )
+      .bind(registrationId, f.eventId, f.adminId, crypto.randomUUID())
+      .run();
+    return { ...f, roomId, snapshot, id: occurrence.id, path: `${base}/occurrences/${occurrence.id}/virtual-room` };
+  }
+
+  it("releases the inherited location link to entitled attendees and keeps it out of public data", async () => {
+    const f = await inheritedFixture();
+    const allowed = await f.raw(f.path);
+    expect(allowed.status, await allowed.clone().text()).toBe(200);
+    expect(sessionVirtualRoomResponseSchema.parse(await allowed.json())).toEqual({ url: roomLink });
+    expect(await (await f.raw(`${base}/participation`)).json()).toMatchObject({
+      sessions: [{ id: f.id, onlineAccessAvailable: true }],
+    });
+    const [row] = await queryAll<{ snapshot_json: string }>(
+      env.DB,
+      "SELECT snapshot_json FROM event_agenda_publications WHERE event_id=?",
+      f.eventId,
+    );
+    const publicData = publicAgendaProjection(agendaSnapshotSchema.parse(JSON.parse(row!.snapshot_json)), null);
+    expect(publicData.occurrences[0]!.onlineAccessAvailable).toBe(true);
+    expect(JSON.stringify(publicData)).not.toContain(roomLink);
+  });
+
+  it("revokes the approved link when the location link changes and marks the session changed", async () => {
+    const f = await inheritedFixture();
+    expect(f.snapshot.occurrences[0]!.publicationStatus).toBe("published");
+    const moved = await f.raw(
+      `${base}/rooms/${f.roomId}`,
+      {
+        expectedRevision: f.snapshot.revision,
+        name: "Streaming hall",
+        capacity: 50,
+        equipment: ["recording"],
+        virtualRoomUrl: "https://example.test/replacement-room",
+      },
+      "PUT",
+    );
+    expect(moved.status, await moved.clone().text()).toBe(200);
+    expect(agendaSnapshotSchema.parse(await moved.json()).occurrences[0]!.publicationStatus).toBe("changed");
+    const refused = await f.raw(f.path);
+    expect(refused.status).toBe(403);
+    expect(await refused.text()).not.toContain(roomLink);
+  });
+
+  it("stores an override as the session's own plan, which replaces the location link", async () => {
+    const f = await inheritedFixture();
+    const overridden = await f.raw(
+      `${base}/occurrences/${f.id}`,
+      { expectedRevision: f.snapshot.revision, plannedMedia: { recording: false, liveStreaming: false } },
+      "PATCH",
+    );
+    expect(overridden.status, await overridden.clone().text()).toBe(200);
+    const draft = agendaSnapshotSchema.parse(await overridden.json());
+    expect(draft.occurrences[0]).toMatchObject({
+      plannedMedia: { recording: false, liveStreaming: false },
+      publicationStatus: "changed",
+    });
+    expect(await queryAll(env.DB, "SELECT planned_media_json FROM event_agenda_occurrences WHERE id=?", f.id)).toEqual([
+      { planned_media_json: '{"recording":false,"liveStreaming":false}' },
+    ]);
+    expect((await f.raw(f.path)).status).toBe(403);
+    const republished = await f.raw(`${base}/publications`, { expectedRevision: draft.revision });
+    expect(republished.status, await republished.clone().text()).toBe(200);
+    expect(agendaSnapshotSchema.parse(await republished.json()).occurrences[0]!.publicationStatus).toBe("published");
+    expect((await f.raw(f.path)).status).toBe(403);
+    const inheritedAgain = await f.raw(
+      `${base}/occurrences/${f.id}`,
+      { expectedRevision: draft.revision + 1, plannedMedia: null },
+      "PATCH",
+    );
+    expect(inheritedAgain.status, await inheritedAgain.clone().text()).toBe(200);
+    expect(agendaSnapshotSchema.parse(await inheritedAgain.json()).occurrences[0]).not.toHaveProperty("plannedMedia");
   });
 });

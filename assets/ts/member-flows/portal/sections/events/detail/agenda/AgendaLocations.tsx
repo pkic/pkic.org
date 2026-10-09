@@ -6,7 +6,7 @@ import { agendaRoomsListSchema } from "../../../../../../../shared/schemas/event
 import type { AgendaSnapshot } from "../../../../../../../shared/schemas/event-agenda";
 import { formatNumber } from "../../../../../../../shared/format-number";
 import { ApiDataTable } from "../../../../../../components/ApiDataTable";
-import { RowActions } from "../../../../../../ui/RowActions";
+import { EmptyState } from "../../../../../../ui/EmptyState";
 
 /** Locations are maintained through the same editor used by calendar columns. */
 export function AgendaLocations({
@@ -35,7 +35,16 @@ export function AgendaLocations({
       rowKey={(room) => room.id}
       rowAction={canEdit ? (room) => ({ label: `Edit ${room.name}`, onSelect: () => onEdit(room) }) : undefined}
       createAction={canEdit ? { label: "New location", onSelect: onNew } : undefined}
-      empty="No locations yet. Add a location to give sessions their own calendar column."
+      empty={
+        <EmptyState
+          title="No locations found"
+          body={
+            canEdit
+              ? "Add a location to give its sessions their own calendar column."
+              : "Locations appear here once organizers add them."
+          }
+        />
+      }
       columns={[
         { header: "Location", sort: { asc: "name", desc: "-name" }, cell: (room) => room.name },
         {
@@ -68,17 +77,6 @@ export function AgendaLocations({
         {
           header: "Equipment",
           cell: (room) => withoutAgendaMediaEquipment(room.equipment).join(", ") || "None recorded",
-        },
-        {
-          header: "Actions",
-          width: "fit",
-          cell: (room) =>
-            canEdit ? (
-              <RowActions
-                subject={room.name}
-                actions={[{ id: "edit", label: "Edit location", onSelect: () => onEdit(room) }]}
-              />
-            ) : null,
         },
       ]}
     />

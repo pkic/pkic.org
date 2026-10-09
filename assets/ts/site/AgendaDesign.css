@@ -1,0 +1,1590 @@
+/*
+ * Conference agenda v4 presentation (Claude Design handoff), shared by the
+ * published agenda and the organizer editor. Only appearance lives here; the
+ * markup, capabilities and behavior stay with the existing components.
+ */
+.pk-content-agenda {
+  --agenda-mono: var(--pk-font-mono, "Roboto Mono", ui-monospace, monospace);
+  --agenda-ink-strong: color-mix(in srgb, var(--pk-ink) 82%, var(--pk-agenda-shade));
+  --agenda-ink-2: color-mix(in srgb, var(--pk-ink) 80%, var(--pk-surface));
+  --agenda-ink-3: color-mix(in srgb, var(--pk-ink-muted) 90%, var(--pk-surface));
+  --agenda-control-line: color-mix(in srgb, var(--pk-line) 60%, var(--pk-line-strong));
+  --agenda-hover: color-mix(in srgb, var(--pk-line-soft) 80%, var(--pk-surface));
+  --agenda-favorite: var(--pk-agenda-favorite);
+}
+
+/* Day tabs: borderless until selected, then a raised sheet with the accent rule. */
+.pk-content-agenda__tabs {
+  align-items: flex-end;
+  border-block-end: 1px solid var(--pk-line);
+}
+.pk-content-agenda__tabs .pk-tabs__list {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  border: 0;
+}
+.pk-content-agenda__tabs [role="tab"],
+.pk-content-agenda__tabs button[aria-selected] {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 1px;
+  margin-block-end: -1px;
+  padding: 10px 18px 9px;
+  border: 1px solid transparent;
+  border-block-end: 3px solid transparent;
+  border-radius: 0;
+  background: transparent;
+  color: var(--agenda-ink-2);
+  font-size: var(--pk-agenda-type-16);
+  font-weight: 600;
+  line-height: 1.3;
+  text-decoration: none;
+}
+.pk-content-agenda__tabs button[aria-selected]:last-child {
+  border-inline-end-color: transparent;
+}
+.pk-content-agenda__tabs [role="tab"][aria-selected="true"],
+.pk-content-agenda__tabs button.is-active {
+  border-color: var(--pk-line);
+  border-block-end-color: var(--pk-accent);
+  background: var(--pk-surface-sunk);
+  color: var(--pk-accent-ink);
+}
+.pk-content-agenda__tabs [role="tab"] small {
+  color: var(--pk-ink-muted);
+  font-size: var(--pk-agenda-type-12);
+  font-weight: 400;
+}
+
+/* Toolbar: 36px controls with the reference's quiet grey outlines. */
+.pk-content-agenda .pk-content-agenda__controls:not([hidden]) {
+  border-block-end: 0;
+  padding-block: 12px 4px;
+}
+.pk-content-agenda__controls .pk-btn,
+.pk-content-agenda__controls .pk-input,
+.pk-content-agenda__controls select {
+  min-block-size: 36px;
+  border-color: var(--agenda-control-line);
+  border-radius: var(--pk-radius);
+  font-size: var(--pk-agenda-type-14);
+  font-weight: 500;
+}
+.pk-content-agenda__controls .pk-btn {
+  padding-block: 0;
+  background: var(--pk-surface);
+  color: var(--pk-ink);
+}
+.pk-content-agenda__controls .pk-content-agenda__filter-controls .pk-field:has([data-agenda-search]) {
+  flex: 0 1 240px;
+}
+.pk-content-agenda__controls [data-agenda-location-trigger] {
+  gap: 10px;
+}
+.pk-content-agenda__controls .pk-content-agenda__location-dots {
+  gap: 3px;
+}
+.pk-content-agenda__controls .pk-content-agenda__location-dots > span {
+  inline-size: 8px;
+  block-size: 8px;
+}
+.pk-content-agenda__controls [data-agenda-location-trigger] > [aria-hidden="true"]:last-child {
+  color: var(--pk-ink-muted);
+  font-size: var(--pk-agenda-type-9);
+}
+.pk-content-agenda__controls [data-agenda-clear-filters] {
+  flex: none;
+  inline-size: 36px;
+  min-inline-size: 36px;
+  block-size: 36px;
+  padding: 0;
+}
+.pk-content-agenda__toolbar-actions > .pk-btn--icon {
+  inline-size: 36px;
+  min-inline-size: 36px;
+  block-size: 36px;
+  min-block-size: 36px;
+  padding: 0;
+}
+.pk-content-agenda__toolbar-actions .pk-btn svg {
+  inline-size: 15px;
+  block-size: 15px;
+}
+/* Abstracts reads as a switch: track and knob follow the pressed state. */
+.pk-content-agenda__toolbar-actions > [data-agenda-compact],
+.pk-content-agenda__toolbar-actions > [data-agenda-compact][aria-pressed],
+.pk-content-agenda__toolbar-actions > [data-agenda-compact]:hover:not(:disabled) {
+  gap: 7px;
+  padding-inline: 12px;
+  border-color: var(--agenda-control-line);
+  background: var(--pk-surface);
+  color: var(--pk-ink);
+}
+.pk-content-agenda__toolbar-actions > [data-agenda-compact] > svg {
+  display: none;
+}
+.pk-content-agenda__toolbar-actions > [data-agenda-compact]::before {
+  content: "";
+  flex: none;
+  inline-size: 26px;
+  block-size: 15px;
+  border-radius: var(--pk-agenda-radius-switch);
+  background:
+    radial-gradient(circle at 7.5px 50%, var(--pk-on-solid) 5px, transparent 5.5px), var(--agenda-control-line);
+  transition: background var(--pk-agenda-dur);
+}
+.pk-content-agenda__toolbar-actions > [data-agenda-compact][aria-pressed="true"]::before {
+  background: radial-gradient(circle at 18.5px 50%, var(--pk-on-solid) 5px, transparent 5.5px), var(--pk-accent);
+}
+.pk-content-agenda .pk-content-agenda__view-choice {
+  border-color: var(--agenda-control-line);
+  border-radius: var(--pk-radius);
+}
+.pk-content-agenda .pk-content-agenda__view-choice > .pk-btn,
+.pk-content-agenda .pk-content-agenda__view-choice > .pk-btn[aria-pressed] {
+  min-block-size: 34px;
+  padding-inline: 12px;
+  border: 0;
+  background: var(--pk-surface);
+  color: var(--pk-ink-muted);
+  font-size: var(--pk-agenda-type-13);
+  font-weight: 600;
+}
+.pk-content-agenda .pk-content-agenda__view-choice > .pk-btn + .pk-btn {
+  border-inline-start: 1px solid var(--agenda-control-line);
+}
+.pk-content-agenda .pk-content-agenda__view-choice > .pk-btn[aria-pressed="true"] {
+  background: var(--pk-line-soft);
+  color: var(--pk-ink);
+}
+
+/* Grid frame, headers and the stacked time track. */
+@media screen {
+  .pk-content-agenda:not([data-agenda-view="list"]) .pk-content-agenda__day {
+    border-block: 1px solid var(--pk-line);
+  }
+  .pk-content-agenda .pk-content-agenda__timeline thead th {
+    block-size: 58px;
+    padding: 10px 12px 8px;
+    vertical-align: middle;
+  }
+  .pk-content-agenda .pk-content-agenda__timeline thead th.pk-content-agenda__location {
+    border-block-end: 2px solid var(--agenda-color);
+    background: color-mix(in srgb, var(--agenda-color) 15%, var(--pk-surface));
+    color: var(--pk-ink);
+    font-size: var(--pk-agenda-type-15);
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .pk-content-agenda .pk-content-agenda__timeline thead th.pk-content-agenda__time-heading {
+    padding: 8px 10px 8px 12px;
+    border-block-end: 2px solid var(--pk-line);
+    box-shadow: 1px 0 0 var(--pk-line);
+    text-align: start;
+  }
+  .pk-content-agenda__time-heading .pk-content-agenda__time-choice .pk-field__label {
+    color: var(--pk-ink);
+    font-size: var(--pk-agenda-type-12);
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .pk-content-agenda__time-heading .pk-content-agenda__time-choice select {
+    min-block-size: 18px;
+    padding: 0 14px 0 0;
+    background-position: right center;
+    color: var(--pk-accent-ink);
+    font-size: var(--pk-agenda-type-12);
+    font-weight: 600;
+    line-height: 1.3;
+  }
+  .pk-content-agenda__time-heading .pk-content-agenda__zone-headings > small {
+    color: var(--pk-ink);
+    font-size: var(--pk-agenda-type-12);
+    font-weight: 600;
+  }
+  .pk-content-agenda .pk-content-agenda__timeline .pk-content-agenda__time {
+    padding: 12px 10px 0 8px;
+  }
+  .pk-content-agenda .pk-content-agenda__slot > th,
+  .pk-content-agenda .pk-content-agenda__slot > td {
+    border-block-start-color: var(--pk-line-soft);
+  }
+  .pk-content-agenda .pk-content-agenda__clock > time {
+    color: var(--pk-ink);
+    font-size: var(--pk-agenda-type-18);
+    font-weight: 700;
+    line-height: 1.25;
+  }
+  .pk-content-agenda:not([data-agenda-time-display="browser"]) [data-agenda-clock="browser"] > time,
+  .pk-content-agenda[data-agenda-time-display="browser"] [data-agenda-clock="venue"] > time {
+    color: var(--agenda-ink-3);
+    font-size: var(--pk-agenda-type-11);
+    font-weight: 500;
+  }
+  .pk-content-agenda .pk-content-agenda__cell {
+    padding: 5px;
+  }
+}
+@media screen and (min-width: 46.001rem) {
+  .pk-content-agenda:not([data-agenda-view="list"]) .pk-content-agenda__cell > .pk-content-agenda__session {
+    inset: 5px;
+  }
+}
+
+/* Session cards. */
+.pk-content-agenda .pk-content-agenda__session {
+  gap: 0;
+  padding: 10px 12px 0;
+  border: 1.5px solid color-mix(in srgb, var(--agenda-color) 60%, transparent);
+  border-radius: var(--pk-radius);
+  background: var(--pk-surface-sunk);
+  transition:
+    box-shadow var(--pk-agenda-dur),
+    transform var(--pk-agenda-dur);
+}
+.pk-content-agenda .pk-content-agenda__session:not(.pk-content-agenda__session--break):hover,
+.pk-content-agenda .pk-content-agenda__session:not(.pk-content-agenda__session--break):focus-within {
+  border-color: color-mix(in srgb, var(--agenda-color) 60%, transparent);
+  box-shadow:
+    0 0 0 1.5px var(--agenda-color),
+    var(--pk-agenda-card-lift);
+  transform: translateY(-1px);
+}
+@media (prefers-reduced-motion: reduce) {
+  .pk-content-agenda .pk-content-agenda__session:hover {
+    transform: none;
+  }
+}
+.pk-content-agenda .pk-content-agenda__session-body {
+  gap: 10px;
+}
+.pk-content-agenda .pk-content-agenda__session h3 {
+  padding-inline-end: 24px;
+  color: var(--agenda-ink-strong);
+  font-size: var(--pk-agenda-type-16-5);
+  font-weight: 700;
+  line-height: 1.3;
+  letter-spacing: -0.005em;
+}
+.pk-content-agenda .pk-content-agenda__session-body > .pk-agenda-speaker + .pk-agenda-speaker {
+  margin-block-start: -2px;
+}
+.pk-content-agenda .pk-content-agenda__session-body .pk-content-agenda__speaker {
+  gap: 10px;
+}
+.pk-content-agenda .pk-content-agenda__session-body .pk-content-agenda__speaker .pk-avatar {
+  --pk-avatar-size: 40px;
+}
+.pk-content-agenda .pk-content-agenda__session-body .pk-content-agenda__speaker strong {
+  font-size: var(--pk-agenda-type-14);
+  font-weight: 600;
+  line-height: 1.3;
+}
+.pk-content-agenda .pk-content-agenda__session-body .pk-content-agenda__speaker small {
+  margin-block-start: 1px;
+  color: var(--pk-ink-muted);
+  font-size: var(--pk-agenda-type-12-5);
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.pk-content-agenda .pk-content-agenda__description {
+  color: var(--agenda-ink-2);
+  font-size: var(--pk-agenda-type-13);
+  line-height: 1.55;
+}
+.pk-content-agenda .pk-content-agenda__description p {
+  margin-block: 0 6px;
+  line-height: inherit;
+}
+
+/* Footer band: duration, track and the viewer's actions on one 36px rule. */
+.pk-content-agenda .pk-content-agenda__card-footer {
+  min-block-size: 36px;
+  margin: auto -12px 0;
+  padding: 0 6px 0 12px;
+  border-block-start: 1px solid color-mix(in srgb, var(--pk-line-soft) 70%, var(--pk-surface));
+  gap: 2px;
+  color: var(--agenda-ink-2);
+  font-size: var(--pk-agenda-type-12);
+}
+.pk-content-agenda .pk-content-agenda__session-body + .pk-content-agenda__card-footer {
+  margin-block-start: 10px;
+}
+.pk-content-agenda .pk-content-agenda__duration {
+  gap: 5px;
+  color: var(--agenda-ink-2);
+  font-size: var(--pk-agenda-type-12);
+}
+.pk-content-agenda .pk-content-agenda__duration svg {
+  inline-size: 13px;
+  block-size: 13px;
+  color: var(--pk-ink-muted);
+}
+.pk-content-agenda .pk-content-agenda__footer-track {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-inline-start: 10px;
+  padding-inline-start: 12px;
+  border-inline-start: 1px solid var(--pk-line);
+  color: var(--pk-accent-ink);
+  font-size: var(--pk-agenda-type-12);
+  font-weight: 600;
+}
+.pk-content-agenda .pk-content-agenda__footer-track::before {
+  content: "";
+  flex: none;
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: var(--pk-agenda-radius-marker);
+  background: currentColor;
+}
+.pk-content-agenda .pk-content-agenda__card-footer .pk-content-agenda__actions {
+  align-items: center;
+  gap: 2px;
+}
+.pk-content-agenda .pk-content-agenda__card-footer .pk-content-agenda__media-action[aria-label] {
+  display: inline-grid;
+  place-items: center;
+  min-inline-size: 28px;
+  block-size: 28px;
+  padding: 0;
+  border-radius: var(--pk-radius-sm);
+  color: var(--pk-ink-muted);
+}
+.pk-content-agenda .pk-content-agenda__card-footer .pk-content-agenda__media-action[aria-label]:hover {
+  background: var(--pk-line-soft);
+  color: var(--pk-ink);
+}
+.pk-content-agenda .pk-content-agenda__card-footer .pk-content-agenda__media-action svg {
+  inline-size: 15px;
+  block-size: 15px;
+}
+.pk-content-agenda .pk-content-agenda__card-footer .pk-content-agenda__recording-action[aria-label] {
+  display: inline-flex;
+  gap: 5px;
+  block-size: 24px;
+  margin-inline-end: 4px;
+  padding: 0 10px;
+  border: 1px solid color-mix(in srgb, var(--pk-accent) 40%, var(--pk-surface));
+  border-radius: var(--pk-agenda-radius-action);
+  background: var(--pk-surface);
+  color: var(--pk-accent-ink);
+  font-size: var(--pk-agenda-type-12);
+  font-weight: 600;
+}
+.pk-content-agenda .pk-content-agenda__card-footer .pk-content-agenda__recording-action svg {
+  inline-size: 12px;
+  block-size: 12px;
+}
+.pk-content-agenda .pk-content-agenda__card-footer .pk-badge {
+  font-size: var(--pk-agenda-type-11);
+}
+.pk-content-agenda .pk-content-agenda__card-footer .pk-content-agenda__capability svg {
+  inline-size: 14px;
+  block-size: 14px;
+}
+
+/* Live / starting-soon band spans the top edge of the card. */
+.pk-content-agenda .pk-content-agenda__status:not([hidden]) {
+  position: relative;
+  gap: 7px;
+  min-block-size: 0;
+  margin: -10px -12px 10px;
+  padding: 5px 12px 6px;
+  background: var(--pk-on-solid-ink);
+  color: var(--pk-on-solid);
+  font-size: var(--pk-agenda-type-11);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+}
+.pk-content-agenda .pk-content-agenda__status::before {
+  content: "";
+  flex: none;
+  inline-size: 7px;
+  block-size: 7px;
+  border-radius: 50%;
+  background: var(--agenda-favorite);
+}
+.pk-content-agenda .pk-content-agenda__status [data-agenda-status-label] {
+  flex: 1;
+  letter-spacing: inherit;
+}
+.pk-content-agenda .pk-content-agenda__status [data-agenda-status-time] {
+  font-weight: 500;
+  letter-spacing: 0.02em;
+  text-transform: none;
+}
+.pk-content-agenda .pk-content-agenda__status[data-agenda-status="live"] {
+  background: var(--pk-agenda-live);
+}
+.pk-content-agenda .pk-content-agenda__status[data-agenda-status="live"]::before {
+  background: var(--pk-on-solid);
+}
+.pk-content-agenda .pk-content-agenda__session:has(> .pk-content-agenda__status:not([hidden])) {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--agenda-color) 60%, transparent);
+}
+
+/* Breaks: one dark bar with duration and sponsor logos. */
+.pk-content-agenda .pk-content-agenda__break,
+.pk-content-agenda .pk-content-agenda__session.pk-content-agenda__session--break {
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 18px;
+  min-block-size: 52px;
+  padding: 10px 16px;
+  border: 0;
+  border-radius: var(--pk-radius);
+  background: var(--pk-on-solid-ink);
+  color: var(--pk-on-solid);
+}
+.pk-content-agenda .pk-content-agenda__break {
+  margin: 5px;
+  box-sizing: border-box;
+}
+.pk-content-agenda .pk-content-agenda__break strong,
+.pk-content-agenda .pk-content-agenda__session--break h3 {
+  padding: 0;
+  color: var(--pk-on-solid);
+  font-size: var(--pk-agenda-type-16);
+  font-weight: 700;
+}
+.pk-content-agenda .pk-content-agenda__break span,
+.pk-content-agenda .pk-content-agenda__session--break .pk-content-agenda__duration {
+  gap: 5px;
+  color: var(--pk-agenda-break-ink-muted);
+  font-size: var(--pk-agenda-type-13);
+}
+.pk-content-agenda .pk-content-agenda__break svg,
+.pk-content-agenda .pk-content-agenda__session--break .pk-content-agenda__duration svg {
+  inline-size: 13px;
+  block-size: 13px;
+  color: var(--pk-agenda-break-ink-muted);
+}
+.pk-content-agenda .pk-content-agenda__session--break .pk-agenda-break-sponsors {
+  gap: 18px;
+  padding-inline-start: 18px;
+  border-inline-start: 1px solid var(--pk-agenda-break-rule);
+}
+.pk-content-agenda .pk-content-agenda__session--break .pk-agenda-break-sponsors img {
+  inline-size: auto;
+  max-inline-size: 92px;
+  block-size: 20px;
+  filter: brightness(0) invert(1);
+}
+
+/* List view: time track, then room / session / actions per row. */
+@media screen {
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__day {
+    border-block-start: 1px solid var(--pk-line);
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__timeline .pk-content-agenda__slot {
+    display: grid;
+    grid-template-columns: 96px minmax(0, 1fr);
+    align-items: start;
+    gap: 8px 20px;
+    padding-block: 14px;
+    border-block-end: 1px solid var(--pk-line-soft);
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__slot > th,
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__slot > td {
+    border: 0;
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__slot > th.pk-content-agenda__time {
+    grid-column: 1;
+    grid-row: 1;
+    inline-size: auto;
+    min-inline-size: 0;
+    max-inline-size: none;
+    padding: 0;
+    background: transparent;
+    text-align: start;
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__clocks {
+    align-items: flex-start;
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__clock:not([hidden]) {
+    justify-content: flex-start;
+  }
+  .pk-content-agenda[data-agenda-view="list"] [data-agenda-clock] > time {
+    color: var(--pk-ink);
+    font-size: var(--pk-agenda-type-18);
+    font-weight: 700;
+  }
+  .pk-content-agenda[data-agenda-view="list"]:not([data-agenda-time-display="browser"])
+    [data-agenda-clock="browser"]
+    > time,
+  .pk-content-agenda[data-agenda-view="list"][data-agenda-time-display="browser"] [data-agenda-clock="venue"] > time {
+    color: var(--pk-accent-ink);
+    font-size: var(--pk-agenda-type-13);
+    font-weight: 500;
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__slot > td {
+    grid-column: 2;
+    padding: 0;
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__slot > td:empty {
+    display: none;
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__break {
+    position: static;
+    inline-size: auto;
+    margin: 0;
+    padding: 12px 16px;
+  }
+  .pk-content-agenda[data-agenda-view="list"]
+    .pk-content-agenda__cell
+    > .pk-content-agenda__session
+    + .pk-content-agenda__session,
+  .pk-content-agenda[data-agenda-view="list"]
+    .pk-content-agenda__timeline
+    .pk-content-agenda__cell
+    > .pk-content-agenda__session {
+    margin: 0;
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__description {
+    display: none;
+  }
+}
+@media screen and (min-width: 47.5rem) {
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__session:not(.pk-content-agenda__session--break) {
+    display: grid;
+    grid-template-columns: 150px minmax(0, 1fr) auto;
+    align-items: start;
+    gap: 8px 20px;
+    min-block-size: 0;
+    padding: 12px 8px 12px 14px;
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__session > .pk-content-agenda__room {
+    grid-column: 1;
+    grid-row: 1;
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__session > .pk-content-agenda__status:not([hidden]) {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: start;
+    margin: 0;
+    padding: 2px 9px;
+    border-radius: var(--pk-radius-lg);
+    letter-spacing: 0.06em;
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__session > .pk-content-agenda__session-body {
+    grid-column: 2;
+    gap: 8px;
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__session > .pk-content-agenda__card-footer {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+    flex-wrap: nowrap;
+    min-block-size: 28px;
+    margin: 0;
+    padding: 0;
+    border: 0;
+  }
+  .pk-content-agenda[data-agenda-view="list"]
+    .pk-content-agenda__session
+    > :is(.pk-content-agenda__unknown-end, .pk-agenda-break-sponsors) {
+    grid-column: 2;
+  }
+}
+@media screen {
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__session > .pk-content-agenda__room {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    justify-content: flex-start;
+    gap: 3px;
+    margin: 0;
+    padding: 2px 0 0;
+    border-radius: 0;
+    background: transparent;
+    font-weight: 400;
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__room > span:first-child {
+    display: inline-flex;
+    align-items: center;
+    gap: 7px;
+    color: var(--pk-ink);
+    font-size: var(--pk-agenda-type-13);
+    font-weight: 700;
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__room > span:first-child::before {
+    content: "";
+    flex: none;
+    inline-size: 9px;
+    block-size: 9px;
+    border-radius: 50%;
+    background: var(--agenda-color);
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__room > .pk-content-agenda__track {
+    padding: 0 0 0 16px;
+    border: 0;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-agenda-type-12);
+    font-weight: 400;
+  }
+}
+@media screen and (max-width: 47.499rem) {
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__timeline .pk-content-agenda__slot {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 10px;
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__slot > th.pk-content-agenda__time {
+    grid-row: auto;
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__slot > td {
+    grid-column: 1;
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__clocks {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 10px;
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__session > .pk-content-agenda__room {
+    flex-direction: row;
+    align-items: baseline;
+    gap: 8px;
+    margin-block-end: 8px;
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__room > .pk-content-agenda__track {
+    padding: 0;
+  }
+}
+
+/* Session details dialog. */
+.pk-content-agenda__session .session-modal {
+  inline-size: min(960px, calc(100% - 48px));
+  max-inline-size: 960px;
+  max-block-size: calc(100dvh - 48px);
+  padding: 0;
+  border: 0;
+  border-radius: var(--pk-radius-lg);
+  box-shadow: var(--pk-agenda-dialog-shadow);
+}
+.pk-content-agenda__session .session-modal::backdrop {
+  background: var(--pk-agenda-dialog-backdrop);
+}
+.pk-content-agenda__session .session-modal__header {
+  align-items: flex-start;
+  gap: 14px;
+  padding: 22px 28px 24px;
+  background: var(--pk-agenda-dialog-field);
+  color: var(--pk-on-solid);
+}
+/* 5px squares on a 30px pitch, fading in from the left (qubit tile). */
+.pk-content-agenda__session .session-modal__header::before {
+  inset: 0 0 0 45%;
+  opacity: 0.16;
+  background: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='48' height='48'%3E%3Crect x='20' y='20' width='8' height='8' fill='%23fff'/%3E%3C/svg%3E")
+    0 0 / 30px 30px repeat;
+  mask-image: linear-gradient(90deg, transparent, var(--pk-agenda-mask-opaque));
+}
+.pk-content-agenda__session .session-modal__heading {
+  gap: 12px;
+}
+.pk-content-agenda__session .session-modal__location {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--agenda-mono);
+  font-size: var(--pk-agenda-type-11);
+  font-weight: 500;
+  letter-spacing: 0.12em;
+  line-height: 34px;
+}
+.pk-content-agenda__session .session-modal__location::before {
+  content: "";
+  flex: none;
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  background: var(--agenda-color);
+  box-shadow: 0 0 0 1.5px var(--pk-agenda-dialog-dot-ring);
+}
+.pk-content-agenda__session .session-modal__location + .session-modal__title {
+  margin-block-start: -6px;
+}
+.pk-content-agenda__session .session-modal__title {
+  color: var(--pk-on-solid);
+  font-size: var(--pk-agenda-type-26);
+  font-weight: 700;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+.pk-content-agenda__session .session-modal__header .pk-content-agenda__metadata {
+  gap: 4px 18px;
+  font-family: var(--agenda-mono);
+}
+.pk-content-agenda__session .session-modal__header .pk-content-agenda__metadata span {
+  gap: 0 18px;
+  font-size: var(--pk-agenda-type-13);
+  line-height: 1.5;
+}
+.pk-content-agenda__session .session-modal__header .pk-content-agenda__metadata svg {
+  display: none;
+}
+.pk-content-agenda__session .session-modal__header .pk-content-agenda__metadata + .pk-content-agenda__metadata {
+  margin-block-start: -10px;
+  color: var(--pk-agenda-dialog-meta-ink);
+}
+.pk-content-agenda__session .session-modal__header > [data-agenda-close-session] {
+  flex: none;
+  inline-size: 34px;
+  min-inline-size: 34px;
+  block-size: 34px;
+  min-block-size: 34px;
+  padding: 0;
+  border: 1px solid var(--pk-agenda-dialog-control-line);
+  border-radius: var(--pk-radius);
+  background: transparent;
+  color: var(--pk-on-solid);
+  font-size: var(--pk-agenda-type-20);
+  font-weight: 400;
+  line-height: 1;
+}
+.pk-content-agenda__session .session-modal__header > [data-agenda-close-session]:hover {
+  background: var(--pk-agenda-dialog-control-hover);
+}
+.pk-content-agenda__session .session-modal__header .pk-btn:not([data-agenda-close-session]) {
+  border-color: var(--pk-agenda-dialog-control-line);
+  background: transparent;
+  color: var(--pk-on-solid);
+}
+.pk-content-agenda__session .session-modal__body {
+  gap: 24px;
+  padding: 24px 28px 32px;
+}
+.pk-content-agenda__session .session-modal__actions {
+  gap: 8px;
+}
+.pk-content-agenda__session .session-modal__actions .pk-btn {
+  min-block-size: 38px;
+  padding-inline: 14px;
+  border-radius: var(--pk-radius);
+  font-size: var(--pk-agenda-type-14);
+  font-weight: 500;
+}
+.pk-content-agenda__session .session-modal__actions .pk-btn--icon {
+  inline-size: 38px;
+  padding: 0;
+}
+.pk-content-agenda__session .session-modal__actions .pk-badge {
+  align-self: center;
+}
+.pk-content-agenda__session .session-modal__body section > h3 {
+  margin: 0 0 4px;
+  padding: 0;
+  border: 0;
+  color: var(--agenda-ink-2);
+  font-family: var(--agenda-mono);
+  font-size: var(--pk-agenda-type-11);
+  font-weight: 600;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+.pk-content-agenda__session .session-modal__body section:first-of-type:not(:has(.session-modal__speaker)) {
+  gap: 12px;
+}
+.pk-content-agenda__session .session-modal__body section:not(:has(.session-modal__speaker)) p {
+  margin: 0;
+  color: var(--pk-ink);
+  font-size: var(--pk-agenda-type-16);
+  line-height: 1.7;
+  text-wrap: pretty;
+}
+.pk-content-agenda__session .session-modal__body section:has(.session-modal__speaker) {
+  gap: 0;
+}
+.pk-content-agenda__session .session-modal__speaker {
+  padding: 16px 0;
+  border: 0;
+  border-block-start: 1px solid var(--pk-line-soft);
+  border-radius: 0;
+  background: transparent;
+}
+.pk-content-agenda__session .session-modal__speaker .pk-content-agenda__speaker--detail {
+  gap: 16px;
+}
+.pk-content-agenda__session .session-modal__speaker .pk-avatar {
+  --pk-avatar-size: 64px;
+  border-radius: 50%;
+}
+.pk-content-agenda__session .session-modal__speaker .pk-content-agenda__speaker h3 {
+  margin: 0 0 4px;
+  font-size: var(--pk-agenda-type-16);
+  font-weight: 700;
+}
+.pk-content-agenda__session .session-modal__speaker .pk-content-agenda__speaker small {
+  color: var(--agenda-ink-2);
+  font-size: var(--pk-agenda-type-14);
+  line-height: 1.4;
+}
+.pk-content-agenda__session .session-modal__speaker .pk-content-agenda__speaker-bio {
+  margin-block-start: 6px;
+  color: color-mix(in srgb, var(--pk-ink) 90%, var(--pk-surface));
+  font-size: var(--pk-agenda-type-14);
+  line-height: 1.6;
+}
+.pk-content-agenda__session .session-modal__speaker .pk-content-agenda__speaker-bio p {
+  margin-block: 0 8px;
+  font-size: inherit;
+  line-height: inherit;
+}
+/* The reference closes with × and Escape only. */
+.pk-content-agenda__session .session-modal:not(.session-modal--summary) > .session-modal__footer {
+  display: none;
+}
+@media (max-width: 46rem) {
+  .pk-content-agenda__session .session-modal {
+    inline-size: calc(100% - 24px);
+    max-block-size: calc(100dvh - 24px);
+  }
+  .pk-content-agenda__session .session-modal__header,
+  .pk-content-agenda__session .session-modal__body {
+    padding-inline: 18px;
+  }
+  .pk-content-agenda__session .session-modal__title {
+    font-size: var(--pk-agenda-type-22);
+  }
+}
+.pk-content-agenda .pk-content-agenda__session--break .pk-content-agenda__card-footer {
+  min-block-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+@media screen {
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__slot .pk-content-agenda__clocks:not(.pk-sr-only) {
+    position: static;
+  }
+}
+/* The header keeps its natural height; only the body scrolls. */
+.pk-content-agenda__session .session-modal__header {
+  flex: none;
+}
+@media (max-width: 46rem) {
+  .pk-content-agenda__session .session-modal__header .pk-content-agenda__metadata span {
+    font-size: var(--pk-agenda-type-12);
+  }
+}
+/* List rows already name the track beside the room. */
+@media screen and (min-width: 47.5rem) {
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__card-footer > .pk-content-agenda__footer-track {
+    display: none;
+  }
+}
+
+/* Every toolbar control is exactly 36px, whatever its padding or font metrics. */
+.pk-content-agenda__controls .pk-content-agenda__filter-controls .pk-btn,
+.pk-content-agenda__controls .pk-content-agenda__filter-controls select,
+.pk-content-agenda__controls .pk-content-agenda__filter-controls input,
+.pk-content-agenda__toolbar-actions > .pk-btn,
+.pk-content-agenda__toolbar-actions > .pk-content-agenda__view-choice {
+  box-sizing: border-box;
+  block-size: 36px;
+  min-block-size: 36px;
+  padding-block: 0;
+  line-height: 1.2;
+}
+.pk-content-agenda .pk-content-agenda__view-choice > .pk-btn,
+.pk-content-agenda .pk-content-agenda__view-choice > .pk-btn[aria-pressed] {
+  block-size: 34px;
+}
+/* The location trigger uses the same caret as the native selects beside it. */
+.pk-content-agenda__controls [data-agenda-location-trigger] {
+  padding-inline: 12px 32px;
+  background:
+    linear-gradient(45deg, transparent 50%, var(--pk-ink) 50%) calc(100% - 16px) 50% / 5px 5px no-repeat,
+    linear-gradient(135deg, var(--pk-ink) 50%, transparent 50%) calc(100% - 11.2px) 50% / 5px 5px no-repeat,
+    var(--pk-surface);
+}
+.pk-content-agenda__controls [data-agenda-location-trigger] > [aria-hidden="true"]:last-child {
+  display: none;
+}
+
+/* Organizer: the day tabs sit directly on the white agenda panel. */
+.pk-agenda-editor .pk-content-agenda__tabs:has(+ .pk-agenda-editor__planning) {
+  margin-block-end: calc(-1 * var(--pk-4));
+}
+.pk-agenda-editor .pk-content-agenda__tabs [role="tab"][aria-selected="true"] {
+  background: var(--pk-surface);
+  border-block-end-color: var(--pk-accent);
+}
+
+/* The secondary clock names its zone ("15:30 CET"); the primary is named in the header. */
+.pk-content-agenda [data-agenda-zone-abbr] {
+  margin-inline-start: 3px;
+}
+.pk-content-agenda:not([data-agenda-time-display="browser"])
+  .pk-content-agenda__time
+  [data-agenda-clock="venue"]
+  > small[data-agenda-zone-abbr],
+.pk-content-agenda[data-agenda-time-display="browser"]
+  .pk-content-agenda__time
+  [data-agenda-clock="browser"]
+  > small[data-agenda-zone-abbr] {
+  display: none;
+}
+.pk-content-agenda .pk-content-agenda__time [data-agenda-clock] > small:not([hidden], :empty) {
+  display: inline;
+  color: var(--agenda-ink-3);
+  font-size: var(--pk-agenda-type-11);
+  font-weight: 500;
+}
+@media screen {
+  .pk-content-agenda[data-agenda-view="list"]
+    .pk-content-agenda__time
+    [data-agenda-clock]
+    > small:not([hidden], :empty) {
+    color: var(--pk-accent-ink);
+    font-size: var(--pk-agenda-type-13);
+  }
+}
+
+/*
+ * A transform makes the card the containing block for fixed menus, which its
+ * overflow then clips. Only the published card lifts, and only on pointer hover.
+ */
+.pk-content-agenda
+  .pk-content-agenda__session.pk-content-agenda__session:not(.pk-content-agenda__session--break):focus-within,
+.pk-agenda-editor .pk-content-agenda .pk-content-agenda__session:not(.pk-content-agenda__session--break):hover,
+.pk-content-agenda
+  .pk-content-agenda__session.pk-content-agenda__session:not(.pk-content-agenda__session--break):has(
+    [aria-expanded="true"]
+  ) {
+  transform: none;
+}
+
+/*
+ * Break bars span every room but their content stays centred in the visible grid,
+ * as in the reference: pinned after the time column and as wide as the viewport.
+ */
+@media screen {
+  .pk-content-agenda .pk-content-agenda__session.pk-content-agenda__session--break {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: stretch;
+    justify-content: flex-start;
+    padding: 0;
+  }
+  .pk-content-agenda .pk-content-agenda__break-content {
+    position: sticky;
+    inset-inline-start: calc(var(--agenda-time-width) + 6px);
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: center;
+    gap: 8px 18px;
+    box-sizing: border-box;
+    flex: none;
+    inline-size: min(100%, calc(var(--agenda-visible-width, 100%) - var(--agenda-time-width) - 12px));
+    min-block-size: 50px;
+    padding: 8px 16px;
+  }
+  .pk-content-agenda:not([data-agenda-view="list"]) .pk-content-agenda__break {
+    inset-inline-start: calc(var(--agenda-time-width) + 6px);
+    inline-size: min(calc(100% - 10px), calc(var(--agenda-visible-width, 100%) - var(--agenda-time-width) - 12px));
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__break-content {
+    position: static;
+    inline-size: auto;
+  }
+}
+.pk-content-agenda .pk-content-agenda__break-content > .pk-content-agenda__session-body {
+  flex: 0 1 auto;
+  justify-content: center;
+}
+/* Single-zone header: "Time" over the event city, as in the reference. */
+.pk-content-agenda__zone-headings [data-agenda-zone-heading="venue"] > span {
+  display: block;
+}
+.pk-content-agenda__zone-headings [data-agenda-zone-heading="venue"] > span + span {
+  color: var(--pk-accent-ink);
+}
+.pk-content-agenda__zone-headings [data-agenda-zone-heading] > span,
+.pk-content-agenda__zone-headings > small {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  overflow-wrap: normal;
+}
+@media screen {
+  .pk-content-agenda .pk-content-agenda__timeline thead th.pk-content-agenda__time-heading {
+    padding-inline: 10px 6px;
+  }
+}
+
+/* Time-zone picker: the city reads like a label; the native select sits invisibly on top. */
+.pk-content-agenda__time-picker {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+}
+.pk-content-agenda__time-face {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-inline-size: 0;
+  overflow: hidden;
+  color: var(--pk-accent-ink);
+  font-size: var(--pk-agenda-type-12);
+  font-weight: 600;
+  line-height: 1.3;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.pk-content-agenda__time-face::after {
+  content: "▼";
+  flex: none;
+  font-size: var(--pk-agenda-type-8);
+}
+.pk-content-agenda__time-heading .pk-content-agenda__time-picker select {
+  position: absolute;
+  inset: 0;
+  inline-size: 100%;
+  block-size: 100%;
+  min-block-size: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.pk-content-agenda__time-heading:has(select:focus-visible) .pk-content-agenda__time-face {
+  outline: 2px solid var(--pk-focus, var(--pk-accent));
+  outline-offset: 2px;
+}
+
+/* Breaks clip without becoming a scroll container, so their content can stay in view. */
+.pk-content-agenda .pk-content-agenda__session.pk-content-agenda__session--break {
+  overflow: clip;
+}
+
+/* Session dialog: the organizer's actions menu sits beside the close button. */
+.pk-content-agenda__session .session-modal__header > .pk-row-actions {
+  flex: none;
+  inline-size: auto;
+  margin-inline-start: auto;
+}
+.pk-content-agenda__session .session-modal__header > .pk-row-actions .pk-btn {
+  inline-size: 34px;
+  min-inline-size: 34px;
+  block-size: 34px;
+  min-block-size: 34px;
+  padding: 0;
+  border: 1px solid var(--pk-agenda-dialog-control-line);
+  border-radius: var(--pk-radius);
+  background: transparent;
+  color: var(--pk-on-solid);
+}
+.pk-content-agenda__session .session-modal__location {
+  white-space: nowrap;
+}
+
+/* More rooms beyond either edge: fade that edge (the time track stays crisp). */
+@media screen {
+  .pk-content-agenda .pk-content-agenda__day[data-agenda-more="after"] {
+    mask-image: linear-gradient(90deg, var(--pk-agenda-mask-opaque) calc(100% - 36px), var(--pk-agenda-mask-faded));
+  }
+  .pk-content-agenda .pk-content-agenda__day[data-agenda-more="before"] {
+    mask-image: linear-gradient(
+      90deg,
+      var(--pk-agenda-mask-opaque) var(--agenda-time-width),
+      var(--pk-agenda-mask-faded) var(--agenda-time-width),
+      var(--pk-agenda-mask-opaque) calc(var(--agenda-time-width) + 36px)
+    );
+  }
+  .pk-content-agenda .pk-content-agenda__day[data-agenda-more="both"] {
+    mask-image: linear-gradient(
+      90deg,
+      var(--pk-agenda-mask-opaque) var(--agenda-time-width),
+      var(--pk-agenda-mask-faded) var(--agenda-time-width),
+      var(--pk-agenda-mask-opaque) calc(var(--agenda-time-width) + 36px),
+      var(--pk-agenda-mask-opaque) calc(100% - 36px),
+      var(--pk-agenda-mask-faded)
+    );
+  }
+}
+
+/* Tabs keep one shape when focused; the focus ring sits inside the tab. */
+.pk-content-agenda__tabs [role="tab"]:focus-visible,
+.pk-content-agenda__tabs button[aria-selected]:focus-visible {
+  outline: 2px solid var(--pk-focus, var(--pk-accent));
+  outline-offset: -4px;
+  border-radius: 0;
+}
+
+/* Short changeovers between sessions: a pill on the row boundary in the time track. */
+.pk-content-agenda__room-change {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline-end: 8px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: var(--pk-agenda-radius-chip);
+  background: var(--pk-line-soft);
+  color: var(--pk-ink-muted);
+  font-size: var(--pk-agenda-type-11);
+  font-weight: 500;
+  line-height: 1.4;
+  white-space: nowrap;
+  transform: translateY(-50%);
+}
+@media screen {
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__room-change {
+    position: static;
+    margin-block-end: 6px;
+    transform: none;
+  }
+}
+@media print {
+  .pk-content-agenda__room-change {
+    display: none;
+  }
+}
+@media (max-width: 46rem) {
+  .pk-content-agenda__time:has(> .pk-content-agenda__room-change) {
+    position: relative;
+  }
+}
+
+/* Placeholders ("to be announced") read as reserved slots, not sessions. */
+.pk-content-agenda .pk-content-agenda__session.pk-content-agenda__session--placeholder {
+  border: 1px solid var(--pk-line-soft);
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--pk-surface-sunk) 50%, var(--pk-surface)) 0 9px,
+    color-mix(in srgb, var(--pk-line-soft) 70%, var(--pk-surface)) 9px 18px
+  );
+  cursor: default;
+}
+.pk-content-agenda .pk-content-agenda__session--placeholder:hover,
+.pk-content-agenda .pk-content-agenda__session--placeholder:focus-within {
+  box-shadow:
+    0 0 0 1.5px var(--pk-line),
+    var(--pk-agenda-placeholder-lift);
+}
+.pk-content-agenda .pk-content-agenda__session--placeholder .pk-content-agenda__session-body {
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+.pk-content-agenda .pk-content-agenda__session--placeholder h3 {
+  padding-inline-end: 0;
+  color: var(--pk-ink-muted);
+  font-size: var(--pk-agenda-type-12);
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.pk-content-agenda .pk-content-agenda__session--placeholder .pk-content-agenda__description {
+  display: none;
+}
+.pk-content-agenda .pk-content-agenda__session--placeholder .pk-content-agenda__card-footer {
+  justify-content: center;
+  border-block-start: 0;
+  color: var(--agenda-ink-3);
+}
+.pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__session--placeholder h3 {
+  text-align: start;
+}
+
+/* Session format glyph at the start of the footer, as in the reference. */
+.pk-content-agenda__format {
+  order: -1;
+  display: inline-flex;
+  flex: none;
+  margin-inline-end: 6px;
+  color: var(--pk-ink-muted);
+}
+.pk-content-agenda__format svg {
+  inline-size: 15px;
+  block-size: 15px;
+}
+.pk-content-agenda__session[data-agenda-format="keynote"] .pk-content-agenda__format {
+  color: var(--pk-accent-ink);
+}
+@media screen {
+  .pk-content-agenda .pk-content-agenda__timeline thead th.pk-content-agenda__time-heading {
+    padding-inline: 8px 4px;
+  }
+}
+.pk-content-agenda__time-face {
+  font-size: var(--pk-agenda-type-11-5);
+  letter-spacing: -0.01em;
+}
+.pk-content-agenda__session .session-modal__header > .pk-row-actions .pk-btn :is(svg, span) {
+  color: var(--pk-on-solid);
+  fill: currentColor;
+}
+
+/* The Speakers directory has no agenda filters or views; the tabs lead straight into it. */
+@media screen {
+  .pk-content-agenda:has(> [data-agenda-panel="speakers"]:not([hidden])) > .pk-content-agenda__controls {
+    display: none;
+  }
+}
+/* Placeholder content (label + duration) is one centred stack; no footer band to crowd it out. */
+.pk-content-agenda .pk-content-agenda__session.pk-content-agenda__session--placeholder {
+  justify-content: center;
+  gap: 4px;
+  padding-block: 6px;
+}
+.pk-content-agenda .pk-content-agenda__session--placeholder > .pk-content-agenda__session-body {
+  flex: 0 0 auto;
+  overflow: visible;
+}
+.pk-content-agenda .pk-content-agenda__session--placeholder > .pk-content-agenda__card-footer {
+  flex: none;
+  min-block-size: 0;
+  block-size: auto;
+  margin: 0;
+  padding: 0;
+}
+/* Reference stripe: #fbfbfc / #f3f4f6, barely distinct on white. */
+.pk-content-agenda .pk-content-agenda__session.pk-content-agenda__session--placeholder {
+  background: repeating-linear-gradient(
+    135deg,
+    color-mix(in srgb, var(--pk-surface-sunk) 30%, var(--pk-surface)) 0 9px,
+    color-mix(in srgb, var(--pk-line-soft) 45%, var(--pk-surface)) 9px 18px
+  );
+}
+.pk-content-agenda .pk-content-agenda__session--placeholder .pk-content-agenda__title-action {
+  letter-spacing: inherit;
+  text-transform: inherit;
+}
+/* A short changeover is marked across the whole grid, with its pill in the time track. */
+@media screen {
+  .pk-content-agenda:not([data-agenda-view="list"]) .pk-content-agenda__slot[data-agenda-room-change] > th,
+  .pk-content-agenda:not([data-agenda-view="list"]) .pk-content-agenda__slot[data-agenda-room-change] > td {
+    border-block-start: 1px dashed var(--pk-line);
+  }
+}
+
+/* Live and starting-soon cards: band, progress, borders and hover as in the reference. */
+.pk-content-agenda .pk-content-agenda__status[data-agenda-status="live"]::after {
+  content: "";
+  position: absolute;
+  inset-inline-start: 0;
+  inset-block-end: 0;
+  block-size: 3px;
+  inline-size: var(--agenda-live-progress, 0%);
+  background: var(--pk-agenda-live-progress-fill);
+}
+.pk-content-agenda__status[data-agenda-progress="0"] {
+  --agenda-live-progress: 0%;
+}
+.pk-content-agenda__status[data-agenda-progress="5"] {
+  --agenda-live-progress: 5%;
+}
+.pk-content-agenda__status[data-agenda-progress="10"] {
+  --agenda-live-progress: 10%;
+}
+.pk-content-agenda__status[data-agenda-progress="15"] {
+  --agenda-live-progress: 15%;
+}
+.pk-content-agenda__status[data-agenda-progress="20"] {
+  --agenda-live-progress: 20%;
+}
+.pk-content-agenda__status[data-agenda-progress="25"] {
+  --agenda-live-progress: 25%;
+}
+.pk-content-agenda__status[data-agenda-progress="30"] {
+  --agenda-live-progress: 30%;
+}
+.pk-content-agenda__status[data-agenda-progress="35"] {
+  --agenda-live-progress: 35%;
+}
+.pk-content-agenda__status[data-agenda-progress="40"] {
+  --agenda-live-progress: 40%;
+}
+.pk-content-agenda__status[data-agenda-progress="45"] {
+  --agenda-live-progress: 45%;
+}
+.pk-content-agenda__status[data-agenda-progress="50"] {
+  --agenda-live-progress: 50%;
+}
+.pk-content-agenda__status[data-agenda-progress="55"] {
+  --agenda-live-progress: 55%;
+}
+.pk-content-agenda__status[data-agenda-progress="60"] {
+  --agenda-live-progress: 60%;
+}
+.pk-content-agenda__status[data-agenda-progress="65"] {
+  --agenda-live-progress: 65%;
+}
+.pk-content-agenda__status[data-agenda-progress="70"] {
+  --agenda-live-progress: 70%;
+}
+.pk-content-agenda__status[data-agenda-progress="75"] {
+  --agenda-live-progress: 75%;
+}
+.pk-content-agenda__status[data-agenda-progress="80"] {
+  --agenda-live-progress: 80%;
+}
+.pk-content-agenda__status[data-agenda-progress="85"] {
+  --agenda-live-progress: 85%;
+}
+.pk-content-agenda__status[data-agenda-progress="90"] {
+  --agenda-live-progress: 90%;
+}
+.pk-content-agenda__status[data-agenda-progress="95"] {
+  --agenda-live-progress: 95%;
+}
+.pk-content-agenda__status[data-agenda-progress="100"] {
+  --agenda-live-progress: 100%;
+}
+.pk-content-agenda .pk-content-agenda__session:has(> .pk-content-agenda__status:not([hidden])):hover,
+.pk-content-agenda .pk-content-agenda__session:has(> .pk-content-agenda__status:not([hidden])):focus-within {
+  border-color: transparent;
+  box-shadow:
+    inset 0 0 0 3px var(--agenda-color),
+    var(--pk-agenda-card-lift);
+}
+/* Finished sessions recede slightly (reference: 80% opacity). */
+.pk-content-agenda .pk-content-agenda__session[data-agenda-state="past"]:not(:hover, :focus-within) {
+  opacity: 0.8;
+}
+/* Join livestream: the red pill from the reference while a streamed session is live. */
+.pk-content-agenda .pk-content-agenda__card-footer [data-agenda-media-during]:not([hidden]) {
+  display: inline-flex;
+  gap: 5px;
+  block-size: 24px;
+  min-inline-size: 0;
+  margin-inline-end: 4px;
+  padding: 0 10px;
+  border-radius: var(--pk-agenda-radius-action);
+  background: var(--pk-agenda-live);
+  color: var(--pk-on-solid);
+  font-size: var(--pk-agenda-type-12);
+  font-weight: 600;
+}
+.pk-content-agenda .pk-content-agenda__card-footer [data-agenda-media-during]:not([hidden]) .pk-sr-only {
+  position: static;
+  inline-size: auto;
+  block-size: auto;
+  margin: 0;
+  clip: auto;
+  clip-path: none;
+  white-space: nowrap;
+}
+.pk-content-agenda .pk-content-agenda__card-footer [data-agenda-media-during]:not([hidden]) svg {
+  inline-size: 12px;
+  block-size: 12px;
+}
+
+/* NOW: a faint red rule across the day with a solid label pinned in the time track. */
+@media screen {
+  .pk-content-agenda:not([data-agenda-view="list"]) .pk-content-agenda__day {
+    position: relative;
+  }
+  .pk-content-agenda__now {
+    position: absolute;
+    inset-inline-start: 0;
+    z-index: 5;
+    block-size: 2px;
+    background: var(--pk-agenda-now-rule);
+    pointer-events: none;
+  }
+  .pk-content-agenda__now > span {
+    position: sticky;
+    inset-inline-start: 6px;
+    display: inline-block;
+    padding: 2px 7px;
+    border-radius: var(--pk-agenda-radius-chip);
+    background: var(--pk-agenda-live);
+    color: var(--pk-on-solid);
+    font-size: var(--pk-agenda-type-10);
+    font-weight: 700;
+    letter-spacing: 0.06em;
+    white-space: nowrap;
+    transform: translateY(-50%);
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__now {
+    display: none;
+  }
+}
+@media print {
+  .pk-content-agenda__now {
+    display: none;
+  }
+}
+
+/* Portal personal agenda: starred marks and the My agenda filter use the reference favorite colour. */
+.pk-content-agenda .pk-content-agenda__card-footer .pk-content-agenda__media-action[aria-pressed="true"],
+.pk-content-agenda .session-modal__actions .pk-btn[aria-pressed="true"] {
+  color: var(--agenda-favorite);
+}
+.pk-content-agenda__toolbar-actions > [data-agenda-mine-filter] {
+  gap: 6px;
+  padding-inline: 12px;
+  border-color: var(--agenda-control-line);
+  background: var(--pk-surface);
+  color: var(--pk-ink);
+}
+.pk-content-agenda__toolbar-actions > [data-agenda-mine-filter] svg {
+  color: var(--agenda-ink-3);
+}
+.pk-content-agenda__toolbar-actions > [data-agenda-mine-filter] small {
+  color: var(--pk-ink-muted);
+  font-size: var(--pk-agenda-type-12);
+}
+.pk-content-agenda__toolbar-actions > [data-agenda-mine-filter][aria-pressed="true"],
+.pk-content-agenda__toolbar-actions > [data-agenda-mine-filter][aria-pressed="true"]:hover:not(:disabled) {
+  border-color: var(--agenda-favorite);
+  background: color-mix(in srgb, var(--agenda-favorite) 10%, var(--pk-surface));
+}
+.pk-content-agenda__toolbar-actions > [data-agenda-mine-filter][aria-pressed="true"] svg {
+  color: var(--agenda-favorite);
+}
+
+/*
+ * Phones: the program starts within the first screen. Day tabs stay one
+ * swipeable row, the two filters share a row above a full-width search, and
+ * full-screen and print (desktop tasks) step aside.
+ */
+@media screen and (max-width: 47.499rem) {
+  .pk-content-agenda__tabs {
+    flex-wrap: nowrap;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .pk-content-agenda__tabs [role="tab"],
+  .pk-content-agenda__tabs button[aria-selected] {
+    flex: none;
+    padding-inline: 10px;
+    font-size: var(--pk-agenda-type-15);
+  }
+  .pk-content-agenda__controls .pk-content-agenda__filter-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .pk-content-agenda__controls .pk-content-agenda__filter-controls [data-agenda-location-trigger] {
+    inline-size: 100%;
+    min-inline-size: 0;
+  }
+  /* Half a phone row only fits the label; the room colours stay on the cards. */
+  .pk-content-agenda__controls .pk-content-agenda__location-dots {
+    display: none;
+  }
+  .pk-content-agenda__controls .pk-content-agenda__filter-controls .pk-field:has([data-agenda-search]) {
+    grid-column: 1 / -1;
+  }
+  .pk-content-agenda__controls .pk-content-agenda__filter-controls :is(.pk-field, select, input) {
+    inline-size: 100%;
+    max-inline-size: none;
+  }
+  .pk-content-agenda__controls .pk-content-agenda__toolbar-actions {
+    justify-content: flex-start;
+    gap: 6px;
+  }
+  /* Filters, Abstracts, calendar and the view switch share one row on a 375px phone. */
+  .pk-content-agenda__controls .pk-content-agenda__toolbar-actions > .pk-btn:not(.pk-btn--icon),
+  .pk-content-agenda__controls .pk-content-agenda__view-choice .pk-btn {
+    padding-inline: 10px;
+  }
+  .pk-content-agenda__controls :is([data-agenda-expand], [data-agenda-print]) {
+    display: none;
+  }
+  .pk-content-agenda__controls .pk-content-agenda__view-choice {
+    margin-inline-start: auto;
+  }
+  /* In the event app the My agenda tab is the personal filter, and the app header sits directly above. */
+  body:has(.pk-app-tabbar--event) .pk-content-agenda__controls [data-agenda-mine-filter] {
+    display: none;
+  }
+  body:has(.pk-app-tabbar--event) .pk-content-agenda {
+    margin-block-start: 0;
+  }
+}
+
+/*
+ * Phone list cards follow the published agenda's card: the room is a tinted
+ * band across the top of the card, and abstracts show while Abstracts is on.
+ */
+@media screen and (max-width: 47.499rem) {
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__session > .pk-content-agenda__room {
+    align-self: stretch;
+    margin: -10px -12px 10px;
+    padding: 10px 12px;
+    border-radius: var(--pk-agenda-radius-band) var(--pk-agenda-radius-band) 0 0;
+    background: color-mix(in srgb, var(--agenda-color) 15%, var(--pk-surface));
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__room > span:first-child {
+    font-size: var(--pk-agenda-type-15);
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__room > span:first-child::before {
+    display: none;
+  }
+  .pk-content-agenda[data-agenda-view="list"]:not(.is-compact) .pk-content-agenda__description {
+    display: block;
+  }
+  /* The row is a plain block here, so the time keeps its own distance from the card. */
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__slot > th.pk-content-agenda__time {
+    padding-block-end: 10px;
+  }
+}
+
+/*
+ * Phones open on the program: the filter row folds behind a Filters toggle (unless a filter is active) and
+ * opens below the toolbar row that holds the toggle. Wider screens keep every filter in view.
+ */
+.pk-content-agenda__toolbar-actions > [data-agenda-filters-toggle] {
+  display: none;
+  gap: 6px;
+  padding-inline: 12px;
+}
+.pk-content-agenda__toolbar-actions > [data-agenda-filters-toggle] svg {
+  color: var(--agenda-ink-3);
+}
+.pk-content-agenda__toolbar-actions > [data-agenda-filters-toggle] small {
+  min-inline-size: 18px;
+  padding: 1px 5px;
+  border-radius: var(--pk-agenda-radius-chip);
+  background: var(--pk-accent);
+  color: var(--pk-accent-on);
+  font-size: var(--pk-agenda-type-11);
+  font-weight: 700;
+  text-align: center;
+}
+/* On an event day, today's finished slots fold behind one "Earlier today" row in the phone list. */
+.pk-content-agenda__earlier {
+  display: none;
+}
+@media screen and (max-width: 47.499rem) {
+  .pk-content-agenda__toolbar-actions > [data-agenda-filters-toggle] {
+    display: inline-flex;
+  }
+  .pk-content-agenda__controls .pk-content-agenda__filter-controls {
+    order: 1;
+  }
+  .pk-content-agenda[data-agenda-filters="collapsed"] .pk-content-agenda__controls .pk-content-agenda__filter-controls {
+    display: none;
+  }
+  .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__earlier:not([hidden]) {
+    display: block;
+    padding-block: 12px 2px;
+  }
+  .pk-content-agenda__earlier > [data-agenda-earlier-toggle] {
+    border-color: var(--agenda-control-line);
+    color: var(--pk-ink-muted);
+  }
+  .pk-content-agenda__earlier > [data-agenda-earlier-toggle][aria-expanded="true"] svg {
+    transform: rotate(180deg);
+  }
+  .pk-content-agenda[data-agenda-view="list"]
+    .pk-content-agenda__day:not([data-agenda-earlier-open])
+    .pk-content-agenda__slot[data-agenda-finished] {
+    display: none;
+  }
+}

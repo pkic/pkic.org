@@ -4,6 +4,7 @@ import {
   type SessionDemand,
 } from "../../../../assets/shared/schemas/event-session-demand";
 import { all } from "../../db/queries";
+import { sessionDemandAggregateSql } from "./session-demand-query";
 import type { DatabaseLike } from "../../types";
 
 /** One bounded grouped read serves the selected agenda page or one room recommendation. */
@@ -21,16 +22,7 @@ export async function readSessionDemand(db: DatabaseLike, eventId: string, occur
     preferences: number;
   }>(
     db,
-    `SELECT participation.occurrence_id,participation.attendance_mode,
-      COUNT(DISTINCT CASE WHEN participation.status='reserved' THEN participation.user_id END) AS confirmed,
-      COUNT(DISTINCT CASE WHEN participation.status='approval_pending' THEN participation.user_id END) AS pending,
-      COUNT(DISTINCT CASE WHEN participation.status='waitlisted' THEN participation.user_id END) AS waitlisted,
-      COUNT(DISTINCT CASE WHEN participation.saved=1 OR participation.status='saved' THEN participation.user_id END) AS preferences
-    FROM agenda_session_participations participation
-    JOIN event_agenda_occurrences occurrence ON occurrence.id=participation.occurrence_id AND occurrence.event_id=participation.event_id
-    WHERE participation.event_id=? AND participation.occurrence_id IN(SELECT value FROM json_each(?))
-      AND participation.status<>'canceled'
-    GROUP BY participation.occurrence_id,participation.attendance_mode LIMIT ?`,
+    `${sessionDemandAggregateSql("SELECT id,event_id FROM event_agenda_occurrences WHERE event_id=? AND id IN(SELECT value FROM json_each(?))")} LIMIT ?`,
     [eventId, JSON.stringify(occurrenceIds), occurrenceIds.length * 2],
   );
   for (const { occurrence_id, attendance_mode, ...counts } of rows) {

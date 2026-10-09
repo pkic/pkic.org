@@ -1,3 +1,4 @@
+import { openOrganizerAgenda } from "./helpers/organizer-agenda";
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
@@ -108,7 +109,7 @@ test("real room refusal preserves the session dialog draft and succeeds after ex
     return auditLogListResponseSchema.parse(await result.json());
   };
   const auditBefore = await audit();
-  await page.goto(`/portal/#/events/${slug}/agenda`);
+  await openOrganizerAgenda(page, slug);
   await page.getByRole("button", { name: `Open session details: ${title}`, exact: true }).click();
   await runRowAction(page, page.getByRole("dialog", { name: title, exact: true }), "Edit session");
   await expect(page.getByRole("heading", { name: "Edit session", exact: true })).toBeVisible();
@@ -116,6 +117,11 @@ test("real room refusal preserves the session dialog draft and succeeds after ex
   await expect(page.getByRole("dialog", { name: "Edit session", exact: true })).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(1);
   await page.getByRole("textbox", { name: /^Session title/ }).fill(draftTitle);
+  // Time and place are usually set on the agenda; the editor keeps them on its Schedule tab.
+  await page
+    .getByRole("dialog", { name: "Edit session", exact: true })
+    .getByRole("tab", { name: "Schedule", exact: true })
+    .click();
   await page.getByLabel("Starts", { exact: true }).fill(instantToDateTimeLocal(at(75), snapshot.timeZone));
   await page.getByLabel("Ends", { exact: true }).fill(instantToDateTimeLocal(at(105), snapshot.timeZone));
   const refused = page.waitForResponse(
@@ -140,10 +146,16 @@ test("real room refusal preserves the session dialog draft and succeeds after ex
   await expect(diagnostics).toContainText(roomName);
   await expect(diagnostics).toContainText(snapshot.timeZone);
   await expect(diagnostics).toContainText(formatTimeRangeInZone(at(75), at(105), snapshot.timeZone));
-  await expect(page.getByRole("textbox", { name: /^Session title/ })).toHaveValue(draftTitle);
+  // The refusal keeps the Schedule tab open; both tabs still hold the attempted draft.
+  const editorTab = (name: string) =>
+    page.getByRole("dialog", { name: "Edit session", exact: true }).getByRole("tab", { name, exact: true });
+  await expect(editorTab("Schedule")).toHaveAttribute("aria-selected", "true");
   await expect(page.getByLabel("Starts", { exact: true })).toHaveValue(
     instantToDateTimeLocal(at(75), snapshot.timeZone),
   );
+  await editorTab("Session").click();
+  await expect(page.getByRole("textbox", { name: /^Session title/ })).toHaveValue(draftTitle);
+  await editorTab("Schedule").click();
   response = await page.request.get(base);
   expect(response.status(), await response.text()).toBe(200);
   expect(agendaSnapshotSchema.parse(await response.json())).toEqual(before);

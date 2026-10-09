@@ -3,11 +3,12 @@ import { proposerSpeakerPatchSchema, type ProposalAccessResponse } from "../../.
 import { speakerRoleSchema, headshotUploadResponseSchema } from "../../../shared/schemas/registration";
 import { successResponseSchema } from "../../../shared/schemas/api-common";
 import { proposalAccessPath, type ProposalResourceAccess } from "../../../shared/proposal-access-paths";
-import { patchJson, requestJson } from "../../shared/api-client";
+import { patchJson } from "../../shared/api-client";
 import { formatDateTime } from "../../shared/ui";
 import { normalizeProfileLinks } from "../../shared/widgets/profile-links";
 import { SPEAKER_ROLE_OPTIONS } from "../../shared/speaker-roles";
-import { AdminHeadshotManager } from "../../shared/headshot/AdminHeadshotManager";
+import { HeadshotTile } from "../../shared/headshot/HeadshotTile";
+import { headshotFormEndpoint } from "../../shared/headshot/endpoints";
 import { useContractForm } from "../../hooks/useContractForm";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import { Button } from "../../ui/Button";
@@ -37,36 +38,20 @@ export function ProposerSpeakerPhoto({
   const name = [speaker.firstName, speaker.lastName].filter(Boolean).join(" ") || speaker.email;
   const endpoint = proposalAccessPath(apiBase, token, "speakers", speaker.userId, "headshot");
   return (
-    <AdminHeadshotManager
-      initialUrl={speaker.headshotUrl ?? null}
-      alt={name}
-      emptyLabel="No photo"
-      readOnly={readOnly}
-      statusText={speaker.headshotUpdatedAt ? `Updated: ${formatDateTime(speaker.headshotUpdatedAt)}` : ""}
-      uploadLabel="Upload photo"
-      deleteLabel="Remove photo"
-      uploadSuccessStatus="Photo uploaded."
-      deleteSuccessStatus="Photo removed."
-      confirmDeleteMessage="Remove this speaker photo?"
-      uploadHeadshot={async (file) => {
-        const body = new FormData();
-        body.append("file", file, "headshot.jpg");
-        const response = await requestJson(endpoint, headshotUploadResponseSchema, { method: "PUT", body });
-        return { headshotUrl: response.headshotUrl ?? null };
-      }}
-      deleteHeadshot={async () => {
-        await requestJson(endpoint, successResponseSchema, { method: "DELETE" });
-      }}
-      onUploaded={async () => {
-        await onReload();
-        onStatus(`Uploaded headshot for ${speaker.email}.`);
-      }}
-      onDeleted={async () => {
-        await onReload();
-        onStatus(`Removed headshot for ${speaker.email}.`);
-      }}
-      onError={(message) => onStatus(message, true)}
-    />
+    <div class="pk-cluster">
+      <HeadshotTile
+        name={name}
+        canChange={!readOnly}
+        imageUrl={speaker.headshotUrl ?? null}
+        consent="on-behalf"
+        endpoint={headshotFormEndpoint(endpoint, headshotUploadResponseSchema)}
+        onChanged={() => onReload()}
+        notify={(message, type) => onStatus(message, type === "error")}
+      />
+      {speaker.headshotUpdatedAt && (
+        <span class="pk-small pk-muted">Photo updated {formatDateTime(speaker.headshotUpdatedAt)}</span>
+      )}
+    </div>
   );
 }
 

@@ -12,6 +12,8 @@ import {
   type AgendaSnapshot,
 } from "../../../../../../../shared/schemas/event-agenda";
 import { useContractForm } from "../../../../../../hooks/useContractForm";
+import { useFormTabs } from "../../../../../../hooks/useFormTabs";
+import { TabList } from "../../../../../../ui/TabList";
 import { postJson } from "../../../../../../shared/api-client";
 import { Field } from "../../../../../../ui/Field";
 import { Textarea } from "../../../../../../ui/TextControl";
@@ -51,11 +53,18 @@ export function SessionHistoryEditor({
       .filter(Boolean),
   };
   const form = useContractForm(sessionHistoryCorrectionSchema, { expectedRevision: snapshot.revision, history });
+  // Materials are what an archive correction is usually for; the rest waits behind named tabs.
+  const tabs = useFormTabs(form, [
+    { id: "materials", label: "Materials", fields: ["history.materials"] },
+    { id: "speakers", label: "Speaker representation", fields: ["history.appearances"] },
+    { id: "details", label: "Details", fields: ["history.prerequisites", "history.legacyPaths"] },
+  ]);
   async function save(event: Event) {
     event.preventDefault();
     if (!canEdit) return;
     const checked = form.submit();
     if (!checked.data) {
+      tabs.revealErrors();
       setError(checked.message);
       return;
     }
@@ -132,13 +141,37 @@ export function SessionHistoryEditor({
       </PanelHeader>
       <PanelBody>
         {canEdit && (
-          <>
-            <p>Corrections update the draft. Approve the agenda again to publish a new historical version.</p>
-            <form noValidate onSubmit={save} class="pk-form">
+          <form noValidate onSubmit={save} class="pk-stack">
+            <p class="pk-muted">
+              Corrections update the draft. Approve the agenda again to publish a new historical version.
+            </p>
+            <TabList label="Session archive sections" {...tabs.list} />
+            <div {...tabs.panel("materials")}>
+              <MaterialFields
+                refreshToken={materialRevision}
+                slug={snapshot.eventSlug}
+                occurrenceId={occurrence.id}
+                materials={materials}
+                legacyDownloads={occurrence.history?.legacyDownloads ?? []}
+                onChange={setMaterials}
+              />
+            </div>
+            <div {...tabs.panel("speakers")}>
+              <AppearanceFields
+                slug={snapshot.eventSlug}
+                occurrenceId={occurrence.id}
+                appearances={appearances}
+                speakers={occurrence.speakers}
+                sourceRepresentations={occurrence.history?.proposalRepresentations ?? []}
+                onChange={setAppearances}
+              />
+            </div>
+            <div {...tabs.panel("details")} class="pk-stack">
               <Field label="Prerequisites" {...form.of("history.prerequisites")}>
                 {(control) => (
                   <Textarea
                     {...control}
+                    rows={3}
                     value={prerequisites}
                     onInput={(e) => setPrerequisites(e.currentTarget.value)}
                   />
@@ -150,31 +183,23 @@ export function SessionHistoryEditor({
                 {...form.of("history.legacyPaths")}
               >
                 {(control) => (
-                  <Textarea {...control} value={legacyPaths} onInput={(e) => setLegacyPaths(e.currentTarget.value)} />
+                  <Textarea
+                    {...control}
+                    rows={3}
+                    value={legacyPaths}
+                    onInput={(e) => setLegacyPaths(e.currentTarget.value)}
+                  />
                 )}
               </Field>
-              <AppearanceFields
-                slug={snapshot.eventSlug}
-                occurrenceId={occurrence.id}
-                appearances={appearances}
-                speakers={occurrence.speakers}
-                sourceRepresentations={occurrence.history?.proposalRepresentations ?? []}
-                onChange={setAppearances}
-              />
-              <MaterialFields
-                refreshToken={materialRevision}
-                slug={snapshot.eventSlug}
-                occurrenceId={occurrence.id}
-                materials={materials}
-                legacyDownloads={occurrence.history?.legacyDownloads ?? []}
-                onChange={setMaterials}
-              />
-              {error && <ErrorAlert error={error} />}
-              <Button type="submit" disabled={busy}>
+            </div>
+            {error && <ErrorAlert error={error} />}
+            <div class="pk-cluster pk-cluster--end">
+              <Button onClick={onClose}>Cancel</Button>
+              <Button type="submit" variant="primary" disabled={busy}>
                 {busy ? "Saving…" : "Save archive details"}
               </Button>
-            </form>
-          </>
+            </div>
+          </form>
         )}
       </PanelBody>
     </Panel>

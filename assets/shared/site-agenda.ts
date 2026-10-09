@@ -1,5 +1,6 @@
 import type { AgendaBreakSponsorDisplay } from "./schemas/event-agenda-sponsors";
 import type { AgendaOccurrence } from "./schemas/event-agenda";
+import type { eventParticipationLink } from "./event-participation-link";
 import type { AgendaMediaCapabilities } from "./event-agenda-media";
 
 export interface ContentAgendaDay {
@@ -25,7 +26,7 @@ export interface ContentAgendaDay {
       endNotRecorded?: boolean;
       locations: string[];
       sessionUrl?: string;
-      participation?: { url: string; label: string; message: string; preference?: boolean };
+      participation?: ReturnType<typeof eventParticipationLink>;
       presentationUrl?: string;
       legacyPresentationUrl?: string;
       recordingUrl?: string;
@@ -35,7 +36,12 @@ export interface ContentAgendaDay {
       sponsors?: AgendaBreakSponsorDisplay[];
       speakers: ContentAgendaSpeaker[];
       title: string;
+      /** Subject/program grouping; independent of the session format. */
       track?: string;
+      /** Configured session format: `id` is the event's session type label, `label` its readable name. */
+      format?: { id: string; label: string };
+      /** Reserved slot whose content is still to be announced. */
+      placeholder?: boolean;
       youtube?: string;
     }>;
     time: string;
@@ -64,11 +70,17 @@ export interface ContentAgendaLocation {
 }
 
 export interface ContentAgendaSpeaker {
+  /** Presentation identity within this agenda; source provenance is never serialized here. */
+  speakerKey?: string;
+  /** Supplied only when this canonical person has an approved public history page. */
+  personPath?: string;
   bioHtml?: string;
   bioMarkdown?: string;
   imageSrc?: string;
   links?: string[];
   name: string;
+  /** The credited organization; `logoSrc` is its public R2 logo, absent when it has none. */
+  organization?: { name: string; logoSrc?: string };
   moderator?: boolean;
   roleLabel?: string;
   title?: string;

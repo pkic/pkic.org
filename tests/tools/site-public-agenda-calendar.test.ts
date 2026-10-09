@@ -8,6 +8,7 @@ import {
   publicConferenceAgendaCalendar,
   publicSessionCalendarPages,
 } from "../../functions/_lib/services/site-agenda-calendar-pages";
+import { approvedEventProgram } from "../../functions/_lib/services/site-published-event-agendas";
 import { applyApprovedAgenda } from "../../functions/_lib/services/site-approved-agenda";
 import { describe, expect, it } from "vitest";
 import { agendaSnapshotSchema, type AgendaSnapshot } from "../../assets/shared/schemas/event-agenda";
@@ -337,6 +338,95 @@ describe("static public calendar approved-history lifecycle", () => {
         event,
       ),
     ).toThrow("PUBLIC_CALENDAR_ROUTE_CONFLICT");
+  });
+  it("resolves an owned original calendar to a different canonical path, including retained cancellations", () => {
+    const first = approval(1, (value) => {
+      value.occurrences.push({
+        ...value.occurrences[0]!,
+        id: "archival",
+        startAt: null,
+        endAt: null,
+        history: sessionHistoryMetadataSchema.parse({
+          archivalTiming: {
+            sourcePath: "data/events/synthetic/agenda.yaml",
+            sourceDigest: "a".repeat(64),
+            provenance: "authored_public",
+            timeZone: "Europe/Amsterdam",
+            authoredDate: "2023-06-06",
+            authoredStart: "15:30",
+            startAt: "2023-06-06T13:30:00.000Z",
+            endAt: null,
+          },
+        }),
+      });
+    });
+    const changed = structuredClone(first);
+    changed.revision = changed.publishedRevision = 2;
+    changed.approvedAt = dates[1];
+    changed.occurrences[0]!.title = "Updated session";
+    const active = fold(first, changed);
+    const event = {
+      route: "/events/2025/original-conference/",
+      updatedAt: "2024-08-15T08:00:00.000Z",
+      program: approvedEventProgram(first),
+    };
+    const publication = sitePublicationSnapshotSchema.parse({
+      version: 1,
+      snapshotId: "a".repeat(64),
+      votes: [],
+      publicResources: {},
+      members: [],
+      groups: {},
+      groupMembers: {},
+      sponsors: {},
+      memberWall: [],
+      news: [],
+      sponsorNews: [],
+      eventAgendas: { "calendar-fixture": changed },
+      eventAgendaCalendars: { "calendar-fixture": active },
+      authoredAgendaRoutes: [
+        {
+          eventSlug: "calendar-fixture",
+          route: event.route,
+          sourcePath: "content/events/2025/original-conference/_index.md",
+          sourceDigest: "b".repeat(64),
+        },
+      ],
+    });
+    const canonical = publicAgendaCalendarPages(publication)[0]!;
+    const legacy = new ICAL.Component(
+      ICAL.parse(publicConferenceAgendaCalendar(publication, event)),
+    ).getAllSubcomponents("vevent");
+    const native = new ICAL.Component(ICAL.parse(canonical.content)).getAllSubcomponents("vevent");
+    expect(legacy).toHaveLength(2);
+    expect(legacy.map((entry) => entry.toJSON())).toEqual(native.map((entry) => entry.toJSON()));
+    const archival = legacy.find((entry) => entry.getFirstPropertyValue("uid") === "agenda-archival@ics.pkic.org")!;
+    expect(archival.hasProperty("dtend")).toBe(false);
+    expect(archival.hasProperty("status")).toBe(false);
+    expect(archival.getFirstPropertyValue("url")).toBe("https://pkic.org/events/calendar-fixture/agenda/");
+    expect(legacy[0]!.toJSON()).toEqual(native[0]!.toJSON());
+    expect(legacy[0]!.getFirstPropertyValue("uid")).toBe("agenda-public@ics.pkic.org");
+    expect(legacy[0]!.getFirstPropertyValue("sequence")).toBe(1);
+    expect(legacy[0]!.getFirstPropertyValue("dtstamp")?.toString()).toBe("2026-10-02T00:00:00Z");
+    const hidden = approval(3, (value) => {
+      value.occurrences = [];
+    });
+    const withdrawn = sitePublicationSnapshotSchema.parse({
+      ...publication,
+      eventAgendas: { "calendar-fixture": hidden },
+      eventAgendaCalendars: { "calendar-fixture": fold(first, changed, hidden) },
+    });
+    const canceled = new ICAL.Component(
+      ICAL.parse(publicConferenceAgendaCalendar(withdrawn, event)),
+    ).getAllSubcomponents("vevent");
+    expect(canceled).toHaveLength(1);
+    expect(canceled[0]!.getFirstPropertyValue("status")).toBe("CANCELLED");
+    expect(canceled[0]!.getFirstPropertyValue("sequence")).toBe(2);
+    expect(canceled[0]!.toJSON()).toEqual(
+      new ICAL.Component(ICAL.parse(publicAgendaCalendarPages(withdrawn)[0]!.content))
+        .getAllSubcomponents("vevent")[0]!
+        .toJSON(),
+    );
   });
   it("never invents native appointments/cancellations from unmarked, private or unknown-end history", () => {
     const unmarked = approval(1, (snapshot) => {

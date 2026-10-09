@@ -1,5 +1,4 @@
 // @vitest-environment jsdom
-import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
@@ -11,7 +10,18 @@ import {
   sessionParticipationResponseSchema,
 } from "../../assets/shared/schemas/event-participation-scanning";
 import { formatAgendaInstant } from "../../assets/shared/agenda-time-display";
-import { MyAgenda } from "../../assets/ts/member-flows/portal/sections/events/detail/participation/MyAgenda";
+import { confirmAction } from "../../assets/ts/components/ConfirmDialog";
+import {
+  NEW_ROOM,
+  OLD_ROOM,
+  cleanupMyAgendaFixture,
+  json,
+  listing,
+  mount,
+  resetMyAgendaFixture,
+  session,
+  stubFetch,
+} from "./helpers/my-agenda-fixture";
 
 // Unit renderer seam only: native links and hashchange still drive the actual window location.
 vi.mock("wouter/use-hash-location", async () => {
@@ -31,49 +41,15 @@ vi.mock("wouter/use-hash-location", async () => {
   };
 });
 
+vi.mock("../../assets/ts/components/ConfirmDialog", async (original) => ({
+  ...(await original<typeof import("../../assets/ts/components/ConfirmDialog")>()),
+  confirmAction: vi.fn(async () => true),
+}));
+
 vi.mock("../../assets/ts/member-flows/portal/notifications/EventPushNotifications", () => ({
   EventPushNotifications: () => null,
 }));
 
-const SESSION = "10000000-0000-4000-8000-000000000001";
-const OLD_ROOM = "10000000-0000-4000-8000-000000000002";
-const NEW_ROOM = "10000000-0000-4000-8000-000000000003";
-const hosts: HTMLElement[] = [];
-function session(revision: number, bookingAction: "reserve" | "request") {
-  const roomId = revision === 1 ? OLD_ROOM : NEW_ROOM;
-  return personalAgendaSessionSchema.parse({
-    id: SESSION,
-    publishedRevision: revision,
-    title: revision === 1 ? "Original workshop" : "Revised workshop",
-    roomId: null,
-    rooms: [{ id: roomId, name: revision === 1 ? "Original room" : "Revised room" }],
-    timeZone: "UTC",
-    startAt: revision === 1 ? "2027-01-20T09:00:00.000Z" : "2027-01-20T11:00:00.000Z",
-    endAt: revision === 1 ? "2027-01-20T10:00:00.000Z" : "2027-01-20T12:00:00.000Z",
-    admissionPolicy: bookingAction === "reserve" ? "reservation" : "approval",
-    status: null,
-    attendanceMode: "physical",
-    availability: [
-      {
-        attendanceMode: "physical",
-        roomId,
-        state: "available",
-        message: "A place is available.",
-        bookingAction,
-        canSave: true,
-      },
-    ],
-  });
-}
-function listing(revision: number, action: "reserve" | "request", empty = false) {
-  return personalAgendaResponseSchema.parse({
-    sessions: empty ? [] : [session(revision, action)],
-    page: { limit: 50, offset: 0, total: empty ? 0 : 1, hasMore: false },
-  });
-}
-function json(value: unknown, status = 200) {
-  return new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
-}
 function refusal() {
   return json(
     {
@@ -85,13 +61,6 @@ function refusal() {
     },
     409,
   );
-}
-function mount() {
-  const host = document.createElement("div");
-  document.body.append(host);
-  hosts.push(host);
-  void act(() => render(<MyAgenda slug="workshop" />, host));
-  return host;
 }
 async function choose(host: HTMLElement, value: string) {
   await act(async () => {
@@ -112,17 +81,8 @@ async function clickUpdate(host: HTMLElement) {
     update(host).click();
   });
 }
-beforeEach(() => {
-  history.replaceState(null, "", `#/events/workshop/agenda?session=${SESSION}`);
-});
-afterEach(() => {
-  for (const host of hosts.splice(0)) {
-    void act(() => render(null, host));
-    host.remove();
-  }
-  vi.unstubAllGlobals();
-  vi.restoreAllMocks();
-});
+beforeEach(resetMyAgendaFixture);
+afterEach(cleanupMyAgendaFixture);
 
 describe("personal agenda publication revisions", () => {
   it.each(["reserve", "request"] as const)(
@@ -135,8 +95,7 @@ describe("personal agenda publication revisions", () => {
       const refreshed = new Promise<Response>((resolve) => {
         resolveRefresh = resolve;
       });
-      vi.stubGlobal(
-        "fetch",
+      stubFetch(
         vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
           const url = new URL(String(input), location.origin);
           if (init?.method === "PUT") {
@@ -210,8 +169,7 @@ describe("personal agenda publication revisions", () => {
   it("keeps a stale reservation blocked when canonical refresh fails", async () => {
     let gets = 0;
     let puts = 0;
-    vi.stubGlobal(
-      "fetch",
+    stubFetch(
       vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
         if (init?.method === "PUT") {
           sessionParticipationRequestSchema.parse(JSON.parse(String(init.body)));
@@ -239,8 +197,7 @@ describe("personal agenda publication revisions", () => {
     async (action) => {
       const bodies: ReturnType<typeof sessionParticipationRequestSchema.parse>[] = [];
       let saved = action === "unsave";
-      vi.stubGlobal(
-        "fetch",
+      stubFetch(
         vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
           if (init?.method === "PUT") {
             bodies.push(sessionParticipationRequestSchema.parse(JSON.parse(String(init.body))));
@@ -260,8 +217,15 @@ describe("personal agenda publication revisions", () => {
       const host = mount();
       await vi.waitFor(() => expect(host.textContent).toContain("Original workshop"));
       if (action === "cancel") {
-        await choose(host, action);
-        await clickUpdate(host);
+        // Canceling is never a choice in the participation select; it is its own confirmed action.
+        const select = host.querySelector<HTMLSelectElement>('select[name="action"]')!;
+        expect([...select.options].map((option) => option.value)).not.toContain("cancel");
+        const cancel = [...host.querySelectorAll<HTMLButtonElement>("button")].find(
+          (item) => item.textContent?.trim() === "Cancel my session registration…",
+        )!;
+        vi.mocked(confirmAction).mockClear();
+        await act(async () => cancel.click());
+        expect(confirmAction).toHaveBeenCalledOnce();
       } else {
         const label = action === "save" ? "Save preference" : "Remove preference";
         const star = host.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`)!;
@@ -296,86 +260,10 @@ describe("personal agenda publication revisions", () => {
   );
 });
 
-describe("dedicated participant agenda destinations", () => {
-  it("keeps forms out of the list and opens the selected session from its record menu", async () => {
-    history.replaceState(null, "", "#/events/workshop/agenda");
-    const paths: URL[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        paths.push(new URL(String(input), location.origin));
-        return json(listing(1, "request"));
-      }),
-    );
-    const host = mount();
-    await vi.waitFor(() =>
-      expect(host.querySelector('button[aria-label="Actions for Original workshop"]')).not.toBeNull(),
-    );
-    expect(host.querySelector("form")).toBeNull();
-    expect(host.textContent).not.toContain("Save preferences");
-    await act(async () => {
-      host.querySelector<HTMLButtonElement>('button[aria-label="Actions for Original workshop"]')!.click();
-    });
-    const manage = [...host.querySelectorAll<HTMLAnchorElement>("a")].find(
-      (link) => link.textContent === "Manage participation",
-    );
-    expect(manage?.hash).toBe(`#/events/workshop/agenda?session=${SESSION}`);
-    await act(async () => {
-      manage!.click();
-    });
-    await vi.waitFor(() => expect(host.querySelector('select[name="action"]')).not.toBeNull());
-    expect(host.querySelector("table")).toBeNull();
-    expect(
-      paths.some((url) => url.searchParams.get("occurrenceId") === SESSION && url.searchParams.get("limit") === "1"),
-    ).toBe(true);
-    await act(async () => {
-      [...host.querySelectorAll<HTMLAnchorElement>("a")]
-        .find((link) => link.textContent === "Back to My agenda")!
-        .click();
-    });
-    await vi.waitFor(() => expect(host.querySelector("table")).not.toBeNull());
-    expect(host.querySelector("form")).toBeNull();
-  });
-
-  it("opens calendar editing only in its dedicated preferences destination", async () => {
-    history.replaceState(null, "", "#/events/workshop/agenda");
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = new URL(String(input), location.origin);
-        return json(
-          url.pathname.endsWith("/calendar/settings")
-            ? { includeTentative: false, reminderEnabled: false, reminderMinutes: 10 }
-            : listing(1, "request"),
-        );
-      }),
-    );
-    const host = mount();
-    await vi.waitFor(() => expect(host.querySelector("table")).not.toBeNull());
-    await act(async () => {
-      host.querySelector<HTMLButtonElement>('button[aria-label="My agenda actions"]')!.click();
-    });
-    await act(async () => {
-      [...host.querySelectorAll<HTMLAnchorElement>("a")]
-        .find((link) => link.textContent === "Calendar preferences")!
-        .click();
-    });
-    await vi.waitFor(() => expect(host.textContent).toContain("Save preferences"));
-    expect(location.hash).toBe("#/events/workshop/agenda?view=calendar");
-    expect(host.querySelector("table")).toBeNull();
-    expect(host.querySelectorAll("form")).toHaveLength(1);
-    expect(host.querySelector('select[name="action"]')).toBeNull();
-  });
-});
-
 describe("participation clock parity", () => {
-  it.each([
-    ["remote", false],
-    ["physical", false],
-    ["physical", true],
-  ] as const)(
-    "keeps %s attendance clock parity with optional local time=%s in list and dedicated RSVP",
-    async (mode, showLocal) => {
+  it.each(["remote", "physical"] as const)(
+    "keeps %s attendance clock parity in the dedicated session view",
+    async (mode) => {
       const original = Intl.DateTimeFormat.prototype.resolvedOptions;
       vi.spyOn(Intl.DateTimeFormat.prototype, "resolvedOptions").mockImplementation(function (
         this: Intl.DateTimeFormat,
@@ -400,44 +288,15 @@ describe("participation clock parity", () => {
         sessions: [row],
         page: { limit: 50, offset: 0, total: 1, hasMore: false },
       });
-      const fetcher = vi.fn(async (_input: RequestInfo | URL, _init?: RequestInit) => json(response));
-      vi.stubGlobal("fetch", fetcher);
-      history.replaceState(null, "", "#/events/workshop/agenda");
+      const fetcher = stubFetch(async () => json(response));
       const host = mount();
-      const selectedSessionLink = () =>
-        [...host.querySelectorAll<HTMLAnchorElement>("tbody a")].find((link) => link.textContent === row.title);
-      await vi.waitFor(() => expect(selectedSessionLink()).toBeDefined());
-      if (showLocal) {
-        await act(async () => {
-          const checkbox = host.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
-          checkbox.checked = true;
-          checkbox.dispatchEvent(new Event("input", { bubbles: true }));
-        });
-      }
-      const selectedRow = selectedSessionLink()!.closest("tr")!;
-      const whenCell = [...selectedRow.querySelectorAll("td")].find(
-        (cell) => cell.querySelector(".pk-table__mobile-label")?.textContent === "When",
-      )!;
-      const when = whenCell.querySelector(".pk-table__value")!;
-      const primary = mode === "remote" ? "Asia/Tokyo" : "Europe/Amsterdam";
-      expect(when.querySelector("span")?.textContent).toContain(formatAgendaInstant(row.startAt, primary));
-      if (mode === "remote" || showLocal)
-        expect(when.querySelector("small")?.textContent).toContain(
-          mode === "remote" ? "Europe/Amsterdam" : "Asia/Tokyo",
-        );
-      else expect(when.querySelector("small")).toBeNull();
-      await act(async () => {
-        selectedSessionLink()!.click();
-      });
       await vi.waitFor(() => expect(host.querySelector('select[name="action"]')).not.toBeNull());
       const starts = [...host.querySelectorAll("dt")].find(
         (term) => term.textContent === "Starts",
       )!.nextElementSibling!;
+      const primary = mode === "remote" ? "Asia/Tokyo" : "Europe/Amsterdam";
       expect(starts.querySelector("span span")?.textContent).toContain(formatAgendaInstant(row.startAt, primary));
-      if (mode === "remote" || showLocal)
-        expect(starts.querySelector("small")?.textContent).toContain(
-          mode === "remote" ? "Europe/Amsterdam" : "Asia/Tokyo",
-        );
+      if (mode === "remote") expect(starts.querySelector("small")?.textContent).toContain("Europe/Amsterdam");
       else expect(starts.querySelector("small")).toBeNull();
       expect(fetcher.mock.calls.every(([, init]) => !init || !init.method || init.method === "GET")).toBe(true);
     },

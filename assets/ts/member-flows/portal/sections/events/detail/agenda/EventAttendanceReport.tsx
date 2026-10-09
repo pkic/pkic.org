@@ -11,6 +11,7 @@ import { ServerSearchSelect } from "../../../../../../components/ServerSearchSel
 import { Field } from "../../../../../../ui/Field";
 import { TextInput, Select } from "../../../../../../ui/TextControl";
 import { ButtonLink } from "../../../../../../ui/Button";
+import { DownloadAction } from "../../../../../../ui/DownloadAction";
 import { Alert } from "../../../../../../ui/Alert";
 import { splitHash } from "../../../../../../shared/hash-query";
 export function EventAttendanceReport({
@@ -117,11 +118,12 @@ export function EventAttendanceReport({
               diagnosticsHref={link("diagnostics")}
             />
             {view === "summary" ? (
-              <ButtonLink
-                href={`${base}/summary/exports?${new URLSearchParams(attendanceSummaryExportQuerySchema.parse(params))}`}
-              >
-                Export attendance summary
-              </ButtonLink>
+              <div class="pk-cluster">
+                <DownloadAction
+                  label="Download attendance summary (CSV)"
+                  href={`${base}/summary/exports?${new URLSearchParams(attendanceSummaryExportQuerySchema.parse(params))}`}
+                />
+              </div>
             ) : (
               <ButtonLink href={link("diagnostics", "reasons")}>View scan reason breakdown</ButtonLink>
             )}

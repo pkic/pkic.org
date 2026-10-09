@@ -9,6 +9,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, it, expect, vi } from "vitest";
 import { AgendaPointerPlacement } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/AgendaPointerPlacement";
 import { ContentAgenda } from "../../assets/ts/site/ContentAgenda";
+import { agendaRows } from "../../assets/ts/site/agenda-layout";
 import { agendaPresenter } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/presenter";
 import { AgendaEditor } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/AgendaEditor";
 import { agendaSnapshotSchema, agendaOccurrenceListSchema } from "../../assets/shared/schemas/event-agenda";
@@ -59,6 +60,8 @@ async function mount() {
   document.body.append(host);
   await act(() => render(<AgendaEditor slug="synthetic" canEdit />, host));
   await settle();
+  await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Enable agenda editing"]')!.click());
+  await settle();
 }
 function agendaReads(url: string, data = snapshot) {
   if (url.includes("/occurrences/filters"))
@@ -106,8 +109,11 @@ async function runRowAction(root: ParentNode, subject: string, action: string) {
   await settle();
 }
 async function openUnscheduledSources() {
-  const source = host.querySelector<HTMLButtonElement>('[aria-label="Session sources"]')!;
+  const source = host.querySelector<HTMLButtonElement>('button[aria-controls^="agenda-sources-"]')!;
   if (source.getAttribute("aria-expanded") !== "true") await act(() => source.click());
+  expect(source.getAttribute("aria-pressed")).toBe("true");
+  expect(source.getAttribute("aria-label")).toBe("Hide session sources");
+  expect(source.querySelector("svg path")?.getAttribute("d")).toBe("M10 2v12M4 5l3 3-3 3");
   await settle();
   await act(() => {
     [...host.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
@@ -429,3 +435,108 @@ describe("touch and keyboard agenda destinations", () => {
     expect(host.querySelectorAll(".pk-agenda-editor__drop")).toHaveLength(0);
   });
 });
+
+it.each(["move", "resize"] as const)(
+  "maps a compressed break's rendered row boxes to exact UTC for %s",
+  async (mode) => {
+    const data = agendaSnapshotSchema.parse({
+      ...snapshot,
+      timeZone: "UTC",
+      eventStartsAt: "2026-12-01T10:00:00.000Z",
+      eventEndsAt: "2026-12-01T12:00:00.000Z",
+      occurrences: [
+        { ...snapshot.occurrences[0], id: "break", title: "Lunch", kind: "break", endAt: "2026-12-01T11:00:00.000Z" },
+        {
+          ...snapshot.occurrences[0],
+          roomId: "room",
+          startAt: "2026-12-01T11:00:00.000Z",
+          endAt: "2026-12-01T11:30:00.000Z",
+        },
+      ],
+    });
+    const before = JSON.stringify(data);
+    const day = agendaPresenter(data)[0]!;
+    const rows = agendaRows(day, 0, true);
+    expect(rows.slice(0, 12).reduce((sum, row) => sum + row.height, 0)).toBe(60);
+    const bounds = new Map<string, { top: number; height: number }>();
+    let top = 100;
+    for (const row of rows) {
+      bounds.set(row.slot.startsAt, { top, height: row.height });
+      top += row.height;
+    }
+    vi.stubGlobal(
+      "CSSStyleSheet",
+      class {
+        replaceSync = vi.fn();
+      },
+    );
+    document.adoptedStyleSheets = [];
+    vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(function (this: HTMLElement) {
+      const instant =
+        this.dataset.agendaStart ?? this.closest<HTMLElement>("tr[data-agenda-start]")?.dataset.agendaStart;
+      const row = instant ? bounds.get(instant) : undefined;
+      return new DOMRect(
+        this.matches("thead th:first-child") ? 0 : 96,
+        row?.top ?? 100,
+        this.matches("thead th:first-child") ? 96 : 340,
+        row?.height ?? 60,
+      );
+    });
+    const move = vi.fn();
+    const resize = vi.fn();
+    host = document.createElement("div");
+    document.body.append(host);
+    await act(() =>
+      render(
+        <AgendaPointerPlacement snapshot={data} disabled={false} onMove={move} onResize={resize}>
+          <ContentAgenda
+            days={[day]}
+            speakers={[]}
+            timeZone="UTC"
+            editor={{
+              session: () => ({
+                controls: null,
+                resizeHandle: <button class="pk-agenda-editor__resize">Resize</button>,
+              }),
+              dropTarget: () => null,
+            }}
+          />
+        </AgendaPointerPlacement>,
+        host,
+      ),
+    );
+    const coordinator = host.querySelector<HTMLElement>(".pk-agenda-editor__pointer-calendar")!;
+    let captured = false;
+    coordinator.setPointerCapture = () => {
+      captured = true;
+    };
+    coordinator.hasPointerCapture = () => captured;
+    coordinator.releasePointerCapture = () => {
+      captured = false;
+    };
+    const card = host.querySelector<HTMLElement>('[data-agenda-occurrence="break"]')!;
+    const target = mode === "resize" ? card.querySelector<HTMLElement>(".pk-agenda-editor__resize")! : card;
+    await act(() => {
+      for (const [element, type, y] of [
+        [target, "pointerdown", mode === "resize" ? 155 : 105],
+        [coordinator, "pointermove", 135],
+        [coordinator, "pointerup", 135],
+      ] as const) {
+        const event = new MouseEvent(type, { bubbles: true, cancelable: true, button: 0, clientX: 150, clientY: y });
+        Object.defineProperty(event, "pointerId", { value: 1 });
+        element.dispatchEvent(event);
+      }
+    });
+    if (mode === "move") {
+      expect(move).toHaveBeenCalledWith("break", "2026-12-01T10:30:00.000Z", "room");
+      expect(resize).not.toHaveBeenCalled();
+    } else {
+      expect(resize).toHaveBeenCalledWith("break", "2026-12-01T10:35:00.000Z", "");
+      expect(move).not.toHaveBeenCalled();
+    }
+    expect(host.querySelector('[data-agenda-occurrence="break"]')).toBe(card);
+    expect(host.querySelectorAll("tr[data-agenda-start]")).toHaveLength(rows.length);
+    expect(document.querySelector(".pk-agenda-editor__pointer-preview")).toBeNull();
+    expect(JSON.stringify(data)).toBe(before);
+  },
+);

@@ -11,7 +11,7 @@ import { proposalSpeakersResponseSchema, type ProposalSpeaker } from "../../../s
 import { useData } from "../../hooks/useData";
 import { getJson } from "../../shared/api-client";
 import { formatDateTime, type ToastType } from "../../shared/ui";
-import { EmptyState } from "../../ui/RecordEmptyState";
+import { EmptyState } from "../../ui/EmptyState";
 import { ErrorAlert } from "../ErrorAlert";
 import { Spinner } from "../Spinner";
 import { ButtonLink } from "../../ui/Button";

@@ -1,3 +1,4 @@
+import { openOrganizerAgenda } from "./helpers/organizer-agenda";
 import { mkdir } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { agendaSnapshotSchema, agendaStaffingSchema } from "../../assets/shared/schemas/event-agenda";
@@ -126,14 +127,25 @@ test("a real multi-day team keeps a senior pin and reports door staffing shortag
   const configured = await page.request.post(`/api/v1/events/${slug}/agenda/staffing`, { data: body });
   expect(configured.ok(), await configured.text()).toBe(true);
   agendaSnapshotSchema.parse(await configured.json());
-  await page.goto(`/portal/#/events/${slug}/agenda`);
-  await page.getByRole("tab", { name: "Shift roles", exact: true }).click();
-  await page.getByRole("button", { name: "Actions for Day 1 opening", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Review staffing", exact: true }).click();
-  await page.getByRole("button", { name: "Actions for MC · Event", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Review positions", exact: true }).click();
-  await page.getByRole("button", { name: "Actions for Position 1", exact: true }).click();
-  await page.getByRole("menuitem", { name: "Edit assignment", exact: true }).click();
+  await openOrganizerAgenda(page, slug);
+  // Staffing rows open their detail through each table row's own named control.
+  const review = async (name: string) => {
+    const control = page.getByRole("button", { name, exact: true });
+    await expect(control).toBeVisible();
+    await control.focus();
+    await control.press("Enter");
+  };
+  const backToStaffing = async () => {
+    for (const name of ["Back to shift", "Back to staffing"]) {
+      const back = page.getByRole("button", { name, exact: true });
+      if (await back.isVisible()) await back.click();
+    }
+    await expect(page.getByRole("tab", { name: "Workload", exact: true })).toBeVisible();
+  };
+  await page.getByRole("tab", { name: "Shifts", exact: true }).click();
+  await review("Review Day 1 opening");
+  await review("Review MC · Event");
+  await review("Edit assignment for position 1");
   await page.getByLabel("Assigned person", { exact: true }).selectOption(roster[0]!.id);
   await page.getByRole("checkbox", { name: "Pin assignment during rotation", exact: true }).check();
   await page.getByRole("button", { name: "Save assignment", exact: true }).click();
@@ -167,12 +179,9 @@ test("a real multi-day team keeps a senior pin and reports door staffing shortag
   const shortageBlock = generated.shifts.find((item) => item.id === shortage.shiftId)!;
   const shortageRole = generated.staffingRoles.find((item) => item.id === shortage.role)!;
   const shortagePost = generated.staffingPosts.find((item) => item.id === shortage.postId)!;
-  await page.getByRole("button", { name: `Actions for ${shortageBlock.name}`, exact: true }).click();
-  await page.getByRole("menuitem", { name: "Review staffing", exact: true }).click();
-  await page
-    .getByRole("button", { name: `Actions for ${shortageRole.name} · ${shortagePost.name}`, exact: true })
-    .click();
-  await page.getByRole("menuitem", { name: "Review positions", exact: true }).click();
+  await backToStaffing();
+  await review(`Review ${shortageBlock.name}`);
+  await review(`Review ${shortageRole.name} · ${shortagePost.name}`);
   await expect(
     page.getByText("Another duty or talk conflicts, including travel", { exact: false }).first(),
   ).toBeVisible();

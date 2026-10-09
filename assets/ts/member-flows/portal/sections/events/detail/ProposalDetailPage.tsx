@@ -23,6 +23,7 @@ import { ErrorAlert } from "../../../../../components/ErrorAlert";
 import { Tabs, type TabItem } from "../../../../../components/Tabs";
 import { getJson, patchJson, postJson } from "../../../../../shared/api-client";
 import { fmt, toast } from "../../../ui";
+import { copyText } from "../../../../../shared/clipboard";
 import { useData } from "../../../../../hooks/useData";
 import { FormAnswerTable } from "../../../../../components/forms/FormResponseViews";
 import { AuditLogSection } from "./proposal-detail/AuditLogSection";
@@ -236,12 +237,12 @@ export function ProposalDetailPage({
   }
 
   async function handleCopyProposerEmail() {
-    try {
-      await navigator.clipboard.writeText(proposal.proposer_email);
-      toast("Proposer email copied", "success");
-    } catch {
-      setCommandError("Could not copy the proposer's address. Select it in the header and copy it manually.");
-    }
+    await copyText(proposal.proposer_email, {
+      copied: "Proposer email copied",
+      failed: "Could not copy the proposer's address. Select it in the header and copy it manually.",
+      // A failure stays on the page, where the manual way out can still be read.
+      notify: (message, type) => (type === "error" ? setCommandError(message) : toast(message, type)),
+    });
   }
 
   async function handleRemind(kind: ProposalReminderKind) {

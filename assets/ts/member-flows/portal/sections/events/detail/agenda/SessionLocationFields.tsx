@@ -29,7 +29,6 @@ export function SessionLocationFields({
         name="additionalRoomIds"
         onChange={(ids) => onChange(ids ?? [])}
         {...validation}
-        help="Choose one or more locations. Use Ctrl or Command to select several; leave none selected to assign locations later."
       />
     </div>
   );

@@ -1,4 +1,3 @@
-import "./ProposalDecisionPanel.css";
 import { useEffect, useLayoutEffect, useState } from "preact/hooks";
 import type { z } from "zod";
 import type { EventProposalDetailResponse } from "../../../shared/schemas/event-proposals";
@@ -13,7 +12,7 @@ import { Alert } from "../../ui/Alert";
 import { Badge } from "../../ui/Badge";
 import { Button } from "../../ui/Button";
 import { EmailHtmlPreview } from "../../ui/EmailHtmlPreview";
-import { Checkbox } from "../../ui/Checkbox";
+import { Checkbox, Radio } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import { Select } from "../../ui/TextControl";
@@ -281,28 +280,26 @@ export function ProposalDecisionPanel({
                         </Alert>
                       )}
                       <div class="pk-stack">
-                        <div>
-                          <div class="pk-small pk-muted">Outgoing emails</div>
-                          <div class="pk-stack pk-stack--tight" role="group" aria-label="Outgoing emails">
+                        {/* Choosing which email to read is a selection, not an action: one
+                            radio per outgoing email, named by the legend, so arrow keys move
+                            between them and the chosen one is announced as checked. */}
+                        <fieldset class="pk-fieldset pk-field">
+                          <legend class="pk-field__label">Outgoing emails</legend>
+                          <div class="pk-stack pk-stack--snug">
                             {preview.messages.map((message) => (
-                              <Button
+                              <Radio
                                 key={message.id}
-                                variant={message.id === selectedPreview.id ? "primary" : "secondary"}
-                                size="sm"
-                                block
-                                class="pk-proposal-email-choice"
-                                aria-pressed={message.id === selectedPreview.id}
-                                onClick={() => setSelectedPreviewId(message.id)}
-                              >
-                                <span class="pk-stack pk-stack--tight pk-start pk-break">
-                                  <span class="pk-strong">{decisionEmailLabel(message.templateKey)}</span>
-                                  <span>{message.recipientLabel}</span>
-                                  <span>{message.recipientEmail}</span>
-                                </span>
-                              </Button>
+                                name="previewEmail"
+                                value={message.id}
+                                class="pk-break"
+                                checked={message.id === selectedPreview.id}
+                                onChange={() => setSelectedPreviewId(message.id)}
+                                label={decisionEmailLabel(message.templateKey)}
+                                hint={`${message.recipientLabel} <${message.recipientEmail}>`}
+                              />
                             ))}
                           </div>
-                        </div>
+                        </fieldset>
                         <div>
                           <div class="pk-small pk-muted">To</div>
                           <div class="pk-strong">

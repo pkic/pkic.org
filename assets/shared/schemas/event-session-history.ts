@@ -6,6 +6,7 @@ import {
 } from "./event-agenda-legacy-fragments";
 export { legacyAgendaFragmentAnchorSchema } from "./event-agenda-legacy-fragments";
 import { parseSessionPresentationPublicUrl } from "../session-presentation-public-url";
+import { parseSessionRecordingPublicUrl, sessionRecordingReleaseParamsSchema } from "../session-recording-public-url";
 import { presentationReviewStatusSchema } from "./presentation-versions";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { z } from "zod";
@@ -17,7 +18,8 @@ export const publicSessionMediaUrlSchema = httpOrSameOriginUrlSchema.refine((val
   const url = new URL(value, "https://pkic.org");
   return (
     (!/^\/(?:portal|api)(?:\/|$)/u.test(url.pathname) ||
-      (value.startsWith("/") && parseSessionPresentationPublicUrl(value) !== null)) &&
+      (value.startsWith("/") &&
+        (parseSessionPresentationPublicUrl(value) !== null || parseSessionRecordingPublicUrl(value) !== null))) &&
     ![...url.searchParams.keys()].some((key) =>
       /^(?:token|access_token|manage|invite|signature|sig|x-amz-signature|x-amz-credential)$/iu.test(key),
     )
@@ -136,6 +138,7 @@ export const sessionMaterialSchema = z
     title: z.string().trim().min(1).max(300),
     url: z.union([publicSessionMediaUrlSchema, z.literal("")]),
     presentationVersionId: z.string().min(1).nullable(),
+    recordingVersionId: z.uuid().nullable().default(null),
     legacyDownloadUrl: legacyAgendaDownloadUrlSchema.nullable().default(null),
     presentationSource: z.enum(["proposal", "session"]).default("proposal"),
     version: z.number().int().positive(),
@@ -150,12 +153,35 @@ export const sessionMaterialSchema = z
     path: ["presentationVersionId"],
     message: "Uploaded presentation versions can only bind presentations.",
   })
+  .refine((material) => material.kind === "recording" || material.recordingVersionId === null, {
+    path: ["recordingVersionId"],
+    message: "Owned recording versions can only bind recordings.",
+  })
+  .refine(
+    (material) =>
+      material.recordingVersionId === null ||
+      sessionRecordingReleaseParamsSchema.shape.materialId.safeParse(material.id).success,
+    { path: ["id"], message: "Use a bounded material identifier for an owned recording." },
+  )
+  .refine(
+    (material) => {
+      const recording = parseSessionRecordingPublicUrl(material.url);
+      return (
+        recording === null ||
+        (material.kind === "recording" &&
+          material.recordingVersionId === recording.versionId &&
+          material.id === recording.materialId)
+      );
+    },
+    { path: ["url"], message: "Choose the owned recording version identified by this material link." },
+  )
   .refine(
     (material) =>
       material.url !== "" ||
       (material.kind === "presentation" &&
         material.presentationSource === "session" &&
-        material.presentationVersionId !== null),
+        material.presentationVersionId !== null) ||
+      (material.kind === "recording" && material.recordingVersionId !== null),
     { path: ["url"], message: "Choose an uploaded session version or enter a stable public URL." },
   )
   .refine(
@@ -230,6 +256,7 @@ export function sessionMaterialReleaseIdentity(material: SessionMaterial): strin
     material.url,
     material.version,
     material.presentationVersionId,
+    material.recordingVersionId ?? null,
     material.presentationSource,
     material.legacyDownloadUrl,
     material.approvedAt,

@@ -1,3 +1,4 @@
+import { plannedMediaJson } from "./occurrence-insert";
 import { prepareHistoricalMappingImports, type HistoricalMappingCandidate } from "./historical-mapping-import";
 import { contentSpeakerStatements } from "./content-library";
 import { agendaContentFieldsSchema } from "../../../../assets/shared/schemas/event-agenda-content";
@@ -18,6 +19,7 @@ import { nowIso } from "../../utils/time";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { getAgenda } from "./read";
 import { commitAgendaRevision, validateAgendaSchedule } from "./mutations";
+import { canonicalAgendaSessionFormats, readAgendaSessionFormatLabels } from "./occurrence-formats";
 export async function importAgenda(
   db: DatabaseLike,
   eventId: string,
@@ -33,12 +35,13 @@ export async function importAgenda(
     "SELECT id,source_key FROM event_agenda_occurrences WHERE event_id=? AND source_key IS NOT NULL",
     [eventId],
   );
-  let candidates = input.occurrences;
+  const formatLabels = await readAgendaSessionFormatLabels(db, eventId);
+  let candidates = canonicalAgendaSessionFormats(formatLabels, input.occurrences);
   let proposalStatuses: Map<string, string> | undefined;
   let placementFingerprint: string | undefined;
   let representations = new Map<string, SessionProposalRepresentation[]>();
   if (input.source === "accepted_proposals") {
-    const imported = await loadAcceptedProposalAgendaImport(db, eventId, input.proposalIds);
+    const imported = await loadAcceptedProposalAgendaImport(db, eventId, input.proposalIds, formatLabels);
     candidates = imported.candidates;
     proposalStatuses = imported.statuses;
     representations = imported.representations;
@@ -143,7 +146,7 @@ export async function importAgenda(
     const statements = items.flatMap((item) => [
       db
         .prepare(
-          "INSERT INTO event_agenda_occurrences(id,event_id,title,description,start_at,end_at,room_id,admission_policy,capacity,remote_capacity,visibility,kind,track,source_key,presentation_url,recording_url,required_equipment_json,content_id,access_policy,booking_opens_at,booking_closes_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
+          "INSERT INTO event_agenda_occurrences(id,event_id,title,description,start_at,end_at,room_id,admission_policy,capacity,remote_capacity,visibility,kind,track,format,placeholder,source_key,presentation_url,recording_url,required_equipment_json,content_id,access_policy,booking_opens_at,booking_closes_at,planned_media_json) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)",
         )
         .bind(
           item.id,
@@ -159,6 +162,8 @@ export async function importAgenda(
           item.visibility,
           item.kind,
           item.track ?? null,
+          item.format ?? null,
+          item.placeholder ? 1 : 0,
           item.sourceKey,
           item.presentationUrl ?? null,
           item.recordingUrl ?? null,
@@ -167,6 +172,7 @@ export async function importAgenda(
           item.accessPolicy ?? "open",
           item.bookingOpensAt ?? null,
           item.bookingClosesAt ?? null,
+          plannedMediaJson(item.plannedMedia),
         ),
       ...agendaAdditionalRoomStatements(db, item.id, item.additionalRoomIds ?? []),
       ...contentSpeakerStatements(db, item.id, agendaContentFieldsSchema.parse(item)),

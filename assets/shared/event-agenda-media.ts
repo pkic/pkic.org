@@ -24,3 +24,41 @@ export function withAgendaMediaCapabilities(equipment: readonly string[], flags:
     ...(flags.liveStreaming ? [AGENDA_MEDIA_EQUIPMENT_KEYS.liveStreaming] : []),
   ];
 }
+
+interface AgendaMediaRoom {
+  id: string;
+  equipment?: readonly string[];
+  virtualRoomUrl?: string | null;
+}
+interface AgendaMediaOccurrence {
+  roomId: string | null;
+  plannedMedia?: AgendaMediaCapabilities | null;
+  virtualRoomUrl?: string | null;
+}
+
+/**
+ * The media a session actually plans. Without its own plan a session follows its primary location's
+ * planned media and virtual-room link; a session link authored before inheritance still takes precedence.
+ */
+export function agendaOccurrenceMedia(rooms: readonly AgendaMediaRoom[], occurrence: AgendaMediaOccurrence) {
+  const room = occurrence.roomId ? rooms.find((candidate) => candidate.id === occurrence.roomId) : undefined;
+  const inherited = occurrence.plannedMedia == null;
+  const plan = occurrence.plannedMedia ?? agendaMediaCapabilities(room?.equipment);
+  return {
+    inherited,
+    recording: plan.recording,
+    liveStreaming: plan.liveStreaming,
+    virtualRoomUrl: occurrence.virtualRoomUrl || (inherited ? room?.virtualRoomUrl : null) || null,
+  };
+}
+
+/** An explicit session plan is a location requirement like any other required equipment. */
+export function agendaOccurrenceRequiredEquipment(occurrence: {
+  requiredEquipment?: readonly string[];
+  plannedMedia?: AgendaMediaCapabilities | null;
+}) {
+  const equipment = occurrence.requiredEquipment ?? [];
+  return occurrence.plannedMedia
+    ? [...new Set(withAgendaMediaCapabilities(equipment, occurrence.plannedMedia))]
+    : [...equipment];
+}

@@ -136,6 +136,14 @@ describe("speaker self-service page", () => {
     expect(panel(root, "data-confirmed-msg").hidden).toBe(false);
     expect(panel(root, "data-participation-actions").hidden).toBe(true);
     expect(panel(root, "data-headshot-section").hidden).toBe(false);
+    // The photo is the shared tile — the picture is the control, named for the
+    // speaker — with no separate upload field or full-width remove button.
+    const photoSection = panel(root, "data-headshot-section");
+    expect(photoSection.querySelector('button[aria-label="Upload photo of Ada Lovelace"]')).not.toBeNull();
+    expect(photoSection.querySelector('[role="status"]')).not.toBeNull();
+    expect([...photoSection.querySelectorAll("button")].map((button) => button.textContent)).not.toContain(
+      "Remove photo",
+    );
     expect(panel(root, "data-profile-section").hidden).toBe(false);
     expect(panel(root, "data-presentation-link").hidden).toBe(false);
   });
@@ -264,11 +272,14 @@ describe("speaker self-service page", () => {
       status: "confirmed",
       consents: [{ termKey: term.termKey, version: term.version }],
     });
-    expect(confirmation.disabled).toBe(true);
+    // Busy the way the design system's Button is: announced and inert, but still focusable.
+    expect(confirmation.getAttribute("aria-busy")).toBe("true");
+    expect(confirmation.getAttribute("aria-disabled")).toBe("true");
     await act(async () => {
       resolveParticipation(json({ error: { code: "TEST_REFUSAL", message: "Please try confirming again." } }, 409));
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
+    expect(confirmation.hasAttribute("aria-busy")).toBe(false);
     expect(confirmation.disabled).toBe(false);
     expect(panel(root, "data-flow-status").textContent).toContain("Please try confirming again.");
   });
@@ -446,6 +457,12 @@ describe("speaker self-service page", () => {
 
     const decline = panel(root, "data-decline-panel");
     expect(decline.hidden).toBe(true);
+    // Declining is named for what it does and kept out of the confirm action's cluster.
+    const open = panel(root, "data-decline-open");
+    expect(open.textContent).toBe("Decline participation…");
+    expect(open.classList.contains("pk-btn--danger-quiet")).toBe(true);
+    expect(open.closest(".pk-cluster")!.querySelector("[data-confirm-participation]")).toBeNull();
+    expect(panel(root, "data-decline-confirm").textContent).toBe("Decline participation");
 
     await act(async () => {
       panel(root, "data-decline-open").dispatchEvent(new MouseEvent("click", { bubbles: true }));

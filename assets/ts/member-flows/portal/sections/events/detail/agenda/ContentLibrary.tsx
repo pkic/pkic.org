@@ -29,8 +29,10 @@ import { TextInput, Textarea, Select } from "../../../../../../ui/TextControl";
 import { Button } from "../../../../../../ui/Button";
 import { Checkbox } from "../../../../../../ui/Checkbox";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
+import { FormActions } from "../../../../../../components/FormActions";
 import { HistoricalMappingReview } from "./HistoricalMappingReview";
 type Content = z.infer<typeof agendaContentSchema>;
+const kindLabels: Record<Content["kind"], string> = { session: "Session", break: "Break", plenary: "Plenary" };
 export function ContentLibrary({
   snapshot,
   canEdit,
@@ -288,7 +290,6 @@ export function ContentLibrary({
                         <RowActions
                           subject={row.title}
                           actions={[
-                            { id: "edit", label: "Edit content", disabled: busy, onSelect: () => edit(row) },
                             {
                               id: "repeat",
                               label: "Add repeat",
@@ -313,8 +314,15 @@ export function ContentLibrary({
         {canEdit && (
           <>
             {mode === "edit" && (
-              <form noValidate {...form.handlers} onSubmit={save} class="pk-form">
-                <h3>{selected ? "Edit session content" : "New unscheduled session"}</h3>
+              <form
+                noValidate
+                {...form.handlers}
+                onSubmit={save}
+                class="pk-form"
+                aria-label={selected ? "Edit session content" : "New session content"}
+              >
+                {message && <p role="status">{message}</p>}
+                {error && <ErrorAlert error={error} />}
                 <Field label="Title" {...form.of("content.title")}>
                   {(control) => (
                     <TextInput
@@ -358,7 +366,7 @@ export function ContentLibrary({
                       onChange={(event) => setKind(event.currentTarget.value as typeof kind)}
                     >
                       {agendaContentCreateSchema.shape.content.shape.kind.unwrap().options.map((value) => (
-                        <option value={value}>{value}</option>
+                        <option value={value}>{kindLabels[value]}</option>
                       ))}
                     </Select>
                   )}
@@ -448,14 +456,18 @@ export function ContentLibrary({
                     )}
                   </aside>
                 )}
-                <Button type="submit" loading={busy}>
-                  Save session content
-                </Button>
+                <FormActions submitLabel="Save session content" busy={busy} onCancel={() => setMode("list")} />
               </form>
             )}
             {mode === "copy" && (
-              <form noValidate {...copyForm.handlers} onSubmit={copy} class="pk-form">
-                <h3>Reuse content from another event</h3>
+              <form
+                noValidate
+                {...copyForm.handlers}
+                onSubmit={copy}
+                class="pk-form"
+                aria-label="Reuse content from another event"
+              >
+                {error && <ErrorAlert error={error} />}
                 <p>You need access to the source event. Copied content starts with no scheduled occurrence.</p>
                 <Field label="Source event slug" {...copyForm.of("sourceEventSlug")}>
                   {(control) => (
@@ -484,15 +496,11 @@ export function ContentLibrary({
                     )}
                   </Field>
                 )}
-                <Button type="submit" loading={busy}>
-                  Copy content into this event
-                </Button>
+                <FormActions submitLabel="Copy content into this event" busy={busy} onCancel={() => setMode("list")} />
               </form>
             )}
           </>
         )}
-        {mode !== "list" && message && <p role="status">{message}</p>}
-        {mode !== "list" && error && <ErrorAlert error={error} />}
       </PanelBody>
     </Panel>
   );

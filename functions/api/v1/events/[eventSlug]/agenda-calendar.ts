@@ -7,6 +7,7 @@ import {
   updateAgendaCalendarSettings,
 } from "../../../../_lib/services/event-participation/calendar-subscriptions";
 import {
+  agendaCalendarCurrentRouteSchema,
   agendaCalendarFeedRouteSchema,
   agendaCalendarRevokeRouteSchema,
   agendaCalendarRotateRouteSchema,
@@ -18,11 +19,15 @@ import { openApiRoute } from "../../../../_lib/openapi/route";
 import { getEventBySlug } from "../../../../_lib/services/events";
 import { participantSessionDatabase } from "../../../../_lib/services/event-participation/self-authorization";
 import {
+  currentAgendaCalendarSubscription,
   resolveAgendaCalendarSubscription,
   revokeAgendaCalendarSubscriptions,
   rotateAgendaCalendarSubscription,
 } from "../../../../_lib/services/event-participation/calendar-subscriptions";
 import { personalAgendaCalendar } from "../../../../_lib/services/event-participation/calendar-entries";
+function feedOrigin(c: AdminContext, eventSlug: string) {
+  return { baseUrl: new URL(c.req.raw.url).origin, eventSlug, signingSecret: c.env.INTERNAL_SIGNING_SECRET };
+}
 export const AgendaCalendarRotatePost = openApiRoute(agendaCalendarRotateRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
   const db = requestDb(c);
@@ -33,12 +38,23 @@ export const AgendaCalendarRotatePost = openApiRoute(agendaCalendarRotateRouteSc
       participantSessionDatabase(db, actor.userId, actor.sessionId),
       event.id,
       actor.userId,
-      new URL(c.req.raw.url).origin,
-      data.params.eventSlug,
+      feedOrigin(c, data.params.eventSlug),
       data.body,
     ),
   );
 });
+export const AgendaCalendarCurrentGet = openApiRoute(
+  agendaCalendarCurrentRouteSchema,
+  async (c: AdminContext, data) => {
+    markResponseSensitive(c);
+    const db = requestDb(c);
+    const actor = await requireIdentityFromRequest(db, c.req.raw, c.env);
+    const event = await getEventBySlug(db, data.params.eventSlug);
+    return json(
+      await currentAgendaCalendarSubscription(db, event.id, actor.userId, feedOrigin(c, data.params.eventSlug)),
+    );
+  },
+);
 export const AgendaCalendarRevokeDelete = openApiRoute(
   agendaCalendarRevokeRouteSchema,
   async (c: AdminContext, data) => {

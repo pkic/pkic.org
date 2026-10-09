@@ -1,4 +1,6 @@
 import type { ComponentChildren, Ref } from "preact";
+import { useRef } from "preact/hooks";
+import { confirmAction } from "./ConfirmDialog";
 import { ProfileLinksInput, type ProfileLinksHandle } from "./ProfileLinksInput";
 import { SPEAKER_ROLE_OPTIONS } from "../shared/speaker-roles";
 import { Button } from "../ui/Button";
@@ -38,6 +40,17 @@ interface SpeakerFormCardProps {
   defaultRole?: string;
   errorPaths?: Partial<Record<"firstName" | "lastName" | "email" | "bio", string>>;
   onRemove?: () => void;
+  /** Names the card being removed, such as "Remove speaker 2". */
+  removeLabel?: string;
+}
+
+/** Whether the reader has typed or chosen anything a removal would discard. */
+function hasEnteredContent(card: HTMLElement): boolean {
+  return [...card.querySelectorAll<HTMLInputElement | HTMLTextAreaElement>("input, textarea")].some(
+    (control) =>
+      !(control instanceof HTMLInputElement && ["radio", "checkbox", "button", "submit"].includes(control.type)) &&
+      control.value.trim() !== "",
+  );
 }
 
 interface SpeakerFieldProps {
@@ -78,18 +91,34 @@ export function SpeakerFormCard({
   defaultRole = "speaker",
   errorPaths,
   onRemove,
+  removeLabel = `Remove ${title}`,
 }: SpeakerFormCardProps) {
   const roleField = fields.role;
+  const card = useRef<HTMLDivElement>(null);
+  async function remove(): Promise<void> {
+    if (!onRemove) return;
+    if (card.current && hasEnteredContent(card.current)) {
+      const confirmed = await confirmAction({
+        title: `${removeLabel}?`,
+        consequences: ["The details entered for this speaker are discarded"],
+        confirmLabel: removeLabel,
+        cancelLabel: "Keep speaker",
+        tone: "danger",
+      });
+      if (!confirmed) return;
+    }
+    onRemove();
+  }
 
   return (
-    <div class="pk">
+    <div class="pk" ref={card}>
       {/* The card names itself as a region, so a reader moving between several
           speakers lands on "Speaker 2" rather than on an anonymous group. */}
       <Panel aria-label={title}>
         <PanelHeader title={title} headingLevel={4}>
           {onRemove && (
-            <Button variant="danger-quiet" size="sm" onClick={onRemove}>
-              Remove
+            <Button type="button" variant="danger-quiet" size="sm" onClick={() => void remove()}>
+              {removeLabel}
             </Button>
           )}
         </PanelHeader>

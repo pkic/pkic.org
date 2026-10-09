@@ -16,6 +16,12 @@ import {
 import type { ProposalInternalComment } from "../../assets/shared/schemas/proposal-comments";
 import { PROPOSAL_SPEAKER_ROLES } from "../../assets/shared/schemas/participant-roles";
 import { buttonNamed, controlFor, groupNames, labelNames, markdownControl } from "./helpers/labelled-control";
+import { confirmAction } from "../../assets/ts/components/ConfirmDialog";
+
+vi.mock("../../assets/ts/components/ConfirmDialog", async (original) => ({
+  ...(await original<typeof import("../../assets/ts/components/ConfirmDialog")>()),
+  confirmAction: vi.fn(async () => true),
+}));
 
 let container: HTMLElement | null = null;
 
@@ -188,18 +194,40 @@ describe("SpeakerFormCard", () => {
     expect(offered).toEqual([...PROPOSAL_SPEAKER_ROLES]);
   });
 
-  it("offers removal as a button, and offers none when the card cannot be removed", async () => {
+  it("names the card it removes, and offers no removal when the card cannot be removed", async () => {
+    vi.mocked(confirmAction).mockClear();
     const onRemove = vi.fn();
-    const root = mount(speakerCard({ onRemove }));
+    const root = mount(speakerCard({ onRemove, removeLabel: "Remove speaker 1" }));
 
-    const remove = buttonNamed(root, "Remove");
+    const remove = buttonNamed(root, "Remove speaker 1");
     expect(remove.type).toBe("button");
-    void act(() => remove.click());
+    // An empty card holds nothing to lose, so it goes without a question.
+    await act(async () => remove.click());
+    expect(confirmAction).not.toHaveBeenCalled();
     expect(onRemove).toHaveBeenCalledOnce();
 
     void act(() => render(null, container!));
     const fixed = mount(speakerCard());
     expect(() => buttonNamed(fixed, "Remove")).toThrow();
+    expect(() => buttonNamed(fixed, "Remove speaker 1")).toThrow();
+  });
+
+  it("confirms before discarding a card that already holds details", async () => {
+    vi.mocked(confirmAction).mockClear();
+    vi.mocked(confirmAction).mockResolvedValueOnce(false);
+    const onRemove = vi.fn();
+    const root = mount(speakerCard({ onRemove, removeLabel: "Remove speaker 1" }));
+    controlFor(root, "First name").value = "Ada";
+
+    await act(async () => buttonNamed(root, "Remove speaker 1").click());
+    expect(confirmAction).toHaveBeenCalledWith(
+      expect.objectContaining({ title: "Remove speaker 1?", confirmLabel: "Remove speaker 1", tone: "danger" }),
+    );
+    expect(onRemove).not.toHaveBeenCalled();
+
+    await act(async () => buttonNamed(root, "Remove speaker 1").click());
+    expect(confirmAction).toHaveBeenCalledTimes(2);
+    expect(onRemove).toHaveBeenCalledOnce();
   });
 
   it("omits the role group entirely when the caller collects no role", async () => {

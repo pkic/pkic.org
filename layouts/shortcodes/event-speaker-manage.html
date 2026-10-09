@@ -113,27 +113,12 @@ panel carries a margin of its own. */}}
     <div class="pk-stack pk-stack--snug" data-headshot-section hidden>
       <h4>Your photo</h4>
       <p class="pk-muted">
-        Upload a professional headshot photo. It will appear on the event website alongside your session.
+        Add a professional headshot photo. It will appear on the event website alongside your session.
       </p>
-      <div data-headshot-preview class="pkic-speaker-headshot-preview"></div>
-      {{/* The upload outcome for the panel, written by
-           registration-manage-headshot.ts. It reports on the section rather
-           than on one control, so it is muted prose and not a field's help
-           text. */}}
-      <p data-headshot-status class="pk-muted pk-small"></p>
-      <div class="pk-cluster">
-        <label class="pk-btn pk-btn--sm pk-btn--secondary" for="speaker-headshot-file">Upload photo</label>
-        <input
-          type="file"
-          id="speaker-headshot-file"
-          accept="image/jpeg,image/png,image/webp"
-          class="pk-sr-only"
-          data-headshot-file
-        />
-        <button type="button" class="pk-btn pk-btn--sm pk-btn--secondary" data-headshot-delete hidden>
-          Remove photo
-        </button>
-      </div>
+      {{/* The photo tile is rendered here by `token-headshot.tsx`, which
+           writes the outcome of a change to the status line below. */}}
+      <div data-headshot-tile></div>
+      <p data-headshot-status class="pk-muted pk-small" role="status"></p>
     </div>
 
     {{/* ── Bio & links ─────────────────────────────────────────────────── */}}

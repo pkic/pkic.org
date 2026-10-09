@@ -1,3 +1,5 @@
+import { closeScannerDiagnostics, openScannerDiagnostics } from "./helpers/scanner-recovery-storage";
+import { enableAgendaEditing, openOrganizerAgenda } from "./helpers/organizer-agenda";
 import { expect, test, type Locator } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
@@ -58,11 +60,15 @@ for (const mode of ["keyboard", "touch", "pointer"] as const) {
         ),
       );
       const fixture = await prepareAgendaInteractionFixture(page);
-      await page.goto(`/portal/#/events/${fixture.slug}/agenda`);
+      await openOrganizerAgenda(page, fixture.slug);
       const activate = async (control: Locator) => {
         await expect(control).toBeVisible();
-        if (mode === "touch") await control.tap();
-        else if (mode === "pointer") await control.click();
+        if (mode === "touch") {
+          // Bring the control on screen first, as a reader scrolls before tapping, so the sticky agenda chrome has
+          // settled before the tap's hit test.
+          await control.scrollIntoViewIfNeeded();
+          await control.tap();
+        } else if (mode === "pointer") await control.click();
         else {
           await control.focus();
           await control.press("Enter");
@@ -80,32 +86,51 @@ for (const mode of ["keyboard", "touch", "pointer"] as const) {
       const panel = page.getByRole("dialog", { name: matrixTitle, exact: true });
       await expect(panel).toBeVisible();
       await expect(panel.getByRole("heading", { name: "Speakers", exact: true })).toBeVisible();
-      for (const person of fixture.people)
-        await expect(panel.getByRole("heading", { name: person.name, exact: true })).toBeVisible();
-      await expect(panel.getByText("Moderator", { exact: true })).toBeVisible();
+      // Each speaker heading names the person through the control that opens their profile.
+      const speakerHeading = (name: string) =>
+        panel.getByRole("heading", { name: `View speaker profile: ${name}`, exact: true });
+      for (const person of fixture.people) {
+        await expect(speakerHeading(person.name)).toBeVisible();
+        await expect(speakerHeading(person.name)).toHaveText(person.name);
+      }
+      // Speaker previews and profiles repeat the role in closed popovers; exactly one role label is shown.
+      const moderatorRole = panel.getByText("Moderator", { exact: true }).filter({ visible: true });
+      await expect(moderatorRole).toHaveCount(1);
+      await expect(moderatorRole).toBeVisible();
       await expect(panel.getByRole("article")).toHaveCount(2);
       for (const person of fixture.people) {
         const speaker = panel.getByRole("article").filter({
-          has: page.getByRole("heading", { name: person.name, exact: true }),
+          has: page.getByRole("heading", { name: `View speaker profile: ${person.name}`, exact: true }),
         });
-        await expect(speaker.getByText(initialsFrom(person.name), { exact: true })).toBeVisible();
+        const initials = speaker.getByText(initialsFrom(person.name), { exact: true }).filter({ visible: true });
+        await expect(initials).toHaveCount(1);
+        await expect(initials).toBeVisible();
         await expect(speaker.locator("img")).toHaveCount(0);
       }
       const panelBounds = await panel.evaluate((element) => {
         const rect = element.getBoundingClientRect();
-        const headings = [...element.querySelectorAll("h2, h3")].map((heading) => {
-          const box = heading.getBoundingClientRect();
-          return { left: box.left, right: box.right };
-        });
+        // Closed speaker previews and profile dialogs are not rendered; measure only the headings shown.
+        const headings = [...element.querySelectorAll("h2, h3")]
+          .filter((heading) => heading.checkVisibility({ visibilityProperty: true }))
+          .map((heading) => {
+            const box = heading.getBoundingClientRect();
+            return { left: box.left, right: box.right };
+          });
         return { left: rect.left, right: rect.right, viewport: innerWidth, headings };
       });
       expect(panelBounds.left).toBeGreaterThanOrEqual(-1);
       expect(panelBounds.right).toBeLessThanOrEqual(panelBounds.viewport + 1);
+      expect(panelBounds.headings.length).toBeGreaterThan(0);
       for (const heading of panelBounds.headings) {
         expect(heading.left).toBeGreaterThanOrEqual(panelBounds.left - 1);
         expect(heading.right).toBeLessThanOrEqual(panelBounds.right + 1);
       }
-      await page.screenshot({ path: info.outputPath(`named-panel-missing-portraits-${mode}.png`), fullPage: true });
+      // A full-page capture drops Chromium's touch media emulation (hover: none, pointer: coarse) for the rest of
+      // the page, so the touch run captures the viewport before it continues with touch-only presentation.
+      await page.screenshot({
+        path: info.outputPath(`named-panel-missing-portraits-${mode}.png`),
+        fullPage: mode !== "touch",
+      });
       await activate(panel.getByRole("button", { name: "Close session details", exact: true }));
       await expect(panel).toBeHidden();
       async function setStep(minutes: string) {
@@ -115,6 +140,7 @@ for (const mode of ["keyboard", "touch", "pointer"] as const) {
         await rules.getByRole("button", { name: "Save rules", exact: true }).click();
         await expect(rules).toBeHidden();
       }
+      await enableAgendaEditing(page, activate);
       await setStep("15");
       const before = await fixture.read();
       const endTarget = (instant: string, roomName: string) => {
@@ -240,7 +266,7 @@ for (const mode of ["keyboard", "touch", "pointer"] as const) {
             await control.press("Enter");
           }
         };
-        await page.goto(`/portal/#/events/${fixture.slug}/agenda`);
+        await openOrganizerAgenda(page, fixture.slug);
         await activate(page.getByRole("tab", { name: "Shifts", exact: true }));
         await expect(page.getByText(staffing.shiftName, { exact: true })).toBeVisible();
         const blockMenu = page.getByRole("button", { name: `Actions for ${staffing.shiftName}`, exact: true });
@@ -252,15 +278,13 @@ for (const mode of ["keyboard", "touch", "pointer"] as const) {
           await expect(blockMenu).toBeFocused();
           expect(await fixture.read()).toEqual(staffing.configured);
         }
-        await activate(blockMenu);
-        await activate(page.getByRole("menuitem", { name: "Review staffing", exact: true }));
-        await activate(page.getByRole("button", { name: "Actions for Matrix MC · Event", exact: true }));
-        await activate(page.getByRole("menuitem", { name: "Review positions", exact: true }));
+        // Rows open their detail through the table's own row control.
+        await activate(page.getByRole("button", { name: `Review ${staffing.shiftName}`, exact: true }));
+        await activate(page.getByRole("button", { name: "Review Matrix MC · Event", exact: true }));
         await expect(page.getByRole("region", { name: "Unfilled staffing duties", exact: true })).toContainText(
           "2 uncovered duties",
         );
-        await activate(page.getByRole("button", { name: "Actions for Position 1", exact: true }));
-        await activate(page.getByRole("menuitem", { name: "Edit assignment", exact: true }));
+        await activate(page.getByRole("button", { name: "Edit assignment for position 1", exact: true }));
         const person = page.getByLabel("Assigned person", { exact: true });
         await expect(person).toBeEnabled();
         if (mode === "keyboard") {
@@ -335,13 +359,9 @@ test("expanded sponsor history prose and inner history fit their visible desktop
     await page.goto(fixture.workspace);
     await page.getByRole("button", { name: /^Open leads for/ }).click();
     await page.getByRole("button", { name: "Scan leads", exact: true }).click();
-    const diagnostics = page.locator("details").filter({
-      has: page.locator(":scope > summary").filter({ hasText: "Recovery and diagnostics" }),
-    });
-    await expect(diagnostics).toHaveCount(1);
-    await diagnostics.locator(":scope > summary").click();
+    const diagnostics = await openScannerDiagnostics(page);
     await diagnostics.getByLabel("Feedback pause", { exact: true }).selectOption("0");
-    await diagnostics.locator(":scope > summary").click();
+    await closeScannerDiagnostics(page);
     await captureSponsorBadge(page, fixture.consenting.badgeId, fixture.sponsorId, fixture.operator.userId);
     await page.getByRole("button", { name: "Close scanner", exact: true }).click();
     const leads = sponsorLeadListSchema.parse(

@@ -100,7 +100,7 @@ describe("group event proposal portal", () => {
     await act(async () => presentationTab?.click());
     await settle();
     expect(container.textContent).toContain("presentation.pdf");
-    expect(container.textContent).toContain("Download");
+    expect(container.querySelector('a[aria-label="Download version 1, presentation.pdf"]')).not.toBeNull();
     expect(container.textContent).not.toContain("Upload on behalf of speaker");
     expect(
       Array.from(container.querySelectorAll<HTMLButtonElement>("button")).some(

@@ -8,7 +8,7 @@ import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { useState } from "preact/hooks";
 import { ApiDataTable } from "../../../../../../components/ApiDataTable";
 import { RowActions } from "../../../../../../ui/RowActions";
-import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
+import { Panel, PanelBody } from "../../../../../../ui/Panel";
 import { getJson } from "../../../../../../shared/api-client";
 import { buildServerCollectionUrl, type CollectionLoader } from "../../../../../../hooks/useServerCollection";
 import {
@@ -60,8 +60,7 @@ export function AcceptedProposalBacklog({
   const controlsBusy = busy || adding;
   const [canRead, setCanRead] = useState(false);
   return (
-    <Panel class="pk-agenda-source-panel">
-      <PanelHeader title="Accepted proposals" />
+    <Panel class="pk-agenda-source-panel" aria-label="Accepted proposals">
       <PanelBody flush>
         <ApiDataTable
           inset={
@@ -108,7 +107,7 @@ export function AcceptedProposalBacklog({
                   ? [
                       {
                         id: "schedule-all",
-                        label: "Schedule all matching proposals",
+                        label: "Place all matching in free slots",
                         disabled: controlsBusy || !canRead,
                         separatorBefore: true,
                         onSelect: async () => {
@@ -132,7 +131,7 @@ export function AcceptedProposalBacklog({
           initialSort="title"
           searchPlaceholder="Search proposals"
           rowKey={(proposal) => proposal.id}
-          empty="No accepted proposals match this search."
+          empty="No accepted proposals match this search. Proposals already on the agenda are not listed."
           columns={[]}
           renderItems={(proposals) => (
             <div class="pk-stack pk-agenda-source-cards" aria-label="Accepted proposal cards">
@@ -153,7 +152,7 @@ export function AcceptedProposalBacklog({
                                 ? [
                                     {
                                       id: "schedule",
-                                      label: "Schedule on agenda",
+                                      label: "Choose a calendar slot",
                                       disabled: controlsBusy || interactionsDisabled || !canRead,
                                       onSelect: () => onSelect(proposal),
                                     },
@@ -163,7 +162,7 @@ export function AcceptedProposalBacklog({
                                 ? [
                                     {
                                       id: "import",
-                                      label: "Add",
+                                      label: "Place in next free slot",
                                       disabled: controlsBusy || !canRead,
                                       onSelect: () => onAdd([proposal.id]),
                                     },

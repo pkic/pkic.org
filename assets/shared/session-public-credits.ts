@@ -26,6 +26,7 @@ export function sessionDisplayCredits(session: AgendaOccurrence, organizer = fal
     if (!selection?.snapshot && !candidate) return credit;
     return {
       ...credit,
+      actingIdentityId: selection?.actingIdentityId ?? null,
       jobTitle: selection?.snapshot?.jobTitle ?? null,
       organizationName: selection?.snapshot?.organizationName ?? null,
       biography: selection?.snapshot?.biography || candidate?.biography || "",

@@ -16,15 +16,25 @@ import { httpOrSameOriginUrlSchema, httpUrlSchema, sameOriginPathSchema } from "
 import { z } from "zod";
 import { utcInstantSchema } from "./api-common";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { proposalTypeSchema } from "./proposal-management";
 
 const id = z.string().min(1).max(200);
-export const agendaAdmissionPolicySchema = z.enum(["preference", "reservation", "approval"]);
+export const agendaAdmissionPolicySchema = z.enum(["preference", "optional_reservation", "reservation", "approval"]);
+export type AgendaAdmissionPolicy = z.infer<typeof agendaAdmissionPolicySchema>;
 export const agendaAccessPolicySchema = z.enum(["open", "invitation"]);
 export const agendaPublicationStatusSchema = z.enum(["published", "changed", "unpublished"]);
 export const agendaVisibilitySchema = z.enum(["public", "private"]);
 export const agendaSessionKindSchema = z.enum(["session", "break", "plenary"]);
 /** Authored subject/program grouping, independent of physical rooms and agenda item type. */
 export const agendaSessionTrackSchema = z.string().trim().min(1).max(160);
+/** Session format (talk, panel, …): one of the owning event's configured session type labels, checked by the service. */
+export const agendaSessionFormatSchema = proposalTypeSchema;
+/** A configured session format offered for agenda authoring and public labelling. */
+export const agendaSessionFormatOptionSchema = z.object({
+  id: agendaSessionFormatSchema,
+  label: z.string().trim().min(1).max(80),
+});
+export type AgendaSessionFormatOption = z.infer<typeof agendaSessionFormatOptionSchema>;
 export const agendaEquipmentSchema = z
   .array(z.string().trim().toLowerCase().min(1).max(80))
   .max(50)
@@ -44,7 +54,11 @@ export const agendaRoomSchema = z.object({
   setupMinutes: z.number().int().min(0).max(120).default(0),
   equipment: agendaEquipmentSchema.optional(),
   availablePeriods: agendaRoomAvailabilitySchema.optional(),
+  /** Default virtual-room destination for sessions held here; private like a session's own link. */
+  virtualRoomUrl: httpUrlSchema.nullable().optional(),
 });
+/** A session's own recording and live-streaming plan, replacing its primary location's planned media. */
+export const agendaPlannedMediaSchema = z.object({ recording: z.boolean(), liveStreaming: z.boolean() });
 export { agendaCreditRoleSchema } from "./agenda-credit-role";
 export const agendaSpeakerPlacementSchema = z.object({
   attendanceMode: z.enum(["physical", "remote"]),
@@ -79,6 +93,11 @@ export const agendaOccurrenceFieldsSchema = z.object({
     .refine((values) => new Set(values).size === values.length, "Choose each additional room once")
     .optional(),
   requiredEquipment: agendaEquipmentSchema.optional(),
+  /**
+   * Null or omitted: the session follows its primary location's planned media and virtual-room link.
+   * An object overrides the location for this session; its virtual-room link is then `virtualRoomUrl` alone.
+   */
+  plannedMedia: agendaPlannedMediaSchema.nullable().optional(),
   admissionPolicy: agendaAdmissionPolicySchema.default("preference"),
   accessPolicy: agendaAccessPolicySchema.optional(),
   bookingOpensAt: utcInstantSchema.nullable().optional(),
@@ -88,6 +107,9 @@ export const agendaOccurrenceFieldsSchema = z.object({
   visibility: agendaVisibilitySchema.default("public"),
   kind: agendaSessionKindSchema.default("session"),
   track: agendaSessionTrackSchema.nullable().optional(),
+  format: agendaSessionFormatSchema.nullable().optional(),
+  /** Reserved slot whose content is still to be announced; omitted means false. */
+  placeholder: z.boolean().optional(),
 });
 export const agendaPublicAnchorSchema = z.string().regex(/^[A-Za-z0-9][A-Za-z0-9_.:-]{0,199}$/u);
 export const agendaOccurrenceSchema = agendaOccurrenceFieldsSchema.extend({
@@ -207,6 +229,12 @@ export const agendaDisplayRoleShiftSchema = z.object({
   track: agendaSessionTrackSchema.optional(),
   duties: z.array(z.object({ role: id, displayName: z.string() })),
 });
+/** Live organization of a credited acting identity; its logo is the organization's own public R2 mark. */
+export const agendaSpeakerOrganizationSchema = z.object({
+  name: z.string().trim().min(1).max(200),
+  logoUrl: httpOrSameOriginUrlSchema.nullable(),
+});
+export type AgendaSpeakerOrganization = z.infer<typeof agendaSpeakerOrganizationSchema>;
 export const agendaSnapshotSchema = z.object({
   eventSlug: id,
   eventName: z.string().optional(),
@@ -216,6 +244,8 @@ export const agendaSnapshotSchema = z.object({
   publicAgendaPath: sameOriginPathSchema.optional(),
   displayRoles: z.array(agendaDisplayRoleShiftSchema).optional(),
   timeZone: z.string(),
+  /** The owning event's configured session formats, captured with the agenda for authoring and labels. */
+  formats: z.array(agendaSessionFormatOptionSchema).max(20).optional(),
   eventStartsAt: utcInstantSchema.nullable().optional(),
   eventEndsAt: utcInstantSchema.nullable().optional(),
   revision: z.number().int().min(0),
@@ -224,6 +254,8 @@ export const agendaSnapshotSchema = z.object({
   publishedRevision: z.number().int().nullable(),
   rooms: z.array(agendaRoomSchema),
   occurrences: z.array(agendaOccurrenceSchema),
+  /** Keyed by credited acting identity ID; projected from live organization records, never frozen in a credit. */
+  speakerOrganizations: z.record(id, agendaSpeakerOrganizationSchema).optional(),
   shifts: z.array(agendaShiftSchema),
   roleMembers: z.array(agendaRoleMemberSchema),
   staffingRoles: z.array(agendaStaffingRoleSchema).max(100).default([]),
@@ -234,6 +266,9 @@ export const agendaSnapshotSchema = z.object({
   staffingReport: agendaStaffingReportSchema.optional(),
 });
 export const agendaRevisionSchema = z.object({ expectedRevision: z.number().int().min(0) });
+export const agendaPublicationSchema = agendaRevisionSchema.extend({
+  acknowledgeArchiveRepresentation: z.boolean().default(false),
+});
 export const agendaRoomCreateSchema = agendaRoomSchema.omit({ id: true }).extend(agendaRevisionSchema.shape);
 export const agendaOccurrenceCreateSchema = agendaOccurrenceFieldsSchema.extend({
   ...agendaRevisionSchema.shape,

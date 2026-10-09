@@ -5,14 +5,8 @@ import { formatNumber } from "../../../../../../../shared/format-number";
 import type { z } from "zod";
 import { IconBadge } from "../../../../../../ui/Badge";
 import { IconVideo } from "../../../../../../ui/MediaIcons";
-import {
-  IconCheckOutline,
-  IconClock,
-  IconFlag,
-  IconInfoOutline,
-  IconPeople,
-  IconRemote,
-} from "../../../../../../components/icons/indicators";
+import { IconClock, IconFlag, IconPeople, IconRemote } from "../../../../../../components/icons/indicators";
+import { IconCheckmark, IconInfoCircle } from "../../../../../../components/icons";
 import { agendaOccurrenceRoomIds } from "../../../../../../../shared/event-agenda-rooms";
 import type { ColumnFilter, DataTableProps } from "../../../../../../components/Table";
 import { RowActions, type RowActionsProps } from "../../../../../../ui/RowActions";
@@ -153,7 +147,7 @@ export function agendaSessionColumns(
     },
     ...(["confirmed", "pending", "waitlisted"] as const).map((status) => ({
       header: status === "confirmed" ? "Reserved" : status === "pending" ? "Pending approval" : "Waitlisted",
-      headerIcon: status === "confirmed" ? <IconCheckOutline /> : status === "pending" ? <IconClock /> : <IconPeople />,
+      headerIcon: status === "confirmed" ? <IconCheckmark /> : status === "pending" ? <IconClock /> : <IconPeople />,
       align: "end" as const,
       width: "fit" as const,
       defaultHidden: status !== "confirmed",
@@ -216,7 +210,7 @@ export function agendaSessionColumns(
         publicSessionMediaUrls(row.history?.materials ?? []).recordingUrl ? (
           <IconBadge icon={<IconVideo />} label="Approved recording available" tone="ok" />
         ) : (
-          <IconBadge icon={<IconInfoOutline />} label="No approved recording available" />
+          <IconBadge icon={<IconInfoCircle />} label="No approved recording available" />
         ),
     },
     {
@@ -241,9 +235,9 @@ export function agendaSessionColumns(
               row.conflicts.hasConflict || coverage === "incomplete" ? (
                 <IconFlag />
               ) : incomplete ? (
-                <IconInfoOutline />
+                <IconInfoCircle />
               ) : (
-                <IconCheckOutline />
+                <IconCheckmark />
               )
             }
           />

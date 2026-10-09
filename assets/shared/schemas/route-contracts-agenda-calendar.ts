@@ -2,6 +2,8 @@ import { z } from "zod";
 import { requiresSession, publicOperation } from "./route-contract";
 import { eventSlugParamsSchema, jsonErrorResponse } from "./api-common";
 import {
+  agendaCalendarCurrentSubscriptionSchema,
+  agendaCalendarRevokeResponseSchema,
   agendaCalendarSettingsSchema,
   agendaCalendarSubscriptionSchema,
   agendaCalendarTokenSchema,
@@ -16,8 +18,21 @@ export const agendaCalendarRotateRouteSchema = {
   },
   responses: {
     "200": {
-      description: "Private URL displayed once",
+      description: "The new private URL; every earlier URL stops working",
       content: { "application/json": { schema: agendaCalendarSubscriptionSchema } },
+    },
+    "401": jsonErrorResponse("Sign in required"),
+  },
+};
+export const agendaCalendarCurrentRouteSchema = {
+  ...requiresSession(),
+  tags: ["Events"],
+  summary: "Read your active private agenda calendar URL",
+  request: { params: eventSlugParamsSchema },
+  responses: {
+    "200": {
+      description: "The active private URL, when one exists and can be shown",
+      content: { "application/json": { schema: agendaCalendarCurrentSubscriptionSchema } },
     },
     "401": jsonErrorResponse("Sign in required"),
   },
@@ -30,7 +45,7 @@ export const agendaCalendarRevokeRouteSchema = {
   responses: {
     "200": {
       description: "Revoked",
-      content: { "application/json": { schema: z.object({ revoked: z.literal(true) }) } },
+      content: { "application/json": { schema: agendaCalendarRevokeResponseSchema } },
     },
   },
 };

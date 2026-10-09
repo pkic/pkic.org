@@ -489,8 +489,8 @@ function initializeOverflowNavigation() {
         leftArrow.className = 'scroll-arrow scroll-left disabled';
         leftArrow.setAttribute('aria-label', 'Scroll the agenda left');
         leftArrow.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                <path fill-rule="evenodd" d="M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"/>
+            <svg xmlns="http://www.w3.org/2000/svg" class="pk-icon" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <path d="m10.5 3-5 5 5 5"/>
             </svg>
         `;
 
@@ -499,8 +499,8 @@ function initializeOverflowNavigation() {
         rightArrow.className = 'scroll-arrow scroll-right';
         rightArrow.setAttribute('aria-label', 'Scroll the agenda right');
         rightArrow.innerHTML = `
-            <svg xmlns="http://www.w3.org/2000/svg" fill="currentColor" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
-                <path fill-rule="evenodd" d="M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"/>
+            <svg xmlns="http://www.w3.org/2000/svg" class="pk-icon" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+                <path d="m5.5 3 5 5-5 5"/>
             </svg>
         `;
 

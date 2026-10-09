@@ -1,5 +1,11 @@
+import { initializeAgendaSpeakers } from "./agenda-speakers";
+import { initializeAgendaFilters, refreshAgendaFilters } from "./agenda-filters";
 import { observeAgendaLayout } from "./agenda-layout-stylesheet";
-import { initializeAgendaSessionMedia } from "./agenda-session-media";
+import { initializeAgendaSessionMedia, pauseAgendaSessionMedia } from "./agenda-session-media";
+import { initializeAgendaNowLine } from "./agenda-now-line";
+import { agendaStickyTop } from "./agenda-sticky-top";
+import { agendaTodayTab, initializeAgendaEarlierSessions, revealAgendaEarlierSessions } from "./agenda-today-focus";
+import { observeDeferredImages, revealDeferredImages } from "./deferred-images";
 
 let agendaStickySequence = 0;
 
@@ -15,39 +21,39 @@ function selectTab(root: HTMLElement, selected: HTMLButtonElement): void {
   root.querySelectorAll<HTMLElement>("[data-agenda-panel]").forEach((panel) => {
     panel.hidden = panel.dataset.agendaPanel !== target;
   });
+  refreshAgendaFilters(root);
 }
 
-function selectLocation(root: HTMLElement, selected: HTMLButtonElement): void {
-  const location = selected.dataset.agendaLocation;
-  if (!location) return;
-  const panel = selected.closest<HTMLElement>("[data-agenda-panel]");
-  if (!panel || !root.contains(panel)) return;
-  const rooms = [
-    ...panel.querySelectorAll<HTMLButtonElement>("[data-agenda-location]:not([data-agenda-location='all'])"),
-  ];
-  rooms.forEach((button) => {
-    const active =
-      location === "all"
-        ? selected.getAttribute("aria-pressed") !== "true"
-        : button === selected
-          ? button.getAttribute("aria-pressed") !== "true"
-          : button.getAttribute("aria-pressed") === "true";
-    button.classList.toggle("is-active", active);
-    button.setAttribute("aria-pressed", String(active));
-  });
-  const selectedRooms = new Set(
-    rooms
-      .filter((button) => button.getAttribute("aria-pressed") === "true")
-      .map((button) => button.dataset.agendaLocation),
+function showAgendaSessionDialog(dialog: HTMLDialogElement): void {
+  if (dialog.open) return;
+  // A modal inside a collapsed earlier slot would have no box to render.
+  revealAgendaEarlierSessions(dialog);
+  const iframe = dialog.querySelector<HTMLIFrameElement>("iframe[data-video-src]");
+  if (iframe && !iframe.closest("[hidden]")) iframe.src = iframe.dataset.videoSrc!;
+  dialog.showModal();
+  document.body.classList.add("agenda-modal-open");
+}
+
+/** Portal deep links open one occurrence's details after showing the day that contains it. */
+export function openContentAgendaOccurrence(root: HTMLElement, occurrenceId: string): boolean {
+  const card = [...root.querySelectorAll<HTMLElement>("[data-agenda-session-dialog]")].find(
+    (element) => element.dataset.agendaOccurrence === occurrenceId,
   );
-  const all = panel.querySelector<HTMLButtonElement>("[data-agenda-location='all']");
-  const allSelected = selectedRooms.size === rooms.length;
-  all?.classList.toggle("is-active", allSelected);
-  all?.setAttribute("aria-pressed", String(allSelected));
-  panel.querySelectorAll<HTMLElement>("[data-agenda-session]").forEach((session) => {
-    session.hidden =
-      !allSelected && !(session.dataset.agendaSession ?? "").split(" ").some((room) => selectedRooms.has(room));
+  const dialog = [...root.querySelectorAll<HTMLDialogElement>("dialog")].find(
+    (element) => card && element.id === card.dataset.agendaSessionDialog,
+  );
+  if (!card || !dialog) return false;
+  const day = card.closest<HTMLElement>("[data-agenda-panel]")?.dataset.agendaPanel;
+  const tab = [...root.querySelectorAll<HTMLButtonElement>("[data-agenda-tab]")].find(
+    (button) => button.dataset.agendaTab === day,
+  );
+  if (tab) selectTab(root, tab);
+  // A newly linked session replaces the open one rather than stacking over it.
+  root.querySelectorAll<HTMLDialogElement>("dialog[open]").forEach((open) => {
+    if (open !== dialog) open.close();
   });
+  showAgendaSessionDialog(dialog);
+  return true;
 }
 
 const initializedAgendas = new WeakMap<HTMLElement, () => void>();
@@ -57,6 +63,10 @@ export function initializeContentAgenda(root: HTMLElement): () => void {
   const cleanup: (() => void)[] = [];
   cleanup.push(observeAgendaLayout(root));
   cleanup.push(initializeAgendaSessionMedia(root));
+  cleanup.push(initializeAgendaFilters(root));
+  cleanup.push(initializeAgendaSpeakers(root));
+  cleanup.push(initializeAgendaNowLine(root));
+  cleanup.push(observeDeferredImages(root));
   const events = new AbortController();
   cleanup.push(() => events.abort());
   const stickySheet =
@@ -71,33 +81,18 @@ export function initializeContentAgenda(root: HTMLElement): () => void {
     let cardSequence = 0;
     const updateStickyHeader = () => {
       stickyFrame = 0;
-      const inDialog = Boolean(root.closest("dialog[open]"));
-      const navbarHeight =
-        Number.parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--pkic-navbar-height")) || 57;
-      const sectionNav = root.closest("#portal-root")
-        ? null
-        : document.querySelector<HTMLElement>(".pk-section-navigation");
-      const sectionHeight =
-        sectionNav && getComputedStyle(sectionNav).position === "sticky"
-          ? sectionNav.getBoundingClientRect().height
-          : 0;
-      const portalTopbar = root.closest("#portal-root")?.querySelector<HTMLElement>("#portal-topbar");
-      const portalTopbarBottom =
-        portalTopbar &&
-        getComputedStyle(portalTopbar).display !== "none" &&
-        ["sticky", "fixed"].includes(getComputedStyle(portalTopbar).position)
-          ? portalTopbar.getBoundingClientRect().bottom
-          : 0;
-      const top = inDialog ? 0 : Math.max(navbarHeight + sectionHeight, portalTopbarBottom);
+      const top = agendaStickyTop(root);
       const toolbar = root.querySelector<HTMLElement>("[data-agenda-controls]");
-      const toolbarHeight = toolbar?.getBoundingClientRect().height ?? 0;
+      // On phones the filters would cover a large part of the screen, so they scroll away with the page and the
+      // table header sticks directly below the page header instead of below the toolbar.
+      const toolbarScrollsAway = window.matchMedia("(max-width: 47.499rem)").matches;
+      const toolbarHeight = toolbar && !toolbarScrollsAway ? toolbar.getBoundingClientRect().height : 0;
       const rules = [`[data-agenda-sticky-id="${stickyId}"] { --pk-agenda-sticky-top: ${top}px; }`];
       if (toolbar) {
         const naturalTop = toolbar.getBoundingClientRect().top - toolbarOffset;
-        toolbarOffset = Math.max(
-          0,
-          Math.min(top - naturalTop, root.getBoundingClientRect().bottom - toolbarHeight - naturalTop),
-        );
+        toolbarOffset = toolbarScrollsAway
+          ? 0
+          : Math.max(0, Math.min(top - naturalTop, root.getBoundingClientRect().bottom - toolbarHeight - naturalTop));
         rules.push(
           `[data-agenda-sticky-id="${stickyId}"] .pk-content-agenda__controls:not([hidden]) { position: relative; top: ${toolbarOffset}px; z-index: 10; }`,
         );
@@ -166,6 +161,12 @@ export function initializeContentAgenda(root: HTMLElement): () => void {
   const updateScrollControls = () => {
     const panel = activeTimeline();
     const maximum = panel ? panel.scrollWidth - panel.clientWidth : 0;
+    if (panel) {
+      // Edge fades show that more rooms are available in either direction.
+      const before = panel.scrollLeft > 2;
+      const after = panel.scrollLeft < maximum - 2;
+      panel.dataset.agendaMore = before && after ? "both" : before ? "before" : after ? "after" : "none";
+    }
     for (const button of scrollButtons) {
       button.hidden = maximum < 2;
       button.disabled =
@@ -193,7 +194,14 @@ export function initializeContentAgenda(root: HTMLElement): () => void {
   const compact = root.querySelector<HTMLButtonElement>("[data-agenda-compact]");
   if (compact)
     listen(compact, "click", () => {
-      compact.setAttribute("aria-pressed", String(root.classList.toggle("is-compact")));
+      const collapsed = root.classList.toggle("is-compact");
+      compact.setAttribute("aria-pressed", String(!collapsed));
+      const label = collapsed ? "Show session descriptions" : "Hide session descriptions";
+      compact.setAttribute("aria-label", label);
+      compact.setAttribute("title", label);
+      compact
+        .querySelector("svg path")
+        ?.setAttribute("d", collapsed ? "m4 6 4-4 4 4M4 10l4 4 4-4" : "m4 2 4 4 4-4M4 14l4-4 4 4");
     });
   const expand = root.querySelector<HTMLButtonElement>("[data-agenda-expand]");
   if (expand) {
@@ -212,6 +220,7 @@ export function initializeContentAgenda(root: HTMLElement): () => void {
     listen(dialog, "close", () => {
       position.replaceWith(root);
       expand.setAttribute("aria-expanded", "false");
+      expand.setAttribute("aria-pressed", "false");
       expand.setAttribute("aria-label", "Expand agenda");
       expand.setAttribute("title", "Expand agenda");
       if (enterIconPath) expandIcon?.setAttribute("d", enterIconPath);
@@ -224,27 +233,32 @@ export function initializeContentAgenda(root: HTMLElement): () => void {
       }
       root.parentNode?.insertBefore(position, root);
       dialog.appendChild(root);
-      expand.setAttribute("aria-expanded", "true");
+      dialog.showModal();
+      expand.setAttribute("aria-expanded", String(dialog.open));
+      expand.setAttribute("aria-pressed", String(dialog.open));
       expand.setAttribute("aria-label", "Exit fullscreen");
       expand.setAttribute("title", "Exit fullscreen");
       expandIcon?.setAttribute("d", "M6 2v4H2m12 0h-4V2M2 10h4v4m4 0v-4h4");
-      dialog.showModal();
       expand.focus();
     });
   }
-  const firstTab = root.querySelector<HTMLButtonElement>("[data-agenda-tab]");
-  if (firstTab) selectTab(root, firstTab);
+  // A deep link chooses its own day; otherwise an event day opens on today in the event's zone.
+  const focusToday =
+    root.hasAttribute("data-agenda-today-focus") &&
+    !(root.hasAttribute("data-agenda-public-fragments") && window.location.hash.length > 1);
+  const initialTab =
+    (focusToday ? agendaTodayTab(root) : undefined) ?? root.querySelector<HTMLButtonElement>("[data-agenda-tab]");
+  if (initialTab) selectTab(root, initialTab);
+  // A panel that was never hidden records no change: show what the opening tab already shows.
+  revealDeferredImages(root);
+  if (focusToday) cleanup.push(initializeAgendaEarlierSessions(root));
   const uniqueElementById = (id: string): HTMLElement | null => {
     const matches = [...root.querySelectorAll<HTMLElement>("[id]")].filter((element) => element.id === id);
     return matches.length === 1 ? matches[0]! : null;
   };
   function openSessionDialog(id: string): void {
     const dialog = uniqueElementById(id);
-    if (!(dialog instanceof HTMLDialogElement) || dialog.open) return;
-    const iframe = dialog.querySelector<HTMLIFrameElement>("iframe[data-video-src]");
-    if (iframe && !iframe.closest("[hidden]")) iframe.src = iframe.dataset.videoSrc!;
-    dialog.showModal();
-    document.body.classList.add("agenda-modal-open");
+    if (dialog instanceof HTMLDialogElement) showAgendaSessionDialog(dialog);
   }
   function resolvePublicFragment(): void {
     let id: string;
@@ -272,7 +286,10 @@ export function initializeContentAgenda(root: HTMLElement): () => void {
     selectTab(root, tabs[0]!);
     updateScrollControls();
     if (dialogId) openSessionDialog(dialogId);
-    else (target.hidden ? tabs[0] : target)?.scrollIntoView?.({ block: "start" });
+    else {
+      revealAgendaEarlierSessions(target);
+      (target.hidden ? tabs[0] : target)?.scrollIntoView?.({ block: "start" });
+    }
   }
   // Portal agendas share rendering, but their global hash belongs to the router.
   if (root.hasAttribute("data-agenda-public-fragments")) {
@@ -281,8 +298,9 @@ export function initializeContentAgenda(root: HTMLElement): () => void {
   }
   updateScrollControls();
   root.querySelectorAll<HTMLDialogElement>("dialog").forEach((dialog) => {
-    listen(dialog, "close", () => {
-      dialog.querySelector<HTMLIFrameElement>("iframe")?.removeAttribute("src");
+    listen(dialog, "close", (event) => {
+      if (event.target !== dialog) return;
+      pauseAgendaSessionMedia(dialog);
       if (!document.querySelector(".pk-content-agenda dialog[open]")) {
         document.body.classList.remove("agenda-modal-open");
       }
@@ -319,8 +337,6 @@ export function initializeContentAgenda(root: HTMLElement): () => void {
       selectTab(root, tab);
       updateScrollControls();
     }
-    const location = target.closest<HTMLButtonElement>("[data-agenda-location]");
-    if (location) selectLocation(root, location);
     const opener = target.closest<HTMLElement>("[data-agenda-open-session]");
     if (opener instanceof HTMLAnchorElement) {
       const dialogId = opener.dataset.agendaOpenSession;

@@ -149,7 +149,7 @@ describe("approved static and portal agenda parity", () => {
         expect(clock.textContent).toBe("10:00");
         expect(
           document.querySelector('.pk-content-agenda__time-heading small[title="Europe/Amsterdam"]')?.textContent,
-        ).toBe("Event · Amsterdam");
+        ).toBe("Time Amsterdam");
         const dayPanels = [...document.querySelectorAll<HTMLElement>(".pk-content-agenda__day")];
         expect(dayPanels.map((panel) => panel.dataset.agendaPanel)).toEqual(
           matrix ? ["2026-12-01", "2026-12-02"] : ["2026-12-01"],
@@ -165,7 +165,9 @@ describe("approved static and portal agenda parity", () => {
           expect(description.querySelector("strong")?.textContent).toBe("Practical transition lessons");
           expect(description.querySelectorAll("p")).toHaveLength(9);
           expect(description.textContent).toContain("Discussion 8: participants compare");
-          const credits = [...body.querySelectorAll(".pk-content-agenda__speaker")];
+          const credits = [...body.querySelectorAll(".pk-content-agenda__speaker")].filter(
+            (credit) => !credit.closest("dialog, [popover]"),
+          );
           expect(credits.map((credit) => credit.querySelector("strong")?.textContent)).toEqual([
             "Historical speaker",
             "Synthetic Panelist Alpha",

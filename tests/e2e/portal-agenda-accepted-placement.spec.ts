@@ -1,3 +1,4 @@
+import { enableAgendaEditing, openOrganizerAgenda } from "./helpers/organizer-agenda";
 import { writeFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
@@ -70,7 +71,7 @@ test("accepted sources place and move between times and rooms through native poi
     });
     expect(await decideProposal(page, proposal.proposalId, "accepted")).toBe(200);
   }
-  await page.goto(`/portal/#/events/${slug}/agenda`);
+  await openOrganizerAgenda(page, slug);
   for (const name of ["Workshop", "Second workshop"]) {
     await runAgendaAction(page, "New location");
     await page.getByRole("textbox", { name: /^Location name/ }).fill(name);
@@ -85,6 +86,7 @@ test("accepted sources place and move between times and rooms through native poi
   await rules.getByLabel(/^Default session duration/).fill("60");
   await rules.getByRole("button", { name: "Save rules", exact: true }).click();
   await expect(rules).toBeHidden();
+  await enableAgendaEditing(page);
   await openSessionSources(page);
   await page.evaluate(() => {
     const journal: unknown[] = [];
@@ -160,7 +162,7 @@ test("accepted sources place and move between times and rooms through native poi
     .getByRole("complementary", { name: "Session sources", exact: true })
     .getByRole("article")
     .filter({ has: page.getByRole("heading", { name: "Accepted placement 3", exact: true }) });
-  await runRowAction(page, row, "Schedule on agenda");
+  await runRowAction(page, row, "Choose a calendar slot");
   await page.getByRole("button", { name: "Cancel selection", exact: true }).press("Enter");
   const snapshot = agendaSnapshotSchema.parse(await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json());
   expect(snapshot.occurrences).toHaveLength(2);
@@ -191,7 +193,8 @@ test("accepted sources place and move between times and rooms through native poi
         imports.push(agendaImportSchema.parse(request.postDataJSON()));
     });
     expect(await readPlacementAgenda(touchPage, endpoint)).toEqual(await readPlacementAgenda(page, endpoint));
-    await touchPage.goto(`/portal/#/events/${slug}/agenda`);
+    await openOrganizerAgenda(touchPage, slug);
+    await enableAgendaEditing(touchPage, (control) => control.tap());
     await openSessionSources(touchPage);
     await completeAcceptedPlacement(
       touchPage,

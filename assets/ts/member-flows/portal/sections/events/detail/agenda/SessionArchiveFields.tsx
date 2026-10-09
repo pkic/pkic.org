@@ -1,3 +1,5 @@
+import { SessionRecordingVersionField } from "./SessionRecordingVersionField";
+import { materialKindLabels, materialStatusLabels } from "./session-material-labels";
 import { useState } from "preact/hooks";
 import {
   sessionAppearanceSchema,
@@ -12,8 +14,6 @@ import { sessionAppearanceChoicesSchema } from "../../../../../../../shared/sche
 import type { SessionAppearance, SessionMaterial } from "../../../../../../../shared/schemas/event-session-history";
 import { sessionMaterialSchema } from "../../../../../../../shared/schemas/event-session-history";
 import { FormSection } from "../../../../../../ui/FormSection";
-import { CollapsiblePanel } from "../../../../../../ui/CollapsiblePanel";
-import { PanelBody } from "../../../../../../ui/Panel";
 import { Field } from "../../../../../../ui/Field";
 import { TextInput, Textarea, Select } from "../../../../../../ui/TextControl";
 import { Button } from "../../../../../../ui/Button";
@@ -89,16 +89,19 @@ export function AppearanceFields({
     setDrafts(drafts.map((value, i) => (i === index ? checked.data : value)));
     setApprovalError("");
   };
+  const pageControls = offset > 0 || Boolean(catalog.data?.page.hasMore);
   return (
-    <section>
-      <h3>Speaker representation review</h3>
-      <p>These credits remain attached to this event revision when a speaker changes organization or profile.</p>
+    <section class="pk-stack" aria-label="Speaker representation">
+      <p class="pk-muted">
+        These credits stay attached to this event revision when a speaker later changes organization or profile.
+      </p>
       {catalog.error && <ErrorAlert error={catalog.error} />}
       {approvalError && <ErrorAlert error={approvalError} />}
       <Field label="Find acting representation">
         {(control) => (
           <TextInput
             {...control}
+            type="search"
             value={query}
             onInput={(event) => {
               setQuery(event.currentTarget.value);
@@ -107,13 +110,16 @@ export function AppearanceFields({
           />
         )}
       </Field>
-      <Button type="button" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 200))}>
-        Previous identities
-      </Button>
-      <Button type="button" disabled={!catalog.data?.page.hasMore} onClick={() => setOffset(offset + 200)}>
-        Next identities
-      </Button>
-
+      {pageControls && (
+        <div class="pk-cluster">
+          <Button size="sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 200))}>
+            Previous identities
+          </Button>
+          <Button size="sm" disabled={!catalog.data?.page.hasMore} onClick={() => setOffset(offset + 200)}>
+            Next identities
+          </Button>
+        </div>
+      )}
       {drafts.map((person, index) => {
         const profileCandidate = speakers.find((speaker) => speaker.userId === person.userId)?.profileCandidate;
         const currentPortrait =
@@ -125,20 +131,9 @@ export function AppearanceFields({
             title={person.displayName}
             description={person.approvedAt ? "Representation approved" : "Representation needs review"}
           >
-            <Field label="Display name">
-              {(control) => (
-                <>
-                  <TextInput
-                    {...control}
-                    value={person.displayName}
-                    onInput={(e) => update(index, { displayName: e.currentTarget.value })}
-                  />
-                </>
-              )}
-            </Field>
             <Field
               label="Representation at this event"
-              help="Choose the canonical identity that represented this speaker at the session date."
+              help="The identity that represented this speaker on the session date."
             >
               {(control) => (
                 <Select
@@ -182,91 +177,86 @@ export function AppearanceFields({
                 </Select>
               )}
             </Field>
+            <Field label="Display name">
+              {(control) => (
+                <TextInput
+                  {...control}
+                  value={person.displayName}
+                  onInput={(e) => update(index, { displayName: e.currentTarget.value })}
+                />
+              )}
+            </Field>
             <Field label="Organization at this event">
               {(control) => (
-                <>
-                  <TextInput
-                    {...control}
-                    value={person.organizationName ?? ""}
-                    onInput={(e) => update(index, { organizationName: e.currentTarget.value || null })}
-                  />
-                </>
+                <TextInput
+                  {...control}
+                  value={person.organizationName ?? ""}
+                  onInput={(e) => update(index, { organizationName: e.currentTarget.value || null })}
+                />
               )}
             </Field>
             <Field label="Role at this event">
               {(control) => (
-                <>
-                  <TextInput
-                    {...control}
-                    value={person.jobTitle ?? ""}
-                    onInput={(e) => update(index, { jobTitle: e.currentTarget.value || null })}
-                  />
-                </>
+                <TextInput
+                  {...control}
+                  value={person.jobTitle ?? ""}
+                  onInput={(e) => update(index, { jobTitle: e.currentTarget.value || null })}
+                />
               )}
             </Field>
             <Field label="Approved biography">
               {(control) => (
-                <>
-                  <Textarea
-                    {...control}
-                    value={person.biography}
-                    onInput={(e) => update(index, { biography: e.currentTarget.value })}
-                  />
-                </>
-              )}
-            </Field>
-            {profileCandidate?.biography && (
-              <Button
-                size="sm"
-                disabled={person.biography === profileCandidate.biography}
-                onClick={() => update(index, { biography: profileCandidate.biography ?? "" })}
-              >
-                Use profile biography
-              </Button>
-            )}
-            <FormSection title="Portrait and approval" layout="stack">
-              <Field label="Approved portrait URL">
-                {(control) => (
-                  <>
-                    <TextInput
-                      {...control}
-                      value={person.photoUrl ?? ""}
-                      onInput={(e) => update(index, { photoUrl: e.currentTarget.value || null })}
-                    />
-                  </>
-                )}
-              </Field>
-              {person.photoUrl && (
-                <Avatar
-                  name={person.displayName}
-                  src={person.photoUrl}
-                  size="lg"
-                  alt={`Selected portrait for ${person.displayName}`}
+                <Textarea
+                  {...control}
+                  rows={3}
+                  value={person.biography}
+                  onInput={(e) => update(index, { biography: e.currentTarget.value })}
                 />
               )}
-              {currentPortrait && (
-                <div class="pk-stack">
-                  {currentPortrait !== person.photoUrl && (
-                    <Avatar
-                      name={person.displayName}
-                      src={currentPortrait}
-                      size="lg"
-                      alt={`Current portrait for ${person.displayName}`}
-                    />
-                  )}
+            </Field>
+            <FormSection
+              title="Portrait and approval"
+              layout="stack"
+              description="Changes stay a draft until you approve this appearance and save."
+            >
+              <Field label="Approved portrait URL">
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    value={person.photoUrl ?? ""}
+                    onInput={(e) => update(index, { photoUrl: e.currentTarget.value || null })}
+                  />
+                )}
+              </Field>
+              <div class="pk-cluster">
+                {person.photoUrl && <Avatar name={person.displayName} src={person.photoUrl} size="sm" />}
+                {currentPortrait && currentPortrait !== person.photoUrl && (
+                  <Avatar name={person.displayName} src={currentPortrait} size="sm" />
+                )}
+                {currentPortrait && (
                   <Button
-                    type="button"
+                    size="sm"
                     disabled={currentPortrait === person.photoUrl}
                     onClick={() => update(index, { photoUrl: currentPortrait })}
                   >
                     Use current portrait
                   </Button>
-                  <p>The selected portrait remains a draft until you approve this event appearance and save.</p>
-                </div>
-              )}
-              <Button type="button" onClick={() => approve(index)}>
-                Approve representation for {person.displayName}
-              </Button>
+                )}
+                {profileCandidate?.biography && (
+                  <Button
+                    size="sm"
+                    disabled={person.biography === profileCandidate.biography}
+                    onClick={() => update(index, { biography: profileCandidate.biography ?? "" })}
+                  >
+                    Use profile biography
+                  </Button>
+                )}
+              </div>
+              <div class="pk-cluster">
+                <Button size="sm" variant="primary" onClick={() => approve(index)}>
+                  Approve representation for {person.displayName}
+                </Button>
+              </div>
             </FormSection>
           </FormSection>
         );
@@ -274,12 +264,6 @@ export function AppearanceFields({
     </section>
   );
 }
-const materialKindLabels: Record<SessionMaterial["kind"], string> = {
-  presentation: "Slides",
-  recording: "Recording",
-  transcript: "Transcript",
-  captions: "Captions",
-};
 export function MaterialFields({
   slug,
   occurrenceId,
@@ -307,110 +291,57 @@ export function MaterialFields({
   );
   const update = (index: number, patch: Partial<SessionMaterial>) =>
     onChange(materials.map((value, i) => (i === index ? { ...value, ...patch } : value)));
+  const searchable = Boolean(catalog.data?.page.total) || query !== "" || offset > 0;
   return (
-    <section class="pk-stack">
-      <h3>Session materials</h3>
-      <p>
-        Uploaded files remain private until rights, consent, validation and release are approved. Publish the agenda
-        after saving a release or withdrawal.
+    <section class="pk-stack" aria-label="Session materials">
+      <p class="pk-muted">
+        Files stay private until rights, consent, validation and release are approved. Publish the agenda after saving a
+        release or withdrawal.
       </p>
       {catalog.error && <ErrorAlert error={catalog.error} />}
       {materials.map((material, index) => (
-        <FormSection key={material.id} title={material.title || "New material"}>
+        <FormSection
+          key={material.id}
+          title={material.title || "New material"}
+          description={materialStatusLabels[material.status]}
+        >
           <Field label="Material title">
             {(control) => (
-              <>
-                <TextInput
-                  {...control}
-                  value={material.title}
-                  onInput={(e) => update(index, { title: e.currentTarget.value })}
-                />
-              </>
+              <TextInput
+                {...control}
+                value={material.title}
+                onInput={(e) => update(index, { title: e.currentTarget.value })}
+              />
             )}
           </Field>
           <Field label="Material type">
             {(control) => (
-              <>
-                <Select
-                  {...control}
-                  value={material.kind}
-                  onChange={(e) =>
-                    update(index, {
-                      kind: sessionMaterialSchema.shape.kind.parse(e.currentTarget.value),
-                      ...(e.currentTarget.value !== "presentation"
-                        ? { presentationVersionId: null, presentationSource: "proposal", legacyDownloadUrl: null }
-                        : {}),
-                    })
-                  }
-                >
-                  {sessionMaterialSchema.shape.kind.options.map((kind) => (
-                    <option value={kind}>{materialKindLabels[kind]}</option>
-                  ))}
-                </Select>
-              </>
+              <Select
+                {...control}
+                value={material.kind}
+                onChange={(e) =>
+                  update(index, {
+                    kind: sessionMaterialSchema.shape.kind.parse(e.currentTarget.value),
+                    recordingVersionId: null,
+                    ...(e.currentTarget.value !== "presentation"
+                      ? { presentationVersionId: null, presentationSource: "proposal", legacyDownloadUrl: null }
+                      : {}),
+                  })
+                }
+              >
+                {sessionMaterialSchema.shape.kind.options.map((kind) => (
+                  <option value={kind}>{materialKindLabels[kind]}</option>
+                ))}
+              </Select>
             )}
           </Field>
-          {material.presentationSource === "session" && material.presentationVersionId ? (
-            <p>The selected slides will receive a download link when their review and publication are approved.</p>
-          ) : (
-            <Field label={`${materialKindLabels[material.kind]} link`}>
-              {(control) => (
-                <>
-                  <TextInput
-                    {...control}
-                    value={material.url}
-                    onInput={(e) => update(index, { url: e.currentTarget.value })}
-                  />
-                </>
-              )}
-            </Field>
-          )}
           {material.kind === "presentation" &&
             (Boolean(catalog.data?.versions.length) ||
               Boolean(material.presentationVersionId) ||
               query !== "" ||
               offset > 0) && (
               <>
-                {(Boolean(catalog.data?.page.total) || query !== "" || offset > 0) && (
-                  <CollapsiblePanel title="Find uploaded slides">
-                    <PanelBody>
-                      <Field label="Find uploaded version">
-                        {(control) => (
-                          <TextInput
-                            {...control}
-                            value={query}
-                            onInput={(event) => {
-                              setQuery(event.currentTarget.value);
-                              setOffset(0);
-                            }}
-                          />
-                        )}
-                      </Field>
-                      {(offset > 0 || catalog.data?.page.hasMore) && (
-                        <div class="pk-cluster">
-                          <Button
-                            type="button"
-                            disabled={offset === 0}
-                            onClick={() => setOffset(Math.max(0, offset - 200))}
-                          >
-                            Previous uploads
-                          </Button>
-                          <Button
-                            type="button"
-                            disabled={!catalog.data?.page.hasMore}
-                            onClick={() => setOffset(offset + 200)}
-                          >
-                            Next uploads
-                          </Button>
-                        </div>
-                      )}
-                    </PanelBody>
-                  </CollapsiblePanel>
-                )}
-                <Field
-                  label="Uploaded slides"
-                  help="Select a file. Its upload review must be approved before publication. Saving this selection does not publish it."
-                >
+                <Field label="Uploaded slides" help="Its upload review must be approved before publication.">
                   {(control) => (
                     <Select
                       {...control}
@@ -453,134 +384,183 @@ export function MaterialFields({
                     </Select>
                   )}
                 </Field>
-              </>
-            )}
-          <CollapsiblePanel title="Additional details">
-            <PanelBody>
-              {material.kind === "presentation" &&
-                material.presentationSource === "session" &&
-                material.presentationVersionId && (
-                  <Field
-                    label="Historical download link"
-                    help="Choose an original link recorded for this presentation. Saving verifies that it matches the uploaded file. Release approval is separate."
-                  >
+                {searchable && (
+                  <Field label="Find uploaded version">
                     {(control) => (
-                      <Select
+                      <TextInput
                         {...control}
-                        value={material.legacyDownloadUrl ?? ""}
-                        onChange={(event) => update(index, { legacyDownloadUrl: event.currentTarget.value || null })}
-                      >
-                        <option value="">No historical download link</option>
-                        {legacyDownloads.map((download) => (
-                          <option
-                            value={download.url}
-                            disabled={download.pdfDigest === null || download.pdfBytes === null}
-                          >
-                            {download.url}
-                            {download.pdfDigest === null || download.pdfBytes === null ? " · PDF evidence pending" : ""}
-                          </option>
-                        ))}
-                        {material.legacyDownloadUrl &&
-                          !legacyDownloads.some((download) => download.url === material.legacyDownloadUrl) && (
-                            <option value={material.legacyDownloadUrl} disabled>
-                              Saved link · receipt unavailable
-                            </option>
-                          )}
-                      </Select>
+                        type="search"
+                        value={query}
+                        onInput={(event) => {
+                          setQuery(event.currentTarget.value);
+                          setOffset(0);
+                        }}
+                      />
                     )}
                   </Field>
                 )}
-              <Field label="Version">
-                {(control) => (
-                  <>
-                    <TextInput
-                      {...control}
-                      type="number"
-                      min="1"
-                      value={material.version}
-                      onInput={(e) => update(index, { version: Number(e.currentTarget.value) })}
-                    />
-                  </>
+                {searchable && (offset > 0 || catalog.data?.page.hasMore) && (
+                  <div class="pk-cluster">
+                    <Button size="sm" disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 200))}>
+                      Previous uploads
+                    </Button>
+                    <Button size="sm" disabled={!catalog.data?.page.hasMore} onClick={() => setOffset(offset + 200)}>
+                      Next uploads
+                    </Button>
+                  </div>
                 )}
-              </Field>
-            </PanelBody>
-          </CollapsiblePanel>
-          <FormSection title="Publication review" layout="stack">
-            <Checkbox
-              checked={material.rightsConfirmed}
-              onChange={(e) => update(index, { rightsConfirmed: e.currentTarget.checked })}
-              label="We have permission to publish this material"
-            />
-            <Checkbox
-              checked={material.consentConfirmed}
-              onChange={(e) => update(index, { consentConfirmed: e.currentTarget.checked })}
-              label="Speaker has agreed to publication"
-            />
-            <Checkbox
-              checked={material.validated}
-              onChange={(e) => update(index, { validated: e.currentTarget.checked })}
-              label="File and accessibility have been reviewed"
-            />
-            <Field label="Release status">
+              </>
+            )}
+          {material.recordingVersionId ? (
+            <p class="pk-muted">The selected recording receives an owned link after review and publication approval.</p>
+          ) : material.presentationSource === "session" && material.presentationVersionId ? (
+            <p class="pk-muted">
+              The selected slides receive a download link when their review and publication are approved.
+            </p>
+          ) : (
+            <Field label={`${materialKindLabels[material.kind]} link`}>
               {(control) => (
-                <>
-                  <Select
-                    {...control}
-                    value={material.status}
-                    onChange={(e) =>
-                      update(index, {
-                        status: sessionMaterialSchema.shape.status.parse(e.currentTarget.value),
-                        approvedAt: e.currentTarget.value === "approved" ? new Date().toISOString() : null,
-                      })
-                    }
-                  >
-                    {sessionMaterialSchema.shape.status.options.map((status) => (
-                      <option value={status}>
-                        {
-                          {
-                            draft: "Draft — private",
-                            approved: "Approved for publication",
-                            withdrawn: "Withdrawn",
-                            failed: "Review failed",
-                          }[status]
-                        }
-                      </option>
-                    ))}
-                  </Select>
-                </>
+                <TextInput
+                  {...control}
+                  value={material.url}
+                  onInput={(e) => update(index, { url: e.currentTarget.value })}
+                />
               )}
             </Field>
-            <Button type="button" onClick={() => onChange(materials.filter((_, i) => i !== index))}>
-              Remove from draft
-            </Button>
+          )}
+          {material.kind === "recording" && (
+            <SessionRecordingVersionField
+              slug={slug}
+              value={material.recordingVersionId}
+              version={material.version}
+              onChange={(item) =>
+                update(index, {
+                  recordingVersionId: item?.id ?? null,
+                  approvalNonce: null,
+                  ...(item ? { version: item.version, url: "" } : {}),
+                  approvedAt: null,
+                  status: "draft",
+                })
+              }
+            />
+          )}
+          {material.kind === "presentation" &&
+            material.presentationSource === "session" &&
+            material.presentationVersionId && (
+              <Field
+                label="Historical download link"
+                help="Saving verifies that the original link matches the uploaded file. Release approval is separate."
+              >
+                {(control) => (
+                  <Select
+                    {...control}
+                    value={material.legacyDownloadUrl ?? ""}
+                    onChange={(event) => update(index, { legacyDownloadUrl: event.currentTarget.value || null })}
+                  >
+                    <option value="">No historical download link</option>
+                    {legacyDownloads.map((download) => (
+                      <option value={download.url} disabled={download.pdfDigest === null || download.pdfBytes === null}>
+                        {download.url}
+                        {download.pdfDigest === null || download.pdfBytes === null ? " · PDF evidence pending" : ""}
+                      </option>
+                    ))}
+                    {material.legacyDownloadUrl &&
+                      !legacyDownloads.some((download) => download.url === material.legacyDownloadUrl) && (
+                        <option value={material.legacyDownloadUrl} disabled>
+                          Saved link · receipt unavailable
+                        </option>
+                      )}
+                  </Select>
+                )}
+              </Field>
+            )}
+          <Field label="Version">
+            {(control) => (
+              <TextInput
+                {...control}
+                type="number"
+                min="1"
+                value={material.version}
+                onInput={(e) => update(index, { version: Number(e.currentTarget.value) })}
+              />
+            )}
+          </Field>
+          <FormSection title="Publication review" layout="stack">
+            <div class="pk-agenda-editor__checks">
+              <Checkbox
+                checked={material.rightsConfirmed}
+                onChange={(e) => update(index, { rightsConfirmed: e.currentTarget.checked })}
+                label="We have permission to publish this material"
+              />
+              <Checkbox
+                checked={material.consentConfirmed}
+                onChange={(e) => update(index, { consentConfirmed: e.currentTarget.checked })}
+                label="Speaker has agreed to publication"
+              />
+              <Checkbox
+                checked={material.validated}
+                onChange={(e) => update(index, { validated: e.currentTarget.checked })}
+                label="File and accessibility have been reviewed"
+              />
+            </div>
+            <Field label="Release status">
+              {(control) => (
+                <Select
+                  {...control}
+                  value={material.status}
+                  onChange={(e) =>
+                    update(index, {
+                      status: sessionMaterialSchema.shape.status.parse(e.currentTarget.value),
+                      approvedAt: e.currentTarget.value === "approved" ? new Date().toISOString() : null,
+                    })
+                  }
+                >
+                  {sessionMaterialSchema.shape.status.options.map((status) => (
+                    <option value={status}>{materialStatusLabels[status]}</option>
+                  ))}
+                </Select>
+              )}
+            </Field>
+            <div class="pk-cluster">
+              <Button
+                size="sm"
+                variant="danger-quiet"
+                onClick={() => onChange(materials.filter((_, i) => i !== index))}
+              >
+                Remove from draft
+              </Button>
+            </div>
           </FormSection>
         </FormSection>
       ))}
-      <Button
-        type="button"
-        onClick={() =>
-          onChange([
-            ...materials,
-            {
-              id: crypto.randomUUID(),
-              title: "",
-              kind: "presentation",
-              url: "",
-              presentationVersionId: null,
-              legacyDownloadUrl: null,
-              presentationSource: "proposal",
-              version: 1,
-              rightsConfirmed: false,
-              consentConfirmed: false,
-              validated: false,
-              status: "draft",
-              approvedAt: null,
-            },
-          ])
-        }
-      >
-        Add material release
-      </Button>
+      <div class="pk-cluster">
+        <Button
+          type="button"
+          onClick={() =>
+            onChange([
+              ...materials,
+              {
+                id: crypto.randomUUID(),
+                title: "",
+                kind: "presentation",
+                url: "",
+                presentationVersionId: null,
+                recordingVersionId: null,
+                legacyDownloadUrl: null,
+                presentationSource: "proposal",
+                version: 1,
+                rightsConfirmed: false,
+                consentConfirmed: false,
+                validated: false,
+                status: "draft",
+                approvedAt: null,
+              },
+            ])
+          }
+        >
+          Add material release
+        </Button>
+      </div>
     </section>
   );
 }

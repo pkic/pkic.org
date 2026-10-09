@@ -3,13 +3,19 @@ import { all } from "../../db/queries";
 import { AppError } from "../../errors";
 import { agendaCreditRoleSchema, agendaImportSchema } from "../../../../assets/shared/schemas/event-agenda";
 import { sessionProposalRepresentationSchema } from "../../../../assets/shared/schemas/event-session-history";
+import { configuredAgendaSessionFormat } from "../../../../assets/shared/event-agenda-format";
 
 /** Batch only explicitly selected sources; all previously imported decisions remain eligible for withdrawal review. */
-export async function loadAcceptedProposalAgendaImport(db: DatabaseLike, eventId: string, proposalIds?: string[]) {
+export async function loadAcceptedProposalAgendaImport(
+  db: DatabaseLike,
+  eventId: string,
+  proposalIds: string[] | undefined,
+  formatLabels: readonly string[],
+) {
   const selected = JSON.stringify(proposalIds ?? []);
-  const proposals = await all<{ id: string; title: string; abstract: string }>(
+  const proposals = await all<{ id: string; title: string; abstract: string; proposal_type: string | null }>(
     db,
-    `SELECT id,title,abstract FROM session_proposals WHERE event_id=? AND status='accepted'${proposalIds ? " AND id IN(SELECT value FROM json_each(?))" : ""} ORDER BY id LIMIT 101`,
+    `SELECT id,title,abstract,proposal_type FROM session_proposals WHERE event_id=? AND status='accepted'${proposalIds ? " AND id IN(SELECT value FROM json_each(?))" : ""} ORDER BY id LIMIT 101`,
     proposalIds ? [eventId, selected] : [eventId],
   );
   if (proposalIds && proposals.length !== proposalIds.length)
@@ -70,6 +76,8 @@ export async function loadAcceptedProposalAgendaImport(db: DatabaseLike, eventId
       remoteCapacity: null,
       visibility: "public" as const,
       kind: "session" as const,
+      // The proposal's type becomes the editable agenda format only when it is still a configured session type.
+      format: proposal.proposal_type ? configuredAgendaSessionFormat(formatLabels, proposal.proposal_type) : null,
       speakerUserIds: roster.map((speaker) => speaker.user_id!),
       speakerRoles: Object.fromEntries(
         roster.map((speaker) => [speaker.user_id!, agendaCreditRoleSchema.parse(speaker.role)]),

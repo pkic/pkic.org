@@ -1,5 +1,10 @@
+import { agendaSpeakerSession, type AgendaSpeakerSession } from "./agenda-speaker-sessions";
+import "../../design/tokens.agenda.generated.css";
+import "./AgendaSessionDetails.css";
+import "./AgendaDesign.css";
 import { AgendaBreakSponsors } from "./AgendaBreakSponsors";
 import { AgendaSpeaker } from "./AgendaSpeaker";
+import { initializeAgendaSpeakers } from "./agenda-speakers";
 import { resolveAgendaDurationRules } from "../../shared/event-agenda-duration";
 import { formatNumber } from "../../shared/format-number";
 import { Menu } from "../ui/Menu";
@@ -8,22 +13,31 @@ import type { ComponentChildren, JSX } from "preact";
 import { useEffect, useRef } from "preact/hooks";
 import { youtubeVideoEmbed } from "../../shared/markdown-media";
 import { sameOriginPathSchema } from "../../shared/schemas/urls";
-import { initializeAgendaSessionMedia } from "./agenda-session-media";
-import { IconBadge } from "../ui/Badge";
-import { IconDownload, IconRemote, IconVideo } from "../ui/MediaIcons";
-import { PreferenceStar } from "../ui/PreferenceStar";
-import { Button, ButtonLink } from "../ui/Button";
+import { initializeAgendaSessionMedia, pauseAgendaSessionMedia } from "./agenda-session-media";
+import { parseSessionRecordingPublicUrl } from "../../shared/session-recording-public-url";
+import { IconClock, IconRemote, IconVideo, SessionFormatIcon } from "../ui/MediaIcons";
+import { AgendaSessionActions } from "./AgendaSessionActions";
+import type { AgendaPersonalSession } from "./AgendaParticipationControls";
+import { Button } from "../ui/Button";
 import { Markdown } from "../ui/Markdown";
-import { formatTimeRangeInZone } from "../../shared/format-date";
+import { formatDateRange, formatTimeRangeInZone } from "../../shared/format-date";
+import { LocalTime } from "./SiteDate";
+import { DeferredImages } from "./SiteImage";
+import { observeDeferredImages } from "./deferred-images";
 import type { ContentAgendaDay, ContentAgendaLocation, ContentAgendaSessionFragment } from "../../shared/site-agenda";
 
-export function ClockIcon() {
+function AgendaFormatIcon({ format }: { format: { id: string; label: string } }) {
   return (
-    <svg viewBox="0 0 16 16" aria-hidden="true">
-      <circle cx="8" cy="8" r="6.5" />
-      <path d="M8 4.5v4l2.5 1.5" />
-    </svg>
+    <span class="pk-content-agenda__format" title={format.label}>
+      <SessionFormatIcon format={format.id} />
+      <span class="pk-sr-only">{format.label}</span>
+    </span>
   );
+}
+
+/** Break content stays within the visible part of a horizontally scrolled grid. */
+function AgendaBreakFrame({ isBreak, children }: { isBreak: boolean; children: ComponentChildren }) {
+  return isBreak ? <div class="pk-content-agenda__break-content">{children}</div> : <>{children}</>;
 }
 
 export interface AgendaSessionEditor {
@@ -67,12 +81,12 @@ function AgendaSessionDuration({
             onSelect: () => editor.onDurationChange?.(minutes),
           }))}
         >
-          <ClockIcon />
+          <IconClock />
           <span>{formatNumber(session.durationMinutes)} min</span>
         </Menu>
       ) : (
         <>
-          <ClockIcon />
+          <IconClock />
           <span>{formatNumber(session.durationMinutes)} min</span>
         </>
       )}
@@ -89,6 +103,8 @@ export function AgendaSession({
   editor,
   publicAnchor,
   legacyFragments = [],
+  speakerSessions,
+  personal,
 }: {
   session: ContentAgendaDay["slots"][number]["sessions"][number];
   slot?: Pick<ContentAgendaDay["slots"][number], "startsAt">;
@@ -96,8 +112,11 @@ export function AgendaSession({
   dialogId: string;
   publicAnchor?: string;
   legacyFragments?: readonly ContentAgendaSessionFragment[];
+  speakerSessions?: ReadonlyMap<string, readonly AgendaSpeakerSession[]>;
   timeZone: string;
   editor?: AgendaSessionEditor;
+  /** Portal-only viewer marks for a session that accepts participation. */
+  personal?: AgendaPersonalSession;
 }) {
   const detail = useRef<HTMLDialogElement>(null);
   const card = useRef<HTMLElement>(null);
@@ -106,21 +125,41 @@ export function AgendaSession({
   const onlineAccess = sameOriginPathSchema.safeParse(session.onlineAccessUrl);
   const onlineAccessUrl = onlineAccess.success ? onlineAccess.data : undefined;
   const approvedEmbed = recordingUrl && session.recordingApproved ? youtubeVideoEmbed(recordingUrl) : null;
-  const recordingEmbed = session.youtube
-    ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(session.youtube)}`
-    : approvedEmbed?.replace("https://www.youtube.com/embed/", "https://www.youtube-nocookie.com/embed/");
-  const hasMedia = Boolean(
-    session.plannedMedia?.recording ||
-    session.plannedMedia?.liveStreaming ||
-    onlineAccessUrl ||
-    recordingUrl ||
-    recordingEmbed,
+  const ownedRecording =
+    recordingUrl && session.recordingApproved && parseSessionRecordingPublicUrl(recordingUrl) ? recordingUrl : null;
+  const recordingEmbed = ownedRecording
+    ? null
+    : session.youtube
+      ? `https://www.youtube-nocookie.com/embed/${encodeURIComponent(session.youtube)}`
+      : approvedEmbed?.replace("https://www.youtube.com/embed/", "https://www.youtube-nocookie.com/embed/");
+  // A public placeholder has nothing to open yet; organizers still edit it.
+  const hasDetails = Boolean(
+    editor ||
+    (!session.placeholder &&
+      (session.sessionUrl ||
+        session.speakers.length ||
+        (session.descriptionMarkdown !== undefined
+          ? session.descriptionMarkdown.trim()
+          : session.descriptionHtml.trim()) ||
+        recordingUrl ||
+        recordingEmbed ||
+        session.presentationUrl ||
+        session.participation ||
+        onlineAccessUrl)),
   );
+  const retainDialog = hasDetails || legacyFragments.length > 0;
   useEffect(() => {
-    if (hasMedia && card.current && !card.current.closest(".pk-content-agenda"))
-      return initializeAgendaSessionMedia(card.current);
+    const element = card.current;
+    if (!element || element.closest(".pk-content-agenda")) return;
+    const stopMedia = initializeAgendaSessionMedia(element);
+    const stopSpeakers = initializeAgendaSpeakers(element);
+    const stopImages = observeDeferredImages(element);
+    return () => {
+      stopImages();
+      stopSpeakers();
+      stopMedia();
+    };
   }, [
-    hasMedia,
     slot?.startsAt,
     session.endsAt,
     session.onlineAccessUrl,
@@ -145,9 +184,14 @@ export function AgendaSession({
     <article
       ref={card}
       id={publicAnchor}
-      class={`pk-content-agenda__session pk-content-agenda__session--${locationIndex % 7}${session.kind === "break" ? " pk-content-agenda__session--break" : ""}`}
+      class={`pk-content-agenda__session pk-content-agenda__session--${locationIndex % 7}${session.kind === "break" ? " pk-content-agenda__session--break" : ""}${session.placeholder ? " pk-content-agenda__session--placeholder" : ""}`}
       data-agenda-occurrence={session.id}
-      data-agenda-media-session={hasMedia ? "" : undefined}
+      data-agenda-search-text={[session.title, ...session.speakers.map((speaker) => speaker.name)].join(" ")}
+      data-agenda-kind={session.kind ?? "session"}
+      data-agenda-track={session.track ?? ""}
+      data-agenda-format={session.format?.id ?? ""}
+      data-agenda-media-session=""
+      data-agenda-mine={personal && (personal.starred || personal.status) ? "" : undefined}
       data-agenda-media-start={slot?.startsAt}
       data-agenda-media-end={session.endsAt}
       draggable={Boolean(editor?.onDragStart)}
@@ -174,8 +218,14 @@ export function AgendaSession({
         ? locations.map((location) => location.id)
         : session.locations
       ).join(" ")}
-      data-agenda-session-dialog={dialogId}
+      data-agenda-session-dialog={hasDetails ? dialogId : undefined}
     >
+      {session.kind !== "break" && (
+        <div class="pk-content-agenda__status" data-agenda-session-status hidden>
+          <span data-agenda-status-label />
+          <span data-agenda-status-time />
+        </div>
+      )}
       {legacyFragments.map((fragment) => (
         <span key={fragment.anchor} id={fragment.anchor} hidden data-agenda-fragment-dialog={dialogId} />
       ))}
@@ -189,276 +239,274 @@ export function AgendaSession({
           {editor.controls}
         </div>
       ) : null}
-      {!editor ? (
+      {!editor && (roomNames || session.track) ? (
         <div class="pk-content-agenda__room">
-          <span>{roomNames}</span>
+          {roomNames ? <span>{roomNames}</span> : null}
           {session.track ? <span class="pk-content-agenda__track">{session.track}</span> : null}
         </div>
       ) : null}
-      <div class="pk-content-agenda__session-body">
-        <h3 aria-label={session.title}>
-          {!editor && session.sessionUrl ? (
-            <a
-              class="pk-content-agenda__title-action"
-              href={session.sessionUrl}
-              data-agenda-open-session={dialogId}
-              aria-label={`Open session details: ${session.title}`}
-            >
-              {session.title}
-            </a>
-          ) : (
-            <button
-              type="button"
-              class="pk-content-agenda__title-action"
-              onClick={
-                editor
-                  ? () => {
-                      if (editor.onOpen) editor.onOpen();
-                      else openDetails();
-                    }
-                  : undefined
-              }
-              data-agenda-open-session={dialogId}
-              aria-label={`Open session details: ${session.title}`}
-            >
-              {session.title}
-            </button>
-          )}
-        </h3>
-        {session.kind === "break" && session.sponsors?.length ? (
-          <AgendaBreakSponsors sponsors={session.sponsors} />
-        ) : null}
-        {session.speakers.map((speaker) => (
-          <AgendaSpeaker speaker={speaker} key={speaker.name} />
-        ))}
-        {session.descriptionMarkdown?.trim() ? (
-          <Markdown className="pk-content-agenda__description" markdown={session.descriptionMarkdown} />
-        ) : session.descriptionMarkdown === undefined && session.descriptionHtml ? (
-          <div class="pk-content-agenda__description" dangerouslySetInnerHTML={{ __html: session.descriptionHtml }} />
-        ) : null}
-      </div>
-      {(session.plannedMedia?.recording || session.plannedMedia?.liveStreaming) && (
-        <div class="pk-cluster" data-agenda-media-plans>
-          {session.plannedMedia.recording && (
-            <span data-agenda-media-before>
-              <IconBadge icon={<IconVideo />} label="Recording planned" />
-            </span>
-          )}
-          {session.plannedMedia.liveStreaming && (
-            <span data-agenda-media-live-plan>
-              <IconBadge icon={<IconRemote />} label="Live streaming planned" />
-            </span>
-          )}
-        </div>
-      )}
-      <div
-        class="pk-content-agenda__card-footer"
-        data-agenda-card-control
-        onPointerDown={editor ? (event) => event.stopPropagation() : undefined}
-        onClick={editor ? (event) => event.stopPropagation() : undefined}
-      >
-        {session.youtube ||
-        recordingUrl ||
-        session.presentationUrl ||
-        onlineAccessUrl ||
-        (!editor && session.participation) ? (
-          <div class="pk-content-agenda__actions">
-            {!editor && session.participation && (
+      <AgendaBreakFrame isBreak={session.kind === "break"}>
+        <div class="pk-content-agenda__session-body">
+          <h3 aria-label={session.title}>
+            {!hasDetails ? (
+              session.title
+            ) : !editor && session.sessionUrl ? (
               <a
-                class="pk-content-agenda__media-action"
-                href={session.participation.url}
-                title={
-                  session.participation.preference
-                    ? `${session.participation.label}. ${session.participation.message}`
-                    : session.participation.message
-                }
-                aria-label={
-                  session.participation.preference ? `${session.participation.label} for ${session.title}` : undefined
-                }
-              >
-                {session.participation.preference ? <PreferenceStar /> : session.participation.label}
-              </a>
-            )}
-            {onlineAccessUrl && (
-              <a
-                class="pk-content-agenda__media-action"
-                href={onlineAccessUrl}
-                aria-label="Join online"
-                title="Join online"
-                data-agenda-media-during
-                hidden
-              >
-                <IconRemote />
-                <span class="pk-sr-only">Join online</span>
-              </a>
-            )}
-            {recordingEmbed ? (
-              <a
-                href={recordingUrl ?? `https://www.youtube.com/watch?v=${encodeURIComponent(session.youtube ?? "")}`}
-                class="pk-content-agenda__media-action"
+                class="pk-content-agenda__title-action"
+                href={session.sessionUrl}
                 data-agenda-open-session={dialogId}
-                aria-label="Watch recording"
-                title="Watch recording"
-                data-agenda-watch-recording
-                data-agenda-media-recording
+                aria-label={`Open session details: ${session.title}`}
+              >
+                {session.title}
+              </a>
+            ) : (
+              <button
+                type="button"
+                class="pk-content-agenda__title-action"
                 onClick={
                   editor
-                    ? (event) => {
-                        event.preventDefault();
-                        openDetails();
+                    ? () => {
+                        if (editor.onOpen) editor.onOpen();
+                        else openDetails();
                       }
                     : undefined
                 }
+                data-agenda-open-session={dialogId}
+                aria-label={`Open session details: ${session.title}`}
               >
-                <IconVideo />
-                <span class="pk-sr-only">Watch recording</span>
-              </a>
-            ) : null}
-            {!recordingEmbed && recordingUrl && (
-              <a
-                class="pk-content-agenda__media-action"
-                href={recordingUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                aria-label="Watch recording"
-                title="Watch recording"
-                data-agenda-media-recording={session.recordingApproved ? "" : undefined}
-              >
-                <IconVideo />
-                <span class="pk-sr-only">Watch recording</span>
-              </a>
+                {session.title}
+              </button>
             )}
-            {session.presentationUrl ? (
-              <a
-                class="pk-content-agenda__media-action"
-                href={session.presentationUrl}
-                data-legacy-download-url={session.legacyPresentationUrl}
-                aria-label="Download slides"
-                title="Download slides"
-                download
-              >
-                <IconDownload />
-                <span class="pk-sr-only">Download slides</span>
-              </a>
-            ) : null}
-          </div>
-        ) : null}
-        <AgendaSessionDuration session={session} editor={editor} />
-        {editor?.moveControls ? <div class="pk-content-agenda__move-controls">{editor.moveControls}</div> : null}
-      </div>
-      {editor?.resizeHandle}
-      {session.endNotRecorded ? <p class="pk-muted">End not recorded</p> : null}
-      <dialog
-        ref={detail}
-        class="session-modal"
-        id={dialogId}
-        aria-labelledby={`${dialogId}-title`}
-        onClose={
-          editor ? () => detail.current?.querySelector<HTMLIFrameElement>("iframe")?.removeAttribute("src") : undefined
-        }
-      >
-        <div class="session-modal__header">
-          <div class="session-modal__heading pk-stack pk-stack--snug">
-            <h2 class="session-modal__title" id={`${dialogId}-title`}>
-              {session.title}
-            </h2>
-            <div class="pk-cluster pk-content-agenda__metadata">
-              <span>
-                <ClockIcon /> {slot ? formatTimeRangeInZone(slot.startsAt, session.endsAt, timeZone) : "Not scheduled"}
-              </span>
-              {roomNames ? <span>{roomNames}</span> : null}
-              {session.endNotRecorded ? (
-                <span>End not recorded</span>
-              ) : session.durationMinutes ? (
-                <span>{formatNumber(session.durationMinutes)} min</span>
-              ) : null}
-            </div>
-          </div>
-          {editor?.detailControls?.(() => detail.current?.close())}
-          <Button
-            variant="ghost"
-            icon
-            data-agenda-close-session
-            onClick={editor ? (event) => event.currentTarget.closest("dialog")?.close() : undefined}
-            aria-label="Close session details"
-          >
-            ×
-          </Button>
+          </h3>
+          {session.speakers.map((speaker, index) => (
+            <AgendaSpeaker
+              speaker={speaker}
+              profileId={`${dialogId}-speaker-${index}`}
+              sessions={
+                speaker.speakerKey
+                  ? speakerSessions?.get(speaker.speakerKey)
+                  : slot
+                    ? [agendaSpeakerSession(session, slot.startsAt, locations, speaker)].filter(
+                        (entry) => entry !== undefined,
+                      )
+                    : undefined
+              }
+              timeZone={timeZone}
+              key={index}
+            />
+          ))}
+          {session.descriptionMarkdown?.trim() ? (
+            <Markdown className="pk-content-agenda__description" markdown={session.descriptionMarkdown} />
+          ) : session.descriptionMarkdown === undefined && session.descriptionHtml ? (
+            <div class="pk-content-agenda__description" dangerouslySetInnerHTML={{ __html: session.descriptionHtml }} />
+          ) : null}
         </div>
-        <div class="session-modal__body">
-          {recordingEmbed && (
-            <div class="session-modal__video" data-agenda-media-recording>
-              <iframe loading="lazy" data-video-src={recordingEmbed} title={session.title} allowFullScreen />
-            </div>
-          )}
-          {(
-            session.descriptionMarkdown !== undefined ? session.descriptionMarkdown.trim() : session.descriptionHtml
-          ) ? (
-            <section class="pk-stack pk-stack--snug">
-              <h3>Abstract</h3>
-              {session.descriptionMarkdown !== undefined ? (
-                <Markdown markdown={session.descriptionMarkdown} />
-              ) : (
-                <div dangerouslySetInnerHTML={{ __html: session.descriptionHtml }} />
+        <div
+          class="pk-content-agenda__card-footer"
+          data-agenda-card-control
+          onPointerDown={editor ? (event) => event.stopPropagation() : undefined}
+          onClick={editor ? (event) => event.stopPropagation() : undefined}
+        >
+          <AgendaSessionActions
+            session={session}
+            editor={Boolean(editor)}
+            recordingUrl={recordingUrl}
+            recordingEmbed={recordingEmbed}
+            ownedRecording={ownedRecording}
+            onlineAccessUrl={onlineAccessUrl}
+            dialogId={dialogId}
+            openDetails={openDetails}
+            personal={personal}
+          />
+          {session.format && session.kind !== "break" ? <AgendaFormatIcon format={session.format} /> : null}
+          <AgendaSessionDuration session={session} editor={editor} />
+          {session.track ? (
+            <span class="pk-content-agenda__footer-track" title={session.track}>
+              {session.track}
+            </span>
+          ) : null}
+          {(session.plannedMedia?.recording || session.plannedMedia?.liveStreaming) && (
+            <div class="pk-cluster" data-agenda-media-plans>
+              {session.plannedMedia.recording && (
+                <span data-agenda-media-before>
+                  <span class="pk-content-agenda__capability" title="Recording planned">
+                    <IconVideo />
+                    <span class="pk-sr-only">Recording planned</span>
+                  </span>
+                </span>
               )}
-            </section>
-          ) : null}
-          {session.speakers.length ? (
-            <section class="pk-stack pk-stack--snug">
-              <h3>Speakers</h3>
-              {session.speakers.map((speaker) => (
-                <article class="session-modal__speaker" key={speaker.name}>
-                  <AgendaSpeaker speaker={speaker} detail />
-                </article>
-              ))}
-            </section>
-          ) : null}
-        </div>
-        <div class="session-modal__footer pk-cluster pk-cluster--end">
-          {!editor && session.participation && (
-            <ButtonLink
-              href={session.participation.url}
-              icon={session.participation.preference}
-              aria-label={
-                session.participation.preference ? `${session.participation.label} for ${session.title}` : undefined
-              }
-              title={
-                session.participation.preference
-                  ? `${session.participation.label}. ${session.participation.message}`
-                  : session.participation.message
-              }
-            >
-              {session.participation.preference ? <PreferenceStar /> : session.participation.label}
-            </ButtonLink>
+              {session.plannedMedia.liveStreaming && (
+                <span data-agenda-media-live-plan>
+                  <span class="pk-content-agenda__capability" title="Live streaming planned">
+                    <IconRemote />
+                    <span class="pk-sr-only">Live streaming planned</span>
+                  </span>
+                </span>
+              )}
+            </div>
           )}
-          {recordingUrl && (
-            <ButtonLink
-              href={recordingUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              data-agenda-media-recording={session.recordingApproved ? "" : undefined}
-            >
-              Watch recording
-            </ButtonLink>
-          )}
-          {session.presentationUrl ? (
-            <ButtonLink
-              href={session.presentationUrl}
-              data-legacy-download-url={session.legacyPresentationUrl}
-              variant="primary"
-              download
-            >
-              Download Slides
-            </ButtonLink>
-          ) : null}
-          <Button
-            data-agenda-close-session
-            onClick={editor ? (event) => event.currentTarget.closest("dialog")?.close() : undefined}
-          >
-            Close
-          </Button>
+
+          {editor?.moveControls ? <div class="pk-content-agenda__move-controls">{editor.moveControls}</div> : null}
         </div>
-      </dialog>
+        {session.kind === "break" && session.sponsors?.length ? (
+          <AgendaBreakSponsors sponsors={session.sponsors} />
+        ) : null}
+      </AgendaBreakFrame>
+      {editor?.resizeHandle}
+      {session.endNotRecorded ? <p class="pk-content-agenda__unknown-end">End not recorded</p> : null}
+      {retainDialog && (
+        <dialog
+          ref={detail}
+          class={`session-modal${hasDetails ? "" : " session-modal--summary"}`}
+          id={dialogId}
+          aria-labelledby={`${dialogId}-title`}
+          onClose={
+            editor
+              ? (event) => {
+                  if (event.target === event.currentTarget) pauseAgendaSessionMedia(event.currentTarget);
+                }
+              : undefined
+          }
+        >
+          <div class="session-modal__header">
+            <div class="session-modal__heading pk-stack pk-stack--snug">
+              {roomNames ? <span class="session-modal__location">{roomNames}</span> : null}
+              <h2 class="session-modal__title" id={`${dialogId}-title`}>
+                {session.title}
+              </h2>
+              <div class="pk-cluster pk-content-agenda__metadata">
+                <span>
+                  <IconClock />{" "}
+                  {slot ? (
+                    <>
+                      {formatDateRange(slot.startsAt, undefined, timeZone)} ·{" "}
+                      {formatTimeRangeInZone(
+                        slot.startsAt,
+                        session.endNotRecorded ? undefined : session.endsAt,
+                        timeZone,
+                      )}
+                    </>
+                  ) : (
+                    "Not scheduled"
+                  )}
+                </span>
+                {session.endNotRecorded ? (
+                  <span>End not recorded</span>
+                ) : session.durationMinutes ? (
+                  <span>{formatNumber(session.durationMinutes)} min</span>
+                ) : null}
+              </div>
+              {slot && (
+                <div
+                  class="pk-cluster pk-content-agenda__metadata"
+                  data-local-time-container
+                  data-event-time-zone={timeZone}
+                  hidden
+                >
+                  <span>
+                    Your time · <LocalTime value={slot.startsAt} format="date-time" />
+                    {!session.endNotRecorded && session.endsAt ? (
+                      <>
+                        {" "}
+                        – <LocalTime value={session.endsAt} format="date-time" />
+                      </>
+                    ) : null}
+                  </span>
+                </div>
+              )}
+            </div>
+            {editor?.detailControls?.(() => detail.current?.close())}
+            <Button
+              variant="ghost"
+              icon
+              data-agenda-close-session
+              onClick={editor ? (event) => event.currentTarget.closest("dialog")?.close() : undefined}
+              aria-label="Close session details"
+            >
+              ×
+            </Button>
+          </div>
+          {hasDetails && (
+            <DeferredImages>
+              <div class="session-modal__body">
+                {ownedRecording ? (
+                  <div class="session-modal__video" data-agenda-media-recording>
+                    <video
+                      src={ownedRecording}
+                      controls
+                      playsInline
+                      preload="none"
+                      aria-label={`Recording: ${session.title}`}
+                    />
+                  </div>
+                ) : recordingEmbed ? (
+                  <div class="session-modal__video" data-agenda-media-recording>
+                    <iframe loading="lazy" data-video-src={recordingEmbed} title={session.title} allowFullScreen />
+                  </div>
+                ) : null}
+                <AgendaSessionActions
+                  session={session}
+                  editor={Boolean(editor)}
+                  detail
+                  recordingUrl={recordingUrl}
+                  recordingEmbed={recordingEmbed}
+                  ownedRecording={ownedRecording}
+                  onlineAccessUrl={onlineAccessUrl}
+                  dialogId={dialogId}
+                  openDetails={openDetails}
+                  personal={personal}
+                />
+                {(
+                  session.descriptionMarkdown !== undefined
+                    ? session.descriptionMarkdown.trim()
+                    : session.descriptionHtml
+                ) ? (
+                  <section class="pk-stack pk-stack--snug">
+                    <h3>Abstract</h3>
+                    {session.descriptionMarkdown !== undefined ? (
+                      <Markdown markdown={session.descriptionMarkdown} />
+                    ) : (
+                      <div dangerouslySetInnerHTML={{ __html: session.descriptionHtml }} />
+                    )}
+                  </section>
+                ) : null}
+                {session.speakers.length ? (
+                  <section class="pk-stack pk-stack--snug">
+                    <h3>Speakers</h3>
+                    {session.speakers.map((speaker, index) => (
+                      <article class="speaker-card session-modal__speaker" key={index}>
+                        <AgendaSpeaker
+                          speaker={speaker}
+                          detail
+                          profileId={`${dialogId}-detail-speaker-${index}`}
+                          sessions={
+                            speaker.speakerKey
+                              ? speakerSessions?.get(speaker.speakerKey)
+                              : slot
+                                ? [agendaSpeakerSession(session, slot.startsAt, locations, speaker)].filter(
+                                    (entry) => entry !== undefined,
+                                  )
+                                : undefined
+                          }
+                          timeZone={timeZone}
+                        />
+                      </article>
+                    ))}
+                  </section>
+                ) : null}
+              </div>
+            </DeferredImages>
+          )}
+          <div class="session-modal__footer pk-cluster pk-cluster--end">
+            <Button
+              data-agenda-close-session
+              onClick={editor ? (event) => event.currentTarget.closest("dialog")?.close() : undefined}
+            >
+              Close
+            </Button>
+          </div>
+        </dialog>
+      )}
     </article>
   );
 }

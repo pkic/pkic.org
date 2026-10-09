@@ -26,6 +26,7 @@ import {
 import { sessionReviewRequestSchema } from "../assets/shared/schemas/route-contracts-session-participation";
 import { sessionHoldRequestSchema, sessionHoldResponseSchema } from "../assets/shared/schemas/event-session-holds";
 import type { DatabaseLike } from "../functions/_lib/types";
+import { physicalOccupiedSql } from "../functions/_lib/services/event-participation/capacity-accounting";
 import { promoteSessionWaitlist } from "../functions/_lib/services/event-participation/waitlist";
 import { integratedPilot } from "./helpers/agenda-integrated-pilot";
 import { callApi } from "./helpers/app";
@@ -417,62 +418,174 @@ describe("Prepared allocation transitions retain live capacity invariants", () =
     }
   });
 
-  it.each(["room downsize", "room swap"] as const)(
-    "rolls back a prepared %s when approved-pool allocation commits after review",
-    async (change) => {
-      const f = await fixture("reservation", 2);
-      const downsize = change === "room downsize";
-      const gate = allocationGate(
-        downsize ? "UPDATE event_agenda_rooms SET" : "UPDATE event_agenda_occurrences SET start_at=",
-      );
-      let pending: Promise<Response>;
-      if (downsize) {
-        const body = agendaRoomCreateSchema.parse({
-          expectedRevision: f.snapshot.revision,
-          name: "First room",
-          capacity: 1,
-          setupMinutes: 0,
-        });
-        pending = f.draft(body, `/rooms/${f.rooms[0]}`, gate.db, "PUT");
-      } else {
-        const proposal = agendaScheduleProposalSchema.parse({
-          expectedRevision: f.snapshot.revision,
-          changes: f.occurrences.map((id, index) => {
-            const occurrence = f.snapshot.occurrences.find((row) => row.id === id)!;
-            return {
-              id,
-              startAt: occurrence.startAt,
-              endAt: occurrence.endAt,
-              roomId: f.rooms[1 - index],
-              additionalRoomIds: occurrence.additionalRoomIds,
-            };
-          }),
-        });
-        const reviewed = await f.pilot.api(`${f.base}/schedule/reviews`, agendaScheduleReviewSchema, proposal);
-        expect(reviewed.affected).toHaveLength(2);
-        const body = agendaScheduleApplySchema.parse({ ...proposal, reviewHash: reviewed.reviewHash });
-        pending = f.request("/schedule", body, f.adminToken, gate.db, "POST");
-      }
-      try {
-        await reached(gate, pending);
-        await expectParticipation(await f.book(0), "reserved");
-        if (downsize) await expectParticipation(await f.book(1), "reserved");
-        const committed = await effects();
-        gate.release();
-        const refused = await pending;
-        expect(refused.status).toBe(409);
-        expect(apiErrorPayloadSchema.parse(await refused.json()).error.code).toBe("AGENDA_AUTHORIZATION_CHANGED");
-        expect(await effects()).toEqual(committed);
-        const retained = await f.pilot.api(f.base, agendaSnapshotSchema);
-        expect(retained.revision).toBe(f.snapshot.revision);
-        expect(retained.publishedRevision).toBe(f.snapshot.publishedRevision);
-        expect(retained.rooms.find((row) => row.id === f.rooms[0])!.capacity).toBe(2);
-        expect(retained.occurrences.find((row) => row.id === f.occurrences[0])!.roomId).toBe(f.rooms[0]);
-        expect(retained.occurrences.find((row) => row.id === f.occurrences[1])!.roomId).toBe(f.rooms[1]);
-        expect((await f.rows()).every((row) => row.status === "reserved" && row.room_id === f.rooms[0])).toBe(true);
-      } finally {
-        gate.release();
-      }
-    },
+  it("saves a prepared room downsize below approved-pool allocations committed after review", async () => {
+    const f = await fixture("reservation", 2);
+    const gate = allocationGate("UPDATE event_agenda_rooms SET");
+    const body = agendaRoomCreateSchema.parse({
+      expectedRevision: f.snapshot.revision,
+      name: "First room",
+      capacity: 1,
+      setupMinutes: 0,
+    });
+    const pending = f.draft(body, `/rooms/${f.rooms[0]}`, gate.db, "PUT");
+    try {
+      await reached(gate, pending);
+      await expectParticipation(await f.book(0), "reserved");
+      await expectParticipation(await f.book(1), "reserved");
+      gate.release();
+      // Room capacity is planning information; the agenda never refuses it against existing attendance.
+      const saved = await pending;
+      expect(saved.status, await saved.clone().text()).toBe(200);
+      const draft = agendaSnapshotSchema.parse(await saved.json());
+      expect(draft.rooms.find((row) => row.id === f.rooms[0])!.capacity).toBe(1);
+      expect((await f.rows()).every((row) => row.status === "reserved" && row.room_id === f.rooms[0])).toBe(true);
+    } finally {
+      gate.release();
+    }
+  });
+
+  it("rolls back a prepared room swap when approved-pool allocation commits after review", async () => {
+    const f = await fixture("reservation", 2);
+    const gate = allocationGate("UPDATE event_agenda_occurrences SET start_at=");
+    const proposal = agendaScheduleProposalSchema.parse({
+      expectedRevision: f.snapshot.revision,
+      changes: f.occurrences.map((id, index) => {
+        const occurrence = f.snapshot.occurrences.find((row) => row.id === id)!;
+        return {
+          id,
+          startAt: occurrence.startAt,
+          endAt: occurrence.endAt,
+          roomId: f.rooms[1 - index],
+          additionalRoomIds: occurrence.additionalRoomIds,
+        };
+      }),
+    });
+    const reviewed = await f.pilot.api(`${f.base}/schedule/reviews`, agendaScheduleReviewSchema, proposal);
+    expect(reviewed.affected).toHaveLength(2);
+    const body = agendaScheduleApplySchema.parse({ ...proposal, reviewHash: reviewed.reviewHash });
+    const pending = f.request("/schedule", body, f.adminToken, gate.db, "POST");
+    try {
+      await reached(gate, pending);
+      await expectParticipation(await f.book(0), "reserved");
+      const committed = await effects();
+      gate.release();
+      const refused = await pending;
+      expect(refused.status).toBe(409);
+      expect(apiErrorPayloadSchema.parse(await refused.json()).error.code).toBe("AGENDA_AUTHORIZATION_CHANGED");
+      expect(await effects()).toEqual(committed);
+      const retained = await f.pilot.api(f.base, agendaSnapshotSchema);
+      expect(retained.revision).toBe(f.snapshot.revision);
+      expect(retained.publishedRevision).toBe(f.snapshot.publishedRevision);
+      expect(retained.rooms.find((row) => row.id === f.rooms[0])!.capacity).toBe(2);
+      expect(retained.occurrences.find((row) => row.id === f.occurrences[0])!.roomId).toBe(f.rooms[0]);
+      expect(retained.occurrences.find((row) => row.id === f.occurrences[1])!.roomId).toBe(f.rooms[1]);
+      expect((await f.rows()).every((row) => row.status === "reserved" && row.room_id === f.rooms[0])).toBe(true);
+    } finally {
+      gate.release();
+    }
+  });
+});
+
+it("restores a prior schedule only as a freshly validated publication while retaining booked attendance", async () => {
+  const f = await fixture("reservation", 2);
+  await expectParticipation(await f.book(0), "reserved");
+  const original = f.snapshot;
+  const booked = await f.rows();
+  const publicationRows = () =>
+    queryAll<{ revision: number; snapshot_json: string }>(
+      env.DB,
+      "SELECT revision,snapshot_json FROM event_agenda_publications WHERE event_id=? ORDER BY revision",
+      f.pilot.eventId,
+    );
+  const initialPublications = await publicationRows();
+  expect(initialPublications).toHaveLength(1);
+  expect(initialPublications[0]!.revision).toBe(original.publishedRevision);
+
+  async function apply(proposal: ReturnType<typeof agendaScheduleProposalSchema.parse>) {
+    const review = await f.pilot.api(`${f.base}/schedule/reviews`, agendaScheduleReviewSchema, proposal);
+    return f.pilot.api(
+      `${f.base}/schedule`,
+      agendaSnapshotSchema,
+      agendaScheduleApplySchema.parse({ ...proposal, reviewHash: review.reviewHash }),
+    );
+  }
+  async function approve(snapshot: ReturnType<typeof agendaSnapshotSchema.parse>) {
+    return f.pilot.api(
+      `${f.base}/publications`,
+      agendaSnapshotSchema,
+      agendaRevisionSchema.parse({ expectedRevision: snapshot.revision }),
+    );
+  }
+  function placement(snapshot: ReturnType<typeof agendaSnapshotSchema.parse>, id: string) {
+    const row = snapshot.occurrences.find((occurrence) => occurrence.id === id)!;
+    return {
+      id: row.id,
+      startAt: row.startAt,
+      endAt: row.endAt,
+      roomId: row.roomId,
+      additionalRoomIds: row.additionalRoomIds,
+    };
+  }
+  const changed = await apply(
+    agendaScheduleProposalSchema.parse({
+      expectedRevision: original.revision,
+      changes: f.occurrences.map((id, index) => ({
+        ...placement(original, id),
+        roomId: f.rooms[0],
+        startAt: `2026-12-01T${index === 0 ? "10" : "09"}:00:00.000Z`,
+        endAt: `2026-12-01T${index === 0 ? "11" : "10"}:00:00.000Z`,
+      })),
+    }),
   );
+  const changedApproved = await approve(changed);
+  expect(changedApproved.publishedRevision).toBeGreaterThan(original.publishedRevision!);
+  const beforeRestore = await publicationRows();
+  expect(beforeRestore).toHaveLength(2);
+  expect(beforeRestore.slice(0, 1)).toEqual(initialPublications);
+
+  // Restoring only the booked session would now collide with the second session.
+  const partial = agendaScheduleProposalSchema.parse({
+    expectedRevision: changedApproved.revision,
+    changes: [placement(original, f.occurrences[0]!)],
+  });
+  const beforeRefusal = await effects();
+  const refused = await f.pilot.raw(`${f.base}/schedule/reviews`, partial);
+  expect(refused.status, await refused.clone().text()).toBe(409);
+  expect(apiErrorPayloadSchema.parse(await refused.json()).error.code).toBe("AGENDA_SCHEDULE_CONFLICT");
+  expect(await effects()).toEqual(beforeRefusal);
+
+  const restoredDraft = await apply(
+    agendaScheduleProposalSchema.parse({
+      expectedRevision: changedApproved.revision,
+      changes: f.occurrences.map((id) => placement(original, id)),
+    }),
+  );
+  expect(restoredDraft.revision).toBeGreaterThan(changedApproved.revision);
+  expect(restoredDraft.publishedRevision).toBe(changedApproved.publishedRevision);
+  expect(await publicationRows()).toEqual(beforeRestore);
+  const restored = await approve(restoredDraft);
+  expect(restored.publishedRevision).toBeGreaterThan(changedApproved.publishedRevision!);
+  const publications = await publicationRows();
+  expect(publications).toHaveLength(3);
+  expect(publications.slice(0, 2)).toEqual(beforeRestore);
+  const restoredPublic = agendaSnapshotSchema.parse(JSON.parse(publications[2]!.snapshot_json));
+  for (const id of f.occurrences) expect(placement(restoredPublic, id)).toEqual(placement(original, id));
+  const after = await f.rows();
+  const bookingIdentity = (rows: typeof booked) =>
+    rows.map(({ id, occurrence_id, user_id, status, attendance_mode }) => ({
+      id,
+      occurrence_id,
+      user_id,
+      status,
+      attendance_mode,
+    }));
+  expect(bookingIdentity(after)).toEqual(bookingIdentity(booked));
+  expect(after.filter((row) => row.status === "reserved")).toHaveLength(1);
+  expect(after[0]!.room_id).toBe(f.rooms[0]);
+  const occupied = await queryAll<{ occupied: number }>(
+    env.DB,
+    `SELECT ${physicalOccupiedSql("occurrence.id")} AS occupied FROM event_agenda_occurrences occurrence WHERE occurrence.id=?`,
+    f.occurrences[0],
+  );
+  expect(occupied).toEqual([{ occupied: 1 }]);
 });

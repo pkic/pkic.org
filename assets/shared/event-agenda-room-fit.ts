@@ -1,6 +1,7 @@
 import { agendaConflicts, agendaDutyIntervalsConflict, agendaRoomIsAvailable } from "./event-agenda-policy";
 import { agendaOccurrenceRoomIds, agendaMovedSpeakers, agendaSpeakerPhysicalRoom } from "./event-agenda-rooms";
 import type { AgendaSnapshot } from "./schemas/event-agenda";
+import { agendaOccurrenceRequiredEquipment } from "./event-agenda-media";
 export function evaluateRoomFits(
   snapshot: AgendaSnapshot,
   occurrenceId: string,
@@ -41,7 +42,7 @@ export function evaluateRoomFits(
           "The session limit must also increase before queued demand can be allocated; room capacities are not added together.",
         );
       for (const placed of snapshot.rooms.filter((item) => agendaOccurrenceRoomIds(candidate).includes(item.id))) {
-        if ((session.requiredEquipment ?? []).some((equipment) => !placed.equipment?.includes(equipment)))
+        if (agendaOccurrenceRequiredEquipment(session).some((equipment) => !placed.equipment?.includes(equipment)))
           reasons.push(`${placed.name} does not provide all required equipment.`);
         if (session.startAt && session.endAt && !agendaRoomIsAvailable(placed, session.startAt, session.endAt))
           reasons.push(`${placed.name} is unavailable during the session and setup interval.`);

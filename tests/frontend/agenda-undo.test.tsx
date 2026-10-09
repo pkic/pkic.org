@@ -58,6 +58,8 @@ async function edit() {
   document.body.append(host);
   await act(() => render(<AgendaEditor slug="synthetic" canEdit />, host));
   await settle();
+  await act(() => host.querySelector<HTMLButtonElement>('button[aria-label="Enable agenda editing"]')!.click());
+  await settle();
   await runRowAction(host, "Original workshop", "Edit session");
   await vi.waitFor(() => expect(host.querySelector('[name="title"]')).not.toBeNull());
   await act(() => {
@@ -154,7 +156,8 @@ describe("revision guarded session undo", () => {
     await settle();
     await settle();
     expect(reads).toBe(2);
-    expect(demandReads).toBe(1);
+    // Live demand is a statistic; the session editor never reads it.
+    expect(demandReads).toBe(0);
     expect(host.textContent).toContain("Another organizer's session");
     expect(host.textContent).toContain("Another organizer changed the agenda.");
     await openRowMenu(host, "Agenda");

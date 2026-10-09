@@ -130,3 +130,36 @@ it("leaves authenticated preview and editing hashes to the portal router", async
   expect(selected()).toBe("one");
   expect(showModal).not.toHaveBeenCalled();
 });
+
+it("keeps compact and expanded toggle state synchronized with the actual agenda and dialog close", async () => {
+  root.insertAdjacentHTML(
+    "afterbegin",
+    `<button data-agenda-compact aria-pressed="true" aria-label="Hide session descriptions"><svg><path d="m4 2 4 4 4-4M4 14l4-4 4 4" /></svg></button>
+    <button data-agenda-expand aria-pressed="false" aria-expanded="false" aria-label="Expand agenda"><svg><path d="original" /></svg></button>`,
+  );
+  await initialize();
+  const compact = root.querySelector<HTMLButtonElement>("[data-agenda-compact]")!;
+  compact.click();
+  expect(root.classList.contains("is-compact")).toBe(true);
+  expect(compact.getAttribute("aria-pressed")).toBe("false");
+  expect(compact.getAttribute("aria-label")).toBe("Show session descriptions");
+  expect(compact.querySelector("path")?.getAttribute("d")).toBe("m4 6 4-4 4 4M4 10l4 4 4-4");
+  compact.click();
+  expect(root.classList.contains("is-compact")).toBe(false);
+  expect(compact.getAttribute("aria-pressed")).toBe("true");
+  expect(compact.getAttribute("aria-label")).toBe("Hide session descriptions");
+  expect(compact.querySelector("path")?.getAttribute("d")).toBe("m4 2 4 4 4-4M4 14l4-4 4 4");
+  const expand = root.querySelector<HTMLButtonElement>("[data-agenda-expand]")!;
+  expand.click();
+  const dialog = document.querySelector<HTMLDialogElement>(".pk-agenda-dialog")!;
+  expect(dialog.open).toBe(true);
+  expect(expand.getAttribute("aria-pressed")).toBe("true");
+  expect(expand.getAttribute("aria-expanded")).toBe("true");
+  expect(expand.querySelector("path")?.getAttribute("d")).toBe("M6 2v4H2m12 0h-4V2M2 10h4v4m4 0v-4h4");
+  dialog.close();
+  expect(expand.getAttribute("aria-pressed")).toBe("false");
+  expect(expand.getAttribute("aria-expanded")).toBe("false");
+  expect(expand.getAttribute("aria-label")).toBe("Expand agenda");
+  expect(expand.querySelector("path")?.getAttribute("d")).toBe("original");
+  expect(root.parentElement).toBe(document.body);
+});

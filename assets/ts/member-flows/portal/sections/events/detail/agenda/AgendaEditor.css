@@ -60,15 +60,67 @@
 .pk-agenda-editor__form {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 1rem;
+  gap: var(--pk-3) var(--pk-4);
 }
 .pk-agenda-editor__form-wide {
   grid-column: 1/-1;
+}
+/* Type, format and track read as one line of the session's identity. */
+.pk-agenda-editor__form-row {
+  grid-column: 1/-1;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(11rem, 100%), 1fr));
+  gap: var(--pk-3) var(--pk-4);
+}
+/* A session abstract runs to several paragraphs; open with room for them. */
+.pk-agenda-editor__description .pk-markdown-editor__canvas {
+  min-height: 12rem;
 }
 @media (max-width: 640px) {
   .pk-agenda-editor__form {
     grid-template-columns: 1fr;
   }
+}
+/*
+ * Buttons size to their label in every agenda form and dialog. `pk-stack`, `pk-form` and the dialog
+ * body are flex columns whose default `align-items: stretch`, and the form grids stretch their items,
+ * so a button placed directly in one of them spanned the whole editor.
+ */
+.pk-agenda-editor
+  :is(.pk-stack, .pk-form, .pk-dialog__body, .pk-agenda-editor__form, .pk-form-section__fields)
+  > .pk-btn {
+  align-self: flex-start;
+  justify-self: start;
+}
+/* Location choices: a compact checkbox list in as many columns as fit. */
+.pk-agenda-editor__locations,
+.pk-agenda-editor__checks {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(min(11rem, 100%), 1fr));
+  gap: var(--pk-2) var(--pk-4);
+}
+.pk-agenda-editor__checks {
+  grid-template-columns: repeat(auto-fill, minmax(min(16rem, 100%), 1fr));
+}
+/* One compact row per speaker; the shared affiliation row keeps its rule between rows. */
+.pk-agenda-editor__speakers > .pk-affiliation {
+  gap: var(--pk-3);
+  align-items: center;
+}
+.pk-agenda-editor__speakers > .pk-affiliation + .pk-affiliation {
+  padding-block-start: var(--pk-2);
+  margin-block-start: var(--pk-2);
+}
+.pk-agenda-editor__speakers .pk-affiliation__actions {
+  align-items: center;
+  gap: var(--pk-1);
+}
+/* The credit role sits beside the remove control at the small button's size, sized to its label. */
+.pk-agenda-editor__speaker-role {
+  width: auto;
+  padding-block: calc(var(--pk-control-y) * 0.7);
+  padding-inline-start: calc(var(--pk-control-x) * 0.8);
+  font-size: var(--pk-text-sm);
 }
 .pk-agenda-editor__resize {
   position: absolute;
@@ -128,15 +180,16 @@
   font-weight: normal;
 }
 .pk-agenda-editor__add-room {
-  width: 10rem;
-  min-width: 10rem;
+  width: 3.5rem;
+  min-width: 3.5rem;
+  max-width: 3.5rem;
   vertical-align: top;
 }
 /* Keep the organizer's room columns and empty time grid on narrow screens. */
 @media (max-width: 46rem) {
   .pk-agenda-editor .pk-content-agenda__timeline {
     display: table;
-    width: max-content;
+    width: 100%;
     min-width: 100%;
   }
   .pk-agenda-editor .pk-content-agenda__timeline thead {
@@ -151,14 +204,14 @@
   .pk-agenda-editor .pk-content-agenda__slot td,
   .pk-agenda-editor .pk-content-agenda__cell:empty {
     display: table-cell;
-    width: 22rem;
-    min-width: 22rem;
+    width: var(--agenda-room-width);
+    min-width: var(--agenda-room-width);
     padding: var(--pk-1);
   }
   .pk-agenda-editor .pk-content-agenda__time {
     display: table-cell;
-    width: 7.5rem;
-    min-width: 7.5rem;
+    width: var(--agenda-time-width);
+    min-width: var(--agenda-time-width);
     vertical-align: top;
   }
 }
@@ -222,6 +275,10 @@
 .pk-agenda-editor:has(> .pk-agenda-workspace-navigation) {
   gap: 0;
 }
+/* Only the day tabs attach to the workspace navigation; other panels keep the stack spacing. */
+.pk-agenda-editor > .pk-agenda-workspace-navigation ~ :not(:has(> .pk-content-agenda__tabs:first-child)) {
+  margin-block-start: var(--pk-4);
+}
 .pk-agenda-editor__calendar {
   min-width: 0;
 }
@@ -263,27 +320,28 @@
 }
 
 .pk-agenda-editor .pk-content-agenda__timeline {
-  width: max-content;
+  width: 100%;
   min-width: 100%;
-  table-layout: fixed;
+  table-layout: auto;
 }
 .pk-agenda-editor .pk-content-agenda__timeline thead th:first-child,
 .pk-agenda-editor .pk-content-agenda__time {
-  width: 7.5rem;
-  min-width: 7.5rem;
-  max-width: 7.5rem;
+  width: var(--agenda-time-width);
+  min-width: var(--agenda-time-width);
+  max-width: var(--agenda-time-width);
   border-block-start: 0;
 }
 .pk-agenda-editor .pk-content-agenda__timeline thead th:not(:first-child),
 .pk-agenda-editor .pk-content-agenda__slot td.pk-content-agenda__cell {
-  width: 22rem;
-  min-width: 22rem;
+  width: auto;
+  min-width: var(--agenda-room-width);
   border-inline-start: 1px solid var(--pk-line);
 }
 .pk-agenda-editor .pk-content-agenda__timeline thead th.pk-agenda-editor__add-room,
 .pk-agenda-editor .pk-content-agenda__slot td.pk-agenda-editor__add-room {
-  width: 10rem;
-  min-width: 10rem;
+  width: 3.5rem;
+  min-width: 3.5rem;
+  max-width: 3.5rem;
   border-inline-start: 1px solid var(--pk-line);
 }
 .pk-agenda-editor .pk-content-agenda__slot > td {
@@ -293,7 +351,7 @@
   border-block-start: 1px solid var(--pk-line);
 }
 .pk-agenda-editor .pk-content-agenda__timeline thead th {
-  border-block-end: 1px solid var(--pk-line);
+  border-block-end: 2px solid var(--agenda-color, var(--pk-line));
 }
 
 .pk-agenda-editor .pk-content-agenda__cell > .pk-agenda-editor__drop:hover,
@@ -313,8 +371,11 @@
 }
 
 @media (hover: none) {
+  /* The always-visible touch grip sits above the card footer's enlarged move controls,
+     which otherwise cover the bottom edge of a narrow card. */
   .pk-agenda-editor__resize {
     opacity: 1;
+    z-index: 6;
   }
 }
 
@@ -375,4 +436,24 @@
 
 .pk-agenda-editor > [role="tabpanel"] > .pk-content-agenda__tabs {
   margin-block-start: var(--pk-2);
+}
+
+.pk-agenda-editor .pk-content-agenda__timeline thead th.pk-agenda-editor__add-room,
+.pk-agenda-editor .pk-content-agenda__slot td.pk-agenda-editor__add-room {
+  width: auto;
+}
+
+.pk-agenda-editor .pk-content-agenda__timeline thead th.pk-content-agenda__location {
+  width: auto;
+}
+.pk-agenda-editor .pk-content-agenda__timeline[data-agenda-has-rooms="true"] .pk-content-agenda__add-column {
+  width: 3.5rem;
+}
+
+.pk-agenda-editor .pk-content-agenda__timeline[data-agenda-has-rooms="false"] thead th.pk-agenda-editor__add-room,
+.pk-agenda-editor
+  .pk-content-agenda__timeline[data-agenda-has-rooms="false"]
+  .pk-content-agenda__slot
+  td.pk-agenda-editor__add-room {
+  width: auto;
 }

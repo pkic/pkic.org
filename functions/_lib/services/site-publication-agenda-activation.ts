@@ -3,7 +3,7 @@ import { all } from "../db/queries";
 import { prepareAuthorizationGuard } from "../db/authorization-guard";
 import type { DatabaseLike, StatementLike } from "../types";
 import { validateAgendaSchedule } from "./event-agenda/mutations";
-import { preparePublicationCapacityGuard } from "./event-agenda/publication-capacity";
+import { preparePublicationAllocationGuard } from "./event-agenda/publication-allocations";
 import {
   occurrenceRepresentationReferences,
   prepareRepresentationEligibility,
@@ -46,7 +46,7 @@ export async function prepareSiteAgendaActivationGuards(db: DatabaseLike): Promi
       validateAgendaSchedule(snapshot, snapshot.occurrences);
       guards.push(
         ...(await prepareRepresentationEligibility(db, occurrenceRepresentationReferences(snapshot.occurrences))),
-        preparePublicationCapacityGuard(db, snapshot, { eventId: row.eventId, revision: row.revision }),
+        preparePublicationAllocationGuard(db, snapshot, { eventId: row.eventId, revision: row.revision }),
         preparePublicationParticipationGuard(db, row.eventId, snapshot),
       );
     }

@@ -190,7 +190,7 @@ export function AgendaBreakDialog({
               setRooms(ids ?? []);
             }}
             {...form.of("roomIds")}
-            help="All locations includes locations added later. Use Ctrl or Command to select a fixed subset."
+            help="All locations includes locations added later."
           />
           <AgendaSponsorFields
             slug={snapshot.eventSlug}

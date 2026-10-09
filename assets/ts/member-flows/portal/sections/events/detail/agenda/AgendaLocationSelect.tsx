@@ -1,11 +1,14 @@
-import { useLayoutEffect, useRef } from "preact/hooks";
 import type { AgendaSnapshot } from "../../../../../../../shared/schemas/event-agenda";
-import { formatNumber } from "../../../../../../../shared/format-number";
 import type { FieldPresentation } from "../../../../../../hooks/useContractForm";
 import { Field } from "../../../../../../ui/Field";
-import { Select } from "../../../../../../ui/TextControl";
+import { Checkbox } from "../../../../../../ui/Checkbox";
 
-/** Use the same native location selection for session and break dialogs. */
+/**
+ * Session, break and location dialogs choose locations from one compact checkbox list.
+ *
+ * `null` is the global "all locations" scope a break may keep, including locations added later;
+ * every other choice is the fixed list of ticked rooms, in the event's room order.
+ */
 export function AgendaLocationSelect({
   rooms,
   value,
@@ -22,40 +25,38 @@ export function AgendaLocationSelect({
   name?: string;
   help?: string;
 }) {
-  const controls = useRef<HTMLDivElement>(null);
-  const all = value === null || (rooms.length > 0 && rooms.every((room) => value.includes(room.id)));
-  useLayoutEffect(() => {
-    // Native selection mutates options even when their rendered props stay unchanged.
-    for (const option of controls.current?.querySelector("select")?.options ?? []) {
-      option.selected = option.value === "" ? all : !all && Boolean(value?.includes(option.value));
-    }
-  }, [all, value, rooms]);
+  const chosen = value ?? rooms.map((room) => room.id);
+  const all = value === null || (rooms.length > 0 && rooms.every((room) => chosen.includes(room.id)));
   return (
-    <Field label="Locations" help={help} {...validation}>
+    <Field group label="Locations" help={help} {...validation}>
       {(control) => (
-        <div ref={controls} class="pk-stack">
-          <Select
-            {...control}
+        <div class="pk-agenda-editor__locations">
+          <Checkbox
+            label="All locations"
             name={name}
-            multiple
-            size={Math.min(6, Math.max(2, rooms.length + 1))}
-            onChange={(event) => {
-              const selected = Array.from(event.currentTarget.selectedOptions, (option) => option.value);
-              if (all && selected.length > 1 && selected.includes("")) onChange(selected.filter((id) => id !== ""));
-              else if (selected.includes("")) onChange(globalAll ? null : rooms.map((room) => room.id));
-              else onChange(selected);
-            }}
-          >
-            <option value="" selected={all}>
-              All locations
-            </option>
-            {rooms.map((room) => (
-              <option key={room.id} value={room.id} selected={!all && Boolean(value?.includes(room.id))}>
-                {room.name}
-              </option>
-            ))}
-          </Select>
-          <p class="pk-muted">{all ? "All locations" : `${formatNumber(value?.length ?? 0)} selected`}</p>
+            value=""
+            checked={all}
+            aria-describedby={control["aria-describedby"]}
+            aria-invalid={control["aria-invalid"]}
+            onChange={(event) =>
+              onChange(event.currentTarget.checked ? (globalAll ? null : rooms.map((room) => room.id)) : [])
+            }
+          />
+          {rooms.map((room) => (
+            <Checkbox
+              key={room.id}
+              label={room.name}
+              name={name}
+              value={room.id}
+              checked={chosen.includes(room.id)}
+              aria-describedby={control["aria-describedby"]}
+              aria-invalid={control["aria-invalid"]}
+              onChange={(event) => {
+                const checked = event.currentTarget.checked;
+                onChange(rooms.map((item) => item.id).filter((id) => (id === room.id ? checked : chosen.includes(id))));
+              }}
+            />
+          ))}
         </div>
       )}
     </Field>

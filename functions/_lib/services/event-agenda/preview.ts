@@ -8,12 +8,16 @@ import { getAgenda } from "./read";
 import { preparePublicAgendaSnapshot } from "./public-snapshot";
 import { publicAgendaProjection } from "./public-projection";
 
-/** Read-only: public rendering never activates or approves the draft being reviewed. */
+/**
+ * Read-only: public rendering never activates or approves the draft being reviewed.
+ * `privateOccurrenceIds` admits named private sessions into one participant's projection.
+ */
 export async function previewAgenda(
   db: DatabaseLike,
   eventId: string,
   eventSlug: string,
   revision: "draft" | "approved",
+  privateOccurrenceIds: ReadonlySet<string> = new Set(),
 ): Promise<AgendaSnapshot> {
   const event = await first<{ base_path: string | null }>(db, "SELECT base_path FROM events WHERE id=?", [eventId]);
   let snapshot: AgendaSnapshot;
@@ -31,6 +35,10 @@ export async function previewAgenda(
     snapshot = { ...preparePublicAgendaSnapshot(draft, draft.revision), publishedRevision: draft.publishedRevision };
   }
   return agendaSnapshotSchema.parse(
-    publicAgendaProjection(await projectLiveAgendaMaterials(db, eventId, snapshot), event?.base_path ?? null),
+    publicAgendaProjection(
+      await projectLiveAgendaMaterials(db, eventId, snapshot),
+      event?.base_path ?? null,
+      privateOccurrenceIds,
+    ),
   );
 }

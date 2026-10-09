@@ -100,7 +100,9 @@ export function AgendaImport({
   if (choosing)
     return (
       <Panel>
-        <PanelHeader title="Choose proposals to import" />
+        <PanelHeader title="Choose proposals to import">
+          <Button onClick={() => setChoosing(false)}>Back to import</Button>
+        </PanelHeader>
         <PanelBody>
           <p>Select accepted proposals. Large selections are added in guarded batches; review before applying.</p>
           <EventProposalsTable
@@ -122,15 +124,15 @@ export function AgendaImport({
               </Button>
             )}
           />
-          <Button onClick={() => setChoosing(false)}>Cancel selection</Button>
         </PanelBody>
       </Panel>
     );
   return (
     <Panel>
-      <PanelHeader title="Import sessions" />
-      <PanelBody>
+      <PanelHeader title="Import sessions">
         <Button onClick={() => setVersioned(true)}>Import or export versioned agenda</Button>
+      </PanelHeader>
+      <PanelBody>
         <p>
           Preview an import before applying it. Existing imported sessions are preserved; repeated imports skip their
           stable source keys.
@@ -172,22 +174,24 @@ export function AgendaImport({
                   ? `${formatNumber(proposalIds.length)} proposals selected.`
                   : "Adds every accepted proposal not already in the agenda, across all pages."}
               </p>
-              <Button onClick={() => setChoosing(true)}>Choose accepted proposals</Button>
-              {proposalIds && (
-                <Button
-                  onClick={() => {
-                    setProposalIds(undefined);
-                    setPreview(null);
-                  }}
-                >
-                  Clear proposal selection
-                </Button>
-              )}
+              <div class="pk-cluster">
+                <Button onClick={() => setChoosing(true)}>Choose accepted proposals</Button>
+                {proposalIds && (
+                  <Button
+                    onClick={() => {
+                      setProposalIds(undefined);
+                      setPreview(null);
+                    }}
+                  >
+                    Clear proposal selection
+                  </Button>
+                )}
+              </div>
             </div>
           )}
           {source === "legacy" && (
             <Field
-              label="Historical agenda JSON"
+              label="Agenda JSON"
               help="Use the migration file with stable source keys and mapped speaker and location IDs."
               {...form.of("occurrences")}
             >

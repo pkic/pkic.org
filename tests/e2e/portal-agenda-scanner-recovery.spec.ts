@@ -103,12 +103,17 @@ test("real pending scanner storage survives reload and logout without crossing a
   await page.getByLabel("Badge code", { exact: true }).fill(badgeId);
   await page.getByRole("button", { name: "Record attendance", exact: true }).click();
   await expect(page.getByText("1 scans awaiting upload", { exact: true })).toBeVisible();
-  const clearedBadge = page.getByLabel("Badge code", { exact: true });
+  const manual = page.getByRole("dialog", { name: "Enter badge code", exact: true });
+  await expect(manual).not.toBeVisible();
+  await openScannerManualEntry(page);
+  const clearedBadge = manual.getByLabel("Badge code", { exact: true });
   await expect(clearedBadge).toHaveValue("");
   await expect(clearedBadge).not.toHaveAttribute("aria-invalid", "true");
   const badgeField = page.locator(".pk-field").filter({ has: clearedBadge });
   await expect(badgeField).not.toHaveClass(/pk-field--invalid/);
   await expect(badgeField.getByRole("alert")).toHaveCount(0);
+  await manual.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(manual).not.toBeVisible();
   const stored = await scannerStorage(page);
   expect(stored.pending).toHaveLength(1);
   const record = stored.pending[0];

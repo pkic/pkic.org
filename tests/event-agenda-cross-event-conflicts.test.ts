@@ -204,7 +204,7 @@ describe("canonical person availability across event agendas", () => {
     });
     const stale = await post("pqc-2026", "settings", refusedBody);
     expect(stale.status).toBe(409);
-    expect(apiErrorPayloadSchema.parse(await stale.json()).error.code).toBe("AGENDA_AUTHORIZATION_CHANGED");
+    expect(apiErrorPayloadSchema.parse(await stale.json()).error.code).toBe("AGENDA_REVISION_CHANGED");
     const unauthorized = await callApi(env, "/api/v1/events/pqc-2026/agenda/settings", {
       method: "POST",
       headers: { "content-type": "application/json" },

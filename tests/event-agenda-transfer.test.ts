@@ -80,7 +80,7 @@ function sourceDecision() {
     kind: "title",
     sourcePath: "/events/source/",
     sourceDigest: "a".repeat(64),
-    sourceLocator: "2023-03-03:0:0",
+    sourceLocator: "talk",
     authoredValue: " ",
     decision: "title_not_recorded",
     resolvedValue: "Title not recorded",
@@ -137,7 +137,7 @@ describe("versioned reviewed agenda transfer", () => {
     row.fields.title = "Title not recorded";
     row.archive = sessionHistoryMetadataSchema.parse({ sourceDecisions: [sourceDecision()] });
     const review = await reviewAgendaTransfer(env.DB, eventId, "transfer-test", value);
-    expect(review.ready).toBe(true);
+    expect(review.ready, JSON.stringify(review.findings)).toBe(true);
     await expect(
       applyAgendaTransfer(
         env.DB,
@@ -174,10 +174,10 @@ describe("versioned reviewed agenda transfer", () => {
     expect(document.occurrences[0]!.archive!.sourceDecisions[0]!.authoredValue).toBe(" ");
     const repeated = transferPrepareSchema.parse({ ...value, expectedRevision: applied.agenda.revision, document });
     expect((await reviewAgendaTransfer(env.DB, eventId, "transfer-test", repeated)).ready).toBe(true);
-    for (const field of ["sourcePath", "sourceDigest"] as const) {
+    for (const field of ["sourcePath", "sourceDigest", "sourceLocator"] as const) {
       const tampered = transferPrepareSchema.parse(repeated);
       tampered.document.occurrences[0]!.archive!.sourceDecisions[0]![field] =
-        field === "sourcePath" ? "/events/elsewhere/" : "f".repeat(64);
+        field === "sourcePath" ? "/events/elsewhere/" : field === "sourceDigest" ? "f".repeat(64) : "foreign-row";
       expect((await reviewAgendaTransfer(env.DB, eventId, "transfer-test", tampered)).ready).toBe(false);
     }
   });
@@ -692,6 +692,21 @@ it("preserves past source-only credits without creating canonical speakers and r
     sessionSlug: null,
     prerequisites: "",
   });
+  const canonicalPopulation = () =>
+    Promise.all(
+      [
+        "users",
+        "identities",
+        "organizations",
+        "members",
+        "member_category_assignments",
+        "user_roles",
+        "event_agenda_occurrence_speakers",
+        "event_agenda_operational_people",
+        "event_agenda_operational_days",
+      ].map((table) => env.DB.prepare(`SELECT COUNT(*) AS count FROM ${table}`).first("count")),
+    );
+  const populationBefore = await canonicalPopulation();
   const review = await reviewAgendaTransfer(env.DB, eventId, "transfer-test", value);
   expect(review.ready).toBe(true);
   expect(review.findings).toContainEqual(
@@ -710,9 +725,19 @@ it("preserves past source-only credits without creating canonical speakers and r
     user,
   );
   expect(applied.agenda.occurrences[0]!.speakers).toEqual([]);
-  await expect(publishAgenda(env.DB, eventId, "transfer-test", applied.agenda.revision, user)).rejects.toMatchObject({
-    code: "AGENDA_HISTORICAL_MAPPING_REQUIRED",
-  });
+  const published = await publishAgenda(env.DB, eventId, "transfer-test", applied.agenda.revision, user, true);
+  expect(published.publishedRevision).toBe(applied.agenda.revision + 1);
+  expect(published.occurrences[0]!.speakers).toEqual([]);
+  const approval = await env.DB.prepare(
+    "SELECT snapshot_json FROM event_agenda_publications WHERE event_id=? AND revision=?",
+  )
+    .bind(eventId, published.publishedRevision)
+    .first<{ snapshot_json: string }>();
+  expect(approval).not.toBeNull();
+  const frozen = agendaSnapshotSchema.parse(JSON.parse(approval!.snapshot_json));
+  expect(frozen.occurrences[0]!.history!.archivalCredits).toEqual(row.archive.archivalCredits);
+  expect(frozen.occurrences[0]!.speakers).toEqual([]);
+  expect(await canonicalPopulation()).toEqual(populationBefore);
   expect(applied.agenda.occurrences[0]!.history?.archivalCredits[0]).toMatchObject({
     displayName: "Alex",
     sourceRef: "speaker",
@@ -728,7 +753,7 @@ it("preserves past source-only credits without creating canonical speakers and r
   expect(exported.occurrences[0]!.archive!.archivalCredits[0]).toEqual(row.archive.archivalCredits[0]);
   const roundTrip = transferPrepareSchema.parse({
     ...value,
-    expectedRevision: applied.agenda.revision,
+    expectedRevision: published.revision,
     document: exported,
   });
   const repeatedReview = await reviewAgendaTransfer(env.DB, eventId, "transfer-test", roundTrip);

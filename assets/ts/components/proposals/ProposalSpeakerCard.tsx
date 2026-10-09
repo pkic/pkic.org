@@ -3,7 +3,7 @@
  * operator can do about it.
  *
  * The card reads like every other record card in the portal. The photo is the
- * same `PictureTile` a user's portrait uses — the picture is the control, the
+ * same `HeadshotTile` a user's portrait uses — the picture is the control, the
  * remove sits in its corner — rather than a column of three buttons under a
  * placeholder. The commands live behind one `…` menu at the card's top right;
  * they used to be a row of five buttons and a select beside the name, which
@@ -19,14 +19,12 @@ import { headshotUrlResponseSchema } from "../../../shared/schemas/registration"
 import { successResponseSchema } from "../../../shared/schemas/api-common";
 import { Badge } from "../Badge";
 import { confirmAction } from "../ConfirmDialog";
-import { PictureTile } from "../PictureTile";
 import { ProfileLinksInput, type ProfileLinksHandle } from "../ProfileLinksInput";
 import { normalizeProfileLinks } from "../../shared/widgets/profile-links";
 import { SPEAKER_ROLE_OPTIONS } from "../../shared/speaker-roles";
 import { requestJson } from "../../shared/api-client";
-import { cropHeadshot } from "../../shared/headshot/crop";
-import { confirmHeadshotUsage } from "../../shared/headshot/controller";
-import { ADMIN_HEADSHOT_DISCLAIMER } from "../../shared/headshot/AdminHeadshotManager";
+import { HeadshotTile } from "../../shared/headshot/HeadshotTile";
+import { headshotBodyEndpoint } from "../../shared/headshot/endpoints";
 import { formatDateTime, type ToastType } from "../../shared/ui";
 import { Badge as ToneBadge } from "../../ui/Badge";
 import { Button } from "../../ui/Button";
@@ -262,46 +260,14 @@ export function ProposalSpeakerCard({
         <PanelBody class="pk-stack pk-stack--snug">
           <div class="pk-cluster pk-cluster--start pk-cluster--between pk-cluster--nowrap">
             <div class="pk-cluster pk-cluster--start pk-cluster--nowrap">
-              <PictureTile
+              <HeadshotTile
                 name={name}
-                noun="photo"
-                shape="round"
-                size="mark"
                 canChange={canEdit}
                 imageUrl={speaker.headshotUrl ?? null}
-                alt={name}
-                hint="JPEG, PNG or WebP."
-                removeConfirmation={`Remove ${name}'s photo?`}
-                removeLabel="Remove photo"
-                onUpload={async (file) => {
-                  // The same two steps a user's portrait takes before it is
-                  // stored: the uploader asserts they may publish it, and the
-                  // image is cropped square.
-                  const accepted = await confirmHeadshotUsage({
-                    title: "Before uploading a photo",
-                    texts: ADMIN_HEADSHOT_DISCLAIMER,
-                    confirmText: "Proceed",
-                  });
-                  if (!accepted) return false;
-                  const cropped = await cropHeadshot(file);
-                  if (!cropped) return false;
-                  const data = await requestJson(assetPath("headshot"), headshotUrlResponseSchema, {
-                    method: "PUT",
-                    headers: { "Content-Type": cropped.type || "image/jpeg" },
-                    body: cropped,
-                  });
-                  onSaved(speaker.userId, {
-                    headshotUrl: data.headshotUrl ?? null,
-                    hasHeadshot: Boolean(data.headshotUrl),
-                  });
-                  return true;
-                }}
-                onRemove={async () => {
-                  await requestJson(assetPath("headshot"), successResponseSchema, { method: "DELETE" });
-                  onSaved(speaker.userId, { headshotUrl: null, hasHeadshot: false });
-                }}
-                onChanged={() => {}}
-                toast={notify}
+                consent="on-behalf"
+                endpoint={headshotBodyEndpoint(assetPath("headshot"), headshotUrlResponseSchema)}
+                onChanged={(headshotUrl) => onSaved(speaker.userId, { headshotUrl, hasHeadshot: Boolean(headshotUrl) })}
+                notify={notify}
               />
               <div class="pk-stack pk-stack--tight">
                 <div class="pk-cluster">

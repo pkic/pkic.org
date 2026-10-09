@@ -1,3 +1,4 @@
+import { enableAgendaEditing, openOrganizerAgenda } from "./helpers/organizer-agenda";
 import { runAgendaAction } from "./helpers/agenda-actions";
 import { runRowAction } from "./helpers/data-table";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
@@ -56,7 +57,7 @@ test("organizers build the shared agenda and browse a compact session table on d
   const createdEvent = groupEventDetailResponseSchema.parse(await createdResponse.json()).event;
   expect(createdEvent).toMatchObject({ ...request, ownerGroupId: ownerEvent.ownerGroupId });
   const slug = createdEvent.slug;
-  await page.goto(`/portal/#/events/${slug}/agenda`);
+  await openOrganizerAgenda(page, slug);
   await expect(page.getByRole("button", { name: "Actions for Agenda", exact: true })).toBeVisible();
   await page.evaluate(() => window.scrollTo(0, 0));
   await page.screenshot({ path: `${artifacts}/agenda-empty.png`, fullPage: true });
@@ -88,14 +89,15 @@ test("organizers build the shared agenda and browse a compact session table on d
     await runAgendaAction(page, "New session");
     const editor = page.getByRole("dialog", { name: "New session", exact: true });
     await editor.getByRole("textbox", { name: /^Session title/ }).fill(title);
+    await editor
+      .getByRole("textbox", { name: "Description", exact: true })
+      .fill("Explore practical approaches with the PKI community, with time for discussion and questions.");
+    await editor.getByRole("tab", { name: "Schedule", exact: true }).click();
     await editor.getByLabel("Starts", { exact: true }).fill(start);
     await editor.getByLabel("Ends", { exact: true }).fill(end);
-    await editor.getByLabel("Locations", { exact: true }).selectOption({ label: room });
-    await editor.getByRole("tab", { name: "Optional / settings", exact: true }).click();
+    await editor.getByRole("checkbox", { name: room, exact: true }).check();
+    await editor.getByRole("tab", { name: "Participation", exact: true }).click();
     await editor.getByLabel("Admission", { exact: true }).selectOption(policy);
-    await editor
-      .getByLabel("Description", { exact: true })
-      .fill("Explore practical approaches with the PKI community, with time for discussion and questions.");
     await editor.getByRole("button", { name: "Save session", exact: true }).click();
     await expect(editor).toBeHidden();
   }
@@ -207,7 +209,15 @@ test("organizers build the shared agenda and browse a compact session table on d
   expect(restored.occurrences).toEqual(beforeUnschedule.occurrences);
   expect(restored.revision).toBe(beforeUnschedule.revision + 2);
   await page.setViewportSize({ width: 1280, height: 900 });
-  await runRowAction(page, page.getByRole("row").filter({ hasText: sessions[0][0] }), "Select for move");
+  // Calendar selection is offered only once calendar editing is explicitly enabled.
+  const openingRow = page.getByRole("row").filter({ hasText: sessions[0][0] });
+  await openingRow.getByRole("button", { name: /^Actions for / }).click();
+  await expect(page.getByRole("menuitem", { name: "Select for move", exact: true })).toBeDisabled();
+  await page.keyboard.press("Escape");
+  await page.getByRole("tab", { name: "Agenda", exact: true }).click();
+  await enableAgendaEditing(page);
+  await page.getByRole("tab", { name: "Schedule", exact: true }).click();
+  await runRowAction(page, openingRow, "Select for move");
   await expect(page.getByRole("button", { name: /Move selected session at/ }).first()).toBeVisible();
   await page.getByRole("tab", { name: "Schedule", exact: true }).click();
   await page.getByRole("tab", { name: "Agenda", exact: true }).click();
@@ -357,7 +367,10 @@ test("organizers build the shared agenda and browse a compact session table on d
         (id) => approved.rooms.find((room) => room.id === id)!.name,
       );
       await expect(article.locator(".pk-content-agenda__room")).toHaveText(roomNames.join(" / "));
-      await expect(publicAgenda.locator(`time[datetime="${occurrence.startAt}"]`).first()).toBeVisible();
+      // The phone list repeats each start time in markup that the desktop grid keeps hidden.
+      await expect(
+        publicAgenda.locator(`time[datetime="${occurrence.startAt}"]`).filter({ visible: true }).first(),
+      ).toBeVisible();
       for (const credit of publicSessionCredits(occurrence)) {
         await expect(article.getByText(credit.displayName, { exact: true }).first()).toBeVisible();
       }
@@ -469,9 +482,9 @@ test("organizers build the shared agenda and browse a compact session table on d
     for (const occurrence of publishedOccurrences) {
       const exported = exportedSessions.find(({ session }) => session.id === occurrence.id)!;
       expect(exported.slot.startsAt).toBe(occurrence.startAt);
-      await expect(publicAgenda.locator(`time[datetime="${occurrence.startAt}"]`).first()).toHaveText(
-        exported.slot.time,
-      );
+      await expect(
+        publicAgenda.locator(`time[datetime="${occurrence.startAt}"]`).filter({ visible: true }).first(),
+      ).toHaveText(exported.slot.time);
       expect(exported.session).toMatchObject({
         title: occurrence.title,
         description: occurrence.description,
@@ -564,7 +577,7 @@ test("organizers build the shared agenda and browse a compact session table on d
   await page.getByRole("combobox", { name: "Session", exact: true }).click();
   await page.getByRole("option", { name: sessions[0][0], exact: true }).click();
   const summaryDownload = page.waitForEvent("download");
-  await page.getByRole("link", { name: "Export attendance summary", exact: true }).click();
+  await page.getByRole("link", { name: "Download attendance summary (CSV)", exact: true }).click();
   const download = await summaryDownload;
   const downloadPath = await download.path();
   expect(downloadPath).not.toBeNull();
@@ -574,7 +587,7 @@ test("organizers build the shared agenda and browse a compact session table on d
   expect(exported).toContain("not_established");
   expect(exported).toContain("contactRetention.state");
   await page.getByRole("link", { name: "Observed people", exact: true }).click();
-  const peopleExport = page.getByRole("link", { name: "Export observed people", exact: true });
+  const peopleExport = page.getByRole("link", { name: "Download observed people (CSV)", exact: true });
   await expect(peopleExport).toBeVisible();
   const peopleUrl = new URL((await peopleExport.getAttribute("href"))!, page.url());
   expect(peopleUrl.pathname).toBe(`/api/v1/events/${slug}/attendance/people/exports`);

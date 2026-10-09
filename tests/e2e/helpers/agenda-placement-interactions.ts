@@ -228,7 +228,7 @@ export async function openSessionSources(page: Page) {
     viewport: element.clientWidth,
     canvas: element.parentElement!.clientWidth,
   }));
-  const control = page.getByRole("button", { name: "Session sources", exact: true });
+  const control = page.getByRole("button", { name: /^(Show|Hide) session sources$/ });
   if ((await control.getAttribute("aria-expanded")) !== "true") await control.click();
   const sidebar = page.getByRole("complementary", { name: "Session sources", exact: true });
   await expect(sidebar).toBeVisible();
@@ -275,7 +275,7 @@ export async function completeAcceptedPlacement(
     .getByRole("complementary", { name: "Session sources", exact: true })
     .getByRole("article")
     .filter({ has: page.getByRole("heading", { name: title, exact: true }) });
-  await rowAction(page, card, "Schedule on agenda", mode);
+  await rowAction(page, card, "Choose a calendar slot", mode);
   expect(await readPlacementAgenda(page, endpoint)).toEqual(before);
   const candidate = page
     .getByRole("button", {

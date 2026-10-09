@@ -36,12 +36,14 @@ export function SessionEditorDialog({
   occurrence,
   onSaved,
   onClose,
+  onManageSlides,
 }: {
   snapshot: AgendaSnapshot;
   initialSchedule?: Pick<AgendaOccurrence, "startAt" | "endAt" | "roomId">;
   occurrence?: AgendaOccurrence;
   onSaved: (snapshot: AgendaSnapshot) => void;
   onClose: () => void;
+  onManageSlides?: (occurrence: AgendaOccurrence) => void;
 }) {
   const root = useRef<HTMLDivElement>(null);
   const [busy, setBusy] = useState(false);
@@ -64,6 +66,7 @@ export function SessionEditorDialog({
             initialSchedule={initialSchedule}
             onSaved={onSaved}
             onClose={onClose}
+            onManageSlides={onManageSlides}
             dialog
             onBusy={setBusy}
           />

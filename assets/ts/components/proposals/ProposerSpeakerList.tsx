@@ -4,6 +4,7 @@ import type { ProposalAccessResponse } from "../../shared/types";
 import { normalizeValidation } from "../../shared/form/validation-map";
 import { formatStatusLabel } from "../../shared/form/helpers";
 import { statusTone } from "../Badge";
+import { confirmAction } from "../ConfirmDialog";
 import { Badge } from "../../ui/Badge";
 import { EmptyState } from "../../ui/EmptyState";
 import { Panel, PanelHeader, PanelBody } from "../../ui/Panel";
@@ -56,8 +57,12 @@ export function ProposalManageSpeakerCard({
   }
 
   async function removeSpeaker(): Promise<void> {
-    if (!confirm(`Remove ${speakerName} from this proposal? Their user profile and proposal history will be kept.`))
-      return;
+    const confirmed = await confirmAction({
+      title: `Remove ${speakerName} from this proposal?`,
+      consequences: ["Their user profile and proposal history are kept."],
+      confirmLabel: "Remove speaker",
+    });
+    if (!confirmed) return;
     setRemoving(true);
     try {
       await deleteJson(profileEndpoint, proposalSpeakerRemovalResponseSchema);

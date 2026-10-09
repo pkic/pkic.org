@@ -1,0 +1,106 @@
+/* Print the canonical agenda DOM; screen layout and publication eligibility stay unchanged. */
+@media print {
+  .pk-content-agenda {
+    color: var(--pk-agenda-print-ink);
+    background: var(--pk-agenda-print-paper);
+    overflow: visible !important;
+    print-color-adjust: exact;
+  }
+
+  .pk-content-agenda .pk-content-agenda__controls,
+  .pk-content-agenda .pk-content-agenda__tabs,
+  .pk-content-agenda .pk-content-agenda__actions,
+  .pk-content-agenda .pk-content-agenda__card-footer,
+  .pk-content-agenda dialog,
+  .pk-content-agenda [data-agenda-card-control],
+  .pk-content-agenda [data-agenda-drop-target],
+  .pk-content-agenda .pk-agenda-editor__add-room,
+  .pk-content-agenda .pk-agenda-editor__add-column,
+  .pk-content-agenda .pk-agenda-editor__canvas > :not(.pk-content-agenda__day) {
+    display: none !important;
+  }
+
+  .pk-content-agenda .pk-content-agenda__day,
+  .pk-content-agenda .pk-content-agenda__speakers {
+    display: block !important;
+    overflow: visible !important;
+    width: 100% !important;
+    break-before: page;
+  }
+
+  .pk-content-agenda .pk-content-agenda__timeline {
+    display: table !important;
+    table-layout: fixed;
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+
+  .pk-content-agenda .pk-content-agenda__timeline caption {
+    position: static;
+    width: auto;
+    height: auto;
+    clip-path: none;
+    overflow: visible;
+    white-space: normal;
+    padding-block: 0.5rem;
+    font-weight: 700;
+  }
+
+  .pk-content-agenda .pk-content-agenda__timeline thead {
+    display: table-header-group !important;
+    position: static !important;
+    top: auto !important;
+  }
+
+  .pk-content-agenda .pk-content-agenda__timeline tbody {
+    display: table-row-group !important;
+  }
+
+  .pk-content-agenda .pk-content-agenda__slot {
+    display: table-row !important;
+    height: auto !important;
+  }
+
+  .pk-content-agenda .pk-content-agenda__timeline th,
+  .pk-content-agenda .pk-content-agenda__timeline td {
+    display: table-cell !important;
+    position: static !important;
+    top: auto !important;
+    min-width: 0 !important;
+    width: auto !important;
+    height: auto !important;
+    vertical-align: top;
+    overflow-wrap: anywhere;
+  }
+
+  .pk-content-agenda .pk-content-agenda__cell > .pk-content-agenda__session {
+    position: static !important;
+    display: block !important;
+    height: auto !important;
+    max-height: none !important;
+    overflow: visible !important;
+    opacity: 1 !important;
+    break-inside: avoid;
+  }
+
+  .pk-content-agenda .pk-content-agenda__description {
+    display: block !important;
+    max-height: none;
+    overflow: visible;
+    mask-image: none;
+  }
+
+  .pk-content-agenda .pk-content-agenda__speakers article {
+    break-inside: avoid;
+  }
+
+  .pk-agenda-dialog:has(.pk-content-agenda) {
+    position: static;
+    width: auto;
+    height: auto;
+    max-height: none;
+    overflow: visible;
+    border: 0;
+    padding: 0;
+  }
+}

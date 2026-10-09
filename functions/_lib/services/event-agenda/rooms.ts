@@ -6,7 +6,7 @@ import type { DatabaseLike } from "../../types";
 import { AppError } from "../../errors";
 import { getAgenda } from "./read";
 import { commitAgendaRevision, validateAgendaSchedule } from "./mutations";
-import { assertPlanningPublicationCapacity, preparePlanningPublicationCapacityGuard } from "./publication-capacity";
+import { assertPublicationAllocations, preparePublicationAllocationGuard } from "./publication-allocations";
 
 export async function updateAgendaRoom(
   db: DatabaseLike,
@@ -30,12 +30,13 @@ export async function updateAgendaRoom(
             setupMinutes: input.setupMinutes,
             equipment: input.equipment ?? [],
             availablePeriods: input.availablePeriods ?? [],
+            ...(input.virtualRoomUrl ? { virtualRoomUrl: input.virtualRoomUrl } : {}),
           }
         : room,
     ),
   };
   validateAgendaSchedule(proposed, proposed.occurrences);
-  await assertPlanningPublicationCapacity(db, proposed, snapshot);
+  await assertPublicationAllocations(db, proposed);
   await commitAgendaRevision(
     db,
     eventId,
@@ -43,7 +44,7 @@ export async function updateAgendaRoom(
     [
       db
         .prepare(
-          "UPDATE event_agenda_rooms SET name=?,capacity=?,setup_minutes=?,equipment_json=?,available_periods_json=? WHERE id=? AND event_id=?",
+          "UPDATE event_agenda_rooms SET name=?,capacity=?,setup_minutes=?,equipment_json=?,available_periods_json=?,virtual_room_url=? WHERE id=? AND event_id=?",
         )
         .bind(
           input.name,
@@ -51,10 +52,11 @@ export async function updateAgendaRoom(
           input.setupMinutes,
           JSON.stringify(input.equipment ?? []),
           JSON.stringify(input.availablePeriods ?? []),
+          input.virtualRoomUrl ?? null,
           roomId,
           eventId,
         ),
-      preparePlanningPublicationCapacityGuard(db, proposed, snapshot),
+      preparePublicationAllocationGuard(db, proposed),
       ...(await prepareAgendaRoomOrder(
         db,
         eventId,

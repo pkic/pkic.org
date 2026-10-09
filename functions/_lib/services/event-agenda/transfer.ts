@@ -1,6 +1,5 @@
-import { historicalReviewMetadataSchema } from "../../../../assets/shared/schemas/event-agenda-historical-review";
-import type { HistoricalMappingCandidate } from "./historical-mapping-import";
 import {
+  historicalMappingCandidates,
   transferredSessionHistory,
   transferredLegacyFragmentRoomId,
   legacyFragmentTransferRoomRef,
@@ -12,31 +11,15 @@ import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
 import { getAgenda } from "./read";
 import { importAgenda } from "./import";
-import { normalizeAgendaTransfer, agendaTransferDigest } from "../../../../assets/shared/event-agenda-transfer";
+import { readAgendaSessionFormatLabels } from "./occurrence-formats";
+import { configuredAgendaSessionFormat } from "../../../../assets/shared/event-agenda-format";
+import {
+  normalizeAgendaTransfer,
+  agendaTransferDigest,
+  agendaTransferModePolicy,
+} from "../../../../assets/shared/event-agenda-transfer";
 import { transferPrepareSchema, transferApplySchema } from "../../../../assets/shared/schemas/event-agenda-transfer";
 type Input = z.infer<typeof transferPrepareSchema>;
-function historicalMappingCandidates(input: Input): HistoricalMappingCandidate[] {
-  if (input.mode !== "archive") return [];
-  return input.document.occurrences
-    .filter((row) => !["skip", "retain_local"].includes(input.resolutions.rows[row.ref] ?? ""))
-    .map((row) => ({
-      sourceKey: row.sourceKey,
-      sourcePath: row.sourcePath,
-      sourceDigest: row.sourceDigest ?? input.document.source.sourceDigest,
-      sourceRef: row.ref,
-      retainedSourceEvidence: row.retainedSourceEvidence,
-      incomingMetadata: historicalReviewMetadataSchema.parse(transferredSessionHistory(input, row) ?? {}),
-      people: row.personRefs.map((ref) => {
-        const person = input.document.people.find((item) => item.ref === ref)!,
-          resolved = input.resolutions.people[ref];
-        return {
-          sourceRef: ref,
-          userId: resolved?.userId ?? person?.canonicalUserId ?? null,
-          actingIdentityId: resolved ? resolved.actingIdentityId : (person?.actingIdentityId ?? null),
-        };
-      }),
-    }));
-}
 export async function reviewAgendaTransfer(db: DatabaseLike, eventId: string, eventSlug: string, input: Input) {
   // Review and apply hash the same canonical contract, including defaults and field order.
   input = transferPrepareSchema.parse(input);
@@ -76,7 +59,8 @@ export async function reviewAgendaTransfer(db: DatabaseLike, eventId: string, ev
     "SELECT id,user_id,started_at,ended_at,blocked_at FROM identities WHERE id IN(SELECT json_extract(value,'$.id') FROM json_each(?))",
     [JSON.stringify(identityRefs)],
   );
-  const archiveClock = nowIso();
+  const archiveClock = nowIso(),
+    policy = agendaTransferModePolicy[input.mode];
   for (const row of input.document.occurrences) {
     const sourceDigest = row.sourceDigest ?? input.document.source.sourceDigest;
     const provenanceMatches = (metadata: { sourcePath: string; sourceDigest: string }) =>
@@ -107,20 +91,21 @@ export async function reviewAgendaTransfer(db: DatabaseLike, eventId: string, ev
     const legacyFragments = row.archive?.legacyFragments ?? [];
     const legacyDownloads = row.archive?.legacyDownloads ?? [];
     const sourceLocatorMatches = (metadata: { sourcePath: string; sourceDigest: string; sourceLocator: string }) =>
-      provenanceMatches(metadata) &&
-      (metadata.sourceLocator === row.ref ||
-        (input.document.source.kind === "portable" &&
-          row.retainedSourceEvidence.some(
-            (receipt) =>
-              receipt.sourcePath === metadata.sourcePath &&
-              receipt.sourceDigest === metadata.sourceDigest &&
-              receipt.sourceRef === metadata.sourceLocator,
-          )));
+      (metadata.sourcePath === row.sourcePath &&
+        metadata.sourceDigest === sourceDigest &&
+        metadata.sourceLocator === row.ref) ||
+      (input.document.source.kind === "portable" &&
+        row.retainedSourceEvidence.some(
+          (receipt) =>
+            receipt.sourcePath === metadata.sourcePath &&
+            receipt.sourceDigest === metadata.sourceDigest &&
+            receipt.sourceRef === metadata.sourceLocator,
+        ));
     const ownedOccurrence = snapshot.occurrences.find((occurrence) =>
       existingSources.some((source) => source.source_key === row.sourceKey && source.id === occurrence.id),
     );
     if (
-      input.mode === "archive" &&
+      policy.retainsSource &&
       (legacyFragments.some((fragment) => {
         const roomId = transferredLegacyFragmentRoomId(input, fragment);
         const rowRoomIds = row.roomRefs.map(
@@ -191,7 +176,7 @@ export async function reviewAgendaTransfer(db: DatabaseLike, eventId: string, ev
     if (
       sourceDecisions.some(
         (decision) =>
-          !provenanceMatches(decision) ||
+          !sourceLocatorMatches(decision) ||
           decision.reviewedAt > archiveClock ||
           (decision.kind === "title" && decision.resolvedValue !== row.fields.title) ||
           (decision.decision === "credit_not_recorded" &&
@@ -239,7 +224,7 @@ export async function reviewAgendaTransfer(db: DatabaseLike, eventId: string, ev
     const partial = row.archive?.archivalTiming;
     if (
       partial &&
-      input.mode === "archive" &&
+      policy.attribution === "archival" &&
       (!row.timing.startAt ||
         row.timing.startAt >= archiveClock ||
         row.timing.endAt !== null ||
@@ -259,7 +244,7 @@ export async function reviewAgendaTransfer(db: DatabaseLike, eventId: string, ev
           "Partial historical timing requires an exact past authored start and source provenance, with no asserted end.",
       });
     const credits = row.archive?.archivalCredits ?? [];
-    if (credits.length && input.mode === "archive") {
+    if (credits.length && policy.attribution === "archival") {
       const invalid =
         (!row.timing.endAt && !partial) ||
         (row.timing.endAt !== null && row.timing.endAt >= archiveClock) ||
@@ -345,7 +330,7 @@ export async function reviewAgendaTransfer(db: DatabaseLike, eventId: string, ev
       }
     }
     if (
-      input.mode === "archive" &&
+      policy.retainsSource &&
       row.sourceAnchor &&
       snapshot.occurrences.some(
         (o) =>
@@ -375,7 +360,7 @@ export async function reviewAgendaTransfer(db: DatabaseLike, eventId: string, ev
       severity: "blocking",
       message: "Choose a unique public anchor for each imported occurrence.",
     });
-  if (input.mode === "archive") {
+  if (policy.retainsSource) {
     const importedKeys = new Set(
       input.document.occurrences
         .filter((row) => !["skip", "retain_local"].includes(input.resolutions.rows[row.ref] ?? ""))
@@ -416,6 +401,16 @@ export async function reviewAgendaTransfer(db: DatabaseLike, eventId: string, ev
           severity: "blocking",
           message: "Choose a location belonging to this event.",
         });
+  const formatLabels = await readAgendaSessionFormatLabels(db, eventId);
+  for (const row of input.document.occurrences)
+    if (row.fields.format && !configuredAgendaSessionFormat(formatLabels, row.fields.format))
+      findings.push({
+        rowRef: row.ref,
+        field: "format",
+        code: "format_unresolved",
+        severity: "blocking",
+        message: `Configure the session format "${row.fields.format}" for this event or map it to a configured session type.`,
+      });
   let imported = 0,
     skipped = 0;
   if (!findings.some((f) => f.severity === "blocking"))
@@ -483,8 +478,9 @@ export async function applyAgendaTransfer(
     );
   if (review.findings.some((f) => f.code === "timing_inferred") && !input.acknowledgeInferredTiming)
     throw new AppError(400, "AGENDA_TRANSFER_TIMING_REVIEW_REQUIRED", "Confirm the inferred timing before applying.");
+  const policy = agendaTransferModePolicy[input.mode];
   if (
-    input.mode === "archive" &&
+    policy.retainsSource &&
     input.document.occurrences.some((r) => r.archive) &&
     !input.acknowledgeArchiveRepresentation
   )
@@ -503,17 +499,18 @@ export async function applyAgendaTransfer(
     actorId,
     (item) => {
       const row = input.document.occurrences.find((r) =>
-        input.mode === "archive"
+        policy.retainsSource
           ? r.sourceKey === item.sourceKey
           : `copy:${input.document.source.sourceDigest}:${r.ref}` === item.sourceKey,
       )!;
       const statements = [
         db
           .prepare(
-            "INSERT INTO event_agenda_import_provenance(occurrence_id,source_format,source_version,source_path,source_ref,source_anchor,source_digest,timing_json,media_json,people_json,imported_by,imported_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?)",
+            "INSERT INTO event_agenda_import_provenance(occurrence_id,import_mode,source_format,source_version,source_path,source_ref,source_anchor,source_digest,timing_json,media_json,people_json,imported_by,imported_at) VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)",
           )
           .bind(
             item.id,
+            input.mode,
             input.document.source.kind,
             input.document.version,
             row.sourcePath,
@@ -533,7 +530,7 @@ export async function applyAgendaTransfer(
               }),
             ),
             JSON.stringify(
-              input.mode === "copy_as_new"
+              !policy.retainsSource
                 ? []
                 : row.personRefs.map((ref) => {
                     const person = input.document.people.find((p) => p.ref === ref)!,
@@ -549,7 +546,7 @@ export async function applyAgendaTransfer(
             clock,
           ),
       ];
-      if (input.mode === "archive" && row.retainedSourceEvidence.length)
+      if (policy.retainsSource && row.retainedSourceEvidence.length)
         statements.push(
           db
             .prepare(
@@ -557,7 +554,7 @@ export async function applyAgendaTransfer(
             )
             .bind(JSON.stringify(row.retainedSourceEvidence), eventId, item.id, eventId),
         );
-      if (input.mode === "archive" && row.sourceAnchor)
+      if (policy.retainsSource && row.sourceAnchor)
         statements.push(
           db.prepare("UPDATE event_agenda_occurrences SET public_anchor=? WHERE id=?").bind(row.sourceAnchor, item.id),
         );

@@ -66,8 +66,8 @@ export function SessionSpeakerReviewDialog({
   return (
     <Dialog
       open
-      title={`Speaker details · ${speaker.displayName}`}
-      confirmLabel={busy ? "Saving…" : "Save speaker details"}
+      title={`Event representation · ${speaker.displayName}`}
+      confirmLabel={busy ? "Saving…" : "Save representation"}
       confirmDisabled={busy || !appearances.length}
       onConfirm={() => formElement.current?.requestSubmit()}
       onCancel={() => {

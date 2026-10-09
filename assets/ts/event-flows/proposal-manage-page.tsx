@@ -1,4 +1,5 @@
 import { SpeakerList } from "../components/proposals/ProposerSpeakerList";
+import { ConfirmDialogHost } from "../components/ConfirmDialog";
 import { mountMarkdownField } from "../components/markdown-editor/mount-markdown-field";
 import { render } from "preact";
 import { getJson, patchJson, postJson } from "../shared/api-client";
@@ -57,14 +58,19 @@ function renderSpeakerList(
   const list = q("[data-cospeaker-list]");
   if (!list) return;
   render(
-    <SpeakerList
-      speakers={speakers}
-      token={token}
-      apiBase={apiBase}
-      proposerUserId={proposerUserId}
-      onReload={onReload}
-      onStatus={onStatus}
-    />,
+    <>
+      <SpeakerList
+        speakers={speakers}
+        token={token}
+        apiBase={apiBase}
+        proposerUserId={proposerUserId}
+        onReload={onReload}
+        onStatus={onStatus}
+      />
+      {/* The speaker photo tiles confirm a removal in the shared dialog,
+          which needs a host on this public page as it has in the portal. */}
+      <ConfirmDialogHost />
+    </>,
     list as HTMLElement,
   );
 }

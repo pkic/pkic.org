@@ -4,6 +4,7 @@ import type { useAgendaScheduling } from "./useAgendaScheduling";
 
 interface AgendaSessionActionContext {
   canEdit: boolean;
+  canInspect?: boolean;
   canReviewAppearances: boolean;
   busy: boolean;
   scheduling: Pick<ReturnType<typeof useAgendaScheduling>, "actions" | "move" | "resize" | "timeStep">;
@@ -12,6 +13,8 @@ interface AgendaSessionActionContext {
     (session: AgendaOccurrence) => void
   > & { locations?: (session: AgendaOccurrence) => void };
   select: (id: string, kind: "move" | "resize") => void;
+  /** Calendar selection needs calendar editing; a locked calendar would silently ignore it. */
+  selectionLocked?: boolean;
 }
 
 /** Direct card interactions replace selection commands; table bulk selection stays available. */
@@ -22,15 +25,40 @@ export function agendaCardActions(actions: RowActionsProps["actions"]) {
 /** Cards, rows and details offer the same authorized commands for the same occurrence. */
 export function agendaSessionActions(
   occurrence: AgendaOccurrence,
-  { canEdit, canReviewAppearances, busy, scheduling, open, select }: AgendaSessionActionContext,
+  {
+    canEdit,
+    canInspect,
+    canReviewAppearances,
+    busy,
+    scheduling,
+    open,
+    select,
+    selectionLocked = false,
+  }: AgendaSessionActionContext,
   beforeSelect?: () => void,
 ): RowActionsProps["actions"] {
+  const schedulingActions = canEdit ? scheduling.actions(occurrence) : [];
   const actions: RowActionsProps["actions"] = !canEdit
-    ? canReviewAppearances
-      ? [{ id: "history", label: "Review historical representation", onSelect: () => open.history(occurrence) }]
-      : []
+    ? canInspect
+      ? [
+          { id: "history", label: "Session archive / materials", onSelect: () => open.history(occurrence) },
+          { id: "promotion", label: "Speaker promotion kit", onSelect: () => open.promotion(occurrence) },
+        ]
+      : canReviewAppearances
+        ? [{ id: "history", label: "Review historical representation", onSelect: () => open.history(occurrence) }]
+        : []
     : [
+        // The record itself.
         { id: "edit", label: "Edit session", disabled: busy, onSelect: () => open.edit(occurrence) },
+        { id: "duplicate", label: "Duplicate session", disabled: busy, onSelect: () => open.duplicate(occurrence) },
+        // Where and when it runs.
+        {
+          id: "move",
+          label: "Move to day / location",
+          disabled: busy,
+          separatorBefore: true,
+          onSelect: () => open.move(occurrence),
+        },
         ...(open.locations
           ? [
               {
@@ -41,36 +69,11 @@ export function agendaSessionActions(
               },
             ]
           : []),
-        ...scheduling.actions(occurrence),
-        { id: "duplicate", label: "Duplicate session", disabled: busy, onSelect: () => open.duplicate(occurrence) },
-        { id: "history", label: "Session archive / materials", onSelect: () => open.history(occurrence) },
-        { id: "promotion", label: "Speaker promotion kit", onSelect: () => open.promotion(occurrence) },
-        { id: "participation", label: "Participation / approvals", onSelect: () => open.participation(occurrence) },
-        {
-          id: "resize",
-          label: "Select end time to resize",
-          disabled: !occurrence.startAt || busy,
-          onSelect: () => select(occurrence.id, "resize"),
-        },
-        { id: "move", label: "Move to day / location", disabled: busy, onSelect: () => open.move(occurrence) },
-        { id: "select", label: "Select for move", disabled: busy, onSelect: () => select(occurrence.id, "move") },
         {
           id: "swap",
           label: "Swap sessions",
           disabled: !occurrence.startAt || busy,
           onSelect: () => open.swap(occurrence),
-        },
-        {
-          id: "extend",
-          label: `Extend by ${scheduling.timeStep} minutes`,
-          disabled: !occurrence.endAt || busy,
-          onSelect: () =>
-            occurrence.endAt &&
-            scheduling.resize(
-              occurrence.id,
-              new Date(Date.parse(occurrence.endAt) + scheduling.timeStep * 60000).toISOString(),
-              occurrence.roomId ?? "",
-            ),
         },
         ...([-1, 1] as const).map((direction) => ({
           id: direction === -1 ? "earlier" : "later",
@@ -84,6 +87,43 @@ export function agendaSessionActions(
               occurrence.roomId,
             ),
         })),
+        {
+          id: "extend",
+          label: `Extend by ${scheduling.timeStep} minutes`,
+          disabled: !occurrence.endAt || busy,
+          onSelect: () =>
+            occurrence.endAt &&
+            scheduling.resize(
+              occurrence.id,
+              new Date(Date.parse(occurrence.endAt) + scheduling.timeStep * 60000).toISOString(),
+              occurrence.roomId ?? "",
+            ),
+        },
+        ...schedulingActions.filter((action) => action.id !== "bulk"),
+        // Calendar and table selection; cards and details drop these in favour of direct manipulation.
+        {
+          id: "select",
+          label: "Select for move",
+          disabled: busy || selectionLocked,
+          separatorBefore: true,
+          onSelect: () => select(occurrence.id, "move"),
+        },
+        {
+          id: "resize",
+          label: "Select end time to resize",
+          disabled: !occurrence.startAt || busy || selectionLocked,
+          onSelect: () => select(occurrence.id, "resize"),
+        },
+        ...schedulingActions.filter((action) => action.id === "bulk"),
+        // Related workspaces for this session.
+        {
+          id: "history",
+          label: "Session archive / materials",
+          separatorBefore: true,
+          onSelect: () => open.history(occurrence),
+        },
+        { id: "promotion", label: "Speaker promotion kit", onSelect: () => open.promotion(occurrence) },
+        { id: "participation", label: "Participation / approvals", onSelect: () => open.participation(occurrence) },
       ];
   return beforeSelect
     ? actions.map((action) => ({

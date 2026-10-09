@@ -44,7 +44,12 @@ import { signInToPortal } from "./helpers/portal-auth";
 import { publishE2eSite } from "./helpers/site-publication";
 import { runAgendaAction } from "./helpers/agenda-actions";
 import { correctPilotAttendance } from "./helpers/attendance-correction";
-import { scannerStorage, reconnectScannerBrowser, openScannerDiagnostics } from "./helpers/scanner-recovery-storage";
+import {
+  scannerStorage,
+  reconnectScannerBrowser,
+  openScannerDiagnostics,
+  closeScannerDiagnostics,
+} from "./helpers/scanner-recovery-storage";
 import {
   prepareSponsorLiveFixture,
   captureDeviceConsole,
@@ -57,7 +62,7 @@ import {
 } from "./helpers/sponsor-live-fixture";
 import {
   pilotAgendaApi,
-  pilotAgendaPage,
+  openPilotAgenda,
   readPilotAgenda,
   capturePilot,
   preparePilotMeeting,
@@ -74,6 +79,10 @@ test.use({ actionTimeout: 30_000 });
 
 async function closePilotScanner(page: Page, scan: ReturnType<typeof enrolledEventScanRequestSchema.parse>) {
   await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(0);
+  // Manual entry is a modal dialog; leave it before reaching the scanner's diagnostics.
+  const manual = page.getByRole("dialog", { name: /^(Enter badge code|Review sponsor lead)$/ });
+  if (await manual.isVisible()) await manual.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(manual).not.toBeVisible();
   const diagnostics = await openScannerDiagnostics(page);
   const closing = page
     .waitForResponse(
@@ -173,7 +182,7 @@ test("one recurring meeting and conference retain the same actors through organi
     draft = await readPilotAgenda(staff);
     const selected = draft.occurrences.find((row) => row.id === ids.sourceId)!;
     await approvePilotAppearance(staff, selected, speaker.userId);
-    await staff.goto(pilotAgendaPage);
+    await openPilotAgenda(staff);
     await runAgendaAction(staff, "Review for publication");
     const publishing = staff.waitForResponse(
       (response) =>
@@ -247,15 +256,23 @@ test("one recurring meeting and conference retain the same actors through organi
     ] as const;
     for (const [occurrence, action, status] of selections) {
       await attendee.goto(`/portal/#/events/${sponsorEventSlug}/agenda?session=${occurrence.id}`);
-      await expect(attendee.getByRole("heading", { name: occurrence.title, exact: true })).toBeVisible();
-      await attendee.getByLabel("Attendance", { exact: true }).selectOption("physical");
-      await attendee.getByLabel("Participation", { exact: true }).selectOption(action);
+      // The deep link opens the session's details over the event app's agenda.
+      const details = attendee.getByRole("dialog", { name: occurrence.title, exact: true });
+      await expect(details.getByRole("heading", { name: occurrence.title, exact: true })).toBeVisible();
+      const participation = details.getByRole("region", { name: "My participation", exact: true });
+      await participation.getByLabel("Attendance", { exact: true }).selectOption("physical");
       const changing = attendee.waitForResponse(
         (response) =>
           new URL(response.url()).pathname === `${pilotAgendaApi}/${occurrence.id}/participation` &&
           response.request().method() === "PUT",
       );
-      await attendee.getByRole("button", { name: "Update", exact: true }).click();
+      // Saving interest is the details' star; registration is the participation command.
+      if (action === "save")
+        await details.getByRole("button", { name: `Star ${occurrence.title}`, exact: true }).click();
+      else {
+        await participation.getByLabel("Participation", { exact: true }).selectOption(action);
+        await participation.getByRole("button", { name: "Update", exact: true }).click();
+      }
       const changed = await changing;
       expect(changed.status(), await changed.text()).toBe(200);
       const body = sessionParticipationRequestSchema.parse(changed.request().postDataJSON());
@@ -424,6 +441,8 @@ test("one recurring meeting and conference retain the same actors through organi
     expect(registrationManageUpdateResponseSchema.parse(await withdrawn.json()).sponsorSharing.allowed).toBe(false);
     expect(sponsorLeadListSchema.parse(await (await sponsor.request.get(leadsPath)).json()).leads).toHaveLength(0);
     expect(await (await sponsor.request.get(`${leadsPath}.csv`)).text()).not.toContain(fixture.email);
+    // The closed session's diagnostics dialog sits over the lead workspace until dismissed.
+    await closeScannerDiagnostics(sponsor);
     await sponsor.getByRole("button", { name: "Close scanner", exact: true }).click();
     await sponsor.reload();
     await sponsor.getByRole("button", { name: `Open leads for ${scope.name}`, exact: true }).click();
@@ -522,7 +541,7 @@ test("one recurring meeting and conference retain the same actors through organi
       (await readPilotAgenda(staff)).occurrences.find((row) => row.id === source.id)!,
       info,
     );
-    await staff.goto(pilotAgendaPage);
+    await openPilotAgenda(staff);
     await runAgendaAction(staff, "Review for publication");
     await staff.getByRole("button", { name: "Approve for publication", exact: true }).click();
     await expect(staff.getByRole("button", { name: "Approve for publication", exact: true })).toBeDisabled();

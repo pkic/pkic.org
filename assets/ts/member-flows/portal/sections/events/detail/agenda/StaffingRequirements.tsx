@@ -178,40 +178,44 @@ export function StaffingRequirements({
                     </Select>
                   )}
                 </Field>
-                <Button
-                  type="button"
-                  onClick={() => {
-                    setRequirements(requirements.filter((item) => item.id !== row.id));
-                    setPositions(positions.filter((item) => item.requirementId !== row.id));
-                  }}
-                >
-                  Remove duty requirement
-                </Button>
+                <div class="pk-cluster">
+                  <Button
+                    type="button"
+                    onClick={() => {
+                      setRequirements(requirements.filter((item) => item.id !== row.id));
+                      setPositions(positions.filter((item) => item.requirementId !== row.id));
+                    }}
+                  >
+                    Remove duty requirement
+                  </Button>
+                </div>
               </div>
             );
           })}
-          <Button
-            type="button"
-            disabled={!snapshot.staffingRoles.length}
-            onClick={() => {
-              const id = crypto.randomUUID();
-              setRequirements([
-                ...requirements,
-                {
-                  id,
-                  shiftId,
-                  roleId: snapshot.staffingRoles[0]!.id,
-                  postId: null,
-                  idealCount: 1,
-                  seniority: "any",
-                  attendanceMode: "any",
-                },
-              ]);
-              setPositions([...positions, { id: crypto.randomUUID(), requirementId: id, index: 1 }]);
-            }}
-          >
-            Add duty requirement
-          </Button>
+          <div class="pk-cluster">
+            <Button
+              type="button"
+              disabled={!snapshot.staffingRoles.length}
+              onClick={() => {
+                const id = crypto.randomUUID();
+                setRequirements([
+                  ...requirements,
+                  {
+                    id,
+                    shiftId,
+                    roleId: snapshot.staffingRoles[0]!.id,
+                    postId: null,
+                    idealCount: 1,
+                    seniority: "any",
+                    attendanceMode: "any",
+                  },
+                ]);
+                setPositions([...positions, { id: crypto.randomUUID(), requirementId: id, index: 1 }]);
+              }}
+            >
+              Add duty requirement
+            </Button>
+          </div>
           {!snapshot.staffingRoles.length && <p>Configure event roles before adding a duty requirement.</p>}
           <div class="pk-cluster pk-cluster--end">
             <Button disabled={busy} onClick={onClose}>

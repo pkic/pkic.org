@@ -1,6 +1,7 @@
 import { legacyAgendaDownloads } from "./legacy-agenda-downloads.mjs";
 import { legacyAgendaFragments } from "./legacy-agenda-fragments.mjs";
 import { resolveLegacyAgendaRow } from "./legacy-agenda-decisions.mjs";
+import { resolveLegacyAgendaFormat } from "./legacy-agenda-format.mjs";
 import { legacyAgendaPeople } from "./legacy-agenda-history.mjs";
 import { validateLegacyAgendaDocument, legacyAgendaSourcePath } from "./legacy-agenda-preparation.mjs";
 import { createHash } from "node:crypto";
@@ -24,6 +25,10 @@ export function prepareLegacyAgendaImport(source, mappings) {
   const historicalCandidates = [];
   const sourceDecisions = [];
   const sourceRows = [];
+  const formatDecisions = [];
+  const placeholderDecisions = [];
+  const endMarkers = [];
+  const shadowedFragments = [];
   if (!source.agenda || typeof source.agenda !== "object" || Object.keys(source.agenda).length === 0)
     unresolved.push({ sourcePath, kind: "agenda", message: "No authored agenda dates were found." });
   const occurrences = [];
@@ -37,6 +42,17 @@ export function prepareLegacyAgendaImport(source, mappings) {
         timing = contentAgendaSlotTiming(date, source.timezone, slot, slots[slotIndex + 1], source.transitionMinutes);
       } catch (error) {
         unresolved.push({ sourcePath, date, slotIndex, kind: "time", message: error.message });
+        continue;
+      }
+      // A final title-only slot without a duration marks when the day ends; it is not a session.
+      if (
+        mappings.archivePublicSource !== true &&
+        slotIndex === slots.length - 1 &&
+        !slot.sessions?.length &&
+        slot.durationMinutes === undefined &&
+        !(timing.durationMinutes > 0)
+      ) {
+        endMarkers.push({ date, time: slot.time, title: slot.title ?? null });
         continue;
       }
       const sessions = slot.sessions?.length
@@ -64,6 +80,12 @@ export function prepareLegacyAgendaImport(source, mappings) {
         sourceDecisions.push(...decisions);
         sourceRows.push(resolved.sourceRow);
         const context = { sourceKey, date, time: slot.time, title };
+        const presentation = slot.sessions?.length
+          ? resolveLegacyAgendaFormat(session, context, mappings)
+          : { format: null, track: null, placeholder: false, unresolved: [] };
+        unresolved.push(...presentation.unresolved);
+        if (presentation.formatDecision) formatDecisions.push(presentation.formatDecision);
+        if (presentation.placeholderDecision) placeholderDecisions.push(presentation.placeholderDecision);
         const legacy = slot.sessions?.length
           ? legacyAgendaFragments(
               source,
@@ -158,7 +180,9 @@ export function prepareLegacyAgendaImport(source, mappings) {
             title: context.title,
             description: session.description ?? "",
             kind: slot.sessions?.length ? "session" : "break",
-            track: session.track?.trim() || null,
+            track: presentation.track,
+            format: presentation.format,
+            placeholder: presentation.placeholder,
             visibility: "public",
             admissionPolicy: "preference",
             capacity: null,
@@ -256,7 +280,9 @@ export function prepareLegacyAgendaImport(source, mappings) {
           remoteCapacity: null,
           visibility: "public",
           kind: slot.sessions?.length ? "session" : "break",
-          track: session.track?.trim() || null,
+          track: presentation.track,
+          format: presentation.format,
+          placeholder: presentation.placeholder,
         });
       }
     }
@@ -284,15 +310,27 @@ export function prepareLegacyAgendaImport(source, mappings) {
         message: "Map colliding authored row locators to distinct reviewed source keys.",
       });
     keys.add(row.sourceKey);
+    if (row.archive?.legacyFragments && mappings.archivePublicSource !== true) {
+      // Hugo rendered every day on one page, so a repeated anchor only ever reached its first
+      // occurrence in date order. Later duplicates were unreachable and are recorded, not kept.
+      row.archive.legacyFragments = row.archive.legacyFragments.filter((fragment) => {
+        const owner = fragmentOwners.get(fragment.anchor);
+        if (owner && owner !== row.sourceKey) {
+          shadowedFragments.push({ sourceKey: row.sourceKey, anchor: fragment.anchor, reachableFrom: owner });
+          return false;
+        }
+        return true;
+      });
+    }
     for (const fragment of row.archive?.legacyFragments ?? []) {
-      if (fragmentOwners.has(fragment.anchor))
+      if (fragmentOwners.has(fragment.anchor) && fragmentOwners.get(fragment.anchor) !== row.sourceKey)
         unresolved.push({
           kind: "legacy_fragment",
           sourceKey: row.sourceKey,
           value: fragment.anchor,
           message: "Resolve colliding authored legacy fragments before importing.",
         });
-      fragmentOwners.set(fragment.anchor, row.sourceKey);
+      if (!fragmentOwners.has(fragment.anchor)) fragmentOwners.set(fragment.anchor, row.sourceKey);
     }
   }
   const locators = new Set(sourceRows.map((row) => row.sourceLocator));
@@ -309,6 +347,10 @@ export function prepareLegacyAgendaImport(source, mappings) {
     historicalCandidates,
     sourceDecisions,
     sourceRows,
+    formatDecisions,
+    placeholderDecisions,
+    endMarkers,
+    shadowedFragments,
     payload: { source: "legacy", dryRun: true, expectedRevision, occurrences },
     unresolved,
     ready: unresolved.length === 0,

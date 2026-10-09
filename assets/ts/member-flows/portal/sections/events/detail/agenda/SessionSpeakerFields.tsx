@@ -1,147 +1,82 @@
-import type { AgendaOccurrence, AgendaSnapshot } from "../../../../../../../shared/schemas/event-agenda";
+import type { AgendaOccurrence } from "../../../../../../../shared/schemas/event-agenda";
 import { agendaCreditRoleSchema } from "../../../../../../../shared/schemas/event-agenda";
-import { agendaSessionContent } from "../../../../../../../shared/public-agenda-content";
-import { AgendaSpeaker } from "../../../../../../site/AgendaSpeaker";
+import { SPEAKER_ROLE_OPTIONS } from "../../../../../../shared/speaker-roles";
+import { AffiliationRow } from "../../../../../../ui/AffiliationRow";
+import { Avatar } from "../../../../../../ui/Avatar";
 import { Button } from "../../../../../../ui/Button";
 import { Select } from "../../../../../../ui/TextControl";
+import { IconRemove } from "../../../../../../components/icons";
 
-function SessionSpeakerSummary({
-  snapshot,
-  occurrence,
-  speaker,
-}: {
-  snapshot: AgendaSnapshot;
-  occurrence?: AgendaOccurrence;
-  speaker: AgendaOccurrence["speakers"][number];
-}) {
-  if (!occurrence) return <strong>{speaker.displayName}</strong>;
-  const history = occurrence.history;
-  const content = agendaSessionContent(
-    snapshot,
-    {
-      ...occurrence,
-      speakers: [speaker],
-      history: history
-        ? {
-            ...history,
-            appearances: history.appearances.filter((item) => item.userId === speaker.userId),
-            archivalCredits: [],
-            proposalRepresentations: history.proposalRepresentations.filter((item) => item.userId === speaker.userId),
-          }
-        : undefined,
-    },
-    true,
-  );
-  return (
-    <>
-      {content.speakers[0] && <AgendaSpeaker speaker={content.speakers[0]} detail />}
-      <small>
-        {history?.appearances.some((item) => item.userId === speaker.userId)
-          ? "Event representation approved"
-          : "Event representation needs review"}
-      </small>
-    </>
-  );
-}
-
+/**
+ * The session's speakers as one compact row each: portrait, name, one quiet organization line,
+ * a small credit-role choice, and a remove control. Speaker details live outside the session
+ * editor; each speaker's saved placement travels unchanged in the session state.
+ */
 export function SessionSpeakerFields({
-  snapshot,
   occurrence,
   speakers,
   setSpeakers,
-  roomId,
-  additionalRoomIds,
-  onReview,
 }: {
-  snapshot: AgendaSnapshot;
   occurrence?: AgendaOccurrence;
   speakers: AgendaOccurrence["speakers"];
   setSpeakers: (speakers: AgendaOccurrence["speakers"]) => void;
-  roomId: string;
-  additionalRoomIds: string[];
-  onReview: (speaker: AgendaOccurrence["speakers"][number]) => void;
 }) {
+  if (!speakers.length) return null;
+  const history = occurrence?.history;
   return (
-    <div class="pk-cluster">
-      {speakers.map((speaker) => (
-        <div class="pk-stack" key={speaker.userId}>
-          <SessionSpeakerSummary snapshot={snapshot} occurrence={occurrence} speaker={speaker} />
-          <Button
-            size="sm"
-            disabled={!occurrence?.speakers.some((item) => item.userId === speaker.userId)}
-            onClick={() => onReview(speaker)}
-          >
-            Speaker details
-          </Button>
-          {!occurrence?.speakers.some((item) => item.userId === speaker.userId) && (
-            <small>Save the session to review this speaker’s representation.</small>
-          )}
-          <Button
-            size="sm"
-            aria-label={`Remove speaker ${speaker.displayName}`}
-            onClick={() => setSpeakers(speakers.filter((value) => value.userId !== speaker.userId))}
-          >
-            {speaker.displayName} ×
-          </Button>
-          <Select
-            aria-label={`Credit for ${speaker.displayName}`}
-            value={speaker.role ?? "speaker"}
-            onChange={(event) =>
-              setSpeakers(
-                speakers.map((value) =>
-                  value.userId === speaker.userId
-                    ? { ...value, role: agendaCreditRoleSchema.parse(event.currentTarget.value) }
-                    : value,
-                ),
-              )
+    <div class="pk-agenda-editor__speakers">
+      {speakers.map((speaker) => {
+        const appearance = history?.appearances.find((item) => item.userId === speaker.userId);
+        const source = history?.proposalRepresentations.find((item) => item.userId === speaker.userId)?.snapshot;
+        const terms = (
+          appearance ? [appearance.organizationName, appearance.jobTitle] : [source?.organizationName, source?.jobTitle]
+        ).filter((term): term is string => Boolean(term));
+        return (
+          <AffiliationRow
+            key={speaker.userId}
+            media={
+              <Avatar
+                name={speaker.displayName}
+                src={appearance?.photoUrl ?? speaker.profileCandidate?.photoUrl ?? undefined}
+                size="sm"
+              />
             }
-          >
-            {agendaCreditRoleSchema.options.map((role) => (
-              <option value={role}>{role.replaceAll("_", " ")}</option>
-            ))}
-          </Select>
-          <Select
-            aria-label={`Attendance for ${speaker.displayName}`}
-            value={speaker.attendanceMode ?? "physical"}
-            onChange={(event) =>
-              setSpeakers(
-                speakers.map((value) =>
-                  value.userId === speaker.userId
-                    ? {
-                        ...value,
-                        attendanceMode: event.currentTarget.value === "remote" ? "remote" : "physical",
-                        roomId: null,
-                      }
-                    : value,
-                ),
-              )
+            title={speaker.displayName}
+            terms={terms}
+            actions={
+              <>
+                <Select
+                  class="pk-agenda-editor__speaker-role"
+                  aria-label={`Role for ${speaker.displayName}`}
+                  value={speaker.role ?? "speaker"}
+                  onChange={(event) => {
+                    const role = agendaCreditRoleSchema.parse(event.currentTarget.value);
+                    setSpeakers(
+                      speakers.map((value) => (value.userId === speaker.userId ? { ...value, role } : value)),
+                    );
+                  }}
+                >
+                  {SPEAKER_ROLE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>
+                      {option.label}
+                    </option>
+                  ))}
+                </Select>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  icon
+                  aria-label={`Remove speaker ${speaker.displayName}`}
+                  title={`Remove ${speaker.displayName}`}
+                  onClick={() => setSpeakers(speakers.filter((value) => value.userId !== speaker.userId))}
+                >
+                  <IconRemove width="12" height="12" />
+                </Button>
+              </>
             }
-          >
-            <option value="physical">In person</option>
-            <option value="remote">Remote</option>
-          </Select>
-          {(speaker.attendanceMode ?? "physical") === "physical" && (
-            <Select
-              aria-label={`Location for ${speaker.displayName}`}
-              value={speaker.roomId ?? ""}
-              onChange={(event) =>
-                setSpeakers(
-                  speakers.map((value) =>
-                    value.userId === speaker.userId ? { ...value, roomId: event.currentTarget.value || null } : value,
-                  ),
-                )
-              }
-            >
-              <option value="">{additionalRoomIds.length ? "Choose one location" : "Follow session location"}</option>
-              {snapshot.rooms
-                .filter((room) => room.id === roomId || additionalRoomIds.includes(room.id))
-                .map((room) => (
-                  <option value={room.id}>{room.name}</option>
-                ))}
-            </Select>
-          )}
-        </div>
-      ))}
+          />
+        );
+      })}
     </div>
   );
 }

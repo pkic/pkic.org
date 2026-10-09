@@ -133,3 +133,124 @@ describe("shared agenda editor presentation", () => {
     expect(output).toContain('data-agenda-occurrence="session"');
   });
 });
+
+function breakSchedule() {
+  return agendaSnapshotSchema.parse({
+    ...snapshot,
+    timeZone: "UTC",
+    eventStartsAt: "2026-12-01T10:00:00.000Z",
+    eventEndsAt: "2026-12-01T12:00:00.000Z",
+    rooms: [...snapshot.rooms, { id: "green", name: "Green hall", capacity: 80 }],
+    occurrences: [
+      {
+        ...snapshot.occurrences[0],
+        id: "break",
+        kind: "break",
+        title: "Lunch",
+        description: "",
+        roomId: null,
+        endAt: "2026-12-01T11:00:00.000Z",
+      },
+      {
+        ...snapshot.occurrences[0],
+        id: "after",
+        description: "",
+        startAt: "2026-12-01T11:00:00.000Z",
+        endAt: "2026-12-01T12:00:00.000Z",
+      },
+    ],
+  });
+}
+
+describe("compact fully covered break intervals", () => {
+  it("keeps all twelve UTC ticks and the exact end boundary while making a one-hour bar 52px plus insets", () => {
+    const data = breakSchedule();
+    const day = agendaPresenter(data)[0]!;
+    const before = JSON.stringify({ data, day });
+    for (const calendar of [false, true]) {
+      const rows = agendaRows(day, 0, calendar);
+      const covered = rows.filter((row) => row.compactBreak);
+      expect(covered).toHaveLength(12);
+      expect(covered.reduce((height, row) => height + row.height, 0)).toBe(60);
+      expect(covered[0]!.cells[0]?.rowSpan).toBe(12);
+      expect(covered[0]!.cells[0]?.colSpan).toBe(2);
+      expect(covered.slice(1).every((row) => row.breakInterior)).toBe(true);
+      expect(rows[12]!.slot.startsAt).toBe("2026-12-01T11:00:00.000Z");
+      expect(rows[12]!.compactBreak).toBe(false);
+    }
+    const rendered = document.createElement("div");
+    rendered.innerHTML = html(
+      <ContentAgenda
+        days={[day]}
+        speakers={[]}
+        timeZone="UTC"
+        editor={{
+          session: () => ({ controls: null }),
+          dropTarget: (instant) => <button data-test-drop={instant}>Drop</button>,
+        }}
+      />,
+    );
+    const ticks = [...rendered.querySelectorAll<HTMLElement>("tr[data-agenda-compact-break]")];
+    expect(ticks.map((tick) => tick.dataset.agendaStart)).toEqual(day.slots.slice(0, 12).map((slot) => slot.startsAt));
+    expect(ticks.at(-1)!.dataset.agendaEnd).toBe("2026-12-01T11:00:00.000Z");
+    expect(ticks.every((tick) => tick.querySelector("button[data-test-drop]"))).toBe(true);
+    expect(
+      ticks
+        .slice(1)
+        .every((tick) => tick.querySelector(".pk-content-agenda__clocks")?.classList.contains("pk-sr-only")),
+    ).toBe(true);
+    expect(JSON.stringify({ data, day })).toBe(before);
+  });
+
+  it("compresses matching room-specific breaks only when they collectively cover every room", () => {
+    const data = breakSchedule();
+    data.occurrences[0]!.roomId = "room";
+    data.occurrences.push({ ...data.occurrences[0]!, id: "green-break", roomId: "green" });
+    const rows = agendaRows(agendaPresenter(data)[0]!, 0, true);
+    expect(rows.filter((row) => row.compactBreak).reduce((sum, row) => sum + row.height, 0)).toBe(60);
+    expect(rows[0]!.cells.filter(Boolean)).toHaveLength(2);
+    expect(rows[0]!.cells.every((cell) => cell?.rowSpan === 12)).toBe(true);
+    data.occurrences.pop();
+    expect(agendaRows(agendaPresenter(data)[0]!, 0, true).some((row) => row.compactBreak)).toBe(false);
+  });
+
+  it("keeps mixed-room normal sessions and their content floor uncompressed", () => {
+    const data = breakSchedule();
+    data.occurrences[0]!.roomId = "room";
+    data.occurrences.push({
+      ...data.occurrences[1]!,
+      id: "parallel",
+      roomId: "green",
+      startAt: "2026-12-01T10:00:00.000Z",
+      endAt: "2026-12-01T11:00:00.000Z",
+    });
+    const rows = agendaRows(agendaPresenter(data)[0]!, 0, true);
+    expect(rows.some((row) => row.compactBreak)).toBe(false);
+    expect(rows.slice(0, 12).reduce((sum, row) => sum + row.height, 0)).toBeGreaterThan(60);
+  });
+
+  it("refuses to compress unknown ends, richer bodies, and a missing terminal slot boundary", () => {
+    const day = agendaPresenter(breakSchedule())[0]!;
+    const unknown = structuredClone(day);
+    unknown.slots[0]!.sessions[0]!.endNotRecorded = true;
+    expect(agendaRows(unknown, 0, true).some((row) => row.compactBreak)).toBe(false);
+    const rich = structuredClone(day);
+    rich.slots[0]!.sessions[0]!.descriptionMarkdown = "Actual break description with attendee instructions.";
+    expect(agendaRows(rich, 0, true).some((row) => row.compactBreak)).toBe(false);
+    const missing = structuredClone(day);
+    missing.slots = missing.slots.filter((slot) => slot.startsAt < "2026-12-01T11:00:00.000Z");
+    expect(agendaRows(missing, 0, true).some((row) => row.compactBreak)).toBe(false);
+  });
+
+  it("retains at least one pixel per tick for a very long break", () => {
+    const data = breakSchedule();
+    data.eventEndsAt = "2026-12-01T17:00:00.000Z";
+    data.occurrences[0]!.endAt = "2026-12-01T16:00:00.000Z";
+    data.occurrences[1]!.startAt = "2026-12-01T16:00:00.000Z";
+    data.occurrences[1]!.endAt = data.eventEndsAt;
+    const covered = agendaRows(agendaPresenter(data)[0]!, 0, true).filter((row) => row.compactBreak);
+    expect(covered).toHaveLength(72);
+    expect(covered.every((row) => row.height >= 1)).toBe(true);
+    expect(covered.reduce((sum, row) => sum + row.height, 0)).toBe(72);
+  });
+});

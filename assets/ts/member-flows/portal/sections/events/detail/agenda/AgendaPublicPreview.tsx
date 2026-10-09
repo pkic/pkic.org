@@ -5,6 +5,8 @@ import { useData } from "../../../../../../hooks/useData";
 import { ContentAgenda } from "../../../../../../site/ContentAgenda";
 import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
 import { Button } from "../../../../../../ui/Button";
+import { EmptyState } from "../../../../../../ui/EmptyState";
+import { TabList } from "../../../../../../ui/TabList";
 import { Spinner } from "../../../../../../components/Spinner";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
 import { agendaContent } from "../../../../../../../shared/public-agenda-content";
@@ -23,38 +25,52 @@ export function AgendaPublicPreview({ slug, onClose }: { slug: string; onClose: 
         <PanelHeader title="Public agenda preview">
           <Button onClick={onClose}>Back to agenda</Button>
         </PanelHeader>
+        <TabList
+          label="Preview revision"
+          idPrefix="agenda-preview-revision"
+          activeId={revision}
+          onSelect={(id) => setRevision(id === "approved" ? "approved" : "draft")}
+          items={[
+            { id: "draft", label: "Current draft", panelId: "agenda-preview-panel" },
+            { id: "approved", label: "Approved revision", panelId: "agenda-preview-panel" },
+          ]}
+        />
         <PanelBody>
-          <div class="pk-cluster" role="group" aria-label="Preview revision">
-            <Button aria-pressed={revision === "draft"} onClick={() => setRevision("draft")}>
-              Current draft
-            </Button>
-            <Button aria-pressed={revision === "approved"} onClick={() => setRevision("approved")}>
-              Approved revision
-            </Button>
-          </div>
           <p class="pk-muted">Preview the public content and layout. This does not approve or publish changes.</p>
         </PanelBody>
       </Panel>
-      {source.loading ? (
-        <Spinner label="Loading public preview…" />
-      ) : source.error ? (
-        <ErrorAlert error={source.error} />
-      ) : (
-        source.data &&
-        content &&
-        (content.days.length ? (
-          <ContentAgenda
-            days={content.days}
-            speakers={content.speakers}
-            timeZone={source.data.timeZone}
-            legacySpeakerFragments={content.legacySpeakerFragments}
-          />
+      <div
+        id="agenda-preview-panel"
+        role="tabpanel"
+        aria-labelledby={`agenda-preview-revision-${revision}`}
+        class="pk-stack"
+      >
+        {source.loading ? (
+          <Spinner label="Loading public preview…" />
+        ) : source.error ? (
+          <ErrorAlert error={source.error} />
         ) : (
-          <Panel>
-            <PanelBody>No public scheduled sessions in this revision.</PanelBody>
-          </Panel>
-        ))
-      )}
+          source.data &&
+          content &&
+          (content.days.length ? (
+            <ContentAgenda
+              days={content.days}
+              speakers={content.speakers}
+              timeZone={source.data.timeZone}
+              legacySpeakerFragments={content.legacySpeakerFragments}
+            />
+          ) : (
+            <Panel>
+              <PanelBody>
+                <EmptyState
+                  title="No public scheduled sessions in this revision"
+                  body="Sessions appear here once they have a day, a time and public visibility."
+                />
+              </PanelBody>
+            </Panel>
+          ))
+        )}
+      </div>
     </div>
   );
 }

@@ -122,9 +122,20 @@ function capture() {
   );
   return bodies;
 }
+/** Rows open their detail through the table's own row control, not a duplicate menu item. */
+async function openRow(label: string) {
+  const selector = `button[aria-label="${label}"]`;
+  for (let attempt = 0; attempt < 10 && !host.querySelector(selector); attempt += 1)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+  const control = host.querySelector<HTMLButtonElement>(selector);
+  if (!control) throw new Error(`no row control is named "${label}"`);
+  await act(async () => control.click());
+}
 async function openPositions() {
-  await runRowAction(host, "Opening to coffee", "Review staffing");
-  await runRowAction(host, "Master of ceremonies · Main door", "Review positions");
+  await openRow("Review Opening to coffee");
+  await openRow("Review Master of ceremonies · Main door");
 }
 describe("staffing canonical actions", () => {
   it("keeps actionable current shortfall reasons visible after successful generation", async () => {
@@ -247,7 +258,7 @@ describe("staffing canonical actions", () => {
     expect(host.textContent).not.toContain("0 uncovered duties");
     expect(host.textContent).not.toContain("Allocate configured duties and posts across the event.");
     await openPositions();
-    await runRowAction(host, "Position 1", "Edit assignment");
+    await openRow("Edit assignment for position 1");
     expect(host.querySelector("table")).toBeNull();
     await act(() => [...host.querySelectorAll("button")].find((row) => row.textContent === "Cancel")!.click());
     expect(host.querySelector("form")).toBeNull();
@@ -258,7 +269,7 @@ describe("staffing canonical actions", () => {
     const bodies = capture();
     await mount();
     await openPositions();
-    await runRowAction(host, "Position 1", "Edit assignment");
+    await openRow("Edit assignment for position 1");
     expect(host.querySelector("table")).toBeNull();
     await act(() => host.querySelector<HTMLInputElement>('[name="pinned"]')!.click());
     await act(async () => {

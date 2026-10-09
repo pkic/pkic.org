@@ -26,7 +26,6 @@ import { USER_SESSION_COOKIE_NAME } from "../../functions/_lib/auth/session-cook
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 import { runAgendaAction } from "./helpers/agenda-actions";
-import { runRowAction } from "./helpers/data-table";
 
 const execute = promisify(execFile);
 const authoredSource = "content/events/2025/pqc-conference-austin-us/index.md";
@@ -307,7 +306,7 @@ test("an actual selected source row stages canonical fixture attribution for vis
     await page.goto(`/portal/#/events/${slug}/agenda`);
     await runAgendaAction(page, "Reuse a session");
     const reusableContent = page.getByRole("table", { name: "Reusable session content", exact: true });
-    await runRowAction(page, reusableContent.getByRole("row").filter({ hasText: title }), "Edit content");
+    await reusableContent.getByRole("button", { name: `Edit ${title}`, exact: true }).click();
     await expect(page.getByRole("button", { name: "Use incoming source content", exact: true })).toBeVisible();
     const acknowledgment = page.getByRole("checkbox", {
       name: "Approve the displayed verified historical mappings and source changes",
@@ -401,7 +400,7 @@ test("an actual selected source row stages canonical fixture attribution for vis
     }
     await page.getByRole("button", { name: "Back to agenda", exact: true }).click();
     await runAgendaAction(page, "Public preview");
-    await page.getByRole("button", { name: "Approved revision", exact: true }).click();
+    await page.getByRole("tab", { name: "Approved revision", exact: true }).click();
     await page.locator('[data-agenda-tab="2025-01-15"]').click();
     await expect(page.getByRole("button", { name: `Open session details: ${title}`, exact: true })).toBeVisible();
     await page.setViewportSize({ width: 1440, height: 1000 });

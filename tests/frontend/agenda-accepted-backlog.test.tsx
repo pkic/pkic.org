@@ -98,10 +98,10 @@ describe("Accepted proposal agenda backlog", () => {
     );
     const onAdd = await mount(vi.fn());
     expect(host.querySelector("form")).toBeNull();
-    expect(host.textContent).toContain("Accepted proposal");
+    expect(host.querySelector('section[aria-label="Accepted proposals"]')).not.toBeNull();
     expect(host.textContent).not.toContain("Accepted session 1");
-    expect(host.querySelector(`[aria-label="Add, Accepted session 1"]`)).toBeNull();
-    await runRowAction(host, "Accepted session 2", "Add");
+    expect(host.querySelector(`[aria-label="Place in next free slot, Accepted session 1"]`)).toBeNull();
+    await runRowAction(host, "Accepted session 2", "Place in next free slot");
     expect(onAdd).toHaveBeenCalledWith([ids[1]]);
     const search = host.querySelector<HTMLInputElement>('input[type="search"]')!;
     await act(() => {
@@ -129,7 +129,7 @@ describe("Accepted proposal agenda backlog", () => {
       vi.fn(async () => Response.json(response([proposal(1)], 25, 0, 1, false))),
     );
     const onAdd = await mount();
-    expect(await rowActionIsDisabled(host, "Accepted session 2", "Add")).toBe(true);
+    expect(await rowActionIsDisabled(host, "Accepted session 2", "Place in next free slot")).toBe(true);
     expect(onAdd).not.toHaveBeenCalled();
     expect(host.querySelector("form")).toBeNull();
   });
@@ -141,6 +141,8 @@ describe("Accepted proposal agenda backlog", () => {
     await mount();
     expect(host.textContent).toContain("No accepted proposals match this search.");
     expect(host.querySelector("form")).toBeNull();
-    expect([...host.querySelectorAll("button")].some((button) => button.textContent === "Add")).toBe(false);
+    expect(
+      [...host.querySelectorAll("button")].some((button) => button.textContent === "Place in next free slot"),
+    ).toBe(false);
   });
 });

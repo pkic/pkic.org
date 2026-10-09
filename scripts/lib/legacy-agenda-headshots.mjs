@@ -4,7 +4,7 @@ import { lstat, readdir, realpath } from "node:fs/promises";
 import { dirname, resolve, relative, sep } from "node:path";
 import { siteContentSlug } from "../../assets/shared/site-content-slug.ts";
 import { contentMediaUrl } from "../../assets/shared/content-media-url.ts";
-import { publicSessionMediaUrlSchema } from "../../assets/shared/schemas/event-session-history.ts";
+import { publicSessionPortraitUrlSchema } from "../../assets/shared/schemas/event-session-history.ts";
 
 /**
  * Source-asset evidence only; no canonical identity matching, rights or upload.
@@ -90,7 +90,8 @@ export async function resolveLegacyAgendaHeadshots(source, options) {
       continue;
     }
     const explicit = options.historicalPeople?.[speaker.name]?.photoUrl;
-    if (explicit !== undefined && !publicSessionMediaUrlSchema.safeParse(explicit).success) {
+    // A reviewed destination may be a migrated R2 portrait (`/api/v1/users/:id/headshots/:file`).
+    if (explicit !== undefined && !publicSessionPortraitUrlSchema.safeParse(explicit).success) {
       fail("invalid_public_url");
       continue;
     }

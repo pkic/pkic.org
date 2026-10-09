@@ -2,20 +2,29 @@ import { formatNumber } from "../../../../../../../shared/format-number";
 import { PARTICIPATION_AVAILABILITY_LABELS } from "../../../../../../../shared/event-participation-availability";
 import type { z } from "zod";
 import type { personalAgendaSessionSchema } from "../../../../../../../shared/schemas/event-personal-agenda";
+// A canceled row is no longer on the agenda: unstarring an unbooked session also records "canceled".
 const STATUS_LABELS = {
-  saved: "Saved preference",
+  saved: "Starred",
   reserved: "Reserved",
   approval_pending: "Awaiting approval",
   waitlisted: "Waitlisted",
-  canceled: "Canceled",
+  canceled: "Not starred",
 };
 export function PersonalAgendaStatus({ session }: { session: z.infer<typeof personalAgendaSessionSchema> }) {
   const states = [...new Set(session.availability.map((item) => PARTICIPATION_AVAILABILITY_LABELS[item.state]))];
   return (
     <div class="pk-stack">
-      <span>{session.status ? STATUS_LABELS[session.status] : "Not saved"}</span>
+      <span>
+        {session.status && session.status !== "canceled"
+          ? STATUS_LABELS[session.status]
+          : session.saved
+            ? STATUS_LABELS.saved
+            : STATUS_LABELS.canceled}
+      </span>
       {states.length > 0 && <small>{states.join(" · ")}</small>}
-      {session.saved && session.status !== "saved" && <small>Saved preference</small>}
+      {session.saved && session.status && !["saved", "canceled"].includes(session.status) && (
+        <small>{STATUS_LABELS.saved}</small>
+      )}
       {session.overlapCount > 0 && (
         <div role="note" class="pk-muted">
           <strong>Overlaps with your agenda</strong>

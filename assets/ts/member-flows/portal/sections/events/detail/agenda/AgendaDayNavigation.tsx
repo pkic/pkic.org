@@ -1,4 +1,4 @@
-import { formatCalendarDate } from "../../../../../../../shared/format-date";
+import { AgendaDayLabel } from "../../../../../../site/AgendaDayLabel";
 import { TabList } from "../../../../../../ui/TabList";
 export function AgendaDayNavigation({
   days,
@@ -16,7 +16,11 @@ export function AgendaDayNavigation({
       idPrefix="agenda-tab"
       activeId={activeDate ?? days[0]?.date ?? ""}
       onSelect={onSelect}
-      items={days.map(({ date }) => ({ id: date, label: formatCalendarDate(date), panelId: `agenda-day-${date}` }))}
+      items={days.map(({ date }) => ({
+        id: date,
+        label: <AgendaDayLabel date={date} />,
+        panelId: `agenda-day-${date}`,
+      }))}
     />
   );
 }

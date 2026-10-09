@@ -1,3 +1,4 @@
+import { openOrganizerAgenda } from "./helpers/organizer-agenda";
 import { runAgendaAction } from "./helpers/agenda-actions";
 import { expect, test, type Page, type TestInfo, type Request } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
@@ -32,7 +33,7 @@ async function capture(page: Page, info: TestInfo, name: string) {
   await page.setViewportSize({ width: 1280, height: 900 });
 }
 
-test("organizers preserve exact track filters and inspect canonical demand without stacking session editors", async ({
+test("organizers preserve exact track filters and inspect canonical demand outside the session editor", async ({
   page,
   browser,
 }, info) => {
@@ -67,19 +68,20 @@ test("organizers preserve exact track filters and inspect canonical demand witho
   expect(room.status(), await room.text()).toBe(200);
   snapshot = agendaSnapshotSchema.parse(await room.json());
   const roomId = snapshot.rooms.find((item) => item.name === roomName)!.id;
-  await page.goto(`/portal/#/events/${slug}/agenda`);
+  await openOrganizerAgenda(page, slug);
   await runAgendaAction(page, "New session");
   const creation = page.getByRole("dialog", { name: "New session", exact: true });
   await creation.getByRole("textbox", { name: /^Session title/ }).fill(title);
-  await creation.getByRole("tab", { name: "Optional / settings", exact: true }).click();
   await creation.getByLabel("Track", { exact: true }).fill(`  ${track}  `);
+  await creation
+    .getByRole("textbox", { name: "Description", exact: true })
+    .fill("A substantive workshop on operational cryptography and program planning.");
+  await creation.getByRole("tab", { name: "Schedule", exact: true }).click();
   await creation.getByLabel("Starts", { exact: true }).fill("2026-12-01T10:00");
   await creation.getByLabel("Ends", { exact: true }).fill("2026-12-01T11:00");
-  await creation.getByLabel("Locations", { exact: true }).selectOption(roomId);
+  await creation.getByRole("checkbox", { name: roomName, exact: true }).check();
+  await creation.getByRole("tab", { name: "Participation", exact: true }).click();
   await creation.getByLabel("Admission", { exact: true }).selectOption("reservation");
-  await creation
-    .getByLabel("Description", { exact: true })
-    .fill("A substantive workshop on operational cryptography and program planning.");
   await creation.getByRole("button", { name: "Save session", exact: true }).click();
   await expect(creation).toBeHidden();
   snapshot = agendaSnapshotSchema.parse(await (await page.request.get(base)).json());
@@ -189,25 +191,12 @@ test("organizers preserve exact track filters and inspect canonical demand witho
   await expect(editor).toBeVisible();
   await expect(page.getByRole("dialog")).toHaveCount(1);
   await expect(editor.locator("form")).toHaveCount(1);
-  await editor.getByRole("tab", { name: "Optional / settings", exact: true }).click();
   await expect(editor.getByLabel("Track", { exact: true })).toHaveValue(track);
-  const demandTable = editor.getByRole("table", { name: "Current session demand", exact: true });
-  for (const [mode, label] of [
-    ["physical", "In person"],
-    ["remote", "Remote"],
-  ] as const) {
-    const actual = demand[mode];
-    await expect(
-      demandTable.getByRole("row").filter({ hasText: label }).getByRole("cell").locator(".pk-table__value"),
-    ).toHaveText([
-      label,
-      String(actual.confirmed),
-      String(actual.pending),
-      String(actual.waitlisted),
-      String(actual.preferences),
-    ]);
-  }
-  await capture(page, info, "track-modal-editor-demand");
+  // Demand is a statistic shown in the Sessions table and event statistics, never in the edit view.
+  await editor.getByRole("tab", { name: "Participation", exact: true }).click();
+  await expect(editor.getByRole("table", { name: "Current session demand", exact: true })).toHaveCount(0);
+  await capture(page, info, "track-modal-editor");
+  await editor.getByRole("tab", { name: "Session", exact: true }).click();
   const beforeDraft = agendaSnapshotSchema.parse(await (await page.request.get(base)).json());
   const mutations: string[] = [];
   const recordMutation = (request: Request) => {
@@ -229,7 +218,6 @@ test("organizers preserve exact track filters and inspect canonical demand witho
   await page.getByRole("button", { name: `Open session details: ${occurrence.title}`, exact: true }).click();
   await runRowAction(page, details, "Edit session");
   await expect(details).toBeHidden();
-  await editor.getByRole("tab", { name: "Optional / settings", exact: true }).click();
   await expect(editor.getByLabel("Track", { exact: true })).toHaveValue(track);
   await editor.getByLabel("Track", { exact: true }).fill("");
   expect(mutations).toEqual([]);

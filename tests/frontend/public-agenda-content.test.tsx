@@ -214,12 +214,14 @@ describe("shared public agenda content", () => {
       expect(article.getAttribute("data-agenda-occurrence")).toBe("session");
       expect(article.getAttribute("data-agenda-session")).toBe(placement ?? "");
       expect(content.days[0]!.slots[0]!.sessions[0]!.locations).toEqual(placement ? [placement] : []);
-      if (placement === null) expect(article.querySelector(".pk-content-agenda__room span")?.textContent).toBe("");
+      // An unplaced card has no room label at all rather than an empty one.
+      if (placement === null) expect(article.querySelector(".pk-content-agenda__room")).toBeNull();
       const target = [...host.querySelectorAll("dialog")].find(
         (dialog) => dialog.id === alias.dataset.agendaFragmentDialog,
       );
-      expect(target?.textContent).toContain("Approved session");
-      expect(target?.textContent).not.toContain("Another session");
+      // The speaker's session list may name the other session; the dialog itself belongs to its owner.
+      expect(target?.querySelector(".session-modal__title")?.textContent).toBe("Approved session");
+      expect(target?.closest("article")?.getAttribute("data-agenda-occurrence")).toBe("session");
       expect(source.occurrences[0]!.history!.legacyFragments).toEqual(original);
     },
   );
@@ -231,7 +233,10 @@ describe("shared public agenda content", () => {
         title: "Engineer at Historical organization",
         bioMarkdown: "**Approved biography** <script>unsafe()</script>",
         imageSrc: "/approved-photo.jpg",
+        organization: { name: "Historical organization" },
         moderator: true,
+        speakerKey: "user:person",
+        personPath: "/people/person/",
       },
     ]);
     const session = content.days[0]!.slots[0]!.sessions[0]!;

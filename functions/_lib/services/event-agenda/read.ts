@@ -10,6 +10,7 @@ import {
   agendaConflictCategorySchema,
 } from "../../../../assets/shared/schemas/event-agenda";
 import { readAgendaSpeakers } from "./speaker-profiles";
+import { withAgendaSpeakerOrganizations } from "./speaker-organizations";
 import { agendaPublicationStatusSql } from "./publication-status";
 import { readSessionDemand } from "../event-participation/session-demand";
 import { promotionCopySchema } from "../../../../assets/shared/schemas/event-promotion-kit";
@@ -26,6 +27,8 @@ import { all, first } from "../../db/queries";
 import type { DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { AppError } from "../../errors";
+import { agendaSessionFormatOptions } from "../../../../assets/shared/event-agenda-format";
+import { resolveEventSessionTypes } from "../event-presentation";
 
 interface OccurrenceRow {
   source_proposal_type: string | null;
@@ -44,6 +47,7 @@ interface OccurrenceRow {
   end_at: string | null;
   room_id: string | null;
   required_equipment_json: string;
+  planned_media_json: string | null;
   admission_policy: string;
   access_policy: string;
   booking_opens_at: string | null;
@@ -53,9 +57,11 @@ interface OccurrenceRow {
   visibility: string;
   kind: string;
   track: string | null;
+  format: string | null;
+  placeholder: number;
 }
 const columns =
-  "id,content_id,title,description,presentation_url,recording_url,public_anchor,start_at,end_at,room_id,admission_policy,access_policy,booking_opens_at,booking_closes_at,capacity,remote_capacity,visibility,kind,track,required_equipment_json";
+  "id,content_id,title,description,presentation_url,recording_url,public_anchor,start_at,end_at,room_id,admission_policy,access_policy,booking_opens_at,booking_closes_at,capacity,remote_capacity,visibility,kind,track,format,placeholder,required_equipment_json,planned_media_json";
 async function occurrences(
   db: DatabaseLike,
   eventId: string,
@@ -134,6 +140,7 @@ async function occurrences(
       roomId: row.room_id,
       additionalRoomIds: roomsByOccurrence.get(row.id) ?? [],
       requiredEquipment: JSON.parse(row.required_equipment_json),
+      ...(row.planned_media_json !== null ? { plannedMedia: JSON.parse(row.planned_media_json) } : {}),
       admissionPolicy: row.admission_policy,
       accessPolicy: row.access_policy,
       bookingOpensAt: row.booking_opens_at,
@@ -143,6 +150,8 @@ async function occurrences(
       visibility: row.visibility,
       kind: row.kind,
       track: row.track,
+      format: row.format,
+      placeholder: row.placeholder === 1,
       speakers: speakerGroups.get(row.id) ?? [],
     }),
   );
@@ -174,9 +183,10 @@ export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: st
     setup_minutes: number;
     equipment_json: string;
     available_periods_json: string;
+    virtual_room_url: string | null;
   }>(
     db,
-    "SELECT id,name,capacity,setup_minutes,equipment_json,available_periods_json FROM event_agenda_rooms WHERE event_id = ? ORDER BY name,id LIMIT 200",
+    "SELECT id,name,capacity,setup_minutes,equipment_json,available_periods_json,virtual_room_url FROM event_agenda_rooms WHERE event_id = ? ORDER BY name,id LIMIT 200",
     [eventId],
   );
   const items = await occurrences(db, eventId);
@@ -261,6 +271,11 @@ export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: st
         ? event.base_path.replace(/\/$/u, "")
         : `/events/${eventSlug}`) + "/agenda/",
     timeZone: event.timezone,
+    formats: agendaSessionFormatOptions(
+      resolveEventSessionTypes(event.settings_json)
+        .slice(0, 20)
+        .map((sessionType) => sessionType.label),
+    ),
     eventStartsAt: event.starts_at,
     eventEndsAt: event.ends_at,
     revision: state?.revision ?? 0,
@@ -270,6 +285,7 @@ export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: st
       setupMinutes: room.setup_minutes,
       equipment: JSON.parse(room.equipment_json),
       availablePeriods: JSON.parse(room.available_periods_json),
+      ...(room.virtual_room_url !== null ? { virtualRoomUrl: room.virtual_room_url } : {}),
     })),
     travelMinutes: state?.travel_minutes ?? 0,
     durationRules: readAgendaDurationRules(event.settings_json),
@@ -310,7 +326,10 @@ export async function getAgenda(db: DatabaseLike, eventId: string, eventSlug: st
       origin: assignment.origin,
     })),
   });
-  return { ...snapshot, staffingReport: await getAgendaStaffingReport(db, eventId, snapshot) };
+  return withAgendaSpeakerOrganizations(db, {
+    ...snapshot,
+    staffingReport: await getAgendaStaffingReport(db, eventId, snapshot),
+  });
 }
 export async function listAgendaOccurrences(
   db: DatabaseLike,

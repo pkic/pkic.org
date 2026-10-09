@@ -82,7 +82,8 @@ describe("temporary historical agenda preparation CLI", () => {
     const documents = await Promise.all(
       manifest.events.map(async (event) => agendaTransferSchema.parse(await json(event.outputs[0].path))),
     );
-    expect(documents[0].occurrences).toHaveLength(14);
+    // The last row of a day that only states a time marks when the day ends; it is not a session.
+    expect(documents[0].occurrences).toHaveLength(13);
     const authoredSlide = "pkic-pqcc-welcome-paul-van-brouwershaven.pdf";
     const publishedSlideUrl = contentMediaUrl(`events/2023/post-quantum-cryptography-conference/${authoredSlide}`);
     expect(publishedSlideUrl).toBe(`/content-media/events/2023/post-quantum-cryptography-conference/${authoredSlide}`);

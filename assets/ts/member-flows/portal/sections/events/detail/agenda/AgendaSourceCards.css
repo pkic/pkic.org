@@ -14,9 +14,6 @@
     min-inline-size: 0;
   }
 
-  .pk-agenda-source-panel > .pk-panel__header {
-    padding: var(--pk-3);
-  }
   .pk-agenda-source-panel .pk-table-list__inset,
   .pk-agenda-source-panel > .pk-panel__body:not(.pk-panel__body--flush) {
     padding: var(--pk-2);

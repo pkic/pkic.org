@@ -1,10 +1,14 @@
 import { prepareAgendaOccurrenceSettings } from "./occurrence-settings";
 import { prepareAgendaSponsorApproval } from "./sponsors";
-import { prepareAgendaOccurrenceInsert } from "./occurrence-insert";
+import { prepareAgendaOccurrenceInsert, plannedMediaJson } from "./occurrence-insert";
+import { agendaOccurrenceRequiredEquipment } from "../../../../assets/shared/event-agenda-media";
+import { agendaEventWindowViolations } from "../../../../assets/shared/event-agenda-event-window";
 import { prepareAgendaRoomOrder } from "./room-order-settings";
 import { preparePublicAgendaSnapshot } from "./public-snapshot";
 import { occurrenceRepresentationReferences, prepareRepresentationEligibility } from "./representation-eligibility";
 import { assertPublicationRepresentations } from "./publication-representations";
+import { agendaHistoricalPublicationReview } from "../../../../assets/shared/agenda-historical-publication-review";
+import { prepareScopedAuditLog } from "../audit";
 import { prepareSitePublicationRequest } from "../site-publication-requests";
 import { operationalDays, prepareOperationalDays } from "./operational-days";
 import { operationalPeople, prepareOperationalPeople } from "./operational-people";
@@ -24,12 +28,7 @@ import {
   preparePublicationParticipationChanges,
 } from "../event-participation/publication-impact";
 import { physicalOccupiedSql, remoteOccupiedSql } from "../event-participation/capacity-accounting";
-import {
-  assertPublicationCapacity,
-  preparePublicationCapacityGuard,
-  assertPlanningPublicationCapacity,
-  preparePlanningPublicationCapacityGuard,
-} from "./publication-capacity";
+import { assertPublicationAllocations, preparePublicationAllocationGuard } from "./publication-allocations";
 import { prepareAgendaChangeNotifications } from "./notifications";
 import { z } from "zod";
 import {
@@ -45,6 +44,7 @@ import { AppError } from "../../errors";
 import type { DatabaseLike } from "../../types";
 import { nowIso } from "../../utils/time";
 import { getAgenda, getAgendaOccurrence } from "./read";
+import { canonicalAgendaSessionFormats, readAgendaSessionFormatLabels } from "./occurrence-formats";
 import {
   agendaScheduleConflictProposalSchema,
   agendaScheduleConflictDetailsSchema,
@@ -107,7 +107,7 @@ export async function createAgendaRoom(
     [
       db
         .prepare(
-          "INSERT INTO event_agenda_rooms(id,event_id,name,capacity,setup_minutes,equipment_json,available_periods_json) VALUES (?,?,?,?,?,?,?)",
+          "INSERT INTO event_agenda_rooms(id,event_id,name,capacity,setup_minutes,equipment_json,available_periods_json,virtual_room_url) VALUES (?,?,?,?,?,?,?,?)",
         )
         .bind(
           id,
@@ -117,6 +117,7 @@ export async function createAgendaRoom(
           input.setupMinutes,
           JSON.stringify(input.equipment ?? []),
           JSON.stringify(input.availablePeriods ?? []),
+          input.virtualRoomUrl ?? null,
         ),
       ...roomOrder,
     ],
@@ -128,10 +129,11 @@ export async function createAgendaOccurrence(
   db: DatabaseLike,
   eventId: string,
   eventSlug: string,
-  input: z.infer<typeof agendaOccurrenceCreateSchema>,
+  requested: z.infer<typeof agendaOccurrenceCreateSchema>,
   actorUserId: string | null = null,
 ) {
   const id = crypto.randomUUID();
+  const [input] = canonicalAgendaSessionFormats(await readAgendaSessionFormatLabels(db, eventId), [requested]);
   const snapshot = await getAgenda(db, eventId, eventSlug);
   const candidate = {
     ...input,
@@ -175,10 +177,9 @@ export function validateAgendaSchedule(
   for (const item of items) {
     if (item.bookingOpensAt && item.bookingClosesAt && item.bookingOpensAt >= item.bookingClosesAt)
       conflicts.push(`${item.title}: booking closing time must follow opening time`);
-    if (item.startAt && snapshot.eventStartsAt && item.startAt < snapshot.eventStartsAt)
-      conflicts.push(`${item.title}: session starts before the event`);
-    if (item.endAt && snapshot.eventEndsAt && item.endAt > snapshot.eventEndsAt)
-      conflicts.push(`${item.title}: session ends after the event`);
+    const outside = agendaEventWindowViolations(item, snapshot);
+    if (outside.startsBefore) conflicts.push(`${item.title}: session starts before the event`);
+    if (outside.endsAfter) conflicts.push(`${item.title}: session ends after the event`);
     if (Boolean(item.startAt) !== Boolean(item.endAt)) conflicts.push(`${item.title}: both start and end are required`);
     if ((item.additionalRoomIds?.length ?? 0) > 0 && !item.roomId)
       conflicts.push(`${item.title}: choose a primary room`);
@@ -199,7 +200,7 @@ export function validateAgendaSchedule(
       }
       if (item.startAt && item.endAt && !agendaRoomIsAvailable(room, item.startAt, item.endAt))
         conflicts.push(`${item.title}: ${room.name} is unavailable for this session and setup time`);
-      for (const equipment of item.requiredEquipment ?? [])
+      for (const equipment of agendaOccurrenceRequiredEquipment(item))
         if (!room.equipment?.includes(equipment))
           conflicts.push(`${item.title}: ${room.name} does not provide ${equipment}`);
       if (roomIds.length === 1 && room.capacity !== null && item.capacity !== null && item.capacity > room.capacity)
@@ -239,11 +240,18 @@ export async function patchAgendaOccurrence(
   eventId: string,
   eventSlug: string,
   id: string,
-  input: z.infer<typeof agendaOccurrencePatchSchema>,
+  requested: z.infer<typeof agendaOccurrencePatchSchema>,
   actorUserId: string | null = null,
 ) {
   const snapshot = await getAgenda(db, eventId, eventSlug);
   const existing = await getAgendaOccurrence(db, eventId, id);
+  // An unchanged format stays valid even if the event later retires that configured session type.
+  const [input] =
+    requested.format && requested.format !== existing.format
+      ? canonicalAgendaSessionFormats(await readAgendaSessionFormatLabels(db, eventId), [
+          { ...requested, title: requested.title ?? existing.title },
+        ])
+      : [requested];
   const item = {
     ...existing,
     ...input,
@@ -271,11 +279,16 @@ export async function patchAgendaOccurrence(
     snapshot.occurrences.map((current) => (current.id === id ? item : current)),
     conflictProposal,
   );
-  const effectiveCapacity =
-    item.capacity ??
-    (agendaOccurrenceRoomIds(item).length <= 1
-      ? (snapshot.rooms.find((room) => room.id === item.roomId)?.capacity ?? null)
+  const physicalLimit = (session: typeof existing) =>
+    session.capacity ??
+    (agendaOccurrenceRoomIds(session).length <= 1
+      ? (snapshot.rooms.find((room) => room.id === session.roomId)?.capacity ?? null)
       : null);
+  // Capacity never blocks agenda work; only lowering a limit below confirmed attendance is refused.
+  const loweredLimit = (next: number | null, previous: number | null) =>
+    next !== null && (previous === null || next < previous) ? next : null;
+  const effectiveCapacity = loweredLimit(physicalLimit(item), physicalLimit(existing));
+  const remoteCapacity = loweredLimit(item.remoteCapacity, existing.remoteCapacity);
   if (effectiveCapacity !== null) {
     const bookings = await first<{ total: number }>(
       db,
@@ -285,17 +298,26 @@ export async function patchAgendaOccurrence(
     if ((bookings?.total ?? 0) > effectiveCapacity)
       throw new AppError(409, "AGENDA_RESERVED_CAPACITY", "The new capacity would displace confirmed attendees");
   }
+  if (remoteCapacity !== null) {
+    const remoteBookings = await first<{ total: number }>(
+      db,
+      `WITH target AS(SELECT ? AS id) SELECT ${remoteOccupiedSql("target.id")} AS total FROM target`,
+      [id],
+    );
+    if ((remoteBookings?.total ?? 0) > remoteCapacity)
+      throw new AppError(409, "AGENDA_RESERVED_CAPACITY", "The new capacity would displace confirmed attendees");
+  }
   const proposed = {
     ...snapshot,
     occurrences: snapshot.occurrences.map((current) => (current.id === id ? item : current)),
   };
-  await assertPlanningPublicationCapacity(db, proposed, snapshot);
+  await assertPublicationAllocations(db, proposed);
   const statements = [
     ...(await prepareRepresentationEligibility(db, occurrenceRepresentationReferences([item]))),
-    preparePlanningPublicationCapacityGuard(db, proposed, snapshot),
+    preparePublicationAllocationGuard(db, proposed),
     db
       .prepare(
-        "UPDATE event_agenda_occurrences SET title=?,description=?,start_at=?,end_at=?,room_id=?,admission_policy=?,capacity=?,remote_capacity=?,visibility=?,kind=?,track=?,presentation_url=?,recording_url=?,access_policy=?,booking_opens_at=?,booking_closes_at=?,required_equipment_json=? WHERE id=? AND event_id=?",
+        "UPDATE event_agenda_occurrences SET title=?,description=?,start_at=?,end_at=?,room_id=?,admission_policy=?,capacity=?,remote_capacity=?,visibility=?,kind=?,track=?,format=?,placeholder=?,presentation_url=?,recording_url=?,access_policy=?,booking_opens_at=?,booking_closes_at=?,required_equipment_json=?,planned_media_json=? WHERE id=? AND event_id=?",
       )
       .bind(
         item.title,
@@ -309,12 +331,15 @@ export async function patchAgendaOccurrence(
         item.visibility,
         item.kind,
         item.track ?? null,
+        item.format ?? null,
+        item.placeholder ? 1 : 0,
         item.presentationUrl ?? null,
         item.recordingUrl ?? null,
         item.accessPolicy ?? "open",
         item.bookingOpensAt ?? null,
         item.bookingClosesAt ?? null,
         JSON.stringify(item.requiredEquipment ?? []),
+        plannedMediaJson(item.plannedMedia),
         id,
         eventId,
       ),
@@ -337,11 +362,11 @@ export async function patchAgendaOccurrence(
         bindings: [id, effectiveCapacity],
       }),
     );
-  if (item.remoteCapacity !== null)
+  if (remoteCapacity !== null)
     statements.unshift(
       prepareAuthorizationGuard(db, {
         sql: `WITH target AS(SELECT ? AS id) SELECT 1 FROM target WHERE ${remoteOccupiedSql("target.id")} <= ?`,
-        bindings: [id, item.remoteCapacity],
+        bindings: [id, remoteCapacity],
       }),
     );
   if (input.speakerUserIds || input.speakerPlacements || input.speakerRoles || item.roomId !== existing.roomId)
@@ -368,6 +393,7 @@ export async function publishAgenda(
   eventSlug: string,
   revision: number,
   userId: string,
+  acknowledgeArchiveRepresentation = false,
 ) {
   const snapshot = await getAgenda(db, eventId, eventSlug);
   if (snapshot.publishedRevision === snapshot.revision)
@@ -377,14 +403,19 @@ export async function publishAgenda(
   const event = await first<{ visibility: string }>(db, "SELECT visibility FROM events WHERE id=?", [eventId]);
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found");
   const approvedSnapshot = preparePublicAgendaSnapshot(snapshot, nextRevision, nowIso(), event.visibility === "public");
-  await assertPublicationRepresentations(db, eventId, approvedSnapshot);
+  const historicalGuards = await assertPublicationRepresentations(
+    db,
+    eventId,
+    approvedSnapshot,
+    acknowledgeArchiveRepresentation,
+  );
   const representationGuards = await prepareRepresentationEligibility(
     db,
     occurrenceRepresentationReferences(approvedSnapshot.occurrences),
   );
   const privatePeople = operationalPeople(snapshot);
   const privateDays = operationalDays(snapshot);
-  await assertPublicationCapacity(db, snapshot);
+  await assertPublicationAllocations(db, snapshot);
   await assertPublicationParticipation(db, eventId, approvedSnapshot);
   const notificationStatements = await prepareAgendaChangeNotifications(db, eventId, nextRevision, approvedSnapshot);
   await commitAgendaRevision(
@@ -397,8 +428,24 @@ export async function publishAgenda(
         bindings: [eventId, event.visibility],
       }),
       ...representationGuards,
+      ...historicalGuards,
+      ...(acknowledgeArchiveRepresentation && agendaHistoricalPublicationReview(approvedSnapshot).occurrenceIds.length
+        ? [
+            prepareScopedAuditLog(
+              db,
+              { type: "event", id: eventId },
+              "user",
+              userId,
+              "agenda.archive.representation.acknowledged",
+              "event_agenda",
+              eventId,
+              { revision: nextRevision, ...agendaHistoricalPublicationReview(approvedSnapshot) },
+              approvedSnapshot.approvedAt,
+            ),
+          ]
+        : []),
       ...(await prepareAgendaSponsorApproval(db, eventId, approvedSnapshot.occurrences)),
-      preparePublicationCapacityGuard(db, snapshot),
+      preparePublicationAllocationGuard(db, snapshot),
       prepareOperationalPeople(db, eventId, nextRevision, privatePeople),
       prepareOperationalDays(db, eventId, nextRevision, privateDays),
       preparePublicationParticipationGuard(db, eventId, approvedSnapshot),

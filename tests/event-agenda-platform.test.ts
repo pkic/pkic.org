@@ -773,7 +773,7 @@ describe("agenda platform", () => {
     const publicProjection = await readSitePublicationSnapshot(env.DB, []);
     expect(publicProjection.eventAgendas?.["pqc-2026"].occurrences.map((item) => item.title)).toEqual(["Public talk"]);
   });
-  it("refuses approval when bookings grew against the previous approved capacity", async () => {
+  it("approves a reduced session capacity even when bookings grew against the previous approved capacity", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email='admin@pkic.org'");
     const now = new Date().toISOString();
@@ -822,15 +822,16 @@ describe("agenda platform", () => {
         attendanceMode: "physical",
       }),
     ).toMatchObject({ status: "reserved" });
-    await expect(publishAgenda(env.DB, eventId, "pqc-2026", snapshot.revision, admin.id)).rejects.toMatchObject({
-      status: 409,
-    });
-    const [state] = await queryAll<{ published_revision: number; revision: number }>(
-      env.DB,
-      "SELECT published_revision,revision FROM event_agenda_state WHERE event_id=?",
-      eventId,
-    );
-    expect(state).toEqual({ published_revision: 2, revision: 3 });
+    // Session capacity limits new reservations; it never blocks agenda approval or displaces confirmed attendees.
+    snapshot = await publishAgenda(env.DB, eventId, "pqc-2026", snapshot.revision, admin.id);
+    expect(snapshot).toMatchObject({ publishedRevision: 4, revision: 4 });
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT user_id,status FROM agenda_session_participations WHERE occurrence_id=? ORDER BY user_id",
+        occurrenceId,
+      ),
+    ).toEqual([...users].sort().map((user_id) => ({ user_id, status: "reserved" })));
   });
   it("rejects pinned duty conflicts and preserves the previous schedule", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);

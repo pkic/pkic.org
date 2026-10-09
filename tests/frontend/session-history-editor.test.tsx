@@ -6,13 +6,13 @@ import {
 } from "../../assets/shared/schemas/event-session-history";
 // @vitest-environment jsdom
 import { render } from "preact";
-import { useState } from "preact/hooks";
 import { act } from "preact/test-utils";
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { SessionHistoryEditor } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/SessionHistoryEditor";
 import { sessionHistoryCorrectionSchema } from "../../assets/shared/schemas/event-session-history";
 import { agendaSnapshotSchema } from "../../assets/shared/schemas/event-agenda";
-import { chooseOption, controlFor, optionValues, submitForm, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, chooseOption, controlFor, optionValues, submitForm, typeInto } from "./helpers/labelled-control";
+import { tabNamed, tabNames } from "./helpers/tabs";
 import { legacyAgendaDownloadsSchema } from "../../assets/shared/schemas/event-agenda-legacy-fragments";
 import { menuItemNamed } from "./helpers/row-actions";
 import type { z } from "zod";
@@ -52,74 +52,6 @@ const snapshot = agendaSnapshotSchema.parse({
   ],
 });
 describe("session archive correction", () => {
-  it.each(["recording", "transcript", "captions"] as const)(
-    "clears uploaded PDF bindings when changing to %s while preserving the supplied external URL",
-    async (kind) => {
-      mockGetJson({ versions: [], page: { limit: 200, offset: 0, total: 0, hasMore: false } });
-      const externalUrl = `https://media.example.test/${kind}`;
-      const initial = sessionMaterialSchema.parse({
-        id: "release",
-        kind: "presentation",
-        title: "Material",
-        url: externalUrl,
-        presentationSource: "session",
-        presentationVersionId: "uploaded-version",
-        version: 1,
-        legacyDownloadUrl: "/events/event/slides.pdf",
-        rightsConfirmed: false,
-        consentConfirmed: false,
-        validated: false,
-        status: "draft",
-        approvedAt: null,
-      });
-      const changed = vi.fn();
-      function ControlledMaterials() {
-        const [materials, setMaterials] = useState([initial]);
-        return (
-          <MaterialFields
-            slug="event"
-            occurrenceId="session"
-            materials={materials}
-            onChange={(next) => {
-              changed(next);
-              setMaterials(next);
-            }}
-          />
-        );
-      }
-      await act(() => render(<ControlledMaterials />, host));
-      expect(controlFor(host, "Uploaded slides")).toBeDefined();
-      await chooseOption(controlFor(host, "Material type"), kind);
-      const result = sessionMaterialSchema.parse(changed.mock.calls[0]![0][0]);
-      expect(result).toMatchObject({
-        kind,
-        url: externalUrl,
-        presentationVersionId: null,
-        presentationSource: "proposal",
-        legacyDownloadUrl: null,
-        status: "draft",
-        approvedAt: null,
-      });
-      expect(
-        controlFor<HTMLInputElement>(
-          host,
-          `${{ recording: "Recording", transcript: "Transcript", captions: "Captions" }[kind]} link`,
-        ).value,
-      ).toBe(externalUrl);
-      expect([...host.querySelectorAll("label")].map((label) => label.textContent)).not.toContain("Uploaded slides");
-      expect(host.textContent).not.toContain("The selected slides will receive a download link");
-      expect(host.querySelector("fieldset")?.className).toBe("pk-form-section");
-      expect(host.textContent).not.toContain("Find uploaded slides");
-      expect(host.textContent).not.toContain("Previous uploads");
-      expect(host.textContent).not.toContain("Next uploads");
-      const details = host.querySelector<HTMLDetailsElement>("details.pk-panel");
-      expect(details?.querySelector("summary")?.textContent).toBe("Additional details");
-      expect(details?.open).toBe(false);
-      expect(initial.presentationVersionId).toBe("uploaded-version");
-      expect(initial.kind).toBe("presentation");
-    },
-  );
-
   it("keeps all archive actions in the shared menu and closes through its existing callback", async () => {
     mockGetJson({
       identities: [],
@@ -146,6 +78,52 @@ describe("session archive correction", () => {
     ]);
     await act(() => menuItemNamed(host, "Close")!.click());
     expect(close).toHaveBeenCalledOnce();
+  });
+  it("opens on materials and keeps representation and details behind their own tabs", async () => {
+    mockGetJson({
+      identities: [],
+      versions: [],
+      page: { limit: 200, offset: 0, total: 0, hasMore: false },
+    });
+    const occurrence = {
+      ...snapshot.occurrences[0]!,
+      history: sessionHistoryMetadataSchema.parse({
+        materials: [
+          sessionMaterialSchema.parse({
+            id: "release",
+            kind: "recording",
+            title: "Recording",
+            url: "https://media.example.test/recording",
+            presentationVersionId: null,
+            version: 1,
+            rightsConfirmed: false,
+            consentConfirmed: false,
+            validated: false,
+            status: "draft",
+            approvedAt: null,
+          }),
+        ],
+      }),
+    };
+    await act(async () =>
+      render(
+        <SessionHistoryEditor snapshot={snapshot} occurrence={occurrence} onSaved={() => {}} onClose={() => {}} />,
+        host,
+      ),
+    );
+    expect(tabNames(host)).toEqual(["Materials", "Speaker representation", "Details"]);
+    const material = controlFor(host, "Material title");
+    const approve = buttonNamed(host, "Approve representation for Example speaker");
+    const prerequisites = controlFor(host, "Prerequisites");
+    expect(material.closest("[hidden]")).toBeNull();
+    expect(approve.closest("[hidden]")).not.toBeNull();
+    expect(prerequisites.closest("[hidden]")).not.toBeNull();
+    await act(() => tabNamed(host, "Speaker representation")!.click());
+    expect(approve.closest("[hidden]")).toBeNull();
+    expect(material.closest("[hidden]")).not.toBeNull();
+    await act(() => tabNamed(host, "Details")!.click());
+    expect(prerequisites.closest("[hidden]")).toBeNull();
+    expect(buttonNamed(host, "Save archive details").closest("[hidden]")).toBeNull();
   });
   it("saves only an explicit historical receipt selection without approving its uploaded material", async () => {
     mockGetJson({
@@ -314,7 +292,7 @@ describe("session archive correction", () => {
       const button = [...host.querySelectorAll("button")].find(
         (item) => item.textContent === "Approve representation for Example speaker",
       )!;
-      expect(host.querySelector<HTMLTextAreaElement>("textarea[id]")?.value).toBe("");
+      expect(controlFor<HTMLTextAreaElement>(host, "Prerequisites").value).toBe("");
       expect([...host.querySelectorAll("textarea")].some((field) => field.value === "Source biography")).toBe(true);
       await act(async () => {
         host.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
@@ -412,13 +390,13 @@ describe("session archive correction", () => {
       render(<MaterialFields slug="event" occurrenceId="session" materials={[material]} onChange={() => {}} />, host),
     );
     await vi.waitFor(() => expect(controlFor<HTMLSelectElement>(host, "Uploaded slides").options.length).toBe(2));
-    const disclosure = host.querySelector<HTMLDetailsElement>("details.pk-panel")!;
-    await act(() => {
-      disclosure.open = true;
-    });
+    const search = controlFor<HTMLInputElement>(host, "Find uploaded version");
+    expect(search.closest('details,[hidden],[aria-hidden="true"]')).toBeNull();
+    expect(search.disabled).toBe(false);
     await typeInto(controlFor(host, "Find uploaded version"), "missing");
     await vi.waitFor(() => expect(controlFor<HTMLSelectElement>(host, "Uploaded slides").options.length).toBe(1));
     expect(controlFor<HTMLInputElement>(host, "Find uploaded version").value).toBe("missing");
+    expect(controlFor(host, "Find uploaded version").closest('details,[hidden],[aria-hidden="true"]')).toBeNull();
     await typeInto(controlFor(host, "Find uploaded version"), "");
     await vi.waitFor(() =>
       expect(optionValues(controlFor<HTMLSelectElement>(host, "Uploaded slides"))).toEqual([

@@ -1,3 +1,4 @@
+import { openOrganizerAgenda } from "./helpers/organizer-agenda";
 import { runAgendaAction } from "./helpers/agenda-actions";
 import { mkdir } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
@@ -78,7 +79,7 @@ test("public preview shares the public layout, hides private content and preserv
     if (new URL(request.url()).pathname.startsWith(endpoint) && !["GET", "HEAD", "OPTIONS"].includes(request.method()))
       previewWrites.push(`${request.method()} ${new URL(request.url()).pathname}`);
   });
-  await page.goto(`/portal/#/events/${slug}/agenda`);
+  await openOrganizerAgenda(page, slug);
   await runAgendaAction(page, "Public preview");
   await expect(page.getByRole("heading", { name: "Public agenda preview", exact: true })).toBeVisible();
   await page.locator('[data-agenda-tab="2026-12-03"]').click();
@@ -93,13 +94,13 @@ test("public preview shares the public layout, hides private content and preserv
   await page.screenshot({ path: `${artifacts}/agenda-public-preview-desktop.png`, fullPage: true });
   await page.setViewportSize({ width: 390, height: 844 });
   await page.screenshot({ path: `${artifacts}/agenda-public-preview-phone.png`, fullPage: true });
-  await page.getByRole("button", { name: "Approved revision", exact: true }).click();
+  await page.getByRole("tab", { name: "Approved revision", exact: true }).click();
   await page.locator('[data-agenda-tab="2026-12-03"]').click();
   await expect(page.getByRole("button", { name: `Open session details: ${publicTitle}`, exact: true })).toBeVisible();
   await expect(page.getByText(draftTitle, { exact: true })).toHaveCount(0);
   await expect(page.getByText(privateTitle, { exact: true })).toHaveCount(0);
   await page.screenshot({ path: `${artifacts}/agenda-approved-preview-phone.png`, fullPage: true });
-  await page.getByRole("button", { name: "Current draft", exact: true }).click();
+  await page.getByRole("tab", { name: "Current draft", exact: true }).click();
   await page.locator('[data-agenda-tab="2026-12-03"]').click();
   await expect(page.getByRole("button", { name: `Open session details: ${draftTitle}`, exact: true })).toBeVisible();
   const after = agendaSnapshotSchema.parse(await (await page.request.get(endpoint)).json());

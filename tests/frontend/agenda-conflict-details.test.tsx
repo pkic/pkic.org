@@ -8,9 +8,7 @@ import { ApiClientError } from "../../assets/ts/shared/api-client";
 import { AgendaConflictDetails } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/AgendaConflictDetails";
 import { AgendaSchedulePreview } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/AgendaSchedulePreview";
 import { SessionEditor } from "../../assets/ts/member-flows/portal/sections/events/detail/agenda/SessionEditor";
-vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/agenda/SessionDemand", () => ({
-  SessionDemand: () => null,
-}));
+vi.mock("../../assets/ts/components/markdown-editor/MarkdownInput", () => ({ MarkdownEditor: () => null }));
 const snapshot = agendaSnapshotSchema.parse({
   eventSlug: "event",
   timeZone: "Europe/Amsterdam",

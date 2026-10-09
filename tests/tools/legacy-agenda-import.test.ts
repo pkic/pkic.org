@@ -56,6 +56,34 @@ describe("explicit legacy agenda migration", () => {
       result.payload.occurrences[0].sourceKey,
     );
   });
+  it("leaves planned media and the virtual room to the location, which the authored source never states", () => {
+    const result = prepareLegacyAgendaImport(
+      {
+        ...source,
+        agenda: {
+          "2026-12-01": [
+            {
+              ...source.agenda["2026-12-01"][0],
+              sessions: [{ ...source.agenda["2026-12-01"][0].sessions[0], youtube: "dQw4w9WgXcQ" }],
+            },
+          ],
+        },
+      },
+      {
+        sourcePath: "conference/_index.md",
+        roomIds: { main: "11111111-1111-4111-8111-111111111111" },
+        speakerUserIds: { Speaker: "22222222-2222-4222-8222-222222222222" },
+      },
+    );
+    const [occurrence] = agendaImportSchema.parse(result.payload).occurrences;
+    expect(occurrence).not.toHaveProperty("plannedMedia");
+    expect(occurrence).not.toHaveProperty("virtualRoomUrl");
+    expect(occurrence!.requiredEquipment ?? []).toEqual([]);
+    for (const row of result.document.occurrences) {
+      expect(row.fields).not.toHaveProperty("plannedMedia");
+      expect(row.fields).not.toHaveProperty("virtualRoomUrl");
+    }
+  });
 });
 
 it("preserves explicitly mapped slides and recording URLs", () => {
@@ -475,7 +503,7 @@ it.each(["None", "TBC", "TBD", "", " "])(
       authoredValue: placeholder,
       decision: "reviewed_credit",
       resolvedValue: "Verified speaker",
-      sourceLocator: "2023-11-07:0:0",
+      sourceLocator: row.ref,
       sourcePath: config.sourcePath,
       sourceDigest: result.document.source.sourceDigest,
     });

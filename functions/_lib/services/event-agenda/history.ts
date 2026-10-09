@@ -1,7 +1,10 @@
 import { sessionPresentationPublicUrl } from "../../../../assets/shared/session-presentation-public-url";
+import { sessionRecordingPublicUrl } from "../../../../assets/shared/session-recording-public-url";
+import { eventRecordingVersionSchema } from "../../../../assets/shared/schemas/event-recordings";
 import {
   prepareSessionMaterialVersionGuard,
   type SessionMaterialVersionEvidence,
+  type SessionRecordingVersionEvidence,
 } from "./session-material-version-guard";
 import { prepareSitePublicationRequest } from "../site-publication-requests";
 import { preparePublicationDocumentEffects } from "../site-publication-document-selections";
@@ -47,6 +50,56 @@ export async function saveSessionHistory(
   }
   metadata = validated.data;
   const session = await getAgendaOccurrence(db, eventId, occurrenceId);
+  const recordingIds = [
+    ...new Set(
+      metadata.materials.flatMap((material) => (material.recordingVersionId ? [material.recordingVersionId] : [])),
+    ),
+  ];
+  const recordingVersions = recordingIds.length
+    ? await all<SessionRecordingVersionEvidence>(
+        db,
+        `SELECT version.id AS versionId,version.source_id AS sourceId,version.acquisition_id AS acquisitionId,
+      version.version_number AS versionNumber,version.source_metadata_revision AS sourceMetadataRevision,
+      version.digest,version.file_size AS bytes,version.mime_type AS mimeType,version.r2_key AS r2Key,
+      version.object_etag AS objectEtag,version.acquired_at AS acquiredAt
+      FROM json_each(?) requested JOIN event_recording_versions version ON version.id=requested.value AND version.event_id=?
+      JOIN event_recording_sources source ON source.id=version.source_id AND source.event_id=version.event_id
+      JOIN event_recording_acquisitions acquisition ON acquisition.id=version.acquisition_id AND acquisition.event_id=version.event_id AND acquisition.source_id=version.source_id
+      WHERE version.deleted_at IS NULL AND source.disabled_at IS NULL AND acquisition.status='completed'
+      AND acquisition.completed_version_id=version.id AND acquisition.expected_metadata_revision=version.source_metadata_revision`,
+        [JSON.stringify(recordingIds), eventId],
+      )
+    : [];
+  for (const material of metadata.materials) {
+    if (!material.recordingVersionId) continue;
+    const version = recordingVersions.find((item) => item.versionId === material.recordingVersionId);
+    const owned =
+      version &&
+      eventRecordingVersionSchema.safeParse({
+        id: version.versionId,
+        eventId,
+        sourceId: version.sourceId,
+        version: version.versionNumber,
+        sourceMetadataRevision: version.sourceMetadataRevision,
+        digest: version.digest,
+        fileBytes: version.bytes,
+        mimeType: version.mimeType,
+        acquiredAt: version.acquiredAt,
+        deletedAt: null,
+      });
+    if (!version || !owned || !owned.success || !version.r2Key || !version.objectEtag)
+      throw new AppError(400, "MATERIAL_VERSION_UNAVAILABLE", "Choose an acquired recording version from this event.");
+    if (material.version !== owned.data.version)
+      throw new AppError(400, "MATERIAL_VERSION_MISMATCH", "Use the recording's canonical version number.");
+    material.url = sessionRecordingPublicUrl({
+      eventSlug,
+      occurrenceId,
+      materialId: material.id,
+      versionId: owned.data.id,
+      digest: owned.data.digest,
+    });
+  }
+  // Resolve owned recording identity first: choosing the same bytes must retain its approval receipt.
   for (const material of metadata.materials) {
     const previous = session.history?.materials.find((item) => item.id === material.id);
     if (material.status === "approved") {
@@ -270,6 +323,7 @@ export async function saveSessionHistory(
     metadata.materials,
     versionEvidence,
     session.history?.legacyDownloads ?? [],
+    recordingVersions,
   );
   await commitAgendaRevision(
     db,

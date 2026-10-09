@@ -95,9 +95,11 @@ export const transferFindingSchema = z.object({
     "person_ambiguous",
     "identity_invalid",
     "room_unresolved",
+    "format_unresolved",
     "media_unresolved",
     "timing_unresolved",
     "timing_inferred",
+    "source_not_recorded",
     "anchor_collision",
     "schedule_collision",
     "source_changed",
@@ -108,9 +110,15 @@ export const transferFindingSchema = z.object({
   severity: z.enum(["blocking", "review", "information"]),
   message: z.string().max(1000),
 });
+/**
+ * archive: a past program with its historical attribution; current: an authored program for an
+ * upcoming or running event, imported as its live agenda; copy_as_new: an unscheduled private template.
+ */
+export const agendaTransferModeSchema = z.enum(["archive", "current", "copy_as_new"]);
+export type AgendaTransferMode = z.infer<typeof agendaTransferModeSchema>;
 export const transferPrepareSchema = z.object({
   expectedRevision: z.number().int().nonnegative(),
-  mode: z.enum(["archive", "copy_as_new"]),
+  mode: agendaTransferModeSchema,
   document: agendaTransferSchema,
   resolutions: transferResolutionSchema,
 });

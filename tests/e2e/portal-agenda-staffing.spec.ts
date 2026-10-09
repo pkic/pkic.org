@@ -1,3 +1,4 @@
+import { openOrganizerAgenda } from "./helpers/organizer-agenda";
 import { mkdir } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { agendaSnapshotSchema } from "../../assets/shared/schemas/event-agenda";
@@ -33,8 +34,8 @@ test("organizers configure two doors and generate an advisory staffing plan", as
   });
   expect(created.status()).toBe(201);
   groupEventDetailResponseSchema.parse(await created.json());
-  await page.goto(`/portal/#/events/${slug}/agenda`);
-  await page.getByRole("tab", { name: "Shift roles", exact: true }).click();
+  await openOrganizerAgenda(page, slug);
+  await page.getByRole("tab", { name: "Shifts", exact: true }).click();
   await page.getByRole("button", { name: "Actions for Event staffing", exact: true }).click();
   await page.getByRole("menuitem", { name: "Roles and posts", exact: true }).click();
   await page.getByRole("button", { name: "Add role", exact: true }).click();
@@ -66,7 +67,7 @@ test("organizers configure two doors and generate an advisory staffing plan", as
   await page.getByRole("button", { name: "Save staffing needs", exact: true }).click();
   async function reviewNeeds() {
     await expect(blockRow.getByRole("cell", { name: "4 unfilled", exact: true })).toBeVisible();
-    await runRowAction(page, blockRow, "Review staffing");
+    await blockRow.getByRole("button", { name: "Review Morning arrivals", exact: true }).click();
     const needs = page.getByRole("table", { name: "Shift staffing needs", exact: true });
     await expect(needs.getByRole("row")).toHaveCount(3);
     for (const door of ["North entrance", "South entrance"]) {

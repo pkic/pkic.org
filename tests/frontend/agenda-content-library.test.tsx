@@ -50,6 +50,10 @@ vi.mock("../../assets/ts/components/ApiDataTable", () => ({
         <button onClick={props.createAction.onSelect}>{props.createAction.label}</button>
       )}
       {props.toolbar?.({ reload: async () => {}, resetPage: () => {} }, {})}
+      {(() => {
+        const action = props.rowAction?.(agendaContentSchema.parse(mocks.row), 0);
+        return action && <button onClick={action.onSelect}>{action.label}</button>;
+      })()}
       {props.columns.map((column) => column.cell(agendaContentSchema.parse(mocks.row), 0))}
     </div>
   ),
@@ -141,8 +145,7 @@ it("uses a distinct placement command for repeats and independent copies", async
   );
 });
 it("keeps local source edits until the organizer deliberately adopts the incoming revision", async () => {
-  await act(async () => button("⋯").click());
-  await act(async () => button("Edit content").click());
+  await act(async () => button("Edit Organizer title").click());
   expect(host.querySelector<HTMLInputElement>('[name="content.title"]')!.value).toBe("Organizer title");
   await act(async () => button("Use incoming source content").click());
   expect(host.querySelector<HTMLInputElement>('[name="content.title"]')!.value).toBe("Updated source title");
@@ -180,8 +183,7 @@ it("requires explicit historical mapping approval after adopting incoming source
     render(null, host);
   });
   await act(async () => render(<ContentLibrary snapshot={snapshot} canEdit onSaved={mocks.onSaved} />, host));
-  await act(async () => button("⋯").click());
-  await act(async () => button("Edit content").click());
+  await act(async () => button("Edit Organizer title").click());
   expect(host.textContent).toContain("Verified historical mapping changes");
   await act(async () => button("Use incoming source content").click());
   const acknowledgment = host.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
@@ -210,8 +212,7 @@ it("keeps incomplete historical source/title mapping approval disabled", async (
     render(null, host);
   });
   await act(async () => render(<ContentLibrary snapshot={snapshot} canEdit onSaved={mocks.onSaved} />, host));
-  await act(async () => button("⋯").click());
-  await act(async () => button("Edit content").click());
+  await act(async () => button("Edit Organizer title").click());
   await act(async () => button("Use incoming source content").click());
   const acknowledgment = host.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
   expect(acknowledgment.disabled).toBe(true);
@@ -237,8 +238,7 @@ it("keeps the dedicated historical review visible when atomic acceptance refuses
       409,
     ),
   );
-  await act(async () => button("⋯").click());
-  await act(async () => button("Edit content").click());
+  await act(async () => button("Edit Organizer title").click());
   const acknowledgment = host.querySelector<HTMLInputElement>('input[type="checkbox"]')!;
   await act(async () => {
     acknowledgment.checked = true;

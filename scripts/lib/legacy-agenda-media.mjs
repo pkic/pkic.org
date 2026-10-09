@@ -3,6 +3,7 @@ import { constants, createReadStream } from "node:fs";
 import { lstat, readdir, realpath } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
 import { contentMediaUrl } from "../../assets/shared/content-media-url.ts";
+import { youtubeStartOffset } from "../../assets/shared/markdown-media.ts";
 import { publicSessionMediaUrlSchema } from "../../assets/shared/schemas/event-session-history.ts";
 
 /**
@@ -54,10 +55,10 @@ const inside = (root, path) => {
  */
 export function canonicalLegacyRecordingUrl(reference) {
   if (typeof reference !== "string") return null;
-  const match = /^([A-Za-z0-9_-]{11})(?:\?start=(0|[1-9][0-9]{0,9}))?$/u.exec(reference);
+  const match = /^([A-Za-z0-9_-]{11})(?:\?start=(.*))?$/u.exec(reference);
   if (match) {
-    const offset = match[2] === undefined ? null : Number(match[2]);
-    if (offset !== null && !Number.isSafeInteger(offset)) return null;
+    const offset = match[2] === undefined ? null : youtubeStartOffset(match[2]);
+    if (match[2] !== undefined && offset === null) return null;
     return `https://www.youtube.com/watch?v=${match[1]}${offset === null ? "" : `&start=${offset}`}`;
   }
   return /^https?:\/\//u.test(reference) && publicSessionMediaUrlSchema.safeParse(reference).success ? reference : null;

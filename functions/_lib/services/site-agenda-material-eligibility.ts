@@ -1,3 +1,5 @@
+import { sessionRecordingPublicUrl } from "../../../assets/shared/session-recording-public-url";
+import { liveRecordingMaterialVersions, recordingEligibilityKey } from "./site-recording-material-eligibility";
 import { sessionPresentationPublicUrl } from "../../../assets/shared/session-presentation-public-url";
 import { all } from "../db/queries";
 import type { DatabaseLike } from "../types";
@@ -38,6 +40,16 @@ export async function projectLiveAgendaMaterialBatch(
             },
           );
     }
+  const recordingPairs = new Map<string, { eventId: string; versionId: string }>();
+  for (const { eventId, snapshot } of entries)
+    for (const occurrence of snapshot.occurrences)
+      for (const material of occurrence.history?.materials ?? [])
+        if (material.recordingVersionId)
+          recordingPairs.set(recordingEligibilityKey(eventId, material.recordingVersionId), {
+            eventId,
+            versionId: material.recordingVersionId,
+          });
+  const recordings = await liveRecordingMaterialVersions(db, [...recordingPairs.values()]);
   const currentReleases = new Map<string, Set<string>>();
   const occurrences = [...occurrencePairs.values()];
   for (let offset = 0; offset < occurrences.length; offset += 100) {
@@ -93,6 +105,8 @@ export async function projectLiveAgendaMaterialBatch(
         .filter(
           (material) =>
             currentReleases.get(key(eventId, item.id))?.has(sessionMaterialReleaseIdentity(material)) &&
+            (!material.recordingVersionId ||
+              recordings.has(recordingEligibilityKey(eventId, material.recordingVersionId))) &&
             (!material.presentationVersionId ||
               eligible.has(
                 versionKey(eventId, material.presentationVersionId, material.presentationSource ?? "proposal", item.id),
@@ -100,11 +114,24 @@ export async function projectLiveAgendaMaterialBatch(
         )
         .map((material) => ({
           ...material,
-          url: material.presentationVersionId
-            ? (publicUrls.get(
-                versionKey(eventId, material.presentationVersionId, material.presentationSource ?? "proposal", item.id),
-              ) ?? material.url)
-            : material.url,
+          url: material.recordingVersionId
+            ? sessionRecordingPublicUrl({
+                eventSlug: recordings.get(recordingEligibilityKey(eventId, material.recordingVersionId))!.event_slug,
+                occurrenceId: item.id,
+                materialId: material.id,
+                versionId: material.recordingVersionId,
+                digest: recordings.get(recordingEligibilityKey(eventId, material.recordingVersionId))!.digest,
+              })
+            : material.presentationVersionId
+              ? (publicUrls.get(
+                  versionKey(
+                    eventId,
+                    material.presentationVersionId,
+                    material.presentationSource ?? "proposal",
+                    item.id,
+                  ),
+                ) ?? material.url)
+              : material.url,
         }));
       return {
         ...item,

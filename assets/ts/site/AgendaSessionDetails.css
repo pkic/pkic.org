@@ -1,0 +1,205 @@
+/* Shared card and dialog fidelity, with actual capabilities supplied by the presenter. */
+.pk-content-agenda__card-footer {
+  min-block-size: 36px;
+  gap: var(--pk-2);
+}
+.pk-content-agenda__card-footer > .pk-content-agenda__duration {
+  order: 0;
+  white-space: nowrap;
+}
+.pk-content-agenda__footer-track {
+  order: 1;
+  min-inline-size: 0;
+  max-inline-size: 40%;
+  padding-inline-start: var(--pk-3);
+  border-inline-start: 1px solid var(--pk-line);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  color: var(--pk-accent-ink);
+  font-size: var(--pk-text-xs);
+  font-weight: 600;
+}
+.pk-content-agenda__card-footer [data-agenda-media-plans] {
+  order: 2;
+  gap: var(--pk-2);
+}
+.pk-content-agenda__capability {
+  display: flex;
+  color: var(--pk-ink-muted);
+}
+.pk-content-agenda__capability svg {
+  inline-size: 15px;
+  block-size: 15px;
+}
+.pk-content-agenda__card-footer .pk-content-agenda__actions {
+  order: 3;
+  margin-inline-start: auto;
+  flex-wrap: nowrap;
+  gap: var(--pk-1);
+}
+.pk-content-agenda__card-footer .pk-content-agenda__move-controls {
+  order: 4;
+}
+.pk-content-agenda__recording-action {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--pk-1);
+  border: 1px solid color-mix(in srgb, var(--pk-accent) 35%, transparent);
+  border-radius: var(--pk-radius-pill);
+  color: var(--pk-accent-ink);
+  font-size: var(--pk-text-xs);
+  white-space: nowrap;
+}
+.pk-content-agenda__status {
+  display: flex;
+  flex: 0 0 auto;
+  justify-content: space-between;
+  align-items: center;
+  min-block-size: 24px;
+  margin: calc(-1 * (var(--pk-2) + var(--pk-1) / 2)) calc(-1 * var(--pk-3)) var(--pk-2);
+  padding-inline: var(--pk-3);
+  background: var(--pk-on-solid-ink);
+  color: var(--pk-on-solid);
+  font-size: var(--pk-text-xs);
+}
+.pk-content-agenda__status [data-agenda-status-label] {
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  font-weight: 700;
+}
+.pk-content-agenda__status[data-agenda-status="live"] {
+  background: var(--pk-danger);
+}
+.pk-content-agenda__session:has(> [data-agenda-session-status]:not([hidden])) > .pk-content-agenda__card-header {
+  inset-block-start: calc(24px + var(--pk-1));
+}
+/* Breaks are a single inline bar, not a session body with a second footer band. */
+.pk-content-agenda__session.pk-content-agenda__session--break {
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: var(--pk-3);
+  padding: var(--pk-3);
+  min-block-size: 52px;
+  box-sizing: border-box;
+}
+.pk-content-agenda__session.pk-content-agenda__session--break
+  .pk-content-agenda__break-content
+  > .pk-content-agenda__session-body {
+  flex: 0 1 auto;
+  justify-content: center;
+}
+.pk-content-agenda__session.pk-content-agenda__session--break .pk-content-agenda__card-footer {
+  flex: 0 0 auto;
+  min-block-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.pk-content-agenda__session.pk-content-agenda__session--break .pk-content-agenda__card-footer:empty {
+  display: none;
+}
+.pk-content-agenda__session.pk-content-agenda__session--break
+  .pk-content-agenda__break-content
+  > .pk-agenda-break-sponsors {
+  margin: 0;
+  padding-inline-start: var(--pk-4);
+  border-inline-start: 1px solid color-mix(in srgb, currentColor 35%, transparent);
+}
+.pk-content-agenda__session .session-modal {
+  max-inline-size: 960px;
+  border-radius: var(--pk-radius-lg);
+}
+.pk-content-agenda__session .session-modal__header {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  padding: 22px 28px 24px;
+  background: var(--pk-agenda-dialog-scrim), var(--pk-grad-brand);
+  border-block-end: 4px solid transparent;
+  border-image: var(--pk-grad-brand) 1;
+  color: var(--pk-on-solid);
+}
+.pk-content-agenda__session .session-modal__header::before {
+  content: "";
+  position: absolute;
+  z-index: -1;
+  inset: 0 0 0 45%;
+  opacity: 0.14;
+  background: repeating-conic-gradient(from 0deg, currentColor 0 25%, transparent 0 100%) 0 0 / 30px 30px;
+  mask-image: linear-gradient(90deg, transparent, black);
+  pointer-events: none;
+}
+.pk-content-agenda__session .session-modal__heading {
+  flex: 1;
+  min-inline-size: 0;
+}
+.pk-content-agenda__session .session-modal__title {
+  font-size: var(--pk-agenda-type-26);
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+  text-wrap: balance;
+}
+.pk-content-agenda__session .session-modal__location {
+  text-transform: uppercase;
+  font-size: var(--pk-text-xs);
+  letter-spacing: 0.12em;
+}
+.pk-content-agenda__session .session-modal__body {
+  padding: 24px 28px 32px;
+  gap: 24px;
+}
+.session-modal__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--pk-2);
+}
+.pk-content-agenda__session .session-modal__body section > h3 {
+  border: 0;
+  padding: 0;
+  color: var(--pk-ink-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  font-size: var(--pk-text-xs);
+}
+.pk-content-agenda__session .session-modal__speaker {
+  padding: var(--pk-4) 0;
+  border: 0;
+  border-block-start: 1px solid var(--pk-line-soft);
+  border-radius: 0;
+  background: transparent;
+}
+.pk-content-agenda__session .session-modal__body .pk-content-agenda__speaker--detail > .pk-avatar {
+  inline-size: 64px;
+  block-size: 64px;
+}
+.pk-content-agenda__session .session-modal__body .pk-content-agenda__speaker--detail {
+  display: flex;
+  gap: var(--pk-4);
+}
+.pk-content-agenda__session .session-modal__speaker .pk-content-agenda__speaker-info {
+  display: block;
+}
+.pk-content-agenda__session .session-modal__speaker .pk-content-agenda__speaker-bio {
+  margin-block-start: var(--pk-3);
+  font-size: var(--pk-text-sm);
+  line-height: 1.6;
+}
+@media (max-width: 46rem) {
+  .pk-content-agenda__session .session-modal__header,
+  .pk-content-agenda__session .session-modal__body {
+    padding-inline: var(--pk-4);
+  }
+}
+
+.pk-content-agenda__session .session-modal__body .pk-agenda-speaker__portrait > .pk-avatar {
+  inline-size: 64px;
+  block-size: 64px;
+}
+@media print {
+  .pk-content-agenda__status {
+    display: none !important;
+  }
+}

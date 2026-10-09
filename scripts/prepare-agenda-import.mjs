@@ -110,6 +110,10 @@ async function prepare(sourcePath, mappingPath, outputPath) {
     historicalCandidates: result.historicalCandidates,
     sourceRows: result.sourceRows,
     sourceDecisions: result.sourceDecisions,
+    formatDecisions: result.formatDecisions,
+    placeholderDecisions: result.placeholderDecisions,
+    endMarkers: result.endMarkers,
+    shadowedFragments: result.shadowedFragments,
     assets: media.assets,
     headshots,
     nextAction:

@@ -1,0 +1,74 @@
+@layer components {
+  /* Two tiles across on a phone, more as the panel widens; every tile keeps one size. */
+  .pk-calendar-tiles {
+    --pk-col-min: 9rem;
+    --pk-gap: var(--pk-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pk-calendar-tile {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--pk-2);
+    inline-size: 100%;
+    block-size: 100%;
+    padding: var(--pk-4);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface);
+    color: var(--pk-ink);
+    font: inherit;
+    text-align: start;
+    text-decoration: none;
+    cursor: pointer;
+    transition: border-color var(--pk-dur-fast) ease;
+  }
+
+  .pk-calendar-tile:hover {
+    border-color: var(--pk-accent);
+  }
+
+  .pk-calendar-tile[aria-busy="true"] {
+    cursor: progress;
+  }
+
+  .pk-calendar-tile__icon {
+    color: var(--pk-accent-strong);
+  }
+
+  .pk-calendar-tile__label {
+    font-weight: 600;
+  }
+
+  .pk-calendar-tile__hint {
+    font-size: var(--pk-text-xs);
+    color: var(--pk-ink-muted);
+  }
+
+  /* The link and its recovery actions are rarely needed, so they sit folded under the tiles. */
+  .pk-calendar-link {
+    border-block-start: 1px solid var(--pk-line-soft);
+    padding-block-start: var(--pk-3);
+  }
+
+  .pk-calendar-link > summary {
+    inline-size: fit-content;
+    cursor: pointer;
+    font-size: var(--pk-text-sm);
+    font-weight: 500;
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-calendar-link__body {
+    padding-block-start: var(--pk-3);
+  }
+
+  .pk-calendar-link__note {
+    margin: 0;
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink-muted);
+  }
+}

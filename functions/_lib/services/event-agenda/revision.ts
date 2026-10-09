@@ -1,13 +1,22 @@
-import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../db/authorization-guard";
 import { prepareScopedAuditLog } from "../audit";
 import { AppError } from "../../errors";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { nowIso } from "../../utils/time";
+import { uuid } from "../../utils/ids";
+import { agendaRevisionSchema } from "../../../../assets/shared/schemas/event-agenda";
 import { isAgendaScheduleGuardFailure, prepareAgendaScheduleGuard } from "./schedule-guards";
 import {
   agendaScheduleConflictDetailsSchema,
   type AgendaScheduleConflictProposal,
 } from "../../../../assets/shared/schemas/event-agenda-schedule";
+
+/** A stale revision is a structural conflict, independent of the current permission guard. */
+export function prepareAgendaRevisionGuard(db: DatabaseLike, eventId: string, revision: number): StatementLike {
+  const expectedRevision = agendaRevisionSchema.shape.expectedRevision.parse(revision);
+  return db
+    .prepare("INSERT INTO event_agenda_revision_guards(id,event_id,expected_revision) VALUES(?,?,?)")
+    .bind(uuid(), eventId, expectedRevision);
+}
 
 export async function commitAgendaRevision(
   db: DatabaseLike,
@@ -24,10 +33,7 @@ export async function commitAgendaRevision(
           "INSERT INTO event_agenda_state(event_id,revision,updated_at) VALUES (?,0,?) ON CONFLICT(event_id) DO NOTHING",
         )
         .bind(eventId, nowIso()),
-      prepareAuthorizationGuard(db, {
-        sql: "SELECT 1 FROM event_agenda_state WHERE event_id = ? AND revision = ?",
-        bindings: [eventId, revision],
-      }),
+      prepareAgendaRevisionGuard(db, eventId, revision),
       ...statements,
       ...prepareAgendaScheduleGuard(db, eventId),
       prepareScopedAuditLog(
@@ -55,7 +61,7 @@ export async function commitAgendaRevision(
           proposal: conflictProposal,
         }),
       );
-    if (isAuthorizationGuardFailure(error))
+    if (error instanceof Error && error.message.includes("AGENDA_REVISION_CHANGED"))
       throw new AppError(
         409,
         "AGENDA_REVISION_CHANGED",

@@ -1,5 +1,5 @@
 import { Menu } from "../../../../../../ui/Menu";
-import { useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import {
   agendaRoomCreateSchema,
   agendaSnapshotSchema,
@@ -41,6 +41,20 @@ export function AgendaRoomQuickEdit({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const order = useAgendaRoomOrder(snapshot, onSaved);
+  const formRef = useRef<HTMLFormElement>(null);
+  // The add column sits past the last room; bring the opened form into view and ready for typing.
+  useEffect(() => {
+    if (!editing) return;
+    const form = formRef.current;
+    form?.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+      behavior: matchMedia("(prefers-reduced-motion: reduce)").matches ? "instant" : "smooth",
+    });
+    const input = form?.querySelector<HTMLInputElement>('input[name="name"]');
+    input?.focus({ preventScroll: true });
+    input?.select();
+  }, [editing]);
   const form = useContractForm(agendaRoomCreateSchema, {
     expectedRevision: snapshot.revision,
     name,
@@ -48,6 +62,7 @@ export function AgendaRoomQuickEdit({
     setupMinutes: room?.setupMinutes ?? 0,
     equipment: room?.equipment ?? [],
     availablePeriods: room?.availablePeriods ?? [],
+    virtualRoomUrl: room?.virtualRoomUrl ?? null,
   });
   async function save(event: Event) {
     event.preventDefault();
@@ -125,6 +140,7 @@ export function AgendaRoomQuickEdit({
     );
   return (
     <form
+      ref={formRef}
       class="pk-agenda-editor__room-name pk-stack"
       noValidate
       {...form.handlers}

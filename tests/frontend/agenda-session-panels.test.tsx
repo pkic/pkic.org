@@ -35,7 +35,7 @@ afterEach(() => {
   host.remove();
   vi.unstubAllGlobals();
 });
-it("opens archive and promotion panels directly from the loaded agenda before any local mutation", async () => {
+it("opens editable archive and promotion panels from the loaded agenda while the calendar stays locked", async () => {
   vi.stubGlobal(
     "fetch",
     vi.fn(
@@ -59,7 +59,14 @@ it("opens archive and promotion panels directly from the loaded agenda before an
     await new Promise((resolve) => setTimeout(resolve, 0));
   });
   await vi.waitFor(() => expect(host.textContent).toContain("Cryptographic operations"));
+  // The lock only guards drag, resize and in-grid moves; dialogs and panels stay editable.
+  expect(host.querySelector('button[aria-label="Enable agenda editing"]')).not.toBeNull();
   await runRowAction(host, "Cryptographic operations", "Session archive / materials");
+  await act(() =>
+    [...host.querySelectorAll<HTMLElement>('[role="tab"]')]
+      .find((tab) => tab.textContent?.trim() === "Details")!
+      .click(),
+  );
   expect([...host.querySelectorAll("label")].some((label) => label.textContent?.startsWith("Prerequisites"))).toBe(
     true,
   );
