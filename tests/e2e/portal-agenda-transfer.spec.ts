@@ -157,9 +157,7 @@ test("organizer resolves a reviewed versioned copy and imports only to the draft
   });
 });
 
-test("agenda import CLI reviews and applies through the real API without publishing", async ({
-  page,
-}, testInfo) => {
+test("agenda import CLI reviews and applies through the real API without publishing", async ({ page }, testInfo) => {
   await signInAsE2eStaff(page, e2eAdminEmail("portal-agenda-transfer-cli"));
   const before = agendaSnapshotSchema.parse(await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json());
   const title = "CLI source session";
