@@ -1,6 +1,8 @@
 import { all } from "../db/queries";
 import type { DatabaseLike } from "../types";
 import type { SitePublicationSnapshot } from "../../../assets/shared/schemas/site-publication";
+import { USER_HEADSHOT_PATH } from "../../../assets/shared/headshot-variants";
+import { userHeadshotKeyFile } from "./user-headshot";
 
 /** Only image references selected by public read models authorize an R2 export. */
 export function publishedMediaReferences(snapshot: SitePublicationSnapshot): string[] {
@@ -25,9 +27,15 @@ export function publishedMediaReferences(snapshot: SitePublicationSnapshot): str
   }
   for (const groups of Object.values(snapshot.sponsors))
     for (const group of groups) for (const sponsor of group.sponsors) add(sponsor.logoUrl);
-  for (const agenda of Object.values(snapshot.eventAgendas ?? {}))
-    for (const occurrence of agenda.occurrences)
+  for (const agenda of Object.values(snapshot.eventAgendas ?? {})) {
+    for (const occurrence of agenda.occurrences) {
       if (occurrence.kind === "break") for (const sponsor of occurrence.sponsors ?? []) add(sponsor.logoUrl);
+      // Approved credits may name a person's R2 headshot; source-only credits carry static paths.
+      for (const credit of [...(occurrence.history?.appearances ?? []), ...(occurrence.history?.archivalCredits ?? [])])
+        add(credit.photoUrl);
+    }
+    for (const organization of Object.values(agenda.speakerOrganizations ?? {})) add(organization.logoUrl);
+  }
   for (const entry of snapshot.memberWall) add(entry.logoUrl);
   return [...references].sort();
 }
@@ -73,7 +81,27 @@ export async function resolvePublishedMediaKeys(
     for (const row of rows)
       if (row.image_key) result[`/api/v1/sponsors/${encodeURIComponent(row.id)}/logo`] = row.image_key;
   }
+  const headshots = references.flatMap((url) => {
+    const match = USER_HEADSHOT_PATH.exec(url);
+    return match ? [{ url, userId: decodeURIComponent(match[1]!), file: decodeURIComponent(match[2]!) }] : [];
+  });
+  for (let offset = 0; offset < headshots.length; offset += 100) {
+    const batch = headshots.slice(offset, offset + 100);
+    const rows = await all<{ id: string; headshot_r2_key: string | null }>(
+      db,
+      `SELECT id, headshot_r2_key FROM users WHERE id IN (SELECT value FROM json_each(?))
+        AND active=1 AND pii_redacted_at IS NULL AND merged_into_user_id IS NULL`,
+      [JSON.stringify([...new Set(batch.map((entry) => entry.userId))])],
+    );
+    const keys = new Map(rows.map((row) => [row.id, row.headshot_r2_key]));
+    for (const entry of batch) {
+      const key = keys.get(entry.userId) ?? null;
+      // Only the file the credit froze is published; a replaced or removed portrait is never substituted.
+      if (key && userHeadshotKeyFile(key) === entry.file) result[entry.url] = key;
+    }
+  }
   for (const reference of references)
-    if (!result[reference]) throw new Error("A published image reference has no source object");
+    if (!result[reference] && !USER_HEADSHOT_PATH.test(reference))
+      throw new Error("A published image reference has no source object");
   return result;
 }

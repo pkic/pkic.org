@@ -43,15 +43,20 @@ async function put(root: string, path: string, content: string) {
   await mkdir(dirname(resolve(root, path)), { recursive: true });
   await writeFile(resolve(root, path), content);
 }
-async function writeRelease(source: string) {
+async function writeRelease(source: string, privatePaths: string[] = []) {
   // This is the endpoint collector used by finish-astro-release, not a hand-authored file inventory.
-  const files = ["index.html", ...(await collectConferenceOutputs(source))];
+  const files = [
+    "index.html",
+    ...privatePaths.map((path) => `${path.slice(1)}index.html`),
+    ...(await collectConferenceOutputs(source)),
+  ];
   const release = sitePublicationReleaseSchema.parse({
     version: 1,
     source: "native",
     environment: "preview",
     snapshotId: "a".repeat(64),
     sourceSequence: 1,
+    privatePaths,
     files,
     integrity: await createReleaseIntegrity(source, files),
   });
@@ -79,7 +84,9 @@ it("inventories generated single-session calendar bytes for fresh assembly, inte
     );
     expect(installed.integrity!.files[endpoint]).toEqual(release.integrity!.files[endpoint]);
     await verifyReleaseIntegrity(destination, installed);
-    expect(await readFile(resolve(destination, "_headers"), "utf8")).toContain(`/${endpoint}\n`);
+    expect(await readFile(resolve(destination, "_headers"), "utf8")).toContain(
+      "/conferences/synthetic/agenda/calendar/*\n",
+    );
 
     await writeFile(resolve(source, endpoint), `${bytes}Tampered`);
     await expect(assembleStaticRelease(source, destination, "preview")).rejects.toThrow("integrity");
@@ -118,6 +125,90 @@ it("validates only immediate single-session ICS children of the owned agenda cal
     expect(await collectConferenceOutputs(root)).toEqual([endpoint]);
     await writeFile(resolve(root, endpoint), "BEGIN:VEVENT\r\nEND:VEVENT\r\n");
     await expect(collectConferenceOutputs(root)).rejects.toThrow("Conference calendar is invalid");
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+it("keeps 240 session calendars and private-page protections inside the edge header budget", async () => {
+  const root = await createTemporaryDirectory("public-calendar-header-budget");
+  const source = resolve(root, "source"),
+    destination = resolve(root, "fresh-worker");
+  const privatePaths = Array.from({ length: 40 }, (_, index) => `/private/review-${index}/`);
+  const agendaPaths = Array.from({ length: 4 }, (_, index) => `events/history-${index}/agenda/`);
+  try {
+    await put(source, "index.html", "Approved home");
+    for (const path of privatePaths) await put(source, `${path.slice(1)}index.html`, "Private invitation view");
+    for (const [index, path] of agendaPaths.entries()) {
+      await put(source, `${path}data.json`, JSON.stringify({ timezone: "UTC", agenda: {} }));
+      await put(source, `${path}calendar.ics`, bytes);
+      await put(source, `events/history-${index}/event-data.json`, JSON.stringify({ timezone: "UTC", agenda: {} }));
+      await put(source, `events/history-${index}/agenda.ics`, bytes);
+      for (let session = 0; session < 60; session += 1)
+        await put(source, `${path}calendar/session-${session}.ics`, bytes);
+    }
+    const release = await writeRelease(source, privatePaths);
+    expect(release.files.filter((file) => /\/calendar\/[^/]+\.ics$/.test(file))).toHaveLength(240);
+    await assembleStaticRelease(source, destination, "preview");
+    const headers = await readFile(resolve(destination, "_headers"), "utf8");
+    const rules = headers.split(/\r?\n/).filter((line) => line && !/^(?:\s|#)/.test(line));
+    expect(rules.length).toBeLessThanOrEqual(100);
+    expect(rules.filter((rule) => rule.endsWith("/agenda/calendar/*"))).toHaveLength(4);
+    expect(rules.some((rule) => /\/calendar\/session-\d+\.ics$/.test(rule))).toBe(false);
+    for (const [index, path] of agendaPaths.entries()) {
+      for (const file of [
+        `${path}data.json`,
+        `${path}calendar.ics`,
+        `${path}calendar/*`,
+        `events/history-${index}/event-data.json`,
+        `events/history-${index}/agenda.ics`,
+      ])
+        expect(headers).toContain(`/${file}\n    ! X-Robots-Tag\n    X-Robots-Tag: noindex, nofollow, noarchive`);
+    }
+    for (const path of privatePaths) {
+      expect(rules.indexOf(path)).toBeGreaterThanOrEqual(0);
+      expect(rules.indexOf(path)).toBeLessThan(100);
+      expect(headers).toContain(
+        `${path}\n    ! Cache-Control\n    Cache-Control: no-store, max-age=0\n    ! Referrer-Policy\n    Referrer-Policy: no-referrer\n    ! X-Robots-Tag\n    X-Robots-Tag: noindex, nofollow, noarchive`,
+      );
+    }
+    // A fresh destination inherits the actual canonical security baseline, including scanner camera policy.
+    expect(headers).toContain("Content-Security-Policy: default-src 'none'");
+    expect(headers).toContain("X-Content-Type-Options: nosniff");
+    expect(headers).toContain("Permissions-Policy: camera=(self), microphone=()");
+    for (const path of ["/meetings/join/*", "/m/*"])
+      expect(headers).toContain(
+        `${path}\n    ! Cache-Control\n    Cache-Control: no-store, max-age=0\n    ! Referrer-Policy\n    Referrer-Policy: no-referrer`,
+      );
+    expect(headers).toContain(
+      "/_assets/*\n    ! Cache-Control\n    Cache-Control: public, max-age=31536000, immutable\n    Service-Worker-Allowed: /portal/",
+    );
+    expect(headers.indexOf("/_published/agenda/*")).toBeLessThan(headers.indexOf(privatePaths[0]!));
+    await writeFile(resolve(destination, "_headers"), `${headers}\n/existing-private/*\n    Cache-Control: no-store\n`);
+    await assembleStaticRelease(source, destination, "preview");
+    const repeated = await readFile(resolve(destination, "_headers"), "utf8");
+    expect(repeated.match(/X-PKIC-Publication/g)).toHaveLength(1);
+    expect(repeated).toContain("/existing-private/*\n    Cache-Control: no-store");
+    expect(repeated.split(/\r?\n/).filter((line) => line && !/^(?:\s|#)/.test(line)).length).toBeLessThanOrEqual(100);
+  } finally {
+    await rm(root, { recursive: true, force: true });
+  }
+});
+
+it("refuses an over-budget release instead of installing silently truncated private protections", async () => {
+  const root = await createTemporaryDirectory("public-header-budget-refusal");
+  const source = resolve(root, "source"),
+    destination = resolve(root, "fresh-worker");
+  const privatePaths = Array.from({ length: 100 }, (_, index) => `/private/review-${index}/`);
+  try {
+    await put(source, "index.html", "Approved home");
+    for (const path of privatePaths) await put(source, `${path.slice(1)}index.html`, "Private invitation view");
+    await writeRelease(source, privatePaths);
+    const baseline = await readFile("static/_headers", "utf8");
+    await put(destination, "_headers", baseline);
+    await expect(assembleStaticRelease(source, destination, "preview")).rejects.toThrow("100 header-rule limit");
+    expect(await readFile(resolve(destination, "_headers"), "utf8")).toBe(baseline);
+    await expect(readFile(resolve(destination, "publication.json"))).rejects.toMatchObject({ code: "ENOENT" });
   } finally {
     await rm(root, { recursive: true, force: true });
   }

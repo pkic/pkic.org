@@ -535,6 +535,8 @@ sponsor:
         roles:
           "SELECT id, user_id, role_id, context_id FROM user_roles WHERE context_type = 'organization' ORDER BY id",
         sponsorships: "SELECT id, sponsor_type, organization_id, event_id, tier FROM sponsorships ORDER BY id",
+        events:
+          "SELECT slug, timezone, starts_at, ends_at FROM events WHERE slug = 'pqc-conference-amsterdam-nl-2023' ORDER BY slug",
         groupMemberships:
           "SELECT id, group_id, user_id, member_id, source, joined_at FROM group_memberships ORDER BY id",
       };
@@ -553,6 +555,14 @@ sponsor:
     expect(first.identities).toHaveLength(3); // two organization identities + one individual identity
     expect(first.roles.length).toBeGreaterThanOrEqual(2); // primary + secondary contact
     expect(first.sponsorships).toHaveLength(3); // member consortium + member event + non-member event
+    expect(first.events).toEqual([
+      {
+        slug: "pqc-conference-amsterdam-nl-2023",
+        timezone: "Europe/Amsterdam",
+        starts_at: "2023-11-07T07:30:00.000Z",
+        ends_at: null,
+      },
+    ]);
     expect(first.sponsorships.some((row) => String(row.tier).toLowerCase() === "none")).toBe(false);
     // One membership from the working-group roster; the rest are the
     // automatic enrollments the portal would have written as each capacity

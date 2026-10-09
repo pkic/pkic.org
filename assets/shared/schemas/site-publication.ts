@@ -1,3 +1,4 @@
+import { publicationAuthoredAgendaRoutesSchema } from "./site-publication-agenda-routes";
 import { publicAgendaCalendarSchema } from "./site-agenda-calendar";
 import { agendaSnapshotSchema } from "./event-agenda";
 import { publicVoteSchema } from "./votes";
@@ -26,6 +27,7 @@ export const sitePublishedEventFlowSchema = z
 export const sitePublicationContentSchema = z.object({
   version: z.literal(1),
   eventAgendas: z.record(z.string(), agendaSnapshotSchema).optional(),
+  authoredAgendaRoutes: publicationAuthoredAgendaRoutesSchema.optional(),
   eventAgendaCalendars: z.record(z.string(), publicAgendaCalendarSchema).optional(),
   votes: z.array(publicVoteSchema),
   publicResources: publishedFormResourcesSchema,

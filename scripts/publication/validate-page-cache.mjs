@@ -12,6 +12,7 @@ import {
 
 const manifestPath = "incremental-build.json";
 const sealPath = "publication-page-cache.json";
+const transformSealPath = "publication-transform-cache.json";
 const outputDirectories = ["dist", "assets"];
 
 /** Astro does not invalidate imported middleware dependencies for incremental
@@ -120,14 +121,14 @@ async function inspectCache(directory) {
 /** Discard only native optimization bytes before a forced full repair. */
 export async function discardPublicationPageCache(directory, anchorDirectory = publicationCacheAnchor()) {
   ({ directory } = await ensureCacheRoot(directory, anchorDirectory));
-  for (const path of [manifestPath, sealPath, ...outputDirectories])
+  for (const path of [manifestPath, sealPath, transformSealPath, ...outputDirectories])
     await rm(resolve(directory, path), { recursive: true, force: true });
 }
 
 /** Existing Astro caches are an optimization, never an approval or serving source.
  * Corrupt, missing or unfinished caches fall back to complete native rendering. */
 export async function validatePublicationPageCache(directory, anchorDirectory = publicationCacheAnchor()) {
-  ({ directory, anchorDirectory } = await ensureCacheRoot(directory, anchorDirectory));
+  ({ directory } = await ensureCacheRoot(directory, anchorDirectory));
   try {
     const info = await lstat(resolve(directory, sealPath));
     if (!info.isFile() || info.isSymbolicLink() || info.size > 32 * 1024 * 1024)
@@ -144,7 +145,10 @@ export async function validatePublicationPageCache(directory, anchorDirectory = 
     console.log(`[publication] verified native page cache: ${actual.paths} keyed paths`);
     return { verified: true, paths: actual.paths };
   } catch (error) {
-    await discardPublicationPageCache(directory, anchorDirectory);
+    // Page and transform reuse have independent completion boundaries.
+    const transformsVerified = await verifyTransformCache(directory);
+    for (const path of [manifestPath, sealPath, "dist", ...(!transformsVerified ? ["assets", transformSealPath] : [])])
+      await rm(resolve(directory, path), { recursive: true, force: true });
     console.log(
       `[publication] full page render required: ${error instanceof Error ? error.message : "unavailable cache"}`,
     );
@@ -165,4 +169,40 @@ export async function sealPublicationPageCache(directory, anchorDirectory = publ
     await rm(temporary, { force: true });
   }
   console.log(`[publication] sealed native page cache: ${paths} keyed paths`);
+}
+
+async function transformIntegrity(directory) {
+  const files = new Set();
+  await collectCacheFiles(directory, "assets", files);
+  return createReleaseIntegrity(directory, [...files]);
+}
+
+async function verifyTransformCache(directory) {
+  try {
+    const info = await lstat(resolve(directory, transformSealPath));
+    if (!info.isFile() || info.isSymbolicLink() || info.size > 32 * 1024 * 1024) return false;
+    const expected = sitePublicationIntegritySchema.parse(
+      JSON.parse(await readFile(resolve(directory, transformSealPath), "utf8")),
+    );
+    const actual = await transformIntegrity(directory);
+    return (
+      expected.digest === actual.digest &&
+      publicationIntegrityHashInput(expected.files) === publicationIntegrityHashInput(actual.files)
+    );
+  } catch {
+    return false;
+  }
+}
+
+/** Native image generation completed; this seal does not approve pages or activate a release. */
+export async function sealPublicationTransformCache(directory, anchorDirectory = publicationCacheAnchor()) {
+  ({ directory } = await ensureCacheRoot(directory, anchorDirectory));
+  const integrity = await transformIntegrity(directory);
+  const temporary = resolve(directory, `${transformSealPath}.${randomUUID()}.tmp`);
+  try {
+    await writeFile(temporary, JSON.stringify(integrity), { flag: "wx" });
+    await rename(temporary, resolve(directory, transformSealPath));
+  } finally {
+    await rm(temporary, { force: true });
+  }
 }

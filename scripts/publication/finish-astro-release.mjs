@@ -4,6 +4,7 @@ import {
   validateDocumentRedirectRules,
 } from "./collect-document-redirects.mjs";
 import { collectSessionRedirects } from "./collect-session-redirects.mjs";
+import { publishPortalOfflineInventory } from "./publish-portal-offline-inventory.mjs";
 import { createReleaseIntegrity } from "./release-integrity.mjs";
 import { publicationTimings } from "./publication-timings.mjs";
 import {
@@ -21,6 +22,7 @@ import { publishedNewsPages } from "../../site/news-pages.ts";
 import { XMLValidator } from "fast-xml-parser";
 import { optimizePublicSvgFiles, publicInlineSvgOptimizer } from "./optimize-public-svg.mjs";
 import { publicDownloadPublisher } from "./publish-linked-downloads.mjs";
+import { publishAuthoredAgendaDownloads } from "./publish-authored-agenda-downloads.mjs";
 import { publicSocialCardPublisher } from "./publish-social-cards.mjs";
 import { publishAgendaLayout } from "./publish-agenda-layout.mjs";
 import { publicDiagramPublisher } from "./publish-diagrams.mjs";
@@ -62,6 +64,8 @@ async function finishRelease(output, pages, timings) {
     { ...snapshot, sourceSequence: source ? null : snapshot.sourceSequence },
     JSON.parse(await readFile(resolve(publicationStagingDirectory(), "document-routes.json"), "utf8")),
     JSON.parse(await readFile(resolve(publicationStagingDirectory(), "retained-documents.json"), "utf8")),
+    JSON.parse(await readFile(resolve(publicationStagingDirectory(), "repair-aliases.json"), "utf8")),
+    JSON.parse(await readFile(resolve(publicationStagingDirectory(), "retained-repair-aliases.json"), "utf8")),
   );
   if (!source)
     await cp(resolve(publicationStagingDirectory(), "media", "_published"), resolve(output, "_published"), {
@@ -73,7 +77,11 @@ async function finishRelease(output, pages, timings) {
     const svgFiles = await timings.measure("SVG file optimization", () => optimizePublicSvgFiles(output));
     const optimizeInlineSvg = publicInlineSvgOptimizer();
     const publishDownloads = publicDownloadPublisher(output, documentRoutes);
-    const downloads = new Set();
+    const downloads = new Set(
+      await timings.measure("authored public downloads", () =>
+        publishAuthoredAgendaDownloads(output, snapshot, documentRoutes),
+      ),
+    );
     const files = svgFiles.map((file) => relative(output, file).split("\\").join("/"));
     const privatePaths = [];
     const memberData = resolve(output, "_published", "members");
@@ -124,8 +132,12 @@ async function finishRelease(output, pages, timings) {
           downloads.add(download);
         if (/noindex/.test(document.window.document.querySelector('meta[name="robots"]')?.content ?? ""))
           privatePaths.push(`/${file.replace(/index\.html$/, "")}`);
-        for (const element of document.window.document.querySelectorAll("[src], [srcset]")) {
-          for (const attribute of ["src", "srcset"]) {
+        // Deferred images (assets/ts/site/deferred-images.ts) carry their sources until opened.
+        const mediaAttributes = ["src", "srcset", "data-deferred-src", "data-deferred-srcset"];
+        for (const element of document.window.document.querySelectorAll(
+          mediaAttributes.map((attribute) => `[${attribute}]`).join(", "),
+        )) {
+          for (const attribute of mediaAttributes) {
             if (/\/api\//.test(element.getAttribute(attribute) ?? ""))
               throw new Error(`An API media reference remains on ${file}`);
           }
@@ -191,6 +203,7 @@ async function finishRelease(output, pages, timings) {
     await mkdir(resolve(output, "_published/agenda"), { recursive: true });
     await writeFile(resolve(output, PUBLICATION_DOCUMENT_ROUTES_PATH), JSON.stringify(documentRoutes));
     files.push(PUBLICATION_DOCUMENT_ROUTES_PATH);
+    files.push(await publishPortalOfflineInventory(output));
     await writeFile(
       resolve(output, "publication.json"),
       JSON.stringify(

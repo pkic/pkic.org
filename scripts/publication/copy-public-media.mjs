@@ -126,6 +126,11 @@ export async function copyPublicMedia({
     await store(bytes, "webp");
     serialized = serialized.replaceAll(JSON.stringify(reference), JSON.stringify(path));
   }
+  // A credited portrait the person has since replaced or removed is no longer public; show initials.
+  serialized = serialized.replace(/(?<!\\)"\/api\/v1\/users\/[^"/\\]+\/headshots\/[^"/\\]+"/g, (reference) => {
+    console.warn(`[publication] Credited portrait ${reference} is no longer current; using initials`);
+    return "null";
+  });
   const published = JSON.parse(serialized);
   // Profile/directory logos are nullable and render initials. Legacy logo walls
   // require a URL and already use the consortium mark when a logo is missing.

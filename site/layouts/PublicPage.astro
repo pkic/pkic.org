@@ -35,6 +35,7 @@ const excludeFromSearch = privatePage || robots?.includes("noindex");
       assets={{}}
       robots={privatePage ? "noindex, nofollow, noarchive" : robots}
     />
+    <slot name="head" />
     {!privatePage && !robots?.includes("noindex") && <template id="pkic-social-card">{JSON.stringify(page.socialCard)}</template>}
   </head>
   <body class={`pk-site${accent ? ` pk-page--${accent}` : ""}`}>

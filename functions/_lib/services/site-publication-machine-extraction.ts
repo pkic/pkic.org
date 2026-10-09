@@ -1,3 +1,4 @@
+import { prepareAuthorizationGuard } from "../db/authorization-guard";
 import { first } from "../db/queries";
 import type { DatabaseLike } from "../types";
 import { readPublicationAttempt } from "./site-publication-coordinator";
@@ -38,4 +39,15 @@ export async function assertPublicationMachineExtraction(db: DatabaseLike, env: 
   );
   if (!owned) throw new Error("PUBLICATION_EXTRACTION_AUTHORITY_CHANGED");
   return { ...context, sourceSequence: attempt.sourceSequence };
+}
+
+/** Recheck the same native build owner inside each extraction transaction. */
+export function preparePublicationMachineExtractionGuard(
+  db: DatabaseLike,
+  machine: NonNullable<Awaited<ReturnType<typeof assertPublicationMachineExtraction>>>,
+) {
+  return prepareAuthorizationGuard(db, {
+    sql: `SELECT 1 FROM site_publication_pipeline_fence fence JOIN site_publication_provider_attempts attempt ON attempt.id=fence.attempt_id JOIN site_publication_delivery_state state ON state.id=1 WHERE fence.id=1 AND attempt.id=? AND attempt.build_id=? AND attempt.phase='build_attested' AND fence.lease_token=attempt.lease_token AND state.desired_sequence=?`,
+    bindings: [machine.attemptId, machine.buildId, machine.sourceSequence],
+  });
 }

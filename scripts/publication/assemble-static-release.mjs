@@ -1,17 +1,16 @@
-import {
-  prepareDocumentRetirement,
-  readReleaseDocumentRoutes,
-  validateDocumentRedirectRules,
-} from "./collect-document-redirects.mjs";
-import { sitePublicationReleaseSchema } from "../../assets/shared/schemas/site-publication-release.ts";
-import {
-  createReleaseIntegrity,
-  verifyReleaseIntegrity,
-  synchronizedPublicationDirectories,
-} from "./release-integrity.mjs";
+import { registerLegacyAgendaSchemaResolution } from "../lib/legacy-agenda-runtime.mjs";
 import { readFile, access, rm } from "node:fs/promises";
 import { resolve } from "node:path";
+import { privatePageHeaderRules } from "./private-page-header-rules.mjs";
 import { installReleaseBytes, installReleaseFile, synchronizeReleaseDirectory } from "./synchronize-release-files.mjs";
+
+// Register native TypeScript resolution before loading the canonical shared schema graph.
+registerLegacyAgendaSchemaResolution();
+const { prepareDocumentRetirement, readReleaseDocumentRoutes, validateDocumentRedirectRules } =
+  await import("./collect-document-redirects.mjs");
+const { sitePublicationReleaseSchema } = await import("../../assets/shared/schemas/site-publication-release.ts");
+const { createReleaseIntegrity, verifyReleaseIntegrity, synchronizedPublicationDirectories } =
+  await import("./release-integrity.mjs");
 
 /** Merge a complete publication into the complete Worker build, never a partial asset upload. */
 export async function assembleStaticRelease(source, destination, environment) {
@@ -78,11 +77,12 @@ export async function assembleStaticRelease(source, destination, environment) {
   }
   // Asset responses carry the selected publication identity without running application code.
   const headerPath = resolve(destination, "_headers");
-  let headers = "";
+  let headers;
   try {
     headers = await readFile(headerPath, "utf8");
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
+    headers = await readFile(new URL("../../static/_headers", import.meta.url), "utf8");
   }
   headers = headers
     .replace(/\n# BEGIN PUBLICATION[\s\S]*?# END PUBLICATION\n?/g, "")
@@ -93,18 +93,23 @@ export async function assembleStaticRelease(source, destination, environment) {
   headers = /^\/\*\r?\n/m.test(headers)
     ? headers.replace(/^\/\*\r?\n/m, (rule) => rule + global)
     : `${headers}\n/*\n${global}`;
-  const privateRules = release.privatePaths
+  const privateRules = privatePageHeaderRules(release.privatePaths, release.files)
     .map(
       (path) =>
         `\n${path}\n    ! Cache-Control\n    Cache-Control: no-store, max-age=0\n    ! Referrer-Policy\n    Referrer-Policy: no-referrer\n    ! X-Robots-Tag\n    X-Robots-Tag: noindex, nofollow, noarchive\n`,
     )
     .join("");
-  const conferenceRules = release.files
-    .filter((file) =>
-      /^(?:events\/.*\/(?:event-data\.json|agenda\.ics)|.*\/agenda\/(?:data\.json|calendar\.ics|calendar\/[^/]+\.ics))$/.test(
-        file,
-      ),
-    )
+  const conferenceRules = [
+    ...new Set(
+      release.files
+        .filter((file) =>
+          /^(?:events\/.*\/(?:event-data\.json|agenda\.ics)|.*\/agenda\/(?:data\.json|calendar\.ics|calendar\/[^/]+\.ics))$/.test(
+            file,
+          ),
+        )
+        .map((file) => file.replace(/(\/agenda\/calendar)\/[^/]+\.ics$/, "$1/*")),
+    ),
+  ]
     .map((file) => `\n/${file}\n    ! X-Robots-Tag\n    X-Robots-Tag: noindex, nofollow, noarchive\n`)
     .join("");
   const immutableRules = [
@@ -123,10 +128,11 @@ export async function assembleStaticRelease(source, destination, environment) {
   const rules =
     immutableRules +
     "\n/_published/news/*\n    ! Cache-Control\n    Cache-Control: public, max-age=300, must-revalidate\n\n/feed/*\n    Content-Type: application/rss+xml; charset=UTF-8\n\n/ms/feed/*\n    Content-Type: application/rss+xml; charset=UTF-8\n\n/news/feed.xml\n    Content-Type: application/rss+xml; charset=UTF-8\n";
-  await installReleaseBytes(
-    `${headers}\n# BEGIN PUBLICATION${rules}${conferenceRules}${privateRules}# END PUBLICATION\n`,
-    headerPath,
-  );
+  const installedHeaders = `${headers}\n# BEGIN PUBLICATION${rules}${conferenceRules}${privateRules}# END PUBLICATION\n`;
+  // Cloudflare ignores rules beyond this limit, which could silently drop private-page protections.
+  const headerRuleCount = installedHeaders.split(/\r?\n/).filter((line) => line && !/^(?:\s|#)/.test(line)).length;
+  if (headerRuleCount > 100) throw new Error("Publication exceeds Cloudflare's 100 header-rule limit");
+  await installReleaseBytes(installedHeaders, headerPath);
   await installReleaseBytes(
     `${redirects}\n# BEGIN PUBLICATION\n${installedRedirects.map(({ from, to, status }) => `${from} ${to} ${status}`).join("\n")}\n# END PUBLICATION\n`,
     redirectPath,

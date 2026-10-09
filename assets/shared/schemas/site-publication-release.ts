@@ -3,6 +3,7 @@ import { httpOrSameOriginUrlSchema, sameOriginPathSchema } from "./urls.ts";
 import { parseSessionPresentationPublicUrl } from "../session-presentation-public-url.ts";
 import { presentationByteCountSchema } from "./event-agenda-legacy-fragments.ts";
 import { publicationDocumentSelectionSchema } from "./site-publication-documents.ts";
+import { publicationRepairAliasesSchema } from "./site-publication-repair-aliases.ts";
 
 function safeRedirectToken(path: string): boolean {
   return (
@@ -62,6 +63,7 @@ export const sitePublicationDocumentRoutesSchema = z
     version: z.literal(1),
     snapshotId: sitePublicationSnapshotIdSchema,
     sourceSequence: sitePublicationSourceSequenceSchema.nullable(),
+    repairAliases: publicationRepairAliasesSchema.default([]),
     documents: z
       .array(publicationDocumentSelectionSchema)
       .max(10000)

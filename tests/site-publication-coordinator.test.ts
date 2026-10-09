@@ -379,6 +379,18 @@ async function assertActivationRefused(
   expect(await activationState()).toEqual(expected);
   expect((await readPublicationAttempt(env.DB, fixture.attempt.id))?.phase).toBe("awaiting_activation");
 }
+/** Capacity is enforced when attendees reserve; approved agenda activation never refuses on it. */
+async function assertActivationSucceeds(
+  fixture: Awaited<ReturnType<typeof approvedActivationAgenda>>,
+  mutate: () => Promise<unknown>,
+) {
+  const db = mutateBeforeNextBatch(env.DB, mutate);
+  const fetcher = activationFetcher(fixture.release);
+  expect((await activatePublicationAttempt(db, config, fixture.attempt.id, "token", fetcher)).state).toBe(
+    "awaiting_receipt",
+  );
+  expect(fetcher.mock.calls.filter(([, init]) => init.method === "POST")).toHaveLength(1);
+}
 describe("approved agenda constraint guards at provider activation", () => {
   it("preserves the approved basis with unapproved draft edits and a later legal booking", async () => {
     const fixture = await approvedActivationAgenda();
@@ -466,7 +478,7 @@ describe("approved agenda constraint guards at provider activation", () => {
         .run(),
     );
   });
-  it("includes normalized operational staff when concurrent bookings would exceed approved capacity", async () => {
+  it("activates when concurrent bookings and normalized operational staff exceed approved session capacity", async () => {
     const fixture = await approvedActivationAgenda();
     expect(
       await queryAll(
@@ -479,9 +491,9 @@ describe("approved agenda constraint guards at provider activation", () => {
       ),
     ).toHaveLength(1);
     await fixture.reservation(fixture.firstId);
-    await assertActivationRefused(fixture, () => fixture.reservation(fixture.firstId));
+    await assertActivationSucceeds(fixture, () => fixture.reservation(fixture.firstId));
   });
-  it("rechecks normalized standalone staff and current live event-day limits inside the intent batch", async () => {
+  it("activates when current live event-day capacity drops below normalized standalone staff", async () => {
     const fixture = await approvedActivationAgenda(true);
     expect(
       await queryAll(
@@ -501,8 +513,23 @@ describe("approved agenda constraint guards at provider activation", () => {
         fixture.staff,
       ),
     ).toHaveLength(1);
-    await assertActivationRefused(fixture, () =>
+    await assertActivationSucceeds(fixture, () =>
       env.DB.prepare("UPDATE events SET capacity_in_person=1 WHERE id=?").bind(fixture.eventId).run(),
+    );
+  });
+  it("rechecks a concurrent reservation held in a room outside the approved session inside the intent batch", async () => {
+    const fixture = await approvedActivationAgenda();
+    const roomId = crypto.randomUUID(),
+      attendee = await insertUser(env.DB);
+    await env.DB.prepare("INSERT INTO event_agenda_rooms(id,event_id,name,setup_minutes,capacity) VALUES(?,?,?,0,NULL)")
+      .bind(roomId, fixture.eventId, "Unapproved room")
+      .run();
+    await assertActivationRefused(fixture, () =>
+      env.DB.prepare(
+        "INSERT INTO agenda_session_participations(id,event_id,occurrence_id,user_id,attendance_mode,room_id,status,created_at,updated_at) VALUES(?,?,?,?,'physical',?,'reserved',?,?)",
+      )
+        .bind(crypto.randomUUID(), fixture.eventId, fixture.firstId, attendee, roomId, nowIso(), nowIso())
+        .run(),
     );
   });
   it("rechecks current overlapping reservations without canceling either reservation", async () => {

@@ -13,8 +13,14 @@ const copy = { ...content?.portalLogin, facts: content?.portalLogin?.facts?.map(
 })) };
 ---
 <PublicPage title="Member portal" privatePage>
+  <Fragment slot="head">
+    <link rel="manifest" href="/portal/manifest.webmanifest" />
+    <meta name="theme-color" content="#0b2a1c" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-title" content="PKI Consortium" />
+  </Fragment>
   <script id={PORTAL_LOGIN_COPY_ID} type="application/json" set:html={JSON.stringify(copy).replace(/</g, "\u003c")} />
-  <div id="portal-app" inert><Login copy={copy} onSignedIn={() => {}} /></div>
+  <div id="portal-app" inert><Login copy={copy} busy status="Checking your sign-in…" onSignedIn={() => {}} /></div>
   <div id="portal-toast-area" />
   <HeadshotDialogTemplates />
   <script>

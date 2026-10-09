@@ -8,6 +8,7 @@ import { publicationImageInputs, publicationRouteCacheKey } from "../../site/pub
 import { publicationForceRebuild, publicationStagingDirectory } from "../../scripts/publication/build-context.mjs";
 import {
   sealPublicationPageCache,
+  sealPublicationTransformCache,
   publicationSupportsPageCache,
   discardPublicationPageCache,
   validatePublicationPageCache,
@@ -267,5 +268,44 @@ it("keeps local snapshot receipts outside every public input, output, and stagin
     ).rejects.toThrow("outside");
   } finally {
     await rm(root, { recursive: true, force: true });
+  }
+});
+
+it("reuses independently verified native transforms after a finisher failure, without reusing pages", async () => {
+  const directory = await createTemporaryDirectory("publication-transform-cache-");
+  try {
+    await nativeCacheFixture(directory);
+    await sealPublicationTransformCache(directory, directory);
+    // No final page seal: native generation completed but release finishing failed.
+    await expect(validatePublicationPageCache(directory, directory)).resolves.toEqual({ verified: false, paths: 0 });
+    await expect(readFile(resolve(directory, "assets/synthetic.webp"), "utf8")).resolves.toBe("synthetic image bytes");
+    await expect(readFile(resolve(directory, "dist/events/synthetic/agenda/index.html"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+    await expect(readFile(resolve(directory, "incremental-build.json"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(resolve(directory, "publication-page-cache.json"))).rejects.toMatchObject({ code: "ENOENT" });
+    await nativeCacheFixture(directory);
+    await sealPublicationPageCache(directory, directory);
+    await expect(validatePublicationPageCache(directory, directory)).resolves.toEqual({ verified: true, paths: 1 });
+    await discardPublicationPageCache(directory, directory);
+    await expect(readFile(resolve(directory, "assets/synthetic.webp"))).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(readFile(resolve(directory, "publication-transform-cache.json"))).rejects.toMatchObject({
+      code: "ENOENT",
+    });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+it("discards independently sealed transforms when their bytes change after native completion", async () => {
+  const directory = await createTemporaryDirectory("publication-transform-cache-");
+  try {
+    await nativeCacheFixture(directory);
+    await sealPublicationTransformCache(directory, directory);
+    await writeFile(resolve(directory, "assets/synthetic.webp"), "tampered transform");
+    await validatePublicationPageCache(directory, directory);
+    await expect(readFile(resolve(directory, "assets/synthetic.webp"))).rejects.toMatchObject({ code: "ENOENT" });
+  } finally {
+    await rm(directory, { recursive: true, force: true });
   }
 });
