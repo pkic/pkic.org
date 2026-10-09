@@ -203,6 +203,27 @@ describe("session acting identity", () => {
     });
   });
 
+  it("keeps each concurrent request's acting identity in its own scope", async () => {
+    const first = await personWithOrganizations(["Gamma Org", "Delta Org"]);
+    const second = await personWithOrganizations(["Epsilon Org", "Zeta Org"]);
+    const firstToken = await createMemberSession(env.DB, first.userId, "concurrent-a", undefined, first.identityIds[0]);
+    const secondToken = await createMemberSession(
+      env.DB,
+      second.userId,
+      "concurrent-b",
+      undefined,
+      second.identityIds[1],
+    );
+    await Promise.all(
+      Array.from({ length: 6 }, (_, index) =>
+        index % 2 === 0 ? updateFirstName(firstToken, `First${index}`) : updateFirstName(secondToken, `Second${index}`),
+      ),
+    );
+
+    expect(await profileUpdateIdentities(first.userId)).toEqual(Array(3).fill(first.identityIds[0]));
+    expect(await profileUpdateIdentities(second.userId)).toEqual(Array(3).fill(second.identityIds[1]));
+  });
+
   it("shows the acting identity's organization beside the actor in the audit log", async () => {
     await seedEventAndAdmin(env.DB);
     const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'");
