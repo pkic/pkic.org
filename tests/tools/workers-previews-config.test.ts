@@ -52,10 +52,8 @@ describe("Workers Previews configuration", () => {
     expect(previewIds.filter((id) => productionIds.has(id))).toEqual([]);
   });
 
-  it("declares every production binding for Previews except the documented OAuth namespace", () => {
-    // OAUTH_KV waits for a preview namespace; MCP OAuth reports itself unavailable without it.
-    const expected = bindingNames(production).filter((name) => name !== "OAUTH_KV");
-    expect(new Set(bindingNames(previews))).toEqual(new Set(expected));
+  it("declares every production binding for Previews", () => {
+    expect(new Set(bindingNames(previews))).toEqual(new Set(bindingNames(production)));
   });
 
   it("keeps production identities and live payment keys out of Preview variables", () => {
