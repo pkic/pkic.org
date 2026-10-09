@@ -1,12 +1,11 @@
 import type { MembershipWorkflowStep } from "../../../../../assets/shared/schemas/membership-workflows";
 import { prepareAuthorizationGuard } from "../../../db/authorization-guard";
 import { all, first } from "../../../db/queries";
-import { prepareQueueEmailStatement } from "../../../email/outbox";
-import { emailPlainText } from "../../../email/plain-text";
 import { AppError } from "../../../errors";
 import type { DatabaseLike, StatementLike } from "../../../types";
 import { uuid } from "../../../utils/ids";
 import type { MembershipExecution } from "./execution";
+import { prepareMembershipReviewDigest } from "./review-digest";
 
 /** Create exactly one next-step requirement inside the application's command boundary. */
 export async function prepareOpenMembershipStep(
@@ -31,38 +30,17 @@ export async function prepareOpenMembershipStep(
       WHERE objection.application_id = ? AND objection.state IN ('unresolved', 'upheld') ORDER BY objection.created_at, objection.id LIMIT 100`,
       [execution.application.id],
     );
-    const notice = prepareQueueEmailStatement(
+    const notice = await prepareMembershipReviewDigest(
       db,
-      {
-        outboxId: uuid(),
-        idempotencyKey: `membership-review:${execution.application.id}:${execution.generation}:${position}`,
-        templateKey: "membership-workflow-review",
-        recipientEmail: destination.email,
-        subject: `${step.label}: ${execution.application.organization_name ?? execution.application.applicant_name}`,
-        messageType: "transactional",
-        data: {
-          applicationName: emailPlainText(
-            execution.application.organization_name ?? execution.application.applicant_name,
-          ),
-          applicantName: emailPlainText(execution.application.applicant_name),
-          stepLabel: emailPlainText(step.label),
-          instructions: emailPlainText(step.instructions),
-          durationDays: step.durationDays,
-          reviewUrl: `${appBaseUrl}/portal/#/membership/applications/${encodeURIComponent(execution.application.id)}/review`,
-          objections: objections.map((objection) => ({
-            body: emailPlainText(
-              objection.body.length > 500
-                ? `${objection.body.slice(0, 500)}… Read the full objection on the review page.`
-                : objection.body,
-            ),
-            author: emailPlainText(objection.author ?? "Recorded reviewer"),
-          })),
-        },
-      },
+      execution,
+      step,
+      destination.email,
+      appBaseUrl,
       now,
+      objections,
     );
     noticeId = notice.id;
-    statements.push(notice.statement);
+    statements.push(...notice.statements);
   }
   if (step.kind === "payment") {
     const feeId = uuid();
