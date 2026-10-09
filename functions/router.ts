@@ -22,7 +22,6 @@ import { OPENAPI_INFO, OPENAPI_TAGS, OPENAPI_TAG_GROUPS } from "./_lib/openapi/d
 import { createMcpWorkerFetch, MCP_OPENAPI_JSON_PATH } from "./_lib/api-tools/mcp-worker";
 import { getStaticAssetsBinding } from "./_lib/static-assets";
 import { primaryFirstDb, requestSessionDb } from "./_lib/db/session";
-import { WorkerEntrypoint } from "cloudflare:workers";
 import {
   conditionalPublicReadResponse,
   isAnonymousReadRequest,
@@ -120,17 +119,15 @@ function handleHttpRequest(request: Request, env: Env, ctx: ExecutionContext): P
   return fetchWithMcp(request, withDependencyHandling({ ...env, DB: requestSessionDb(env.DB, request) }), ctx);
 }
 
-/** This entrypoint is reached only after the uncached gateway checks the request. */
-export class PublicRead extends WorkerEntrypoint<Env> {
-  async fetch(request: Request): Promise<Response> {
-    if (!isAnonymousReadRequest(request)) {
-      return new Response(null, { status: 404, headers: { "cache-control": "no-store" } });
-    }
-    try {
-      return await publicReadCacheResponse(await handleHttpRequest(request, this.env, this.ctx), this.env);
-    } catch (error) {
-      return await publicReadCacheResponse(handleError(error), this.env);
-    }
+/** The cached entrypoint calls this only after the uncached gateway checks the request. */
+export async function handlePublicRead(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+  if (!isAnonymousReadRequest(request)) {
+    return new Response(null, { status: 404, headers: { "cache-control": "no-store" } });
+  }
+  try {
+    return await publicReadCacheResponse(await handleHttpRequest(request, env, ctx), env);
+  } catch (error) {
+    return await publicReadCacheResponse(handleError(error), env);
   }
 }
 

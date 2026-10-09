@@ -28,7 +28,7 @@ test("MCP discovery and consent recover from an expired cookie through email sig
     client_id: clientId,
     redirect_uri: `${baseURL}/oauth-test-callback`,
     response_type: "code",
-    scope: "forms:read organizations:read users:read",
+    scope: "forms:read forms:write organizations:read organizations:write users:read users:write",
     state: "browser-test",
     code_challenge: createHash("sha256").update(verifier).digest("base64url"),
     code_challenge_method: "S256",
@@ -88,12 +88,23 @@ test("MCP discovery and consent recover from an expired cookie through email sig
   await expect(page.getByRole("button", { name: "Approve", exact: true })).toHaveCount(0);
   await expect(page.getByRole("button", { name: "Deny", exact: true })).toHaveCount(0);
   await expect(page.getByText(email, { exact: true })).toHaveCount(0);
-  await expect(page.getByText("forms:read", { exact: true })).toHaveCount(0);
+  await expect(page.getByLabel("Read forms", { exact: true })).toHaveCount(0);
   await expect(page.getByText("Example forms, organizations, and users client", { exact: true })).toHaveCount(0);
   await page.screenshot({ path: "test-results/mcp-consent-expired-recovery.png", fullPage: true });
   consentUnavailable = false;
   await page.reload();
   await expect(page.getByRole("button", { name: "Approve", exact: true })).toBeEnabled();
+  await expect(page.getByLabel("Read forms", { exact: true })).toBeChecked();
+  await expect(page.getByLabel("Create and edit forms", { exact: true })).not.toBeChecked();
+  await page.getByRole("button", { name: "Read and write organizations", exact: true }).click();
+  await expect(page.getByLabel("Create and edit organizations", { exact: true })).toBeChecked();
+  await page.getByLabel("Read users", { exact: true }).uncheck();
+  await expect(page.getByText("Selected permissions (3)")).toBeVisible();
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(page.getByLabel("Read forms", { exact: true })).toBeVisible();
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+  await page.screenshot({ path: "test-results/mcp-consent-mobile.png", fullPage: true });
+  await page.setViewportSize({ width: 1280, height: 720 });
   await page.screenshot({ path: "test-results/mcp-consent.png", fullPage: true });
   await page.route("**/oauth-test-callback?**", (route) =>
     route.fulfill({ body: "Authorization returned to client." }),
@@ -112,4 +123,35 @@ test("MCP discovery and consent recover from an expired cookie through email sig
     },
   });
   expect(tokens.ok()).toBe(true);
+  const issued = await tokens.json();
+  expect(issued.scope.split(" ").sort()).toEqual(["forms:read", "organizations:read", "organizations:write"]);
+  async function execute(accessToken: string, code: string) {
+    const response = await request.post("/api/v1/mcp", {
+      headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json, text/event-stream" },
+      data: { jsonrpc: "2.0", id: 2, method: "tools/call", params: { name: "execute", arguments: { code } } },
+    });
+    return { status: response.status(), text: await response.text() };
+  }
+  const write = await execute(
+    issued.access_token,
+    `async () => await codemode.request({ method: "POST", path: "/api/v1/forms", body: { key: "unapproved-example-form", title: "Example form", purpose: "survey", fields: [] } })`,
+  );
+  expect(write.status).toBe(200);
+  expect(write.text).toContain("SCOPE_REQUIRED");
+  const refreshed = await request.post("/api/v1/auth/oauth/token", {
+    form: {
+      grant_type: "refresh_token",
+      client_id: clientId,
+      refresh_token: issued.refresh_token,
+      scope: "forms:read",
+    },
+  });
+  expect(refreshed.ok()).toBe(true);
+  const narrowed = await refreshed.json();
+  expect(narrowed.scope).toBe("forms:read");
+  const deniedWrite = await execute(
+    narrowed.access_token,
+    `async () => await codemode.request({ method: "POST", path: "/api/v1/forms", body: { key: "unapproved-refresh-form", title: "Example form", purpose: "survey", fields: [] } })`,
+  );
+  expect(deniedWrite.text).toContain("SCOPE_REQUIRED");
 });

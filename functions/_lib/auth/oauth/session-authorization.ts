@@ -27,7 +27,8 @@ export async function mcpTokenLifetime(
   env: Env,
   value: unknown,
   accessTokenTTL: number,
-): Promise<{ accessTokenTTL: number }> {
+  requestedScope?: string[],
+): Promise<{ accessTokenTTL: number; accessTokenScope?: string[]; accessTokenProps?: McpOAuthProps }> {
   try {
     const props = parseMcpOauthProps(value);
     if (!props) throw new AppError(401, "AUTH_INVALID", "Missing MCP authorization");
@@ -38,7 +39,13 @@ export async function mcpTokenLifetime(
     if (ttl < 60) {
       throw new AppError(401, "AUTH_EXPIRED", "Your MCP authorization session expired. Sign in again.");
     }
-    return { accessTokenTTL: ttl };
+    const scopes = requestedScope ? props.scopes.filter((scope) => requestedScope.includes(scope)) : props.scopes;
+    if (scopes.length === 0) throw new AppError(401, "AUTH_EXPIRED", "No approved permissions remain.");
+    return {
+      accessTokenScope: scopes,
+      accessTokenProps: { ...props, scopes },
+      accessTokenTTL: ttl,
+    };
   } catch (error) {
     if (error instanceof AppError && error.status === 401) {
       throw new OAuthError("invalid_grant", { description: "Your MCP authorization session expired. Sign in again." });
