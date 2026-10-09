@@ -87,8 +87,13 @@ function missingAppBaseUrlError(): Error {
   return new Error("APP_BASE_URL is required when request URL is unavailable");
 }
 
+/** The deployment's configured origin: production, or a branch Preview's build-time URL. */
+export function configuredAppOrigin(env: Pick<Env, "APP_BASE_URL">): string | null {
+  return toOrigin(env.APP_BASE_URL);
+}
+
 export function resolveAppBaseUrl(env: Pick<Env, "APP_BASE_URL">, request?: Request): string {
-  const configuredOrigin = toOrigin(env.APP_BASE_URL);
+  const configuredOrigin = configuredAppOrigin(env);
   if (configuredOrigin) {
     return configuredOrigin;
   }
