@@ -58,6 +58,7 @@ import { LazyGroupEventConfiguration } from "./LazyGroupEventConfiguration";
 import { GroupEventEditor } from "./GroupEventEditor";
 import { GroupEventInvitations } from "./GroupEventInvitations";
 import { GroupEventProposals } from "./GroupEventProposals";
+import { ProposalCallPanel } from "./ProposalCallPanel";
 import { groupEventProposalPath } from "./GroupEventProposals";
 import { EventProposalSpeakersTable } from "../../../../components/proposals/EventProposalSpeakersTable";
 import { GroupEventOverview } from "./GroupEventOverview";
@@ -78,7 +79,7 @@ interface EventWorkspaceTabDef extends TabItem {
 
 export const GROUP_EVENT_OVERVIEW_TAB = "overview";
 const EVENT_RESPONSES_SEGMENT = "responses";
-import { GroupEventRecordSections } from "./GroupEventRecordSections";
+import { CALL_SEGMENT, GroupEventRecordSections } from "./GroupEventRecordSections";
 
 const EVENT_WORKSPACE_TABS: readonly EventWorkspaceTabDef[] = [
   { key: GROUP_EVENT_OVERVIEW_TAB, label: "Overview", visible: () => true },
@@ -215,10 +216,12 @@ export function GroupEventWorkspace({
 
   const responsesActive = detailId === EVENT_RESPONSES_SEGMENT;
   const speakersActive = activeTab === "proposals" && detailId === "speakers";
+  const callActive = activeTab === "proposals" && detailId === CALL_SEGMENT;
   const recordOpen =
     detailId !== undefined &&
     !responsesActive &&
     !speakersActive &&
+    !callActive &&
     ((activeTab === "registrations" && detailId !== "badges") || activeTab === "proposals");
 
   return (
@@ -342,6 +345,15 @@ export function GroupEventWorkspace({
                   basePath={tabPath("proposals")}
                   responsesActive={responsesActive}
                   speakersActive={speakersActive}
+                  callActive={callActive}
+                  call={
+                    <ProposalCallPanel
+                      event={event}
+                      groupId={groupId}
+                      settingsHref={usePortalHashLocation.hrefs(tabPath("settings"))}
+                      onUpdated={onUpdated}
+                    />
+                  }
                   speakers={
                     <EventProposalSpeakersTable
                       slug={event.slug}

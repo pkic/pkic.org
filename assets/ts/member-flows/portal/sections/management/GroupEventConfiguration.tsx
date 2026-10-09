@@ -15,6 +15,7 @@ import { EventDaysEditor } from "./EventDaysEditor";
 import { EventFormPlacementEditor } from "./EventFormPlacementEditor";
 import { EventRegistrationSettingsEditor } from "./EventRegistrationSettingsEditor";
 import { EventTermsEditor } from "./EventTermsEditor";
+import { canConfigureEventForms } from "./useEventFormPlacement";
 
 export function GroupEventConfiguration({
   event,
@@ -31,7 +32,7 @@ export function GroupEventConfiguration({
     setUpdatedAt(nextUpdatedAt);
     void onUpdated?.();
   };
-  const canConfigureForms = event.sourceMode === "portal";
+  const canConfigureForms = canConfigureEventForms(event);
 
   return (
     <section class="pk pk-stack" aria-label={`Configure ${event.name} registration`}>
@@ -47,6 +48,7 @@ export function GroupEventConfiguration({
           <EventRegistrationSettingsEditor
             groupId={groupId}
             eventId={event.id}
+            timeZone={event.timezone}
             expectedUpdatedAt={updatedAt}
             onRevision={recordRevision}
             showFormConfiguration={canConfigureForms}
@@ -64,6 +66,7 @@ export function GroupEventConfiguration({
               groupId={groupId}
               eventId={event.id}
               purpose="proposal_submission"
+              timeZone={event.timezone}
               expectedUpdatedAt={updatedAt}
               onRevision={recordRevision}
             />

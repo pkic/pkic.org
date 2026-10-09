@@ -25,12 +25,15 @@ type RegistrationSettings = z.infer<typeof groupEventRegistrationSettingsRespons
 export function EventRegistrationSettingsEditor({
   groupId,
   eventId,
+  timeZone,
   expectedUpdatedAt,
   onRevision,
   showFormConfiguration = true,
 }: {
   groupId: string;
   eventId: string;
+  /** The event's IANA zone, for the registration form's submission window. */
+  timeZone: string;
   expectedUpdatedAt: string;
   onRevision: (updatedAt: string) => void;
   showFormConfiguration?: boolean;
@@ -150,6 +153,7 @@ export function EventRegistrationSettingsEditor({
           groupId={groupId}
           eventId={eventId}
           purpose="event_registration"
+          timeZone={timeZone}
           expectedUpdatedAt={expectedUpdatedAt}
           onRevision={onRevision}
         />

@@ -290,6 +290,15 @@ describe("group event workspace", () => {
     expect(proposalSections?.querySelector('a[href$="/proposals/speakers"]')).not.toBeNull();
     expect(proposalSections?.textContent).toContain("Responses");
     expect(proposalSections?.querySelector('a[href$="/proposals/responses"]')).not.toBeNull();
+    expect(proposalSections?.querySelector('a[href$="/proposals/call"]')?.textContent).toBe("Call for proposals");
+    // The call has a section of its own rather than sitting above the proposals list.
+    expect(proposals.querySelector('section[aria-label="Call for proposals"]')).toBeNull();
+
+    const call = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="proposals" detailId="call" />);
+    expect(call.querySelector('section[aria-label="Call for proposals"]')).not.toBeNull();
+    expect(call.querySelector('nav[aria-label="Proposal sections"] a[aria-current="page"]')?.textContent).toBe(
+      "Call for proposals",
+    );
   });
 
   it("preserves the Attendance deep link under the Analytics permission gate", () => {

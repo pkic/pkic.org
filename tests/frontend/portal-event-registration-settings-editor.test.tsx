@@ -72,6 +72,7 @@ function editor(onRevision = vi.fn()) {
     <EventRegistrationSettingsEditor
       groupId={GROUP_ID}
       eventId={EVENT_ID}
+      timeZone="Europe/Amsterdam"
       expectedUpdatedAt={UPDATED_AT}
       onRevision={onRevision}
       showFormConfiguration={false}

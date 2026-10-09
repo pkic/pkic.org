@@ -34,9 +34,9 @@ export function instantFromLocal(value: string, timeZone: string): string | null
   }
 }
 
-/** The stored instant as a wall clock the control can show, or empty for no bound. */
-export function localFromInstant(value: string | null): string {
-  return value ? localDateTimeValue(value) : "";
+/** The stored instant as a wall clock in `timeZone` (the reader's own by default), or empty for no bound. */
+export function localFromInstant(value: string | null, timeZone?: string): string {
+  return value ? localDateTimeValue(value, timeZone) : "";
 }
 
 export function SubmissionWindowFields({
@@ -45,8 +45,11 @@ export function SubmissionWindowFields({
   closesAt,
   onChange,
   fieldProps,
+  zoneOwner = "Your time",
 }: {
   timeZone: string;
+  /** Whose clock the zone is: the reader's own, or the event's when the window is set in the event's zone. */
+  zoneOwner?: "Your time" | "Event time";
   opensAt: string;
   closesAt: string;
   onChange: (patch: { opensAt?: string; closesAt?: string }) => void;
@@ -61,7 +64,7 @@ export function SubmissionWindowFields({
     <>
       <Field
         label="Opens"
-        help={`Your time (${timeZone}). Leave empty to accept responses from now.`}
+        help={`${zoneOwner} (${timeZone}). Leave empty to accept responses from now.`}
         {...fieldProps.opensAt}
       >
         {(control) => (
@@ -76,7 +79,7 @@ export function SubmissionWindowFields({
       </Field>
       <Field
         label="Closes"
-        help={`Your time (${timeZone}). Leave empty to keep the form open indefinitely.`}
+        help={`${zoneOwner} (${timeZone}). Leave empty to keep the form open indefinitely.`}
         {...fieldProps.closesAt}
       >
         {(control) => (

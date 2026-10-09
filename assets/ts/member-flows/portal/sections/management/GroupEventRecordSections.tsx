@@ -3,6 +3,7 @@ import type { EventFormsPurpose } from "../../../../../shared/schemas/forms";
 import { Tabs } from "../../../../components/Tabs";
 import { EventFormResponses } from "../../../../components/forms/management/FormManagement";
 const EVENT_RESPONSES_SEGMENT = "responses";
+export const CALL_SEGMENT = "call";
 export function GroupEventRecordSections({
   label,
   basePath,
@@ -14,6 +15,8 @@ export function GroupEventRecordSections({
   speakersActive = false,
   badges,
   badgesActive = false,
+  call,
+  callActive = false,
 }: {
   label: string;
   basePath: string;
@@ -25,14 +28,19 @@ export function GroupEventRecordSections({
   speakersActive?: boolean;
   badges?: ComponentChildren;
   badgesActive?: boolean;
+  /** The call for proposals, as a section of a proposal program of its own. */
+  call?: ComponentChildren;
+  callActive?: boolean;
 }) {
   const active = badgesActive
     ? "badges"
-    : speakersActive
-      ? "speakers"
-      : responsesActive
-        ? EVENT_RESPONSES_SEGMENT
-        : "overview";
+    : callActive
+      ? CALL_SEGMENT
+      : speakersActive
+        ? "speakers"
+        : responsesActive
+          ? EVENT_RESPONSES_SEGMENT
+          : "overview";
   return (
     <div class="pk pk-stack">
       <Tabs
@@ -40,6 +48,7 @@ export function GroupEventRecordSections({
         items={[
           { key: "overview", label: "Overview" },
           ...(speakers ? [{ key: "speakers", label: "Speakers" }] : []),
+          ...(call ? [{ key: CALL_SEGMENT, label: "Call for proposals" }] : []),
           ...(badges ? [{ key: "badges", label: "Badges" }] : []),
           { key: EVENT_RESPONSES_SEGMENT, label: "Responses" },
         ]}
@@ -48,6 +57,8 @@ export function GroupEventRecordSections({
       />
       {badgesActive ? (
         badges
+      ) : callActive ? (
+        call
       ) : speakersActive ? (
         speakers
       ) : responsesActive ? (

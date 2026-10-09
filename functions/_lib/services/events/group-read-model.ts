@@ -27,6 +27,7 @@ import {
   type GroupResourceViewer,
 } from "../resource-grants";
 import { getProposalAccessForEvent } from "../../auth/proposal-access";
+import { readEventProposalCall } from "./proposal-call";
 import { buildEventAudiencePredicate } from "./visibility";
 
 interface GroupEventRow {
@@ -240,5 +241,7 @@ export async function getGroupEvent(db: DatabaseLike, viewer: GroupResourceViewe
     throw new AppError(404, "EVENT_NOT_FOUND", "The event is not available through this group");
   }
   const proposalAccess = viewer.admin ? await getProposalAccessForEvent(db, event.id, viewer.admin) : null;
-  return groupEventDetailResponseSchema.parse({ event: { ...event, proposalAccess } });
+  // The managed event's call for proposals, from the one server definition of "open" that the public event detail uses.
+  const proposalCall = await readEventProposalCall(db, event.id);
+  return groupEventDetailResponseSchema.parse({ event: { ...event, proposalAccess, proposalCall } });
 }

@@ -696,6 +696,8 @@ describe("group event management routes", () => {
       id: created.id,
       capabilities: ["view", "attend"],
     });
+    // The managed event carries the server's verdict on its call for proposals; this one has no proposal form.
+    expect(detail.event.proposalCall).toEqual({ open: false, path: null });
   });
 
   it("rejects meeting profiles from standalone event creation", async () => {
