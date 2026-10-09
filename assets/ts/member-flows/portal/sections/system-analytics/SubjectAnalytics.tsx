@@ -21,6 +21,7 @@ import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { StatCard } from "../../../../ui/StatCard";
 import { statusBars, svgBarChart } from "../../../../ui/chart";
 import { EmptyState } from "../../../../ui/EmptyState";
+import { formatNumber } from "../../../../../shared/format-number";
 
 export interface SubjectFigure {
   label: string;
@@ -76,7 +77,7 @@ export function SubjectAnalytics<Row>({
 
       <div class="pk-stat-row">
         {figures.map((figure) => (
-          <StatCard key={figure.label} label={figure.label} value={String(figure.value)} note={figure.note} />
+          <StatCard key={figure.label} label={figure.label} value={formatNumber(figure.value)} note={figure.note} />
         ))}
       </div>
 

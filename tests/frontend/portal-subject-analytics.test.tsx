@@ -76,6 +76,9 @@ describe("subject analytics pages", () => {
     expect(container!.querySelector("h2")?.textContent).toBe("Membership analytics");
     expect(container!.textContent).toContain("Memberships begun, by month");
     expect(container!.textContent).toContain("Full (F)");
+    // Headline figures group their digits like every other count in the portal.
+    expect(container!.textContent).toContain("1,234");
+    expect(container!.textContent).toContain("1,100");
   });
 
   it("reads the organizations projection and shows its monthly series", async () => {
