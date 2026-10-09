@@ -136,9 +136,11 @@ it("keeps the brand and disabled sign-in card while the canonical initial sessio
 it("keeps an expired verification error in the card and lets the same form request a fresh link", async () => {
   window.location.hash = "#/verify?token=synthetic-expired-link";
   const pending = pendingResponse();
-  fetchMock.mockImplementation((input: RequestInfo | URL) =>
-    String(input).endsWith("/verify-link") ? pending.promise : Promise.resolve(Response.json({ success: true })),
-  );
+  fetchMock.mockImplementation((input: RequestInfo | URL) => {
+    if (String(input).endsWith("/verify-link")) return pending.promise;
+    if (String(input).endsWith("/auth/session")) return Promise.resolve(refusal(401, "Sign in required"));
+    return Promise.resolve(Response.json({ success: true }));
+  });
   await mount();
   await vi.waitFor(() => expect(card().textContent).toContain("Verifying your sign-in link…"));
   expect(card().querySelector<HTMLInputElement>("input")!.matches(":disabled")).toBe(true);
@@ -167,6 +169,19 @@ it("keeps an expired verification error in the card and lets the same form reque
     email: "synthetic@example.test",
   });
   expect(mocks.recordSession).not.toHaveBeenCalled();
+});
+
+it("opens the portal when a link opened twice is refused but the first opening signed this browser in", async () => {
+  window.location.hash = "#/verify?token=synthetic-used-link&next=%2Fgroups%2Fsynthetic";
+  const session = portalSessionFixture({ pendingIdentityCount: 1 });
+  fetchMock.mockImplementation(async (input: RequestInfo | URL) =>
+    String(input).endsWith("/verify-link") ? refusal(410, "Magic link already used") : Response.json(session),
+  );
+  await mount();
+  await vi.waitFor(() => expect(host.textContent).toContain("Authenticated portal content"));
+  expect(host.textContent).not.toContain("Magic link already used");
+  expect(portalSession.value?.sessionId).toBe(session.sessionId);
+  expect(window.location.hash).toBe("#/groups/synthetic");
 });
 
 it("keeps online failure and retry in the card without entering the offline scanner", async () => {

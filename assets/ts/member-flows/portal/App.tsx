@@ -154,7 +154,6 @@ export function App() {
         setVerifying(false);
         return;
       }
-      const existingSession = portalSession.value;
       const userToken = magicLinkToken;
       if (userToken) {
         try {
@@ -177,12 +176,20 @@ export function App() {
           return;
         } catch (err) {
           if (!cancelled) {
-            setVerifyError(
-              err instanceof ApiClientError ? err.message : "The link may have expired or already been used.",
-            );
             setVerifying(false);
-            if (existingSession) await loadPortalSession(() => !cancelled);
-            else clearAuth();
+            // A link opened twice is refused the second time, but the first
+            // opening may already have signed this browser in: check the
+            // session before saying sign-in failed.
+            const signedIn = await loadPortalSession(() => !cancelled);
+            if (cancelled) return;
+            if (signedIn && portalSession.value && portalHashPath(window.location.hash) === "/verify") {
+              const next = portalMagicLinkReturnPath(window.location.hash);
+              history.replaceState({}, "", `/portal/#${next ?? portalDefaultPath(portalSession.value)}`);
+            } else if (!signedIn) {
+              setVerifyError(
+                err instanceof ApiClientError ? err.message : "The link may have expired or already been used.",
+              );
+            }
             return;
           }
         }
