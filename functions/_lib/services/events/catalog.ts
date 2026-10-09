@@ -101,7 +101,9 @@ function buildEventsListPredicate(
     );
   }
   if (query.from) {
-    conditions.push("COALESCE(event.ends_at, event.starts_at) >= ?");
+    // Upcoming: an event without a start date is never upcoming, even when it
+    // carries an end date. Unscoped listings still include it.
+    conditions.push("event.starts_at IS NOT NULL AND COALESCE(event.ends_at, event.starts_at) >= ?");
     bindings.push(query.from);
   }
   if (query.to) {

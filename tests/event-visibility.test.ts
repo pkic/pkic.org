@@ -270,6 +270,23 @@ describe("event audience visibility", () => {
     expect(series.page.total).toBe(1);
   });
 
+  it("keeps undated events out of the upcoming scope but in the unscoped list", async () => {
+    await insertEvent("dated-upcoming", "public");
+    await insertEvent("end-dated-only", "public");
+    await insertEvent("undated", "public");
+    // An end date without a start is not a schedule the upcoming scope can place.
+    await env.DB.prepare("UPDATE events SET starts_at = NULL WHERE slug = 'end-dated-only'").run();
+    await env.DB.prepare("UPDATE events SET starts_at = NULL, ends_at = NULL WHERE slug = 'undated'").run();
+
+    const upcoming = await requestAudienceList("/api/v1/events?from=2026-06-01T00:00:00.000Z");
+    expect(upcoming.events.map((event) => event.slug)).toEqual(["dated-upcoming"]);
+    expect(upcoming.page.total).toBe(1);
+
+    const unscoped = await requestAudienceList("/api/v1/events");
+    expect(unscoped.events.map((event) => event.slug).sort()).toEqual(["dated-upcoming", "end-dated-only", "undated"]);
+    expect(unscoped.page.total).toBe(3);
+  });
+
   it("uses the visibility schedule index for anonymous page and count queries", async () => {
     const query = buildEventsPageQuery({ userId: null }, eventsListQuerySchema.parse({ limit: 25, offset: 0 }));
     const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(query);
