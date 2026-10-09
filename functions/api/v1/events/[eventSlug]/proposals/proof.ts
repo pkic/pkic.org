@@ -18,8 +18,7 @@ import { getEventBySlug } from "../../../../../_lib/services/events";
 import { requireInternalSecret } from "../../../../../_lib/request";
 import { resolveAppBaseUrl } from "../../../../../_lib/config";
 import { processOutboxByIdBackground } from "../../../../../_lib/email/outbox";
-import { getUserSessionToken } from "../../../../../_lib/auth/user-session-token";
-import { requireIdentityFromRequest } from "../../../../../_lib/auth/user-session";
+import { resolveOptionalIdentityFromRequest } from "../../../../../_lib/auth/user-session";
 import {
   startEventProposalProof,
   verifyEventProposalProof,
@@ -34,7 +33,7 @@ export const EventProposalProofPost = openApiRoute(eventProposalProofStartRouteS
     appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
     ttlSeconds: 30 * 60,
     signingSecret: requireInternalSecret(c.env),
-    actor: getUserSessionToken(c.req.raw) ? await requireIdentityFromRequest(c.env.DB, c.req.raw, c.env) : undefined,
+    actor: await resolveOptionalIdentityFromRequest(c.env.DB, c.req.raw, c.env),
   });
   if (result.outboxId) c.executionCtx.waitUntil(processOutboxByIdBackground(c.env.DB, c.env, result.outboxId));
   return json(eventProposalProofStartResponseSchema.parse({ status: result.status }));
@@ -50,9 +49,7 @@ export const EventProposalProofVerifyPost = openApiRoute(eventProposalProofVerif
         event,
         appBaseUrl: resolveAppBaseUrl(c.env, c.req.raw),
         signingSecret: requireInternalSecret(c.env),
-        actor: getUserSessionToken(c.req.raw)
-          ? await requireIdentityFromRequest(c.env.DB, c.req.raw, c.env)
-          : undefined,
+        actor: await resolveOptionalIdentityFromRequest(c.env.DB, c.req.raw, c.env),
         speakerManagementToken: data.body.speakerManagementToken,
         speakerProposalId: data.body.speakerProposalId,
       }),
@@ -71,9 +68,7 @@ export const EventProposalProofIdentitiesPost = openApiRoute(
           continuationToken: data.body.continuationToken,
           signingSecret: requireInternalSecret(c.env),
           query: data.query,
-          actor: getUserSessionToken(c.req.raw)
-            ? await requireIdentityFromRequest(c.env.DB, c.req.raw, c.env)
-            : undefined,
+          actor: await resolveOptionalIdentityFromRequest(c.env.DB, c.req.raw, c.env),
           speakerManagementToken: data.body.speakerManagementToken,
           speakerProposalId: data.body.speakerProposalId,
         }),
@@ -90,9 +85,7 @@ export const EventProposalProofPersonPatch = openApiRoute(eventProposalProofPers
         eventId: event.id,
         signingSecret: requireInternalSecret(c.env),
         body: data.body,
-        actor: getUserSessionToken(c.req.raw)
-          ? await requireIdentityFromRequest(c.env.DB, c.req.raw, c.env)
-          : undefined,
+        actor: await resolveOptionalIdentityFromRequest(c.env.DB, c.req.raw, c.env),
       }),
     ),
   );
@@ -109,9 +102,7 @@ export const EventProposalProofIdentityPatch = openApiRoute(
           identityId: data.params.identityId,
           body: data.body,
           signingSecret: requireInternalSecret(c.env),
-          actor: getUserSessionToken(c.req.raw)
-            ? await requireIdentityFromRequest(c.env.DB, c.req.raw, c.env)
-            : undefined,
+          actor: await resolveOptionalIdentityFromRequest(c.env.DB, c.req.raw, c.env),
         }),
       ),
     );

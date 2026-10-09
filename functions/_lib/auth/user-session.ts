@@ -323,6 +323,27 @@ export async function requireIdentityFromRequest(
   return identity;
 }
 
+/**
+ * The signed-in person behind a public action that guests may also take.
+ * A session the server no longer accepts (removed, revoked, expired, or an
+ * idle staff elevation) is the same as no session here: the page already
+ * treats `/auth/session`'s 401 as signed out, so refusing the action with that
+ * session error would contradict what the visitor sees.
+ */
+export async function resolveOptionalIdentityFromRequest(
+  db: DatabaseLike,
+  request: Request,
+  env?: Pick<Env, "INTERNAL_SIGNING_SECRET">,
+): Promise<AuthenticatedIdentity | undefined> {
+  if (!getUserSessionToken(request)) return undefined;
+  try {
+    return await requireIdentityFromRequest(db, request, env);
+  } catch (error) {
+    if (error instanceof AppError && error.status === 401) return undefined;
+    throw error;
+  }
+}
+
 export async function queueUserSignInCapability(payload: {
   db: DatabaseLike;
   email: string;

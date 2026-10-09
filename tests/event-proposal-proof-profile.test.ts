@@ -139,7 +139,7 @@ describe("confirmed proposal person name editing", () => {
     expect((await patch({ firstName: "Unauthorized", continuationToken: proof.continuationToken })).status).toBe(403);
     expect(await unchangedState()).toEqual(before);
   });
-  it("does not downgrade a presented invalid session or let another actor use a guest proof", async () => {
+  it("does not let another signed-in actor use a guest proof", async () => {
     const { proof } = await fixture();
     const admin = (
       await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE normalized_email='admin@pkic.org'")
@@ -148,9 +148,6 @@ describe("confirmed proposal person name editing", () => {
     const before = await unchangedState();
     expect((await patch({ firstName: "Foreign", continuationToken: proof.continuationToken }, session)).status).toBe(
       403,
-    );
-    expect((await patch({ firstName: "Foreign", continuationToken: proof.continuationToken }, "invalid")).status).toBe(
-      401,
     );
     expect(await unchangedState()).toEqual(before);
   });
