@@ -23,13 +23,14 @@ export const SYSTEM_FLOW = {
     {
       id: "12.3",
       title: "Staff read focused platform analytics",
-      status: "covered",
+      status: "unit",
+      note: "Covered in portal-event-analytics, portal-subject-analytics and portal-navigation-shell: each page names itself, asks the server for its own projection, and never calls a retired system or admin route. The figures themselves are asserted against seeded rows in the analytics Worker suite.",
     },
     {
       id: "12.3.a",
       title: "Each domain answers for its own numbers, on a page under it",
-      status: "covered",
-      note: 'The figures used to be one system-wide panel inside Settings, which put the membership numbers under a heading that named none of them and three clicks from the roll they describe (#39). Members, organizations and users each have an analytics page under their own section now, beside the event and donation pages that already did. Every one of those addresses is a reserved segment matched before its section\'s `:id` route, or "analytics" is read as the id of a record.',
+      status: "unit",
+      note: 'Covered in portal-analytics-routes, portal-capability-navigation and portal-subject-analytics: each address resolves to its own page through the real shell and a record id still opens its record, and each page is offered under its section only for analytics:read. The figures used to be one system-wide panel inside Settings, which put the membership numbers under a heading that named none of them and three clicks from the roll they describe (#39). Members, organizations and users each have an analytics page under their own section now, beside the event and donation pages that already did. Every one of those addresses is a reserved segment matched before its section\'s `:id` route, or "analytics" is read as the id of a record.',
     },
     {
       id: "12.4",
@@ -46,8 +47,8 @@ export const SYSTEM_FLOW = {
     {
       id: "12.6",
       title: "Staff create, preview, activate and reopen an email template",
-      status: "covered",
-      note: "Preview before activate is the point: a template goes out to the membership, and the draft is the last place to read it.",
+      status: "unit",
+      note: "Covered in portal-email-templates and portal-email-template-editor for the screens (create, preview, save a draft only after a preview, activate from the version row) and in system-email-templates, system-email-templates-atomicity and email-template-engine for the routes, rendering and rollback. Preview before activate is the point: a template goes out to the membership, and the draft is the last place to read it. The preview renders in the sandboxed email frame covered by email-preview-document and the portal security policy tests.",
     },
     {
       id: "12.7",

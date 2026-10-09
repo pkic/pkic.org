@@ -6,6 +6,7 @@ import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TemplateEditor } from "../../assets/ts/member-flows/portal/sections/email-templates/EmailTemplateEditor";
 import {
+  emailTemplateActivateSchema,
   emailTemplatePreviewSchema,
   emailTemplateVersionSchema,
   type EmailTemplateVersion,
@@ -425,6 +426,99 @@ describe("portal email template editor", () => {
     expect(requests.every((request) => request.pathname !== `/api/v1/email/templates/${TEMPLATE_KEY}/activate`)).toBe(
       true,
     );
+  });
+
+  it("replaces the selected subject text with the chosen variable and keeps the author typing there", async () => {
+    stubApi();
+    await mount();
+    await typeInto("Subject template", "Hello organization");
+    const subject = controlFor<HTMLInputElement>(container!, "Subject template");
+    subject.setSelectionRange(6, 18);
+
+    await act(async () =>
+      container!.querySelector<HTMLButtonElement>('button[aria-label="Insert subject variable"]')!.click(),
+    );
+    const variable = [...container!.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+      (item) => item.textContent === "organizationName",
+    );
+    await act(async () => variable!.click());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(subject.value).toBe("Hello {{organizationName}}");
+    expect(document.activeElement).toBe(subject);
+    // The highlighted copy behind the field marks the same variable.
+    expect(container!.querySelector(".pk-template-subject .adm-template-token-var")?.textContent).toBe(
+      "{{organizationName}}",
+    );
+  });
+
+  it("marks conditions and variables in a raw body without changing what is sent", async () => {
+    const requests = stubApi();
+    await mount({ contentType: "html" });
+    const source = "{{#if organizationName}}<h2>{{organizationName}}</h2>{{else}}Hello user{{/if}}<script>x()</script>";
+    const body = controlFor<HTMLTextAreaElement>(container!, "Body");
+    body.value = source;
+    await act(() => {
+      body.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await settle();
+
+    const backdrop = container!.querySelector(".pk-overlay-editor pre:not(.pk-template-subject pre)")!;
+    expect(backdrop.querySelectorAll(".adm-template-token")).toHaveLength(4);
+    expect(backdrop.querySelectorAll(".adm-template-token-var")).toHaveLength(1);
+    // Author markup is shown as text behind the field, never as live elements.
+    expect(backdrop.querySelector("script, h2")).toBeNull();
+
+    await click("Render Preview");
+    const preview = requests.find((request) => request.pathname === PREVIEW_PATH)!;
+    expect(emailTemplatePreviewSchema.parse(preview.body)).toMatchObject({ content: source, contentType: "html" });
+  });
+
+  it("activates a draft version from its row and shows it as the version in use", async () => {
+    const posts: unknown[] = [];
+    let activeVersion = 1;
+    const version = (number: number): EmailTemplateVersion => ({
+      ...ACTIVE_VERSION,
+      id: `version-${number}`,
+      version: number,
+      status: number === activeVersion ? "active" : "draft",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init?.method ?? "GET";
+        if (url.pathname === VERSIONS_PATH && method === "GET") {
+          return json({ versions: [version(2), version(1)], page: { limit: 25, offset: 0, total: 2, hasMore: false } });
+        }
+        if (url.pathname === `/api/v1/email/templates/${TEMPLATE_KEY}/activate` && method === "POST") {
+          const body = emailTemplateActivateSchema.parse(JSON.parse(String(init?.body)));
+          posts.push(body);
+          activeVersion = body.version;
+          return json({ success: true });
+        }
+        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
+      }),
+    );
+    await mount();
+
+    await openRowMenu(container!, "v2");
+    await act(async () => menuItemNamed(container!, "Activate")!.click());
+    await settle();
+    await settle();
+
+    expect(posts).toEqual([{ version: 2 }]);
+    expect(toastMessages()).toContain("v2 is now active");
+    // The history is read again, so the row now offers the old version for activation instead.
+    await openRowMenu(container!, "v2");
+    expect(menuItemNamed(container!, "Activate")).toBeNull();
+    await openRowMenu(container!, "v1");
+    expect(menuItemNamed(container!, "Activate")).not.toBeNull();
   });
 
   it("shows the template's addressable place in the settings breadcrumb", async () => {

@@ -585,6 +585,31 @@ describe("portal capability-derived navigation", () => {
     expect(portalActiveSection("/donations/analytics/weekly")).toBe("donations");
   });
 
+  it("offers each domain's Analytics page under that domain, and only for analytics:read (#39)", () => {
+    const grant = (permission: string) => ({ permission, contextType: null, contextId: null });
+    const analyst = portalSessionFixture({
+      staff: true,
+      administrator: false,
+      grants: [
+        grant("analytics:read"),
+        grant("events:read"),
+        grant("organizations:read"),
+        grant("membership:read"),
+        grant("users:read"),
+      ],
+    });
+    const withoutAnalytics = portalSessionFixture({
+      staff: true,
+      administrator: false,
+      grants: [grant("events:read"), grant("organizations:read"), grant("membership:read"), grant("users:read")],
+    });
+
+    for (const section of ["events", "organizations", "members", "users"] as const) {
+      expect(portalSectionChildren(section, analyst).map((child) => child.path)).toEqual([`/${section}/analytics`]);
+      expect(portalSectionChildren(section, withoutAnalytics)).toEqual([]);
+    }
+  });
+
   it("preserves a genuine unknown route instead of hiding it behind a redirect", () => {
     expect(portalCapacityFallbackPath(portalSessionFixture({ staff: true }), "/not-a-portal-route")).toBeNull();
   });

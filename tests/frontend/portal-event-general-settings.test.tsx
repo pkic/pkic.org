@@ -9,7 +9,7 @@ import { GeneralTab } from "../../assets/ts/member-flows/portal/sections/events/
 import { Settings } from "../../assets/ts/member-flows/portal/sections/events/detail/Settings";
 import { eventTeamRolesResponseSchema } from "../../assets/shared/schemas/event-team";
 import { SponsorTiersTab } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/SponsorTiersTab";
-import { controlFor } from "./helpers/labelled-control";
+import { controlFor, typeInto } from "./helpers/labelled-control";
 
 /*
  * The surface addresses its own add page, so it reads the portal's location
@@ -142,6 +142,48 @@ describe("admin event general settings", () => {
     expect(bodies).toHaveLength(1);
     expect(start.getAttribute("aria-invalid")).toBe("true");
   });
+  it("discards an abandoned edit and saves a changed name while the event keeps its own wall clock", async () => {
+    const bodies: unknown[] = [];
+    const onUpdated = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PATCH") {
+          bodies.push(JSON.parse(String(init.body)));
+          return json({ event: { ...writableEvent, name: "Saved event settings" } });
+        }
+        return json({ forms: [], page: { limit: 100, offset: 0, total: 0, hasMore: false } });
+      }),
+    );
+    const container = mount(<GeneralTab event={writableEvent} onUpdated={onUpdated} />);
+    await settle();
+
+    await beginRecordEdit(container, "Event settings actions");
+    const name = controlFor(container, "Event name") as HTMLInputElement;
+    await typeInto(name, "Discarded name");
+    const cancel = [...container.querySelectorAll("button")].find((button) => button.textContent === "Cancel")!;
+    await act(async () => cancel.click());
+    expect(container.querySelector("input,select,textarea")).toBeNull();
+    expect(container.textContent).toContain("Portal workshop");
+    expect(container.textContent).not.toContain("Discarded name");
+    expect(bodies).toEqual([]);
+
+    await beginRecordEdit(container, "Event settings actions");
+    const reopened = controlFor(container, "Event name") as HTMLInputElement;
+    expect(reopened.value).toBe("Portal workshop");
+    await typeInto(reopened, "Saved event settings");
+    await submitForm(container);
+
+    expect(bodies).toHaveLength(1);
+    // The unchanged start is the same instant the event already had.
+    expect(eventSettingsUpdateSchema.parse(bodies[0])).toMatchObject({
+      name: "Saved event settings",
+      startsAt: portalEvent.startsAt,
+      timezone: "Europe/Amsterdam",
+    });
+    expect(onUpdated).toHaveBeenCalledTimes(1);
+  });
+
   it("does not render or submit portal-owned attendee registration controls", async () => {
     vi.stubGlobal(
       "fetch",

@@ -6,6 +6,7 @@ import { GroupFormDetail } from "../../assets/ts/member-flows/portal/sections/ma
 import { GroupFormEditor } from "../../assets/ts/member-flows/portal/sections/management/GroupFormEditor";
 import { isCurrentTab, tabs } from "./helpers/tabs";
 import { fillQuestion, nameForm } from "./helpers/form-editor";
+import { buttonNamed, typeInto } from "./helpers/labelled-control";
 
 const navigate = vi.fn();
 
@@ -355,6 +356,75 @@ describe("group form management", () => {
     expect(status.textContent).toContain(
       new Date("2020-02-01T17:00:00.000Z").toLocaleString(undefined, { dateStyle: "short", timeStyle: "short" }),
     );
+  });
+
+  it.each([
+    ["event_registration", "Registrations"],
+    ["proposal_submission", "Proposals"],
+  ])("sends %s answers to the event's %s instead of listing or collecting them here", async (purpose, section) => {
+    const requests: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url.pathname);
+        const body = detail(GROUP_ID, ["view_definition", "submit", "view_responses", "manage"]);
+        return json({
+          ...body,
+          form: { ...body.form, purpose },
+          placement: { ...body.placement, contextType: "event", contextRef: FORM_ID },
+        });
+      }),
+    );
+    const container = mount(
+      <GroupFormDetail groupId={GROUP_ID} placementId={PLACEMENT_ID} initialTab="responses" onChanged={vi.fn()} />,
+    );
+    await settle();
+
+    expect(container.textContent).toContain("Responses are part of the event records");
+    expect(container.textContent).toContain(`View their answers in the event’s ${section} section.`);
+    expect(container.textContent).not.toContain("No responses yet.");
+    expect(tabs(container).map((tab) => tab.textContent)).not.toContain("Respond");
+    expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Submit response")).toBe(
+      false,
+    );
+    // Nothing asks the form for submissions it does not own.
+    expect(requests.every((path) => !path.includes("/submissions"))).toBe(true);
+  });
+
+  it("keeps what a respondent typed when the form closes under them, and states why", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          return json(
+            {
+              error: {
+                code: "FORM_CLOSED",
+                message: "This form closed on 2026-01-01T09:00:00.000Z",
+                details: { state: "closed", closesAt: "2026-01-01T09:00:00.000Z" },
+              },
+            },
+            409,
+          );
+        }
+        return json(detail(GROUP_ID, ["view_definition", "submit"]));
+      }),
+    );
+    const container = mount(<GroupFormDetail groupId={GROUP_ID} placementId={PLACEMENT_ID} onChanged={vi.fn()} />);
+    await settle();
+
+    const answer = container.querySelector<HTMLInputElement>("#custom-priority")!;
+    await typeInto(answer, "An answer prepared while the form was open");
+    await act(async () => buttonNamed(container, "Submit response").click());
+    await settle();
+
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("closed");
+    expect(answer.value).toBe("An answer prepared while the form was open");
+    expect(container.textContent).not.toContain("Response submitted.");
   });
 
   it("opens the tab given by an initial resourceTab", async () => {

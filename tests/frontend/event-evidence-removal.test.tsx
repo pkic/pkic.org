@@ -165,6 +165,49 @@ describe("reviewed evidence removal", () => {
     expect(requests).toHaveLength(2);
     expect(host.textContent).toContain("Removal is in progress");
   });
+  it("lists what the review covers in grouped digits at the end of their column, and pins the review to the preview", async () => {
+    const reviews: ReturnType<typeof evidencePurgeReviewCreateSchema.parse>[] = [];
+    const counts = Object.fromEntries(
+      EVIDENCE_PURGE_TABLES.map((table) => [table, table === "event_attendance_observations" ? 2000 : 12]),
+    );
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: unknown, options?: RequestInit) => {
+        if (options?.method === "POST") {
+          reviews.push(evidencePurgeReviewCreateSchema.parse(JSON.parse(String(options.body))));
+          return json({
+            ...preview(),
+            counts,
+            reviewId: runId,
+            reviewHash: "a".repeat(64),
+            reviewedAt: at,
+            expiresAt: "2026-10-04T12:15:00.000Z",
+          });
+        }
+        return json({ ...preview(), counts });
+      }),
+    );
+    await mount();
+
+    const table = host.querySelector("table")!;
+    expect(table.getAttribute("aria-label") ?? table.querySelector("caption")?.textContent).toBe(
+      "Evidence included in removal review",
+    );
+    const records = [...table.querySelectorAll("th")].find((header) => header.textContent === "Records")!;
+    expect(records.classList.contains("pk-end")).toBe(true);
+    const observations = [...table.querySelectorAll("tr")].find((row) =>
+      row.textContent?.includes("Attendance observations"),
+    )!;
+    const figure = [...observations.querySelectorAll("td")].find(
+      (cell) => cell.querySelector(".pk-table__value")?.textContent === "2,000",
+    )!;
+    expect(figure.classList.contains("pk-end")).toBe(true);
+
+    await click("Review current evidence");
+    expect(reviews).toHaveLength(1);
+    expect(reviews[0]).toMatchObject({ expectedPreviewHash: "c".repeat(64), expectedGeneration: 3 });
+    expect(host.querySelector<HTMLInputElement>('input[name="retireCapture"]')!.checked).toBe(false);
+  });
   it("resumes an existing run and retries an uncertain step with the same operation ID", async () => {
     const bodies: ReturnType<typeof evidencePurgeChunkCreateSchema.parse>[] = [];
     vi.stubGlobal(

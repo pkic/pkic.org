@@ -12,6 +12,7 @@ import { ScheduledJobs } from "../../assets/ts/member-flows/portal/sections/syst
 import { runRowAction } from "./helpers/row-actions";
 import {
   schedulerJobRunCreateSchema,
+  schedulerJobScheduleUpdateSchema,
   schedulerJobStateUpdateSchema,
   type ScheduledJobResource,
 } from "../../assets/shared/schemas/scheduler";
@@ -319,5 +320,64 @@ describe("portal scheduled-job pause refusals", () => {
     expect(document.activeElement).toBe(reason);
     expect(reason.value).toBe("investigating");
     expect(container.querySelector('form[aria-label="Pause Retention"]')).not.toBeNull();
+  });
+});
+
+describe("portal scheduled-job schedule editing", () => {
+  it("refuses an interval the contract rejects, then saves minutes as seconds against the shown interval", async () => {
+    const patches: unknown[] = [];
+    let current = scheduledJob({ intervalSeconds: 3_600, capabilities: { manageState: true, run: true } });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init?.method ?? (input instanceof Request ? input.method : "GET");
+        if (url.pathname === "/api/v1/scheduler/jobs" && method === "GET") return json(jobsPage([current]));
+        if (url.pathname === "/api/v1/scheduler/jobs/retention/schedule" && method === "PATCH") {
+          const body = JSON.parse(String(init?.body));
+          patches.push(body);
+          current = { ...current, intervalSeconds: body.intervalSeconds };
+          return json({ success: true, job: current });
+        }
+        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
+      }),
+    );
+
+    container = document.createElement("div");
+    document.body.append(container);
+    await act(() => render(<ScheduledJobs />, container!));
+    await settle();
+
+    await runRowAction(container, "Retention", "Edit schedule");
+    const interval = container.querySelector<HTMLInputElement>('input[name="intervalSeconds"]')!;
+    expect(interval.value).toBe("60");
+    const type = async (value: string) => {
+      await act(() => {
+        interval.value = value;
+        interval.dispatchEvent(new Event("input", { bubbles: true }));
+      });
+    };
+
+    await type("0");
+    await act(() => button(container!, "Save schedule").click());
+    await settle();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Use an interval of at least 1 minute");
+    expect(patches).toEqual([]);
+
+    await type("17");
+    await act(() => button(container!, "Save schedule").click());
+    await settle();
+    await settle();
+
+    expect(patches).toHaveLength(1);
+    expect(schedulerJobScheduleUpdateSchema.parse(patches[0])).toEqual({
+      intervalSeconds: 1_020,
+      expectedIntervalSeconds: 3_600,
+    });
+    expect(container.querySelector('input[name="intervalSeconds"]')).toBeNull();
+    expect(container.textContent).toContain("17 minutes");
   });
 });

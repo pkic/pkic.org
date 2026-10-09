@@ -14,6 +14,7 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { eventAttendanceRegistrationsListResponseSchema } from "../../assets/shared/schemas/event-registrations";
+import { eventRegistrationNotificationCreateSchema } from "../../assets/shared/schemas/route-contracts-event-registration-management";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupEventRegistrationRecord } from "../../assets/ts/member-flows/portal/sections/management/GroupEventRegistrationRecord";
 import { GroupEventRegistrations } from "../../assets/ts/member-flows/portal/sections/management/GroupEventRegistrations";
@@ -94,6 +95,9 @@ function installApi(waitlisted: boolean) {
       }
       if (method === "POST" && url.pathname === MANAGE_ACCESS_ENDPOINT) {
         return json({ manageUrl: "https://portal.example.test/events/architecture-workshop/manage#token" });
+      }
+      if (method === "POST" && url.pathname === `${REGISTRATION_ENDPOINT}/notifications`) {
+        return json({ success: true, message: "Email queued" });
       }
       if (method === "POST" && url.pathname === `${REGISTRATION_ENDPOINT}/admissions`) {
         return json({
@@ -525,6 +529,30 @@ describe("group event registration record", () => {
       "_blank",
       "noopener",
     );
+  });
+
+  it("queues the registration email from the record's menu, with a body the notification contract accepts", async () => {
+    const toastArea = document.createElement("div");
+    toastArea.id = "portal-toast-area";
+    document.body.append(toastArea);
+    const requests = installApi(false);
+    const container = mountRecord(true, EVENT_SLUG);
+    await settle();
+    await settle();
+
+    await act(async () =>
+      container.querySelector<HTMLButtonElement>('button[aria-label="Registration actions"]')!.click(),
+    );
+    await act(async () => menuItemNamed(container, "Resend registration email")!.click());
+    await settle();
+
+    const sent = requests.filter(
+      ({ method, path }) => method === "POST" && path === `${REGISTRATION_ENDPOINT}/notifications`,
+    );
+    expect(sent).toHaveLength(1);
+    expect(eventRegistrationNotificationCreateSchema.parse(sent[0].body)).toEqual({ type: "confirmation" });
+    expect(toastArea.textContent).toContain("Registration email queued");
+    toastArea.remove();
   });
 
   it("offers the manage page only with event manage", async () => {

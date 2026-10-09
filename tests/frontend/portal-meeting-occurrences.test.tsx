@@ -15,6 +15,7 @@ import type { EventOccurrence, GroupEventSeries } from "../../assets/shared/sche
 import { eventOccurrenceUpdateSchema } from "../../assets/shared/schemas/event-series";
 import { confirmAction } from "../../assets/ts/components/ConfirmDialog";
 import { MeetingOccurrenceEditor } from "../../assets/ts/member-flows/portal/sections/management/MeetingOccurrenceEditor";
+import { MeetingOccurrenceSettings } from "../../assets/ts/member-flows/portal/sections/management/MeetingOccurrenceSettings";
 import { MeetingOccurrences } from "../../assets/ts/member-flows/portal/sections/management/MeetingOccurrences";
 import { buttonNamed, controlFor, typeInto } from "./helpers/labelled-control";
 
@@ -151,6 +152,28 @@ describe("meeting calendar collection", () => {
     await settle();
     expect(container.querySelectorAll(".pk-calendar__day")).toHaveLength(7);
     expect(urls.at(-1)!.searchParams.get("offset")).toBe("0");
+  });
+});
+
+describe("meeting calendar entries", () => {
+  it("names the series zone and opens an entry as that occurrence's own record", async () => {
+    // Anchored on the current moment so the entry always falls in the month shown.
+    const startsAt = new Date().toISOString();
+    const item = occurrence({ startsAt, endsAt: new Date(Date.now() + 3_600_000).toISOString() });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => json({ occurrences: [item], page: { limit: 50, offset: 0, total: 1, hasMore: false } })),
+    );
+    const container = mount(<MeetingOccurrenceCalendar groupId={GROUP_ID} series={series()} />);
+    await settle();
+
+    expect(container.textContent).toContain("Europe/Amsterdam");
+    // The calendar reads; nothing on it edits.
+    expect(container.querySelector("form")).toBeNull();
+    const entry = container.querySelector<HTMLAnchorElement>("a.pk-calendar__entry")!;
+    expect(entry.getAttribute("href")).toBe(
+      `#/groups/${GROUP_ID}/meetings/60000000-0000-4000-8000-000000000005/occurrences/${item.id}`,
+    );
   });
 });
 
@@ -299,5 +322,33 @@ describe("meeting occurrence editor", () => {
     const submit = container.querySelector<HTMLButtonElement>('button[type="submit"]');
     expect(submit?.disabled).toBe(false);
     expect(submit?.hasAttribute("aria-busy")).toBe(false);
+  });
+});
+
+describe("meeting occurrence settings", () => {
+  it("opens as facts in the series zone and offers the editor only when asked", async () => {
+    const container = mount(
+      <MeetingOccurrenceSettings
+        endpoint="/api/v1/groups/test/meetings/series/test/occurrences/test"
+        occurrence={occurrence()}
+        timeZone="Europe/Amsterdam"
+        onChanged={() => undefined}
+      />,
+    );
+    await settle();
+
+    expect(container.querySelector('section[aria-label="Occurrence settings"]')).not.toBeNull();
+    expect(container.querySelector("form")).toBeNull();
+    expect(container.textContent).toContain("Europe/Amsterdam");
+
+    await act(() =>
+      container.querySelector<HTMLButtonElement>('button[aria-label="Occurrence settings actions"]')!.click(),
+    );
+    const edit = [...container.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (item) => item.textContent === "Edit settings",
+    )!;
+    await act(() => edit.click());
+    await settle();
+    expect(container.querySelector("form")).not.toBeNull();
   });
 });

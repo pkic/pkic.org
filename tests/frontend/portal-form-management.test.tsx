@@ -3,6 +3,7 @@ import type { ComponentChildren } from "preact";
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { formDefinitionUpdateSchema } from "../../assets/shared/schemas/forms";
 import {
   FORM_SUBMISSION_STATUSES,
   formDetailResponseSchema,
@@ -16,7 +17,8 @@ import {
   FormManagementList,
 } from "../../assets/ts/components/forms/management/FormManagement";
 import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
-import { isCurrentTab, tabs } from "./helpers/tabs";
+import { isCurrentTab, tabNamed, tabs } from "./helpers/tabs";
+import { typeInto } from "./helpers/labelled-control";
 
 const mounted: HTMLElement[] = [];
 
@@ -243,6 +245,109 @@ describe("portal form management", () => {
     expect(lastRequest?.searchParams.get("purpose")).toBe("survey");
     expect(lastRequest?.searchParams.get("status")).toBe("archived");
     expect(lastRequest?.searchParams.get("offset")).toBe("0");
+  });
+
+  it("sends the search to the query rather than narrowing the page it holds", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        requests.push(
+          new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, location.origin),
+        );
+        return formListResponse();
+      }),
+    );
+    const container = mount(<FormManagementList />);
+    await settle();
+
+    const search = container.querySelector<HTMLInputElement>('input[type="search"]')!;
+    await typeInto(search, "no-such-form-key-anywhere");
+    await act(async () => {
+      search.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+    });
+    await settle();
+
+    expect(requests.at(-1)?.searchParams.get("q")).toBe("no-such-form-key-anywhere");
+    expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
+  });
+
+  it("saves an edited title to the form's own address and shows the stored result", async () => {
+    const patches: unknown[] = [];
+    const notify = vi.fn();
+    let title = "Member feedback";
+    const detail = () =>
+      formDetailResponseSchema.parse({
+        form: {
+          id: "00000000-0000-4000-8000-000000000004",
+          key: "member-feedback",
+          scope_type: "global",
+          scope_ref: null,
+          purpose: "feedback",
+          status: "active",
+          title,
+          description: null,
+          created_at: "2026-08-29T10:00:00.000Z",
+          updated_at: "2026-08-29T10:00:00.000Z",
+        },
+        fields: [
+          {
+            id: "00000000-0000-4000-8000-000000000005",
+            key: "feedback",
+            label: "Feedback",
+            fieldType: "text",
+            required: true,
+            options: null,
+            optionSource: null,
+            validation: null,
+            sortOrder: 10,
+            updatedAt: "2026-08-29T10:00:00.000Z",
+            archivedAt: null,
+          },
+        ],
+      });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (init?.method === "PATCH") {
+          expect(url.pathname).toBe("/api/v1/forms/member-feedback");
+          const body = formDefinitionUpdateSchema.parse(JSON.parse(String(init.body)));
+          patches.push(body);
+          title = body.title ?? title;
+          return new Response(JSON.stringify({ success: true, ...detail() }), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }
+        if (url.pathname.endsWith("/submissions/stats")) return emptyStatsResponse();
+        if (url.pathname.endsWith("/submissions")) return emptySubmissionsResponse();
+        return new Response(JSON.stringify(detail()), { status: 200, headers: { "content-type": "application/json" } });
+      }),
+    );
+
+    const container = mount(
+      <FormManagementDetail formKey="member-feedback" canWrite onBack={vi.fn()} notify={notify} />,
+    );
+    await settle();
+    await act(async () => tabNamed(container, "Edit")!.click());
+    await settle();
+    await typeInto(
+      container.querySelector<HTMLInputElement>('input[aria-label="Form title"]')!,
+      "Member feedback updated",
+    );
+    const save = [...container.querySelectorAll("button")].find((button) => button.textContent === "Save form")!;
+    await act(async () => save.click());
+    await settle();
+    await settle();
+
+    expect(patches).toHaveLength(1);
+    expect(patches[0]).toMatchObject({ title: "Member feedback updated" });
+    expect(notify).toHaveBeenCalledWith("Form updated", "success");
+    expect(container.textContent).toContain("Member feedback updated");
   });
 
   it("does not offer global mutations for a community-owned form", async () => {
