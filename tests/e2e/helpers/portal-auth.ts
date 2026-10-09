@@ -83,11 +83,14 @@ export async function signInToPortal(page: Page, email: string): Promise<void> {
   await page.getByRole("button", { name: "Send sign-in link" }).click();
   await expect(page.getByText("you'll receive a sign-in link shortly", { exact: false })).toBeVisible();
   const emailMessage = await waitForCapturedEmail(email, "sign-in link", { since });
+  // A user normally opens the email in a new tab. The portal is already
+  // mounted here and a hash-only navigation would not rerun its one-time
+  // verifier, so leave the document first and open the link as a fresh load.
+  // (Reloading after the link instead races the first redemption: the reload
+  // cancels its response, the session cookie is lost, and the second
+  // redemption of the same token is refused.)
+  await page.goto("about:blank");
   await page.goto(extractEmailUrl(emailMessage, "/portal/"));
-  // A user normally opens the email in a new tab. In this helper the portal
-  // application is already mounted, and a hash-only navigation does not rerun
-  // its one-time verifier; reload to model that fresh-tab mount.
-  await page.reload();
   // The login heading remains visible while the hash verifier redeems the
   // capability, so waiting for that text would return before a session exists.
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toHaveCount(0, { timeout: 15_000 });
