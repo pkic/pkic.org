@@ -217,6 +217,7 @@ export async function describeMcpAuthorization(
     clientName: clientInfo?.clientName ?? clientInfo?.clientId ?? authRequest.clientId,
     requestedScopes,
     grantedScopes,
+    grantableGrants: admin?.grants?.filter((grant) => grantedScopes.includes(grant.permission as AuthScope)) ?? [],
     userEmail: session?.identity.email ?? null,
     staffEmail: admin?.email ?? null,
   };
@@ -313,7 +314,7 @@ export function toOAuthErrorResponse(error: unknown): Response {
   }
 
   if (error instanceof AppError) {
-    return jsonResponse({ error: { code: error.code, message: error.message } }, error.status);
+    return jsonResponse({ error: { code: error.code, message: error.message, details: error.details } }, error.status);
   }
 
   if (error instanceof z.ZodError) {

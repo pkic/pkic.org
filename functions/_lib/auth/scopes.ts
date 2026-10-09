@@ -19,5 +19,9 @@ export function requireAuthScope(actor: AuthAdmin, scope: AuthScope): void {
 }
 
 export function grantableScopesForActor(actor: AuthAdmin, requestedScopes: readonly AuthScope[]): AuthScope[] {
-  return requestedScopes.filter((scope) => hasPermission(actor, scope));
+  return requestedScopes.filter(
+    (scope) =>
+      (!actor.scopeRestricted || actor.scopes?.includes(scope)) &&
+      (hasPermission(actor, scope) || actor.grants?.some((grant) => grant.permission === scope)),
+  );
 }

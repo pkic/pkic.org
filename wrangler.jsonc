@@ -4,7 +4,7 @@
   "account_id": "dd9c5d7f73f7d170f3e2c1108fc84bb3",
   "compatibility_date": "2026-03-17",
   "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
-  "main": "functions/router.ts",
+  "main": "functions/worker.ts",
   "exports": {
     "PublicRead": { "type": "worker", "cache": { "enabled": true } },
   },

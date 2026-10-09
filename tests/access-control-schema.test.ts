@@ -7,6 +7,8 @@
  * that embed it.
  */
 import { describe, expect, it } from "vitest";
+import { permissionSchema } from "../assets/shared/schemas/permissions";
+import { PERMISSION_METADATA } from "../assets/shared/schemas/permission-metadata";
 import {
   userRoleAssignSchema,
   accessGrantCreateSchema,
@@ -110,4 +112,21 @@ describe("access-control contextTypeSchema", () => {
       expect(schema.safeParse({ ...common, contextId: crypto.randomUUID() }).success).toBe(false);
     },
   );
+});
+
+describe("permission consent classification", () => {
+  it.each(["membership:approve", "users:anonymize", "donations:sync", "access:grant", "access:revoke"] as const)(
+    "requires explicit write consent for %s",
+    (permission) => {
+      expect(permissionSchema.parse(permission)).toBe(permission);
+      expect(PERMISSION_METADATA[permission].access).toBe("write");
+    },
+  );
+
+  it("keeps unknown actions out of role grants and OAuth consent", () => {
+    expect(permissionSchema.safeParse("forms:delete").success).toBe(false);
+    expect(accessGrantCreateSchema.safeParse({ userId: crypto.randomUUID(), permission: "forms:delete" }).success).toBe(
+      false,
+    );
+  });
 });

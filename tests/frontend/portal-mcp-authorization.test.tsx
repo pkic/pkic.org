@@ -319,7 +319,11 @@ describe("portal MCP authorization", () => {
     await act(() => buttonLabeled("Approve")!.click());
     await waitFor(() => controlLabeled("Portal email") !== null);
 
-    expect(mcpOauthAuthorizeActionSchema.parse(decision)).toEqual({ action: "approve", return_to: RETURN_TO });
+    const request = mcpOauthAuthorizeActionSchema.parse(decision);
+    expect(request.action).toBe("approve");
+    if (request.action !== "approve") throw new Error("Expected approval");
+    expect(request.return_to).toBe(RETURN_TO);
+    expect(request.scopes).toEqual(["forms:read", "organizations:read", "users:read"]);
     expect(buttonLabeled("Approve")).toBeUndefined();
     expect(buttonLabeled("Deny")).toBeUndefined();
     expect(container.querySelector("dl")).toBeNull();
@@ -360,6 +364,66 @@ describe("portal MCP authorization", () => {
     expect(controlLabeled("Portal email")).toBeNull();
     expect(buttonLabeled("Approve")).toBeUndefined();
     expect(buttonLabeled("Deny and return to client")).toBeTruthy();
+  });
+
+  it("starts read-only, supports mixed-domain presets and individual permissions, and submits the shared subset contract", async () => {
+    window.location.hash = `#/auth/oauth?${new URLSearchParams({ return_to: RETURN_TO })}`;
+    const posted: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          posted.push(JSON.parse(String(init.body)));
+          return Response.json(
+            { error: { code: "SCOPE_REQUIRED", message: "Permissions changed. Review again." } },
+            { status: 403 },
+          );
+        }
+        return Response.json({
+          ...AUTHORIZED_CONTEXT,
+          clientName: "Example forms client",
+          requestedScopes: [
+            "forms:read",
+            "forms:write",
+            "organizations:read",
+            "organizations:write",
+            "users:read",
+            "users:anonymize",
+          ],
+          grantedScopes: ["forms:read", "forms:write", "organizations:read", "organizations:write", "users:read"],
+        });
+      }),
+    );
+    await act(() => render(<McpAuthorization />, container));
+    await waitFor(() => buttonLabeled("Approve") !== undefined);
+    const choice = (label: string) =>
+      Array.from(container.querySelectorAll("label"))
+        .find((el) => el.textContent?.startsWith(label))!
+        .querySelector("input")!;
+    expect(choice("Read forms").checked).toBe(true);
+    expect(choice("Create and edit forms").checked).toBe(false);
+    expect(choice("Anonymize users").disabled).toBe(true);
+    await act(() => buttonLabeled("Read and write organizations")!.click());
+    await act(() => {
+      const control = choice("Read users");
+      control.checked = false;
+      control.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    expect(choice("Create and edit organizations").checked).toBe(true);
+    expect(choice("Read users").checked).toBe(false);
+    await act(() => {
+      container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true }));
+    });
+    await waitFor(() => posted.length === 1);
+    const request = mcpOauthAuthorizeActionSchema.parse(posted[0]);
+    expect(request.action).toBe("approve");
+    if (request.action !== "approve") throw new Error("Expected approval");
+    expect(request.scopes).toEqual(["forms:read", "organizations:read", "organizations:write"]);
+    await waitFor(() => container.textContent?.includes("Permissions changed. Review again.") ?? false);
+    await act(() => buttonLabeled("No forms access")!.click());
+    await act(() => buttonLabeled("No organizations access")!.click());
+    expect(buttonLabeled("Approve")!.disabled).toBe(true);
+    expect(buttonLabeled("Deny")!.disabled).toBe(false);
   });
 
   it("announces a failed context lookup and offers nothing to approve", async () => {

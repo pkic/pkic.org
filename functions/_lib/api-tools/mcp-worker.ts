@@ -144,7 +144,8 @@ export function createMcpWorkerFetch(
       allowPlainPKCE: false,
       clientIdMetadataDocumentEnabled: true,
       resolveExternalToken: resolveMcpExternalToken,
-      tokenExchangeCallback: ({ props }) => mcpTokenLifetime(env, props, accessTokenTTL),
+      tokenExchangeCallback: ({ props, requestedScope }) =>
+        mcpTokenLifetime(env, props, accessTokenTTL, requestedScope),
       resourceMetadata: {
         resource: new URL(MCP_PATH, request.url).toString(),
         scopes_supported: [...AUTH_SCOPES],
