@@ -26,11 +26,6 @@ export function EventProposalForm() {
             kept confidential from the public.
           </p>
           <div data-proposer-identity />
-          <Checkbox
-            id="proposal-is-presenting"
-            name="isPresenting"
-            label="I will also be presenting — add me as one of the speakers"
-          />
         </div>
         <div data-step="3" class="event-flow-step pk-stack" hidden>
           <p class="event-flow-step-intro">
@@ -63,6 +58,11 @@ export function EventProposalForm() {
             Each speaker receives a personal link by email to confirm their participation, complete their profile, and
             upload a headshot once the proposal is accepted.
           </p>
+          <Checkbox
+            id="proposal-is-presenting"
+            name="isPresenting"
+            label="I will also be presenting — add me as one of the speakers"
+          />
           <div data-proposal-speakers class="pk-stack" />
           <Field group label="Speakers" errorSlot="speakers">
             {() => (

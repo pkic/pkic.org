@@ -205,6 +205,9 @@ describe("proposal submission gate", () => {
     expect(eventProposalProofVerifySchema.parse(verified?.body).token).toBe("v".repeat(40));
     expect(form.elements.namedItem("firstName")).toBeNull();
     expect(form.elements.namedItem("email")).toBeNull();
+    // Whether the contact also presents is a speaker question, asked on the Speakers step.
+    const speakersStep = form.querySelector<HTMLElement>('[data-step="4"]')!;
+    expect(speakersStep.querySelector("#proposal-is-presenting")).not.toBeNull();
     await act(() => {
       const presenting = form.querySelector<HTMLInputElement>("#proposal-is-presenting")!;
       presenting.checked = true;

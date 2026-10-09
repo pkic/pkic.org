@@ -344,7 +344,7 @@ async function main(): Promise<void> {
     }
   });
 
-  // ── Step navigation — pre-fill proposer card when entering step 3 ─────────
+  // ── Step navigation ───────────────────────────────────────────────────────
 
   installStepNavigation(
     boot.root,
@@ -360,7 +360,6 @@ async function main(): Promise<void> {
         return false;
       }
       if (currentStep === 3 && abstractEditor && !abstractEditor.validate()) return false;
-      if (currentStep === 3 && isPresentingCheckbox?.checked) ensureProposerCard();
     },
     (step) => {
       if (step >= 2) activateIdentity();
