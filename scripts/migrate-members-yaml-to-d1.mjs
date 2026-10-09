@@ -100,10 +100,10 @@
  * consistent with the repository's supported Node versions.
  *
  * Environment flags mirror scripts/seed.mjs's ENVS table; the database is
- * addressed by name through scripts/lib/wrangler-target.mjs:
+ * addressed through scripts/lib/wrangler-target.mjs:
  *   --local        --env local --local     (database pkic-db-local)
- *   --preview      --config wrangler.preview-migrations.jsonc --remote
- *                  (database pkic-db-preview, shared by Workers Previews)
+ *   --preview      --env production --preview --remote
+ *                  (binding DB's preview database pkic-db-preview, shared by Workers Previews)
  *   --production   --env production --remote (database pkic-db)
  *
  * Other flags:

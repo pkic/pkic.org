@@ -125,11 +125,16 @@ binding they use is declared in `env.production.previews` in
 `tests/tools/workers-previews-config.test.ts` fails if a production resource
 appears there.
 
-- All Previews share the `pkic-db-preview` D1 database. Deployments never apply
-  migrations; apply them separately with `pnpm migrate:preview`, which targets
-  that database through
-  [wrangler.preview-migrations.jsonc](wrangler.preview-migrations.jsonc).
-  `pnpm seed:preview` and `pnpm backup:preview` use the same file.
+- Each Preview's `APP_BASE_URL` and `WEBAUTHN_ORIGIN` are its own branch URL,
+  injected by `vite.config.ts` from `WORKERS_CI_BRANCH` or the current git
+  branch. A preview build without a non-`main` branch fails.
+- All Previews share the `pkic-db-preview` D1 database, which is also the
+  production `DB` binding's `preview_database_id`. Deployments never apply
+  migrations; apply them separately with `pnpm migrate:preview`, which runs
+  Wrangler with `--env production --preview`. `pnpm seed:preview` uses the same
+  arguments, and `pnpm backup:preview` exports `pkic-db-preview` by name
+  because `d1 export` has no `--preview` option. Wrangler takes the account
+  from `wrangler.jsonc`.
 - Cron Triggers, routes, and inbound email do not run in Previews, so the
   email outbox and other scheduled jobs stay idle there. Run a job manually
   from the portal scheduler when a Preview test needs it.
