@@ -17,7 +17,7 @@ import { publicationDocumentAllowSchema } from "../assets/shared/schemas/site-pu
 import { requirePresentationBucket } from "../functions/_lib/services/presentation-upload";
 import { assertPublicationMachineExtraction } from "../functions/_lib/services/site-publication-machine-extraction";
 import { parseEventFlowPath } from "../assets/shared/event-flow-paths";
-import { publicationStagingDirectory } from "../scripts/publication/build-context.mjs";
+import { publicationStagingDirectory, wranglerEnvironment } from "../scripts/publication/build-context.mjs";
 import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { getPlatformProxy, unstable_readConfig as readConfig } from "wrangler";
@@ -83,7 +83,7 @@ export async function readPublicationSource() {
     return fixture;
   }
   if (!environment) throw new Error("Select CLOUDFLARE_ENV or provide a synthetic publication snapshot");
-  const config = readConfig({ config: resolve("wrangler.jsonc"), env: environment });
+  const config = readConfig({ config: resolve("wrangler.jsonc"), env: wranglerEnvironment(environment) });
   const configPath = resolve(output, "bindings.json");
   await writeFile(configPath, JSON.stringify(publicationBindingConfig(config, environment)));
   const platform = await getPlatformProxy<Pick<Env, "DB" | "ASSETS_BUCKET" | "SPEAKER_UPLOADS_BUCKET">>({

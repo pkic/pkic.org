@@ -246,24 +246,50 @@ it("uses only the target's native D1 and public-source R2 bindings", () => {
   const config = {
     account_id: "synthetic-account",
     compatibility_date: "2026-09-30",
-    d1_databases: [{ binding: "DB", database_id: "preview-db" }],
+    d1_databases: [{ binding: "DB", database_id: "local-db" }],
     r2_buckets: [
-      { binding: "ASSETS_BUCKET", bucket_name: "preview-assets" },
-      { binding: "SPEAKER_UPLOADS_BUCKET", bucket_name: "preview-portraits" },
+      { binding: "ASSETS_BUCKET", bucket_name: "local-assets" },
+      { binding: "SPEAKER_UPLOADS_BUCKET", bucket_name: "local-portraits" },
       { binding: "PRIVATE_UPLOADS", bucket_name: "private" },
     ],
   };
-  expect(publicationBindingConfig(config, "preview")).toMatchObject({
+  expect(publicationBindingConfig(config, "local")).toMatchObject({
+    d1_databases: [{ database_id: "local-db", remote: false }],
+    r2_buckets: [
+      { bucket_name: "local-assets", remote: false },
+      { bucket_name: "local-portraits", remote: false },
+    ],
+  });
+});
+
+it("publishes a preview from the production Worker's previews bindings only", () => {
+  const config = {
+    account_id: "synthetic-account",
+    compatibility_date: "2026-09-30",
+    d1_databases: [{ binding: "DB", database_id: "production-db" }],
+    r2_buckets: [{ binding: "ASSETS_BUCKET", bucket_name: "production-assets" }],
+    previews: {
+      d1_databases: [{ binding: "DB", database_name: "preview-database", database_id: "preview-db" }],
+      r2_buckets: [
+        { binding: "ASSETS_BUCKET", bucket_name: "preview-assets" },
+        { binding: "SPEAKER_UPLOADS_BUCKET", bucket_name: "preview-portraits" },
+      ],
+    },
+  };
+  const bindings = publicationBindingConfig(config, "preview");
+  expect(bindings).toMatchObject({
     d1_databases: [{ database_id: "preview-db", remote: true }],
     r2_buckets: [
       { bucket_name: "preview-assets", remote: true },
       { bucket_name: "preview-portraits", remote: true },
     ],
   });
-  expect(publicationBindingConfig(config, "local").d1_databases[0].remote).toBe(false);
+  expect(JSON.stringify(bindings)).not.toContain("production");
+  expect(() => publicationBindingConfig({ ...config, previews: undefined }, "preview")).toThrow(/previews bindings/);
 });
 
-it.each(["preview", "production"])("keeps %s publication on its deployment resources", (environment) => {
+it("keeps production publication on its deployment resources", () => {
+  const environment = "production";
   const config = {
     account_id: "synthetic-account",
     compatibility_date: "2026-09-30",
