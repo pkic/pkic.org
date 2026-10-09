@@ -2,7 +2,6 @@ import { expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
-import { seedMembershipReviewDigestTemplates } from "./helpers/membership-review-email-templates";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createApplicationFormSubmission, seedMemberApplication } from "./helpers/member-applications";
@@ -14,7 +13,6 @@ import { evaluateMembershipApplication } from "../functions/_lib/services/member
 
 it("runs the standard staff, voting-member, and council requirements with independent full notice windows", async () => {
   await resetDb();
-  await seedMembershipReviewDigestTemplates(env.DB);
   await seedEventAndAdmin(env.DB);
   const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'");
   const token = await createAdminSession(env.DB, admin.id, "standard-workflow");
@@ -45,11 +43,28 @@ it("runs the standard staff, voting-member, and council requirements with indepe
   expect((await call("", "PATCH", { membershipCategory: "A" })).status).toBe(422);
   await evaluateMembershipApplication(env.DB, id, "https://app.test");
   const initial = await getMembershipExecution(env.DB, id);
-  const completed = await call("/reviews/completion", "POST", {
+  const decision = {
     expectedRevision: initial.revision,
     reason: "Verified the form and the user's authority for Example Organization.",
-  });
+  };
+  // resetDb clears email templates, reproducing an upgrade without seeding (#259).
+  const missingTemplates = await call("/reviews/completion", "POST", decision);
+  expect(missingTemplates.status).toBe(404);
+  expect(await missingTemplates.text()).toContain("partial_membership_review_summary");
+  expect(await getMembershipExecution(env.DB, id)).toEqual(initial);
+  expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM email_outbox").first("count")).toBe(0);
+  const migration = env.TEST_MIGRATIONS.find(
+    (candidate) => candidate.name === "0038_membership_review_digest_templates.sql",
+  );
+  if (!migration) throw new Error("Missing membership review digest migration");
+  await env.DB.batch(migration.queries.map((query) => env.DB.prepare(query)));
+  const completed = await call("/reviews/completion", "POST", decision);
   expect(completed.status, await completed.clone().text()).toBe(200);
+  expect((await getMembershipExecution(env.DB, id)).steps[0]).toMatchObject({
+    state: "complete",
+    completed_by_user_id: admin.id,
+    completion_reason: decision.reason,
+  });
   expect((await call("", "PATCH", { applicantName: "Changed after review" })).status).toBe(409);
   for (const position of [1, 2]) {
     const execution = await getMembershipExecution(env.DB, id);
