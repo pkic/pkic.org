@@ -5,6 +5,8 @@ import type { AuthorizationEvidence } from "../db/authorization-guard";
 import { normalizeEmail } from "../validation";
 import type { SponsorCapacity } from "../../../assets/shared/schemas/sponsor-access";
 import { findActiveSponsorCapacitiesByUserId } from "./sponsor-capacity";
+import { findActingIdentitiesForUser } from "./session-acting-identities";
+import type { SessionActingIdentity } from "../../../assets/shared/session-acting-identity";
 import { executiveCouncilSeatSql } from "./executive-council";
 import { activeOrganizationMemberRepresentationPredicate } from "../services/membership/capacity-query";
 
@@ -324,23 +326,35 @@ export interface IdentityCapacityResolution {
   pendingIdentityCount: number;
   eventParticipation: boolean;
   hasActiveAffiliation: boolean;
+  actingIdentities: SessionActingIdentity[];
 }
 
 export async function resolveIdentityCapacities(
   db: DatabaseLike,
   userId: string,
 ): Promise<IdentityCapacityResolution | null> {
-  const [identity, staff, member, sponsors, pendingIdentityCount, eventParticipation, affiliation] = await Promise.all([
-    first<{ id: string; email: string }>(db, "SELECT id, email FROM users WHERE id = ? AND active = 1", [userId]),
-    findEligibleStaffUserById(db, userId),
-    findEligibleMemberById(db, userId),
-    findActiveSponsorCapacitiesByUserId(db, userId),
-    countPendingIdentitiesForUser(db, userId),
-    hasEventParticipation(db, userId),
-    hasActiveAffiliation(db, userId),
-  ]);
+  const [identity, staff, member, sponsors, pendingIdentityCount, eventParticipation, affiliation, actingIdentities] =
+    await Promise.all([
+      first<{ id: string; email: string }>(db, "SELECT id, email FROM users WHERE id = ? AND active = 1", [userId]),
+      findEligibleStaffUserById(db, userId),
+      findEligibleMemberById(db, userId),
+      findActiveSponsorCapacitiesByUserId(db, userId),
+      countPendingIdentitiesForUser(db, userId),
+      hasEventParticipation(db, userId),
+      hasActiveAffiliation(db, userId),
+      findActingIdentitiesForUser(db, userId),
+    ]);
   return identity &&
     (staff || member || sponsors.length > 0 || pendingIdentityCount > 0 || eventParticipation || affiliation)
-    ? { identity, staff, member, sponsors, pendingIdentityCount, eventParticipation, hasActiveAffiliation: affiliation }
+    ? {
+        identity,
+        staff,
+        member,
+        sponsors,
+        pendingIdentityCount,
+        eventParticipation,
+        hasActiveAffiliation: affiliation,
+        actingIdentities,
+      }
     : null;
 }

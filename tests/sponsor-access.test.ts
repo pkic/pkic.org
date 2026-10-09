@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { sponsorAttendeesListQuerySchema } from "../assets/shared/schemas/sponsor-access";
-import { redeemSponsorSignInCapability } from "../functions/_lib/auth/user-session";
+import { redeemSponsorSignInCapability } from "../functions/_lib/auth/sponsor-sign-in-session";
 import {
   listSponsorAttendeesForExport,
   listSponsorAttendeesPageWithAudit,

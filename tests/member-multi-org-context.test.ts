@@ -3,15 +3,15 @@
  * concurrently represents two organizations must never be resolved into an
  * arbitrary one. functions/_lib/auth/member.ts previously used first() over
  * an unordered UNION, silently picking whichever row D1 returned. This
- * exercises login (deterministic default), an authorized explicit switch,
- * and rejection of switching to a membership the caller doesn't hold.
+ * exercises login (deterministic default) and an explicit identity
+ * selection; the switch endpoint is covered in session-acting-identity.test.ts.
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
 import { insertUser, insertOrganization, seedOrganizationAggregate, addRepresentative } from "./helpers/membership";
-import { findEligibleMemberById, switchActiveIdentity } from "../functions/_lib/auth/member";
+import { findEligibleMemberById } from "../functions/_lib/auth/member";
 import { getMyProfile } from "../functions/_lib/services/member-self-service";
 import { createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
@@ -223,28 +223,6 @@ describe("member auth — multi-organization membership context", () => {
       ).applications,
     ).toEqual([]);
     expect((await call(reassignedToken, `/api/v1/users/current/applications/${applicationAId}`)).status).toBe(404);
-  });
-
-  it("switchActiveIdentity authorizes against the caller's own live identities, not the client's say-so", async () => {
-    const userId = await insertUser(env.DB);
-    const otherUserId = await insertUser(env.DB);
-    const orgAId = await insertOrganization(env.DB);
-    const orgBId = await insertOrganization(env.DB);
-    const orgCId = await insertOrganization(env.DB);
-    const memberAId = await seedOrganizationAggregate(env.DB, orgAId, "A");
-    const memberBId = await seedOrganizationAggregate(env.DB, orgBId, "B");
-    const memberCId = await seedOrganizationAggregate(env.DB, orgCId, "C");
-    await addRepresentative(env.DB, memberAId, userId);
-    const identityBId = await addRepresentative(env.DB, memberBId, userId);
-    // memberC is represented by a different user entirely.
-    const identityCId = await addRepresentative(env.DB, memberCId, otherUserId);
-
-    const initial = await findEligibleMemberById(env.DB, userId);
-    const switched = await switchActiveIdentity(env.DB, initial!, identityBId);
-    expect(switched.memberId).toBe(memberBId);
-    expect(switched.organizationId).toBe(orgBId);
-
-    await expect(switchActiveIdentity(env.DB, initial!, identityCId)).rejects.toThrow();
   });
 
   it("falls back to the deterministic default when a stale/tampered iid claim no longer matches an eligible identity", async () => {

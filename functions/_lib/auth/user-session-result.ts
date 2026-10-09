@@ -1,4 +1,8 @@
 import type { SponsorCapacity } from "../../../assets/shared/schemas/sponsor-access";
+import {
+  resolveSessionActingIdentityId,
+  type SessionActingIdentity,
+} from "../../../assets/shared/session-acting-identity";
 import type { AuthMember, DatabaseLike, UserBackedAuthAdmin } from "../types";
 import { createUserBackedAuthAdmin } from "./admin-identity";
 import { hasActiveAffiliation, type EligibleStaffUser } from "./identity-capacities";
@@ -23,6 +27,9 @@ export interface UserSessionResult {
   pendingIdentityCount: number;
   eventParticipation?: boolean;
   hasActiveAffiliation: boolean;
+  actingIdentities: SessionActingIdentity[];
+  /** The identity this session acts as; null while a person with several has not chosen. */
+  actingIdentityId: string | null;
 }
 
 export function userStaffExpiresAt(createdAt: string, sessionExpiresAt: string): string {
@@ -61,6 +68,7 @@ export async function createEstablishedUserSessionResult(
     sponsors: SponsorCapacity[];
     pendingIdentityCount: number;
     eventParticipation: boolean;
+    actingIdentities: SessionActingIdentity[];
   },
 ): Promise<UserSessionResult> {
   const activityAt = Math.floor(new Date(prepared.createdAt).getTime() / 1000);
@@ -95,5 +103,9 @@ export async function createEstablishedUserSessionResult(
     pendingIdentityCount: capacities.pendingIdentityCount,
     eventParticipation: capacities.eventParticipation,
     hasActiveAffiliation: await hasActiveAffiliation(db, capacities.identity.id),
+    actingIdentities: capacities.actingIdentities,
+    // A new session has selected nothing yet: it acts as the person's only
+    // identity, or asks a person with several which one to act as.
+    actingIdentityId: resolveSessionActingIdentityId(capacities.actingIdentities, null),
   };
 }

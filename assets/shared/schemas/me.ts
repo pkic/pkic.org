@@ -12,6 +12,7 @@ import { applicationStageSchema } from "./member-applications";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { requiresSession } from "./route-contract";
 import { verifiedEmailIdentitySchema } from "./identity";
+import { userAuthSessionResponseSchema } from "./user-auth";
 
 export const myActingIdentitySchema = z.object({
   identityId: databaseIdSchema,
@@ -82,14 +83,17 @@ export const myActiveIdentitySwitchSchema = z.object({
 export const myActiveIdentitySwitchRouteSchema = {
   ...requiresSession(),
   tags: ["Users"],
-  summary: "Replace the current user's active acting identity",
+  summary: "Replace the identity the current session acts as",
   description:
-    "Only meaningful for a user with more than one active identity. Re-verifies identityId against the caller's live identities, derives the matching Member aggregate, and reissues the shared human session cookie scoped to that exact identity.",
+    "Re-verifies identityId against the caller's own live identities — an organization affiliation or the individual capacity — and reissues the shared human session scoped to that identity. Audit records written by the session name it as the acting identity.",
   request: {
     body: { content: { "application/json": { schema: myActiveIdentitySwitchSchema } }, required: true },
   },
   responses: {
-    "200": { description: "Switched.", content: { "application/json": { schema: myProfileSchema } } },
+    "200": {
+      description: "The session, now acting as the selected identity.",
+      content: { "application/json": { schema: userAuthSessionResponseSchema } },
+    },
     "403": { description: "The caller does not actively hold this identity." },
   },
 };

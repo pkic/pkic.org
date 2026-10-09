@@ -1,10 +1,7 @@
 import { publicUserSession } from "../../../_lib/auth/public-user-session";
 import { prepareMagicLinkVerificationHttp, createSessionEstablishedResponse } from "../../../_lib/auth/http-flow";
-import {
-  redeemSponsorSignInCapability,
-  redeemUserSignInCapability,
-  serializeUserSessionCookie,
-} from "../../../_lib/auth/user-session";
+import { redeemUserSignInCapability, serializeUserSessionCookie } from "../../../_lib/auth/user-session";
+import { redeemSponsorSignInCapability } from "../../../_lib/auth/sponsor-sign-in-session";
 import { parseCapabilityToken } from "../../../_lib/auth/capability-token";
 import { openApiRoute } from "../../../_lib/openapi/route";
 import type { AdminContext } from "../../../_lib/db/context";

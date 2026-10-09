@@ -4,7 +4,7 @@ import type { AuthMember, DatabaseLike, Env } from "../types";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
 import { guardDatabaseBatches } from "../db/guarded-database";
 import { getUserSessionToken, resolveUserSessionFromRequest } from "./user-session";
-import { memberSessionAuthorizationEvidence, resolveEligibleMembershipRows, toAuthMember } from "./identity-capacities";
+import { memberSessionAuthorizationEvidence } from "./identity-capacities";
 export {
   findEligibleMemberById,
   memberSignInAuthorizationEvidence,
@@ -32,27 +32,6 @@ export function guardMemberSessionMutationDatabase(db: DatabaseLike, member: Aut
 }
 
 const memberByRequest = new WeakMap<Request, AuthMember>();
-
-/**
- * Switches the acting membership context for an already-authenticated
- * user session — the explicit, authorized alternative to ever picking a
- * membership capacity implicitly. Re-verifies `memberId` against the caller's own
- * live eligible memberships (not the client-supplied claim, not a cached
- * list) before allowing the switch, so a user can never select an
- * organization they don't actually represent.
- */
-export async function switchActiveIdentity(
-  db: DatabaseLike,
-  member: AuthMember,
-  identityId: string,
-): Promise<AuthMember> {
-  const rows = await resolveEligibleMembershipRows(db, member.userId);
-  if (!rows.some((row) => row.identity_id === identityId)) {
-    throw new AppError(403, "NOT_ACTIVE_IDENTITY", "You do not actively hold this identity");
-  }
-  const selected = toAuthMember(rows, identityId);
-  return { ...selected, sessionId: member.sessionId, expiresAt: member.expiresAt };
-}
 
 export function cacheMemberForRequest(request: Request, member: AuthMember): void {
   memberByRequest.set(request, member);

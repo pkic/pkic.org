@@ -21,6 +21,8 @@ const SESSION: PortalSession = {
   identity: { id: "user-1", email: "user@example.test" },
   sponsors: [],
   pendingIdentityCount: 0,
+  actingIdentities: [],
+  actingIdentityId: null,
 };
 
 function resetPortalState(): void {

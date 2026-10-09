@@ -11,6 +11,7 @@ import {
 import { databaseIdSchema } from "./identifiers";
 import { publicOperation, requiresSession } from "./route-contract";
 import { sponsorCapacitySchema } from "./sponsor-access";
+import { sessionActingIdentitySchema } from "../session-acting-identity";
 import { publicStaffCapacitySchema } from "./staff-capacity";
 
 /**
@@ -46,6 +47,10 @@ const userCapacityFields = {
   /** Live owned organization affiliation; conveys no membership or workspace permission. */
   hasActiveAffiliation: z.boolean().optional(),
   pendingIdentityCount: z.number().int().nonnegative().default(0),
+  /** Every identity the person holds right now, which this session may act as. */
+  actingIdentities: z.array(sessionActingIdentitySchema).default([]),
+  /** The identity this session acts as; null while a person with several has not chosen. */
+  actingIdentityId: databaseIdSchema.nullable().default(null),
 };
 
 function requireCapacity<T extends z.ZodTypeAny>(schema: T) {

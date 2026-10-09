@@ -20,6 +20,8 @@ import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { normalizeEmail } from "../validation";
 import { resolveIdentityCapacities } from "../auth/identity-capacities";
+import { resolveSessionActingIdentityId } from "../../../assets/shared/session-acting-identity";
+import { recordAuditActingIdentity } from "./audit-actor";
 import {
   createEstablishedUserSessionResult,
   prepareUserSession,
@@ -492,6 +494,7 @@ export async function completePasskeyAuthentication(
     }
   };
 
+  recordAuditActingIdentity(resolved.identity.id, resolveSessionActingIdentityId(resolved.actingIdentities, null));
   await persistAuthentication({
     actorType: "user",
     actorId: credentialRow.user_id,
@@ -506,12 +509,13 @@ export async function completePasskeyAuthentication(
     sponsors: resolved.sponsors,
     pendingIdentityCount: resolved.pendingIdentityCount,
     eventParticipation: resolved.eventParticipation,
+    actingIdentities: resolved.actingIdentities,
   });
   const token = await signUserSessionToken(signingSecret, {
     sub: resolved.identity.id,
     sid: prepared.sessionId,
     exp: sessionExpiresAtToExp(prepared.expiresAt),
-    identityId: resolved.member?.identityId,
+    identityId: session.actingIdentityId,
   });
   return { session, token };
 }

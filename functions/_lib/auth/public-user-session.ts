@@ -1,6 +1,7 @@
 import type { PublicStaffCapacity } from "../../../assets/shared/schemas/staff-capacity";
 import type { SponsorCapacity } from "../../../assets/shared/schemas/sponsor-access";
 import type { AuthMember } from "../types";
+import type { SessionActingIdentity } from "../../../assets/shared/session-acting-identity";
 import type { UserSessionResult } from "./user-session";
 import { publicStaffCapacity } from "./admin-identity";
 
@@ -15,6 +16,8 @@ export function publicUserSession(result: UserSessionResult): {
   pendingIdentityCount: number;
   eventParticipation?: boolean;
   hasActiveAffiliation: boolean;
+  actingIdentities: SessionActingIdentity[];
+  actingIdentityId: string | null;
 } {
   return {
     sessionId: result.sessionId,
@@ -34,5 +37,7 @@ export function publicUserSession(result: UserSessionResult): {
     pendingIdentityCount: result.pendingIdentityCount,
     eventParticipation: result.eventParticipation ?? false,
     hasActiveAffiliation: result.hasActiveAffiliation,
+    actingIdentities: result.actingIdentities,
+    actingIdentityId: result.actingIdentityId,
   };
 }

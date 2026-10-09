@@ -19,6 +19,9 @@ import {
   hasActiveAffiliation,
 } from "./identity-capacities";
 import { signInCapacityAuthorizationEvidence } from "./sign-in-capacity-authorization";
+import { findActingIdentitiesForUser } from "./session-acting-identities";
+import { resolveSessionActingIdentityId } from "../../../assets/shared/session-acting-identity";
+import { recordAuditActingIdentity } from "../services/audit-actor";
 import {
   assertSessionActive,
   fetchSessionRow,
@@ -34,13 +37,7 @@ import {
   verifyEmailAuthCapabilityToken,
 } from "./email-auth-capabilities";
 import { prepareVerifyPrimaryEmailStatement } from "../services/email-verification";
-import { prepareVerifyOwnedEmailStatements } from "../services/email-verification";
-import { buildFindOrCreateUserStatement } from "../services/users";
-import {
-  findActiveSponsorCapacitiesByUserId,
-  sponsorSignInAuthorizationEvidence,
-  verifySponsorSignInCapability,
-} from "./sponsor-capacity";
+import { findActiveSponsorCapacitiesByUserId } from "./sponsor-capacity";
 import {
   DEFAULT_USER_SESSION_IDLE_TTL_HOURS,
   sessionIdleExpiresAt,
@@ -91,7 +88,7 @@ function assertActivityActive(idleExpiresAt: string): void {
   }
 }
 
-async function findActiveIdentity(
+export async function findActiveIdentity(
   db: DatabaseLike,
   userId: string,
 ): Promise<{ id: string; email: string; normalized_email: string } | null> {
@@ -163,12 +160,10 @@ async function findCapabilitySignInIdentity(
   return null;
 }
 
-/** Resolve identity and capacities from one session row and live D1 state. */
-async function resolveUserSessionContext(
-  db: DatabaseLike,
+async function verifyUserSessionRequest(
   request: Request,
   env: Pick<Env, "INTERNAL_SIGNING_SECRET">,
-): Promise<{ session: UserSessionResult; claims: UserSessionTokenClaims }> {
+): Promise<UserSessionTokenClaims> {
   const token = getUserSessionToken(request);
   if (!token) throw new AppError(401, "AUTH_REQUIRED", "Missing user session token");
   if (!env.INTERNAL_SIGNING_SECRET) {
@@ -182,22 +177,26 @@ async function resolveUserSessionContext(
       verified.reason === "expired" ? "User session expired" : "Invalid user session token",
     );
   }
-  const row = assertSessionActive(
-    await fetchSessionRow(db, USER_SESSIONS, verified.claims.sid, verified.claims.sub),
-    "user",
-  );
-  const lastActivityAt = activityAtOrCreatedAt(verified.claims.lastActivityAt, row.createdAt);
+  return verified.claims;
+}
+
+/** Resolve identity, capacities, and acting identity from one session row and live D1 state. */
+async function resolveUserSessionClaims(db: DatabaseLike, claims: UserSessionTokenClaims): Promise<UserSessionResult> {
+  const row = assertSessionActive(await fetchSessionRow(db, USER_SESSIONS, claims.sid, claims.sub), "user");
+  const lastActivityAt = activityAtOrCreatedAt(claims.lastActivityAt, row.createdAt);
   const idleExpiresAt = sessionIdleExpiresAt(lastActivityAt, row.expiresAt, DEFAULT_USER_SESSION_IDLE_TTL_HOURS);
   assertActivityActive(idleExpiresAt);
-  const [identity, staff, member, sponsors, pendingIdentityCount, eventParticipation, affiliation] = await Promise.all([
-    findActiveIdentity(db, verified.claims.sub),
-    findEligibleStaffUserById(db, verified.claims.sub),
-    findEligibleMemberById(db, verified.claims.sub, verified.claims.iid),
-    findActiveSponsorCapacitiesByUserId(db, verified.claims.sub),
-    countPendingIdentitiesForUser(db, verified.claims.sub),
-    hasEventParticipation(db, verified.claims.sub),
-    hasActiveAffiliation(db, verified.claims.sub),
-  ]);
+  const [identity, staff, member, sponsors, pendingIdentityCount, eventParticipation, affiliation, actingIdentities] =
+    await Promise.all([
+      findActiveIdentity(db, claims.sub),
+      findEligibleStaffUserById(db, claims.sub),
+      findEligibleMemberById(db, claims.sub, claims.iid),
+      findActiveSponsorCapacitiesByUserId(db, claims.sub),
+      countPendingIdentitiesForUser(db, claims.sub),
+      hasEventParticipation(db, claims.sub),
+      hasActiveAffiliation(db, claims.sub),
+      findActingIdentitiesForUser(db, claims.sub),
+    ]);
   if (
     !identity ||
     (!staff && !member && sponsors.length === 0 && pendingIdentityCount === 0 && !eventParticipation && !affiliation)
@@ -205,7 +204,7 @@ async function resolveUserSessionContext(
     throw new AppError(401, "AUTH_INVALID", "This user session no longer has an active capacity");
   }
   const elevatedStaffExpiry = userStaffExpiresAt(row.createdAt, row.expiresAt);
-  const staffLastActivityAt = activityAtOrCreatedAt(verified.claims.staffLastActivityAt, row.createdAt);
+  const staffLastActivityAt = activityAtOrCreatedAt(claims.staffLastActivityAt, row.createdAt);
   const staffIdleExpiresAt = sessionIdleExpiresAt(
     staffLastActivityAt,
     elevatedStaffExpiry,
@@ -217,31 +216,35 @@ async function resolveUserSessionContext(
   }
   const staffActor =
     staff && staffActive
-      ? await createStaffSessionActor(
-          db,
-          staff,
-          row.id,
-          elevatedStaffExpiry,
-          member?.memberId ?? null,
-          verified.claims.state,
-        )
+      ? await createStaffSessionActor(db, staff, row.id, elevatedStaffExpiry, member?.memberId ?? null, claims.state)
       : null;
+  // The selection is honored only while that identity is still active.
+  const actingIdentityId = resolveSessionActingIdentityId(actingIdentities, claims.iid);
+  recordAuditActingIdentity(identity.id, actingIdentityId);
   return {
-    claims: verified.claims,
-    session: {
-      identity: { id: identity.id, email: identity.email },
-      sessionId: row.id,
-      expiresAt: row.expiresAt,
-      idleExpiresAt,
-      ...(staffActor ? { staff: staffActor } : {}),
-      ...(staffActor ? { staffIdleExpiresAt } : {}),
-      ...(member ? { member: { ...member, sessionId: row.id, expiresAt: row.expiresAt } } : {}),
-      sponsors,
-      pendingIdentityCount,
-      eventParticipation,
-      hasActiveAffiliation: affiliation,
-    },
+    identity: { id: identity.id, email: identity.email },
+    sessionId: row.id,
+    expiresAt: row.expiresAt,
+    idleExpiresAt,
+    ...(staffActor ? { staff: staffActor } : {}),
+    ...(staffActor ? { staffIdleExpiresAt } : {}),
+    ...(member ? { member: { ...member, sessionId: row.id, expiresAt: row.expiresAt } } : {}),
+    sponsors,
+    pendingIdentityCount,
+    eventParticipation,
+    hasActiveAffiliation: affiliation,
+    actingIdentities,
+    actingIdentityId,
   };
+}
+
+async function resolveUserSessionContext(
+  db: DatabaseLike,
+  request: Request,
+  env: Pick<Env, "INTERNAL_SIGNING_SECRET">,
+): Promise<{ session: UserSessionResult; claims: UserSessionTokenClaims }> {
+  const claims = await verifyUserSessionRequest(request, env);
+  return { claims, session: await resolveUserSessionClaims(db, claims) };
 }
 
 export async function resolveUserSessionFromRequest(
@@ -252,13 +255,27 @@ export async function resolveUserSessionFromRequest(
   return (await resolveUserSessionContext(db, request, env)).session;
 }
 
+/**
+ * Re-resolves the session and reissues its token with fresh activity. With
+ * `actingIdentityId`, the reissued session acts as that identity instead, once
+ * it is re-verified against the caller's own live identities.
+ */
 export async function refreshUserSessionFromRequest(
   db: DatabaseLike,
   request: Request,
   env: Pick<Env, "INTERNAL_SIGNING_SECRET">,
+  options: { actingIdentityId?: string } = {},
 ): Promise<{ session: UserSessionResult; token: string }> {
   const resolved = await resolveUserSessionContext(db, request, env);
-  const session = resolved.session;
+  let session = resolved.session;
+  let claims = resolved.claims;
+  if (options.actingIdentityId !== undefined) {
+    if (!session.actingIdentities.some((identity) => identity.id === options.actingIdentityId)) {
+      throw new AppError(403, "NOT_ACTIVE_IDENTITY", "You do not actively hold this identity");
+    }
+    claims = { ...claims, iid: options.actingIdentityId };
+    session = await resolveUserSessionClaims(db, claims);
+  }
   const secret = env.INTERNAL_SIGNING_SECRET;
   if (!secret) {
     throw new AppError(401, "AUTH_REQUIRED", "Missing user session token");
@@ -270,13 +287,13 @@ export async function refreshUserSessionFromRequest(
     ? sessionIdleExpiresAt(activityAt, session.staff.expiresAt!, STAFF_SESSION_IDLE_TTL_HOURS)
     : undefined;
   const token = await signUserSessionToken(secret, {
-    sub: resolved.claims.sub,
-    sid: resolved.claims.sid,
-    exp: resolved.claims.exp,
-    identityId: resolved.claims.iid,
-    state: resolved.claims.state,
+    sub: claims.sub,
+    sid: claims.sid,
+    exp: claims.exp,
+    identityId: claims.iid,
+    state: claims.state,
     lastActivityAt: activityAt,
-    staffLastActivityAt: session.staff ? activityAt : (resolved.claims.staffLastActivityAt ?? 0),
+    staffLastActivityAt: session.staff ? activityAt : (claims.staffLastActivityAt ?? 0),
   });
   return {
     session: {
@@ -422,17 +439,20 @@ export async function redeemUserSignInCapability(
     email: signInIdentity.email,
     normalized_email: signInIdentity.normalized_email,
   };
-  const [staff, member, sponsors, pendingIdentityCount, eventParticipation, affiliation] = await Promise.all([
-    findEligibleStaffUserById(db, capability.subjectId),
-    findEligibleMemberById(db, capability.subjectId),
-    findActiveSponsorCapacitiesByUserId(db, capability.subjectId),
-    countPendingIdentitiesForUser(db, capability.subjectId),
-    hasEventParticipation(db, capability.subjectId),
-    hasActiveAffiliation(db, capability.subjectId),
-  ]);
+  const [staff, member, sponsors, pendingIdentityCount, eventParticipation, affiliation, actingIdentities] =
+    await Promise.all([
+      findEligibleStaffUserById(db, capability.subjectId),
+      findEligibleMemberById(db, capability.subjectId),
+      findActiveSponsorCapacitiesByUserId(db, capability.subjectId),
+      countPendingIdentitiesForUser(db, capability.subjectId),
+      hasEventParticipation(db, capability.subjectId),
+      hasActiveAffiliation(db, capability.subjectId),
+      findActingIdentitiesForUser(db, capability.subjectId),
+    ]);
   if (!staff && !member && sponsors.length === 0 && pendingIdentityCount === 0 && !eventParticipation && !affiliation) {
     throw new AppError(403, "AUTH_FORBIDDEN", "This identity no longer has portal access");
   }
+  recordAuditActingIdentity(identity.id, resolveSessionActingIdentityId(actingIdentities, null));
   await assertEmailAuthCapabilityEmail({
     signingSecret: payload.signingSecret,
     capability,
@@ -441,7 +461,16 @@ export async function redeemUserSignInCapability(
   const prepared = await prepareUserSession(db, identity.id, payload.sessionTtlHours);
   const verifiedAt = nowIso();
   const authorizationEvidence = signInCapacityAuthorizationEvidence(
-    { identity, staff, member, sponsors, pendingIdentityCount, eventParticipation, hasActiveAffiliation: affiliation },
+    {
+      identity,
+      staff,
+      member,
+      sponsors,
+      pendingIdentityCount,
+      eventParticipation,
+      hasActiveAffiliation: affiliation,
+      actingIdentities,
+    },
     signInIdentity.normalized_sign_in_email,
   );
   await commitEmailAuthRedemption(db, {
@@ -486,96 +515,13 @@ export async function redeemUserSignInCapability(
     sponsors,
     pendingIdentityCount,
     eventParticipation,
+    actingIdentities,
   });
   const token = await signUserSessionToken(payload.signingSecret, {
     sub: identity.id,
     sid: prepared.sessionId,
     exp: sessionExpiresAtToExp(prepared.expiresAt),
-    identityId: member?.identityId,
-  });
-  return { session, token };
-}
-
-/** Redeem a sponsor-mailbox capability into the same user session used by the portal. */
-export async function redeemSponsorSignInCapability(
-  db: DatabaseLike,
-  payload: {
-    token: string;
-    signingSecret: string;
-    sessionTtlHours: number;
-    ipHash?: string | null;
-    userAgentHash?: string | null;
-  },
-): Promise<{ session: UserSessionResult; token: string }> {
-  const verified = await verifySponsorSignInCapability(db, payload);
-  const preparedUser = await buildFindOrCreateUserStatement(db, {
-    email: verified.sponsorship.contactEmail,
-  });
-  if (!preparedUser.created && !(await findActiveIdentity(db, preparedUser.user.id))) {
-    throw new AppError(403, "AUTH_FORBIDDEN", "This identity is inactive");
-  }
-
-  const [staff, member] = preparedUser.created
-    ? [null, null]
-    : await Promise.all([
-        findEligibleStaffUserById(db, preparedUser.user.id),
-        findEligibleMemberById(db, preparedUser.user.id),
-      ]);
-  const prepared = await prepareUserSession(db, preparedUser.user.id, payload.sessionTtlHours);
-  const verifiedAt = nowIso();
-  const normalizedContactEmail = normalizeEmail(verified.sponsorship.contactEmail);
-  await commitEmailAuthRedemption(db, {
-    purpose: "sponsor_sign_in",
-    capabilityId: verified.capability.capabilityId,
-    actorType: "user",
-    actorId: preparedUser.user.id,
-    action: "sponsor_magic_link_verified",
-    entityType: "identity_session",
-    entityId: prepared.sessionId,
-    details: { sponsorId: verified.sponsorship.sponsorId, expiresAt: prepared.expiresAt },
-    createdAt: verifiedAt,
-    authorizationEvidence: [
-      sponsorSignInAuthorizationEvidence(verified.sponsorship.sponsorId, normalizedContactEmail),
-      ...(!preparedUser.created
-        ? [
-            {
-              sql: "SELECT 1 FROM users WHERE id = ? AND active = 1",
-              bindings: [preparedUser.user.id],
-            },
-          ]
-        : []),
-    ],
-    statements: [
-      ...(preparedUser.statement ? [preparedUser.statement] : []),
-      ...prepareVerifyOwnedEmailStatements(db, {
-        userId: preparedUser.user.id,
-        normalizedEmail: normalizedContactEmail,
-        method: "magic_link",
-        verifiedAt,
-      }),
-      prepared.statement,
-    ],
-  });
-
-  const sponsors = await findActiveSponsorCapacitiesByUserId(db, preparedUser.user.id);
-  if (sponsors.length === 0) {
-    throw new AppError(403, "AUTH_FORBIDDEN", "This identity no longer has sponsor access");
-  }
-  const pendingIdentityCount = await countPendingIdentitiesForUser(db, preparedUser.user.id);
-  const eventParticipation = await hasEventParticipation(db, preparedUser.user.id);
-  const session = await createEstablishedUserSessionResult(db, prepared, {
-    identity: { id: preparedUser.user.id, email: preparedUser.user.email },
-    staff,
-    member,
-    sponsors,
-    pendingIdentityCount,
-    eventParticipation,
-  });
-  const token = await signUserSessionToken(payload.signingSecret, {
-    sub: preparedUser.user.id,
-    sid: prepared.sessionId,
-    exp: sessionExpiresAtToExp(prepared.expiresAt),
-    identityId: member?.identityId,
+    identityId: session.actingIdentityId,
   });
   return { session, token };
 }
