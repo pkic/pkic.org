@@ -144,6 +144,12 @@
       // resource; never bind a production database, bucket, or namespace.
       "previews": {
         "worker_loaders": [{ "binding": "LOADER" }],
+        "kv_namespaces": [
+          {
+            "binding": "OAUTH_KV",
+            "id": "5c0850c6b3a84a2f9ec97d0f39fe2019",
+          },
+        ],
         "d1_databases": [
           {
             "binding": "DB",

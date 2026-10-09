@@ -135,8 +135,8 @@ appears there.
   from the portal scheduler when a Preview test needs it.
 - Preview URLs are public unless Cloudflare Access protects them. Cloudflare
   adds `X-Robots-Tag: noindex` to `workers.dev` Previews.
-- MCP OAuth is unavailable in Previews until a preview `OAUTH_KV` namespace is
-  created and declared in `previews.kv_namespaces`.
+- MCP OAuth in Previews uses its own `OAUTH_KV` namespace, never the
+  production one.
 
 Never copy production personal data, credentials, secrets, or private uploads
 into preview; use synthetic or purpose-created preview data. Preview secrets
