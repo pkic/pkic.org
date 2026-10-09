@@ -49,8 +49,8 @@ export const ORGANIZATION_FLOW = {
     {
       id: "10.8",
       title: "An uploaded SVG logo is sanitized before it is served",
-      status: "covered",
-      note: "An SVG is a script host. This walks the upload through the UI and reads the served file back, which is the only place the sanitizer's output is what a browser would actually execute.",
+      status: "unit",
+      note: "Covered in svg-logo-uploads: hostile SVGs go through both upload endpoints and the stored object, the bytes the browser is served, is read back free of scripts, handlers and editor cruft.",
     },
     {
       id: "10.9",

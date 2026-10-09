@@ -2,9 +2,9 @@
  * My Organization — the representative's own moderated workspace: content
  * edits and logo changes queue for staff review rather than publishing
  * directly, and the primary contact alone may nominate a secondary contact.
- * None of this had browser coverage: `svg-logo-upload.spec.ts` drives the
- * *staff* organization-detail logo control, a different component from the
- * member-facing `LogoUploader` here, and nothing exercised the content
+ * None of this had browser coverage: the staff organization-detail logo
+ * control is a different component from the member-facing `LogoUploader`
+ * here, and nothing exercised the content
  * review queue, the secondary-contact nomination, or the individual-member
  * fallback at all.
  * @covers organization.10.1
@@ -20,7 +20,7 @@ import { uploadThroughButton } from "./helpers/file-upload";
 
 // A full-canvas single-colour fill reads to the sanitizer's crop step as
 // background with nothing to crop to ("The SVG has no visible content."), so
-// this mirrors svg-logo-upload.spec.ts's own working shape: a background
+// this uses the shape the sanitizer accepts: a background
 // rect plus a distinct, smaller rect the sanitizer can crop the logo to.
 const SANITIZED_SVG = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg" width="200" height="200" viewBox="0 0 200 200">' +

@@ -61,8 +61,8 @@ export const AUTHORITY_FLOW = {
     {
       id: "9.10",
       title: "A permission reads without granting the next act: read cannot stage, write cannot approve",
-      status: "covered",
-      note: "Approval is the act that provisions a member, so it is separated from the permission that moves an application along.",
+      status: "unit",
+      note: "Covered in membership-application-management: read, write and approval are enforced independently on the canonical routes. Approval provisions a member, so it is separated from the permission that moves an application along.",
     },
     {
       id: "9.11",

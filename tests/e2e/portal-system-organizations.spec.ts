@@ -309,7 +309,7 @@ test("permitted staff link an existing user as a representative through the User
 // A single edge-to-edge rect is rejected server-side as "The SVG has no
 // visible content" — cropping-to-content finds nothing to crop to. A distinct
 // inset shape over a background is what the sanitizer treats as real content,
-// matching the fixture svg-logo-upload.spec.ts already proves works.
+// matching the fixtures in tests/svg-logo-uploads.test.ts.
 const PROFILE_LOGO_SVG = Buffer.from(
   '<svg xmlns="http://www.w3.org/2000/svg" width="120" height="120" viewBox="0 0 120 120">' +
     '<rect width="120" height="120" fill="#ffffff"/>' +
