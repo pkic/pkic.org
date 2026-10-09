@@ -145,7 +145,8 @@ test("proposer and invited speaker manage their own event records without emaile
     expect(before.speaker.status).toBe("invited");
     expect(before.profile.actingIdentitySelection).toBe("unrecorded");
     const individual = speaker.getByRole("radio", { name: "As an individual", exact: true });
-    await individual.check();
+    // Choosing resolves the signed-in speaker's representation at once, so the question closes on click.
+    await individual.click();
     await expect(speaker.getByText("Individual participation", { exact: true })).toBeVisible();
     await expect(individual).toHaveCount(0);
     await expect(speaker.getByLabel("Organization", { exact: true })).toHaveCount(0);
