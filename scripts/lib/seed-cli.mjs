@@ -1,4 +1,5 @@
 import path from "node:path";
+import { wranglerTargetArgs } from "./wrangler-target.mjs";
 
 /**
  * Parses the options shared by the event and email-template seeders. A custom
@@ -54,7 +55,7 @@ export function buildWranglerD1ExecuteArgs({ database, wranglerEnv, mode, persis
     "d1",
     "execute",
     database,
-    ...(wranglerEnv ? ["--env", wranglerEnv] : []),
+    ...(wranglerEnv ? wranglerTargetArgs(wranglerEnv) : []),
     mode === "remote" ? "--remote" : "--local",
     ...(persistTo ? [`--persist-to=${persistTo}`] : []),
   ];

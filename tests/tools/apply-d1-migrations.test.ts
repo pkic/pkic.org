@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildImportSql, pendingMigrationNames } from "../../scripts/apply-d1-migrations.mjs";
+import { buildImportSql, pendingMigrationNames, remoteD1Args } from "../../scripts/apply-d1-migrations.mjs";
 
 describe("remote D1 migration import", () => {
   it("records migration 0035 in the same SQL import as its schema changes", () => {
@@ -12,6 +12,17 @@ describe("remote D1 migration import", () => {
     expect(buildImportSql("ALTER TABLE users DROP COLUMN role;", "0037_retire_legacy_account_role.sql")).toBe(
       "ALTER TABLE users DROP COLUMN role;\nINSERT INTO d1_migrations (name) VALUES ('0037_retire_legacy_account_role.sql');\n",
     );
+  });
+
+  it("addresses the shared Preview database only through the preview migrations config", () => {
+    expect(remoteD1Args("preview")).toEqual([
+      "PREVIEW_DB",
+      "--config",
+      "wrangler.preview-migrations.jsonc",
+      "--remote",
+    ]);
+    expect(remoteD1Args("production")).toEqual(["DB", "--env", "production", "--remote"]);
+    expect(() => remoteD1Args("staging")).toThrow(/Unsupported Wrangler target/);
   });
 
   it("requires earlier migrations before the exceptional import", () => {
