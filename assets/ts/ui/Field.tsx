@@ -19,6 +19,7 @@ import type { ComponentChildren } from "preact";
 import { useId } from "preact/hooks";
 
 import { FIELD_STATE_ICON, type FieldState } from "./field-state";
+import { StrokeIcon } from "./MediaIcons";
 import "./Field.css";
 
 export type { FieldState };
@@ -67,9 +68,9 @@ export interface FieldControlProps {
 
 export function StateIcon({ state, class: className }: { state: FieldState; class?: string }) {
   return (
-    <svg class={className} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
+    <StrokeIcon class={className}>
       <path d={FIELD_STATE_ICON[state]} />
-    </svg>
+    </StrokeIcon>
   );
 }
 

@@ -1,0 +1,110 @@
+/*
+ * BottomSheet.
+ *
+ * The native modal dialog anchored to the bottom edge: full width on a phone,
+ * a centred column on anything wider. `--pk-sheet-drag` is the handle's
+ * downward travel while it is dragged; the sheet follows it, and snaps back
+ * (or is dismissed) when the pointer lets go.
+ */
+
+@layer components {
+  .pk-sheet {
+    --pk-sheet-drag: 0px;
+    inline-size: min(36rem, 100vw);
+    max-inline-size: 100vw;
+    max-block-size: min(85dvh, calc(100dvh - var(--pk-6)));
+    margin: auto auto 0;
+    padding: 0;
+    border: 1px solid var(--pk-line);
+    border-block-end: 0;
+    border-radius: var(--pk-radius-lg) var(--pk-radius-lg) 0 0;
+    background: var(--pk-surface-raise);
+    color: var(--pk-ink);
+    box-shadow: var(--pk-shadow-3);
+    overflow: hidden;
+    transform: translateY(var(--pk-sheet-drag));
+  }
+
+  .pk-sheet:not([open]) {
+    display: none;
+  }
+
+  .pk-sheet::backdrop {
+    background: var(--pk-overlay);
+  }
+
+  .pk-sheet__panel {
+    display: flex;
+    flex-direction: column;
+    max-block-size: inherit;
+    padding-inline: max(var(--pk-4), env(safe-area-inset-left, 0px)) max(var(--pk-4), env(safe-area-inset-right, 0px));
+    padding-block-end: max(var(--pk-4), env(safe-area-inset-bottom, 0px));
+  }
+
+  /* The handle and title row are the drag surface: the browser keeps pinch zoom but not the pan. */
+  .pk-sheet__grip {
+    flex: none;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding-block-start: var(--pk-2);
+    touch-action: pinch-zoom;
+    cursor: grab;
+    user-select: none;
+  }
+
+  .pk-sheet__handle {
+    inline-size: var(--pk-6);
+    block-size: var(--pk-1);
+    border-radius: var(--pk-radius-pill);
+    background: var(--pk-line-strong);
+  }
+
+  .pk-sheet__head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--pk-3);
+    inline-size: 100%;
+    padding-block: var(--pk-2) var(--pk-3);
+  }
+
+  .pk-sheet__title {
+    margin: 0;
+    font-size: var(--pk-text-lg);
+    font-weight: 700;
+  }
+
+  .pk-sheet__body {
+    min-block-size: 0;
+    overflow-y: auto;
+    overscroll-behavior: contain;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .pk-sheet[open] {
+      animation: pk-sheet-rise var(--pk-dur) var(--pk-ease);
+      transition: transform var(--pk-dur) var(--pk-ease);
+    }
+
+    .pk-sheet[open]::backdrop {
+      animation: pk-sheet-dim var(--pk-dur) var(--pk-ease);
+    }
+
+    .pk-sheet[data-dragging] {
+      transition: none;
+    }
+  }
+
+  @keyframes pk-sheet-rise {
+    from {
+      transform: translateY(100%);
+    }
+  }
+
+  @keyframes pk-sheet-dim {
+    from {
+      opacity: 0;
+    }
+  }
+}

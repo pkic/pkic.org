@@ -63,6 +63,11 @@
     gap: var(--pk-gap, var(--pk-4));
   }
 
+  /* A button is as wide as its label, never the column: a stacked layout must not stretch it. */
+  :is(.pk-stack, .pk-form) > :is(.pk-btn, button, a.pk-btn) {
+    align-self: flex-start;
+  }
+
   /* Tighter rhythms, as classes. A surface that needs a smaller gap picks one
      of these rather than writing an inline custom property — the repository
      forbids style attributes, and a class keeps the value on the scale. */
@@ -386,7 +391,8 @@
    * will stretch the whole document sideways from wherever it happens to land.
    * Any scroll container that can hold one needs `position: relative`.
    */
-  .pk-sr-only {
+  .pk-sr-only,
+  .pk-field__sr {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -470,5 +476,4 @@
      40px indent, which would push the values out of line with their term. */
   /* Preformatted text that must still wrap: a long free-text answer has no
      line breaks of its own and would otherwise scroll sideways forever. */
-
 }

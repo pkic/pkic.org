@@ -79,8 +79,11 @@
     color: var(--pk-ink);
   }
 
+  /* Actions keep their label width at every size: on a narrow sheet they
+     wrap onto another line, still aligned to the end and still spaced. */
   .pk-dialog__foot {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--pk-2);
     justify-content: flex-end;
     padding: var(--pk-3) var(--pk-4);
@@ -96,14 +99,6 @@
       margin: auto 0 0;
       border-radius: var(--pk-radius-lg) var(--pk-radius-lg) 0 0;
       border-bottom: 0;
-    }
-
-    .pk-dialog__foot {
-      flex-direction: column-reverse;
-    }
-
-    .pk-dialog__foot .pk-btn {
-      width: 100%;
     }
   }
 }

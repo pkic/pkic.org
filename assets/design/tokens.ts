@@ -146,6 +146,13 @@ const shadowDark: Record<keyof typeof shadowLight, string> = {
   "shadow-3": "0 12px 32px rgba(0,0,0,0.6), 0 2px 8px rgba(0,0,0,0.4)",
 };
 
+/**
+ * The conference kit's field gradient. The attendee event app paints its key
+ * visual with it and the agenda's session dialog paints its header with it, so
+ * both tokens read this one definition.
+ */
+const conferenceField = "linear-gradient(135deg, #0b2a1c 0%, #125c3c 32%, #20506e 74%, #b0581f 100%)";
+
 /** Values that do not change with the theme. */
 export const constants = {
   // Decorative Handlebars backgrounds keep the editor's ordinary ink readable.
@@ -220,6 +227,17 @@ export const constants = {
   // The reduced-motion clamp. Named rather than inlined so the one place that
   // is allowed to shorten motion is visible in the token list.
   "dur-instant": "1ms",
+
+  /*
+   * Icon line weight, in rendered pixels rather than grid units.
+   *
+   * Every UI icon is an outline drawn with `vector-effect: non-scaling-stroke`
+   * (see `.pk-icon` in base.css), so the same weight holds whether the glyph is
+   * drawn at 12px inside a status pill or at 22px in the tab bar, and whatever
+   * grid it was authored on. The strong step marks a selected or open state.
+   */
+  "icon-stroke": "1.25px",
+  "icon-stroke-strong": "1.75px",
 
   focus: "0 0 0 2px var(--pk-surface), 0 0 0 4px var(--pk-accent)",
 
@@ -317,12 +335,96 @@ export const constants = {
   "public-support-shadow": "0 4px 12px rgba(0,0,0,0.08), 0 16px 40px rgba(0,0,0,0.12)",
   "public-member-wall-duration": "30s",
   "public-member-wall-mask": "linear-gradient(to bottom, transparent 0%, #000 8%, #000 92%, transparent 100%)",
-  "agenda-location-1": "#2f8fcb",
-  "agenda-location-2": "#f2782c",
-  "agenda-location-3": "#df3447",
-  "agenda-location-4": "#6c36bd",
-  "agenda-location-5": "#10a884",
-  "agenda-location-6": "#5c76d8",
+  "agenda-location-1": "#5a9bd5",
+  "agenda-location-2": "#ed7d31",
+  "agenda-location-3": "#dc3545",
+  "agenda-location-4": "#7d5bc6",
+  "agenda-location-5": "#2fa58f",
+  "agenda-location-6": "#6577d6",
+  /*
+   * The conference agenda's own presentation. Its design handoff is drawn in
+   * pixels, so its type steps stay in px rather than approximating them on the
+   * shared rem ramp, which would move with the reader's root font size. The
+   * agenda alone loads these, through its feature sheet.
+   */
+  "agenda-type-8": "8px",
+  "agenda-type-9": "9px",
+  "agenda-type-10": "10px",
+  "agenda-type-11": "11px",
+  "agenda-type-11-5": "11.5px",
+  "agenda-type-12": "12px",
+  "agenda-type-12-5": "12.5px",
+  "agenda-type-13": "13px",
+  "agenda-type-14": "14px",
+  "agenda-type-15": "15px",
+  "agenda-type-16": "16px",
+  "agenda-type-16-5": "16.5px",
+  "agenda-type-18": "18px",
+  "agenda-type-20": "20px",
+  "agenda-type-22": "22px",
+  "agenda-type-26": "26px",
+  "agenda-type-44": "44px",
+  /* Corners the shared radius steps do not cover: the track marker square, the
+     phone room band inside a card's border, the Abstracts switch track, the
+     small count and time chips, and the footer's recording and live pills. */
+  "agenda-radius-marker": "2px",
+  "agenda-radius-band": "5px",
+  "agenda-radius-switch": "8px",
+  "agenda-radius-chip": "9px",
+  "agenda-radius-action": "12px",
+  "agenda-dur": "150ms",
+  /* The shade strong agenda ink is darkened against. */
+  "agenda-shade": "#000000",
+  "agenda-favorite": palette.orange,
+  /* The live band, the livestream pill, and the NOW rule with its label. */
+  "agenda-live": palette.red,
+  "agenda-live-progress-fill": "rgba(255, 255, 255, 0.6)",
+  "agenda-now-rule": "rgba(220, 53, 69, 0.18)",
+  /* The dark break bar's secondary ink and its sponsor divider. */
+  "agenda-break-ink-muted": "#ced4da",
+  "agenda-break-rule": "rgba(255, 255, 255, 0.25)",
+  "agenda-card-lift": "0 8px 22px rgba(0, 0, 0, 0.12)",
+  "agenda-placeholder-lift": "0 8px 22px rgba(0, 0, 0, 0.08)",
+  /* The session dialog: its shadow and backdrop, and the header field it
+     paints in both themes with the controls and metadata written on it. */
+  "agenda-dialog-shadow": "0 24px 64px rgba(0, 0, 0, 0.3)",
+  "agenda-dialog-backdrop": "rgba(11, 13, 12, 0.55)",
+  "agenda-dialog-field": conferenceField,
+  "agenda-dialog-scrim": "linear-gradient(135deg, rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.35))",
+  "agenda-dialog-dot-ring": "rgba(255, 255, 255, 0.7)",
+  "agenda-dialog-meta-ink": "#b5d2ec",
+  "agenda-dialog-control-line": "rgba(255, 255, 255, 0.3)",
+  "agenda-dialog-control-hover": "rgba(255, 255, 255, 0.12)",
+  /* Mask stops: only their alpha matters, opaque keeps and faded dims. */
+  "agenda-mask-opaque": "#000000",
+  "agenda-mask-faded": "rgba(0, 0, 0, 0.25)",
+  /* Printed agendas are black on white paper whatever the screen theme. */
+  "agenda-print-ink": "#000000",
+  "agenda-print-paper": "#ffffff",
+  /*
+   * The conference kit (PQC Conference design handoff): the field gradient,
+   * its paper/ink, and the badge's role bands. Loaded only by the attendee
+   * event app, which renders the key visual and the badge-shaped ticket. The
+   * field stays dark and the ticket stays paper in both themes, as printed.
+   */
+  "pqc-ink": "#0b0d0c",
+  "pqc-ink-muted": "#4a524f",
+  "pqc-paper": "#ffffff",
+  "pqc-rule": "#e1e5e3",
+  "pqc-forest": "#0b2a1c",
+  "pqc-green-deep": "#125c3c",
+  "pqc-blue-deep": "#20506e",
+  "pqc-copper": "#b0581f",
+  "pqc-green": palette.green,
+  "pqc-blue": palette.blue,
+  "pqc-orange": palette.orange,
+  "pqc-on-field": "#ffffff",
+  "pqc-on-field-muted": "rgba(255,255,255,0.88)",
+  "pqc-field": conferenceField,
+  "pqc-light": "radial-gradient(110% 80% at 8% 0%, rgba(255,255,255,0.16) 0%, rgba(255,255,255,0) 60%)",
+  "pqc-stripe": `linear-gradient(90deg, ${palette.green} 0%, ${palette.blue} 50%, ${palette.orange} 100%)`,
+  "pqc-dots": `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='32' height='32'%3E%3Ccircle cx='16' cy='16' r='1.7' fill='rgba(255,255,255,0.22)'/%3E%3C/svg%3E")`,
+  "pqc-dots-fine": `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='14' height='14'%3E%3Ccircle cx='7' cy='7' r='1.1' fill='rgba(255,255,255,0.22)'/%3E%3C/svg%3E")`,
   // The dark theme's --pk-danger is a light red meant for ink. Filling a
   // button with it and writing in white gave 2.6:1. A destructive fill gets
   // the same darkening an accent fill does.
@@ -394,13 +496,26 @@ export const publicationBrand = {
 
 /** Component-only tokens load with their consumers rather than the global entry. */
 export const featureTokenGroups = {
-  agenda: [
-    "agenda-location-1",
-    "agenda-location-2",
-    "agenda-location-3",
-    "agenda-location-4",
-    "agenda-location-5",
-    "agenda-location-6",
-  ],
+  agenda: Object.keys(constants).filter((name) => name.startsWith("agenda-")),
   scanner: ["grad-state-ok", "grad-state-attention"],
+  event: [
+    "pqc-ink",
+    "pqc-ink-muted",
+    "pqc-paper",
+    "pqc-rule",
+    "pqc-forest",
+    "pqc-green-deep",
+    "pqc-blue-deep",
+    "pqc-copper",
+    "pqc-green",
+    "pqc-blue",
+    "pqc-orange",
+    "pqc-on-field",
+    "pqc-on-field-muted",
+    "pqc-field",
+    "pqc-light",
+    "pqc-stripe",
+    "pqc-dots",
+    "pqc-dots-fine",
+  ],
 } as const;

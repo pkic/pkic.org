@@ -44,18 +44,12 @@
       <p data-registration-identity-note class="pk-muted pk-small" hidden>This registration keeps the identity details you confirmed for this event.</p>
 
       {{/* ── Your photo ─────────────────────────────────────────────── */}}
-      <div data-headshot-section class="pk-stack pk-stack--snug">
+      <div data-headshot-section id="manage-headshot" class="pk-stack pk-stack--snug">
         <h3>Your photo</h3>
-        <div data-headshot-preview class="pkic-headshot-preview"></div>
-        {{/* Upload progress and outcome for the section, written by
-             `registration-manage-headshot.ts`. It reports on an action rather
-             than guiding a control, so it is muted prose. */}}
-        <p data-headshot-status class="pk-muted pk-small"></p>
-        <div class="pk-cluster">
-          <label class="pk-btn pk-btn--sm pk-btn--secondary" for="manage-headshot-file">Upload photo</label>
-          <input type="file" id="manage-headshot-file" accept="image/jpeg,image/png,image/webp" class="pk-sr-only" data-headshot-file>
-          <button type="button" class="pk-btn pk-btn--sm pk-btn--secondary" data-headshot-delete hidden>Remove photo</button>
-        </div>
+        {{/* The photo tile is rendered here by `token-headshot.tsx`, which
+             writes the outcome of a change to the status line below. */}}
+        <div data-headshot-tile></div>
+        <p data-headshot-status class="pk-muted pk-small" role="status"></p>
       </div>
 
       {{/* ── Your details ─────────────────────────────────────────────── */}}

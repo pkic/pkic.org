@@ -132,7 +132,7 @@ it("loads component-only colors with the owning feature and retains canonical va
   const scanner = emitFeatureTokenCss("scanner");
   expect(core).not.toContain("--pk-agenda-location-1:");
   expect(core).not.toContain("--pk-grad-state-ok:");
-  expect(agenda).toContain("--pk-agenda-location-1: #2f8fcb;");
+  expect(agenda).toContain("--pk-agenda-location-1: #5a9bd5;");
   expect(scanner).toContain("--pk-grad-state-ok: linear-gradient(");
   expect(agenda).not.toContain("--pk-grad-state-ok:");
 });

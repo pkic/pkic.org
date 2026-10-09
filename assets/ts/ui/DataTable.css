@@ -266,6 +266,17 @@
     .pk-table--records .pk-table__select {
       display: block;
     }
+    /* Stacked records read label then value from the start edge, including end-aligned numeric columns.
+       The row's stretched control is excluded: start alignment would shrink its absolute box to its
+       visually hidden label, leaving the record with nothing to tap. */
+    .pk-table--records tbody td.pk-end {
+      text-align: start;
+    }
+    .pk-table--records tbody td.pk-end > :not(.pk-table__row-link),
+    .pk-table--records tbody td.pk-end .pk-cluster--end {
+      justify-self: start;
+      justify-content: flex-start;
+    }
   }
 
   /*

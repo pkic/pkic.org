@@ -165,7 +165,7 @@
         {{ end }}
 
         {{ if or $upcomingWebinars $pastWebinars }}
-        <a href="/events/webinars/" class="pk-btn pk-btn--secondary pk-btn--sm pk-btn--block">View all webinars</a>
+        <a href="/events/webinars/" class="pk-btn pk-btn--secondary pk-btn--sm">View all webinars</a>
         {{ end }}
         {{ else }}
         <div class="events-webinar-empty">
@@ -175,7 +175,7 @@
 
         <div class="events-sidebar-cta pk-stack pk-stack--snug">
           <p class="pk-small">{{ $wsCta }}</p>
-          <a href="{{ $wsCtaLink }}" class="pk-btn pk-btn--secondary pk-btn--sm pk-btn--block">{{ $wsCtaLabel }}</a>
+          <a href="{{ $wsCtaLink }}" class="pk-btn pk-btn--secondary pk-btn--sm">{{ $wsCtaLabel }}</a>
         </div>
 
       </div>

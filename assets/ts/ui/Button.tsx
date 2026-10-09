@@ -23,7 +23,6 @@ export interface ButtonProps extends Omit<JSX.ButtonHTMLAttributes<HTMLButtonEle
   size?: ButtonSize;
   /** Renders square, for an icon-only control. Requires `aria-label`. */
   icon?: boolean;
-  block?: boolean;
   /**
    * Shows a spinner and blocks activation while keeping the button focusable.
    * A disabled control loses focus, which throws a screen-reader user out of
@@ -38,20 +37,15 @@ interface ButtonLook {
   size?: ButtonSize;
   /** Renders square, for an icon-only control. Requires `aria-label`. */
   icon?: boolean;
-  block?: boolean;
 }
 
 /** The classes for a look; `extra` is whatever `class` the caller passed. */
-function buttonClasses(
-  { variant = "secondary", size = "md", icon = false, block = false }: ButtonLook,
-  extra: unknown,
-) {
+function buttonClasses({ variant = "secondary", size = "md", icon = false }: ButtonLook, extra: unknown) {
   return [
     "pk-btn",
     `pk-btn--${variant}`,
     size === "md" ? null : `pk-btn--${size}`,
     icon ? "pk-btn--icon" : null,
-    block ? "pk-btn--block" : null,
     typeof extra === "string" ? extra : null,
   ]
     .filter(Boolean)
@@ -59,10 +53,9 @@ function buttonClasses(
 }
 
 export function Button({
-  variant = "secondary",
+  variant,
   size = "md",
   icon = false,
-  block = false,
   loading = false,
   disabled = false,
   type = "button",
@@ -70,7 +63,9 @@ export function Button({
   children,
   ...rest
 }: ButtonProps) {
-  const classes = buttonClasses({ variant, size, icon, block }, className);
+  // A form's submit is its affirmative action, so it is primary unless the caller chose otherwise.
+  const look = variant ?? (type === "submit" ? "primary" : "secondary");
+  const classes = buttonClasses({ variant: look, size, icon }, className);
 
   const inert = Boolean(disabled) || loading;
 
@@ -100,9 +95,9 @@ export interface ButtonLinkProps
  * A link drawn as a button: for a destination, where `Button` is for an
  * action. Same looks, same classes, so a row of the two lines up.
  */
-export function ButtonLink({ variant, size, icon, block, class: className, children, ...rest }: ButtonLinkProps) {
+export function ButtonLink({ variant, size, icon, class: className, children, ...rest }: ButtonLinkProps) {
   return (
-    <a {...rest} class={buttonClasses({ variant, size, icon, block }, className)}>
+    <a {...rest} class={buttonClasses({ variant, size, icon }, className)}>
       {children}
     </a>
   );

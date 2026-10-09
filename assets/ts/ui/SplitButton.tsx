@@ -13,8 +13,8 @@ export interface SplitButtonProps {
   variant?: Extract<ButtonVariant, "primary" | "secondary">;
   /** When omitted, the entire control opens the choices. */
   defaultAction?:
-    | { label: string; onSelect: () => void; href?: never; disabled?: boolean }
-    | { label: string; href: string; onSelect?: never; disabled?: never };
+    | { label: string; onSelect: () => void; href?: never; disabled?: boolean; loading?: boolean }
+    | { label: string; href: string; onSelect?: never; disabled?: never; loading?: never };
 }
 
 export function SplitButton({
@@ -47,8 +47,9 @@ export function SplitButton({
             title={defaultAction.label}
             onClick={defaultAction.onSelect}
             disabled={defaultAction.disabled}
+            loading={defaultAction.loading}
           >
-            {icon}
+            {!defaultAction.loading && icon}
           </Button>
         )
       )}

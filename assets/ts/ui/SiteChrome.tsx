@@ -3,6 +3,7 @@ import type { MemberWallEntry } from "../../shared/schemas/members-directory";
 import type { ComponentChildren } from "preact";
 import type { SiteNavigation, SiteNavigationItem } from "../../shared/site-content";
 import { WorkingGroupIcon } from "../site/WorkingGroupIcon.tsx";
+import { IconChevron, IconMenu, IconRemove, IconSearch } from "./MediaIcons";
 import { ThemeToggle } from "./ThemeToggle";
 
 import "./SiteChrome.css";
@@ -24,42 +25,6 @@ function truncate(value: string | undefined, limit: number): string | undefined 
  */
 function pathIsActive(currentPath: string, href?: string): boolean {
   return Boolean(href?.startsWith("/")) && currentPath === href;
-}
-
-function SearchIcon({ className }: { className?: string }) {
-  return (
-    <svg
-      class={className}
-      xmlns="http://www.w3.org/2000/svg"
-      width="13"
-      height="13"
-      fill="currentColor"
-      viewBox="0 0 16 16"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path d="M11.742 10.344a6.5 6.5 0 1 0-1.397 1.398h-.001c.03.04.062.078.098.115l3.85 3.85a1 1 0 0 0 1.415-1.414l-3.85-3.85a1.007 1.007 0 0 0-.115-.1zM12 6.5a5.5 5.5 0 1 1-11 0 5.5 5.5 0 0 1 11 0" />
-    </svg>
-  );
-}
-
-function Chevron() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="11"
-      height="11"
-      fill="currentColor"
-      viewBox="0 0 16 16"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path
-        fill-rule="evenodd"
-        d="M1.646 4.646a.5.5 0 0 1 .708 0L8 10.293l5.646-5.647a.5.5 0 0 1 .708.708l-6 6a.5.5 0 0 1-.708 0l-6-6a.5.5 0 0 1 0-.708"
-      />
-    </svg>
-  );
 }
 
 function NavigationLink({ currentPath, item }: { currentPath: string; item: SiteNavigationItem }) {
@@ -105,7 +70,7 @@ function MegaTrigger({
         aria-expanded="false"
         type="button"
       >
-        <Chevron />
+        <IconChevron pointing="down" width="11" height="11" />
       </button>
     </div>
   );
@@ -114,7 +79,7 @@ function MegaTrigger({
 function SearchTrigger({ id, withLabel = true }: { id: string; withLabel?: boolean }) {
   return (
     <button class="pkic-search-trigger" id={id} type="button" aria-label="Open search">
-      <SearchIcon />
+      <IconSearch width="13" height="13" />
       {withLabel ? <span class="pkic-search-trigger-label">Search…</span> : <span>Search…</span>}
       {withLabel ? (
         <kbd class="pkic-search-shortcut" id="pkicSearchKbd">
@@ -243,7 +208,7 @@ function SearchPanel() {
         <div class="pk-container pk-container--wide pkic-search-panel-body">
           <div class="pkic-search-panel-mobile-input">
             <div class="pkic-search-input-wrap pkic-search-panel-input">
-              <SearchIcon className="pkic-search-input-icon" />
+              <IconSearch class="pkic-search-input-icon" width="13" height="13" />
               <input
                 type="search"
                 id="pkicSearchInputMobile"
@@ -272,17 +237,7 @@ function SearchPanel() {
               type="button"
               aria-label="Close search"
             >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                width="14"
-                height="14"
-                viewBox="0 0 12 12"
-                fill="none"
-                aria-hidden="true"
-                focusable="false"
-              >
-                <path d="M2 2l8 8M2 10l8-8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" />
-              </svg>
+              <IconRemove width="18" height="18" />
               <span>Close search</span>
               <kbd>Esc</kbd>
             </button>
@@ -322,7 +277,7 @@ export function SiteHeader({
           <div class="pkic-navbar-search" id="pkicNavSearch">
             <SearchTrigger id="pkicSearchToggle" />
             <div class="pkic-search-input-wrap" id="pkicSearchInputWrap">
-              <SearchIcon className="pkic-search-input-icon" />
+              <IconSearch class="pkic-search-input-icon" width="13" height="13" />
               <input
                 type="search"
                 id="pkicSearchInput"
@@ -333,16 +288,7 @@ export function SiteHeader({
                 aria-label="Search"
               />
               <button class="pkic-search-close-btn" id="pkicSearchClose" type="button" aria-label="Close search">
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="11"
-                  height="11"
-                  viewBox="0 0 12 12"
-                  aria-hidden="true"
-                  focusable="false"
-                >
-                  <path d="M2 2l8 8M2 10l8-8" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" />
-                </svg>
+                <IconRemove width="14" height="14" />
               </button>
             </div>
           </div>
@@ -367,22 +313,7 @@ export function SiteHeader({
             aria-expanded="false"
             aria-label="Toggle navigation"
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              width="24"
-              height="24"
-              viewBox="0 0 30 30"
-              aria-hidden="true"
-              focusable="false"
-            >
-              <path
-                stroke="currentColor"
-                stroke-linecap="round"
-                stroke-miterlimit="10"
-                stroke-width="2"
-                d="M4 7h22M4 15h22M4 23h22"
-              />
-            </svg>
+            <IconMenu width="24" height="24" />
           </button>
 
           <div class="pkic-navbar-collapse" id="navbarContent">

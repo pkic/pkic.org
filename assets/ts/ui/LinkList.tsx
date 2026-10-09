@@ -1,5 +1,6 @@
 import socialIcons from "../../shared/social-icons.json";
 import { getLinkLabel, getLinkMark } from "../../shared/schemas/links";
+import { IconExternalLink } from "./MediaIcons";
 import "./LinkList.css";
 
 export interface LinkListProps {
@@ -44,21 +45,24 @@ export function LinkList({ links, ownerName, label, compact = false }: LinkListP
               title={link}
               aria-label={ownerName ? `${ownerName} on ${getLinkLabel(link)} ${NEW_TAB}` : undefined}
             >
-              <svg
-                class="pk-link-list__mark"
-                width="16"
-                height="16"
-                viewBox="0 0 16 16"
-                fill="currentColor"
-                aria-hidden="true"
-                focusable="false"
-              >
-                {paths ? (
-                  paths.map((d) => <path key={d} d={d} />)
-                ) : (
-                  <path d="M9 2h5v5h-1V3.7L7.4 9.3l-.7-.7L12.3 3H9zM3 3h4v1H3v9h9V9h1v4a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V4a1 1 0 0 1 1-1z" />
-                )}
-              </svg>
+              {paths ? (
+                // A network's own mark stays the solid brand glyph it publishes.
+                <svg
+                  class="pk-link-list__mark"
+                  width="16"
+                  height="16"
+                  viewBox="0 0 16 16"
+                  fill="currentColor"
+                  aria-hidden="true"
+                  focusable="false"
+                >
+                  {paths.map((d) => (
+                    <path key={d} d={d} />
+                  ))}
+                </svg>
+              ) : (
+                <IconExternalLink class="pk-link-list__mark" />
+              )}
               <span class={`pk-link-list__label${paths || compact ? " pk-sr-only" : ""}`}>{getLinkLabel(link)}</span>
               {/* Dropped from the announcement when `ownerName` supplies the
                 whole accessible name, which is why that branch says it too. */}

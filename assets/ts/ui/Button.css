@@ -147,10 +147,6 @@
     padding: var(--pk-control-y);
     aspect-ratio: 1;
   }
-  .pk-btn--block {
-    width: 100%;
-  }
-
   .pk-btn__spinner {
     width: 0.85em;
     height: 0.85em;
@@ -164,6 +160,21 @@
   @keyframes pk-btn-spin {
     to {
       transform: rotate(360deg);
+    }
+  }
+}
+
+/* Touch sizing overrides compact component layouts, including table tools.
+   The existing spacing scale gives a 44px minimum without changing desktop density. */
+@layer utilities {
+  @media (any-pointer: coarse) {
+    .pk-btn {
+      min-block-size: calc(var(--pk-6) + var(--pk-3));
+      min-inline-size: calc(var(--pk-6) + var(--pk-3));
+      max-inline-size: 100%;
+      white-space: normal;
+      overflow-wrap: anywhere;
+      text-align: center;
     }
   }
 }

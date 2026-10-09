@@ -15,24 +15,27 @@ export type FieldState = "ok" | "advisory" | "invalid";
 export const FIELD_STATES: readonly FieldState[] = ["ok", "advisory", "invalid"];
 
 export const FIELD_STATE_ICON: Record<FieldState, string> = {
-  // Tick, triangle, cross — drawn as paths so they take currentColor and scale
-  // with the control rather than arriving as three more network requests.
-  ok: "M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0m-4.03-2.97a.75.75 0 0 0-1.08.02L7.48 9.4 5.7 7.6a.75.75 0 1 0-1.06 1.06l2.35 2.35a.75.75 0 0 0 1.08-.02l3.92-4.9a.75.75 0 0 0-.02-1.06",
-  advisory:
-    "M8.98 1.57a1.13 1.13 0 0 0-1.96 0L.16 13.23c-.45.78.1 1.77.99 1.77h13.71c.89 0 1.44-.99.98-1.77zM8 5c.54 0 .95.46.9 1l-.35 3.5a.55.55 0 0 1-1.1 0L7.1 6A.9.9 0 0 1 8 5m0 6a1 1 0 1 1 0 2 1 1 0 0 1 0-2",
-  invalid:
-    "M16 8A8 8 0 1 1 0 8a8 8 0 0 1 16 0M5.35 4.29a.75.75 0 0 0-1.06 1.06L6.94 8l-2.65 2.65a.75.75 0 1 0 1.06 1.06L8 9.06l2.65 2.65a.75.75 0 0 0 1.06-1.06L9.06 8l2.65-2.65a.75.75 0 0 0-1.06-1.06L8 6.94z",
+  // Tick, triangle, cross — outlines at the one icon weight, drawn as paths so
+  // they take currentColor and scale with the control rather than arriving as
+  // three more network requests.
+  ok: "M14.5 8a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0zM5.25 8.25 7 10l3.75-4",
+  advisory: "M8 1.75 1.25 13.75h13.5zM8 6.25V9.5M8 11.75h.01",
+  invalid: "M14.5 8a6.5 6.5 0 1 1-13 0 6.5 6.5 0 0 1 13 0zM5.75 5.75l4.5 4.5M10.25 5.75l-4.5 4.5",
 };
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
 function stateIcon(document: Document, state: FieldState, className: string): SVGElement {
   const svg = document.createElementNS(SVG_NS, "svg");
+  // The same frame `StrokeIcon` draws: `pk-icon` takes the shared line weight.
   svg.setAttribute("viewBox", "0 0 16 16");
-  svg.setAttribute("fill", "currentColor");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
   svg.setAttribute("aria-hidden", "true");
   svg.setAttribute("focusable", "false");
-  svg.classList.add(className);
+  svg.classList.add("pk-icon", className);
   const path = document.createElementNS(SVG_NS, "path");
   path.setAttribute("d", FIELD_STATE_ICON[state]);
   svg.appendChild(path);

@@ -62,6 +62,8 @@
     --pk-dur-spin: 700ms;
     --pk-dur-shimmer: 1400ms;
     --pk-dur-instant: 1ms;
+    --pk-icon-stroke: 1.25px;
+    --pk-icon-stroke-strong: 1.75px;
     --pk-focus: 0 0 0 2px var(--pk-surface), 0 0 0 4px var(--pk-accent);
     --pk-on-solid: #ffffff;
     --pk-chrome: #050505;

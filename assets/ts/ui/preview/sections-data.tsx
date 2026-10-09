@@ -5,6 +5,7 @@ import { Breadcrumb } from "../Breadcrumb";
 import { Button } from "../Button";
 import { DataTable } from "../DataTable";
 import { DescriptionList } from "../DescriptionList";
+import { DownloadAction } from "../DownloadAction";
 import { Field } from "../Field";
 import { FileInput } from "../FileInput";
 import { Menu, type MenuItem } from "../Menu";
@@ -363,9 +364,7 @@ export const dataSections: PreviewSection[] = [
             }
             actions={
               <>
-                <Button size="sm" variant="secondary">
-                  Export roster
-                </Button>
+                <DownloadAction label="Download roster (CSV)" size="sm" href="#" />
                 <Button size="sm" variant="primary">
                   Add member
                 </Button>

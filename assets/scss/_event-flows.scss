@@ -20,8 +20,12 @@
 // exactly at each bubble centre, regardless of container width or step count.
 // The .event-flow-stepper-track / -fill elements are kept in the HTML for the
 // JS fill animation but are hidden; the visual line comes from CSS only.
-.event-flow-stepper-track { display: none; }
-.event-flow-stepper-fill  { display: none; }
+.event-flow-stepper-track {
+  display: none;
+}
+.event-flow-stepper-fill {
+  display: none;
+}
 
 .event-flow-stepper-list {
   display: flex;
@@ -43,7 +47,7 @@
   // Left half of the connector (from item left-edge to bubble centre).
   // Hidden on the first item so the line starts at the first bubble.
   &::before {
-    content: '';
+    content: "";
     position: absolute;
     top: 1rem; // vertically centred on the 2rem bubble
     left: 0;
@@ -56,7 +60,7 @@
   // Right half of the connector (from bubble centre to item right-edge).
   // Hidden on the last item so the line ends at the last bubble.
   &::after {
-    content: '';
+    content: "";
     position: absolute;
     top: 1rem;
     left: 50%;
@@ -66,8 +70,12 @@
     transition: background-color var(--pk-dur) ease;
   }
 
-  &:first-child::before { display: none; }
-  &:last-child::after   { display: none; }
+  &:first-child::before {
+    display: none;
+  }
+  &:last-child::after {
+    display: none;
+  }
 
   // Colour the incoming connector for done steps and the active step.
   &.is-done::before,
@@ -83,7 +91,9 @@
       text-decoration: underline;
       text-decoration-color: transparent;
       text-underline-offset: 0.18em;
-      transition: color var(--pk-dur-fast) ease, text-decoration-color var(--pk-dur-fast) ease;
+      transition:
+        color var(--pk-dur-fast) ease,
+        text-decoration-color var(--pk-dur-fast) ease;
     }
 
     &:hover,
@@ -135,8 +145,12 @@
   border-color: var(--page-accent, var(--pk-accent));
   color: var(--pk-on-solid);
 
-  .event-flow-stepper-num { display: none; }
-  .event-flow-stepper-check { display: inline; }
+  .event-flow-stepper-num {
+    display: none;
+  }
+  .event-flow-stepper-check {
+    display: inline;
+  }
 }
 
 .event-flow-stepper-item.is-active .event-flow-stepper-bubble {
@@ -169,8 +183,14 @@
 }
 
 @keyframes step-fade-in {
-  from { opacity: 0; transform: translateY(6px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 // One-line context/intro text at the top of each step.
@@ -205,46 +225,6 @@
     color: var(--pk-ink);
   }
 }
-
-.pkic-headshot-preview,
-.pkic-speaker-headshot-preview,
-[data-headshot-section] [data-headshot-preview] {
-  width: 112px;
-  height: 112px;
-  border-radius: var(--pk-radius-pill);
-  overflow: hidden;
-  border: 1px solid var(--pk-line);
-  background: var(--pk-surface-sunk);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-
-}
-
-.pkic-headshot-preview__image,
-.pkic-speaker-headshot-preview__image,
-[data-headshot-section] [data-headshot-preview] > img {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-.pkic-headshot-preview__placeholder,
-.pkic-speaker-headshot-preview__placeholder,
-[data-headshot-section] [data-headshot-preview] > div {
-  width: 100%;
-  height: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0.75rem;
-  text-align: center;
-  font-size: 0.75rem;
-  color: var(--pk-ink-muted);
-}
-
-
 
 .event-flow-fields {
   margin-bottom: 1.5rem;
@@ -666,8 +646,8 @@
 .event-flow-attendance-card {
   --option-color: var(--page-accent, var(--pk-accent));
 
-  position: relative;        // anchor for the radio dot
-  flex: 1 1 0;               // equal-width columns
+  position: relative; // anchor for the radio dot
+  flex: 1 1 0; // equal-width columns
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -690,10 +670,18 @@
   }
 }
 
-.event-flow-attendance-card--in-person { --option-color: #e05c3b; }
-.event-flow-attendance-card--virtual { --option-color: #2b7de8; }
-.event-flow-attendance-card--on-demand { --option-color: #7b2be8; }
-.event-flow-attendance-card--default { --option-color: var(--pk-accent); }
+.event-flow-attendance-card--in-person {
+  --option-color: #e05c3b;
+}
+.event-flow-attendance-card--virtual {
+  --option-color: #2b7de8;
+}
+.event-flow-attendance-card--on-demand {
+  --option-color: #7b2be8;
+}
+.event-flow-attendance-card--default {
+  --option-color: var(--pk-accent);
+}
 
 // Coloured rounded-square icon pill.
 .event-flow-attendance-icon {
@@ -755,7 +743,9 @@
   border-radius: 50%;
   border: 2px solid var(--pk-line);
   background-color: var(--pk-surface);
-  transition: border-color var(--pk-dur-fast), box-shadow var(--pk-dur-fast);
+  transition:
+    border-color var(--pk-dur-fast),
+    box-shadow var(--pk-dur-fast);
 }
 
 // Checked state.
@@ -837,8 +827,14 @@
 }
 
 @keyframes tag-pop {
-  from { transform: scale(0.8); opacity: 0; }
-  to   { transform: scale(1);   opacity: 1; }
+  from {
+    transform: scale(0.8);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
 }
 
 .event-flow-tag-remove {
@@ -1175,7 +1171,9 @@
   padding: 0 0.25rem;
   cursor: pointer;
   border-radius: var(--pk-radius-sm);
-  transition: color var(--pk-dur-fast), background-color var(--pk-dur-fast);
+  transition:
+    color var(--pk-dur-fast),
+    background-color var(--pk-dur-fast);
 
   &:hover {
     color: var(--pk-danger-ink);
@@ -1196,8 +1194,12 @@
   .event-flow-invite-thead {
     grid-template-columns: 1fr 1.6rem;
     > span:nth-child(1),
-    > span:nth-child(2) { display: none; }
-    > span:nth-child(3) { display: block; }
+    > span:nth-child(2) {
+      display: none;
+    }
+    > span:nth-child(3) {
+      display: block;
+    }
   }
 
   .event-flow-invite-row {
@@ -1205,15 +1207,27 @@
     grid-template-rows: auto auto;
 
     // First and last name inputs on row 1 (cols 1-2), spans 2 cols each
-    [data-invite-first] { grid-column: 1; grid-row: 1; }
-    [data-invite-last]  { grid-column: 2; grid-row: 1; }
+    [data-invite-first] {
+      grid-column: 1;
+      grid-row: 1;
+    }
+    [data-invite-last] {
+      grid-column: 2;
+      grid-row: 1;
+    }
     // Email full-width on row 2
-    [data-invite-email] { grid-column: 1 / 3; grid-row: 2; }
+    [data-invite-email] {
+      grid-column: 1 / 3;
+      grid-row: 2;
+    }
     // Remove button top-right
-    [data-invite-remove] { grid-column: 3; grid-row: 1 / 3; align-self: center; }
+    [data-invite-remove] {
+      grid-column: 3;
+      grid-row: 1 / 3;
+      align-self: center;
+    }
   }
 }
-
 
 // ── Proposal form — "Are you presenting?" checkbox ──────────────────────────
 
@@ -1227,7 +1241,9 @@
   background: var(--pk-surface-sunk);
   cursor: pointer;
   user-select: none;
-  transition: border-color var(--pk-dur) ease, background var(--pk-dur) ease;
+  transition:
+    border-color var(--pk-dur) ease,
+    background var(--pk-dur) ease;
 
   &:has(input:checked) {
     border-color: var(--pk-accent);

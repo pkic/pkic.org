@@ -38,10 +38,6 @@
     text-rendering: optimizeLegibility;
   }
 
-  .pk-canvas {
-    background: var(--pk-canvas);
-  }
-
   /*
    * Border-box, globally — not scoped to `.pk`.
    *
@@ -98,6 +94,26 @@
     max-width: 100%;
   }
 
+  /*
+   * One line weight for every UI icon — globally, because icons sit in
+   * server-rendered chrome as well as inside `.pk` surfaces.
+   *
+   * The weight is stated in rendered pixels: `non-scaling-stroke` draws each
+   * outline at `--pk-icon-stroke` whatever size the glyph is shown at and
+   * whatever grid it was authored on, so a 12px pill icon and a 22px tab icon
+   * read as the same family. A component marks a selected state with
+   * `--pk-icon-stroke-strong` rather than a number of its own.
+   */
+  .pk-icon {
+    stroke-width: var(--pk-icon-stroke);
+    stroke-linecap: round;
+    stroke-linejoin: round;
+  }
+
+  .pk-icon * {
+    vector-effect: non-scaling-stroke;
+  }
+
   .pk h1,
   .pk h2,
   .pk h3,
@@ -144,7 +160,7 @@
 
   /* Digits that sit in columns line up. Applied here because it is a property
      of the typeface's use, not of any one component. */
-  .pk :where(table, .pk-num) {
+  .pk :where(table) {
     font-variant-numeric: tabular-nums;
   }
 

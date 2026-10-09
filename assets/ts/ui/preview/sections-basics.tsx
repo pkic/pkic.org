@@ -38,7 +38,6 @@ export const basicSections: PreviewSection[] = [
           <Button icon aria-label="Settings">
             ⚙️
           </Button>
-          <Button block>Block width</Button>
         </div>
       </>
     ),

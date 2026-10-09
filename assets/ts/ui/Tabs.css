@@ -37,6 +37,8 @@
     white-space: nowrap;
     align-items: center;
     justify-content: center;
+    /* Separates the label from an attention badge. */
+    gap: var(--pk-2);
     padding: 0.5rem var(--pk-4);
     margin: 0;
     color: var(--pk-ink-muted);

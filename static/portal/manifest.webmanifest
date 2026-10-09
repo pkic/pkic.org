@@ -1,0 +1,27 @@
+{
+  "id": "/portal/",
+  "name": "PKI Consortium",
+  "short_name": "PKI Consortium",
+  "description": "Your PKI Consortium portal and event app: agenda, ticket, groups and account.",
+  "lang": "en",
+  "dir": "ltr",
+  "scope": "/portal/",
+  "start_url": "/portal/#/",
+  "display": "standalone",
+  "orientation": "any",
+  "theme_color": "#0b2a1c",
+  "background_color": "#f5f6f7",
+  "categories": ["business", "productivity", "events"],
+  "icons": [
+    { "src": "/img/pqc/app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" },
+    { "src": "/img/pqc/app-icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" },
+    { "src": "/img/pqc/app-icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "/img/pqc/app-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/img/pqc/app-icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
+    { "src": "/img/icon-180x180-white-black.png", "sizes": "180x180", "type": "image/png", "purpose": "any" }
+  ],
+  "shortcuts": [
+    { "name": "Events", "url": "/portal/#/events" },
+    { "name": "Home", "url": "/portal/#/home" }
+  ]
+}

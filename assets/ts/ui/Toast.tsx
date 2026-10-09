@@ -4,6 +4,9 @@
  * A status message, not an interruption. Uses role="status" (not role="alert"),
  * and resolves its tone through modifier classes to keep the tone definitions
  * in the stylesheet.
+ *
+ * Product code does not render it directly: `showToast()` in `shared/ui`
+ * mounts it into a page's toast area and retires it after its dwell time.
  */
 
 import type { JSX } from "preact";
