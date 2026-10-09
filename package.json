@@ -67,7 +67,7 @@
     "migrate:preview": "node scripts/apply-d1-migrations.mjs preview",
     "migrate:production": "node scripts/apply-d1-migrations.mjs production",
     "backup:local": "mkdir -p backups/d1 && f=backups/d1/local-$(date +%Y%m%d-%H%M%S).sql && pnpm exec wrangler d1 export DB --env local --local --output \"$f\" && node scripts/reorder-d1-dump.mjs \"$f\"",
-    "backup:preview": "mkdir -p backups/d1 && f=backups/d1/preview-$(date +%Y%m%d-%H%M%S).sql && pnpm exec wrangler d1 export DB --env preview --remote --output \"$f\" && node scripts/reorder-d1-dump.mjs \"$f\"",
+    "backup:preview": "mkdir -p backups/d1 && f=backups/d1/preview-$(date +%Y%m%d-%H%M%S).sql && pnpm exec wrangler d1 export PREVIEW_DB --config wrangler.preview-migrations.jsonc --remote --output \"$f\" && node scripts/reorder-d1-dump.mjs \"$f\"",
     "backup:production": "mkdir -p backups/d1 && f=backups/d1/production-$(date +%Y%m%d-%H%M%S).sql && pnpm exec wrangler d1 export DB --env production --remote --output \"$f\" && node scripts/reorder-d1-dump.mjs \"$f\"",
     "seed:local": "node scripts/seed.mjs --local",
     "seed:preview": "node scripts/seed.mjs --preview",

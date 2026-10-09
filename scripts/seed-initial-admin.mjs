@@ -12,6 +12,7 @@ import path from "node:path";
 import { pathToFileURL } from "node:url";
 import { E2E_WORKER_COUNT, e2eAdminEmailsForWorkerCount } from "./e2e-admin-identities.mjs";
 import { readSeedDatabaseRows } from "./lib/production-seed-guard.mjs";
+import { buildWranglerD1ExecuteArgs } from "./lib/seed-cli.mjs";
 
 function parseArgs(argv) {
   let mode = "local";
@@ -165,17 +166,7 @@ function runSeed(mode, database, wranglerEnv, persistTo, e2eWorkerPool, recover)
   const sqlPath = path.join(tmpdir(), `pkic-seed-initial-admin-${String(process.pid)}.sql`);
   fs.writeFileSync(sqlPath, `${insertStatements(emails, { recover }).join("\n")}\n`, "utf8");
 
-  const args = [
-    "wrangler",
-    "d1",
-    "execute",
-    database,
-    ...(wranglerEnv ? ["--env", wranglerEnv] : []),
-    mode === "remote" ? "--remote" : "--local",
-    ...(persistTo ? [`--persist-to=${persistTo}`] : []),
-    "--file",
-    sqlPath,
-  ];
+  const args = [...buildWranglerD1ExecuteArgs(options), "--file", sqlPath];
 
   try {
     execFileSync("pnpm", ["exec", ...args], {

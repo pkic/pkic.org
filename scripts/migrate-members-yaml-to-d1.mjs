@@ -99,11 +99,11 @@
  * command rather than invoking this module directly so the runtime flags stay
  * consistent with the repository's supported Node versions.
  *
- * Environment flags mirror scripts/seed.mjs's ENVS table (binding is always
- * "DB"; --env/--local|--remote select which wrangler.jsonc environment
- * block resolves it):
+ * Environment flags mirror scripts/seed.mjs's ENVS table; the database is
+ * addressed by name through scripts/lib/wrangler-target.mjs:
  *   --local        --env local --local     (database pkic-db-local)
- *   --preview      --env preview --remote  (database pkic-db-preview)
+ *   --preview      --config wrangler.preview-migrations.jsonc --remote
+ *                  (database pkic-db-preview, shared by Workers Previews)
  *   --production   --env production --remote (database pkic-db)
  *
  * Other flags:

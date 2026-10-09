@@ -6,7 +6,7 @@
  *
  * Usage:
  *   node scripts/seed.mjs --local                  # local D1 / local R2
- *   node scripts/seed.mjs --preview                # remote preview env
+ *   node scripts/seed.mjs --preview                # remote shared Preview database
  *   node scripts/seed.mjs --production             # remote production env
  *
  * Optional flags:
@@ -17,6 +17,7 @@
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { requireEmptyProductionSeedDatabase } from "./lib/production-seed-guard.mjs";
+import { wranglerTargetArgs } from "./lib/wrangler-target.mjs";
 
 // ── Environment definitions ────────────────────────────────────────────────
 
@@ -31,7 +32,7 @@ const ENVS = {
   },
   preview: {
     wranglerFlag: "--remote",
-    wranglerEnv: "preview", // maps to env.preview in wrangler.jsonc
+    wranglerEnv: "preview", // the shared Workers Previews database
     database: "pkic-db-preview",
     assetsBucket: "pkic-assets-preview",
     speakerBucket: "pkic-speaker-uploads-preview",
@@ -47,9 +48,9 @@ const ENVS = {
   },
 };
 
-/** Return ["--env", name] when an env name is set, otherwise []. */
+/** Wrangler arguments that address the selected target's resources. */
 function envFlag(cfg) {
-  return cfg.wranglerEnv ? ["--env", cfg.wranglerEnv] : [];
+  return wranglerTargetArgs(cfg.wranglerEnv);
 }
 
 // ── CLI parsing ─────────────────────────────────────────────────────────────
