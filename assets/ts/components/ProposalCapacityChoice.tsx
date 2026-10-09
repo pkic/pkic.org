@@ -24,7 +24,12 @@ export function ProposalCapacityChoice({
   };
   return (
     <>
-      <Field group label={question} errorSlot="applicantKind">
+      <Field
+        group
+        label={question}
+        errorSlot="applicantKind"
+        help="On behalf of an organization, the proposal is associated with it and you confirm this with your work email address there."
+      >
         {(control) => (
           <div class="pk-stack pk-stack--snug">
             <Radio
@@ -35,7 +40,6 @@ export function ProposalCapacityChoice({
               required
               aria-describedby={control["aria-describedby"]}
               label="On behalf of an organization (my employer or my own company)"
-              hint="The proposal is associated with that organization. You confirm it with your work email address there."
             />
             <Radio
               name="applicantKind"
