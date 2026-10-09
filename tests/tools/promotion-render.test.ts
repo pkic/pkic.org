@@ -4,6 +4,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, writeFileSync } from "node:fs";
 import { PDFDocument, PDFName, PDFDict, PDFArray, PDFNumber, PDFString } from "pdf-lib";
 import {
+  hasUnsupportedPromotionScript,
   renderPromotionPdf,
   renderPromotionSvg,
   promotionLines,
@@ -135,17 +136,22 @@ describe("promotion exports", () => {
     );
   });
 
-  it("embeds bundled CJK and emoji fallback glyphs into selectable PDF text", async () => {
+  it("embeds the bundled emoji fallback glyphs into selectable PDF text", async () => {
     const bytes = await renderPromotionPdf(
-      { ...data, occurrence: { ...data.occurrence, title: "密码基础设施 🔐" } },
+      { ...data, occurrence: { ...data.occurrence, title: "Public key infrastructure 🔐" } },
       readFileSync("static/fonts/Roboto-Regular.ttf"),
       readFileSync("static/fonts/Roboto-Bold.ttf"),
-      [readFileSync("static/fonts/NotoSansSC-Regular.ttf"), readFileSync("static/fonts/NotoEmoji-Regular.ttf")],
+      [readFileSync("static/fonts/NotoEmoji-Regular.ttf")],
     );
     const pdf = await PDFDocument.load(bytes);
-    expect(pdf.getTitle()).toContain("密码基础设施 🔐");
-    expect(bytes.length).toBeLessThan(16_000_000);
+    expect(pdf.getTitle()).toContain("Public key infrastructure 🔐");
     if (process.env.PKIC_PROMOTION_REVIEW_CJK_PDF) writeFileSync(process.env.PKIC_PROMOTION_REVIEW_CJK_PDF, bytes);
+  });
+
+  it("asks for the English spelling instead of rendering Chinese, Japanese or Korean script", () => {
+    expect(hasUnsupportedPromotionScript("密码基础设施")).toBe(true);
+    expect(hasUnsupportedPromotionScript("キー")).toBe(true);
+    expect(hasUnsupportedPromotionScript("Zoë Müller — Post-quantum 🔐")).toBe(false);
   });
 
   it("escapes speaker titles and includes a decodable matrix destination in every card aspect", async () => {

@@ -470,3 +470,11 @@ export async function renderPromotionPdf(
   structure.finish();
   return pdf.save();
 }
+
+/**
+ * The event is held in English and announced by name, so promotion cards carry Latin-script text only; a
+ * Chinese, Japanese or Korean spelling has no bundled font and is refused with a request for the English one.
+ */
+export function hasUnsupportedPromotionScript(text: string): boolean {
+  return /[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(text);
+}

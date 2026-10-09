@@ -5,6 +5,7 @@ import { AppError } from "../../errors";
 import { ensureResvgWasm } from "../../utils/resvg";
 import { fetchStaticAsset, uint8ToBase64 } from "../og-badge-hero-image";
 import {
+  hasUnsupportedPromotionScript,
   renderPromotionSvg,
   renderPromotionPdf,
   promotionCardPages,
@@ -24,12 +25,13 @@ export async function renderPromotionArtifact(
   preview?: Uint8Array;
 }> {
   const text = JSON.stringify([data.occurrence, data.copy, data.agenda.eventName]);
-  const fallbackNames = [
-    ...(/[\p{Script=Han}\p{Script=Hiragana}\p{Script=Katakana}\p{Script=Hangul}]/u.test(text)
-      ? ["NotoSansSC-Regular.ttf"]
-      : []),
-    ...(/\p{Extended_Pictographic}/u.test(text) ? ["NotoEmoji-Regular.ttf"] : []),
-  ];
+  if (hasUnsupportedPromotionScript(text))
+    throw new AppError(
+      409,
+      "PROMOTION_SCRIPT_UNSUPPORTED",
+      "Promotion cards are printed in Latin script. Use the English spelling of names and titles.",
+    );
+  const fallbackNames = /\p{Extended_Pictographic}/u.test(text) ? ["NotoEmoji-Regular.ttf"] : [];
   const fonts = await Promise.all(
     ["Roboto-Regular.ttf", "Roboto-Bold.ttf", ...fallbackNames].map(async (name) => {
       const response = await fetchStaticAsset(env, origin, `/fonts/${name}`);
