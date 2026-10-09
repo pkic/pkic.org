@@ -23,7 +23,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { readHashQueryParam } from "../../../../../shared/hash-query";
 import type { Column } from "../../../../../components/Table";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
-import { EmptyState } from "../../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../../ui/EmptyState";
 import { SPONSORSHIP_PIPELINE_STAGES } from "../../../../../../shared/schemas/sponsorship-management";
 import {
   SPONSOR_TYPES,

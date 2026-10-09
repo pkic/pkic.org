@@ -52,12 +52,3 @@ export function EventTime({
   const until = new Date(start + (duration - 1) * DAY_MILLISECONDS).toISOString();
   return <LocalTime class={className} until={until} value={value} />;
 }
-
-export function CalendarIcon() {
-  return (
-    <svg viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-      <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
-      <path d="M16 2v4M8 2v4M3 10h18" />
-    </svg>
-  );
-}

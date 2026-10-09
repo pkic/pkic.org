@@ -238,7 +238,7 @@ describe("donation thank-you page", () => {
       await loadModule();
 
       const container = badgeContainer();
-      const copy = container.querySelector<HTMLButtonElement>("[data-share-copy]");
+      const copy = container.querySelector<HTMLButtonElement>("[data-copy-link-button]");
       expect(copy?.textContent).toBe("Copy link");
 
       copy?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -266,7 +266,7 @@ describe("donation thank-you page", () => {
 
       const container = badgeContainer();
       container
-        .querySelector<HTMLButtonElement>("[data-share-copy]")
+        .querySelector<HTMLButtonElement>("[data-copy-link-button]")
         ?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
       await vi.runAllTimersAsync();
 
@@ -286,7 +286,7 @@ describe("donation thank-you page", () => {
     // The thank-you still stands; only the personal link is missing, so the
     // copy row is absent rather than offering an empty control.
     expect(container.textContent).toContain("Alice, thank you for your donation!");
-    expect(container.querySelector("[data-share-link-row]")).toBeNull();
+    expect(container.querySelector("[data-copy-link-row]")).toBeNull();
     const share = container.querySelector<HTMLAnchorElement>("[aria-label='Share on LinkedIn']");
     expect(share?.href).toContain(encodeURIComponent("https://pkic.org/donate/"));
   });

@@ -40,6 +40,8 @@ import {
   scrollScannerToTop,
   reconnectScannerBrowser,
   openScannerDiagnostics,
+  closeScannerDiagnostics,
+  openScannerManualEntry,
 } from "./scanner-recovery-storage";
 
 export const sponsorEventSlug = "pqc-conference-amsterdam-nl";
@@ -171,12 +173,7 @@ export async function prepareSponsorLiveFixture(staff: Page, attendee: Page) {
 }
 
 async function openManualBadgeEntry(page: Page) {
-  const manual = page.locator("details").filter({
-    has: page.getByText("Enter or paste badge code", { exact: true }),
-  });
-  if (!(await manual.evaluate((element) => (element as HTMLDetailsElement).open)))
-    await manual.getByText("Enter or paste badge code", { exact: true }).click();
-  await expect(page.getByLabel("Badge code", { exact: true })).toBeVisible();
+  await openScannerManualEntry(page);
 }
 
 async function expectDoorScannerReady(page: Page) {
@@ -186,13 +183,14 @@ async function expectDoorScannerReady(page: Page) {
       exact: true,
     }),
   ).toBeVisible();
+  await closeScannerDiagnostics(page);
   await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
-  await diagnostics.getByText("Recovery and diagnostics", { exact: true }).click();
 }
 
 export async function captureSponsorBadge(page: Page, badgeId: string, sponsorId: string, operatorUserId: string) {
   await openManualBadgeEntry(page);
-  await page.getByLabel("Badge code", { exact: true }).fill(badgeId);
+  const manual = page.getByRole("dialog", { name: "Review sponsor lead", exact: true });
+  await manual.getByLabel("Badge code", { exact: true }).fill(badgeId);
   await page
     .getByRole("checkbox", {
       name: "The attendee agrees to share their contact details with this sponsor.",
@@ -205,7 +203,7 @@ export async function captureSponsorBadge(page: Page, badgeId: string, sponsorId
       response.request().method() === "POST" &&
       response.request().postDataJSON()?.badgeId === badgeId,
   );
-  await page.getByRole("button", { name: "Capture sponsor lead", exact: true }).click();
+  await manual.getByRole("button", { name: "Confirm lead", exact: true }).click();
   const response = await receiving;
   expect(response.status()).toBe(200);
   const request = enrolledEventScanRequestSchema.parse(response.request().postDataJSON());
@@ -226,8 +224,18 @@ export async function captureSponsorBadge(page: Page, badgeId: string, sponsorId
   await expect
     .poll(async () => (await scannerStorage(page)).history.some((row) => row.scan.operationId === request.operationId))
     .toBe(true);
-  await expect(page.getByLabel("Badge code", { exact: true })).toHaveValue("");
-  await expect(page.getByLabel("Badge code", { exact: true })).not.toHaveAttribute("aria-invalid", "true");
+  await expect(manual).not.toBeVisible();
+  await openManualBadgeEntry(page);
+  await expect(manual.getByLabel("Badge code", { exact: true })).toHaveValue("");
+  await expect(manual.getByLabel("Badge code", { exact: true })).not.toHaveAttribute("aria-invalid", "true");
+  await expect(
+    manual.getByRole("checkbox", {
+      name: "The attendee agrees to share their contact details with this sponsor.",
+      exact: true,
+    }),
+  ).not.toBeChecked();
+  await manual.getByRole("button", { name: "Cancel", exact: true }).click();
+  await expect(manual).not.toBeVisible();
   return { request, receipt };
 }
 
@@ -246,8 +254,8 @@ export async function captureOfflineSponsorBadge(
       exact: true,
     }),
   ).toBeVisible();
+  await closeScannerDiagnostics(page);
   await expect(page.getByRole("button", { name: "Start scanning", exact: true })).toBeEnabled();
-  await diagnostics.getByText("Recovery and diagnostics", { exact: true }).click();
   expect((await scannerStorage(page)).pending).toHaveLength(0);
   const offlineReceipts: number[] = [];
   const observeReceipt = (response: import("@playwright/test").Response) => {
@@ -273,7 +281,8 @@ export async function captureOfflineSponsorBadge(
         exact: true,
       })
       .check();
-    const capture = page.getByRole("button", { name: "Capture sponsor lead", exact: true });
+    const manual = page.getByRole("dialog", { name: "Review sponsor lead", exact: true });
+    const capture = manual.getByRole("button", { name: "Confirm lead", exact: true });
     expect(
       await capture.evaluate((button) => {
         const form = (button as HTMLButtonElement).form;
@@ -476,10 +485,15 @@ export async function prepareDoorScannerContext(
       url.searchParams.get("epochId") === manifest.epochId
     );
   });
-  await page.getByRole("combobox", { name: "Session", exact: true }).fill(occurrence.title);
-  await page.getByRole("option", { name: occurrence.title, exact: true }).click();
-  await expect(page.getByRole("combobox", { name: "Session", exact: true })).toHaveValue(occurrence.title);
-  await expect(page.getByRole("combobox", { name: "Physical room", exact: true })).toHaveValue(occurrence.roomId!);
+  // Sessions are chosen in their own dialog; a future session is outside the Now and Next windows.
+  await page.getByRole("button", { name: "Choose session or room", exact: true }).click();
+  const chooser = page.getByRole("dialog", { name: "Choose check-in session", exact: true });
+  await chooser.getByRole("tab", { name: "Browse days and rooms", exact: true }).click();
+  await chooser.getByRole("combobox", { name: "Session", exact: true }).fill(occurrence.title);
+  await chooser.getByRole("option").filter({ hasText: occurrence.title }).click();
+  // A single-room session selects its room and closes the chooser; the request below proves the exact room.
+  await expect(chooser).toBeHidden();
+  await expect(page.getByText(occurrence.title, { exact: false }).first()).toBeVisible();
   const prepared = enrolledOfflineEligibilityResponseSchema.parse(await (await selected).json());
   expect(prepared).toMatchObject({
     epochId: manifest.epochId,

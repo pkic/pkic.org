@@ -77,7 +77,7 @@ describe("OrganizationLogo", () => {
     // No panel header and no separate button: the tile is named for what
     // pressing it does, and the file rule reaches it through describedby.
     const control = root.querySelector<HTMLButtonElement>("button");
-    expect(control?.getAttribute("aria-label")).toBe("Upload logo");
+    expect(control?.getAttribute("aria-label")).toBe("Upload logo of Example Corp");
     expect(root.querySelector(`#${control!.getAttribute("aria-describedby")!}`)?.textContent).toContain("SVG only.");
     const input = root.querySelector<HTMLInputElement>('input[type="file"]');
     expect(input?.getAttribute("accept")).toBe("image/svg+xml");
@@ -96,9 +96,11 @@ describe("OrganizationLogo", () => {
       <OrganizationLogo organization={organization("/logo.svg")} canWrite onChanged={() => Promise.resolve()} />,
     );
 
-    expect(root.querySelector("button")?.getAttribute("aria-label")).toBe("Change logo");
+    expect(root.querySelector("button")?.getAttribute("aria-label")).toBe("Change logo of Example Corp");
     expect(root.querySelector("img")?.getAttribute("alt")).toBe("Example Corp logo");
-    expect([...root.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"))).toContain("Remove");
+    expect([...root.querySelectorAll("button")].map((button) => button.getAttribute("aria-label"))).toContain(
+      "Remove logo of Example Corp",
+    );
   });
 
   it("reports an upload failure to the reader instead of silently keeping the old logo", async () => {

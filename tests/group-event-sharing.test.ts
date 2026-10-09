@@ -607,6 +607,8 @@ describe("group event sharing", () => {
       occurrenceId,
       eventAttendanceListQuerySchema.parse({ q: "example", verified: "false", limit: 20 }),
     );
+    // Newest confirmation first, matching the attendance table's opening order.
+    expect(attendanceQuery.orderBy).toBe("ORDER BY confirmation.confirmed_at DESC, confirmation.id ASC");
     const attendanceSql = buildOffsetPageSql(attendanceQuery);
     const attendancePlan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${attendanceSql.pageSql}`)
       .bind(...attendanceSql.bindings, attendanceQuery.limit, attendanceQuery.offset)

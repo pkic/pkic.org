@@ -429,7 +429,7 @@ test("permitted staff remove an organization's logo", async ({ page }) => {
   await createBareOrganization(page, organizationName);
 
   // Upload, then remove — the tile only offers Remove once a logo exists.
-  // `LogoTile` is the whole affordance — no panel wraps it — so its controls
+  // `PictureTile` is the whole affordance — no panel wraps it — so its controls
   // are reached directly rather than through a "Logo" region that no longer
   // exists. There is only one logo tile on the page, so this stays unambiguous.
   const logo = page;
@@ -447,16 +447,16 @@ test("permitted staff remove an organization's logo", async ({ page }) => {
   });
   expect((await uploadResponse).status()).toBe(200);
   await expect(page.locator(".my-toast", { hasText: "Logo uploaded" })).toBeVisible({ timeout: 20_000 });
-  await expect(logo.getByRole("button", { name: "Remove", exact: true })).toBeVisible();
+  await expect(logo.getByRole("button", { name: /^Remove logo of / })).toBeVisible();
 
   const removeResponse = page.waitForResponse(
     (response) =>
       /\/api\/v1\/organizations\/[^/]+\/logo$/.test(new URL(response.url()).pathname) &&
       response.request().method() === "DELETE",
   );
-  await logo.getByRole("button", { name: "Remove", exact: true }).click();
-  await acceptConfirmDialog(page, "Remove");
+  await logo.getByRole("button", { name: /^Remove logo of / }).click();
+  await acceptConfirmDialog(page, "Remove logo");
   expect((await removeResponse).status()).toBe(200);
-  await expect(logo.getByRole("button", { name: "Remove", exact: true })).toHaveCount(0);
+  await expect(logo.getByRole("button", { name: /^Remove logo of / })).toHaveCount(0);
   await expect(logo.getByRole("button", { name: "Upload logo" })).toBeVisible();
 });

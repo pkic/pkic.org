@@ -104,17 +104,23 @@ async function settle(): Promise<void> {
   });
 }
 
-async function mount(props: { canWrite?: boolean } = {}): Promise<void> {
+async function mount(
+  props: { canWrite?: boolean; contentType?: EmailTemplateVersion["content_type"] } = {},
+): Promise<void> {
   container = document.createElement("div");
   document.body.append(container);
   await act(() =>
     render(
-      <TemplateEditor templateKey={TEMPLATE_KEY} initialVersion={ACTIVE_VERSION} canWrite={props.canWrite ?? true} />,
+      <TemplateEditor
+        templateKey={TEMPLATE_KEY}
+        initialVersion={{ ...ACTIVE_VERSION, content_type: props.contentType ?? ACTIVE_VERSION.content_type }}
+        canWrite={props.canWrite ?? true}
+      />,
       container!,
     ),
   );
   await settle();
-  await markdownControl(container!, "Body");
+  if (!props.contentType || props.contentType === "markdown") await markdownControl(container!, "Body");
 }
 
 function button(label: string): HTMLButtonElement | undefined {
@@ -180,6 +186,59 @@ afterEach(() => {
 });
 
 describe("portal email template editor", () => {
+  it("requires a new preview after inserting reusable content into a previewed draft", async () => {
+    const requests = stubApi();
+    await mount({ contentType: "text" });
+    await click("Render Preview");
+    expect(button("Save as Draft")?.disabled).toBe(false);
+    await act(() => {
+      container!
+        .querySelector<HTMLButtonElement>('button[aria-label="Insert body variable or reusable content"]')!
+        .click();
+    });
+    await settle();
+    const partial = [...container!.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) =>
+      item.textContent?.startsWith("about_pkic"),
+    )!;
+    await act(() => partial.click());
+    await settle();
+    expect(controlFor<HTMLTextAreaElement>(container!, "Body").value).toContain("{{> about_pkic}}");
+    expect(button("Save as Draft")?.disabled).toBe(true);
+    expect(requests.filter((request) => request.pathname === VERSIONS_PATH && request.method === "POST")).toHaveLength(
+      0,
+    );
+    await click("Render Preview");
+    const previews = requests.filter((request) => request.pathname === PREVIEW_PATH);
+    expect(emailTemplatePreviewSchema.parse(previews.at(-1)?.body).content).toContain("{{> about_pkic}}");
+    expect(button("Save as Draft")?.disabled).toBe(false);
+  });
+
+  it("inserts reusable content into the raw body through the shared menu and previews visible sample data", async () => {
+    const requests = stubApi();
+    await mount({ contentType: "text" });
+    const menu = container!.querySelector<HTMLButtonElement>(
+      'button[aria-label="Insert body variable or reusable content"]',
+    );
+    expect(menu).not.toBeNull();
+    await act(() => menu!.click());
+    await settle();
+    const partial = [...container!.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) =>
+      item.textContent?.startsWith("about_pkic"),
+    );
+    expect(partial).toBeDefined();
+    await act(() => partial!.click());
+    await settle();
+    const body = controlFor<HTMLTextAreaElement>(container!, "Body");
+    expect(body.value).toContain("{{> about_pkic}}");
+    const sample = controlFor<HTMLTextAreaElement>(container!, "Preview data (JSON)");
+    expect(sample.closest("details")).toBeNull();
+    await typeInto("Preview data (JSON)", '{"firstName":"Alex"}');
+    await click("Render Preview");
+    const request = requests.find((item) => item.pathname === PREVIEW_PATH);
+    const parsed = emailTemplatePreviewSchema.parse(request?.body);
+    expect(parsed.content).toContain("{{> about_pkic}}");
+    expect(parsed.data).toEqual({ firstName: "Alex" });
+  });
   it("sends an inserted reusable template to preview without Markdown escaping its syntax", async () => {
     const requests = stubApi();
     await mount();

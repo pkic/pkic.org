@@ -133,7 +133,7 @@ async function settle(): Promise<void> {
 function removeButton(): HTMLButtonElement | null {
   return (
     [...container.querySelectorAll<HTMLButtonElement>("button")].find(
-      (button) => button.getAttribute("aria-label") === "Remove photo",
+      (button) => button.getAttribute("aria-label")?.startsWith("Remove photo of ") ?? false,
     ) ?? null
   );
 }

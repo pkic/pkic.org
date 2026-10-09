@@ -32,8 +32,11 @@ const DEFAULT_SESSION_TYPES: readonly SessionTypeConfig[] = [
 ];
 
 /** Normalizes both current session-type objects and legacy string entries. */
-export function resolveSessionTypes(settings: { proposal?: { sessionTypes?: unknown[] } }): SessionTypeConfig[] {
-  const raw = settings.proposal?.sessionTypes;
+export function resolveSessionTypes(
+  settings: { proposal?: { sessionTypes?: unknown[] } | null } | null,
+): SessionTypeConfig[] {
+  // Legacy settings may hold JSON null for the whole object or for its proposal container.
+  const raw = settings?.proposal?.sessionTypes;
   if (!Array.isArray(raw) || raw.length === 0) return [...DEFAULT_SESSION_TYPES];
 
   const sessionTypes: SessionTypeConfig[] = [];
@@ -52,7 +55,9 @@ export function resolveSessionTypes(settings: { proposal?: { sessionTypes?: unkn
 }
 
 export function resolveEventSessionTypes(settingsJson: string): SessionTypeConfig[] {
-  return resolveSessionTypes(parseJsonSafe<{ proposal?: { sessionTypes?: unknown[] } }>(settingsJson, {}));
+  return resolveSessionTypes(
+    parseJsonSafe<{ proposal?: { sessionTypes?: unknown[] } | null } | null>(settingsJson, {}),
+  );
 }
 
 /** Returns the canonical configured label and rejects labels not enabled for this event. */

@@ -9,20 +9,7 @@ import {
   resizeHeadshot,
   validateUploadedImageFile,
 } from "../functions/_lib/utils/image-upload";
-import { validJpegBytes, validPngBytes } from "./helpers/raster-images";
-
-function validWebp(width = 1, height = 1): Uint8Array {
-  const bytes = new Uint8Array(30);
-  bytes.set([
-    0x52, 0x49, 0x46, 0x46, 0x16, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x58, 0x0a, 0x00, 0x00,
-    0x00,
-  ]);
-  const encodedWidth = width - 1;
-  const encodedHeight = height - 1;
-  bytes.set([0x00, 0x00, 0x00, 0x00, encodedWidth & 0xff, encodedWidth >> 8, encodedWidth >> 16], 20);
-  bytes.set([encodedHeight & 0xff, encodedHeight >> 8, encodedHeight >> 16], 27);
-  return bytes;
-}
+import { validJpegBytes, validPngBytes, validWebpBytes as validWebp } from "./helpers/raster-images";
 
 function asArrayBuffer(bytes: Uint8Array): ArrayBuffer {
   return bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;

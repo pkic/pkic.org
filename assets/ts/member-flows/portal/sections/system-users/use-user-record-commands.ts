@@ -17,10 +17,10 @@ import { confirmAction } from "../../../../components/ConfirmDialog";
 import { postJson } from "../../../../shared/api-client";
 import { userAnonymizeResponseSchema } from "../../../../../shared/schemas/user-management";
 import { userGravatarImportResponseSchema } from "../../../../../shared/schemas/route-contracts-headshots";
-import { confirmHeadshotUsage } from "../../../../shared/headshot/controller";
-import { ADMIN_HEADSHOT_DISCLAIMER } from "../../../../shared/headshot/AdminHeadshotManager";
+import { ADMIN_HEADSHOT_DISCLAIMER, showHeadshotDisclaimer } from "../../../../shared/headshot/upload";
 import type { MenuItem } from "../../../../ui/Menu";
 import { toast } from "../../ui";
+import { copyText } from "../../../../shared/clipboard";
 import type { UserDetail as UserRecord } from "./model";
 
 export interface UserRecordCommandOptions {
@@ -44,14 +44,11 @@ export function useUserRecordCommands(options: UserRecordCommandOptions): MenuIt
   const [importingGravatar, setImportingGravatar] = useState(false);
 
   async function copyRecordLink() {
-    try {
-      await navigator.clipboard.writeText(window.location.href);
-      toast("Record link copied", "success");
-    } catch {
-      // Clipboard access is refused in some browsers and every insecure
-      // context; say so rather than leaving the reader wondering.
-      toast("Your browser would not let the page copy the link", "error");
-    }
+    await copyText(window.location.href, {
+      copied: "Record link copied",
+      failed: "Your browser would not let the page copy the link",
+      notify: toast,
+    });
   }
 
   /**
@@ -61,7 +58,7 @@ export function useUserRecordCommands(options: UserRecordCommandOptions): MenuIt
    * arrives, somebody is asserting the consortium may publish it.
    */
   async function importGravatar() {
-    const accepted = await confirmHeadshotUsage({
+    const accepted = await showHeadshotDisclaimer({
       title: "Before importing a photo",
       texts: ADMIN_HEADSHOT_DISCLAIMER,
       confirmText: "Proceed",

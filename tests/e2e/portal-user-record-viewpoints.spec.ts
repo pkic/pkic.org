@@ -48,8 +48,9 @@ test("a contact record offers different things on your own page than on someone 
   const otherEmail = "paul.vanbrouwershaven@pkic.org";
   await openUserRecord(page, otherEmail, "Paul van Brouwershaven");
 
-  await expect(page.getByRole("button", { name: "Message — not available yet" })).toBeVisible();
-  await expect(page.getByRole("button", { name: "Follow — not available yet" })).toBeVisible();
+  // Messaging and following have no domain yet, so neither is offered.
+  await expect(page.getByRole("button", { name: /^(Message|Follow)\b/ })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Record actions" })).toBeVisible();
 
   // The skills are vouchable: each chip is a toggle carrying its own state.
   const skills = page.getByRole("region", { name: "Skills" });
@@ -64,9 +65,7 @@ test("a contact record offers different things on your own page than on someone 
   // address.
   await openUserRecord(page, viewerEmail, viewerEmail);
 
-  // Neither action means anything pointed at yourself, so neither is offered.
-  await expect(page.getByRole("button", { name: "Message — not available yet" })).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Follow — not available yet" })).toHaveCount(0);
+  await expect(page.getByRole("button", { name: /^(Message|Follow)\b/ })).toHaveCount(0);
 
   // The record is still the reader's to administer: the actions menu is there
   // and offers the name straight away, while the account section opens

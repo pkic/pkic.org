@@ -765,6 +765,10 @@ test.describe("browser workflows", () => {
     const registrationManageRoute = `/events/2026/pqc-conference-amsterdam-nl/register/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(new URL(manageUrl).searchParams.get("token") ?? "")}`;
     await page.goto(registrationManageRoute);
     await expect(page.getByText(/Hi Alice, we're looking forward to seeing you/i)).toBeVisible();
+    // The page opens on the registration's details; the form waits for Edit details.
+    await expect(page.getByRole("definition").filter({ hasText: "Vegetarian" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Save changes/i })).toBeHidden();
+    await page.getByRole("button", { name: "Edit details", exact: true }).click();
     await expect(page.locator("input[name='custom.dietary_restrictions[]'][value='Vegetarian']")).toBeChecked();
     const onDemandRadio = page.getByRole("radio", { name: /On-demand/i }).first();
     await onDemandRadio.scrollIntoViewIfNeeded();
@@ -981,7 +985,7 @@ test.describe("browser workflows", () => {
 
     // Reload the speaker page and verify the headshot <img> element is rendered
     await page.goto(speakerManageRoute);
-    await expect(page.locator("[data-headshot-preview] img")).toBeVisible();
+    await expect(page.locator("[data-headshot-section] img")).toBeVisible();
     await screenshot("07-speaker-headshot-visible");
 
     // Accept the proposal via the API so the presentation-upload section becomes visible
@@ -1449,7 +1453,7 @@ test.describe("browser workflows", () => {
     await page.goto(refreshedRoute);
     await expect(page.getByText(/Please confirm whether you would like to participate/i)).toBeVisible();
     await expect(page.locator("[data-profile-section]")).toBeVisible();
-    await expect(page.locator("[data-headshot-preview] img")).toBeVisible();
+    await expect(page.locator("[data-headshot-section] img")).toBeVisible();
     const drafted = await page.request.get(`/api/v1/proposals/speakers/access/${encodeURIComponent(refreshedToken)}`);
     expect(drafted.status()).toBe(200);
     const draftedProfile = speakerSelfServiceReadResponseSchema.parse(await drafted.json()).profile;

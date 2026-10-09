@@ -1,6 +1,6 @@
 import { useState } from "preact/hooks";
 import type { SponsorCapacity } from "../../../../../shared/schemas/sponsor-access";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { Tabs } from "../../../../components/Tabs";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { ButtonLink } from "../../../../ui/Button";

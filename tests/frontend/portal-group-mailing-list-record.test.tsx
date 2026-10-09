@@ -229,7 +229,8 @@ describe("group mailing-list record", () => {
     expect(container.querySelector('section[aria-label="Architecture discussion subscribers"]')).not.toBeNull();
     expect(container.textContent).toContain("Ada Lovelace");
     const portrait = container.querySelector<HTMLImageElement>(".pk-person-cell img");
-    expect(portrait?.getAttribute("src")).toBe(subscriber.user.headshotUrl);
+    // Row avatars ask the headshot route for its smallest square rendition.
+    expect(portrait?.getAttribute("src")).toBe(`${subscriber.user.headshotUrl}?width=96`);
     expect(container.textContent).toContain("Subscribed");
     const representation = container.querySelector('[aria-label="Representation"]');
     expect(representation?.textContent).toContain("Subscribed people across the whole list");

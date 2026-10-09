@@ -3,7 +3,8 @@ import { userIdParamsSchema, proposalSpeakerIdParamsSchema, successResponseSchem
 import { databaseIdSchema } from "./identifiers";
 import { proposalAccessTokenParamsSchema } from "./proposal-management";
 import { headshotImageUploadFormSchema, headshotUploadResponseSchema } from "./registration";
-import { publicOperation } from "./route-contract";
+import { publicErrors, publicOperation } from "./route-contract";
+import { HEADSHOT_VARIANT_WIDTHS } from "../headshot-variants";
 
 const rawHeadshotImageSchema = z.any().describe("Raw JPEG, PNG, or WebP image bytes");
 const headshotUploadRequestContent = {
@@ -31,6 +32,32 @@ export const userHeadshotGetRouteSchema = {
     "200": { description: "Binary headshot image.", content: headshotImageResponseContent },
     "401": { description: "Staff authorization required." },
     "404": { description: "User or headshot not found." },
+    "503": { description: "Uploads bucket is not configured." },
+  },
+};
+
+export const userHeadshotFileParamsSchema = userIdParamsSchema.extend({
+  file: z.string().min(1).max(255),
+});
+export const userHeadshotFileQuerySchema = z.object({
+  width: z
+    .enum(HEADSHOT_VARIANT_WIDTHS)
+    .optional()
+    .describe("A bounded square rendition width in pixels. Omit it for the stored portrait."),
+});
+export const userHeadshotFileGetRouteSchema = {
+  tags: ["Users", "Headshots"],
+  summary: "Download a user's current headshot file",
+  description:
+    "Public address of the portrait the user's record names right now. A replaced or removed file stops resolving at once. With `width`, returns a square WebP rendition of that portrait, or the stored portrait when no rendition can be produced.",
+  ...publicOperation(),
+  request: {
+    params: userHeadshotFileParamsSchema,
+    query: userHeadshotFileQuerySchema,
+  },
+  responses: {
+    "200": { description: "Binary headshot image.", content: headshotImageResponseContent },
+    ...publicErrors({ badRequest: "Invalid user, file, or width.", notFound: "Headshot not found." }),
     "503": { description: "Uploads bucket is not configured." },
   },
 };

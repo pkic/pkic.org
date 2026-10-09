@@ -7,7 +7,7 @@ import {
   type MailingListSubscribersResponse,
 } from "../../../../../shared/schemas/mailing-lists";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { Badge } from "../../../../ui/Badge";
 import { PersonCell } from "../../../../ui/PersonCell";
 

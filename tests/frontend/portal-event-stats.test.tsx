@@ -7,7 +7,8 @@ import { EventStats } from "../../assets/ts/member-flows/portal/sections/events/
 
 // The page's sections are routed tabs, so it reads the portal's location hook
 // and renders wouter links — neither of which has a dispatcher in a bare mount.
-vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
+const route = vi.hoisted(() => ({ location: "" }));
+vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => [route.location, vi.fn()] }));
 vi.mock("wouter", () => ({
   Link: ({ children, href, ...rest }: { children?: ComponentChildren; href: string } & Record<string, unknown>) => (
     <a href={`#${href}`} {...rest}>
@@ -74,6 +75,7 @@ function stubAnalyticsFetch(respond: (url: URL) => Response | Promise<Response>)
 }
 
 beforeEach(() => {
+  route.location = "";
   container = document.createElement("div");
   document.body.append(container);
 });
@@ -127,7 +129,15 @@ describe("portal event statistics", () => {
     const tabs = [...container.querySelectorAll('[aria-label="Analytics sections"] a')].map((tab) =>
       tab.textContent?.trim(),
     );
-    expect(tabs).toEqual(["Overview", "Attendance", "Registrations", "Invitations", "Calendar", "Promoters"]);
+    expect(tabs).toEqual([
+      "Overview",
+      "Registration changes",
+      "Registrations",
+      "Invitations",
+      "Calendar",
+      "Promoters",
+      "Session demand",
+    ]);
     expect([...container.querySelectorAll("caption")].map((node) => node.textContent)).not.toContain(
       "Attendee invites by status",
     );
@@ -218,4 +228,56 @@ describe("portal event statistics", () => {
     // Nothing is actionable, so nothing is claimed to be.
     expect(container.querySelector('[role="alert"]')).toBeNull();
   });
+});
+
+it("opens attendance imports without fetching an unauthorized analytics dashboard", async () => {
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  mount(
+    <EventStats
+      slug={SLUG}
+      section="attendance"
+      basePath="/groups/group/events/event/stats"
+      canViewAnalytics={false}
+      attendance={{ timeZone: "Europe/Amsterdam", canRead: false, canImport: true, canCorrect: false }}
+    />,
+  );
+  await vi.waitFor(async () => {
+    await settle();
+    expect(container.querySelector('[aria-label="Attendance sections"]')).not.toBeNull();
+  });
+  const analyticsLinks = [...container.querySelectorAll('[aria-label="Analytics sections"] a')];
+  expect(analyticsLinks.map((link) => link.textContent?.trim())).toEqual(["Attendance"]);
+  expect(container.querySelector('[aria-label="Attendance sections"] a')?.getAttribute("href")).toBe(
+    "#/groups/group/events/event/stats/attendance/imports",
+  );
+  expect(fetch).not.toHaveBeenCalled();
+});
+
+it("keeps legacy attendance import links inside Analytics", async () => {
+  route.location = "/groups/group/events/event/attendance/imports";
+  const fetch = vi.fn();
+  vi.stubGlobal("fetch", fetch);
+  mount(
+    <EventStats
+      slug={SLUG}
+      section="attendance"
+      basePath="/groups/group/events/event/stats"
+      legacyAttendanceBasePath="/groups/group/events/event/attendance"
+      canViewAnalytics={false}
+      attendance={{ timeZone: "Europe/Amsterdam", canRead: false, canImport: true, canCorrect: false }}
+    />,
+  );
+  await vi.waitFor(async () => {
+    await settle();
+    expect(container.querySelector('[aria-label="Attendance sections"]')).not.toBeNull();
+  });
+  expect(container.querySelector('[aria-label="Analytics sections"] a')?.getAttribute("href")).toBe(
+    "#/groups/group/events/event/stats/attendance",
+  );
+  expect(container.querySelector('[aria-label="Attendance sections"] [aria-current="page"]')?.textContent).toContain(
+    "Imports",
+  );
+  expect(fetch).not.toHaveBeenCalled();
+  route.location = "";
 });

@@ -18,7 +18,10 @@ import {
 import type { DatabaseLike, UserBackedAuthAdmin } from "../../types";
 import { prepareStorageDeletion } from "../storage-deletion-outbox";
 import { serializeOrganizationContentValue } from "./fields";
-import type { OrganizationContentReviewsListQuery } from "../../../../assets/shared/schemas/organization-content-reviews";
+import {
+  organizationContentReviewDefaultSort,
+  type OrganizationContentReviewsListQuery,
+} from "../../../../assets/shared/schemas/organization-content-reviews";
 
 interface ContentReviewRow extends ReviewRow {
   organization_name: string;
@@ -69,7 +72,7 @@ export async function listContentReviews(db: DatabaseLike, params: OrganizationC
   }
   const where = `WHERE ${conditions.join(" AND ")}`;
   const orderBy = resolveMappedOrderBy(
-    params.sort,
+    params.sort ?? organizationContentReviewDefaultSort(status),
     {
       organizationName: "o.name COLLATE NOCASE",
       submitterName:

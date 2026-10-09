@@ -188,7 +188,7 @@ const scanned = [
   "layouts/shortcodes/sponsorform.html",
   "layouts/shortcodes/event-registration.html",
   "layouts/partials/donations/form-widget.html",
-  "assets/ts/shared/form/button-loading.tsx",
+  "assets/ts/shared/form/button-busy.ts",
   "assets/ts/shared/form/success-panel.tsx",
   "assets/ts/member-flows/portal/sections/management/GroupVoteLifecycleActions.tsx",
   "assets/ts/member-flows/portal/sections/management/MeetingSeriesSettings.tsx",
@@ -238,9 +238,14 @@ const scanned = [
   "assets/ts/member-flows/meeting-join/App.tsx",
   "assets/ts/components/TimeZoneSelect.tsx",
   "assets/ts/member-flows/portal/sections/events/EventList.tsx",
-  "assets/ts/components/LogoManager.tsx",
+  // LogoManager.tsx and the headshot managers were replaced by the one tile.
+  "assets/ts/components/PictureTile.tsx",
+  "assets/ts/components/PictureTile.css",
+  "assets/ts/components/usePictureCommands.ts",
+  "assets/ts/shared/headshot/HeadshotTile.tsx",
+  "assets/ts/shared/headshot/endpoints.ts",
+  "assets/ts/member-flows/portal/sections/sponsors/management/SponsorshipLogo.tsx",
   "assets/ts/member-flows/portal/sections/system-analytics/SystemAnalytics.tsx",
-  "assets/ts/member-flows/portal/sections/Placeholder.tsx",
   "assets/ts/member-flows/portal/sections/management/MeetingOccurrenceDetail.tsx",
   "assets/ts/member-flows/portal/sections/system-users/Users.tsx",
   "assets/ts/components/forms/form-answers.ts",
@@ -339,6 +344,7 @@ function inspect(file) {
     rel === "assets/design/tokens.public.generated.css" ||
     rel === "assets/design/tokens.agenda.generated.css" ||
     rel === "assets/design/tokens.scanner.generated.css" ||
+    rel === "assets/design/tokens.event.generated.css" ||
     rel === "assets/design/tokens.template.generated.css";
   const isTokenSource = rel.startsWith("assets/design/") && /\.ts$/.test(rel);
 

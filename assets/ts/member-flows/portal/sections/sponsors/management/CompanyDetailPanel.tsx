@@ -7,7 +7,7 @@ import {
 } from "../../../../../../shared/schemas/sponsorship-management";
 import { ApiDataTable } from "../../../../../components/ApiDataTable";
 import { Badge, statusLabel } from "../../../../../components/Badge";
-import { EmptyState } from "../../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../../ui/EmptyState";
 import type { Column } from "../../../../../components/Table";
 import { PageHeader } from "../../../../../ui/PageHeader";
 import { fmtCalendarDate } from "../../../ui";

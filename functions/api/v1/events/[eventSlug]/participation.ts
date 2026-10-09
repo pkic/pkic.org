@@ -23,8 +23,12 @@ import { openApiRoute } from "../../../../_lib/openapi/route";
 import { getEventBySlug } from "../../../../_lib/services/events";
 import { setSessionParticipation } from "../../../../_lib/services/event-participation/session-booking";
 import { participantSessionDatabase } from "../../../../_lib/services/event-participation/self-authorization";
-import { personalAgendaRouteSchema } from "../../../../../assets/shared/schemas/event-personal-agenda";
-import { personalAgenda } from "../../../../_lib/services/event-participation/personal-agenda";
+import {
+  personalAgendaProgramRouteSchema,
+  personalAgendaRouteSchema,
+} from "../../../../../assets/shared/schemas/event-personal-agenda";
+import { personalAgenda, personalAgendaProgram } from "../../../../_lib/services/event-participation/personal-agenda";
+import { getVisibleEventAudienceDetail } from "../../../../_lib/services/events/catalog";
 import { AppError } from "../../../../_lib/errors";
 import { reviewSessionParticipation } from "../../../../_lib/services/event-participation/approval";
 import { sessionBookings } from "../../../../_lib/services/event-participation/reporting";
@@ -65,6 +69,23 @@ export const PersonalAgendaGet = openApiRoute(personalAgendaRouteSchema, async (
     ),
   );
 });
+/** Signed-in participants see the same approved projection as the public agenda, plus their own marks. */
+export const PersonalAgendaProgramGet = openApiRoute(
+  personalAgendaProgramRouteSchema,
+  async (c: AdminContext, data) => {
+    markResponseSensitive(c);
+    const db = requestDb(c);
+    const actor = await requireIdentityFromRequest(db, c.req.raw, c.env);
+    const event = await getVisibleEventAudienceDetail(db, { userId: actor.userId }, data.params.eventSlug);
+    return json(
+      await personalAgendaProgram(
+        participantSessionDatabase(db, actor.userId, actor.sessionId),
+        { id: event.id, slug: data.params.eventSlug },
+        actor.userId,
+      ),
+    );
+  },
+);
 export const SessionParticipationPut = openApiRoute(sessionParticipationRouteSchema, async (c: AdminContext, data) => {
   markResponseSensitive(c);
   const db = requestDb(c);

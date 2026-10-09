@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { expect, test } from "@playwright/test";
 import { signInToPortal } from "./helpers/portal-auth";
-import { scannerStorage, reconnectScannerBrowser } from "./helpers/scanner-recovery-storage";
+import { scannerStorage, reconnectScannerBrowser, openScannerManualEntry } from "./helpers/scanner-recovery-storage";
 import {
   enrolledEventScanRequestSchema,
   eventScanResponseSchema,
@@ -104,15 +104,27 @@ test("sponsor captures live consented contacts, exports them and loses disclosur
     > = [];
     try {
       for (const expectedCount of [1, 2]) {
-        await page.getByLabel("Badge code", { exact: true }).fill(fixture.consenting.badgeId);
+        await openScannerManualEntry(page);
+        const manual = page.getByRole("dialog", { name: "Review sponsor lead", exact: true });
+        await manual.getByLabel("Badge code", { exact: true }).fill(fixture.consenting.badgeId);
         await page
           .getByRole("checkbox", {
             name: "The attendee agrees to share their contact details with this sponsor.",
             exact: true,
           })
           .check();
-        await page.getByRole("button", { name: "Capture sponsor lead", exact: true }).click();
-        await expect(page.getByLabel("Badge code", { exact: true })).toHaveValue("");
+        await manual.getByRole("button", { name: "Confirm lead", exact: true }).click();
+        await expect(manual).not.toBeVisible();
+        await openScannerManualEntry(page);
+        await expect(manual.getByLabel("Badge code", { exact: true })).toHaveValue("");
+        await expect(
+          manual.getByRole("checkbox", {
+            name: "The attendee agrees to share their contact details with this sponsor.",
+            exact: true,
+          }),
+        ).not.toBeChecked();
+        await manual.getByRole("button", { name: "Cancel", exact: true }).click();
+        await expect(manual).not.toBeVisible();
         await expect(page.getByText(`${expectedCount} scans awaiting upload`, { exact: true })).toBeVisible();
         await expect.poll(async () => (await scannerStorage(page)).pending.length).toBe(expectedCount);
       }

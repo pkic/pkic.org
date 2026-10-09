@@ -185,19 +185,21 @@ describe("portal System Users detail record", () => {
     expect(cardNamed(writer, "Visibility")?.textContent).toContain("Organization A");
   });
 
-  it("offers nothing on your own record that only makes sense aimed at someone else", async () => {
+  it("offers only actions that work, on your own record and on someone else's", async () => {
     stubDetail(user);
 
-    const other = await mountDetail(READ_ONLY, "somebody-else");
-    expect(other.querySelector('button[aria-label="Message — not available yet"]')).not.toBeNull();
-    expect(other.querySelector('button[aria-label="Follow — not available yet"]')).not.toBeNull();
-
-    // Nobody messages or follows themselves. The actions menu stays, because
-    // the record is still one the reader may act on.
-    const own = await mountDetail(READ_ONLY, user.id);
-    expect(own.querySelector('button[aria-label="Message — not available yet"]')).toBeNull();
-    expect(own.querySelector('button[aria-label="Follow — not available yet"]')).toBeNull();
-    expect(own.querySelector('button[aria-label="Record actions"]')).not.toBeNull();
+    // Messaging and following have no domain behind them, so the record does
+    // not advertise them as disabled controls; the actions menu is the only
+    // action either reader sees.
+    for (const viewer of ["somebody-else", user.id]) {
+      const root = await mountDetail(READ_ONLY, viewer);
+      const labels = [...root.querySelectorAll("button")].map(
+        (button) => button.getAttribute("aria-label") ?? button.textContent?.trim() ?? "",
+      );
+      expect(labels.filter((label) => /^(Message|Follow)\b/.test(label))).toEqual([]);
+      expect(root.textContent).not.toContain("not available yet");
+      expect(root.querySelector('button[aria-label="Record actions"]')).not.toBeNull();
+    }
   });
 
   it("offers editing in the record's own actions menu, not as a band across the page", async () => {

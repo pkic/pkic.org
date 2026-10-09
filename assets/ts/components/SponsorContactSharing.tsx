@@ -12,6 +12,7 @@ import { Alert } from "../ui/Alert";
 import { Button } from "../ui/Button";
 import { DescriptionList } from "../ui/DescriptionList";
 import { FormSection } from "../ui/FormSection";
+import { confirmAction, ConfirmDialogHost } from "./ConfirmDialog";
 
 /** Sharing changes only after an authoritative receipt for this registration. */
 function SponsorContactSharing({ initial, endpoint }: { initial: RegistrationSponsorSharing; endpoint: string }) {
@@ -19,6 +20,17 @@ function SponsorContactSharing({ initial, endpoint }: { initial: RegistrationSpo
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function withdraw(): Promise<void> {
+    const confirmed = await confirmAction({
+      title: "Withdraw sponsor contact sharing?",
+      consequences: [
+        "Sponsors of this event no longer receive your contact details",
+        "Copies sponsors have already downloaded cannot be recalled",
+      ],
+      confirmLabel: "Withdraw sharing",
+      cancelLabel: "Keep sharing",
+      tone: "danger",
+    });
+    if (!confirmed) return;
     setBusy(true);
     setError(null);
     try {
@@ -54,9 +66,11 @@ function SponsorContactSharing({ initial, endpoint }: { initial: RegistrationSpo
         have already downloaded cannot be recalled.
       </p>
       {sharing.allowed && (
-        <Button type="button" variant="secondary" loading={busy} onClick={() => void withdraw()}>
-          Withdraw sharing
-        </Button>
+        <div class="pk-cluster">
+          <Button type="button" variant="danger-quiet" loading={busy} onClick={() => void withdraw()}>
+            Withdraw sharing…
+          </Button>
+        </div>
       )}
       {error && <Alert tone="danger">{error}</Alert>}
     </FormSection>
@@ -69,5 +83,13 @@ export function mountSponsorContactSharing(
   sharing: RegistrationSponsorSharing,
 ): void {
   const host = root.querySelector<HTMLElement>("[data-sponsor-contact-sharing]");
-  if (host) render(<SponsorContactSharing initial={sharing} endpoint={endpoint} />, host);
+  if (host)
+    render(
+      <>
+        <SponsorContactSharing initial={sharing} endpoint={endpoint} />
+        {/* The withdrawal confirms in the shared dialog, which needs a host on this public page. */}
+        <ConfirmDialogHost />
+      </>,
+      host,
+    );
 }

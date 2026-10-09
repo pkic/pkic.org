@@ -429,7 +429,8 @@ describe("portal system donations", () => {
     expect(detail.querySelectorAll("dl.pk-datalist > dd")).toHaveLength(terms.length);
     // The badge is fetched from a URL, so it stays a link rather than a button.
     const badge = detail.querySelector<HTMLAnchorElement>("a[download]");
-    expect(badge?.textContent).toBe("Download badge");
+    expect(badge?.getAttribute("aria-label")).toBe("Download donation badge (JPEG)");
+    expect(badge?.querySelector("svg")).not.toBeNull();
   });
 
   it("states a permission refusal in words and asks the API for nothing", async () => {

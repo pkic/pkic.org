@@ -6,6 +6,8 @@ import { imageExtension, putUploadedImage } from "../utils/image-upload";
 import { first } from "../db/queries";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange, type AuditScope } from "./audit";
 import { storedRasterImageResponse } from "./image-response";
+import { userHeadshotRenditionResponse } from "./user-headshot-variants";
+import type { HeadshotVariantWidth } from "../../../assets/shared/headshot-variants";
 import { profileImageBucketName, requireProfileImageBucket } from "./profile-image-storage";
 import {
   prepareStorageDeletion,
@@ -15,6 +17,9 @@ import {
 import type { Env, StatementLike } from "../types";
 import { resolveAppBaseUrl } from "../config";
 import { prepareBadgeRenderJobsForUser } from "./badge-render-job-statements";
+
+/** Short and revalidated: a replaced or removed portrait must stop being shown promptly. */
+const CURRENT_HEADSHOT_CACHE_CONTROL = "public, max-age=300, s-maxage=300, must-revalidate";
 
 export interface HeadshotAudit {
   actorType: string;
@@ -360,13 +365,15 @@ export function removeUserHeadshotForRequest(
  * writer — the member migration's `member-photos/<orgSlug>/<file>` — could
  * never be served at all. Comparing the file segment keeps what the rebuild
  * was for: a replaced or removed photograph's address stops resolving at once,
- * because the row no longer names that file.
+ * because the row no longer names that file. A requested rendition is derived
+ * only after that same check, so it is revoked with the file it came from.
  */
 export async function currentUserHeadshotResponse(
   db: DatabaseLike,
-  env: Pick<Env, "ASSETS_BUCKET" | "SPEAKER_UPLOADS_BUCKET">,
+  env: Pick<Env, "ASSETS_BUCKET" | "SPEAKER_UPLOADS_BUCKET" | "IMAGES">,
   userId: string,
   requestedFile: string,
+  rendition?: { width: HeadshotVariantWidth; origin: string },
 ): Promise<Response> {
   const current = await first<{ headshot_r2_key: string | null }>(
     db,
@@ -377,9 +384,21 @@ export async function currentUserHeadshotResponse(
   if (!storedKey || userHeadshotKeyFile(storedKey) !== requestedFile) {
     throw new AppError(404, "NOT_FOUND", "Headshot not found");
   }
-  return storedRasterImageResponse(requireProfileImageBucket(env, storedKey), storedKey, {
+  const bucket = requireProfileImageBucket(env, storedKey);
+  if (rendition) {
+    return userHeadshotRenditionResponse({
+      bucket,
+      storedKey,
+      userId,
+      width: rendition.width,
+      images: env.IMAGES,
+      origin: rendition.origin,
+      cacheControl: CURRENT_HEADSHOT_CACHE_CONTROL,
+    });
+  }
+  return storedRasterImageResponse(bucket, storedKey, {
     notFoundCode: "NOT_FOUND",
     notFoundMessage: "Headshot not found",
-    cacheControl: "public, max-age=300, s-maxage=300, must-revalidate",
+    cacheControl: CURRENT_HEADSHOT_CACHE_CONTROL,
   });
 }

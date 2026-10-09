@@ -2,37 +2,10 @@ import { SiteImage } from "./SiteImage";
 import type { SiteEventsIndex, SiteListingItem } from "../../shared/site-content";
 import { EventCard } from "./EventCard";
 import { LocalTime } from "./SiteDate";
-import { CalendarGlyph } from "./SiteGlyphs";
 import { ButtonLink } from "../ui/Button";
+import { IconCalendar, IconMapPin } from "../ui/MediaIcons";
 
 import "./BlogCard.css";
-
-/**
- * The events index, as `layouts/events/list.html` lays it out.
- *
- * Two columns: the consortium's own events grouped by year in the main one,
- * and the sponsored webinars beside them. Upcoming events come first and are
- * badged as such; everything else is grouped newest year first.
- */
-function PinGlyph() {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="11"
-      height="11"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      stroke-width="2"
-      stroke-linecap="round"
-      stroke-linejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z" />
-      <circle cx="12" cy="10" r="3" />
-    </svg>
-  );
-}
 
 function WebinarCard({ item, upcoming }: { item: SiteListingItem; upcoming: boolean }) {
   return (
@@ -57,20 +30,19 @@ function WebinarCard({ item, upcoming }: { item: SiteListingItem; upcoming: bool
         </h3>
         {item.date ? (
           <p class="event-webinar-meta">
-            <CalendarGlyph size={11} />
+            <IconCalendar width="11" height="11" />
             <LocalTime format="date-time" value={item.date} />
           </p>
         ) : null}
         {item.location ? (
           <p class="event-webinar-meta">
-            <PinGlyph />
+            <IconMapPin width="11" height="11" />
             {item.location}
           </p>
         ) : null}
         {item.summary ? <p class="event-webinar-summary">{item.summary}</p> : null}
         {upcoming && item.button ? (
           <ButtonLink
-            block
             class="event-webinar-register-btn"
             href={item.button.href}
             rel="noopener noreferrer"
@@ -127,7 +99,7 @@ function Sidebar({ events }: { events: SiteEventsIndex }) {
           </>
         ) : null}
         {upcoming.length || past.length ? (
-          <ButtonLink block href="/events/webinars/" size="sm" variant="secondary">
+          <ButtonLink href="/events/webinars/" size="sm" variant="secondary">
             View all webinars
           </ButtonLink>
         ) : (
@@ -139,7 +111,7 @@ function Sidebar({ events }: { events: SiteEventsIndex }) {
         )}
         <div class="events-sidebar-cta pk-stack pk-stack--snug">
           <p class="pk-small">{sidebar?.cta ?? "Want to host a sponsored webinar?"}</p>
-          <ButtonLink block href={sidebar?.ctaLink ?? "/sponsors/"} size="sm" variant="secondary">
+          <ButtonLink href={sidebar?.ctaLink ?? "/sponsors/"} size="sm" variant="secondary">
             {sidebar?.ctaLabel ?? "Sponsorship opportunities"}
           </ButtonLink>
         </div>
@@ -148,6 +120,13 @@ function Sidebar({ events }: { events: SiteEventsIndex }) {
   );
 }
 
+/**
+ * The events index, as `layouts/events/list.html` lays it out.
+ *
+ * Two columns: the consortium's own events grouped by year in the main one,
+ * and the sponsored webinars beside them. Upcoming events come first and are
+ * badged as such; everything else is grouped newest year first.
+ */
 export function EventsIndex({ events, html }: { events: SiteEventsIndex; html: string }) {
   const hasEvents = events.upcoming.length > 0 || events.past.length > 0;
   return (

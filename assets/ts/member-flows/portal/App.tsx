@@ -1,6 +1,7 @@
 import { Button } from "../../ui/Button";
 import { ScannerCodePreparation } from "./sections/events/detail/scanner/scanner-code-preparation";
 import { prepareScannerDecoder } from "./sections/events/detail/scanner/prepareScannerDecoder";
+import { registerPortalServiceWorker } from "./portal-worker-registration";
 /**
  * Portal root — gates on identity authentication, then loads member profile
  * data only when the session advertises member capacity. Staff-only users can
@@ -31,7 +32,6 @@ import {
 import { Login } from "./shell/Login";
 import { Alert } from "../../ui/Alert";
 import { ConfirmDialogHost } from "../../components/ConfirmDialog";
-import { PortalShell } from "./shell/PortalShell";
 import { VerifyingOverlay } from "../../components/VerifyingOverlay";
 import { myProfileSchema } from "../../../shared/schemas/me";
 import { userAuthEstablishedResponseSchema, userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth";
@@ -41,7 +41,7 @@ import {
   readPendingUserLogout,
   subscribeUserSessionState,
 } from "../../shared/pending-user-logout";
-import { resumePendingUserLogout, signOutPortalSession } from "./logout-session";
+import { resumePendingUserLogout } from "./logout-session";
 import { SponsorAccess } from "./sections/sponsors/Access";
 import { portalHashPath, portalMagicLinkReturnPath, portalMagicLinkToken } from "./hash-route";
 import { IdentityInvitationAcceptance } from "./shell/IdentityInvitationAcceptance";
@@ -53,38 +53,63 @@ import { meetingEntryReturnUrl } from "../../../shared/meeting-entry-navigation"
 import { MeetingEntryReturn } from "./shell/MeetingEntryReturn";
 import { useSessionExpiry } from "./use-session-expiry";
 import { useSessionActivity } from "./use-session-activity";
+const PortalShell = lazy(() => import("./shell/PortalShell").then((module) => ({ default: module.PortalShell })));
 const loadOfflineScannerBootstrap = () => import("./sections/events/detail/scanner/OfflineScannerBootstrap");
 const OfflineScannerBootstrap = lazy(() =>
   loadOfflineScannerBootstrap().then((module) => ({ default: module.OfflineScannerBootstrap })),
 );
 const prepareOfflineScannerCode = (signal: AbortSignal) => prepareScannerDecoder(signal, loadOfflineScannerBootstrap);
 
-async function verifyMagicLink(token: string): Promise<PortalSession> {
+async function verifyMagicLink(token: string, isCurrent: () => boolean): Promise<PortalSession | null> {
   const session = await postJson("/api/v1/auth/verify-link", { token }, userAuthEstablishedResponseSchema);
+  if (!isCurrent()) return null;
   if (!(await recordCanonicalSession({ sessionId: session.sessionId, operatorUserId: session.identity.id })))
     throw new Error("This session was signed out on this device.");
+  if (!isCurrent()) return null;
   savePortalSession(session);
   return session;
 }
 
 export function App() {
+  useEffect(() => {
+    // Public shell preparation is independent of sign-in, scanner diagnostics, and push enrollment.
+    void registerPortalServiceWorker().catch(() => {});
+  }, []);
   const [portalPath] = usePortalHashLocation();
+  const magicLinkToken = portalMagicLinkToken(window.location.hash);
   const isMcpAuthorization = portalPath === "/auth/oauth";
   const isIdentityInvitation = portalPath === "/identity-invitations";
   const [verifying, setVerifying] = useState(() => Boolean(portalMagicLinkToken(window.location.hash)));
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
-  const [reauthenticating, setReauthenticating] = useState(false);
+  const [reauthenticationRefusedFor, setReauthenticationRefusedFor] = useState<string | null>(null);
+  const [checkingReauthentication, setCheckingReauthentication] = useState(false);
+  useEffect(() => {
+    if (portalPath === "/home" || reauthenticationRefusedFor !== portalSession.value?.sessionId)
+      setReauthenticationRefusedFor(null);
+  }, [portalPath, portalSession.value?.sessionId, reauthenticationRefusedFor]);
 
-  async function loadPortalSession(): Promise<boolean> {
+  function checkRenewedStaff(session: PortalSession): void {
+    setReauthenticationRefusedFor(!session.staff && !session.staffReauthenticationRequired ? session.sessionId : null);
+  }
+
+  async function loadPortalSession(isCurrent: () => boolean = () => true): Promise<boolean> {
+    if (!isCurrent()) return portalSession.value !== null;
     scannerTransportUnavailable.value = false;
     setSessionError(null);
     const checkedSessionId = portalSession.value?.sessionId;
     let checkedLocalSession: Awaited<ReturnType<typeof readActiveUserSession>> = null;
     try {
       checkedLocalSession = await readActiveUserSession();
+      if (!isCurrent()) return portalSession.value !== null;
       const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
-      if (!(await recordCanonicalSession({ sessionId: session.sessionId, operatorUserId: session.identity.id }))) {
+      if (!isCurrent()) return portalSession.value !== null;
+      const recorded = await recordCanonicalSession({
+        sessionId: session.sessionId,
+        operatorUserId: session.identity.id,
+      });
+      if (!isCurrent()) return portalSession.value !== null;
+      if (!recorded) {
         if (portalSession.value?.sessionId === session.sessionId) clearAuth();
         finishAuthCheck();
         return portalSession.value !== null;
@@ -93,15 +118,18 @@ export function App() {
       savePortalSession(session);
       if (session.member) {
         const nextProfile = await getJson("/api/v1/users/current", myProfileSchema);
-        if (portalSession.value === session) saveProfile(nextProfile);
+        if (isCurrent() && portalSession.value === session) saveProfile(nextProfile);
       } else {
         clearMemberProfile();
       }
     } catch (error) {
+      if (!isCurrent()) return portalSession.value !== null;
       if (error instanceof ApiClientError && [401, 403].includes(error.status)) {
         await clearScannerOfflineContexts(checkedLocalSession).catch(() => {
-          setSessionError("Local scanner preparation could not be cleared. Reconnect before scanning.");
+          if (isCurrent())
+            setSessionError("Local scanner preparation could not be cleared. Reconnect before scanning.");
         });
+        if (!isCurrent()) return portalSession.value !== null;
         if (portalSession.value?.sessionId === checkedSessionId) clearUserSession();
       } else {
         scannerTransportUnavailable.value =
@@ -110,25 +138,22 @@ export function App() {
       }
     }
 
-    finishAuthCheck();
+    if (isCurrent()) finishAuthCheck();
     return portalSession.value !== null;
+  }
+
+  async function refreshReauthentication(): Promise<void> {
+    setCheckingReauthentication(true);
+    try {
+      await loadPortalSession();
+      if (portalSession.value) checkRenewedStaff(portalSession.value);
+    } finally {
+      setCheckingReauthentication(false);
+    }
   }
 
   useSessionExpiry();
   useSessionActivity();
-
-  async function restartSignIn(): Promise<void> {
-    setSessionError(null);
-    setReauthenticating(true);
-    try {
-      const session = portalSession.value;
-      if (session) await signOutPortalSession(session);
-    } catch {
-      setSessionError("Local sign-out could not be saved. Keep this page open and try again.");
-    } finally {
-      setReauthenticating(false);
-    }
-  }
 
   useEffect(() => {
     let cancelled = false;
@@ -139,16 +164,27 @@ export function App() {
         finishAuthCheck();
         return;
       }
+      setVerifying(Boolean(magicLinkToken));
+      setVerifyError(null);
       setAuthChecking();
-      if (await resumePendingUserLogout()) {
+      const pendingLogout = await resumePendingUserLogout();
+      if (cancelled) return;
+      if (pendingLogout) {
         clearAuth();
         setVerifying(false);
         return;
       }
-      const userToken = portalMagicLinkToken(window.location.hash);
+      const existingSession = portalSession.value;
+      const restoringStaff = Boolean(
+        existingSession &&
+        (existingSession.staffReauthenticationRequired || existingSession.sessionId === reauthenticationRefusedFor),
+      );
+      const userToken = magicLinkToken;
       if (userToken) {
         try {
-          const session = await verifyMagicLink(userToken);
+          const session = await verifyMagicLink(userToken, () => !cancelled);
+          if (!session || cancelled) return;
+          if (restoringStaff) checkRenewedStaff(session);
           // Recorded before the redirect below rewrites the hash: after that
           // there is nothing left on the page saying this session began with a
           // link rather than with a passkey.
@@ -161,19 +197,23 @@ export function App() {
             const next = portalMagicLinkReturnPath(window.location.hash);
             history.replaceState({}, "", `/portal/#${next ?? portalDefaultPath(session)}`);
           }
+          // Token removal owns the canonical session refresh in the next effect.
+          setVerifying(false);
+          return;
         } catch (err) {
           if (!cancelled) {
             setVerifyError(
               err instanceof ApiClientError ? err.message : "The link may have expired or already been used.",
             );
             setVerifying(false);
-            clearAuth();
+            if (existingSession) await loadPortalSession(() => !cancelled);
+            else clearAuth();
             return;
           }
         }
         if (!cancelled) setVerifying(false);
       }
-      if (!cancelled) await loadPortalSession();
+      if (!cancelled) await loadPortalSession(() => !cancelled);
     }
 
     void run().catch(() => {
@@ -186,7 +226,7 @@ export function App() {
     return () => {
       cancelled = true;
     };
-  }, [isMcpAuthorization, isIdentityInvitation]);
+  }, [isMcpAuthorization, isIdentityInvitation, magicLinkToken]);
 
   useEffect(() => {
     async function changed() {
@@ -225,7 +265,15 @@ export function App() {
   }
 
   if (verifying || authStatus.value === "loading") {
-    return <VerifyingOverlay />;
+    return (
+      <Login
+        busy
+        status={verifying ? "Verifying your sign-in link…" : "Checking your sign-in…"}
+        onSignedIn={async () => {
+          await loadPortalSession();
+        }}
+      />
+    );
   }
 
   const pendingNotice =
@@ -251,25 +299,72 @@ export function App() {
         </Suspense>
       </div>
     );
-  if (sessionError && !isAuthed.value) return <div class="pk pk-stack">{sessionNotice}</div>;
+  if (sessionError && !isAuthed.value)
+    return (
+      <Login
+        notice={
+          <>
+            {pendingNotice}
+            {sessionNotice}
+          </>
+        }
+        onSignedIn={async () => {
+          await loadPortalSession();
+        }}
+      />
+    );
 
   if (isAuthed.value) {
+    const reauthenticationRefused = reauthenticationRefusedFor === portalSession.value?.sessionId;
+    if (
+      (checkingReauthentication || portalSession.value?.staffReauthenticationRequired || reauthenticationRefused) &&
+      portalPath !== "/home"
+    ) {
+      return (
+        <Login
+          key={`reauthentication:${magicLinkToken ?? ""}`}
+          reauthentication
+          busy={checkingReauthentication}
+          notice={
+            <>
+              {sessionNotice}
+              {reauthenticationRefused && (
+                <Alert tone="info" title="Administrator access unavailable">
+                  This account does not currently have administrator access. Continue to Home to use your remaining
+                  portal access.
+                </Alert>
+              )}
+              {verifyError && (
+                <Alert tone="danger" title="Verification failed">
+                  {verifyError}
+                </Alert>
+              )}
+            </>
+          }
+          onAuthenticationFailed={async (error) => {
+            setVerifyError(error instanceof Error ? error.message : "Verification failed. Please try again.");
+            await refreshReauthentication();
+          }}
+          onSignedIn={async () => {
+            setVerifyError(null);
+            const returnPath = portalMagicLinkReturnPath(window.location.hash);
+            await refreshReauthentication();
+            if (returnPath && portalSession.value?.staff && !portalSession.value.staffReauthenticationRequired)
+              history.replaceState({}, "", `/portal/#${returnPath}`);
+          }}
+        />
+      );
+    }
     const meetingDestination = meetingEntryReturnUrl(window.location.hash);
     if (meetingDestination) return <MeetingEntryReturn destination={meetingDestination} />;
     return (
       <>
         {pendingNotice}
         {sessionNotice}
-        {portalSession.value?.staffReauthenticationRequired && (
-          <Alert tone="warn" title="Administrator access expired">
-            <p>You are still signed in with your other portal access. Sign in again to restore administrator access.</p>
-            <Button variant="secondary" loading={reauthenticating} onClick={() => void restartSignIn()}>
-              Sign out and sign in again
-            </Button>
-          </Alert>
-        )}
         <ScannerCodePreparation.Provider value={prepareOfflineScannerCode}>
-          <PortalShell key={`${portalSession.value?.identity.id}:${portalSession.value?.member?.identityId ?? ""}`} />
+          <Suspense fallback={<Login busy status="Opening your portal…" onSignedIn={() => {}} />}>
+            <PortalShell key={`${portalSession.value?.identity.id}:${portalSession.value?.member?.identityId ?? ""}`} />
+          </Suspense>
         </ScannerCodePreparation.Provider>
         <ConfirmDialogHost />
       </>
@@ -299,22 +394,20 @@ export function App() {
   }
 
   return (
-    <>
-      {verifyError && (
-        <div class="pk pk-container pk-section pk-cluster pk-cluster--center">
-          <div class="content-width-sm">
+    <Login
+      notice={
+        <>
+          {verifyError && (
             <Alert tone="danger" title="Sign-in failed">
               {verifyError}
             </Alert>
-          </div>
-        </div>
-      )}
-      {pendingNotice}
-      <Login
-        onSignedIn={async () => {
-          await loadPortalSession();
-        }}
-      />
-    </>
+          )}
+          {pendingNotice}
+        </>
+      }
+      onSignedIn={async () => {
+        await loadPortalSession();
+      }}
+    />
   );
 }

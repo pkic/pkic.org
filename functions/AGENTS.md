@@ -10,3 +10,4 @@
 - Preserve the dependency direction from shared contracts to domain policy, persistence, focused use cases, and thin route adapters.
 - Generic infrastructure such as the email outbox must not import feature services. Feature use cases may depend on infrastructure interfaces.
 - Produce stored and returned instants through `_lib/utils/time.ts` so every write is ISO-8601 UTC with `Z`. Do not emit a server-local or SQL-defaulted timestamp.
+- Keep Worker startup far below Cloudflare's 1s limit: do no work at module scope (parsing YAML/JSON, building schema or OpenAPI registries, large eager imports); precompute at build time or load per route on first use. Check with `wrangler check startup` after changes to routing, bundling, or shared schemas.

@@ -1,5 +1,6 @@
 import { logInfo } from "../logging";
 import { resolveEventFrontendRoutes, type EventRecord } from "./events";
+import { eventMyAgendaPath } from "../../../assets/shared/event-participation-link";
 
 type EventRouteSource = Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json" | "source_mode">;
 
@@ -107,6 +108,11 @@ export function proposalManagePageUrl(appBaseUrl: string, event: EventRouteSourc
     event: event.slug,
     token,
   });
+}
+
+/** The attendee's own agenda in the portal; it resolves live sessions and standing after sign-in. */
+export function myAgendaPageUrl(appBaseUrl: string, event: Pick<EventRouteSource, "slug">): string {
+  return new URL(eventMyAgendaPath(event.slug), appBaseUrl).toString();
 }
 
 export function speakerParticipationPageUrl(appBaseUrl: string, event: EventRouteSource, proposalId: string): string {

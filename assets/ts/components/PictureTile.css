@@ -6,16 +6,26 @@
  * else. The corner removal control stays visible and keyboard accessible.
  */
 @layer components {
+  /*
+   * The tile is as wide as its picture, never the column it sits in: the
+   * corner removal is positioned against the tile, and a tile stretched across
+   * a panel put it at the panel's far edge instead of on the picture.
+   */
   .pk-picture-tile {
     position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: var(--pk-2);
+    inline-size: min(100%, 14rem);
+  }
+
+  .pk-picture-tile--mark {
+    inline-size: fit-content;
   }
 
   .pk-picture-tile__control,
-  .pk-picture-tile[role="img"] {
+  .pk-picture-tile--static {
     position: relative;
     display: grid;
     place-items: center;
@@ -39,7 +49,7 @@
      and a portrait squared off reads as a logo. The veil and the initials
      inherit the radius so the whole affordance keeps one silhouette. */
   .pk-picture-tile--round .pk-picture-tile__control,
-  .pk-picture-tile--round[role="img"],
+  .pk-picture-tile--round.pk-picture-tile--static,
   .pk-picture-tile--round .pk-picture-tile__img,
   .pk-picture-tile--round .pk-picture-tile__initials,
   .pk-picture-tile--round .pk-picture-tile__veil {
@@ -47,7 +57,7 @@
   }
 
   .pk-picture-tile--mark .pk-picture-tile__control,
-  .pk-picture-tile--mark[role="img"] {
+  .pk-picture-tile--mark.pk-picture-tile--static {
     width: 92px;
     max-width: none;
     aspect-ratio: 1;

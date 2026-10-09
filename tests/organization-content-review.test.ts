@@ -822,6 +822,39 @@ describe("Organization content moderation", () => {
     expect(resubmit.status).toBe(200);
   });
 
+  it("lists the pending queue oldest first and decided reviews newest first", async () => {
+    const reviewIds: string[] = [];
+    for (const [index, email] of ["queue-first@example.test", "queue-second@example.test"].entries()) {
+      const { organizationId, userId } = await seedOrgWithContact(email, "F");
+      const token = await createMemberSession(env.DB, userId, `queue-order-token-${index}`);
+      const submitResponse = await call(token, organizationContentReviewsPath(organizationId), {
+        method: "POST",
+        body: JSON.stringify({ slogan: `Queued ${index}` }),
+      });
+      expect(submitResponse.status).toBe(200);
+      const { review } = (await submitResponse.json()) as { review: { id: string } };
+      await env.DB.prepare("UPDATE organization_content_reviews SET submitted_at = ? WHERE id = ?")
+        .bind(`2026-01-0${index + 1}T00:00:00.000Z`, review.id)
+        .run();
+      reviewIds.push(review.id);
+    }
+    const listedIds = async (status: string) => {
+      const response = await call(adminToken, `/api/v1/organizations/content-reviews?status=${status}`);
+      expect(response.status).toBe(200);
+      return organizationContentReviewsListResponseSchema.parse(await response.json()).reviews.map((r) => r.id);
+    };
+
+    expect(await listedIds("pending")).toEqual(reviewIds);
+    for (const reviewId of reviewIds) {
+      const rejectResponse = await call(adminToken, `/api/v1/organizations/content-reviews/${reviewId}/reject`, {
+        method: "POST",
+        body: JSON.stringify({ reviewerNote: "Not this time" }),
+      });
+      expect(rejectResponse.status, await rejectResponse.clone().text()).toBe(200);
+    }
+    expect(await listedIds("rejected")).toEqual([...reviewIds].reverse());
+  });
+
   it("staff admin reaches the static content-review collection before dynamic organization IDs, then approves a review", async () => {
     const { organizationId, userId } = await seedOrgWithContact("primary5@example.test", "F");
     const token = await createMemberSession(env.DB, userId, "approve-flow-token");

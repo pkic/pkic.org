@@ -5,6 +5,7 @@ import type { SiteBlogSidebar, SiteAuthor } from "../../shared/site-content";
 import type { ComponentChildren } from "preact";
 import { Avatar } from "../ui/Avatar";
 import { LinkList } from "../ui/LinkList";
+import { IconChevron } from "../ui/MediaIcons";
 import { AuthorStrip } from "./BlogCard";
 import { LocalTime } from "./SiteDate";
 
@@ -153,29 +154,6 @@ function Sidebar({ sidebar, sponsors }: { sidebar: SiteBlogSidebar; sponsors?: C
   );
 }
 
-function NavArrow({ direction }: { direction: "next" | "previous" }) {
-  return (
-    <svg
-      xmlns="http://www.w3.org/2000/svg"
-      width="14"
-      height="14"
-      fill="currentColor"
-      viewBox="0 0 16 16"
-      aria-hidden="true"
-      focusable="false"
-    >
-      <path
-        fill-rule="evenodd"
-        d={
-          direction === "previous"
-            ? "M11.354 1.646a.5.5 0 0 1 0 .708L5.707 8l5.647 5.646a.5.5 0 0 1-.708.708l-6-6a.5.5 0 0 1 0-.708l6-6a.5.5 0 0 1 .708 0z"
-            : "M4.646 1.646a.5.5 0 0 1 .708 0l6 6a.5.5 0 0 1 0 .708l-6 6a.5.5 0 0 1-.708-.708L10.293 8 4.646 2.354a.5.5 0 0 1 0-.708z"
-        }
-      />
-    </svg>
-  );
-}
-
 /** Articles this old were published under the consortium's former name. */
 const CASC_UNTIL = "2021-02-01";
 
@@ -237,7 +215,7 @@ export function BlogPost({
               {sidebar.previous ? (
                 <a class="blog-post-nav-item blog-post-nav-prev" href={sidebar.previous.href} title="Previous article">
                   <span class="blog-post-nav-label">
-                    <NavArrow direction="previous" />
+                    <IconChevron pointing="left" width="14" height="14" />
                     Previous article
                   </span>
                   <span class="blog-post-nav-title">{sidebar.previous.title}</span>
@@ -249,7 +227,7 @@ export function BlogPost({
                 <a class="blog-post-nav-item blog-post-nav-next" href={sidebar.next.href} title="Next article">
                   <span class="blog-post-nav-label">
                     Next article
-                    <NavArrow direction="next" />
+                    <IconChevron pointing="right" width="14" height="14" />
                   </span>
                   <span class="blog-post-nav-title">{sidebar.next.title}</span>
                 </a>

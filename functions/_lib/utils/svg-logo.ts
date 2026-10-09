@@ -4,14 +4,22 @@
  * event handlers, metadata, comments, DOCTYPEs, and editor cruft cannot
  * survive by construction (sanitization by reconstruction, not by
  * blocklist). On top of that the logo is normalized for embedding anywhere:
- * full-canvas background fills are dropped, the viewBox is cropped to the
- * rendered content's bounding box, and the root width/height are removed so
- * the logo scales with its container.
+ * full-canvas background fills are dropped, the viewBox is tightened to the
+ * painted pixels inside the original viewBox, and the root width/height are
+ * removed so the logo scales with its container.
  */
 import { AppError } from "../errors";
 import { ensureResvgWasm } from "./resvg";
 
+type ResvgConstructor = Awaited<ReturnType<typeof ensureResvgWasm>>;
+
 export const SVG_LOGO_CONTENT_TYPE = "image/svg+xml";
+
+export const SVG_LOGO_LIVE_TEXT_MESSAGE =
+  "This logo uses live text. Export it with text converted to outlines (paths) and upload it again.";
+
+/** `<text>`, `<tspan>`, and `<textPath>`, with or without a namespace prefix. */
+const LIVE_TEXT_ELEMENT = /<(?:[\w-]+:)?(?:text|tspan|textpath)\b/i;
 
 const DRAWABLE_TAGS = new Set(["path", "rect", "circle", "ellipse", "line", "polyline", "polygon", "text", "use"]);
 
@@ -114,6 +122,77 @@ function stripBackgroundRects(svg: string): string {
   return output;
 }
 
+interface CanvasRect {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+}
+
+/** Longest side, in pixels, of the coverage raster that measures the painted extent. */
+const COVERAGE_RASTER_SIZE = 1024;
+
+function serializedViewBox(svg: string): CanvasRect | null {
+  const root = /<svg\b[^>]*>/i.exec(svg)?.[0];
+  const values = root
+    ? attribute(root, "viewBox")
+        ?.trim()
+        .split(/[\s,]+/)
+        .map(Number)
+    : undefined;
+  if (!values || values.length !== 4 || !values.every(Number.isFinite)) return null;
+  const [x, y, width, height] = values;
+  return width > 0 && height > 0 ? { x, y, width, height } : null;
+}
+
+/**
+ * Measures the painted extent by rasterizing the parsed tree inside its own
+ * viewBox. resvg's geometric bounding boxes are not reliable enough to crop
+ * by: `innerBBox()` tests each top-level element against the viewBox in the
+ * element's untransformed coordinates, so transformed artwork is dropped or
+ * clipped, and `getBBox()` underestimates miter joins and ignores filters.
+ * Coverage is what the logo actually shows (transforms, strokes, markers,
+ * clip paths, and filter effects included), and every partially covered
+ * edge pixel counts, so the result never cuts visible content. Content that
+ * reaches a raster edge keeps the original viewBox edge on that side.
+ */
+function paintedExtent(Resvg: ResvgConstructor, normalizedSvg: string, canvas: CanvasRect): CanvasRect | null {
+  const fitTo =
+    canvas.width >= canvas.height
+      ? { mode: "width" as const, value: COVERAGE_RASTER_SIZE }
+      : { mode: "height" as const, value: COVERAGE_RASTER_SIZE };
+  const measure = new Resvg(stripRootDimensions(normalizedSvg), { fitTo });
+  try {
+    const image = measure.render();
+    try {
+      const { width, height, pixels } = image;
+      let [minX, minY, maxX, maxY] = [width, height, -1, -1];
+      for (let row = 0; row < height; row += 1) {
+        for (let column = 0; column < width; column += 1) {
+          if (pixels[(row * width + column) * 4 + 3] === 0) continue;
+          if (column < minX) minX = column;
+          if (column > maxX) maxX = column;
+          if (row < minY) minY = row;
+          maxY = row;
+        }
+      }
+      if (maxX < 0) return null;
+      const unitsPerPixel = fitTo.mode === "width" ? canvas.width / width : canvas.height / height;
+      const right = canvas.x + canvas.width;
+      const bottom = canvas.y + canvas.height;
+      const x = minX === 0 ? canvas.x : canvas.x + minX * unitsPerPixel;
+      const y = minY === 0 ? canvas.y : canvas.y + minY * unitsPerPixel;
+      const x2 = maxX === width - 1 ? right : Math.min(right, canvas.x + (maxX + 1) * unitsPerPixel);
+      const y2 = maxY === height - 1 ? bottom : Math.min(bottom, canvas.y + (maxY + 1) * unitsPerPixel);
+      return { x, y, width: x2 - x, height: y2 - y };
+    } finally {
+      image.free();
+    }
+  } finally {
+    measure.free();
+  }
+}
+
 /** Removes fixed dimensions from the root element so the logo fills its container. */
 function stripRootDimensions(svg: string): string {
   return svg.replace(/<svg\b[^>]*>/i, (root) =>
@@ -140,6 +219,11 @@ export async function sanitizeSvgLogo(buffer: ArrayBuffer): Promise<SanitizedSvg
   if (/<image\b/i.test(text) || /data:image\//i.test(text)) {
     throw invalid("The SVG must be pure vector artwork — embedded raster images are not allowed.");
   }
+  // The sanitizer loads no fonts, so live text would be silently dropped from
+  // the rebuilt logo. Refuse it instead of storing a logo without lettering.
+  if (LIVE_TEXT_ELEMENT.test(text.replace(/<!--[\s\S]*?-->/g, ""))) {
+    throw invalid(SVG_LOGO_LIVE_TEXT_MESSAGE);
+  }
 
   const withoutBackground = stripBackgroundRects(text);
 
@@ -151,11 +235,23 @@ export async function sanitizeSvgLogo(buffer: ArrayBuffer): Promise<SanitizedSvg
     throw invalid("The SVG could not be parsed.");
   }
   try {
-    const bbox = resvg.innerBBox() ?? resvg.getBBox();
-    if (!bbox || bbox.width <= 0 || bbox.height <= 0) {
-      throw invalid("The SVG has no visible content.");
+    const parsed = resvg.toString();
+    const canvas = serializedViewBox(parsed);
+    // Without a measurable canvas the original viewBox is kept untightened.
+    if (canvas) {
+      const extent = paintedExtent(Resvg, parsed, canvas);
+      // getBBox() only supplies the wasm BBox handle that cropByBBox accepts.
+      const bbox = extent && extent.width > 0 && extent.height > 0 ? resvg.getBBox() : undefined;
+      if (!extent || !bbox) {
+        throw invalid("The SVG has no visible content.");
+      }
+      try {
+        Object.assign(bbox, extent);
+        resvg.cropByBBox(bbox);
+      } finally {
+        bbox.free();
+      }
     }
-    resvg.cropByBBox(bbox);
     const normalized = stripRootDimensions(resvg.toString());
     if (!/<svg\b/i.test(normalized)) {
       throw invalid("The SVG could not be normalized.");

@@ -22,7 +22,7 @@ import { getJson } from "../shared/api-client";
 import { VoteCard } from "../site/PublicVoteCard";
 import { Spinner } from "../components/Spinner";
 import { ErrorAlert } from "../components/ErrorAlert";
-import { EmptyState } from "../ui/RecordEmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import { Button } from "../ui/Button";
 import { publicVotesListResponseSchema, type PublicVotesListResponse } from "../../shared/schemas/votes";
 
@@ -129,10 +129,12 @@ export function VotesIndex({ apiBase, detailBase }: { apiBase: string; detailBas
 
   if (openSection.page.total === 0 && closedSection.page.total === 0) {
     return (
-      <EmptyState
-        title="No public votes yet."
-        body="Votes appear here once a group opens one to the public. Nothing is open or closed at the moment."
-      />
+      <div class="pk">
+        <EmptyState
+          title="No public votes yet."
+          body="Votes appear here once a group opens one to the public. Nothing is open or closed at the moment."
+        />
+      </div>
     );
   }
 

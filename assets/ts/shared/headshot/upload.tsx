@@ -1,11 +1,21 @@
 import { render } from "preact";
 import { dismissModalDialog, mountModalTemplate, openModalDialog } from "../modal-template";
 
-const HEADSHOT_DISCLAIMER_TEXT = [
+/** What a person asserts before publishing a photograph of themselves. */
+export const OWN_HEADSHOT_DISCLAIMER: string[] = [
   "This is a photograph of myself.",
   "I hold the copyright to this image, or I have an unrestricted, royalty-free license to use and publish it.",
   "The image does not infringe any third-party intellectual property rights, privacy rights, or applicable laws.",
   "I grant PKI Consortium a non-exclusive, worldwide license to display this image alongside my name and professional details on this website and related materials.",
+  "I accept full responsibility for any claims arising from this upload.",
+];
+
+/** What someone asserts before publishing a photograph of another person. */
+export const ADMIN_HEADSHOT_DISCLAIMER: string[] = [
+  "This is a photograph of the named individual.",
+  "PKI Consortium holds the copyright, or has an unrestricted, royalty-free license to use and publish this image.",
+  "The image does not infringe any third-party intellectual property rights, privacy rights, or applicable laws.",
+  "PKI Consortium may display this image alongside the individual's name and professional details on the website and related materials.",
   "I accept full responsibility for any claims arising from this upload.",
 ];
 
@@ -51,7 +61,7 @@ export interface HeadshotDisclaimerOptions {
 }
 
 export function showHeadshotDisclaimer(opts: HeadshotDisclaimerOptions = {}): Promise<boolean> {
-  const { title = "Before you upload a photo", texts = HEADSHOT_DISCLAIMER_TEXT, confirmText = "Upload photo" } = opts;
+  const { title = "Before you upload a photo", texts = OWN_HEADSHOT_DISCLAIMER, confirmText = "Upload photo" } = opts;
 
   return new Promise((resolve) => {
     const dialog = mountModalTemplate(

@@ -1,8 +1,8 @@
 /**
  * Driving a headshot upload the way a reader does.
  *
- * `AdminHeadshotManager` renders a visible button and a hidden file input, and
- * the button is what opens the picker. A spec that reaches past the button and
+ * The headshot tile is a visible button over a hidden file input, and the
+ * button is what opens the picker. A spec that reaches past the button and
  * calls `setInputFiles` on the input it finds in the DOM proves only that the
  * input has a listener — not that the button reaches it. Issue #28 was exactly
  * that gap: the wiring swapped the input for a clone, leaving the button
@@ -30,12 +30,13 @@ export const TINY_JPEG = Buffer.from(
  * The portrait is the control (#28): a reader changes a photograph by
  * clicking the face at the top of the record, the way every network they
  * already use works — not through an upload button behind a disclosure named
- * "Account administration". The tile names itself for what pressing it does,
- * so it is "Upload photo" until there is one and "Change photo" after.
+ * "Account administration". The tile names itself for what pressing it does
+ * and whose photo it is, so it is "Upload photo of …" until there is one and
+ * "Change photo of …" after.
  */
 export async function chooseHeadshotThroughUploadButton(page: Page): Promise<void> {
   const chooser = page.waitForEvent("filechooser");
-  await page.getByRole("button", { name: /^(Upload|Change) photo$/ }).click();
+  await page.getByRole("button", { name: /^(Upload|Change) photo of / }).click();
   await (await chooser).setFiles({ name: "headshot.jpg", mimeType: "image/jpeg", buffer: TINY_JPEG });
 }
 

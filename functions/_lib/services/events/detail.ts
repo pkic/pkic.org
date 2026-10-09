@@ -10,6 +10,8 @@ import type { DatabaseLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
 import { resolveEventSessionTypes } from "../events";
 import { eventColumns, type EventRecord } from "../event-types";
+import { readEventAudienceAccess } from "./scanner-access";
+import type { EventAudienceViewer } from "./visibility";
 
 interface EventDetailRow extends EventRecord {
   user_retention_days: number | null;
@@ -44,6 +46,7 @@ export async function getEventDetail(
   db: DatabaseLike,
   eventSlug: string,
   capabilities: readonly EventManagementCapability[],
+  viewer?: EventAudienceViewer,
 ): Promise<EventDetail> {
   const event = await first<EventDetailRow>(
     db,
@@ -63,6 +66,9 @@ export async function getEventDetail(
     event.profile_key !== "board_meeting" &&
     !event.series_id;
   return eventDetailSchema.parse({
+    scannerAccess: viewer
+      ? (await readEventAudienceAccess(db, viewer, [event.id])).get(event.id)?.scannerAccess
+      : undefined,
     id: event.id,
     slug: event.slug,
     name: event.name,

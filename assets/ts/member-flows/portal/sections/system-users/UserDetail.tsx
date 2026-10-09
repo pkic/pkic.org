@@ -339,45 +339,10 @@ export function UserDetail({
           `Created ${fmt(user.created_at)}`,
           user.pii_redacted_at ? "Anonymized" : null,
         ].filter((fact): fact is string => Boolean(fact))}
-        /*
-         * Message and Follow are on the record because this is a community
-         * profile and they are part of what it will offer — but they are
-         * disabled, with the reason on the control itself, because neither has
-         * a domain behind it yet: there is no messaging schema and no follow
-         * relation. A disabled control states an intention; an enabled one
-         * that quietly does nothing states a lie.
-         *
-         * `title` carries the reason to a pointer, `aria-describedby` would
-         * need an id per button, so the accessible name carries it too.
-         */
         actions={
-          <>
-            {!isSelf && (
-              <>
-                <Button
-                  variant="primary"
-                  size="sm"
-                  disabled
-                  title="Messaging is not available yet"
-                  aria-label="Message — not available yet"
-                >
-                  Message
-                </Button>
-                <Button
-                  variant="secondary"
-                  size="sm"
-                  disabled
-                  title="Following members is not available yet"
-                  aria-label="Follow — not available yet"
-                >
-                  Follow
-                </Button>
-              </>
-            )}
-            <Menu label="Record actions" align="end" items={recordActions}>
-              <span aria-hidden="true">⋯</span>
-            </Menu>
-          </>
+          <Menu label="Record actions" align="end" items={recordActions}>
+            <span aria-hidden="true">⋯</span>
+          </Menu>
         }
       />
 

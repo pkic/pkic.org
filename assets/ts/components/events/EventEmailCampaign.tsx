@@ -67,6 +67,8 @@ export function EventEmailCampaign({
   campaignsPath,
   daysPath,
   initialAudience = "attendees",
+  initialSubject = "",
+  initialBody = "",
   notify = () => {},
   cancelHref,
   onSent,
@@ -74,6 +76,8 @@ export function EventEmailCampaign({
   campaignsPath: string;
   daysPath: string;
   initialAudience?: EventEmailCampaignAudience;
+  initialSubject?: string;
+  initialBody?: string;
   notify?: (message: string, type: "success" | "error") => void;
   /** The way back, when the composer is a page of its own. */
   cancelHref?: string;
@@ -86,8 +90,8 @@ export function EventEmailCampaign({
   const [mode, setMode] = useState<EventEmailCampaignSendMode>("personal");
   const [messageType, setMessageType] = useState<EmailMessageType>("promotional");
   const [batchSize, setBatchSize] = useState(500);
-  const [subject, setSubject] = useState("");
-  const [body, setBody] = useState("");
+  const [subject, setSubject] = useState(initialSubject);
+  const [body, setBody] = useState(initialBody);
   const [audience, setAudience] = useState<EventEmailCampaignAudience>(initialAudience);
 
   // attendee filters

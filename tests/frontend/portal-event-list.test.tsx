@@ -1,9 +1,12 @@
 // @vitest-environment jsdom
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EventList } from "../../assets/ts/member-flows/portal/sections/events/EventList";
 import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
+import { portalSession } from "../../assets/ts/member-flows/portal/state";
+import { portalSessionFixture } from "../helpers/portal-session";
+import { eventsListQuerySchema } from "../../assets/shared/schemas/event-management";
 
 const { navigateMock } = vi.hoisted(() => ({ navigateMock: vi.fn() }));
 
@@ -80,11 +83,16 @@ function audienceEventRow(overrides: Record<string, unknown> = {}): Record<strin
   };
 }
 
+beforeEach(() => {
+  portalSession.value = portalSessionFixture({ member: true });
+});
+
 afterEach(() => {
   for (const container of mounted.splice(0)) {
     void act(() => render(null, container));
     container.remove();
   }
+  portalSession.value = null;
   vi.unstubAllGlobals();
   navigateMock.mockReset();
 });
@@ -217,6 +225,65 @@ describe("portal event list", () => {
     );
   });
 
+  it("opens a group-owned management row's event page and keeps the workspace a row action", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({
+          events: [
+            managementEventRow({
+              id: "e0000000-0000-4000-8000-000000000009",
+              ownerGroupId: "20000000-0000-4000-8000-000000000001",
+              ownerGroupName: "Post-Quantum Cryptography",
+            }),
+          ],
+          page: { limit: 25, offset: 0, total: 1, hasMore: false },
+        }),
+      ),
+    );
+
+    const container = mount(<EventList />);
+    await settle();
+    await settle();
+
+    expect(container.querySelector("tbody tr a[href='#/events/pqc-2026']")).not.toBeNull();
+    expect(container.querySelector("tbody tr a[href*='/events/e0000000']")).toBeNull();
+    expect(rowActionControlNames(container)).toEqual(["Actions for PQC Conference 2026"]);
+  });
+
+  it("offers no group workspace to an event-scoped staff identity that cannot open the group", async () => {
+    portalSession.value = portalSessionFixture({
+      staff: true,
+      grants: [
+        { permission: "events:manage", contextType: "event", contextId: "e0000000-0000-4000-8000-000000000009" },
+      ],
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () =>
+        json({
+          events: [
+            managementEventRow({
+              id: "e0000000-0000-4000-8000-000000000009",
+              ownerGroupId: "20000000-0000-4000-8000-000000000001",
+              ownerGroupName: "Post-Quantum Cryptography",
+            }),
+          ],
+          page: { limit: 25, offset: 0, total: 1, hasMore: false },
+        }),
+      ),
+    );
+
+    const container = mount(<EventList />);
+    await settle();
+    await settle();
+
+    expect(rowActionControlNames(container)).toEqual([]);
+    expect(container.querySelector('a[href^="#/groups/"]')).toBeNull();
+    expect(container.textContent).toContain("Post-Quantum Cryptography");
+    expect(container.querySelector("tbody tr a[href='#/events/pqc-2026']")).not.toBeNull();
+  });
+
   it.each([
     [null, "#/events/pqc-2026"],
     [
@@ -324,9 +391,13 @@ describe("portal event list", () => {
   });
 
   it("names the scope group and reports each scope's pressed state", async () => {
+    const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async () => json({ events: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } })),
+      vi.fn(async (input: RequestInfo | URL) => {
+        requests.push(new URL(String(input), location.origin));
+        return json({ events: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
+      }),
     );
 
     const container = mount(<EventList />);
@@ -343,12 +414,19 @@ describe("portal event list", () => {
 
     // The table renames itself with the scope, so the two lists are told apart.
     expect(container.querySelector("caption")?.textContent).toBe("Upcoming events");
+    const upcoming = eventsListQuerySchema.parse(Object.fromEntries(requests.at(-1)!.searchParams));
+    expect(upcoming.from).toBeDefined();
+    expect(upcoming.to).toBeUndefined();
     await act(async () => {
       toggles[1].click();
       await new Promise((resolve) => setTimeout(resolve, 0));
     });
     await settle();
     expect(container.querySelector("caption")?.textContent).toBe("Past events");
+    const past = eventsListQuerySchema.parse(Object.fromEntries(requests.at(-1)!.searchParams));
+    expect(past).toMatchObject({ sort: "-starts_at" });
+    expect(past.to).toBeDefined();
+    expect(past.from).toBeUndefined();
   });
 
   it("states a refused event listing as a sentence rather than an empty table", async () => {

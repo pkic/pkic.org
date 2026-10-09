@@ -17,6 +17,7 @@ import {
   eventFormsResponseSchema,
   FORM_PURPOSES,
   FORM_STATUSES,
+  formDefinitionUpdateSchema,
   type EventFormsPurpose,
   type FormDefinitionCreateInput,
   type FormDefinitionUpdateInput,
@@ -29,13 +30,14 @@ import { deleteJson, getJson, patchJson, postJson } from "../../../shared/api-cl
 import { formatDateTime } from "../../../shared/ui";
 import { ApiDataTable } from "../../ApiDataTable";
 import { confirmAction } from "../../ConfirmDialog";
-import { EmptyState } from "../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../ui/EmptyState";
 import { ErrorAlert } from "../../ErrorAlert";
 import { FilterSelect, type FilterOption } from "../../FilterSelect";
 import { Spinner } from "../../Spinner";
 import { Tabs } from "../../Tabs";
 import { Badge } from "../../Badge";
 import { Button } from "../../../ui/Button";
+import { Menu, type MenuItem } from "../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { Toolbar } from "../../../ui/Toolbar";
 import { FormDefinitionEditor, type EditableFormDetail } from "../FormDefinitionEditor";
@@ -206,14 +208,34 @@ export function FormManagementDetail({
     void load();
   }, [load]);
 
+  async function archive(): Promise<void> {
+    const confirmed = await confirmAction({
+      title: `Archive "${detail?.form.title ?? formKey}"?`,
+      consequences: [
+        "The form stops accepting responses wherever it is placed",
+        "Its responses and analytics are kept for records",
+      ],
+      confirmLabel: "Archive form",
+    });
+    if (!confirmed) return;
+    try {
+      await patchJson(base, formDefinitionUpdateSchema.parse({ status: "archived" }), formUpdateResponseSchema);
+      notify?.("Form archived — responses kept", "success");
+      onChanged?.();
+      await load();
+    } catch (cause) {
+      notify?.((cause as Error).message, "error");
+    }
+  }
+
   async function remove(): Promise<void> {
     const confirmed = await confirmAction({
-      title: `Archive or delete "${detail?.form.title ?? formKey}"?`,
+      title: `Delete "${detail?.form.title ?? formKey}"?`,
       consequences: [
-        "A form with existing responses is archived and kept for records",
-        "A form with no responses is deleted permanently",
+        "The form, its fields, and its placements are removed permanently",
+        "A form that already has responses is archived instead, so its records are kept",
       ],
-      confirmLabel: "Archive or delete form",
+      confirmLabel: "Delete form",
       tone: "danger",
     });
     if (!confirmed) return;
@@ -240,6 +262,14 @@ export function FormManagementDetail({
   if (!detail) return null;
   const canManageForm = canWrite && detail.form.scope_type !== "community";
   const effectiveTab: FormTab = responseId ? "responses" : tab === "edit" && !canManageForm ? "statistics" : tab;
+  const formActions: MenuItem[] = canManageForm
+    ? [
+        ...(detail.form.status !== "archived"
+          ? [{ id: "archive", label: "Archive form…", onSelect: () => void archive() }]
+          : []),
+        { id: "delete", label: "Delete form…", danger: true, separatorBefore: true, onSelect: () => void remove() },
+      ]
+    : [];
 
   return (
     <div class="pk pk-stack">
@@ -255,10 +285,8 @@ export function FormManagementDetail({
           <Button size="sm" onClick={() => void load()}>
             Refresh
           </Button>
-          {canManageForm && (
-            <Button size="sm" variant="danger-quiet" onClick={() => void remove()}>
-              Archive/Delete
-            </Button>
+          {formActions.length > 0 && (
+            <Menu label={`Actions for ${detail.form.title}`} align="end" items={formActions} />
           )}
         </PanelHeader>
         {/* The body's `gap` is the only spacing between the identity line, the

@@ -1,10 +1,9 @@
 import { eventParticipantRecordPath } from "./event-participant-paths";
 import { Badge } from "../../../../components/Badge";
-import { useRef, useState } from "preact/hooks";
+import { useRef } from "preact/hooks";
 import type { z } from "zod";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
-import { Chip } from "../../../../ui/Chip";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { RowActions } from "../../../../ui/RowActions";
 import type { MenuItem } from "../../../../ui/Menu";
 import {
@@ -14,16 +13,18 @@ import {
 } from "../../../../../shared/schemas/event-management";
 import { usePortalHashLocation } from "../../hash-location";
 import { formatEventWhen, formatRelativeDays } from "../../ui";
-import { eventDestination } from "./event-destination";
+import { canOpenGroupWorkspace, eventDestination } from "./event-destination";
+import { portalSession } from "../../state";
 import { ViewerEventState } from "./ViewerEventState";
+import { EventScopeToggle, useEventScope } from "./EventScopeToggle";
 
 // ────────────────────────────────────────────────────────
 // Root events overview
 //
-// This is a projection, not the canonical home for events: an event's real
-// home is its owning group's workspace (`/groups/:g/events/:e`). This screen
-// exists so a member can see what is upcoming and where they stand — not to
-// manage events, which happens inside the owning group.
+// Each row opens the group-independent event page (`/events/:slug`), where a
+// reader sees where they stand. Managing an event happens inside its owning
+// group's workspace (`/groups/:g/events/:e`), offered as a row action to
+// those who can open it.
 // ────────────────────────────────────────────────────────
 
 type ManagementEventRow = z.infer<typeof eventManagementSummarySchema>;
@@ -48,7 +49,10 @@ function eventWhen(event: EventRow): string {
   return formatEventWhen(event.startsAt, event.timezone, location, attendanceType);
 }
 
-/** Audience actions use server-granted scanner/contact access; management rows open their owning workspace. */
+/**
+ * Audience actions use server-granted scanner/contact access; a management
+ * row also offers its owning workspace when this session can open it.
+ */
 function workspaceActions(event: EventRow, navigate: (path: string) => void): MenuItem[] {
   const audienceActions: MenuItem[] = isAudienceEvent(event)
     ? [
@@ -78,7 +82,8 @@ function workspaceActions(event: EventRow, navigate: (path: string) => void): Me
         })) ?? []),
       ]
     : [];
-  if (isAudienceEvent(event) || !event.ownerGroupId) return audienceActions;
+  if (isAudienceEvent(event) || !event.ownerGroupId || !canOpenGroupWorkspace(portalSession.value, event.ownerGroupId))
+    return audienceActions;
   const groupId = event.ownerGroupId;
   const groupLabel = event.ownerGroupName ?? "group";
   return [
@@ -91,29 +96,10 @@ function workspaceActions(event: EventRow, navigate: (path: string) => void): Me
   ];
 }
 
-type Scope = "upcoming" | "past";
-
-function ScopeToggle({ scope, onChange }: { scope: Scope; onChange: (scope: Scope) => void }) {
-  return (
-    // Two applied-filter toggles, which is what `Chip` is: each is a real
-    // button carrying `aria-pressed`, and the pressed state is drawn rather
-    // than announced only by an `active` class the design system never had.
-    <div class="pk-cluster" role="group" aria-label="Events scope">
-      <Chip pressed={scope === "upcoming"} onToggle={() => onChange("upcoming")}>
-        Upcoming
-      </Chip>
-      <Chip pressed={scope === "past"} onToggle={() => onChange("past")}>
-        Past
-      </Chip>
-    </div>
-  );
-}
-
 export function EventList() {
   const [, navigate] = usePortalHashLocation();
-  const [scope, setScope] = useState<Scope>("upcoming");
+  const { scope, setScope, params } = useEventScope();
   const tableRef = useRef<ApiTableActions | null>(null);
-  const now = new Date().toISOString();
 
   return (
     <div>
@@ -127,12 +113,12 @@ export function EventList() {
         responseSchema={eventsListResponseSchema}
         resolve={(data) => data.events}
         resolvePage={(data) => data.page}
-        params={scope === "upcoming" ? { from: now } : { to: now }}
+        params={params}
         initialSort={scope === "past" ? "-starts_at" : ""}
         paginate
         actionsRef={tableRef}
         searchPlaceholder="Search events…"
-        toolbar={() => <ScopeToggle scope={scope} onChange={setScope} />}
+        toolbar={() => <EventScopeToggle scope={scope} onChange={setScope} />}
         columns={[
           {
             header: "Event",
@@ -162,10 +148,12 @@ export function EventList() {
           {
             header: "Group",
             cell: (e) =>
-              !isAudienceEvent(e) && e.ownerGroupId ? (
+              isAudienceEvent(e) || !e.ownerGroupId ? (
+                <span class="pk-muted">—</span>
+              ) : canOpenGroupWorkspace(portalSession.value, e.ownerGroupId) ? (
                 <a href={`#/groups/${encodeURIComponent(e.ownerGroupId)}`}>{e.ownerGroupName ?? e.ownerGroupId}</a>
               ) : (
-                <span class="pk-muted">—</span>
+                (e.ownerGroupName ?? e.ownerGroupId)
               ),
           },
           {
@@ -212,10 +200,7 @@ export function EventList() {
             cell: (e) => <RowActions subject={e.name} actions={workspaceActions(e, navigate)} />,
           },
         ]}
-        rowAction={(e) => {
-          const href = eventDestination(e);
-          return href ? { label: `Open ${e.name}`, href } : undefined;
-        }}
+        rowAction={(e) => ({ label: `Open ${e.name}`, href: eventDestination(e) })}
         empty={
           <EmptyState
             title={scope === "past" ? "No past events" : "No upcoming events"}

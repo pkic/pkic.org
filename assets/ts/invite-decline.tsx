@@ -7,7 +7,7 @@
  * a "parting gift" success state.
  */
 
-import { setButtonLoading, resetButton } from "./shared/form/button-loading";
+import { clearButtonBusy, setButtonBusy } from "./shared/form/button-busy";
 import { inviteDeclineSchema } from "../shared/schemas/registration";
 import { inviteDeclineInfoResponseSchema, inviteDeclineResponseSchema } from "../shared/schemas/invites";
 import { getJson, postJson, ApiClientError } from "./shared/api-client";
@@ -456,7 +456,7 @@ function boot(): void {
       });
 
       const submitBtn = $("[data-submit-btn]", root!) as HTMLButtonElement | null;
-      if (submitBtn) setButtonLoading(submitBtn);
+      if (submitBtn) setButtonBusy(submitBtn);
 
       try {
         const result = await postJson(
@@ -487,7 +487,7 @@ function boot(): void {
           errorBanner.textContent = msg;
           show(errorBanner);
         }
-        if (submitBtn) resetButton(submitBtn);
+        if (submitBtn) clearButtonBusy(submitBtn);
       }
     });
   }

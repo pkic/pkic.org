@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useState } from "preact/hooks";
 import {
   CONTENT_REVIEW_STATUSES,
+  contentReviewStatusSchema,
+  organizationContentReviewDefaultSort,
   organizationContentReviewDecisionResponseSchema,
   organizationContentReviewDetailResponseSchema,
   organizationContentReviewRejectSchema,
@@ -34,6 +36,12 @@ type ReviewStatus = (typeof CONTENT_REVIEW_STATUSES)[number];
  * deliberately no "all statuses" state — a moderation queue is not an archive.
  */
 const DEFAULT_QUEUE_STATUS: ReviewStatus = "pending";
+
+/** The pending queue reads oldest first; decided reviews read newest first. */
+function reviewQueueSort(filters: Readonly<Record<string, string>>): string {
+  const status = contentReviewStatusSchema.safeParse(filters.status);
+  return organizationContentReviewDefaultSort(status.success ? status.data : DEFAULT_QUEUE_STATUS);
+}
 
 /**
  * A field value as text to compare. `links` arrives as an array and is read
@@ -231,8 +239,8 @@ export function OrganizationContentReviews({ reviewId }: { reviewId?: string }) 
         resolvePage={(data) => data.page}
         paginate
         searchPlaceholder="organization, submitter, or note…"
-        initialSort="-submittedAt"
-        params={{ status: DEFAULT_QUEUE_STATUS }}
+        initialSort={reviewQueueSort}
+        initialFilters={{ status: DEFAULT_QUEUE_STATUS }}
         columns={[
           {
             header: "Organization",
@@ -257,7 +265,7 @@ export function OrganizationContentReviews({ reviewId }: { reviewId?: string }) 
             filter: {
               param: "status",
               options: CONTENT_REVIEW_STATUSES.map((value) => ({
-                value: value === DEFAULT_QUEUE_STATUS ? "" : value,
+                value,
                 label: statusLabel(value),
               })),
             },

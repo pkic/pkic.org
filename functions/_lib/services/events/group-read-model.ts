@@ -55,12 +55,22 @@ interface GroupEventRow {
 }
 
 const NEXT_OCCURRENCE_CTE = `next_occurrence AS (
-  SELECT occurrence.series_id, MIN(occurrence.starts_at) AS next_occurrence_at
+  SELECT occurrence.series_id, MIN(occurrence.starts_at) AS next_occurrence_at,
+         MAX(occurrence.ends_at) AS last_occurrence_ends_at
     FROM event_occurrences occurrence
    WHERE occurrence.status = 'scheduled'
      AND unixepoch(occurrence.ends_at) >= unixepoch()
    GROUP BY occurrence.series_id
 )`;
+/** When the event, or its series' next remaining occurrence, starts; null while unscheduled. */
+const EVENT_SCHEDULED_START = "COALESCE(next_occurrence.next_occurrence_at, event.starts_at, event.ends_at)";
+/** When the event, or its series' last remaining occurrence, ends. */
+const EVENT_SCHEDULED_END = "COALESCE(next_occurrence.last_occurrence_ends_at, event.ends_at, event.starts_at)";
+/**
+ * The date the list shows for a row. Its sort keys lead with `IS NULL` so an
+ * unscheduled event follows every scheduled one in either direction.
+ */
+const SCHEDULED_START_ORDER = "COALESCE(next_occurrence_at, event_starts_at)";
 const EVENT_LOCATION = `COALESCE(series.location,
   CASE WHEN json_valid(event.settings_json) THEN json_extract(event.settings_json, '$.location') END)`;
 const EVENT_SELECT = `SELECT event.id AS event_id, event.owner_group_id, series.id AS series_id,
@@ -142,16 +152,13 @@ export function buildGroupEventsPageQuery(
     conditions.push("event.registration_mode = ?");
     bindings.push(query.registrationPolicy);
   }
-  if (query.sourceMode) {
-    conditions.push("event.source_mode = ?");
-    bindings.push(query.sourceMode);
-  }
   if (query.from) {
-    conditions.push("COALESCE(next_occurrence.next_occurrence_at, event.starts_at, event.ends_at) >= ?");
+    // An unscheduled event has not happened yet, so it stays with the upcoming ones.
+    conditions.push(`(${EVENT_SCHEDULED_END} >= ? OR ${EVENT_SCHEDULED_START} IS NULL)`);
     bindings.push(query.from);
   }
   if (query.to) {
-    conditions.push("COALESCE(next_occurrence.next_occurrence_at, event.starts_at, event.ends_at) <= ?");
+    conditions.push(`${EVENT_SCHEDULED_START} <= ?`);
     bindings.push(query.to);
   }
   if (query.q) {
@@ -178,11 +185,12 @@ export function buildGroupEventsPageQuery(
       query.sort,
       {
         name: "event_name COLLATE NOCASE",
-        starts_at: "event_starts_at",
-        next_occurrence_at: "COALESCE(next_occurrence_at, event_starts_at)",
+        starts_at: "event_starts_at IS NULL, event_starts_at",
+        next_occurrence_at: `${SCHEDULED_START_ORDER} IS NULL, ${SCHEDULED_START_ORDER}`,
         created_at: "event_created_at",
       } satisfies Record<(typeof GROUP_EVENTS_SORT_COLUMNS)[number], string>,
-      "COALESCE(next_occurrence_at, event_starts_at, '9999') ASC",
+      // Past alone reads most recent first; otherwise the soonest comes first.
+      `${SCHEDULED_START_ORDER} IS NULL, ${SCHEDULED_START_ORDER} ${query.to && !query.from ? "DESC" : "ASC"}`,
       "event_id ASC",
     ),
     limit: query.limit,

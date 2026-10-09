@@ -196,7 +196,7 @@ function PolicyForm({ event, canWrite }: { event: RetentionEvent; canWrite: bool
                 </Field>
               </FormSection>
               {canWrite && (
-                <Button type="submit" disabled={saving}>
+                <Button type="submit" variant="primary" loading={saving} disabled={saving}>
                   {saving ? "Saving…" : "Save raw evidence policy"}
                 </Button>
               )}

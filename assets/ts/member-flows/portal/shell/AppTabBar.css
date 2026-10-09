@@ -1,0 +1,126 @@
+/*
+ * AppTabBar.
+ *
+ * The installed portal's bottom navigation, shown on phones only. Above the
+ * breakpoint the sidebar and each page's top tabs are the navigation, so the
+ * bar is not rendered at all (display: none also takes it out of the
+ * accessibility tree).
+ */
+
+@layer components {
+  .pk-app-tabbar {
+    display: none;
+  }
+
+  @media (max-width: 48rem) {
+    :root {
+      /* Icon over label; comfortably above the 48px touch target. */
+      --pk-app-tabbar-height: 3.5rem;
+    }
+
+    .pk-app-tabbar {
+      display: block;
+      position: fixed;
+      inset-inline: 0;
+      inset-block-end: 0;
+      /* Under the topbar (200) and the navigation drawer and its backdrop
+         (205/210), so an open drawer covers the bar instead of sitting under it. */
+      z-index: 190;
+      background: var(--pk-surface);
+      border-block-start: 1px solid var(--pk-line);
+      box-shadow: var(--pk-shadow-2);
+      padding-block-end: env(safe-area-inset-bottom, 0px);
+    }
+
+    /* The page keeps its last line clear of the fixed bar. */
+    body:has(.pk-app-tabbar) {
+      padding-block-end: calc(var(--pk-app-tabbar-height) + env(safe-area-inset-bottom, 0px));
+    }
+
+    /* Inside an event the event's own bar replaces the portal-wide one. */
+    body:has(.pk-app-tabbar--event) .pk-app-tabbar--portal {
+      display: none;
+    }
+
+    .pk-app-tabbar__list {
+      display: flex;
+      margin: 0;
+      padding: 0;
+      list-style: none;
+    }
+
+    .pk-app-tabbar__item {
+      flex: 1 1 0;
+      min-width: 0;
+    }
+
+    /* Swiping up on the bar opens its menu sheet, so the browser must not take the vertical pan. */
+    .pk-app-tabbar--swipeable {
+      touch-action: pinch-zoom;
+    }
+
+    .pk-app-tabbar__link {
+      position: relative;
+      display: flex;
+      inline-size: 100%;
+      margin: 0;
+      border: 0;
+      background: none;
+      font-family: inherit;
+      cursor: pointer;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: var(--pk-1);
+      min-block-size: var(--pk-app-tabbar-height);
+      padding: var(--pk-1);
+      color: var(--pk-ink-muted);
+      font-size: var(--pk-text-xs);
+      font-weight: 500;
+      line-height: 1.2;
+      text-align: center;
+      text-decoration: none;
+      overflow-wrap: anywhere;
+    }
+
+    .pk-app-tabbar__link:hover {
+      color: var(--pk-ink);
+    }
+
+    .pk-app-tabbar__link:focus-visible {
+      outline: none;
+      box-shadow: inset var(--pk-focus);
+    }
+
+    .pk-app-tabbar__icon {
+      flex: none;
+    }
+
+    .pk-app-tabbar__label {
+      max-inline-size: 100%;
+    }
+
+    .pk-app-tabbar__link[aria-current="page"] {
+      color: var(--pk-accent-ink);
+      font-weight: 700;
+    }
+
+    /* The open tab's glyph is filled and heavier, so it is not told by colour alone. */
+    .pk-app-tabbar__link[aria-current="page"] .pk-app-tabbar__icon {
+      fill: currentColor;
+      fill-opacity: 0.22;
+      stroke-width: var(--pk-icon-stroke-strong);
+    }
+
+    /* The brand rule marks the open tab, as it marks the hero beneath the field. */
+    .pk-app-tabbar__link[aria-current="page"]::before {
+      content: "";
+      position: absolute;
+      inset-inline: var(--pk-3);
+      inset-block-start: 0;
+      block-size: 3px;
+      border-radius: 0 0 var(--pk-radius-sm) var(--pk-radius-sm);
+      background: var(--pk-stripe);
+    }
+  }
+}

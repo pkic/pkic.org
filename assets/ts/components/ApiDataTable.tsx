@@ -35,7 +35,13 @@ export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, 
   paginate?: boolean;
   searchPlaceholder?: string;
   initialPageSize?: number;
-  initialSort?: string;
+  /**
+   * The order the list opens in. A function derives it from the column
+   * filters in force, so a list whose meaning changes with a filter (a FIFO
+   * work queue beside a newest-first history) follows that filter until the
+   * reader picks an order of their own.
+   */
+  initialSort?: string | ((filters: Readonly<Record<string, string>>) => string);
   /** Complete active server query; actions such as exports can preserve the displayed scope. */
   toolbar?: (
     actions: ApiTableActions,
@@ -122,11 +128,14 @@ export function ApiDataTable<T, Response = unknown>({
   retainDataOnError = true,
   renderItems,
 }: ApiDataTableProps<T, Response>) {
+  const defaultSortFor = (activeFilters: Readonly<Record<string, string>>) =>
+    typeof initialSort === "function" ? initialSort(activeFilters) : initialSort;
+  const openingSort = defaultSortFor(initialFilters ?? {});
   const url = useUrlTableState(
     urlState,
     {
       q: "",
-      sort: initialSort,
+      sort: openingSort,
       offset: 0,
       pageSize: initialPageSize ?? ADMIN_LIST_PAGE_SIZE_DEFAULT,
       filters: initialFilters ?? {},
@@ -136,7 +145,11 @@ export function ApiDataTable<T, Response = unknown>({
   const pager = useOffsetPager(url.initial.pageSize, url.initial.offset);
   const resetKey = buildCollectionResetKey(endpoint, params);
   const requestOffset = useCollectionOffset(resetKey, pager.offset, pager.resetPage);
-  const [sort, setSort] = useState(url.initial.sort);
+  // The order follows the filters' default until the reader (or the URL) picks one.
+  const sortFollowsFilters = useRef(url.initial.sort === openingSort);
+  const [sort, setSort] = useState(() =>
+    sortFollowsFilters.current ? defaultSortFor(url.initial.filters) : url.initial.sort,
+  );
   const [search, setSearch] = useState(url.initial.q);
   const [pendingSearch, setPendingSearch] = useState(url.initial.q);
   // Column filters are the table's own state: a column declares what it can
@@ -149,6 +162,7 @@ export function ApiDataTable<T, Response = unknown>({
   }, [search, sort, pager.offset, pager.pageSize, filters]);
 
   function applySort(nextSort: string) {
+    sortFollowsFilters.current = false;
     setSort(nextSort);
     pager.resetPage();
   }
@@ -163,13 +177,16 @@ export function ApiDataTable<T, Response = unknown>({
     if (value) next[param] = value;
     else delete next[param];
     setFilters(next);
+    if (sortFollowsFilters.current) setSort(defaultSortFor(next));
     onFiltersChange?.(next);
     pager.resetPage();
   }
 
   const query = {
-    ...params,
     ...filters,
+    // Caller-owned scope (for example, the selected attendee) cannot be
+    // replaced by a column filter restored from the URL.
+    ...params,
     ...(paginate ? { limit: String(pager.pageSize), offset: String(requestOffset) } : {}),
     ...(search ? { q: search } : {}),
     ...(sort ? { sort } : {}),

@@ -1,5 +1,5 @@
 import { CalendarReplyBadge, CalendarReplyReceipt } from "./CalendarReplyReceipt";
-import { StatusBadge } from "../../../../../../site/StatusBadge";
+import { Badge as StatusBadge } from "../../../../../../components/Badge";
 import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
 import { DescriptionList } from "../../../../../../ui/DescriptionList";
 import { RowActions } from "../../../../../../ui/RowActions";

@@ -19,7 +19,9 @@ describe("shared symbolic badges", () => {
     expect(icon?.getAttribute("title")).toBe(icon?.getAttribute("aria-label"));
     expect(icon?.querySelector("svg")).not.toBeNull();
     expect(icon?.querySelector("svg")?.getAttribute("fill")).toBe("none");
-    expect(icon?.querySelector("svg")?.getAttribute("stroke-width")).toBe("1.6");
+    // The weight comes from the shared `.pk-icon` rule, not from the glyph.
+    expect(icon?.querySelector("svg")?.classList.contains("pk-icon")).toBe(true);
+    expect(icon?.querySelector("svg")?.hasAttribute("stroke-width")).toBe(false);
     expect(icon?.textContent).toBe("");
   });
 

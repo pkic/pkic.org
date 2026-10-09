@@ -1,5 +1,5 @@
 import { formatDate } from "../../shared/format-date";
-import { StatusBadge } from "./StatusBadge";
+import { statusLabel, statusTone } from "../../shared/status-display";
 import { Badge } from "../ui/Badge";
 import type { PublicVotesListResponse } from "../../shared/schemas/votes";
 import { VOTE_TYPE_LABELS } from "./PublicVoteDetail";
@@ -21,8 +21,10 @@ export function VoteCard({
       <div class="pk-cluster">
         {/* The lifecycle badge comes from the product's own status vocabulary,
             so "open" and "scheduled" read the same here as they do in the
-            portal, and the tone carries a dot rather than colour alone. */}
-        <StatusBadge status={vote.status} />
+            portal, and the tone carries a dot rather than colour alone. The
+            portal's status pill lives outside what server-rendered pages may
+            import, so this composes the same vocabulary over the same pill. */}
+        <Badge tone={statusTone(vote.status)}>{statusLabel(vote.status)}</Badge>
         <Badge tone="neutral" dot={false}>
           {VOTE_TYPE_LABELS[vote.voteType]}
         </Badge>

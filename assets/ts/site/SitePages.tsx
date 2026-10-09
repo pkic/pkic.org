@@ -169,6 +169,11 @@ function SectionNavigation({ navigation }: { navigation?: SiteSectionNavigation 
             </a>
           );
         })}
+        {navigation.appHref ? (
+          <a class="pk-section-navigation__app" href={navigation.appHref}>
+            Event app
+          </a>
+        ) : null}
       </div>
     </nav>
   );

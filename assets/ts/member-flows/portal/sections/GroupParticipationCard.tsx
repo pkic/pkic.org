@@ -15,6 +15,7 @@ import { useState } from "preact/hooks";
 import type { SelfGroup } from "../../../../shared/schemas/group-participation";
 import { Badge } from "../../../ui/Badge";
 import { Button, ButtonLink } from "../../../ui/Button";
+import { Menu } from "../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { RowActions } from "../../../ui/RowActions";
 import { fmtDate } from "../ui";
@@ -43,6 +44,24 @@ export function GroupParticipationCard({ group, onChanged }: { group: SelfGroup;
     <Panel class="pk">
       <PanelHeader title="Your participation">
         {group.memberships.length > 0 && <Badge tone="ok">Joined</Badge>}
+        {/* Leaving through every affiliation is a whole-record command, so it
+            sits in the card's menu under the catalog's own label rather than
+            beside the join action. */}
+        {group.memberships.length > 1 && (
+          <Menu
+            label={`Actions for ${group.name}`}
+            align="end"
+            items={[
+              {
+                id: "leave-all",
+                label: "Leave for every affiliation…",
+                danger: true,
+                disabled: busy,
+                onSelect: () => void run(() => leaveGroupEntirely(group)),
+              },
+            ]}
+          />
+        )}
       </PanelHeader>
       <PanelBody class="pk-stack">
         {group.memberships.length === 0 && <p class="pk-small pk-muted">You have not joined this group yet.</p>}
@@ -95,16 +114,6 @@ export function GroupParticipationCard({ group, onChanged }: { group: SelfGroup;
           {available.length > 0 && (
             <Button variant="primary" size="sm" loading={busy} onClick={() => void run(() => joinGroupOnBehalf(group))}>
               {group.memberships.length > 0 ? "Join on behalf of…" : "Join group…"}
-            </Button>
-          )}
-          {group.memberships.length > 1 && (
-            <Button
-              variant="danger-quiet"
-              size="sm"
-              loading={busy}
-              onClick={() => void run(() => leaveGroupEntirely(group))}
-            >
-              Leave all
             </Button>
           )}
         </div>

@@ -241,8 +241,8 @@ describe("the shared icon set", () => {
       expect(svg.getAttribute("aria-hidden")).toBe("true");
       expect(svg.getAttribute("focusable")).toBe("false");
       // The gap beside a label belongs to the flex parent, so no icon carries
-      // spacing of its own any more.
-      expect(svg.getAttribute("class")).toBeNull();
+      // a spacing class of its own; outline glyphs carry only the shared weight.
+      expect(svg.getAttribute("class") ?? "").toMatch(/^(pk-icon)?$/);
     }
   });
 

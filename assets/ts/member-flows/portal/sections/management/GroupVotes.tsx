@@ -5,7 +5,7 @@ import { groupVoteDetailResponseSchema, groupVotesListResponseSchema } from "../
 import { VOTE_STATUSES, VOTE_TYPES } from "../../../../../shared/schemas/votes";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge, statusLabel } from "../../../../components/Badge";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { Tabs } from "../../../../components/Tabs";
@@ -263,7 +263,7 @@ export function GroupVotes({
                 : undefined
             }
             searchPlaceholder="Search votes…"
-            initialSort="-closes_at"
+            initialSort="-created_at"
             actionsRef={tableActions}
             columns={[
               {

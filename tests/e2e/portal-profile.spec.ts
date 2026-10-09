@@ -112,7 +112,7 @@ test("a member uploads a headshot through the disclaimer and crop flow", async (
    * panel further down the record.
    */
   const portrait = page.getByRole("img", { name: `Profile Headshot ${suffix}'s photo` });
-  await expect(page.getByRole("button", { name: "Upload photo" })).toBeVisible();
+  await expect(page.getByRole("button", { name: `Upload photo of Profile Headshot ${suffix}` })).toBeVisible();
   await expect(portrait).toHaveCount(0);
   // Driven through the tile and the picker it opens, not by reaching past it
   // to the input: see helpers/headshot-upload.ts.
@@ -125,12 +125,8 @@ test("a member uploads a headshot through the disclaimer and crop flow", async (
   await crop.locator(".crop-headshot-confirm").click();
   expect((await uploaded).status()).toBe(200);
 
-  // The "Headshot uploaded" status line is written by the same closure that
-  // resolved the upload, but the record's `uploadHeadshot` awaits a full
-  // `refreshProfile()` first — which re-renders `AdminHeadshotManager` with a
-  // new `initialUrl` and re-runs its wiring effect before that write lands, so
-  // the status text is not a reliable signal here. What matters to the reader
-  // is the outcome: the real, persisted photo replaces the placeholder.
+  // What matters to the reader is the outcome: the real, persisted photo
+  // replaces the initials in the tile.
   await expect(portrait).toBeVisible({ timeout: 15_000 });
   await expect(portrait).toHaveAttribute("src", /\/headshots\//);
   // Visible is not loaded: a broken image still occupies its box, and an
@@ -139,7 +135,7 @@ test("a member uploads a headshot through the disclaimer and crop flow", async (
     .poll(async () => portrait.evaluate((img: HTMLImageElement) => img.naturalWidth), { timeout: 15_000 })
     .toBeGreaterThan(0);
   // The tile now offers the other verb, because there is something to change.
-  await expect(page.getByRole("button", { name: "Change photo" })).toBeVisible();
+  await expect(page.getByRole("button", { name: `Change photo of Profile Headshot ${suffix}` })).toBeVisible();
 
   // The headshot survives a fresh mount, proving it was persisted rather than
   // only reflected in the component the upload happened in.
@@ -148,7 +144,7 @@ test("a member uploads a headshot through the disclaimer and crop flow", async (
 });
 
 // The other half of the upload flow above: a photo a member put up is theirs
-// to take down again. The "Remove headshot" control stays hidden until there
+// to take down again. The "Remove photo" control stays hidden until there
 // is something to remove, so this uploads first and then removes, and checks
 // the placeholder survives a fresh mount — proving the removal reached the
 // server rather than only the component it was clicked in.
@@ -174,21 +170,24 @@ test("a member can remove their own headshot", async ({ page }) => {
   /*
    * Removing is confirmed in the portal's own dialog rather than the
    * browser's. The portrait tile takes the same route an organization's logo
-   * does — `confirmAction`, which the portal mounts — instead of the shared
-   * headshot controller's native `confirm()`, which exists only because that
-   * controller is also mounted on public token pages with no dialog host.
+   * does — `confirmAction`, which every page carrying the tile mounts — rather
+   * than the browser's native `confirm()`.
    */
   const remove = page.waitForResponse(
     (response) => response.url().endsWith("/api/v1/users/current/headshot") && response.request().method() === "DELETE",
   );
-  await page.getByRole("button", { name: "Remove photo" }).click();
+  await page.getByRole("button", { name: `Remove photo of Profile Headshot Remove ${suffix}` }).click();
   await acceptConfirmDialog(page, "Remove photo");
   expect((await remove).status()).toBe(200);
   // Back to the tile offering to upload one, with no picture behind it.
-  await expect(page.getByRole("button", { name: "Upload photo" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: `Upload photo of Profile Headshot Remove ${suffix}` })).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(portrait).toHaveCount(0);
 
   await page.reload();
-  await expect(page.getByRole("button", { name: "Upload photo" })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("button", { name: `Upload photo of Profile Headshot Remove ${suffix}` })).toBeVisible({
+    timeout: 15_000,
+  });
   await expect(portrait).toHaveCount(0);
 });

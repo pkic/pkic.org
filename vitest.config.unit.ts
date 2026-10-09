@@ -9,6 +9,7 @@ export const NODE_UNIT_TEST_FILES = [
   "tests/access-control-schema.test.ts",
   "tests/admin-identity.test.ts",
   "tests/badge-credential.test.ts",
+  "tests/calendar-subscription-links.test.ts",
   "tests/calendar-timezone.test.ts",
   "tests/csv.test.ts",
   "tests/db-json-membership.test.ts",

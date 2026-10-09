@@ -59,8 +59,9 @@ test("an organization contact submits a logo and content changes for review, the
   const logoSubmitted = page.waitForResponse((response) =>
     /\/organizations\/[^/]+\/logo$/.test(new URL(response.url()).pathname),
   );
-  // Through the tile, not past it (#28).
-  await uploadThroughButton(page, "Change logo (SVG)", {
+  // Through the tile, not past it (#28). The tile is named for what pressing
+  // it does and whose logo it is: "Upload logo of …" until there is one.
+  await uploadThroughButton(page, `Upload logo of ${organizationName}`, {
     name: "logo.svg",
     mimeType: "image/svg+xml",
     buffer: SANITIZED_SVG,
@@ -125,9 +126,10 @@ test("an organization contact submits a logo and content changes for review, the
   await editorPanel.getByRole("button", { name: "Cancel", exact: true }).click();
 
   // The organization's own public profile never changed: every submission
-  // above was withdrawn before a staff decision.
+  // above was withdrawn before a staff decision, so the tile still offers to
+  // upload one rather than to change it.
   const profilePanel = page.locator("section").filter({ has: page.getByRole("heading", { name: "Public profile" }) });
-  await expect(profilePanel.getByText("No logo", { exact: true })).toBeVisible();
+  await expect(profilePanel.getByRole("button", { name: `Upload logo of ${organizationName}` })).toBeVisible();
 });
 
 test("the primary contact nominates and withdraws a secondary-contact nomination", async ({ page }) => {

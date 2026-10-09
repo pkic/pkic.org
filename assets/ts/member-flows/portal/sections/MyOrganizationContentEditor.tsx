@@ -246,7 +246,7 @@ function ContentEditForm({
         ))}
       </div>
       <Field
-        label="Profile links (one URL per line)"
+        label="Profile links (one per line)"
         help="Each is labeled automatically by the site it points at."
         {...validation.of("links")}
       >

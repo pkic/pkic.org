@@ -186,6 +186,42 @@ describe("group event management routes", () => {
     }
   });
 
+  it("splits upcoming and past at the requested instant, soonest and most recent first", async () => {
+    const fixture = await createFixture();
+    const now = "2026-06-01T12:00:00.000Z";
+    const schedules: Array<{ name: string; startsAt: string | null; endsAt: string | null }> = [
+      { name: "Long past", startsAt: "2025-01-10T08:00:00.000Z", endsAt: "2025-01-10T17:00:00.000Z" },
+      { name: "Unscheduled", startsAt: null, endsAt: null },
+      { name: "Later", startsAt: "2026-09-01T08:00:00.000Z", endsAt: "2026-09-01T17:00:00.000Z" },
+      { name: "Recent", startsAt: "2026-05-20T08:00:00.000Z", endsAt: "2026-05-20T17:00:00.000Z" },
+      { name: "In progress", startsAt: "2026-05-31T08:00:00.000Z", endsAt: "2026-06-02T17:00:00.000Z" },
+      { name: "Soon", startsAt: "2026-06-10T08:00:00.000Z", endsAt: "2026-06-10T17:00:00.000Z" },
+    ];
+    for (const schedule of schedules) {
+      const event = await createGroupEvent(fixture);
+      await env.DB.prepare("UPDATE events SET name = ?, starts_at = ?, ends_at = ? WHERE id = ?")
+        .bind(schedule.name, schedule.startsAt, schedule.endsAt, event.id)
+        .run();
+    }
+    async function names(query: string): Promise<string[]> {
+      const response = await request(
+        fixture.ownerLeaderToken,
+        `/api/v1/groups/${fixture.ownerGroupId}/events?collection=events&limit=20&${query}`,
+      );
+      expect(response.status, await response.clone().text()).toBe(200);
+      const body = (await response.json()) as { events: Array<{ name: string }> };
+      return body.events.map((event) => event.name);
+    }
+    const upcoming = ["In progress", "Soon", "Later", "Unscheduled"];
+    const past = ["In progress", "Recent", "Long past"];
+
+    // The server default follows the window; the explicit Next sort agrees.
+    expect(await names(`from=${now}`)).toEqual(upcoming);
+    expect(await names(`from=${now}&sort=next_occurrence_at`)).toEqual(upcoming);
+    expect(await names(`to=${now}`)).toEqual(past);
+    expect(await names(`to=${now}&sort=-next_occurrence_at`)).toEqual(past);
+  });
+
   it("uses indexed D1 joins for event-day attendance counts", async () => {
     const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL}`)
       .bind("event-id")

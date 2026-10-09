@@ -17,28 +17,36 @@ import { Field } from "../../../../../../ui/Field";
 import { Select } from "../../../../../../ui/TextControl";
 import { PreferenceStar } from "../../../../../../ui/PreferenceStar";
 import { Button } from "../../../../../../ui/Button";
+import { confirmAction } from "../../../../../../components/ConfirmDialog";
 type Session = z.infer<typeof personalAgendaSessionSchema>;
-const ACTION_LABELS = {
+type BookingAction = "reserve" | "request";
+const ACTION_LABELS: Record<BookingAction, string> = {
   reserve: "Reserve a place",
   request: "Request approval",
-  cancel: "Cancel session registration",
 };
+const ACTIVE_STATUSES = ["reserved", "approval_pending", "waitlisted"];
+/**
+ * The booking command a session's policy offers. Canceling is never one of
+ * them: it is a separate, confirmed action, so changing only the attendance
+ * mode or location can never release a place.
+ */
+function bookingActions(policy: Session["admissionPolicy"]): BookingAction[] {
+  return policy === "preference" ? [] : policy === "approval" ? ["request"] : ["reserve"];
+}
 export function ParticipationControls({
   slug,
   session,
   onSaved,
+  preference = true,
 }: {
   slug: string;
   session: Session;
   onSaved: () => void;
+  /** The shared agenda details already carry the star; they omit this duplicate. */
+  preference?: boolean;
 }) {
-  const [action, setAction] = useState<z.infer<typeof sessionParticipationRequestSchema>["action"]>(
-    session.admissionPolicy === "approval"
-      ? "request"
-      : session.admissionPolicy === "reservation"
-        ? "reserve"
-        : "cancel",
-  );
+  const actions = bookingActions(session.admissionPolicy);
+  const [action, setAction] = useState<BookingAction>(session.admissionPolicy === "approval" ? "request" : "reserve");
   const [attendanceMode, setMode] = useState<"physical" | "remote">(session.attendanceMode ?? "physical");
   const [roomId, setRoomId] = useState<string | null>(
     session.roomId ?? (session.rooms.length === 1 ? session.rooms[0]!.id : null),
@@ -61,10 +69,9 @@ export function ParticipationControls({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [refusedRevision, setRefusedRevision] = useState<number | null>(null);
-  const booking = action === "reserve" || action === "request";
   const form = useContractForm(sessionParticipationRequestSchema, {
     action,
-    expectedPublishedRevision: booking ? session.publishedRevision : undefined,
+    expectedPublishedRevision: session.publishedRevision,
     attendanceMode,
     roomId: attendanceMode === "physical" ? roomId : null,
     replaceOccurrenceId: action === "reserve" ? replacement?.id : undefined,
@@ -74,9 +81,15 @@ export function ParticipationControls({
     attendanceMode,
     roomId: attendanceMode === "physical" ? roomId : null,
   });
-  const registrationControls =
-    session.admissionPolicy !== "preference" ||
-    ["reserved", "approval_pending", "waitlisted"].includes(session.status ?? "");
+  // Canceling releases the place the viewer already holds, so it carries that
+  // place rather than whatever the location fields currently show.
+  const cancelForm = useContractForm(sessionParticipationRequestSchema, {
+    action: "cancel",
+    attendanceMode: session.attendanceMode ?? attendanceMode,
+    roomId: (session.attendanceMode ?? attendanceMode) === "physical" ? (session.roomId ?? null) : null,
+  });
+  const registered = ACTIVE_STATUSES.includes(session.status ?? "");
+  const registrationControls = actions.length > 0;
   useEffect(() => {
     if (refusedRevision === null || session.publishedRevision === refusedRevision) return;
     setMode(session.attendanceMode ?? "physical");
@@ -88,13 +101,13 @@ export function ParticipationControls({
   const availability = session.availability.find(
     (item) => item.attendanceMode === attendanceMode && (attendanceMode === "remote" || item.roomId === roomId),
   );
-  const actionAllowed = (action !== "reserve" && action !== "request") || availability?.bookingAction === action;
+  const actionAllowed = availability?.bookingAction === action;
   const changingConfirmedPlace =
     session.status === "reserved" && (attendanceMode !== session.attendanceMode || roomId !== session.roomId);
   const canSubmit =
-    !(booking && refusedRevision === session.publishedRevision) &&
+    refusedRevision !== session.publishedRevision &&
     actionAllowed &&
-    !(availability?.state === "full" && changingConfirmedPlace && (action === "reserve" || action === "request"));
+    !(availability?.state === "full" && changingConfirmedPlace);
   async function submit(event: Event) {
     event.preventDefault();
     if (!registrationControls || running.current) return;
@@ -103,6 +116,25 @@ export function ParticipationControls({
       return;
     }
     await apply(form.submit(), form.refuse);
+  }
+  async function cancelRegistration() {
+    if (running.current) return;
+    const confirmed = await confirmAction({
+      title: `Cancel your registration for ${session.title}?`,
+      consequences: [
+        session.status === "waitlisted"
+          ? "You leave the waiting list"
+          : session.status === "approval_pending"
+            ? "Your approval request is withdrawn"
+            : "Your place is released and may go to the next person on the waiting list",
+        "Registering again depends on the availability at that time",
+      ],
+      confirmLabel: "Cancel registration",
+      cancelLabel: "Keep registration",
+      tone: "danger",
+    });
+    if (!confirmed) return;
+    await apply(cancelForm.submit(), cancelForm.refuse);
   }
   async function apply(checked: ReturnType<typeof form.submit>, refuse: typeof form.refuse) {
     if (running.current) return;
@@ -138,21 +170,23 @@ export function ParticipationControls({
   }
   return (
     <form class="pk-stack" noValidate {...form.handlers} onSubmit={submit}>
-      <div class="pk-cluster">
-        <Button
-          type="button"
-          icon
-          variant="ghost"
-          aria-label={session.saved ? "Remove preference" : "Save preference"}
-          title={session.saved ? "Remove saved preference" : "Save preference; this does not reserve a place"}
-          aria-pressed={session.saved}
-          loading={busy}
-          onClick={() => void apply(preferenceForm.submit(), preferenceForm.refuse)}
-        >
-          <PreferenceStar selected={session.saved} />
-        </Button>
-        <small>Saving interest does not reserve a place.</small>
-      </div>
+      {preference && (
+        <div class="pk-cluster">
+          <Button
+            type="button"
+            icon
+            variant="ghost"
+            aria-label={session.saved ? "Remove preference" : "Save preference"}
+            title={session.saved ? "Remove saved preference" : "Save preference; this does not reserve a place"}
+            aria-pressed={session.saved}
+            loading={busy}
+            onClick={() => void apply(preferenceForm.submit(), preferenceForm.refuse)}
+          >
+            <PreferenceStar selected={session.saved} />
+          </Button>
+          <small>Saving interest does not reserve a place.</small>
+        </div>
+      )}
       <p role="status">
         <strong>{availability ? PARTICIPATION_AVAILABILITY_LABELS[availability.state] : "Choose a location"}</strong>{" "}
         {availability?.message ??
@@ -167,22 +201,11 @@ export function ParticipationControls({
               value={action}
               onChange={(event) => setAction(event.currentTarget.value as typeof action)}
             >
-              {sessionParticipationRequestSchema.shape.action.options
-                .filter(
-                  (value): value is Exclude<typeof value, "save" | "unsave"> =>
-                    value !== "save" &&
-                    value !== "unsave" &&
-                    (value !== "request" || session.admissionPolicy === "approval") &&
-                    (value !== "reserve" || session.admissionPolicy !== "preference"),
-                )
-                .map((value) => (
-                  <option
-                    value={value}
-                    disabled={(value === "reserve" || value === "request") && availability?.bookingAction !== value}
-                  >
-                    {value === "reserve" && availability?.state === "full" ? "Join waiting list" : ACTION_LABELS[value]}
-                  </option>
-                ))}
+              {actions.map((value) => (
+                <option value={value} disabled={availability?.bookingAction !== value}>
+                  {value === "reserve" && availability?.state === "full" ? "Join waiting list" : ACTION_LABELS[value]}
+                </option>
+              ))}
             </Select>
           )}
         </Field>
@@ -238,10 +261,19 @@ export function ParticipationControls({
           )}
         </Field>
       )}
-      {registrationControls && (
-        <Button type="submit" loading={busy} disabled={!canSubmit}>
-          Update
-        </Button>
+      {(registrationControls || registered) && (
+        <div class="pk-cluster">
+          {registrationControls && (
+            <Button type="submit" loading={busy} disabled={!canSubmit}>
+              Update
+            </Button>
+          )}
+          {registered && (
+            <Button type="button" variant="danger-quiet" disabled={busy} onClick={() => void cancelRegistration()}>
+              Cancel my session registration…
+            </Button>
+          )}
+        </div>
       )}
       {error && <ErrorAlert error={error} />}
     </form>

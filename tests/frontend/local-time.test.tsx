@@ -6,11 +6,13 @@
  */
 import { renderToString } from "preact-render-to-string";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { formatClockInZone, formatLocalTime } from "../../assets/shared/format-date";
+import { formatClockInZone, formatDateRange, formatLocalTime, formatTimeOfDay } from "../../assets/shared/format-date";
 import { initLocalTime } from "../../assets/js/modules/local-time.js";
 import { ContentAgenda } from "../../assets/ts/site/ContentAgenda";
 import { agendaLocalClock } from "../../assets/shared/agenda-time-display";
 import { EventTime, LocalTime } from "../../assets/ts/site/SiteDate";
+import { AgendaSession } from "../../assets/ts/site/AgendaSession";
+import { dateTimeLocalToIso } from "../../assets/shared/timezone";
 
 afterEach(() => {
   document.body.innerHTML = "";
@@ -64,6 +66,34 @@ describe("local time", () => {
     expect(span).toBe(formatLocalTime("2026-12-01T08:00:00.000Z", "date", "2026-12-03T08:00:00.000Z"));
   });
 
+  it("keeps explicit formats when global UI runs after the local-time enhancer and preserves legacy clocks", async () => {
+    document.body.innerHTML = renderToString(
+      <>
+        <LocalTime value="2026-12-01" format="weekday" />
+        <LocalTime value="2026-12-01" format="date" />
+        <EventTime value="2026-12-01T08:00:00.000Z" duration={3} />
+        <time class="localTime" dateTime="2026-12-01T08:00:00.000Z">
+          Legacy clock
+        </time>
+        <time data-local-time="2026-12-01" data-local-time-format="fortnight">
+          Unrecognized format
+        </time>
+      </>,
+    );
+    initLocalTime();
+    await import("../../assets/js/modules/global-ui.js");
+    const expected = [
+      formatLocalTime("2026-12-01", "weekday"),
+      formatLocalTime("2026-12-01", "date"),
+      formatLocalTime("2026-12-01T08:00:00.000Z", "date", "2026-12-03T08:00:00.000Z"),
+      formatTimeOfDay("2026-12-01T08:00:00.000Z"),
+      "Unrecognized format",
+    ];
+    expect([...document.querySelectorAll("time")].map((element) => element.textContent)).toEqual(expected);
+    initLocalTime();
+    expect([...document.querySelectorAll("time")].map((element) => element.textContent)).toEqual(expected);
+  });
+
   it("reveals a personal clock only after computing the viewer's time", () => {
     document.body.innerHTML =
       "<div data-local-time-container hidden>" +
@@ -102,10 +132,11 @@ function browserZone(zone: string) {
   });
 }
 
-function publishedAgenda(startsAt = "2026-12-01T23:30:00.000Z") {
+function publishedAgenda(startsAt = "2026-12-01T23:30:00.000Z", editor = false) {
   document.body.innerHTML = renderToString(
     <ContentAgenda
       timeZone="Europe/Amsterdam"
+      editor={editor ? { session: () => ({ controls: null }), dropTarget: () => null } : undefined}
       speakers={[]}
       days={[
         {
@@ -133,7 +164,7 @@ describe("progressive public agenda clocks", () => {
     expect(root.querySelector<HTMLElement>("[data-agenda-time-choice]")!.hidden).toBe(true);
     expect(root.querySelector("[data-agenda-panel]")?.getAttribute("data-agenda-panel")).toBe("2026-12-02");
     const select = root.querySelector<HTMLSelectElement>("[data-agenda-time-select]")!;
-    const listener = vi.spyOn(select, "addEventListener");
+    const listener = vi.spyOn(root, "addEventListener");
     const cleanup = initLocalTime(root);
     initLocalTime(root);
     expect(listener.mock.calls.filter(([event]) => event === "change")).toHaveLength(1);
@@ -149,7 +180,7 @@ describe("progressive public agenda clocks", () => {
     expect(eventClock.hidden).toBe(false);
     expect(eventClock.querySelector("time")!.getAttribute("datetime")).toBe("2026-12-01T23:30:00.000Z");
     expect(root.querySelector('.pk-content-agenda__time-heading small[title="Europe/Amsterdam"]')?.textContent).toBe(
-      "Event · Amsterdam",
+      "Time Amsterdam",
     );
     expect(eventClock.textContent).not.toContain("Amsterdam");
     expect(root.querySelector("[data-agenda-panel]")?.getAttribute("data-agenda-panel")).toBe("2026-12-02");
@@ -168,7 +199,8 @@ describe("progressive public agenda clocks", () => {
     browserZone("Europe/Amsterdam");
     const root = publishedAgenda();
     initLocalTime(root);
-    expect(root.querySelector<HTMLElement>("[data-agenda-time-choice]")!.hidden).toBe(true);
+    // The zone choice stays available for the common conference zones; only the duplicate clock is hidden.
+    expect(root.querySelector<HTMLElement>("[data-agenda-time-choice]")!.hidden).toBe(false);
     expect(root.querySelector<HTMLElement>('[data-agenda-clock="browser"]')!.hidden).toBe(true);
     expect(root.dataset.agendaTimeDisplay).toBe("venue");
   });
@@ -182,4 +214,152 @@ describe("progressive public agenda clocks", () => {
     expect(local.textContent).toBe(agendaLocalClock("2026-12-02T18:30:00.000Z", "Europe/Amsterdam", "Asia/Tokyo").date);
     expect(root.querySelector("[data-agenda-panel]")?.getAttribute("data-agenda-panel")).toBe("2026-12-02");
   });
+});
+
+it("updates editor clocks and its shared zone choice after the agenda mounts again", () => {
+  browserZone("Asia/Tokyo");
+  let root = publishedAgenda("2026-12-02T18:30:00.000Z", true);
+  initLocalTime(root);
+  const choice = root.querySelector<HTMLSelectElement>("[data-agenda-time-select]")!;
+  expect(choice).not.toBeNull();
+  choice.value = "browser";
+  choice.dispatchEvent(new Event("change", { bubbles: true }));
+  expect(root.dataset.agendaTimeDisplay).toBe("browser");
+  expect(root.dataset.agendaDistinctZones).toBe("true");
+  expect(root.querySelector<HTMLElement>('[data-agenda-clock="browser"]')!.hidden).toBe(false);
+  expect(root.querySelector("[data-agenda-local-date]")!.textContent).toBe(
+    agendaLocalClock("2026-12-02T18:30:00.000Z", "Europe/Amsterdam", "Asia/Tokyo").date,
+  );
+  root = publishedAgenda("2026-03-20T18:30:00.000Z", true);
+  initLocalTime(root);
+  expect(root.querySelector('[data-agenda-clock="browser"] time')!.textContent).toBe(
+    formatClockInZone("2026-03-20T18:30:00.000Z", "Asia/Tokyo"),
+  );
+  vi.restoreAllMocks();
+  browserZone("Europe/Amsterdam");
+  initLocalTime(root);
+  expect(root.dataset.agendaDistinctZones).toBe("false");
+  expect(root.querySelector<HTMLElement>('[data-agenda-clock="browser"]')!.hidden).toBe(true);
+});
+
+it("synchronizes choices from the second real day header and reinitializes after disposal", () => {
+  browserZone("Asia/Tokyo");
+  const days = ["2026-12-01", "2026-12-02"].map((date) => ({
+    date,
+    locations: [{ id: "room", label: "Room" }],
+    slots: [{ startsAt: `${date}T09:00:00.000Z`, time: "10:00", sessions: [] }],
+  }));
+  document.body.innerHTML = renderToString(<ContentAgenda timeZone="Europe/Amsterdam" speakers={[]} days={days} />);
+  const root = document.querySelector<HTMLElement>(".pk-content-agenda")!;
+  const selects = [...root.querySelectorAll<HTMLSelectElement>("[data-agenda-time-select]")];
+  expect(selects).toHaveLength(2);
+  expect(selects.every((select) => select.closest("th.pk-content-agenda__time-heading"))).toBe(true);
+  expect(root.querySelector(".pk-content-agenda__toolbar-actions [data-agenda-time-select]")).toBeNull();
+  const cleanup = initLocalTime(root);
+  expect(selects.map((select) => select.title)).toEqual(["Europe/Amsterdam", "Europe/Amsterdam"]);
+  expect([...root.querySelectorAll("[data-agenda-time-face]")].map((face) => face.textContent)).toEqual([
+    "Amsterdam",
+    "Amsterdam",
+  ]);
+  expect([...root.querySelectorAll("[data-agenda-time-mode]")].map((label) => label.textContent)).toEqual([
+    "Event time",
+    "Event time",
+  ]);
+  selects[1]!.value = "browser";
+  selects[1]!.dispatchEvent(new Event("change", { bubbles: true }));
+  expect(root.dataset.agendaTimeDisplay).toBe("browser");
+  expect(selects.map((select) => select.value)).toEqual(["browser", "browser"]);
+  expect(selects.map((select) => select.title)).toEqual(["Asia/Tokyo", "Asia/Tokyo"]);
+  expect([...root.querySelectorAll("[data-agenda-time-face]")].map((face) => face.textContent)).toEqual([
+    "Tokyo",
+    "Tokyo",
+  ]);
+  expect([...root.querySelectorAll("[data-agenda-time-mode]")].map((label) => label.textContent)).toEqual([
+    "Your time",
+    "Your time",
+  ]);
+  expect(
+    [...root.querySelectorAll("[data-agenda-panel]")].map((panel) => panel.getAttribute("data-agenda-panel")),
+  ).toEqual(["2026-12-01", "2026-12-02", "speakers"]);
+  cleanup();
+  selects[1]!.value = "venue";
+  selects[1]!.dispatchEvent(new Event("change", { bubbles: true }));
+  expect(root.dataset.agendaTimeDisplay).toBe("browser");
+  const nextCleanup = initLocalTime(root);
+  expect(selects.map((select) => select.value)).toEqual(["browser", "browser"]);
+  selects[1]!.value = "venue";
+  selects[1]!.dispatchEvent(new Event("change", { bubbles: true }));
+  expect(selects.map((select) => select.value)).toEqual(["venue", "venue"]);
+  expect(selects.map((select) => select.title)).toEqual(["Europe/Amsterdam", "Europe/Amsterdam"]);
+  vi.restoreAllMocks();
+  browserZone("Europe/Amsterdam");
+  initLocalTime(root);
+  expect([...root.querySelectorAll<HTMLElement>("[data-agenda-time-choice]")].some((choice) => choice.hidden)).toBe(
+    false,
+  );
+  expect(root.dataset.agendaTimeDisplay).toBe("venue");
+  nextCleanup();
+});
+
+it("shows the event date and both viewer dates when a session crosses the viewer's midnight", () => {
+  const viewerZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const eventZone = viewerZone === "Pacific/Kiritimati" ? "UTC" : "Pacific/Kiritimati";
+  const startsAt = dateTimeLocalToIso("2026-12-01T23:30", viewerZone);
+  const endsAt = dateTimeLocalToIso("2026-12-02T00:30", viewerZone);
+  document.body.innerHTML = renderToString(
+    <AgendaSession
+      session={{
+        title: "Across midnight",
+        speakers: [],
+        locations: [],
+        descriptionHtml: "Session description",
+        endsAt,
+      }}
+      slot={{ startsAt }}
+      locations={[]}
+      timeZone={eventZone}
+      dialogId="across-midnight"
+    />,
+  );
+  const header = document.querySelector<HTMLElement>("dialog.session-modal .session-modal__header")!;
+  const viewer = header.querySelector<HTMLElement>("[data-local-time-container]")!;
+  expect(header.textContent).toContain(formatDateRange(startsAt, undefined, eventZone));
+  expect(viewer.hidden).toBe(true);
+  initLocalTime();
+  expect(viewer.hidden).toBe(false);
+  expect([...viewer.querySelectorAll("time")].map((time) => time.textContent)).toEqual([
+    formatLocalTime(startsAt, "date-time"),
+    formatLocalTime(endsAt, "date-time"),
+  ]);
+  expect([...viewer.querySelectorAll("time")].map((time) => time.getAttribute("datetime"))).toEqual([startsAt, endsAt]);
+  expect(formatLocalTime(startsAt, "date")).not.toBe(formatLocalTime(endsAt, "date"));
+});
+
+it("hides the duplicate same-zone header line and does not invent an unknown end or an unscheduled date", () => {
+  const zone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  const startsAt = "2026-12-01T09:00:00.000Z";
+  const session = {
+    title: "Unknown end",
+    speakers: [],
+    locations: [],
+    descriptionHtml: "Session description",
+    endNotRecorded: true,
+    endsAt: "2026-12-01T10:00:00.000Z",
+  };
+  document.body.innerHTML = renderToString(
+    <AgendaSession session={session} slot={{ startsAt }} locations={[]} timeZone={zone} dialogId="unknown-end" />,
+  );
+  initLocalTime();
+  const header = document.querySelector<HTMLElement>("dialog.session-modal .session-modal__header")!;
+  expect(header.textContent).toContain(formatDateRange(startsAt, undefined, zone));
+  expect(header.textContent).toContain("End not recorded");
+  const viewer = header.querySelector<HTMLElement>("[data-local-time-container]")!;
+  expect(viewer.hidden).toBe(true);
+  expect([...viewer.querySelectorAll("time")].map((time) => time.getAttribute("datetime"))).toEqual([startsAt]);
+  document.body.innerHTML = renderToString(
+    <AgendaSession session={session} locations={[]} timeZone={zone} dialogId="unscheduled" />,
+  );
+  const unscheduled = document.querySelector<HTMLElement>("dialog.session-modal .session-modal__header")!;
+  expect(unscheduled.textContent).toContain("Not scheduled");
+  expect(unscheduled.querySelector("[data-local-time-container], time")).toBeNull();
 });

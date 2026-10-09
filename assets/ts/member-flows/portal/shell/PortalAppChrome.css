@@ -1,0 +1,36 @@
+/*
+ * The portal as an app.
+ *
+ * The portal page sits inside the public site's header and footer. When it is
+ * used as an app — installed (standalone display), or inside an event on a
+ * phone, where the event's own bottom bar is the navigation — that public
+ * chrome steps aside: no site navigation, search or theme row above, no
+ * community banner or site footer below. The portal's own navigation stays,
+ * and the event pages' compact header carries the way back. Desktop browsing
+ * keeps the public chrome unchanged.
+ */
+
+@layer components {
+  @media (display-mode: standalone) {
+    body:has(#portal-root) {
+      /* Sticky portal chrome measures from the top once the site bar is gone. */
+      --pkic-navbar-height: 0px;
+    }
+
+    body:has(#portal-root) :is(.pkic-navbar, .pkic-mega-backdrop, .footer-member-wall, #site-footer) {
+      display: none;
+    }
+  }
+
+  @media (max-width: 48rem) {
+    body:has(.pk-app-tabbar--event) {
+      --pkic-navbar-height: 0px;
+    }
+
+    /* Inside an event the event app's header and bottom bar are the whole chrome. */
+    body:has(.pk-app-tabbar--event)
+      :is(.pkic-navbar, .pkic-mega-backdrop, .footer-member-wall, #site-footer, #portal-topbar) {
+      display: none;
+    }
+  }
+}

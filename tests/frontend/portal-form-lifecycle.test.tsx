@@ -70,8 +70,22 @@ function globalFormDetailResponse(): Response {
   );
 }
 
+/** Opens the form's `…` menu and takes one of its commands. */
+async function chooseFormAction(root: HTMLElement, label: string): Promise<void> {
+  const trigger = root.querySelector<HTMLButtonElement>('[aria-label="Actions for Member feedback"]');
+  if (!trigger) throw new Error("missing form actions menu");
+  await act(async () => trigger.click());
+  const item = [...root.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+    (candidate) => candidate.textContent?.trim() === label,
+  );
+  if (!item) throw new Error(`missing form action: ${label}`);
+  await act(async () => item.click());
+  await settle();
+}
+
+/** The open confirmation: an alert dialog for a destructive command, a native dialog otherwise. */
 function dialogButton(root: HTMLElement, label: string): HTMLButtonElement {
-  const dialog = root.querySelector('[role="alertdialog"]');
+  const dialog = root.querySelector('[role="alertdialog"], dialog');
   if (!dialog) throw new Error("no confirm dialog is open");
   const button = [...dialog.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
   if (!button) throw new Error(`missing dialog button: ${label}`);
@@ -159,7 +173,7 @@ describe("portal form creation and lifecycle", () => {
     expect(created?.body).toMatchObject({ key: "new-member-form", title: "New member form" });
     expect(onCreated).toHaveBeenCalledWith("new-member-form");
   });
-  it("archives or deletes a form only after the named confirmation is accepted", async () => {
+  it("deletes a form from its menu only after the named confirmation is accepted", async () => {
     const requests: { method: string; url: URL }[] = [];
     vi.stubGlobal(
       "fetch",
@@ -190,17 +204,17 @@ describe("portal form creation and lifecycle", () => {
     );
     await settle();
 
-    const removeButton = [...container.querySelectorAll("button")].find(
-      (button) => button.textContent === "Archive/Delete",
+    expect([...container.querySelectorAll("button")].map((button) => button.textContent)).not.toContain(
+      "Archive/Delete",
     );
-    if (!removeButton) throw new Error("missing Archive/Delete button");
-    void act(() => removeButton.click());
+    await chooseFormAction(container, "Delete form…");
 
     const dialog = container.querySelector('[role="alertdialog"]');
-    expect(dialog?.textContent).toContain('Archive or delete "Member feedback"?');
+    expect(dialog?.textContent).toContain('Delete "Member feedback"?');
+    expect(dialog?.textContent).toContain("archived instead");
     expect(requests.some((request) => request.method === "DELETE")).toBe(false);
 
-    void act(() => dialogButton(container, "Archive or delete form").click());
+    void act(() => dialogButton(container, "Delete form").click());
     await settle();
 
     expect(requests).toContainEqual(
@@ -211,7 +225,51 @@ describe("portal form creation and lifecycle", () => {
     );
     expect(onBack).toHaveBeenCalledTimes(1);
   });
-  it("keeps the form when the archive/delete confirmation is cancelled", async () => {
+  it("archives a form through the status contract after its own confirmation", async () => {
+    const requests: { method: string; url: URL; body: unknown }[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init?.method ?? "GET";
+        requests.push({ method, url, body: init?.body ? JSON.parse(String(init.body)) : undefined });
+        if (method === "PATCH") {
+          const detail = (await globalFormDetailResponse().json()) as { form: Record<string, unknown> };
+          return new Response(
+            JSON.stringify({ success: true, ...detail, form: { ...detail.form, status: "archived" } }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return url.pathname.endsWith("/submissions/stats") ? emptyStatsResponse() : globalFormDetailResponse();
+      }),
+    );
+    const onBack = vi.fn();
+    const notify = vi.fn();
+    const container = mount(
+      <>
+        <ConfirmDialogHost />
+        <FormManagementDetail formKey="member-feedback" canWrite onBack={onBack} notify={notify} />
+      </>,
+    );
+    await settle();
+
+    await chooseFormAction(container, "Archive form…");
+    expect(container.querySelector("dialog")?.textContent).toContain('Archive "Member feedback"?');
+    expect(requests.some((request) => request.method === "PATCH")).toBe(false);
+    void act(() => dialogButton(container, "Archive form").click());
+    await settle();
+
+    const patch = requests.find((request) => request.method === "PATCH");
+    expect(patch?.url.pathname).toBe("/api/v1/forms/member-feedback");
+    expect(patch?.body).toEqual({ status: "archived" });
+    expect(requests.some((request) => request.method === "DELETE")).toBe(false);
+    expect(notify).toHaveBeenCalledWith("Form archived — responses kept", "success");
+    expect(onBack).not.toHaveBeenCalled();
+  });
+  it("keeps the form when the delete confirmation is cancelled", async () => {
     const fetchMock = vi.fn(async (input: RequestInfo | URL) => {
       const url = new URL(
         typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
@@ -230,12 +288,8 @@ describe("portal form creation and lifecycle", () => {
     );
     await settle();
 
-    const removeButton = [...container.querySelectorAll("button")].find(
-      (button) => button.textContent === "Archive/Delete",
-    );
-    if (!removeButton) throw new Error("missing Archive/Delete button");
     const callsBeforeCancel = fetchMock.mock.calls.length;
-    void act(() => removeButton.click());
+    await chooseFormAction(container, "Delete form…");
     void act(() => dialogButton(container, "Cancel").click());
     await settle();
 

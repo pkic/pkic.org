@@ -1,7 +1,7 @@
 import { render } from "preact";
 import { postJson } from "../api-client";
 import { successResponseSchema } from "../../../shared/schemas/api-common";
-import { resetButton, setButtonLoading } from "../form/button-loading";
+import { clearButtonBusy, isButtonBusy, setButtonBusy } from "../form/button-busy";
 import { Alert } from "../../ui/Alert";
 // The status line is an element the template already rendered, so its tone is
 // written here as class names rather than reached through `Alert`. Component
@@ -69,6 +69,7 @@ export function showManageLinkRecoveryForm(options: ManageLinkRecoveryOptions): 
   resendBtn.dataset.bound = "1";
 
   resendBtn.addEventListener("click", async () => {
+    if (isButtonBusy(resendBtn)) return;
     const email = emailInput?.value.trim() ?? "";
     if (!email) {
       if (statusEl) announce(statusEl, "Please enter your email address.", "danger");
@@ -78,7 +79,7 @@ export function showManageLinkRecoveryForm(options: ManageLinkRecoveryOptions): 
     }
     emailInput?.removeAttribute("aria-invalid");
 
-    setButtonLoading(resendBtn);
+    setButtonBusy(resendBtn);
     try {
       await postJson(endpoint, { email }, successResponseSchema);
       // The outcome is the design system's Alert rather than its class names:
@@ -90,7 +91,7 @@ export function showManageLinkRecoveryForm(options: ManageLinkRecoveryOptions): 
       if (sectionEl) render(<Alert tone="ok">{successMessage}</Alert>, sectionEl);
     } catch {
       if (statusEl) announce(statusEl, "Something went wrong. Please try again.", "danger");
-      resetButton(resendBtn);
+      clearButtonBusy(resendBtn);
     }
   });
 }

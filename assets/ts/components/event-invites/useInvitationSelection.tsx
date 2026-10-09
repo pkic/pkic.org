@@ -3,6 +3,7 @@ import type { EventInviteSummary } from "../../../shared/schemas/event-invites";
 import { eventInviteResendResponseSchema } from "../../../shared/schemas/event-invites";
 import { successResponseSchema } from "../../../shared/schemas/api-common";
 import { postJson } from "../../shared/api-client";
+import { formatNumber } from "../../../shared/format-number";
 import type { ApiTableActions } from "../ApiDataTable";
 import { confirmAction } from "../ConfirmDialog";
 import { BulkBar } from "../../ui/BulkBar";
@@ -26,12 +27,13 @@ export function useInvitationSelection(
     const targets = eligible(action);
     if (busy || !targets.length) return;
     const confirmed = await confirmAction({
-      title: `${action === "resend" ? "Resend" : "Revoke"} ${targets.length} invitations?`,
+      title: `${action === "resend" ? "Resend" : "Revoke"} ${formatNumber(targets.length)} ${targets.length === 1 ? "invitation" : "invitations"}?`,
       body:
         action === "resend"
           ? "Each recipient will receive a new invitation email using the event's default deadline."
           : "The selected invitation links will stop working immediately.",
       confirmLabel: action === "resend" ? "Resend invitations" : "Revoke invitations",
+      tone: action === "revoke" ? "danger" : "primary",
     });
     if (!confirmed) return;
     setBusy(true);
@@ -80,7 +82,7 @@ export function useInvitationSelection(
         }}
       >
         <Button size="sm" disabled={busy || eligible("resend").length === 0} onClick={() => void run("resend")}>
-          Resend selected
+          Resend selected…
         </Button>
         <Button
           size="sm"
@@ -88,7 +90,7 @@ export function useInvitationSelection(
           disabled={busy || eligible("revoke").length === 0}
           onClick={() => void run("revoke")}
         >
-          Revoke selected
+          Revoke selected…
         </Button>
       </BulkBar>
     ),

@@ -6,6 +6,7 @@ import YAML from "yaml";
 import { buildWranglerD1ExecuteArgs, parseSeedCliArgs } from "./lib/seed-cli.mjs";
 import { sqlString } from "./lib/sql.mjs";
 import { buildTemplateSqlStatements } from "./lib/email-template-seed-sql.mjs";
+import { DEFAULT_EVENT_MESSAGE_TEMPLATES } from "./lib/event-message-default-templates.mjs";
 
 const DEFAULT_CONFIG_PATH = path.join(process.cwd(), "scripts", "seed-event.yaml");
 const DEFAULT_BUCKET = process.env.ASSETS_BUCKET_NAME ?? "pkic-assets";
@@ -126,6 +127,7 @@ export const DEFAULT_LAYOUT_HTML = `<!doctype html>
 // NOTE: shared email partials are seeded here and managed through the portal.
 // Keep these in sync with the editor labels and the partial loader.
 export const DEFAULT_TEMPLATES = [
+  ...DEFAULT_EVENT_MESSAGE_TEMPLATES,
   {
     key: "agenda_changed",
     subjectTemplate: "Your schedule has changed — {{eventName}}",
@@ -258,7 +260,7 @@ Know someone who should attend? Share your personal referral link: [{{shareUrl}}
   // ─────────────────────────────────────────────────────────────────────────
   // 2. Registration confirmed
   // Variables: eventName, eventUrl, firstName, lastName, email, organizationName,
-  //            jobTitle, attendanceType, venue, status, manageUrl, shareUrl,
+  //            jobTitle, attendanceType, venue, status, manageUrl, myAgendaUrl, shareUrl,
   //            sponsorsImageUrl, heroImageUrl, customAnswerRows, acceptedTermsText
   // Partials:  {{> reg_details}}, {{> sponsors_block}}
   // ─────────────────────────────────────────────────────────────────────────
@@ -293,6 +295,10 @@ We are delighted to confirm that **your registration for {{eventName}} has been 
 
 [Manage your registration &rarr;]({{manageUrl}})
 
+{{#if myAgendaUrl}}
+Plan the sessions you want to attend in [My agenda &rarr;]({{myAgendaUrl}})
+{{/if}}
+
 Know someone who should attend? Share your personal referral link and use the attached personal image to help grow the community:
 [{{shareUrl}}]({{shareUrl}})
 
@@ -307,7 +313,7 @@ We look forward to seeing you at the *{{eventName}}**!
   // ─────────────────────────────────────────────────────────────────────────
   // 3. Registration updated
   // Variables: eventName, firstName, lastName, email, organizationName,
-  //            jobTitle, attendanceSummary, statusLabel, manageUrl,
+  //            jobTitle, attendanceSummary, statusLabel, manageUrl, myAgendaUrl,
   //            customAnswerRows, acceptedTermsText
   // ─────────────────────────────────────────────────────────────────────────
   {
@@ -349,6 +355,12 @@ This email confirms that your registration for **{{eventName}}** has been succes
 {{/if}}
 
 If the details above don't look right, use your [registration management link]({{manageUrl}}) to review or edit your registration.
+
+{{#if eq status "cancelled"}}{{else}}
+{{#if myAgendaUrl}}
+Plan the sessions you want to attend in [My agenda &rarr;]({{myAgendaUrl}})
+{{/if}}
+{{/if}}
 `,
   },
 
@@ -411,7 +423,7 @@ We apologise for any inconvenience.
   // ─────────────────────────────────────────────────────────────────────────
   // 10. Management link resend
   // Sent when a registrant requests a fresh management link.
-  // Variables: eventName, firstName, manageUrl
+  // Variables: eventName, firstName, manageUrl, myAgendaUrl, status
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "registration_manage_link",
@@ -421,6 +433,12 @@ We apologise for any inconvenience.
 Here is your management link for **{{eventName}}**. Use it to review, update, or cancel your registration at any time.
 
 <div class="cta"><a href="{{manageUrl}}">Manage your registration &rarr;</a></div>
+
+{{#if eq status "cancelled"}}{{else}}
+{{#if myAgendaUrl}}
+Plan the sessions you want to attend in [My agenda &rarr;]({{myAgendaUrl}})
+{{/if}}
+{{/if}}
 
 If you did not request this email, you can safely ignore it.
 `,

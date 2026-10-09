@@ -62,6 +62,8 @@ export function siteContentSecurityPolicy(pathname = "/"): string {
     `img-src ${images.join(" ")}`,
     `frame-src ${frames.join(" ")}`,
     "worker-src 'self' blob:",
+    // The installable portal reads its own web app manifest; nothing else needs one.
+    ...(portal ? ["manifest-src 'self'"] : []),
     "media-src 'self' https://www.rovid.nl/def/dco/2016/def-dco-20160823-idoa9bivg-web-hd.mp4",
   ].join("; ");
 }

@@ -1,14 +1,16 @@
+import { portalHasGlobalPermission } from "../../shell/portal-navigation";
 import { EventStaffScanner } from "./EventStaffScanner";
 /** URL-addressed event record and nested sections inside its owning group. */
 import { useState } from "preact/hooks";
 import { usePortalHashLocation } from "../../hash-location";
 import { hasEventAgendaPermission } from "../events/event-agenda-access";
 import { portalSession } from "../../state";
+import type { PortalSession } from "../../types";
+import type { BadgePrintScope } from "../../../../components/event-badges/badge-print-population";
 import type { GroupEvent } from "../../../../../shared/schemas/group-events";
 import {
   EVENT_PROFILE_LABELS,
   EVENT_REGISTRATION_POLICY_LABELS,
-  EVENT_SOURCE_MODE_LABELS,
   EVENT_VISIBILITY_LABELS,
 } from "../../../../../shared/schemas/event-series";
 import { Badge } from "../../../../components/Badge";
@@ -29,6 +31,9 @@ const RawEvidenceRetentionPolicy = lazy(() =>
     default: module.RawEvidenceRetentionPolicy,
   })),
 );
+const EventRecordings = lazy(() =>
+  import("../events/detail/settings/EventRecordings").then((module) => ({ default: module.EventRecordings })),
+);
 const GroupEventScheduling = lazy(() =>
   import("./GroupEventScheduling").then((module) => ({ default: module.GroupEventScheduling })),
 );
@@ -37,9 +42,6 @@ const BadgeCredentials = lazy(() =>
 );
 const SponsorLeads = lazy(() =>
   import("../events/detail/agenda/SponsorLeads").then((module) => ({ default: module.SponsorLeads })),
-);
-const AttendanceReport = lazy(() =>
-  import("../events/detail/agenda/AttendanceReport").then((module) => ({ default: module.AttendanceReport })),
 );
 const AgendaEditor = lazy(() =>
   import("../events/detail/agenda/AgendaEditor").then((module) => ({ default: module.AgendaEditor })),
@@ -58,7 +60,7 @@ import { GroupEventInvitations } from "./GroupEventInvitations";
 import { GroupEventProposals } from "./GroupEventProposals";
 import { groupEventProposalPath } from "./GroupEventProposals";
 import { EventProposalSpeakersTable } from "../../../../components/proposals/EventProposalSpeakersTable";
-import { GroupEventRegistrationPanel } from "./GroupEventRegistrationPanel";
+import { GroupEventOverview } from "./GroupEventOverview";
 import { GroupEventRegistrationRecord } from "./GroupEventRegistrationRecord";
 import { GroupEventRegistrations } from "./GroupEventRegistrations";
 import { ResourceSharingEditor } from "./ResourceSharingEditor";
@@ -95,13 +97,6 @@ const EVENT_WORKSPACE_TABS: readonly EventWorkspaceTabDef[] = [
       ),
   },
   {
-    key: "attendance",
-    label: "Attendance",
-    visible: (event) =>
-      hasEventAgendaPermission(event.id, "agenda:attendance_read") ||
-      hasEventAgendaPermission(event.id, "agenda:attendance_import"),
-  },
-  {
     key: "leads",
     label: "Sponsor leads",
     visible: () =>
@@ -118,7 +113,14 @@ const EVENT_WORKSPACE_TABS: readonly EventWorkspaceTabDef[] = [
     visible: (event) => event.capabilities.includes("manage") || event.proposalAccess?.canFinalize === true,
   },
   { key: "communications", label: "Communications", visible: (event) => event.capabilities.includes("manage") },
-  { key: "stats", label: "Analytics", visible: (event) => event.capabilities.includes("manage_attendance") },
+  {
+    key: "stats",
+    label: "Analytics",
+    visible: (event) =>
+      event.capabilities.includes("manage_attendance") ||
+      hasEventAgendaPermission(event.id, "agenda:attendance_read") ||
+      hasEventAgendaPermission(event.id, "agenda:attendance_import"),
+  },
   {
     key: "settings",
     label: "Settings",
@@ -160,15 +162,21 @@ export function GroupEventWorkspace({
   detailSegment?: string;
   onUpdated?: () => void | Promise<void>;
 }) {
-  if (tab === "team" || tab === "promoters" || tab === "badges") {
+  if (tab === "team" || tab === "promoters" || tab === "badges" || tab === "attendance") {
     const legacy = tab;
     detailSegment = detailTab;
     detailTab = detailId;
     detailId = legacy;
-    tab = legacy === "team" ? "settings" : legacy === "promoters" ? "stats" : "registrations";
+    tab =
+      legacy === "team" ? "settings" : legacy === "promoters" || legacy === "attendance" ? "stats" : "registrations";
   }
   const [, navigate] = usePortalHashLocation();
   const [editing, setEditing] = useState(false);
+  const [badgePrint, setBadgePrint] = useState<{
+    scope: BadgePrintScope;
+    session: PortalSession | null;
+    eventId: string;
+  } | null>(null);
   const canManage = event.capabilities.includes("manage");
   const canRegister = event.registrationPolicy !== "no_registration" && event.capabilities.includes("register");
   const canFinalizeProposals = event.proposalAccess?.canFinalize === true;
@@ -260,58 +268,7 @@ export function GroupEventWorkspace({
         ) : (
           <section aria-label={`${activeTabLabel} — ${event.name}`} class="pk-stack">
             {activeTab === GROUP_EVENT_OVERVIEW_TAB && (
-              <div class="pk-record">
-                <div class="pk-stack">
-                  {canRegister && <GroupEventRegistrationPanel event={event} groupId={groupId} />}
-                </div>
-                <aside class="pk-stack pk-datalist-aligned">
-                  <Panel aria-label="Schedule">
-                    <PanelHeader title="Schedule" />
-                    <PanelBody>
-                      <DescriptionList
-                        items={[
-                          { term: "Starts", value: formatEventWhen(event.startsAt, event.timezone, event.location) },
-                          /* The same formatter as "Starts": one page must not show
-                             the start in the event's zone and the end in the
-                             viewer's. */
-                          { term: "Ends", value: formatEventWhen(event.endsAt, event.timezone, event.location) },
-                          { term: "Time zone", value: event.timezone },
-                          { term: "Location", value: event.location },
-                        ]}
-                      />
-                    </PanelBody>
-                  </Panel>
-                  <Panel aria-label="Event facts">
-                    <PanelHeader title="Event" />
-                    <PanelBody>
-                      <DescriptionList
-                        density="compact"
-                        items={[
-                          { term: "Profile", value: EVENT_PROFILE_LABELS[event.profileKey ?? "conference"] },
-                          { term: "Registration", value: EVENT_REGISTRATION_POLICY_LABELS[event.registrationPolicy] },
-                          { term: "Visibility", value: EVENT_VISIBILITY_LABELS[event.visibility] },
-                          {
-                            term: "Source",
-                            value: event.sourceMode ? EVENT_SOURCE_MODE_LABELS[event.sourceMode] : undefined,
-                          },
-                          { term: "Slug", value: <span class="pk-mono">{event.slug}</span> },
-                        ]}
-                      />
-                    </PanelBody>
-                  </Panel>
-                  {/* Absent rather than empty when the event has stated no
-                      links: a titled panel with nothing in it claims a fact
-                      the record does not have. */}
-                  {event.links.length > 0 && (
-                    <Panel aria-label="Event links">
-                      <PanelHeader title="Links" />
-                      <PanelBody>
-                        <LinkList links={event.links} label="Event links" />
-                      </PanelBody>
-                    </Panel>
-                  )}
-                </aside>
-              </div>
+              <GroupEventOverview event={event} groupId={groupId} canRegister={canRegister} />
             )}
 
             {activeTab === "registrations" &&
@@ -341,6 +298,10 @@ export function GroupEventWorkspace({
                           basePath={`${tabPath("registrations")}/badges`}
                           credentialId={detailTab}
                           segment={detailSegment}
+                          eventId={event.id}
+                          groupId={groupId}
+                          printRequest={badgePrint?.eventId === event.id ? badgePrint : null}
+                          onPrintClose={() => setBadgePrint(null)}
                         />
                       </Suspense>
                     ) : detailId === "badges" ? (
@@ -354,6 +315,10 @@ export function GroupEventWorkspace({
                     eventSlug={event.slug}
                     badgesPath={`${tabPath("registrations")}/badges`}
                     canManage={canManage}
+                    onPrint={(scope) => {
+                      setBadgePrint({ scope, session: portalSession.value, eventId: event.id });
+                      navigate(`${tabPath("registrations")}/badges`);
+                    }}
                   />
                 </GroupEventRecordSections>
               ))}
@@ -417,6 +382,7 @@ export function GroupEventWorkspace({
               <GroupEventCommunications
                 groupId={groupId}
                 eventId={event.id}
+                eventSlug={event.slug}
                 composing={detailId === NEW_CAMPAIGN_SEGMENT}
                 listPath={tabPath("communications")}
               />
@@ -433,21 +399,6 @@ export function GroupEventWorkspace({
               </Suspense>
             )}
             {activeTab === "scanner" && <EventStaffScanner eventId={event.id} slug={event.slug} />}
-            {activeTab === "attendance" && (
-              <Suspense fallback={<Spinner />}>
-                <AttendanceReport
-                  slug={event.slug}
-                  basePath={tabPath("attendance")}
-                  section={detailId}
-                  detailId={detailTab}
-                  detailTab={detailSegment}
-                  timeZone={event.timezone}
-                  canCorrect={hasEventAgendaPermission(event.id, "agenda:attendance_correct")}
-                  canImport={hasEventAgendaPermission(event.id, "agenda:attendance_import")}
-                  canRead={hasEventAgendaPermission(event.id, "agenda:attendance_read")}
-                />
-              </Suspense>
-            )}
             {activeTab === "leads" && (
               <Suspense fallback={<Spinner />}>
                 <SponsorLeads slug={event.slug} timeZone={event.timezone} />
@@ -455,7 +406,20 @@ export function GroupEventWorkspace({
             )}
             {activeTab === "stats" && (
               <Suspense fallback={<Spinner label="Loading analytics…" />}>
-                <EventStats slug={event.slug} section={detailId} subTab={detailTab} basePath={tabPath("stats")} />
+                <EventStats
+                  slug={event.slug}
+                  section={detailId}
+                  subTab={detailTab}
+                  basePath={tabPath("stats")}
+                  legacyAttendanceBasePath={tabPath("attendance")}
+                  canViewAnalytics={event.capabilities.includes("manage_attendance")}
+                  attendance={{
+                    timeZone: event.timezone,
+                    canRead: hasEventAgendaPermission(event.id, "agenda:attendance_read"),
+                    canImport: hasEventAgendaPermission(event.id, "agenda:attendance_import"),
+                    canCorrect: hasEventAgendaPermission(event.id, "agenda:attendance_correct"),
+                  }}
+                />
               </Suspense>
             )}
 
@@ -464,13 +428,24 @@ export function GroupEventWorkspace({
                 <Tabs
                   label="Settings sections"
                   items={[
-                    ...(canManage ? [{ key: "general", label: "General" }] : []),
+                    ...(canManage
+                      ? [
+                          { key: "general", label: "General" },
+                          { key: "recordings", label: "Recordings" },
+                        ]
+                      : []),
                     { key: "team", label: "Team" },
                     ...(hasEventAgendaPermission(event.id, "agenda:write")
                       ? [{ key: "scheduling", label: "Scheduling" }]
                       : []),
                   ]}
-                  active={detailId === "team" || detailId === "scheduling" ? detailId : canManage ? "general" : "team"}
+                  active={
+                    detailId === "team" || detailId === "scheduling" || detailId === "recordings"
+                      ? detailId
+                      : canManage
+                        ? "general"
+                        : "team"
+                  }
                   hrefFor={(key) => (key === "general" ? tabPath("settings") : `${tabPath("settings")}/${key}`)}
                 />
                 {detailId === "team" || (!canManage && !detailId) ? (
@@ -483,6 +458,15 @@ export function GroupEventWorkspace({
                       staffingPath={`${tabPath("agenda")}?view=staffing`}
                       canManage={canManage}
                       canEditStaffing={hasEventAgendaPermission(event.id, "agenda:write")}
+                    />
+                  </Suspense>
+                ) : detailId === "recordings" && canManage ? (
+                  <Suspense fallback={<Spinner />}>
+                    <EventRecordings
+                      slug={event.slug}
+                      canLinkProviderMeetings={portalHasGlobalPermission(portalSession.value, "events:manage")}
+                      basePath={`${tabPath("settings")}/recordings`}
+                      sourceId={detailTab}
                     />
                   </Suspense>
                 ) : detailId === "scheduling" ? (

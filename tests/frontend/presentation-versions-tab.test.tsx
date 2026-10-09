@@ -123,11 +123,12 @@ describe("presentation versions tab", () => {
     // has to stay a word rather than a colour.
     expect(root.querySelector("[data-presentation-review-status]")?.textContent).toBe("Needs revision");
 
-    // The download is a destination drawn as a button: the design system's
-    // link, with the same classes a Button beside it carries.
-    const download = [...row.querySelectorAll("a")].find((link) => link.textContent === "Download");
+    // The download is a destination drawn as the shared download icon control:
+    // a link with the same classes a Button beside it carries.
+    const download = row.querySelector<HTMLAnchorElement>('a[aria-label="Download version 1, pqc-migration-talk.pdf"]');
     expect(download?.classList.contains("pk-btn")).toBe(true);
     expect(download?.hasAttribute("download")).toBe(true);
+    expect(download?.querySelector("svg")).not.toBeNull();
 
     expect(rowMenuTrigger(root, "Version 1, pqc-migration-talk.pdf")).not.toBeNull();
     expect([...row.querySelectorAll("button")].some((button) => button.textContent?.trim() === "Review")).toBe(false);

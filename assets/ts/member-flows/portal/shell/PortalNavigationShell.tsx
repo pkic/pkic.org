@@ -6,7 +6,7 @@ import { userOrganizationsListResponseSchema } from "../../../../shared/schemas/
 import { Alert } from "../../../ui/Alert";
 import { ButtonLink } from "../../../ui/Button";
 import { Menu } from "../../../ui/Menu";
-import { MenuIcon } from "../../../components/MenuIcon";
+import { IconMenu } from "../../../ui/MediaIcons";
 import { useData } from "../../../hooks/useData";
 import { getJson } from "../../../shared/api-client";
 import { signOutPortalSession } from "../logout-session";
@@ -19,6 +19,9 @@ import {
   type PortalNavItem,
 } from "./portal-navigation";
 import { SidebarGroups } from "./SidebarGroups";
+import { AppTabBar } from "./AppTabBar";
+import "./PortalAppChrome.css";
+import { portalAppTabForLocation, portalAppTabs } from "./portal-app-tabs";
 
 function SettingsNavigation({
   items,
@@ -156,7 +159,7 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
           aria-controls="portal-sidebar"
           onClick={() => setNavigationOpen((open) => !open)}
         >
-          <MenuIcon />
+          <IconMenu width="20" height="20" />
         </button>
         <span class="portal-brand">PKI Consortium Portal</span>
       </div>
@@ -178,7 +181,7 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
             aria-controls="portal-sidebar"
             onClick={toggleSidebar}
           >
-            <MenuIcon />
+            <IconMenu width="20" height="20" />
           </button>
           <div class="portal-sidebar-brand">
             <div class="portal-brand">PKI Consortium Portal</div>
@@ -299,6 +302,12 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
         )}
         {children}
       </main>
+      <AppTabBar
+        scope="portal"
+        label="App"
+        items={portalAppTabs(session)}
+        activeId={portalAppTabForLocation(session, location)}
+      />
     </div>
   );
 }

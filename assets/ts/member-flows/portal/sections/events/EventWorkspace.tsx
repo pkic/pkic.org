@@ -4,7 +4,6 @@ import { useEffect, useMemo } from "preact/hooks";
 import { Field } from "../../../../ui/Field";
 import { Select } from "../../../../ui/TextControl";
 import { hasEventAgendaPermission } from "./event-agenda-access";
-import { EventAudienceView } from "./EventAudienceView";
 import { eventDetailResponseSchema } from "../../../../../shared/schemas/event-management";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
@@ -14,8 +13,13 @@ import { getJson } from "../../../../shared/api-client";
 import { usePortalHashLocation } from "../../hash-location";
 import { portalSession } from "../../state";
 import { portalHasPermissionAtAnyScope } from "../../shell/portal-navigation";
+import { canOpenGroupWorkspace } from "./event-destination";
 import type { PortalSession } from "../../types";
 import { createScannerEventBootstrap } from "./detail/scanner/scanner-event-bootstrap";
+import { databaseIdSchema } from "../../../../../shared/schemas/identifiers";
+import { readHashQueryParam } from "../../../../shared/hash-query";
+import { ScannerEventNavigation } from "./ParticipantEventNavigation";
+import { eventAgendaRoute } from "../../../../../shared/event-participation-link";
 
 const scannerEventBootstrap = createScannerEventBootstrap(() => portalSession.value);
 
@@ -79,8 +83,16 @@ function ScopedScannerRoute({ slug, sponsorId }: { slug: string; sponsorId?: str
   const can = (value: import("../../../../../shared/schemas/permissions").Permission) =>
     hasEventAgendaPermission(event.data!.event.id, value, sponsorId);
   const allowedActions = availableScannerActions(can);
-  if (sponsorId ? !can(permission as "agenda:leads_capture") : !allowedActions.length)
+  if (
+    sponsorId
+      ? !can(permission as "agenda:leads_capture") ||
+        !scannerAccess?.sponsors.some((sponsor) => sponsor.id === sponsorId)
+      : !allowedActions.length || !scannerAccess?.canScan
+  )
     return <ErrorAlert error="Your current identity does not have permission to scan for this event." />;
+  const selectedSession = sponsorId ? null : readHashQueryParam("session");
+  const target = selectedSession === null ? null : databaseIdSchema.safeParse(selectedSession);
+  if (target && !target.success) return <ErrorAlert error="This session is not available for check-in." />;
   return (
     <div class="pk pk-stack portal-section">
       <PageHeader
@@ -88,6 +100,23 @@ function ScopedScannerRoute({ slug, sponsorId }: { slug: string; sponsorId?: str
         trail={[
           { label: "Events", href: usePortalHashLocation.hrefs("/events") },
           { label: sponsorId ? "Lead scanner" : "Scanner" },
+        ]}
+      />
+      <ScannerEventNavigation
+        event={{ ...event.data.event, slug }}
+        activeId={sponsorId ? "lead-scanner" : "scanner"}
+        items={[
+          {
+            id: "overview",
+            label: "Overview",
+            href: usePortalHashLocation.hrefs(`/events/${encodeURIComponent(slug)}`),
+          },
+          { id: "programme", label: "Agenda", href: usePortalHashLocation.hrefs(eventAgendaRoute(slug)) },
+          {
+            id: "agenda",
+            label: "My agenda",
+            href: usePortalHashLocation.hrefs(eventAgendaRoute(slug, { mine: true })),
+          },
         ]}
       />
       {scannerAccess && scannerAccess.sponsors.length + Number(scannerAccess.canScan) > 1 && (
@@ -114,8 +143,9 @@ function ScopedScannerRoute({ slug, sponsorId }: { slug: string; sponsorId?: str
       )}
       <Suspense fallback={<Spinner />}>
         <EventScanner
-          key={`${slug}:${sponsorId ?? "event"}:${portalSession.value?.identity.id ?? ""}`}
+          key={`${slug}:${sponsorId ?? "event"}:${target?.success ? target.data : "entrance"}:${portalSession.value?.identity.id ?? ""}`}
           slug={slug}
+          occurrenceId={target?.success ? target.data : null}
           allowedActions={
             sponsorId
               ? ["lead"]
@@ -147,9 +177,11 @@ function ScopedScannerRoute({ slug, sponsorId }: { slug: string; sponsorId?: str
 }
 
 /**
- * Canonical event management lives in groups. These legacy routes only
- * resolve an event to its owning group; they never provide an independent
- * system-level management workspace.
+ * Canonical event management lives in groups. These legacy routes resolve an
+ * event to its owning group only for a caller who can open that group's
+ * workspace; they never provide an independent system-level management
+ * workspace. Everyone else — and every attendee-facing tab — gets the
+ * group-independent event page, never a redirect into a refusal.
  */
 function LegacyEventRoute({
   slug,
@@ -170,29 +202,23 @@ function LegacyEventRoute({
   const event = detail.data?.event;
   const ownerGroupId = event && "ownerGroupId" in event ? event.ownerGroupId : null;
   const eventId = detail.data?.event.id ?? null;
-  const personal =
-    audienceFallback &&
-    Boolean(
-      event?.participation?.registrationId || event?.participation?.proposals || event?.participation?.speakerProposals,
-    );
   const target =
-    !personal && ownerGroupId && eventId
+    !audienceFallback && ownerGroupId && eventId && canOpenGroupWorkspace(portalSession.value, ownerGroupId)
       ? mapPath(`/groups/${encodeURIComponent(ownerGroupId)}/events/${encodeURIComponent(eventId)}`)
       : null;
 
-  const fallbackTarget = !detail.loading && !detail.error && event && !target && !audienceFallback ? "/events" : null;
-
   useEffect(() => {
-    const destination = target ?? fallbackTarget;
-    if (destination) navigate(destination, { replace: true });
-  }, [target, fallbackTarget, navigate]);
+    if (target) navigate(target, { replace: true });
+  }, [target, navigate]);
 
   if (detail.loading) return <Spinner label="Loading event…" />;
   if (detail.error) return <ErrorAlert error={detail.error} />;
-  if (target || fallbackTarget) return null;
-  if (personal && event) return <ParticipantEvent event={event} tab={audienceTab} />;
-  if (audienceFallback && event && "viewer" in event) return <EventAudienceView event={event} />;
-  return null;
+  if (target || !event) return null;
+  // Every reader lands on the event app: the caller's own registration,
+  // proposals, agenda, ticket and scanner tabs come from the caller-scoped
+  // projection, and a reader who has none of them yet sees the event home
+  // with its registration offer rather than a separate plain detail page.
+  return <ParticipantEvent event={event} tab={audienceFallback ? audienceTab : undefined} />;
 }
 
 /**
@@ -210,6 +236,14 @@ export function eventListShowsProposalPrograms(session: PortalSession | null): b
 export function EventWorkspace(props: EventWorkspaceProps) {
   const session = portalSession.value;
   useEffect(() => scannerEventBootstrap.sessionChanged(), [session?.sessionId, session?.identity.id]);
+  if (props.view === "detail" && props.tab === "lead-scanner")
+    return (
+      <div class="pk pk-stack portal-section">
+        <Suspense fallback={<Spinner />}>
+          <ParticipantEventPage slug={props.slug} tab="lead-scanner" />
+        </Suspense>
+      </div>
+    );
   if (props.view === "detail" && props.tab === "leads") return <ScopedSponsorLeadsRoute slug={props.slug} />;
   if (
     props.view === "detail" &&
@@ -271,7 +305,9 @@ export function EventWorkspace(props: EventWorkspaceProps) {
           tab === "submissions" ||
           tab === "agenda" ||
           tab === "promotion" ||
-          tab === "session-management"
+          tab === "session-management" ||
+          tab === "ticket" ||
+          tab === "more"
         }
         audienceTab={props.tab}
         mapPath={(base) => {

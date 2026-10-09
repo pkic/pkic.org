@@ -30,3 +30,14 @@ FEEDBACK_IDENTITY_SECRET_V1=replace-with-strong-random-value
 # closed unless this SendGrid Event Webhook public key is configured as a
 # Wrangler secret.
 # SENDGRID_WEBHOOK_VERIFICATION_KEY=replace-with-base64-p256-public-key
+
+# Optional browser notifications for event agendas. Leave all four unset to keep
+# them off; the portal then shows email reminders only. Use keys made for local
+# development, never the preview or production ones.
+# Generate a VAPID key pair with `pnpm dlx web-push generate-vapid-keys`
+# (public key: 65-byte uncompressed P-256 point, private key: 32 bytes, both
+# base64url) and a random value of at least 32 characters for the encryption key.
+# VAPID_PUBLIC_KEY=replace-with-base64url-public-key
+# VAPID_PRIVATE_KEY=replace-with-base64url-private-key
+# VAPID_SUBJECT=mailto:replace-with-operator-address
+# WEB_PUSH_ENCRYPTION_KEY=replace-with-strong-random-value-of-32-or-more-characters

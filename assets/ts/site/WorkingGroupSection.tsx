@@ -2,6 +2,7 @@ import { Fragment } from "preact";
 
 import type { SiteHero, SiteWorkingGroupCard, SiteWorkingGroupSection } from "../../shared/site-content";
 import { ButtonLink } from "../ui/Button";
+import { IconChevron } from "../ui/MediaIcons";
 import { BlogCard } from "./BlogCard";
 import { EventCard } from "./EventCard.tsx";
 import { SiteHero as PageHero } from "./SitePrimitives";
@@ -97,20 +98,7 @@ function SectionNav({ section }: { section: SiteWorkingGroupSection }) {
                 aria-expanded="false"
                 aria-label="Show contents"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="11"
-                  height="11"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  aria-hidden="true"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
+                <IconChevron pointing="down" width="11" height="11" />
               </button>
             </div>
           ) : (

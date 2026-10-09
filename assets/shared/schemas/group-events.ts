@@ -29,7 +29,6 @@ import {
 import {
   eventProfileKeySchema,
   eventRegistrationPolicySchema,
-  eventSourceModeSchema,
   eventVisibilitySchema,
   standaloneEventProfileKeySchema,
 } from "./event-series";
@@ -64,8 +63,13 @@ export const groupEventsListQuerySchema = listQuerySchema(GROUP_EVENTS_SORT_COLU
   collection: z.enum(["events", "unscheduled_meetings"]).optional(),
   profileKey: eventProfileKeySchema.optional(),
   registrationPolicy: eventRegistrationPolicySchema.optional(),
-  sourceMode: eventSourceModeSchema.optional(),
+  /**
+   * Upcoming: the event, or its series' remaining occurrences, ends at or
+   * after this instant. An event without a schedule yet also counts, since it
+   * has not happened; it sorts after every scheduled one.
+   */
   from: utcInstantSchema.optional(),
+  /** Past: the event, or its next occurrence, starts at or before this instant. */
   to: utcInstantSchema.optional(),
 });
 export type GroupEventsListQuery = z.infer<typeof groupEventsListQuerySchema>;

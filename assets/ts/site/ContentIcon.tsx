@@ -9,7 +9,9 @@ export function ContentIcon({ name }: { name: string }) {
     <span
       class="bento-icon"
       aria-hidden="true"
-      dangerouslySetInnerHTML={{ __html: icon.replace('class="ICON_CLASS"', 'width="1em" height="1em"') }}
+      dangerouslySetInnerHTML={{
+        __html: icon.replace('class="ICON_CLASS"', 'class="pk-icon" width="1em" height="1em"'),
+      }}
     />
   ) : null;
 }

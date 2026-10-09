@@ -35,6 +35,7 @@ import type { ParsedContact } from "../invite-parser";
 import { registrationInviteCreateSchema, peerInviteResultSchema } from "../../../shared/schemas/registration";
 import { postJson, ApiClientError } from "../api-client";
 import { Alert } from "../../ui/Alert";
+import { CopyLinkRow } from "./copy-link-row";
 import { Button, ButtonLink } from "../../ui/Button";
 import { Field } from "../../ui/Field";
 import { Panel, PanelBody } from "../../ui/Panel";
@@ -134,33 +135,6 @@ function OgBadge({
         >
           <span aria-hidden="true">⬇</span> Download badge
         </ButtonLink>
-      </div>
-    </div>
-  );
-}
-
-function CopyLinkRow({ shareUrl }: { shareUrl: string }) {
-  const [copyStatus, setCopyStatus] = useState("");
-
-  const handleCopy = useCallback(() => {
-    navigator.clipboard.writeText(shareUrl).then(
-      () => setCopyStatus("Link copied to your clipboard."),
-      () => setCopyStatus("Could not copy automatically — select the link above and copy it."),
-    );
-  }, [shareUrl]);
-
-  return (
-    <div class="pk-stack pk-stack--snug">
-      <Field label="Your unique sharing link" help="Registrations made through this link are credited to you.">
-        {(control) => <TextInput {...control} class="pk-mono" value={shareUrl} readOnly />}
-      </Field>
-      <div class="pk-cluster">
-        <Button size="sm" onClick={handleCopy}>
-          Copy link
-        </Button>
-        <p class="pk-small" role="status">
-          {copyStatus}
-        </p>
       </div>
     </div>
   );
@@ -527,7 +501,11 @@ function SharePanelInner({ options }: { options: SharePanelOptions }) {
 
         {canInvite && <InvitePanel manageToken={manageToken as string} eventSlug={eventSlug as string} />}
 
-        <CopyLinkRow shareUrl={shareUrl} />
+        <CopyLinkRow
+          url={shareUrl}
+          label="Your unique sharing link"
+          help="Registrations made through this link are credited to you."
+        />
         <SocialLinks twitterUrl={twitterUrl} blueskyUrl={blueskyUrl} redditUrl={redditUrl} />
       </PanelBody>
     </Panel>

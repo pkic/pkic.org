@@ -677,7 +677,7 @@ test.describe("Portal management browser-verification pass", () => {
     await page.getByRole("button", { name: "Registration actions", exact: true }).click();
     await expect(page.getByRole("menuitem", { name: "Run waitlist promotions" })).toBeVisible();
     await page.keyboard.press("Escape");
-    const download = page.getByRole("link", { name: "Download CSV", exact: true });
+    const download = page.getByRole("link", { name: "Download registrations (CSV)", exact: true });
     await expect(download).toBeVisible();
     await expect(download.locator("svg")).toBeVisible();
     const actions = page.getByRole("button", { name: "Registration actions", exact: true });

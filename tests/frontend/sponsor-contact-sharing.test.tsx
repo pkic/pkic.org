@@ -12,6 +12,12 @@ import {
 import { mountSponsorContactSharing } from "../../assets/ts/components/SponsorContactSharing";
 import { EventRegistrationManagement } from "../../assets/ts/site/EventRegistrationManagement";
 import { formatDateTime } from "../../assets/ts/shared/ui";
+import { confirmAction } from "../../assets/ts/components/ConfirmDialog";
+
+vi.mock("../../assets/ts/components/ConfirmDialog", () => ({
+  confirmAction: vi.fn(async () => true),
+  ConfirmDialogHost: () => null,
+}));
 
 const endpoint = "/api/v1/registrations/access/synthetic-sharing-token";
 const withdrawnAt = "2026-10-05T10:00:00.000Z";
@@ -48,6 +54,8 @@ afterEach(async () => {
   }
   document.body.innerHTML = "";
   vi.unstubAllGlobals();
+  vi.mocked(confirmAction).mockReset();
+  vi.mocked(confirmAction).mockResolvedValue(true);
 });
 
 describe("attendee sponsor contact sharing", () => {
@@ -66,7 +74,7 @@ describe("attendee sponsor contact sharing", () => {
         expect(host.textContent).toContain(formatDateTime(sharing.withdrawnAt));
       }
       if (sharing.allowed) {
-        expect(host.querySelector("button")?.textContent).toBe("Withdraw sharing");
+        expect(host.querySelector("button")?.textContent).toBe("Withdraw sharing…");
         expect([...host.querySelectorAll("dt")].map((term) => term.textContent)).not.toContain("Withdrawn");
         if (sharing.withdrawnAt) expect(host.textContent).not.toContain(formatDateTime(sharing.withdrawnAt));
       } else {
@@ -89,12 +97,23 @@ describe("attendee sponsor contact sharing", () => {
     const host = await mount({ allowed: true, withdrawnAt: null });
     const button = host.querySelector<HTMLButtonElement>("button")!;
     expect(button.type).toBe("button");
+    // Withdrawing takes effect at once, so it sits in the page's read view
+    // rather than inside the details form that waits for "Edit details".
     expect(host.querySelector("form")).toBeNull();
-    expect(host.closest("form")).not.toBeNull();
+    expect(host.closest("form")).toBeNull();
+    expect(host.closest("[data-manage-form]")).not.toBeNull();
     expect(host.textContent).toContain("already downloaded cannot be recalled");
-    await act(() => {
+    expect(button.classList.contains("pk-btn--danger-quiet")).toBe(true);
+    await act(async () => {
       button.click();
     });
+    expect(confirmAction).toHaveBeenCalledWith(
+      expect.objectContaining({
+        confirmLabel: "Withdraw sharing",
+        tone: "danger",
+        consequences: expect.arrayContaining(["Copies sponsors have already downloaded cannot be recalled"]),
+      }),
+    );
     expect(host.textContent).toContain("Sharing enabled");
     expect(button.getAttribute("aria-busy")).toBe("true");
     const [url, init] = fetch.mock.calls[0];
@@ -109,6 +128,20 @@ describe("attendee sponsor contact sharing", () => {
     await vi.waitFor(() => expect(host.textContent).toContain("Sharing withdrawn"));
     expect(host.textContent).toContain(formatDateTime(withdrawnAt));
     expect(host.querySelector("button")).toBeNull();
+  });
+
+  it("keeps sharing and sends nothing when the withdrawal is not confirmed", async () => {
+    const fetch = vi.fn();
+    vi.stubGlobal("fetch", fetch);
+    vi.mocked(confirmAction).mockResolvedValue(false);
+    const host = await mount({ allowed: true, withdrawnAt: null });
+    await act(async () => {
+      host.querySelector<HTMLButtonElement>("button")!.click();
+    });
+    expect(confirmAction).toHaveBeenCalledTimes(1);
+    expect(fetch).not.toHaveBeenCalled();
+    expect(host.textContent).toContain("Sharing enabled");
+    expect(host.querySelector("button")?.getAttribute("aria-busy")).toBeNull();
   });
 
   it("retains sharing on a refusal and permits an explicit retry", async () => {
@@ -145,6 +178,6 @@ describe("attendee sponsor contact sharing", () => {
     await vi.waitFor(() => expect(host.querySelector('[role="alert"]')).not.toBeNull());
     expect(host.textContent).toContain("Sharing enabled");
     expect(host.textContent).not.toContain("Sharing withdrawn");
-    expect(host.querySelector("button")?.textContent).toBe("Withdraw sharing");
+    expect(host.querySelector("button")?.textContent).toBe("Withdraw sharing…");
   });
 });

@@ -11,7 +11,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { GroupAuditLog } from "../../assets/ts/member-flows/portal/sections/management/GroupAuditLog";
 import { GroupEvents } from "../../assets/ts/member-flows/portal/sections/management/GroupEvents";
-import { chooseColumnFilter, columnFilterOptions, columnFilterSummary } from "./helpers/column-menu";
+import { groupEventsListQuerySchema } from "../../assets/shared/schemas/group-events";
 
 const navigate = vi.fn();
 
@@ -96,13 +96,12 @@ describe("group events list", () => {
     const controls = [...container.querySelectorAll("a, button")].map((control) => control.textContent);
     expect(controls).toContain("Open Architecture workshop");
     expect(controls).not.toContain("Details");
-    expect(container.querySelector("table caption")?.textContent).toBe("Group events");
-    // Where the event is authored is a column, in product language, so the
-    // source filter has a column to live in.
-    expect(container.querySelector("tbody")?.textContent).toContain("Portal");
+    expect(container.querySelector("table caption")?.textContent).toBe("Upcoming group events");
+    // Where an event is authored means nothing to an organizer.
+    expect([...container.querySelectorAll("thead th")].map((cell) => cell.textContent)).not.toContain("Source");
   });
 
-  it("narrows by source from the Source column and sends the chosen source to the events query", async () => {
+  it("opens on upcoming events and switches to past ones, most recent first", async () => {
     const requests: URL[] = [];
     vi.stubGlobal(
       "fetch",
@@ -115,24 +114,50 @@ describe("group events list", () => {
     const container = mount(<GroupEvents groupId={GROUP_ID} canManage />);
     await settle();
 
-    // No select above the table: the filter is the Source column's own.
-    expect(container.querySelector('[role="toolbar"] select')).toBeNull();
-    // The options speak product language, not the schema's `sourceMode` keys.
-    expect(columnFilterOptions(container, "Source")).toEqual([
-      "All sources",
-      "Website content",
-      "Portal",
-      "Integration",
+    const toggles = [
+      ...container.querySelectorAll<HTMLButtonElement>(
+        '[role="group"][aria-label="Events scope"] button[aria-pressed]',
+      ),
+    ];
+    expect(toggles.map((button) => [button.textContent, button.getAttribute("aria-pressed")])).toEqual([
+      ["Upcoming", "true"],
+      ["Past", "false"],
     ]);
-    // The default view is the server default: no `sourceMode` parameter at all.
-    expect(requests.some((url) => url.searchParams.has("sourceMode"))).toBe(false);
+    const upcoming = groupEventsListQuerySchema.parse(Object.fromEntries(requests.at(-1)!.searchParams));
+    expect(upcoming).toMatchObject({ collection: "events", sort: "next_occurrence_at" });
+    expect(upcoming.from).toBeDefined();
+    expect(upcoming.to).toBeUndefined();
 
-    await chooseColumnFilter(container, "Source", "Portal");
+    await act(async () => {
+      toggles[1].click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
     await settle();
 
-    expect(requests.at(-1)?.searchParams.get("sourceMode")).toBe("portal");
-    expect(requests.at(-1)?.searchParams.get("offset")).toBe("0");
-    expect(columnFilterSummary(container, "Source")).toBe("Portal");
+    expect(container.querySelector("caption")?.textContent).toBe("Past group events");
+    const past = groupEventsListQuerySchema.parse(Object.fromEntries(requests.at(-1)!.searchParams));
+    expect(past).toMatchObject({ collection: "events", sort: "-next_occurrence_at", offset: 0 });
+    expect(past.to).toBeDefined();
+    expect(past.from).toBeUndefined();
+  });
+
+  it("keeps meetings awaiting a schedule out of the upcoming and past split", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        requests.push(new URL(String(input), location.origin));
+        return json({ events: [], page: { limit: 50, offset: 0, total: 0, hasMore: false } });
+      }),
+    );
+
+    const container = mount(<GroupEvents groupId={GROUP_ID} collection="unscheduled_meetings" canManage />);
+    await settle();
+
+    expect(container.querySelector('[aria-label="Events scope"]')).toBeNull();
+    const query = groupEventsListQuerySchema.parse(Object.fromEntries(requests.at(-1)!.searchParams));
+    expect(query).toMatchObject({ collection: "unscheduled_meetings" });
+    expect(query.from ?? query.to).toBeUndefined();
   });
 
   it("announces a failed event load as an alert instead of an empty list", async () => {
@@ -149,7 +174,7 @@ describe("group events list", () => {
     expect(alert?.textContent).not.toBe("");
     // The empty-state sentence would claim the group has no events, which is
     // a different and wrong thing to tell a reader about a failed request.
-    expect(container.textContent).not.toContain("No events yet");
+    expect(container.textContent).not.toContain("No upcoming events");
     expect(container.querySelector("table")).toBeNull();
   });
 });

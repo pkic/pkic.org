@@ -316,7 +316,6 @@ export function MemberAvailabilityPanel({
           <ButtonLink
             variant="primary"
             size="sm"
-            block
             href={`mailto:${contactEmail}?subject=${encodeURIComponent(
               availability.openToEmployment ? "About a role" : "About an engagement",
             )}`}

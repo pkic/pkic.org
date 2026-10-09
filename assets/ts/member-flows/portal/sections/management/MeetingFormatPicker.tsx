@@ -25,7 +25,7 @@ export function MeetingFormatPicker({
     [groupId, query, offset],
   );
   return (
-    <section aria-label="Reusable meeting formats">
+    <section aria-label="Reusable meeting formats" class="pk-stack">
       <p>
         Copy an accessible format version into this draft. Dates and publication stay with this meeting; speaker
         assignments are cleared for review.
@@ -62,12 +62,14 @@ export function MeetingFormatPicker({
         ))}
       </ul>
       {catalog.data?.formats.length === 0 && <p>No matching accessible formats.</p>}
-      <Button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 20))}>
-        Previous formats
-      </Button>
-      <Button disabled={!catalog.data?.page.hasMore} onClick={() => setOffset(offset + 20)}>
-        Next formats
-      </Button>
+      <div class="pk-cluster">
+        <Button disabled={offset === 0} onClick={() => setOffset(Math.max(0, offset - 20))}>
+          Previous formats
+        </Button>
+        <Button disabled={!catalog.data?.page.hasMore} onClick={() => setOffset(offset + 20)}>
+          Next formats
+        </Button>
+      </div>
     </section>
   );
 }

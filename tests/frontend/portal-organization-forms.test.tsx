@@ -163,7 +163,7 @@ describe("portal organization create form", () => {
     // organization's web presence rather than scattered through the form.
     const webPresence = namedGroup(container, "Web presence");
     await typeInto(controlFor(webPresence, "Website"), "https://example.test");
-    const linkInput = webPresence.querySelector<HTMLInputElement>('[aria-label="Additional organization URL"]');
+    const linkInput = webPresence.querySelector<HTMLInputElement>('[aria-label="Additional organization link"]');
     if (!linkInput) throw new Error("missing organization link input");
     await typeInto(linkInput, "https://www.linkedin.com/company/example");
     const addLink = webPresence.querySelector<HTMLButtonElement>('[aria-label="Add profile link"]');

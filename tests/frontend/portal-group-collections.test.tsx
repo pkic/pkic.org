@@ -240,7 +240,7 @@ describe("portal selected-group collections", () => {
         { path: `/api/v1/groups/${GROUP_ID}/forms`, limit: "50", sort: "title" },
         { path: `/api/v1/groups/${GROUP_ID}/events`, limit: "50", sort: "next_occurrence_at" },
         { path: `/api/v1/groups/${GROUP_ID}/audit-log`, limit: "50", sort: "-createdAt" },
-        { path: `/api/v1/groups/${GROUP_ID}/votes`, limit: "50", sort: "-closes_at" },
+        { path: `/api/v1/groups/${GROUP_ID}/votes`, limit: "50", sort: "-created_at" },
       ]),
     );
   });

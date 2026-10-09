@@ -42,10 +42,12 @@ describe("showToast", () => {
     showToast("portal-toast-area", "Could not save", "error");
     showToast("portal-toast-area", "Working", "info");
 
+    // The design system's Toast is what is mounted, so the tone is its own
+    // modifier class rather than a second, imperative copy of the markup.
     expect(toasts().map((toast) => toast.className)).toEqual([
-      "my-toast pk pk-toast pk-toast--ok",
-      "my-toast pk pk-toast pk-toast--danger",
-      "my-toast pk pk-toast pk-toast--info",
+      "pk-toast pk-toast--ok my-toast pk",
+      "pk-toast pk-toast--danger my-toast pk",
+      "pk-toast pk-toast--info my-toast pk",
     ]);
     for (const toast of toasts()) {
       expect(toast.className).not.toMatch(/\balert(-[a-z]+)?\b/);

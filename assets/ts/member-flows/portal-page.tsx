@@ -10,10 +10,16 @@
  */
 import "../../scss/portal-entry.scss";
 import { render } from "preact";
+import { capturePortalWorkerPageAssets } from "./portal/portal-worker-release";
 import { App } from "./portal/App";
 import { installPortalApiInterceptors } from "./portal/state";
 
 installPortalApiInterceptors();
 
 const mount = document.getElementById("portal-app");
-if (mount) render(<App />, mount);
+if (mount) {
+  // The loaded module fingerprint includes the portal import graph. Publish it
+  // before App requests offline preparation; the worker has its own fingerprint.
+  capturePortalWorkerPageAssets(import.meta.url);
+  render(<App />, mount);
+}

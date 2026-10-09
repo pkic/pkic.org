@@ -202,7 +202,7 @@ test.describe("portal sponsor workspace", () => {
     await expect(page.getByText("Casey Attendee")).toBeVisible();
 
     // ── CSV export via the real download link ──────────────────────────────
-    const csvLink = page.getByRole("link", { name: "Download CSV", exact: true });
+    const csvLink = page.getByRole("link", { name: "Download consenting attendees (CSV)", exact: true });
     const csvEndpoint = await csvLink.getAttribute("href");
     expect(csvEndpoint).not.toBeNull();
     const downloadPromise = page.waitForEvent("download");

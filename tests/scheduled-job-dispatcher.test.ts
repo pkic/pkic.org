@@ -1,5 +1,6 @@
-import { beforeEach, describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
+import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll } from "./helpers/context";
 import {
@@ -59,6 +60,38 @@ describe("scheduled job dispatcher", () => {
       consecutive_abandoned: 0,
       wake_requested: 0,
     });
+  });
+
+  it("skips provider dispatch with invalid configuration while retaining the bounded private cleanup owner", async () => {
+    const recordingJob = SCHEDULED_JOB_DEFINITIONS.find((definition) => definition.key === "recording_acquisitions");
+    if (!recordingJob) throw new Error("Recording scheduler definition missing");
+    const bucket = env.SPEAKER_UPLOADS_BUCKET;
+    if (!bucket) throw new Error("Expected native private recording bucket");
+    const provider = vi.spyOn(globalThis, "fetch").mockRejectedValue(new Error("Provider must not be called"));
+    try {
+      for (const origins of [undefined, "not JSON", '["http://downloads.test"]', "[]"]) {
+        const { db, budget } = createD1QueryBudgetedDatabase(env.DB, 100);
+        const outcome = await recordingJob.run({
+          env: {
+            ...env,
+            DB: db,
+            SPEAKER_UPLOADS_BUCKET: bucket,
+            REALTIMEKIT_ACCOUNT_ID: "0123456789abcdef0123456789abcdef",
+            REALTIMEKIT_APP_ID: "synthetic-app",
+            REALTIMEKIT_API_TOKEN: "synthetic-private-token",
+            REALTIMEKIT_RECORDING_DOWNLOAD_ORIGINS: origins,
+          },
+          d1QueryBudget: budget,
+        });
+        expect(outcome).toMatchObject({
+          summary: { configuration: "unavailable", selected: 0, processed: 0, cleanupSelected: 0, cleanupCompleted: 0 },
+        });
+        expect(budget.usedQueries()).toBe(1);
+      }
+      expect(provider).not.toHaveBeenCalled();
+    } finally {
+      provider.mockRestore();
+    }
   });
 
   it("claims a due job exactly once, so a concurrent pass cannot double-run it", async () => {

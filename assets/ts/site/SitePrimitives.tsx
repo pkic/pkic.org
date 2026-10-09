@@ -8,8 +8,6 @@ import { EventCard } from "./EventCard";
 import { WorkingGroupIcon } from "./WorkingGroupIcon.tsx";
 import { WorkingGroupCard } from "./WorkingGroupCard";
 
-export { CalendarIcon } from "./SiteDate";
-
 import "./SitePages.css";
 
 /**

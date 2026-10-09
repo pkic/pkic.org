@@ -100,13 +100,7 @@ export function IdentityInvitationAcceptance() {
                     Actions taken in this capacity will be attributed to the organization. Opening the email link did
                     not activate it.
                   </p>
-                  <Button
-                    variant="primary"
-                    block
-                    loading={accepting}
-                    disabled={accepting}
-                    onClick={() => void accept()}
-                  >
+                  <Button variant="primary" loading={accepting} disabled={accepting} onClick={() => void accept()}>
                     {accepting ? "Accepting…" : "Accept identity"}
                   </Button>
                 </div>
@@ -117,7 +111,7 @@ export function IdentityInvitationAcceptance() {
                 </Alert>
               )}
               {!loading && (error || accepted) && (
-                <ButtonLink href="/portal/#/account" variant="secondary" block>
+                <ButtonLink href="/portal/#/account" variant="secondary">
                   Open portal
                 </ButtonLink>
               )}

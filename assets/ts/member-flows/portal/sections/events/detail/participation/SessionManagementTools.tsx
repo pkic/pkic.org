@@ -20,6 +20,14 @@ import { Select } from "../../../../../../ui/TextControl";
 import { Checkbox } from "../../../../../../ui/Checkbox";
 import { Button } from "../../../../../../ui/Button";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
+import { confirmAction } from "../../../../../../components/ConfirmDialog";
+type InvitationAction = z.infer<typeof sessionInvitationRequestSchema>["action"];
+/** The commands the form submits; revoking is its own confirmed action, never a choice in the select. */
+const INVITATION_ACTIONS = {
+  invite: "Send invitation",
+  add: "Confirm registration",
+} satisfies Partial<Record<InvitationAction, string>>;
+type GrantingAction = keyof typeof INVITATION_ACTIONS;
 export function SessionManagementTools({
   slug,
   occurrenceId,
@@ -33,7 +41,7 @@ export function SessionManagementTools({
   const [info, setInfo] = useState<z.infer<typeof sessionManagementInfoSchema> | null>(null),
     [user, setUser] = useState<PickedUser | null>(null);
   const [mode, setMode] = useState<"physical" | "remote">("physical"),
-    [action, setAction] = useState<z.infer<typeof sessionInvitationRequestSchema>["action"]>("invite"),
+    [action, setAction] = useState<GrantingAction>("invite"),
     [reason, setReason] =
       useState<z.infer<typeof sessionInvitationRequestSchema>["reasonCode"]>("organizer_invitation");
   const [holdsRevision, setHoldsRevision] = useState(0);
@@ -48,6 +56,13 @@ export function SessionManagementTools({
     userId: user?.id ?? "",
     attendanceMode: mode,
     action,
+    reasonCode: reason,
+    roomId: mode === "physical" ? roomId : null,
+  });
+  const revocation = useContractForm(sessionInvitationRequestSchema, {
+    userId: user?.id ?? "",
+    attendanceMode: mode,
+    action: "revoke",
     reasonCode: reason,
     roomId: mode === "physical" ? roomId : null,
   });
@@ -69,23 +84,38 @@ export function SessionManagementTools({
   }, [endpoint]);
   async function invite(event: Event) {
     event.preventDefault();
-    const checked = invitation.submit();
+    await send(invitation);
+  }
+  async function revoke() {
+    if (!user) {
+      setError(revocation.submit().message || "Choose the attendee whose invitation to revoke.");
+      return;
+    }
+    const name = [user.firstName, user.lastName].filter(Boolean).join(" ") || user.email;
+    const confirmed = await confirmAction({
+      title: `Revoke ${name}'s invitation to this session?`,
+      consequences: [
+        `${name} can no longer register for this session through the invitation`,
+        "Their session registration is canceled when the session is invitation-only or private",
+      ],
+      confirmLabel: "Revoke invitation",
+      cancelLabel: "Keep invitation",
+      tone: "danger",
+    });
+    if (confirmed) await send(revocation);
+  }
+  async function send(command: typeof invitation) {
+    const checked = command.submit();
     if (!checked.data) {
       setError(checked.message);
       return;
     }
+    const sent = checked.data.action;
     setBusy(true);
     setError("");
     try {
       await putJson(`${endpoint}/invitations`, checked.data, sessionInvitationResponseSchema);
-      setMessage(
-        action === "invite"
-          ? "Invitation sent. No seat has been held."
-          : action === "add"
-            ? "Session registration reviewed. The attendee may be waitlisted if capacity is full."
-            : "Invitation revoked.",
-      );
-      if (hold && action === "invite" && info?.canDelegate)
+      if (hold && sent === "invite" && info?.canDelegate)
         await postJson(
           `${endpoint}/holds`,
           sessionHoldRequestSchema.parse({
@@ -98,11 +128,11 @@ export function SessionManagementTools({
           sessionHoldResponseSchema,
         );
       setMessage(
-        action === "invite"
+        sent === "invite"
           ? hold
             ? "Invitation sent; capacity held for one hour."
             : "Invitation sent. No seat is held until registration is confirmed."
-          : action === "add"
+          : sent === "add"
             ? "Session registration reviewed. The attendee may be waitlisted if capacity is full."
             : "Invitation revoked.",
       );
@@ -110,7 +140,7 @@ export function SessionManagementTools({
       setHoldsRevision((value) => value + 1);
       onChanged();
     } catch (error) {
-      setError(invitation.refuse(error));
+      setError(command.refuse(error));
     } finally {
       setBusy(false);
     }
@@ -163,14 +193,8 @@ export function SessionManagementTools({
               value={action}
               onChange={(event) => setAction(event.currentTarget.value as typeof action)}
             >
-              {sessionInvitationRequestSchema.shape.action.options.map((value) => (
-                <option value={value}>
-                  {value === "invite"
-                    ? "Send invitation"
-                    : value === "add"
-                      ? "Confirm registration"
-                      : "Revoke invitation"}
-                </option>
+              {Object.entries(INVITATION_ACTIONS).map(([value, label]) => (
+                <option value={value}>{label}</option>
               ))}
             </Select>
           )}
@@ -227,9 +251,14 @@ export function SessionManagementTools({
             onInput={(event) => setHold(event.currentTarget.checked)}
           />
         )}
-        <Button type="submit" loading={busy}>
-          {action === "invite" ? "Send invitation" : action === "add" ? "Confirm registration" : "Revoke invitation"}
-        </Button>
+        <div class="pk-cluster">
+          <Button type="submit" variant="primary" loading={busy}>
+            {INVITATION_ACTIONS[action]}
+          </Button>
+          <Button type="button" variant="danger-quiet" disabled={busy} onClick={() => void revoke()}>
+            Revoke invitation…
+          </Button>
+        </div>
       </form>
       {info?.canDelegate && info.speakers.length > 0 && (
         <>

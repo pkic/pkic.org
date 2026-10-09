@@ -83,7 +83,7 @@ it("validates the actual checkout request and retains editable controls after a 
   form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
   await vi.waitFor(() => {
     expect(requests).toHaveLength(1);
-    expect(submit.disabled).toBe(false);
+    expect(submit.hasAttribute("aria-busy")).toBe(false);
   });
   expect(requests[0]).toMatchObject({
     contactName: "Casey Sponsor",

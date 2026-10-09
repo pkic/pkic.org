@@ -1,8 +1,11 @@
-import { formatDateTime, formatTimeOfDay } from '../../shared/format-date';
+import { formatTimeOfDay } from "../../shared/format-date";
+import { initLocalTime } from "./local-time.js";
 
-var e = document.querySelectorAll('.nav-tabs .nav-link');
+initLocalTime();
+
+var e = document.querySelectorAll(".nav-tabs .nav-link");
 for (var i = 0; i < e.length; i++) {
-  e[i].addEventListener('click', function (event) {
+  e[i].addEventListener("click", function (event) {
     location.hash = event.target.dataset.bsTarget;
 
     var se = document.getElementById(event.target.parentElement.dataset.scrollTarget);
@@ -10,26 +13,19 @@ for (var i = 0; i < e.length; i++) {
   });
 }
 
-if (window.location.hash.indexOf('nav') == 1) {
-  var tab = document.getElementById(window.location.hash.substr(1) + '-tab');
+if (window.location.hash.indexOf("nav") == 1) {
+  var tab = document.getElementById(window.location.hash.substr(1) + "-tab");
   if (tab) tab.click();
 }
 
-document.querySelectorAll('time[datetime]').forEach(function ($e) {
+document.querySelectorAll("time[datetime]").forEach(function ($e) {
   var date = new Date($e.dateTime);
   $e.title = date.toString();
 
-  if ($e.dataset.localTime) {
-    var localDate = new Date($e.dataset.localTime);
-    if (!isNaN(localDate.getTime())) {
-      // The shared browser-locale rendering (issue #10), with the viewer's
-      // zone named so the converted-to-local time cannot be mistaken for UTC.
-      $e.textContent = formatDateTime($e.dataset.localTime, { zoneName: true });
-      return;
-    }
-  }
+  // Formatted dates belong to the shared local-time enhancer.
+  if ($e.hasAttribute("data-local-time")) return;
 
-  if ($e.classList.contains('localTime')) {
+  if ($e.classList.contains("localTime")) {
     // Through the shared formatter, which answers an em dash for a datetime
     // attribute it cannot read instead of writing "Invalid Date" into the page.
     $e.textContent = formatTimeOfDay($e.dateTime);
@@ -38,36 +34,40 @@ document.querySelectorAll('time[datetime]').forEach(function ($e) {
 
 // WG Sidebar collapse toggle
 (function () {
-  var STORAGE_KEY = 'wg-sidebar-collapsed';
-  var btn = document.getElementById('wg-sidebar-collapse-btn');
-  var wrap = document.getElementById('wg-sidebar-wrap');
+  var STORAGE_KEY = "wg-sidebar-collapsed";
+  var btn = document.getElementById("wg-sidebar-collapse-btn");
+  var wrap = document.getElementById("wg-sidebar-wrap");
 
   if (!btn || !wrap) return;
 
   var applyState = function (collapsed) {
-    wrap.classList.toggle('is-collapsed', collapsed);
-    btn.setAttribute('aria-expanded', String(!collapsed));
-    btn.setAttribute('aria-label', collapsed ? 'Expand sidebar' : 'Collapse sidebar');
-    try { localStorage.setItem(STORAGE_KEY, collapsed ? '1' : '0'); } catch {
+    wrap.classList.toggle("is-collapsed", collapsed);
+    btn.setAttribute("aria-expanded", String(!collapsed));
+    btn.setAttribute("aria-label", collapsed ? "Expand sidebar" : "Collapse sidebar");
+    try {
+      localStorage.setItem(STORAGE_KEY, collapsed ? "1" : "0");
+    } catch {
       // Storage can be unavailable in privacy modes; the UI state still applies.
     }
   };
 
   var stored = false;
-  try { stored = localStorage.getItem(STORAGE_KEY) === '1'; } catch {
+  try {
+    stored = localStorage.getItem(STORAGE_KEY) === "1";
+  } catch {
     // Treat unavailable storage as the default expanded state.
   }
   if (stored) applyState(true);
 
-  btn.addEventListener('click', function () {
-    applyState(!wrap.classList.contains('is-collapsed'));
+  btn.addEventListener("click", function () {
+    applyState(!wrap.classList.contains("is-collapsed"));
   });
 })();
 
 // WG Nav tree panel interaction
 (function () {
-  document.querySelectorAll('.wg-nav-link-wrap').forEach(function (trigger) {
-    var btn = trigger.querySelector('[data-wg-tree-btn]');
+  document.querySelectorAll(".wg-nav-link-wrap").forEach(function (trigger) {
+    var btn = trigger.querySelector("[data-wg-tree-btn]");
     var panelId = trigger.dataset.panel;
     var panel = panelId ? document.getElementById(panelId) : null;
 
@@ -78,54 +78,56 @@ document.querySelectorAll('time[datetime]').forEach(function ($e) {
     var open = function () {
       clearTimeout(closeTimer);
       var r = trigger.getBoundingClientRect();
-      panel.style.top = (r.bottom + 4) + 'px';
-      panel.style.left = r.left + 'px';
-      panel.removeAttribute('hidden');
-      btn.setAttribute('aria-expanded', 'true');
+      panel.style.top = r.bottom + 4 + "px";
+      panel.style.left = r.left + "px";
+      panel.removeAttribute("hidden");
+      btn.setAttribute("aria-expanded", "true");
     };
 
     var scheduleClose = function () {
       closeTimer = setTimeout(function () {
-        panel.setAttribute('hidden', '');
-        btn.setAttribute('aria-expanded', 'false');
+        panel.setAttribute("hidden", "");
+        btn.setAttribute("aria-expanded", "false");
       }, 150);
     };
 
     var lockedClosed = false;
 
-    trigger.addEventListener('mouseenter', function () {
+    trigger.addEventListener("mouseenter", function () {
       if (lockedClosed) return;
       open();
     });
 
-    trigger.addEventListener('mouseleave', function () {
+    trigger.addEventListener("mouseleave", function () {
       lockedClosed = false;
       scheduleClose();
     });
 
-    panel.addEventListener('mouseenter', function () { clearTimeout(closeTimer); });
-    panel.addEventListener('mouseleave', scheduleClose);
+    panel.addEventListener("mouseenter", function () {
+      clearTimeout(closeTimer);
+    });
+    panel.addEventListener("mouseleave", scheduleClose);
 
-    btn.addEventListener('click', function () {
-      if (panel.hasAttribute('hidden')) {
+    btn.addEventListener("click", function () {
+      if (panel.hasAttribute("hidden")) {
         lockedClosed = false;
         open();
       } else {
         lockedClosed = true;
         clearTimeout(closeTimer);
-        panel.setAttribute('hidden', '');
-        btn.setAttribute('aria-expanded', 'false');
+        panel.setAttribute("hidden", "");
+        btn.setAttribute("aria-expanded", "false");
       }
     });
   });
 
-  document.addEventListener('keydown', function (e) {
-    if (e.key === 'Escape') {
-      document.querySelectorAll('.wg-nav-tree-panel:not([hidden])').forEach(function (p) {
-        p.setAttribute('hidden', '');
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") {
+      document.querySelectorAll(".wg-nav-tree-panel:not([hidden])").forEach(function (p) {
+        p.setAttribute("hidden", "");
       });
       document.querySelectorAll('[data-wg-tree-btn][aria-expanded="true"]').forEach(function (b) {
-        b.setAttribute('aria-expanded', 'false');
+        b.setAttribute("aria-expanded", "false");
       });
     }
   });
@@ -133,8 +135,8 @@ document.querySelectorAll('time[datetime]').forEach(function ($e) {
 
 // Prevent <summary> toggle when clicking WG sidebar links
 (function () {
-  document.querySelectorAll('.wg-sidebar-summary .wg-sidebar-link').forEach(function (link) {
-    link.addEventListener('click', function (e) {
+  document.querySelectorAll(".wg-sidebar-summary .wg-sidebar-link").forEach(function (link) {
+    link.addEventListener("click", function (e) {
       e.stopPropagation();
     });
   });

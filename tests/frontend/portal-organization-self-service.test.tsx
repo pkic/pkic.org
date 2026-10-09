@@ -321,6 +321,23 @@ describe("portal organization self-service", () => {
     expect((labelledControl(container, "Slogan") as HTMLInputElement).value).toBe("Trust, made routine");
   });
 
+  it("gives a contact the logo tile itself, SVG only, proposing a logo without removing the public one", async () => {
+    stubOrganization(organizationProfile({ logoUrl: "https://example.test/logo.svg" }));
+
+    void act(() => render(<MyOrganization />, container));
+    await settle();
+
+    const tile = container.querySelector<HTMLButtonElement>('button[aria-label="Change logo of Example Organization"]');
+    expect(tile).not.toBeNull();
+    expect(container.querySelector(`#${tile!.getAttribute("aria-describedby")!}`)?.textContent).toContain("SVG only.");
+    expect(container.querySelector<HTMLInputElement>('input[type="file"]')?.accept).toBe("image/svg+xml");
+    // A representative's logo enters review; taking the public one down is not theirs to do here.
+    expect(container.querySelector('button[aria-label^="Remove logo"]')).toBeNull();
+    expect([...container.querySelectorAll("button")].map((button) => button.textContent)).not.toContain(
+      "Change logo (SVG)",
+    );
+  });
+
   it("withholds the editor and the submission history from a member who is not an organization contact", async () => {
     const { requests } = stubOrganization(organizationProfile({ isOrgContact: false, isPrimaryContact: false }));
 
@@ -331,9 +348,9 @@ describe("portal organization self-service", () => {
     expect(container.textContent).toContain("Example profile");
     expect(container.textContent).not.toContain("Edit organization content");
     expect(container.textContent).not.toContain("Submission history");
-    expect([...container.querySelectorAll("button")].map((button) => button.textContent)).not.toContain(
-      "Change logo (SVG)",
-    );
+    // The logo is shown read-only: the tile is not a control for a non-contact.
+    expect(container.querySelector('button[aria-label*="logo of Example Organization"]')).toBeNull();
+    expect(container.querySelector('input[type="file"]')).toBeNull();
     expect(container.querySelector("form")).toBeNull();
     // The review collection is a contact-only resource, so it is never fetched.
     expect(requests.some((request) => request.endsWith("/content/reviews"))).toBe(false);

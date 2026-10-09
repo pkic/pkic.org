@@ -18,6 +18,7 @@ import { resolve, relative, dirname } from "node:path";
 import { writeFileSync, mkdirSync, readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { createHash } from "node:crypto";
+import { portalOfflineAssetsPlugin } from "./lib/portal-offline-assets.mjs";
 import { entryStylesheets } from "./lib/frontend-entry-assets.mjs";
 import { assertFrontendBundleBudget } from "./lib/frontend-bundle-budget.mjs";
 
@@ -129,7 +130,7 @@ const config = {
     },
     target: "es2022",
   },
-  plugins: [manifestPlugin({ entries, outDir, root, isDev })],
+  plugins: [manifestPlugin({ entries, outDir, root, isDev }), portalOfflineAssetsPlugin("/js/built/")],
 };
 
 await build(config);

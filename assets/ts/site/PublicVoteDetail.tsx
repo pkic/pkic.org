@@ -1,5 +1,5 @@
 import { formatDateTime } from "../../shared/format-date";
-import { StatusBadge } from "./StatusBadge";
+import { statusLabel, statusTone } from "../../shared/status-display";
 import { Badge } from "../ui/Badge";
 import type { PublicVoteGetResponse } from "../../shared/schemas/votes";
 import { Markdown } from "../ui/Markdown";
@@ -35,7 +35,7 @@ function MotionResult({ result }: { result: MotionResultData }) {
        * calls it what it is, and the tone arrives with a dot, so the outcome
        * never rests on colour alone.
        */}
-      {outcome && <StatusBadge status={outcome} />}
+      {outcome && <Badge tone={statusTone(outcome)}>{statusLabel(outcome)}</Badge>}
       {counts && (
         <span class="pk-muted">
           {counts.in_favor} in favor · {counts.opposed} opposed · {counts.abstain} abstained

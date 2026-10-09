@@ -2,7 +2,7 @@ import { useEffect } from "preact/hooks";
 import { PageHeader } from "../../../../ui/PageHeader";
 import { usePortalHashLocation } from "../../hash-location";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import type { Column } from "../../../../components/Table";
 import { PersonCell } from "../../../../ui/PersonCell";
 import {

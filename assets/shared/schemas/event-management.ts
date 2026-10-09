@@ -16,6 +16,7 @@ import { databaseIdSchema } from "./identifiers";
 import { linksSchema } from "./links";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import { attendanceTypeSchema, registrationLifecycleStatusSchema } from "./registration";
+import { eventBadgeTemplateSchema } from "./event-badge-template";
 
 /**
  * D1-backed event profile catalog projection. The key remains a validated
@@ -41,6 +42,7 @@ export const eventProfileCatalogResponseSchema = z.object({
  */
 export const EVENT_MANAGED_SETTING_KEYS = [
   "agenda",
+  "badgeTemplate",
   "forms",
   "frontend",
   "heroImageUrl",
@@ -105,6 +107,7 @@ export const eventSettingsSchema = z.object({
   visibility: eventVisibilitySchema.optional(),
   inviteLimitAttendee: attendeeInviteLimitSchema.optional(),
   settings: eventCustomSettingsSchema.optional(),
+  badgeTemplate: eventBadgeTemplateSchema.nullable().optional(),
   userRetentionDays: z.number().int().positive().max(3650).optional(),
 });
 export type EventSettingsInput = z.infer<typeof eventSettingsSchema>;
@@ -130,8 +133,17 @@ export type EventCreateInput = z.infer<typeof eventCreateSchema>;
  * capabilities, and other view-specific data instead of copying the event
  * identity and scheduling shape.
  */
+/** Whether the event's call for proposals takes submissions now, and the public form to submit through. */
+export const eventProposalCallSchema = z.object({
+  open: z.boolean(),
+  path: z.string().nullable(),
+});
+export type EventProposalCall = z.infer<typeof eventProposalCallSchema>;
+
 export const eventResourceCoreSchema = z.object({
   participation: eventParticipationSchema.optional(),
+  /** Event detail only, like `participation`; lists leave it out rather than query each row. */
+  proposalCall: eventProposalCallSchema.optional(),
   id: eventIdSchema,
   slug: z.string(),
   name: z.string(),
@@ -176,6 +188,11 @@ export const eventViewerStateSchema = z.object({
 export type EventViewerState = z.infer<typeof eventViewerStateSchema>;
 
 /** Public/member-safe event representation; management configuration is deliberately absent. */
+export const eventScannerAccessSchema = z.object({
+  canScan: z.boolean(),
+  sponsors: z.array(z.object({ id: z.string(), name: z.string() })),
+});
+
 export const eventAudienceDetailSchema = eventResourceCoreSchema
   .omit({ sourceMode: true, inviteLimitAttendee: true, updatedAt: true })
   .extend({
@@ -184,9 +201,7 @@ export const eventAudienceDetailSchema = eventResourceCoreSchema
     links: linksSchema,
     /** The public page path for this event, when the event has one. */
     basePath: z.string().nullable(),
-    scannerAccess: z
-      .object({ canScan: z.boolean(), sponsors: z.array(z.object({ id: z.string(), name: z.string() })) })
-      .optional(),
+    scannerAccess: eventScannerAccessSchema.optional(),
     /** Discovery only; each contact request independently checks the exact live sponsor scope. */
     sponsorLeadAccess: z.boolean(),
     viewer: eventViewerStateSchema.nullable(),
@@ -246,6 +261,7 @@ export type EventManagementCapability = z.infer<typeof eventManagementCapability
 
 /** Full event-management read model for an authenticated event-scoped actor. */
 export const eventDetailSchema = eventResourceCoreSchema.extend({
+  scannerAccess: eventScannerAccessSchema.optional(),
   ownerGroupId: groupIdSchema.nullable(),
   seriesId: databaseIdSchema.nullable(),
   basePath: z.string().nullable(),

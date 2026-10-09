@@ -230,7 +230,6 @@ export function McpAuthorization() {
                 {passkeysSupported && (
                   <>
                     <Button
-                      block
                       loading={submitting}
                       disabled={submitting}
                       onClick={() => {
@@ -239,7 +238,7 @@ export function McpAuthorization() {
                     >
                       {submitting ? "Waiting for passkey…" : "Sign in with a passkey"}
                     </Button>
-                    <p class="pk-small pk-center">or</p>
+                    <p class="pk-small pk-muted">or</p>
                   </>
                 )}
                 <form
@@ -262,7 +261,7 @@ export function McpAuthorization() {
                       />
                     )}
                   </Field>
-                  <Button type="submit" variant="primary" block loading={submitting} disabled={submitting || !returnTo}>
+                  <Button type="submit" variant="primary" loading={submitting} disabled={submitting || !returnTo}>
                     {submitting ? "Sending…" : "Send sign-in link"}
                   </Button>
                 </form>
@@ -274,13 +273,12 @@ export function McpAuthorization() {
                 This account does not have permission to authorize MCP access.
               </Alert>
               <Button
-                block
                 disabled={submitting}
                 onClick={() => {
                   void handleDecision("deny");
                 }}
               >
-                Deny and return to client
+                Deny and go back
               </Button>
             </>
           ) : (
@@ -314,10 +312,9 @@ export function McpAuthorization() {
                 )}
               </div>
 
-              <div class="pk-stack pk-stack--snug">
+              <div class="pk-cluster">
                 <Button
                   variant="primary"
-                  block
                   disabled={submitting || context.grantedScopes.length === 0}
                   onClick={() => {
                     void handleDecision("approve");
@@ -326,7 +323,6 @@ export function McpAuthorization() {
                   Approve
                 </Button>
                 <Button
-                  block
                   disabled={submitting}
                   onClick={() => {
                     void handleDecision("deny");

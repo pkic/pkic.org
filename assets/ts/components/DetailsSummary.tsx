@@ -80,17 +80,13 @@ function renderValue(value: unknown): ComponentChildren {
   return formatPrimitiveText(value);
 }
 
-/**
- * The shape the summary cannot read, kept rather than dropped. `<details>` is
- * already a disclosure control the keyboard and a screen reader both
- * understand, so it needs no role, no handler and no state of its own.
- */
+/** Preserve an unsupported shape visibly rather than dropping audit evidence. */
 function RawDetailsFallback({ value }: { value: unknown }) {
   return (
-    <details>
-      <summary class="pk-small">Raw details</summary>
+    <div class="pk-stack pk-stack--tight">
+      <p class="pk-small pk-strong">Raw details</p>
       <pre class="pk-code-block pk-answer-pre">{JSON.stringify(value, null, 2)}</pre>
-    </details>
+    </div>
   );
 }
 
@@ -100,7 +96,7 @@ function RawDetailsFallback({ value }: { value: unknown }) {
  *
  * Object roots up to two levels deep render as a `<dl>` with humanized keys. Anything shallower
  * or deeper than that shape — a non-object root, or nesting past one level — falls back to a
- * collapsed raw-JSON view so no data is ever lost. An empty object or a nullish value renders
+ * visible raw-JSON view so no data is ever lost. An empty object or a nullish value renders
  * nothing.
  *
  * The pairs are direct children of the `<dl>`, not wrapped rows. `pk-datalist`

@@ -1,32 +1,46 @@
 import { useEffect, useRef, useState } from "preact/hooks";
+import type { z } from "zod";
 import { sessionVirtualRoomResponseSchema } from "../../../../../../../shared/schemas/event-session-virtual-room";
-import { personalAgendaResponseSchema } from "../../../../../../../shared/schemas/event-personal-agenda";
+import {
+  personalAgendaResponseSchema,
+  type personalAgendaSessionSchema,
+} from "../../../../../../../shared/schemas/event-personal-agenda";
 import { agendaTimeZones, formatAgendaInstant } from "../../../../../../../shared/agenda-time-display";
 import { useData } from "../../../../../../hooks/useData";
 import { getJson } from "../../../../../../shared/api-client";
 import { Spinner } from "../../../../../../components/Spinner";
 import { ErrorAlert } from "../../../../../../components/ErrorAlert";
+import { Alert } from "../../../../../../ui/Alert";
 import { PageHeader } from "../../../../../../ui/PageHeader";
 import { Panel, PanelHeader, PanelBody } from "../../../../../../ui/Panel";
 import { DescriptionList } from "../../../../../../ui/DescriptionList";
 import { Button, ButtonLink } from "../../../../../../ui/Button";
 import { PersonalAgendaStatus } from "./PersonalAgendaStatus";
 import { ParticipationControls } from "./ParticipationControls";
+import { availableScannerActions } from "../../../../../../../shared/event-scanner-permissions";
+import { hasEventAgendaPermission } from "../../event-agenda-access";
+import { usePortalHashLocation } from "../../../../hash-location";
 
-export function SessionParticipation({
+type Session = z.infer<typeof personalAgendaSessionSchema>;
+
+/** One occurrence's live personal participation, read from the canonical personal agenda. */
+function useParticipationSession(slug: string, occurrenceId: string, refreshKey?: string) {
+  const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/agenda/participation?occurrenceId=${encodeURIComponent(occurrenceId)}&limit=1`;
+  return useData(() => getJson(endpoint, personalAgendaResponseSchema), [endpoint, refreshKey]);
+}
+
+/** Join and check-in actions shared by the session dialog and the dedicated session view. */
+function SessionParticipationActions({
   slug,
-  occurrenceId,
-  backHref,
-  showLocalTime = false,
+  eventId,
+  session,
+  variant,
 }: {
   slug: string;
-  occurrenceId: string;
-  backHref: string;
-  showLocalTime?: boolean;
+  eventId?: string;
+  session: Session;
+  variant?: "primary";
 }) {
-  const endpoint = `/api/v1/events/${encodeURIComponent(slug)}/agenda/participation?occurrenceId=${encodeURIComponent(occurrenceId)}&limit=1`;
-  const loaded = useData(() => getJson(endpoint, personalAgendaResponseSchema), [endpoint]);
-  const session = loaded.data?.sessions[0];
   const [joining, setJoining] = useState(false);
   const [joinError, setJoinError] = useState("");
   const joinGeneration = useRef(0);
@@ -37,7 +51,7 @@ export function SessionParticipation({
     return () => {
       joinGeneration.current += 1;
     };
-  }, [slug, occurrenceId]);
+  }, [slug, session.id]);
   async function joinOnline() {
     if (joining) return;
     const generation = joinGeneration.current;
@@ -45,7 +59,7 @@ export function SessionParticipation({
     setJoinError("");
     try {
       const response = await getJson(
-        `/api/v1/events/${encodeURIComponent(slug)}/agenda/occurrences/${encodeURIComponent(occurrenceId)}/virtual-room`,
+        `/api/v1/events/${encodeURIComponent(slug)}/agenda/occurrences/${encodeURIComponent(session.id)}/virtual-room`,
         sessionVirtualRoomResponseSchema,
       );
       if (generation === joinGeneration.current) window.location.assign(response.url);
@@ -56,12 +70,105 @@ export function SessionParticipation({
       if (generation === joinGeneration.current) setJoining(false);
     }
   }
-  const back = <ButtonLink href={backHref}>Back to My agenda</ButtonLink>;
+  const checkIn =
+    eventId && availableScannerActions((permission) => hasEventAgendaPermission(eventId, permission)).length > 0;
+  return (
+    <>
+      {checkIn && (
+        <ButtonLink
+          href={usePortalHashLocation.hrefs(
+            `/events/${encodeURIComponent(slug)}/scanner?${new URLSearchParams({ session: session.id }).toString()}`,
+          )}
+        >
+          Start session check-in
+        </ButtonLink>
+      )}
+      {session.onlineAccessAvailable && (
+        <Button variant={variant} loading={joining} onClick={() => void joinOnline()}>
+          Join online
+        </Button>
+      )}
+      {joinError && <ErrorAlert error={joinError} />}
+    </>
+  );
+}
+
+/** Live registration management inside the shared agenda's session details. */
+export function SessionParticipationManager({
+  slug,
+  eventId,
+  occurrenceId,
+  refreshKey,
+  notice,
+  onChanged,
+}: {
+  slug: string;
+  eventId?: string;
+  occurrenceId: string;
+  /** Changes when the viewer's marks change elsewhere, so this view rereads its row. */
+  refreshKey?: string;
+  /** Shown above the controls, for example when the approved session changed while it was open. */
+  notice?: string;
+  onChanged: (session: Session) => void;
+}) {
+  const loaded = useParticipationSession(slug, occurrenceId, refreshKey);
+  const session = loaded.data?.sessions[0];
+  const changed = useRef(onChanged);
+  changed.current = onChanged;
+  useEffect(() => {
+    if (session?.id === occurrenceId) changed.current(session);
+  }, [session, occurrenceId]);
+  return (
+    <section class="pk-stack pk-stack--snug" aria-label="My participation">
+      <h3>My participation</h3>
+      {loaded.loading ? (
+        <Spinner label="Loading your participation…" />
+      ) : !session || session.id !== occurrenceId ? (
+        <ErrorAlert error={loaded.error ?? "This session is no longer available in the published agenda."} />
+      ) : (
+        <>
+          {loaded.error && <ErrorAlert error={loaded.error} />}
+          {notice && <Alert tone="warn">{notice}</Alert>}
+          <div class="pk-cluster">
+            <SessionParticipationActions slug={slug} eventId={eventId} session={session} variant="primary" />
+          </div>
+          <PersonalAgendaStatus session={session} />
+          <ParticipationControls
+            slug={slug}
+            session={session}
+            preference={false}
+            onSaved={() => {
+              void loaded.reload();
+            }}
+          />
+        </>
+      )}
+    </section>
+  );
+}
+
+/**
+ * Dedicated view for an occurrence that is not on the shared public agenda, such as an invitation-only session.
+ * It renders inside the participant event tabs, so the My agenda tab is the way back.
+ */
+export function SessionParticipation({
+  slug,
+  eventId,
+  occurrenceId,
+  showLocalTime = false,
+}: {
+  slug: string;
+  eventId?: string;
+  occurrenceId: string;
+  showLocalTime?: boolean;
+}) {
+  const loaded = useParticipationSession(slug, occurrenceId);
+  const session = loaded.data?.sessions[0];
   if (loaded.loading) return <Spinner label="Loading session participation…" />;
   if (!session || session.id !== occurrenceId)
     return (
       <div class="pk-stack">
-        <PageHeader title="Session participation" actions={back} />
+        <PageHeader title="Session participation" />
         <ErrorAlert error={loaded.error ?? "This session is no longer available in the published agenda."} />
       </div>
     );
@@ -91,19 +198,9 @@ export function SessionParticipation({
       <PageHeader
         title={session.title}
         eyebrow="Session participation"
-        actions={
-          <>
-            {session.onlineAccessAvailable && (
-              <Button variant="primary" loading={joining} onClick={() => void joinOnline()}>
-                Join online
-              </Button>
-            )}
-            {back}
-          </>
-        }
+        actions={<SessionParticipationActions slug={slug} eventId={eventId} session={session} variant="primary" />}
       />
       {loaded.error && <ErrorAlert error={loaded.error} />}
-      {joinError && <ErrorAlert error={joinError} />}
       <DescriptionList
         items={[
           {

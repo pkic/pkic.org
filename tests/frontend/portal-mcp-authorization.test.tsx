@@ -209,7 +209,7 @@ describe("portal MCP authorization", () => {
     expect(refusal?.textContent).toContain("does not have permission");
     expect(controlLabeled("Portal email")).toBeNull();
     expect(buttonLabeled("Approve")).toBeUndefined();
-    expect(buttonLabeled("Deny and return to client")).toBeTruthy();
+    expect(buttonLabeled("Deny and go back")).toBeTruthy();
   });
 
   it("announces a failed context lookup and offers nothing to approve", async () => {

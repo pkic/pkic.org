@@ -235,7 +235,7 @@ test("staff upload a photograph onto a user record", async ({ page }) => {
   await expect
     .poll(async () => portrait.evaluate((img: HTMLImageElement) => img.naturalWidth), { timeout: 15_000 })
     .toBeGreaterThan(0);
-  const frame = page.getByRole("button", { name: "Change photo", exact: true });
+  const frame = page.getByRole("button", { name: /^Change photo of / });
   const frameBox = (await frame.boundingBox())!;
   const imageBox = (await portrait.boundingBox())!;
   expect(Math.abs(imageBox.width - imageBox.height), "photo stays square").toBeLessThan(1);
@@ -249,9 +249,9 @@ test("staff upload a photograph onto a user record", async ({ page }) => {
     const pictureBox = (await frame.boundingBox())!;
     expect(Math.abs(ringBox.width - ringBox.height), "standing stays circular").toBeLessThan(1);
     expect(ringBox.width - pictureBox.width, "ring hugs the photo").toBeCloseTo(6, 0);
-    await expect(ring.getByRole("button", { name: "Remove photo", exact: true })).toHaveCount(0);
+    await expect(ring.getByRole("button", { name: /^Remove photo of / })).toHaveCount(0);
     await frame.focus();
-    await expect(page.getByRole("button", { name: "Remove photo", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Remove photo of / })).toBeVisible();
     const badge = page.locator(".pk-avatar-standing").filter({ has: frame }).locator(".pk-avatar-standing__label");
     expect(
       await badge.evaluate((label) => {
@@ -260,7 +260,7 @@ test("staff upload a photograph onto a user record", async ({ page }) => {
       }),
       "badge paints above the photo where they overlap",
     ).toBe(true);
-    const removeBox = (await page.getByRole("button", { name: "Remove photo", exact: true }).boundingBox())!;
+    const removeBox = (await page.getByRole("button", { name: /^Remove photo of / }).boundingBox())!;
     expect(removeBox.y, "remove is at the portrait corner, not a separate row").toBeLessThan(pictureBox.y + 10);
     await page.screenshot({ path: `test-results/issue-85-portrait-${width}.png` });
   }

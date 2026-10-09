@@ -12,7 +12,7 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { z } from "zod";
 import { MagicLinkSubmitButton, SignInError } from "../../assets/ts/components/MagicLinkFeedback";
-import { MenuIcon } from "../../assets/ts/components/MenuIcon";
+import { IconMenu } from "../../assets/ts/ui/MediaIcons";
 import { NotFoundPanel } from "../../assets/ts/components/NotFoundPanel";
 import { SuccessPanel } from "../../assets/ts/components/SuccessPanel";
 import { VerifyingOverlay } from "../../assets/ts/components/VerifyingOverlay";
@@ -154,7 +154,8 @@ describe("public shared link recovery and flow state", () => {
     expect(status.getAttribute("role")).toBe("alert");
     expect(status.textContent).toBe("Something went wrong. Please try again.");
     expect(root.querySelector("[data-email]")?.getAttribute("aria-invalid")).toBeNull();
-    expect(button.disabled).toBe(false);
+    expect(button.hasAttribute("aria-busy")).toBe(false);
+    expect(button.querySelector(".pk-btn__spinner")).toBeNull();
   });
 
   it("replaces the link-recovery form with an announced confirmation once the link is sent", async () => {
@@ -181,9 +182,18 @@ describe("public shared link recovery and flow state", () => {
     // The confirmation is the design system's Alert, which brings role="status"
     // with it rather than being a class name the surface wrote by hand.
     expect(section.querySelector('[role="status"]')?.textContent).toContain("A fresh link is on its way.");
-    // The send button stays in its loading state, which is what stops a second
-    // request for a link that is already on its way.
-    expect(root.querySelector<HTMLButtonElement>("[data-btn]")?.disabled).toBe(true);
+    // The send button stays busy, which is what stops a second request for a
+    // link that is already on its way. Like the design system's Button it
+    // stays focusable: busy is said with aria, not by disabling the control.
+    const sent = root.querySelector<HTMLButtonElement>("[data-btn]")!;
+    expect(sent.getAttribute("aria-busy")).toBe("true");
+    expect(sent.disabled).toBe(false);
+    const requests = vi.mocked(fetch).mock.calls.length;
+    await act(async () => {
+      sent.click();
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(vi.mocked(fetch).mock.calls.length).toBe(requests);
   });
 
   it("uses one invitation-aware error path for event forms", async () => {
@@ -251,7 +261,7 @@ describe("public shared link recovery and flow state", () => {
       <>
         <NotFoundPanel message="Missing member" backHref="/members/" backLabel="Back to members" />
         <VerifyingOverlay />
-        <MenuIcon size={24} />
+        <IconMenu width="24" height="24" />
       </>,
     );
     expect(container.textContent).toContain("Missing member");

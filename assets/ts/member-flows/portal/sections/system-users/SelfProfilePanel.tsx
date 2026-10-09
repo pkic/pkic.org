@@ -275,7 +275,7 @@ export function SelfProfilePanel({
                 <Textarea
                   {...control}
                   rows={3}
-                  placeholder="One URL per line"
+                  placeholder="One link per line"
                   name="links"
                   value={form.linksText}
                   onInput={(event) => setForm((f) => ({ ...f, linksText: event.currentTarget.value }))}

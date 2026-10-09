@@ -298,10 +298,10 @@ export function ContentFaq({
         <section key={`${group.title ?? "group"}-${groupIndex}`}>
           {group.title ? <h2>{group.title}</h2> : null}
           {group.questions?.map((item, itemIndex) => (
-            <details open={item.open} key={`${item.question ?? "question"}-${itemIndex}`}>
-              <summary>{item.question}</summary>
+            <article key={`${item.question ?? "question"}-${itemIndex}`}>
+              <h3>{item.question}</h3>
               {item.answerHtml ? <div dangerouslySetInnerHTML={{ __html: item.answerHtml }} /> : null}
-            </details>
+            </article>
           ))}
         </section>
       ))}

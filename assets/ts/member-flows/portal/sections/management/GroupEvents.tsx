@@ -4,10 +4,9 @@ import {
   groupEventDetailResponseSchema,
   groupEventsListResponseSchema,
 } from "../../../../../shared/schemas/group-events";
-import { EVENT_SOURCE_MODE_LABELS, EVENT_SOURCE_MODES } from "../../../../../shared/schemas/event-series";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { useData } from "../../../../hooks/useData";
@@ -16,6 +15,7 @@ import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { usePortalHashLocation } from "../../hash-location";
 import { fmt } from "../../ui";
 import { GroupEventEditor } from "./GroupEventEditor";
+import { EventScopeToggle, useEventScope } from "../events/EventScopeToggle";
 import { lazy, Suspense } from "preact/compat";
 const GroupEventWorkspace = lazy(() =>
   import("./GroupEventWorkspace").then((module) => ({ default: module.GroupEventWorkspace })),
@@ -58,6 +58,10 @@ export function GroupEvents({
   // drives navigation itself.
   const selectedEventId = creating ? null : (initialEventId ?? null);
   const tableActions = useRef<ApiTableActions | null>(null);
+  const { scope, setScope, params: scopeParams } = useEventScope();
+  // Meetings awaiting a schedule have no date to fall either side of now.
+  const scoped = collection === "events";
+  const past = scoped && scope === "past";
   const detail = useData(
     () =>
       selectedEventId
@@ -129,21 +133,25 @@ export function GroupEvents({
   return (
     <div class="pk pk-stack">
       <ApiDataTable
-        caption={collection === "events" ? "Group events" : "Meetings awaiting a schedule"}
-        params={{ collection }}
+        // Remounting on scope change resets pagination and default sort
+        // together, so "Past" reliably opens on most-recent-first.
+        key={scoped ? scope : collection}
+        caption={scoped ? (past ? "Past group events" : "Upcoming group events") : "Meetings awaiting a schedule"}
+        params={scoped ? { collection, ...scopeParams } : { collection }}
         endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/events`}
         responseSchema={groupEventsListResponseSchema}
         resolve={(response) => response.events}
         resolvePage={(response) => response.page}
         paginate
         actionsRef={tableActions}
+        toolbar={scoped ? () => <EventScopeToggle scope={scope} onChange={setScope} /> : undefined}
         createAction={
           canManage && collection === "events"
             ? { label: "Create event", onSelect: () => navigate(`${eventsPath}/${NEW_EVENT_SEGMENT}`) }
             : undefined
         }
         searchPlaceholder={collection === "events" ? "Search events…" : "Search meetings…"}
-        initialSort="next_occurrence_at"
+        initialSort={past ? "-next_occurrence_at" : "next_occurrence_at"}
         columns={[
           {
             header: "Event",
@@ -161,40 +169,30 @@ export function GroupEvents({
             width: "fit",
           },
           {
-            // Where the event is authored. The list contract already accepts
-            // `sourceMode`; the column shows the value and its menu narrows by
-            // it, instead of a select above the table filtering by something
-            // no column said.
-            header: "Source",
-            cell: (event) => (event.sourceMode ? EVENT_SOURCE_MODE_LABELS[event.sourceMode] : "—"),
-            width: "fit",
-            filter: {
-              param: "sourceMode",
-              options: [
-                { value: "", label: "All sources" },
-                ...EVENT_SOURCE_MODES.map((mode) => ({ value: mode as string, label: EVENT_SOURCE_MODE_LABELS[mode] })),
-              ],
-            },
-          },
-          {
             // A date has a bounded length; the column says so instead of
             // wearing `pk-nowrap` while still claiming slack.
-            header: "Next",
+            header: past ? "Date" : "Next",
             cell: (event) =>
               event.nextOccurrenceAt || event.startsAt
                 ? fmt(event.nextOccurrenceAt ?? event.startsAt)
                 : "Not scheduled",
             width: "fit",
-            sort: { asc: "next_occurrence_at", desc: "-next_occurrence_at", defaultDirection: "asc" },
+            sort: {
+              asc: "next_occurrence_at",
+              desc: "-next_occurrence_at",
+              defaultDirection: past ? "desc" : "asc",
+            },
           },
         ]}
         empty={
           collection === "unscheduled_meetings" ? (
             "No meetings awaiting a schedule."
+          ) : past ? (
+            "No past events are available through this group."
           ) : canManage ? (
-            <EmptyState title="No events yet" body="Create an event to get started." />
+            <EmptyState title="No upcoming events" body="Create an event to get started." />
           ) : (
-            "No events are available through this group."
+            "No upcoming events are available through this group."
           )
         }
         rowKey={(event) => event.id}

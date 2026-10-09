@@ -334,6 +334,8 @@ describe("admin event general settings", () => {
     await settle();
 
     await beginRecordEdit(container, "Sponsor tier actions");
+    // Each draft row's removal names the row it removes.
+    expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toContain("Remove tier 1");
     const save = [...container.querySelectorAll("button")].find(
       (button) => button.textContent === "Save sponsor tiers",
     )!;

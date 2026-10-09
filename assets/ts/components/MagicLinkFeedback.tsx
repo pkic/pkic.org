@@ -14,7 +14,7 @@ export function MagicLinkSubmitButton({ submitting }: { submitting: boolean }) {
   // stops a second submit, because a submit button posts its form on click
   // whether or not the component ignored the handler.
   return (
-    <Button type="submit" variant="primary" block loading={submitting} disabled={submitting}>
+    <Button type="submit" variant="primary" loading={submitting} disabled={submitting}>
       {submitting ? "Sending…" : "Send sign-in link"}
     </Button>
   );

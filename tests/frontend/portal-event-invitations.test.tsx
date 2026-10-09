@@ -138,10 +138,12 @@ describe("portal event invitations", () => {
       await act(async () => selectAll.click());
       await settle();
       const revoke = [...container.querySelectorAll("button")].find(
-        (button) => button.textContent === "Revoke selected",
+        (button) => button.textContent === "Revoke selected…",
       )!;
       await act(async () => revoke.click());
       await settle();
+      expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Revoke 2 invitations?");
+      expect(paths).toEqual([]);
       await act(async () => confirmDialogButton("Revoke invitations").click());
       await settle();
       await settle();

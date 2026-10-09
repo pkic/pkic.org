@@ -13,7 +13,7 @@ import {
   type MembershipCategoryCatalogEntry,
 } from "../../../../../shared/schemas/membership-categories";
 import { DataTable, type Column } from "../../../../components/Table";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Spinner } from "../../../../components/Spinner";
 import { Badge } from "../../../../ui/Badge";

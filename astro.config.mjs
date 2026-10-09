@@ -1,3 +1,4 @@
+import { portalOfflineAssetsPlugin } from "./scripts/lib/portal-offline-assets.mjs";
 import { EMAIL_PREVIEW_DOCUMENT_PATH } from "./assets/shared/site-security-policy.ts";
 import { siteMarkdownProcessor } from "./site/markdown-processor.ts";
 import { PUBLICATION_SITE_ORIGIN } from "./site/publication-cache.ts";
@@ -7,6 +8,7 @@ import {
   discardPublicationPageCache,
   validatePublicationPageCache,
   sealPublicationPageCache,
+  sealPublicationTransformCache,
 } from "./scripts/publication/validate-page-cache.mjs";
 import { randomUUID } from "node:crypto";
 import { resolve } from "node:path";
@@ -65,6 +67,9 @@ export default defineConfig({
           await preparePublicationPublicAssets(resolve(root, "public"), publicAssets);
           await publishAssessmentScripts(publicAssets);
         },
+        "astro:build:generated": async () => {
+          await sealPublicationTransformCache(publicationCacheDirectory());
+        },
         "astro:build:done": async ({ dir, pages }) => {
           await logPublicationBuildCache("after Astro generation");
           await finishAstroRelease(fileURLToPath(dir), pages);
@@ -83,7 +88,7 @@ export default defineConfig({
       ],
     },
     ssr: { external: ["@resvg/resvg-wasm"] },
-    plugins: [contentMediaPlugin(root), bylinesPlugin(root), trustListPlugin(root)],
+    plugins: [contentMediaPlugin(root), bylinesPlugin(root), trustListPlugin(root), portalOfflineAssetsPlugin("/")],
     build: {
       assetsInlineLimit: 0,
       minify: true,

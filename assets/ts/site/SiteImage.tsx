@@ -1,5 +1,7 @@
-import type { JSX, ComponentType } from "preact";
+import { createContext, type ComponentChildren, type JSX, type ComponentType } from "preact";
 import { lazy } from "preact/compat";
+import { useContext } from "preact/hooks";
+import { deferImageSources } from "./deferred-images";
 
 export interface SiteImageAsset {
   src: string;
@@ -8,13 +10,16 @@ export interface SiteImageAsset {
   width?: number;
   height?: number;
 }
+/** Portraits are drawn small; `auto` reads the laid-out width where the browser supports it. */
+export const PORTRAIT_IMAGE_SIZES = "auto, 96px";
 export type SiteImageProps = JSX.ImgHTMLAttributes<HTMLImageElement> & { portrait?: boolean };
+type RenderedImageProps = SiteImageProps & { deferred?: boolean };
 type Resolver = (src: string, portrait: boolean) => Promise<SiteImageAsset | null>;
 let resolveAsset: Resolver | undefined;
 interface CachedImage {
   promise: Promise<void>;
   value?: SiteImageAsset | null;
-  Component: ComponentType<SiteImageProps>;
+  Component: ComponentType<RenderedImageProps>;
 }
 const assets = new Map<string, CachedImage>();
 
@@ -34,7 +39,7 @@ export function prepareSiteImage(src: string, portrait = false): Promise<void> |
       }),
       Component: lazy(async () => {
         await entry.promise;
-        return { default: (props: SiteImageProps) => renderSiteImage(props, entry.value ?? null) };
+        return { default: (props: RenderedImageProps) => renderSiteImage(props, entry.value ?? null) };
       }),
     };
     assets.set(key, entry);
@@ -53,24 +58,47 @@ export async function preparePublicationImages(
   return true;
 }
 
-/** Render framework-prepared attributes directly, preserving authored crop and accessibility. */
-export function SiteImage({ portrait = false, ...props }: SiteImageProps) {
-  const src = typeof props.src === "string" ? props.src : undefined;
-  if (!src || !resolveAsset) return <img {...props} />;
-  void prepareSiteImage(src, portrait);
-  const asset = assets.get(JSON.stringify([src, portrait]))!;
-  if (asset.value === undefined) return <asset.Component {...props} portrait={portrait} />;
-  return renderSiteImage({ ...props, portrait }, asset.value);
+const ImageDeferral = createContext(false);
+
+/**
+ * Images inside a surface that opens later — a dialog, a popover, a panel that
+ * starts hidden — keep their sources in `data-deferred-*` until it is shown
+ * (deferred-images.ts). Wrap only what a reader must open to see: without
+ * scripts such an image never loads.
+ */
+export function DeferredImages({ children }: { children: ComponentChildren }) {
+  return <ImageDeferral.Provider value={true}>{children}</ImageDeferral.Provider>;
 }
 
-function renderSiteImage({ portrait = false, ...props }: SiteImageProps, image: SiteImageAsset | null) {
-  if (!image) return <img {...props} />;
+/** Render framework-prepared attributes directly, preserving authored crop and accessibility. */
+export function SiteImage({ portrait = false, ...props }: SiteImageProps) {
+  const deferred = useContext(ImageDeferral);
+  const src = typeof props.src === "string" ? props.src : undefined;
+  if (!src || !resolveAsset) return <Img {...props} deferred={deferred} />;
+  void prepareSiteImage(src, portrait);
+  const asset = assets.get(JSON.stringify([src, portrait]))!;
+  if (asset.value === undefined) return <asset.Component {...props} portrait={portrait} deferred={deferred} />;
+  return renderSiteImage({ ...props, portrait, deferred }, asset.value);
+}
+
+/** The `<img>` itself, with its sources deferred when its surface opens later. */
+function Img({ deferred = false, ...props }: JSX.ImgHTMLAttributes<HTMLImageElement> & { deferred?: boolean }) {
+  return deferred ? <img {...deferImageSources(props)} /> : <img {...props} />;
+}
+
+function renderSiteImage(
+  { portrait = false, deferred = false, ...props }: RenderedImageProps,
+  image: SiteImageAsset | null,
+) {
+  if (!image) return <Img {...props} deferred={deferred} />;
   const hero = String(props.class ?? "").includes("pkic-hero-media__image");
   const sizes =
-    props.sizes ?? (hero ? "100vw" : portrait ? "auto, 96px" : "auto, (min-width: 80rem) 76rem, calc(100vw - 2rem)");
+    props.sizes ??
+    (hero ? "100vw" : portrait ? PORTRAIT_IMAGE_SIZES : "auto, (min-width: 80rem) 76rem, calc(100vw - 2rem)");
   const rendered = (
-    <img
+    <Img
       {...props}
+      deferred={deferred}
       src={image.src}
       srcSet={image.srcSet}
       width={props.width ?? image.width}
@@ -83,7 +111,11 @@ function renderSiteImage({ portrait = false, ...props }: SiteImageProps, image: 
   );
   return image.avifSrcSet ? (
     <picture class="pkic-responsive-picture">
-      <source type="image/avif" srcSet={image.avifSrcSet} sizes={sizes} />
+      {deferred ? (
+        <source type="image/avif" {...deferImageSources({ srcSet: image.avifSrcSet, sizes })} />
+      ) : (
+        <source type="image/avif" srcSet={image.avifSrcSet} sizes={sizes} />
+      )}
       {rendered}
     </picture>
   ) : (

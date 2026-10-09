@@ -25,7 +25,7 @@
 
 import { render, type ComponentChildren } from "preact";
 import type { z } from "zod";
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
+import { useEffect, useRef, useState } from "preact/hooks";
 import { getJson, postJson } from "../api-client";
 import { formatDateTime } from "../ui";
 import { currencyInfo, toMajorUnit } from "../../../shared/constants/currencies";
@@ -38,12 +38,11 @@ import {
 } from "../../../shared/schemas/donation";
 import { IconLinkedIn, IconXTwitter } from "../../components/icons";
 import { Alert } from "../../ui/Alert";
-import { Button, ButtonLink } from "../../ui/Button";
-import { Field } from "../../ui/Field";
+import { CopyLinkRow } from "../widgets/copy-link-row";
+import { ButtonLink } from "../../ui/Button";
 import { Panel, PanelBody } from "../../ui/Panel";
 import { Spinner } from "../../ui/Spinner";
 import { StatCard } from "../../ui/StatCard";
-import { TextInput } from "../../ui/TextControl";
 // `pk-framed` and `pk-mono` are written as class names here rather than
 // reached through a component, so this module has to pull their stylesheet
 // into its own chunk.
@@ -106,45 +105,6 @@ function BadgeImage({ badgeUrl }: { badgeUrl: string }) {
         width={600}
         height={315}
       />
-    </div>
-  );
-}
-
-/**
- * The personal promoter link, with a copy control whose outcome is reported
- * separately from the control's own name.
- */
-function ShareLinkRow({ shareUrl }: { shareUrl: string }) {
-  const [copyStatus, setCopyStatus] = useState("");
-
-  const handleCopy = useCallback(() => {
-    const clipboard = navigator.clipboard;
-    if (!clipboard) {
-      setCopyStatus("Could not copy automatically — select the link above and copy it.");
-      return;
-    }
-    void clipboard.writeText(shareUrl).then(
-      () => setCopyStatus("Link copied to your clipboard."),
-      () => setCopyStatus("Could not copy automatically — select the link above and copy it."),
-    );
-  }, [shareUrl]);
-
-  return (
-    <div class="pk-stack pk-stack--snug pk-start" data-share-link-row>
-      <Field
-        label="Your personal share link"
-        help="Sharing this link lets us see who is driving donations — even without donating again yourself."
-      >
-        {(control) => <TextInput {...control} class="pk-mono" data-share-link value={shareUrl} readOnly />}
-      </Field>
-      <div class="pk-cluster">
-        <Button size="sm" data-share-copy onClick={handleCopy}>
-          Copy link
-        </Button>
-        <p class="pk-small" role="status">
-          {copyStatus}
-        </p>
-      </div>
     </div>
   );
 }
@@ -216,7 +176,13 @@ function DonationBadge({
           </ButtonLink>
         </div>
 
-        {personalized && <ShareLinkRow shareUrl={shareUrl} />}
+        {personalized && (
+          <CopyLinkRow
+            url={shareUrl}
+            label="Your personal share link"
+            help="Sharing this link lets us see who is driving donations — even without donating again yourself."
+          />
+        )}
 
         <p class="pk-small">
           PKI Consortium is a section 501(c)(6) nonprofit business league. Contributions or gifts to PKI Consortium are

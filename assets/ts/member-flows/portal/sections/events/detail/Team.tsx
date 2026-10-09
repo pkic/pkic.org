@@ -1,7 +1,7 @@
 import { useState, useRef } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../../components/ConfirmDialog";
-import { EmptyState } from "../../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../../ui/EmptyState";
 import { PersonCell, personDisplayName } from "../../../../../components/PersonCell";
 import { UserPicker, type PickedUser } from "../../../../../components/UserPicker";
 import { RowActions } from "../../../../../ui/RowActions";

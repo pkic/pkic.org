@@ -8,7 +8,7 @@
 import { type ComponentChildren } from "preact";
 import { useEffect } from "preact/hooks";
 import { usePortalHashLocation } from "../hash-location";
-import { EmptyState } from "../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../ui/EmptyState";
 import type { PortalSession } from "../types";
 import { portalCapacityFallbackPath } from "./portal-navigation";
 

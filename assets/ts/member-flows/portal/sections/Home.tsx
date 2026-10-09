@@ -15,6 +15,7 @@ import { userOrganizationsListResponseSchema } from "../../../../shared/schemas/
 import { currentUserVotesListResponseSchema } from "../../../../shared/schemas/votes";
 import { formatDateTime, formatWeekdayTimeInZone } from "../../../../shared/format-date";
 import { meetingEntryUrl } from "../../../../shared/meeting-entry-navigation";
+import { meetingSeriesCalendarPath, registrationCalendarPath } from "../../../../shared/calendar-subscription-links";
 import { MEETING_JOIN_ACTION_LEAD_MINUTES } from "../../../../shared/schemas/meeting-entry-policy";
 import { matchRecurrenceShape, describeRecurrenceShape } from "../../../components/RecurrenceEditor";
 import { Badge } from "../../../components/Badge";
@@ -191,7 +192,7 @@ function MeetingsPanel() {
                   class="pk-push"
                   aria-label="Download the full series calendar (.ics)"
                   title="Download the full series calendar (.ics)"
-                  href={`/api/v1/groups/${encodeURIComponent(meeting.groupId)}/meetings/series/${encodeURIComponent(meeting.seriesId)}/calendar.ics?personal=true`}
+                  href={meetingSeriesCalendarPath(meeting.groupId, meeting.seriesId, { personal: true })}
                 >
                   <IconCalendarDownload />
                 </ButtonLink>
@@ -212,7 +213,10 @@ function MeetingsPanel() {
                   icon
                   aria-label="Download only the next meeting (.ics)"
                   title="Download only the next meeting (.ics)"
-                  href={`/api/v1/groups/${encodeURIComponent(meeting.groupId)}/meetings/series/${encodeURIComponent(meeting.seriesId)}/calendar.ics?personal=true&occurrenceId=${encodeURIComponent(meeting.nextOccurrenceId)}`}
+                  href={meetingSeriesCalendarPath(meeting.groupId, meeting.seriesId, {
+                    personal: true,
+                    occurrenceId: meeting.nextOccurrenceId,
+                  })}
                 >
                   <IconCalendarDownload />
                 </ButtonLink>
@@ -252,18 +256,13 @@ function EventsPanel() {
           {rows.map((event) => {
             const relative = formatRelativeDays(event.startsAt);
             const viewer = "viewer" in event ? event.viewer : null;
-            const basePath = eventDestination(event);
             return (
               <li key={event.id} class="pk-stack pk-stack--tight">
                 <div class="pk-home-event-heading">
-                  {basePath ? (
-                    // No utility class: `.pk-strong` painted the anchor in
-                    // body ink, so the one clickable thing in the row was the
-                    // only line not dressed as a link.
-                    <a href={basePath}>{event.name}</a>
-                  ) : (
-                    <span class="pk-strong">{event.name}</span>
-                  )}
+                  {/* No utility class: `.pk-strong` painted the anchor in body
+                  ink, so the one clickable thing in the row was the only line
+                  not dressed as a link. */}
+                  <a href={eventDestination(event)}>{event.name}</a>
                   {event.participation?.registrationId && event.participation.registrationStatus === "registered" && (
                     <ButtonLink
                       variant="ghost"
@@ -271,7 +270,7 @@ function EventsPanel() {
                       icon
                       aria-label={`Download your personal calendar for ${event.name} (.ics)`}
                       title="Download your personal event calendar (.ics)"
-                      href={`/api/v1/events/${encodeURIComponent(event.slug)}/registrations/${encodeURIComponent(event.participation.registrationId)}/calendar.ics`}
+                      href={registrationCalendarPath(event.slug, event.participation.registrationId)}
                     >
                       <IconCalendarDownload />
                     </ButtonLink>

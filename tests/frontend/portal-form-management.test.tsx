@@ -201,7 +201,8 @@ describe("portal form management", () => {
     expect(requests.some((request) => request.pathname.startsWith("/api/v1/admin/forms"))).toBe(false);
     expect(container.textContent).toContain("Member feedback");
     expect(container.textContent).not.toContain("New form");
-    expect(container.textContent).not.toContain("Archive/Delete");
+    expect(container.textContent).not.toContain("Archive form");
+    expect(container.textContent).not.toContain("Delete form");
   });
 
   it("keeps creation out of the list itself and exposes the contract's purpose and status filters", async () => {
@@ -261,7 +262,8 @@ describe("portal form management", () => {
 
     expect(container.textContent).toContain("Community survey");
     expect(container.textContent).not.toContain("Edit");
-    expect(container.textContent).not.toContain("Archive/Delete");
+    expect(container.textContent).not.toContain("Archive form");
+    expect(container.textContent).not.toContain("Delete form");
   });
 
   it("opens the tab named in a preset hash query instead of the default statistics tab", async () => {

@@ -31,6 +31,7 @@ async function mount(composing = false): Promise<HTMLDivElement> {
       <GroupEventCommunications
         groupId="group-1"
         eventId="event-1"
+        eventSlug="event-1"
         composing={composing}
         listPath="/x/communications"
       />,
@@ -69,6 +70,9 @@ describe("GroupEventCommunications", () => {
   it("offers one message action without audience navigation on the landing page", async () => {
     const root = await mount();
 
+    expect(
+      root.querySelector('a[href="#/x/communications/new?campaignPreset=session-planning"]')?.textContent,
+    ).toContain("Ask attendees to plan sessions");
     expect(root.querySelector("details")).toBeNull();
     expect(root.querySelector("summary")).toBeNull();
     expect(root.querySelector("select")).toBeNull();

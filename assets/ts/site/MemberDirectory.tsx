@@ -3,7 +3,7 @@ import { useMemo, useState } from "preact/hooks";
 import type { PublicMemberSummary } from "../../shared/schemas/members-directory";
 import { memberProfileHref } from "../../shared/member-profile-url";
 import { Avatar } from "../ui/Avatar";
-import { EmptyState } from "../ui/RecordEmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import "./member-directory.css";
 const DIGITS = new Set("0123456789".split(""));
 
@@ -78,10 +78,12 @@ export function DirectoryGrid({ members, prefix }: { members: DirectoryMember[];
 
   if (members.length === 0) {
     return (
-      <EmptyState
-        title="No members found."
-        body="No member matches your search. Try a shorter term, or clear the search to see everyone."
-      />
+      <div class="pk">
+        <EmptyState
+          title="No members found."
+          body="No member matches your search. Try a shorter term, or clear the search to see everyone."
+        />
+      </div>
     );
   }
 

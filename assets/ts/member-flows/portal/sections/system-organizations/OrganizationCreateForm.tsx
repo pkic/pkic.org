@@ -236,8 +236,8 @@ export function OrganizationCreateForm({
                   fieldName="organization.links"
                   label="Other links"
                   value={links}
-                  inputAriaLabel="Additional organization URL"
-                  helpText="One URL per line. Each is labeled by its site — a linkedin.com address shows as LinkedIn."
+                  inputAriaLabel="Additional organization link"
+                  helpText="Add one link at a time. Each is labeled by its site — a linkedin.com address shows as LinkedIn."
                   onChange={setLinks}
                 />
               </fieldset>

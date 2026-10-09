@@ -13,7 +13,8 @@ import { useRef } from "preact/hooks";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { confirmAction } from "../../../../components/ConfirmDialog";
 import { Badge, statusLabel } from "../../../../components/Badge";
-import { IconIndividual, IconOrganization } from "../../../../components/icons";
+import { IconOrganization } from "../../../../components/icons";
+import { IconPerson } from "../../../../components/icons/app-navigation";
 // `pk-muted` and `pk-small` are written here as class names rather than
 // reached through a component, so this module pulls their stylesheet into its
 // own chunk.
@@ -112,7 +113,7 @@ export function MembersList({
             member.memberType === "organization" ? (
               <IconOrganization aria-hidden={undefined} role="img" aria-label="Organization" />
             ) : (
-              <IconIndividual aria-hidden={undefined} role="img" aria-label="Individual" />
+              <IconPerson aria-hidden={undefined} role="img" aria-label="Individual" />
             ),
           className: "pk-center",
           width: "fit",

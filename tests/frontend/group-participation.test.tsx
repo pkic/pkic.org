@@ -3,6 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { SelfGroup } from "../../assets/shared/schemas/group-participation";
+import { group } from "./helpers/self-group-fixture";
 import { groupJoinSchema, groupLeaveSchema } from "../../assets/shared/schemas/groups";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { GroupParticipationCard } from "../../assets/ts/member-flows/portal/sections/GroupParticipationCard";
@@ -16,51 +17,6 @@ vi.mock("wouter/use-hash-location", () => ({
 }));
 
 const mounted: HTMLElement[] = [];
-
-function group(overrides: Partial<SelfGroup> = {}): SelfGroup {
-  return {
-    id: "10000000-0000-4000-8000-000000000001",
-    slug: "architecture",
-    abbreviatedName: null,
-    name: "Architecture Group",
-    type: { key: "working_group", singularLabel: "Working group", pluralLabel: "Working groups" },
-    parentGroup: null,
-    description: "Architecture collaboration",
-    links: [],
-    visibility: "public",
-    governanceInheritanceMode: "inherited",
-    eligibilityMode: "open",
-    automaticEnrollmentMode: "none",
-    allowAutomaticOptOut: false,
-    publicLeadership: false,
-    publicRoster: false,
-    minEndorsersForBallot: 0,
-    active: true,
-    revision: 0,
-    membershipCapacityCount: 0,
-    representedMemberCount: 0,
-    participantCount: 0,
-    childCount: 0,
-    createdAt: "2026-08-01T00:00:00.000Z",
-    updatedAt: "2026-08-01T00:00:00.000Z",
-    eligibleCapacities: [
-      {
-        memberId: "20000000-0000-4000-8000-000000000001",
-        memberType: "organization",
-        organizationName: "Organization A",
-        membershipCategory: "A",
-      },
-      {
-        memberId: "20000000-0000-4000-8000-000000000002",
-        memberType: "organization",
-        organizationName: "Organization B",
-        membershipCategory: "B",
-      },
-    ],
-    memberships: [],
-    ...overrides,
-  };
-}
 
 function mountCard(value: SelfGroup, onChanged = vi.fn(async () => {})): HTMLElement {
   const container = document.createElement("div");
@@ -327,6 +283,46 @@ describe("generic group participation card", () => {
     });
   });
 
+  it("offers leaving through every affiliation from the card's menu, not beside joining", async () => {
+    const requests: Array<{ url: string; body: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        requests.push({ url: String(input), body: JSON.parse(String(init?.body)) });
+        return mutationResponse();
+      }),
+    );
+    const membership = (index: 1 | 2) => ({
+      id: `30000000-0000-4000-8000-00000000000${index}`,
+      memberId: `20000000-0000-4000-8000-00000000000${index}`,
+      memberType: "organization" as const,
+      organizationName: `Organization ${index === 1 ? "A" : "B"}`,
+      membershipCategory: "A",
+      source: "self_service" as const,
+      joinedAt: "2026-08-20T00:00:00.000Z",
+    });
+    const container = mountCard(group({ memberships: [membership(1), membership(2)] }));
+
+    expect(() => buttonNamed(container, "Leave all")).toThrow();
+    await act(() =>
+      container.querySelector<HTMLButtonElement>('[aria-label="Actions for Architecture Group"]')!.click(),
+    );
+    const leave = [...container.querySelectorAll<HTMLElement>('[role="menuitem"]')].find(
+      (item) => item.textContent?.trim() === "Leave for every affiliation…",
+    );
+    expect(leave).toBeDefined();
+    void act(() => leave!.click());
+    await settle();
+    expect(container.querySelector('[role="alertdialog"]')?.textContent).toContain(
+      "Leave Architecture Group for every affiliation?",
+    );
+    void act(() => dialogButton(container, "Leave group").click());
+    await settle();
+    expect(requests).toHaveLength(1);
+    expect(requests[0]?.url).toBe("/api/v1/groups/10000000-0000-4000-8000-000000000001/leave");
+    expect(groupLeaveSchema.parse(requests[0]?.body)).toEqual({ mode: "all" });
+  });
+
   it("keeps the affiliation when the removal confirmation is cancelled", async () => {
     const fetchMock = vi.fn();
     vi.stubGlobal("fetch", fetchMock);
@@ -450,139 +446,5 @@ describe("generic group participation card", () => {
 
     // Joining on behalf of nobody is not a thing the dialog can be made to do.
     expect(dialogButton(container, "Join group").disabled).toBe(true);
-  });
-});
-
-describe("staff groups collection", () => {
-  it("stays quiet for an active group and only badges the inactive one", async () => {
-    portalSession.value = portalSessionFixture({ staff: true });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              groups: [
-                group({
-                  id: "10000000-0000-4000-8000-000000000010",
-                  slug: "pqc",
-                  name: "Architecture Group",
-                  active: true,
-                }),
-                group({
-                  id: "10000000-0000-4000-8000-000000000011",
-                  abbreviatedName: "RET",
-                  name: "Retired Group",
-                  active: false,
-                }),
-              ],
-              page: { limit: 25, offset: 0, total: 2, hasMore: false },
-            }),
-            { status: 200, headers: { "content-type": "application/json" } },
-          ),
-      ),
-    );
-
-    const container = document.createElement("div");
-    document.body.append(container);
-    mounted.push(container);
-    void act(() => render(<Groups />, container));
-    await settle();
-
-    const rows = [...container.querySelectorAll("tbody tr")];
-    const activeRow = rows.find((row) => row.textContent?.includes("Architecture Group"));
-    const inactiveRow = rows.find((row) => row.textContent?.includes("Retired Group"));
-    if (!activeRow || !inactiveRow) throw new Error("missing expected group rows");
-    expect(activeRow.querySelector(".pk-table__coded-label")).toBeNull();
-    expect(activeRow.querySelector(".pk-table__clamp")?.textContent).toBe("Architecture Group");
-    expect(activeRow.querySelector(".pk-table__clamp")?.getAttribute("title")).toBe("Architecture Group");
-    expect(inactiveRow.querySelector(".pk-table__coded-label__code")?.textContent).toBe("RET");
-    expect(inactiveRow.querySelector(".pk-table__coded-label__separator")?.textContent?.trim()).toBe("|");
-
-    // An active group is quiet on the page — no pill — but not silent to a
-    // screen reader: the dash that stands in for the badge is decoration, and
-    // the word beside it is what carries the state.
-    expect(activeRow.querySelector(".pk-badge")).toBeNull();
-    expect(activeRow.querySelector(".pk-table__value > [aria-hidden='true']")?.textContent).toBe("—");
-    expect(activeRow.querySelector(".pk-sr-only")?.textContent).toBe("Active");
-    expect(inactiveRow.querySelector(".pk-badge")?.textContent).toBe("Inactive");
-  });
-
-  it("names the staff table and its region, so it is not one card among several unnamed ones", async () => {
-    portalSession.value = portalSessionFixture({ staff: true });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(
-            JSON.stringify({
-              groups: [group({ id: "10000000-0000-4000-8000-000000000012", name: "Architecture Group" })],
-              page: { limit: 25, offset: 0, total: 1, hasMore: false },
-            }),
-            { status: 200, headers: { "content-type": "application/json" } },
-          ),
-      ),
-    );
-
-    const container = document.createElement("div");
-    document.body.append(container);
-    mounted.push(container);
-    void act(() => render(<Groups />, container));
-    await settle();
-
-    // The table names itself through its caption; the panel wrapper that
-    // used to carry a duplicate name is gone with the width cap.
-    expect(container.querySelector("caption")?.textContent).toBe("All groups");
-    // The row is activated by a real link, not a handler on the `<tr>`.
-    const rowLink = container.querySelector<HTMLAnchorElement>("tbody a.pk-table__row-link");
-    expect(rowLink?.textContent).toBe("Open Architecture Group");
-    expect(rowLink?.getAttribute("href")).toContain("/groups/10000000-0000-4000-8000-000000000012/overview");
-  });
-
-  it("announces a failed member catalog as a sentence rather than an empty column", async () => {
-    portalSession.value = portalSessionFixture({ member: true });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ error: "unavailable" }), {
-            status: 503,
-            headers: { "content-type": "application/json" },
-          }),
-      ),
-    );
-
-    const container = document.createElement("div");
-    document.body.append(container);
-    mounted.push(container);
-    void act(() => render(<Groups />, container));
-    await settle();
-
-    const alert = container.querySelector("[role='alert']");
-    expect(alert).not.toBeNull();
-    expect(alert?.textContent).toContain("Online services are temporarily unavailable.");
-  });
-
-  it("says the catalog is empty in an announced region rather than a muted line", async () => {
-    portalSession.value = portalSessionFixture({ member: true });
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Response(JSON.stringify({ groups: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } }), {
-            status: 200,
-            headers: { "content-type": "application/json" },
-          }),
-      ),
-    );
-
-    const container = document.createElement("div");
-    document.body.append(container);
-    mounted.push(container);
-    void act(() => render(<Groups />, container));
-    await settle();
-
-    const empty = container.querySelector("[role='status']");
-    expect(empty?.textContent).toContain("No groups are available right now.");
   });
 });

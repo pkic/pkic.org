@@ -1,0 +1,267 @@
+/*
+ * EventHero.
+ *
+ * The conference key visual for the event app. Every colour, gradient and
+ * pattern is a kit token (tokens.event.generated.css); the field is dark in
+ * both themes, as printed, so its ink is the kit's on-field white.
+ */
+
+@layer components {
+  .pk-event-hero {
+    position: relative;
+    overflow: hidden;
+    border-radius: var(--pk-radius);
+    background: var(--pk-pqc-forest);
+    color: var(--pk-pqc-on-field);
+  }
+
+  /*
+   * Inside the event app on a phone the hero is the top of the screen: it runs
+   * edge to edge across #portal-main's slim 0.5rem/1.25rem phone gutters
+   * (_portal.scss) and clears the status bar of an installed app.
+   */
+  @media (max-width: 48rem) {
+    body:has(.pk-app-tabbar--event) .pk-event-hero {
+      margin-inline: -0.5rem;
+      margin-block-start: -1.25rem;
+      /* The status bar of an installed app sits on the forest edge, above the field. */
+      padding-block-start: env(safe-area-inset-top, 0px);
+      border-radius: 0;
+    }
+  }
+
+  .pk-event-hero__field {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    gap: var(--pk-5);
+    min-block-size: 13.5rem;
+    padding: var(--pk-5) var(--pk-5) var(--pk-6);
+    background: var(--pk-pqc-light), var(--pk-pqc-field);
+    /* Decoration paints over this background and under the content. */
+    isolation: isolate;
+  }
+
+  /* Dot grid on a 32px pitch, masked in across the right half. */
+  .pk-event-hero__field::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 0 45%;
+    z-index: -1;
+    background: var(--pk-pqc-dots) 0 0 / 32px 32px repeat;
+    mask-image: linear-gradient(90deg, transparent, #000 40%);
+    pointer-events: none;
+  }
+
+  /* The tri-colour mark, cropped at the right edge. */
+  .pk-event-hero__field::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: url("/img/pqc/mark-color-dark.svg") right -4.5rem top 1.5rem / 13rem auto no-repeat;
+    opacity: 0.15;
+    pointer-events: none;
+  }
+
+  /* The canal-house outline along the foot. */
+  .pk-event-hero__houses {
+    position: absolute;
+    inset: auto 0 0;
+    z-index: -1;
+    block-size: 2.75rem;
+    background: url("/img/pqc/canal-houses.svg") left bottom / auto 100% repeat-x;
+    opacity: 0.32;
+    pointer-events: none;
+  }
+
+  .pk-event-hero__top {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--pk-2) var(--pk-4);
+  }
+
+  .pk-event-hero__back {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-1);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    overflow: hidden;
+    color: var(--pk-pqc-on-field);
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-2xs);
+    font-weight: 500;
+    letter-spacing: var(--pk-tracking-label);
+    text-decoration: none;
+    text-overflow: ellipsis;
+    text-transform: uppercase;
+    white-space: nowrap;
+  }
+
+  .pk-event-hero__back:hover {
+    text-decoration: underline;
+  }
+
+  .pk-event-hero__back:focus-visible {
+    outline: 2px solid var(--pk-pqc-on-field);
+    outline-offset: 2px;
+  }
+
+  /* The full hero's back link sits on its own line above the logo. */
+  .pk-event-hero:not(.pk-event-hero--compact) .pk-event-hero__back {
+    flex-basis: 100%;
+  }
+
+  .pk-event-hero__logo {
+    display: block;
+    block-size: var(--pk-6);
+    inline-size: auto;
+  }
+
+  .pk-event-hero__status,
+  .pk-event-hero__eyebrow {
+    margin: 0;
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-2xs);
+    font-weight: 500;
+    letter-spacing: var(--pk-tracking-label);
+    text-transform: uppercase;
+  }
+
+  .pk-event-hero__eyebrow {
+    color: var(--pk-pqc-on-field-muted);
+  }
+
+  .pk-event-hero__status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-2);
+    padding: var(--pk-1) var(--pk-3);
+    border: 1px solid color-mix(in oklab, var(--pk-pqc-on-field) 35%, transparent);
+    border-radius: var(--pk-radius-pill);
+  }
+
+  .pk-event-hero__status--live::before {
+    content: "";
+    inline-size: var(--pk-2);
+    block-size: var(--pk-2);
+    border-radius: 50%;
+    background: var(--pk-pqc-orange);
+    box-shadow: 0 0 0 2px color-mix(in oklab, var(--pk-pqc-orange) 35%, transparent);
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .pk-event-hero__status--live::before {
+      animation: pk-event-hero-pulse 1.6s var(--pk-ease) infinite;
+    }
+  }
+
+  @keyframes pk-event-hero-pulse {
+    50% {
+      box-shadow: 0 0 0 5px color-mix(in oklab, var(--pk-pqc-orange) 0%, transparent);
+    }
+  }
+
+  .pk-event-hero__subject {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-2);
+    max-inline-size: 44rem;
+  }
+
+  .pk-event-hero__title {
+    margin: 0;
+    color: inherit;
+    font-size: calc(var(--pk-text-2xl) + 0.125rem);
+    font-weight: 700;
+    line-height: 1.1;
+    letter-spacing: -0.03em;
+    text-wrap: balance;
+  }
+
+  .pk-event-hero__bar {
+    display: block;
+    inline-size: var(--pk-8);
+    block-size: var(--pk-1);
+    margin-block: var(--pk-1);
+    background: var(--pk-pqc-stripe);
+  }
+
+  .pk-event-hero__meta {
+    margin: 0;
+    color: var(--pk-pqc-on-field-muted);
+    font-size: var(--pk-text-md);
+    line-height: 1.4;
+  }
+
+  .pk-event-hero__actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: var(--pk-2);
+    margin-block-start: var(--pk-2);
+  }
+
+  /* Secondary buttons read as outlines on the field. */
+  .pk-event-hero__actions .pk-btn--secondary {
+    border-color: color-mix(in oklab, var(--pk-pqc-on-field) 35%, transparent);
+    background: transparent;
+    color: var(--pk-pqc-on-field);
+  }
+
+  /* Hover stays on the field: a light wash, never the page surface under white text. */
+  .pk-event-hero__actions .pk-btn--secondary:hover:not(:disabled, [aria-disabled="true"]) {
+    border-color: var(--pk-pqc-on-field);
+    background: color-mix(in oklab, var(--pk-pqc-on-field) 14%, transparent);
+    color: var(--pk-pqc-on-field);
+  }
+
+  /* The kit's 4px signature stripe under the field. */
+  .pk-event-hero__rule {
+    block-size: var(--pk-1);
+    background: var(--pk-pqc-stripe);
+  }
+
+  /* Every other event-app page: the same field, slim, with the page's own title. */
+  .pk-event-hero--compact .pk-event-hero__field {
+    gap: var(--pk-2);
+    min-block-size: 0;
+    padding: var(--pk-3) var(--pk-4) var(--pk-4);
+  }
+
+  .pk-event-hero--compact .pk-event-hero__field::after {
+    background-size: 7rem auto;
+    background-position: right -2.5rem center;
+  }
+
+  .pk-event-hero--compact .pk-event-hero__houses {
+    block-size: 1.5rem;
+  }
+
+  .pk-event-hero--compact .pk-event-hero__title {
+    font-size: var(--pk-text-xl);
+  }
+
+  .pk-event-hero--compact .pk-event-hero__bar {
+    display: none;
+  }
+
+  @media (min-width: 48.0625rem) {
+    .pk-event-hero:not(.pk-event-hero--compact) .pk-event-hero__field {
+      min-block-size: 15rem;
+      padding: var(--pk-6) var(--pk-6) var(--pk-7);
+    }
+
+    .pk-event-hero:not(.pk-event-hero--compact) .pk-event-hero__field::after {
+      background-size: 18rem auto;
+      background-position: right -6rem top 1rem;
+    }
+
+    .pk-event-hero:not(.pk-event-hero--compact) .pk-event-hero__houses {
+      block-size: 3.5rem;
+    }
+  }
+}

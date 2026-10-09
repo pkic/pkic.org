@@ -116,7 +116,7 @@ test("permitted staff filter donations by status and open the donation's badge a
   // A completed, fully-settled donation needs no sync action of its own, and
   // offers its badge for download instead.
   await expect(page.getByRole("button", { name: /^Sync with Stripe/ })).toHaveCount(0);
-  const badgeLink = page.getByRole("link", { name: "Download badge" });
+  const badgeLink = page.getByRole("link", { name: "Download donation badge (JPEG)", exact: true });
   await expect(badgeLink).toBeVisible();
   await expect(badgeLink).toHaveAttribute("href", new RegExp(`/api/v1/donations/checkouts/[^/]+/badge\\?name=`));
 });

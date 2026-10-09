@@ -99,7 +99,7 @@ describe("portal System Users list permissions", () => {
     const photoAvatar = withPhoto.querySelector(".pk-avatar img");
     expect(photoAvatar).not.toBeNull();
     expect(photoAvatar?.getAttribute("src")).toBe(
-      "/api/v1/users/00000000-0000-4000-8000-000000000001/headshots/photo.webp",
+      "/api/v1/users/00000000-0000-4000-8000-000000000001/headshots/photo.webp?width=96",
     );
   });
 

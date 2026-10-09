@@ -1,0 +1,109 @@
+/*
+ * Event app cards and lists.
+ *
+ * Panels keep the portal's surface, border and theme tokens; the event app
+ * tightens the corner to the kit's 6px, softens the border, and labels each
+ * card with the kit's mono eyebrow.
+ */
+
+@layer components {
+  .pk-event-card {
+    border-color: var(--pk-line-soft);
+    border-radius: var(--pk-radius);
+  }
+
+  .pk-event-card--live {
+    border-inline-start: var(--pk-1) solid var(--pk-accent);
+  }
+
+  .pk-event-card__eyebrow {
+    margin: 0;
+    color: var(--pk-ink-muted);
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-2xs);
+    font-weight: 500;
+    letter-spacing: var(--pk-tracking-label);
+    text-transform: uppercase;
+  }
+
+  .pk-event-card--live .pk-event-card__eyebrow {
+    color: var(--pk-accent-ink);
+  }
+
+  .pk-event-card__title {
+    margin: 0;
+    color: var(--pk-ink);
+    font-size: var(--pk-text-xl);
+    font-weight: 700;
+    line-height: 1.25;
+    letter-spacing: -0.01em;
+  }
+
+  .pk-event-card__meta {
+    margin: 0;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+
+  .pk-event-card p {
+    margin: 0;
+  }
+
+  .pk-event-home {
+    align-items: start;
+  }
+
+  .pk-event-venue {
+    font-style: normal;
+  }
+
+  /* Destination tiles: a grid of icon-over-label links with room between them, never a full-width list. */
+  .pk-event-destinations {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(6.5rem, 1fr));
+    gap: var(--pk-3);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pk-event-destinations__item {
+    display: flex;
+  }
+
+  .pk-event-destinations__tile {
+    display: flex;
+    flex: 1;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: var(--pk-2);
+    min-block-size: 5.5rem;
+    padding: var(--pk-3) var(--pk-2);
+    border: 1px solid var(--pk-line-soft);
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface);
+    color: var(--pk-ink);
+    font-size: var(--pk-text-sm);
+    font-weight: 500;
+    line-height: 1.25;
+    text-align: center;
+    text-decoration: none;
+    overflow-wrap: anywhere;
+  }
+
+  .pk-event-destinations__tile:hover {
+    border-color: var(--pk-line);
+    background: var(--pk-surface-sunk);
+  }
+
+  .pk-event-destinations__tile:focus-visible {
+    outline: none;
+    box-shadow: var(--pk-focus);
+  }
+
+  .pk-event-destinations__icon {
+    flex: none;
+    color: var(--pk-accent-ink);
+  }
+}

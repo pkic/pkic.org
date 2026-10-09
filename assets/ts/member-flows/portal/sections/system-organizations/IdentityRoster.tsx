@@ -1,7 +1,7 @@
 import { useRef, useState } from "preact/hooks";
 import type { OrganizationDetail } from "../../../../../shared/schemas/organization-management";
 import { identityCreateSchema, identityMutationResponseSchema } from "../../../../../shared/schemas/identity";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { FormActions } from "../../../../components/FormActions";
 import type { ApiTableActions } from "../../../../components/ApiDataTable";
 import { ProfileLinksInput } from "../../../../components/ProfileLinksInput";

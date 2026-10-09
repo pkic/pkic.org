@@ -107,7 +107,7 @@ function SharedControls() {
         )}
       </Field>
 
-      <Button variant="primary" block data-donation-submit>
+      <Button variant="primary" data-donation-submit>
         Donate
       </Button>
 

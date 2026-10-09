@@ -22,6 +22,8 @@ test.use({ timezoneId: "Europe/Amsterdam" });
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
 
 test("a portal manager creates and edits a group-owned standalone event", async ({ page }) => {
+  // The journey ends with a real Astro site release, which alone takes most of the default budget.
+  test.setTimeout(240_000);
   await useEmailPreviewLogoFixture(page);
   await signInToPortal(page, e2eAdminEmail("portal-event-management"));
   await page.goto(`/portal/#/groups/${GROUP_ID}/events`);

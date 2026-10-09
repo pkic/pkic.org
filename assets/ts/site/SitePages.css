@@ -218,14 +218,13 @@
     gap: var(--pk-6);
   }
 
-  .pk-content-faq details {
+  .pk-content-faq article {
     padding: var(--pk-4);
     border-block-end: 1px solid var(--pk-line);
   }
 
-  .pk-content-faq summary {
+  .pk-content-faq h3 {
     color: var(--pk-accent-ink);
-    cursor: pointer;
     font-weight: 700;
   }
 
@@ -1094,6 +1093,20 @@
   .pk-section-navigation a.is-active {
     border-block-end-color: var(--pk-accent);
     color: var(--pk-on-solid);
+  }
+
+  /* The attendee app sits apart from the page tabs as the one action. */
+  .pk-section-navigation a.pk-section-navigation__app {
+    align-self: center;
+    margin-inline-start: auto;
+    padding: var(--pk-1) var(--pk-3);
+    border: 1px solid color-mix(in srgb, var(--pk-on-solid) 45%, transparent);
+    border-radius: var(--pk-radius);
+    color: var(--pk-on-solid);
+  }
+  .pk-section-navigation a.pk-section-navigation__app:hover {
+    border-color: var(--pk-on-solid);
+    background: color-mix(in srgb, var(--pk-on-solid) 10%, transparent);
   }
 
   .pk-public-page__body:has(.pk-content-agenda) {

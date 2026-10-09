@@ -23,6 +23,20 @@ export const ORGANIZATION_CONTENT_REVIEW_SORT_COLUMNS = [
   "submittedAt",
 ] as const;
 
+type OrganizationContentReviewSort =
+  | (typeof ORGANIZATION_CONTENT_REVIEW_SORT_COLUMNS)[number]
+  | `-${(typeof ORGANIZATION_CONTENT_REVIEW_SORT_COLUMNS)[number]}`;
+
+/**
+ * The pending queue is worked first-in, first-out, so it lists the oldest
+ * submission first. Decided reviews are a history, read newest first.
+ */
+export function organizationContentReviewDefaultSort(
+  status: z.infer<typeof contentReviewStatusSchema>,
+): OrganizationContentReviewSort {
+  return status === "pending" ? "submittedAt" : "-submittedAt";
+}
+
 export const organizationContentReviewsListQuerySchema = listQuerySchema(
   ORGANIZATION_CONTENT_REVIEW_SORT_COLUMNS,
 ).extend({

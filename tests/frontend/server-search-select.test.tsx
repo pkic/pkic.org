@@ -488,3 +488,37 @@ describe("ServerSearchSelect", () => {
     expect(alert?.textContent).not.toContain("HTTP 503");
   });
 });
+
+it("pages a non-searchable provider chooser at100 without unsupported sort or query", async () => {
+  vi.useFakeTimers();
+  const requests = stubFetch((url) => json(pagedItems(url, 201)));
+  const host = mount(
+    <Field label="Provider recordings">
+      {(control) => (
+        <ServerSearchSelect
+          {...control}
+          catalog={{ ...catalog, sort: "" }}
+          searchLabel="Recording"
+          pageSize={100}
+          searchable={false}
+          value={null}
+          onChange={() => {}}
+        />
+      )}
+    </Field>,
+  );
+  await elapse(0);
+  const trigger = host.querySelector<HTMLButtonElement>('[role="combobox"]')!;
+  expect(trigger.tagName).toBe("BUTTON");
+  expect(host.querySelector("input")).toBeNull();
+  await act(async () => trigger.click());
+  const next = Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Next options")!;
+  await act(async () => next.click());
+  await elapse(0);
+  expect(requests.some((url) => url.searchParams.get("offset") === "100")).toBe(true);
+  for (const url of requests) {
+    expect(url.searchParams.get("limit")).toBe("100");
+    expect(url.searchParams.has("sort")).toBe(false);
+    expect(url.searchParams.has("q")).toBe(false);
+  }
+});

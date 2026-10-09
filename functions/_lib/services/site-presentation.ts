@@ -257,8 +257,15 @@ export function createSitePresentation<TDocument extends SitePresentationDocumen
           candidate.data.draft !== true,
       )
       .sort((a, b) => (a.data.weight ?? 0) - (b.data.weight ?? 0) || titleFor(a).localeCompare(titleFor(b)));
+    // Attendees reach their event app (portal event page) from every event page until the event ends.
+    const rootParams = paramsFor(root);
+    const eventSlug = typeof rootParams.sponsoringSlug === "string" ? rootParams.sponsoringSlug : undefined;
+    const eventDate = Date.parse(String(rootParams.eventDate ?? ""));
+    const eventDays = Number(rootParams.eventDuration ?? 1);
+    const eventEnded = Number.isFinite(eventDate) && eventDate + Math.max(1, eventDays) * 86_400_000 < Date.now();
     return {
       currentPath: document.route,
+      ...(eventSlug && !eventEnded ? { appHref: `/portal/#/events/${encodeURIComponent(eventSlug)}` } : {}),
       items: [root, ...children].map((item) => ({
         href: item.route,
         label: item.data.linkTitle ?? item.data.title ?? titleFor(item),

@@ -6,10 +6,14 @@ export default defineConfig({
       "react/jsx-dev-runtime": "preact/jsx-runtime",
       "react/jsx-runtime": "preact/jsx-runtime",
       react: "preact/compat",
+      // The CommonJS shim requires React outside Vite's renderer alias.
+      "use-sync-external-store/shim/index.js": "preact/compat",
       "react-dom": "preact/compat",
     },
   },
   test: {
+    // Transform the real router so its external-store import uses the Preact renderer.
+    server: { deps: { inline: [/\/wouter\//] } },
     include: ["tests/frontend/**/*.test.{ts,tsx}"],
     exclude: ["**/._*"],
     environment: "jsdom",
