@@ -142,18 +142,19 @@ function resolveEmailBaseUrl(payload: Record<string, unknown>, env: Env): string
   return resolveAppBaseUrl(env);
 }
 
-async function claimOutboxForSending(db: DatabaseLike, outboxId: string): Promise<string | null> {
+async function claimOutboxForSending(db: DatabaseLike, outboxId: string) {
   const lease = createDurableJobLease();
-  const claimed = await run(
+  const claimed = await first<{ payload_json: string }>(
     db,
     `UPDATE email_outbox
      SET status = 'sending', processing_token = ?, lease_expires_at = ?, updated_at = ?
      WHERE id = ?
        AND send_after <= ?
-       AND status IN ('queued', 'retrying')`,
+       AND status IN ('queued', 'retrying')
+     RETURNING payload_json`,
     [lease.token, lease.expiresAt, lease.claimedAt, outboxId, lease.claimedAt],
   );
-  return claimed.changes === 1 ? lease.token : null;
+  return claimed ? { token: lease.token, payloadJson: claimed.payload_json } : null;
 }
 
 async function markOutboxSent(
@@ -254,14 +255,17 @@ async function processOutboxRow(
   // scheduled/admin/direct processors may therefore select the same queued
   // row. Claim only a due row before contacting SendGrid so one invocation owns
   // the external side effect; future rows remain queued for the due processor.
-  const processingToken = await claimOutboxForSending(db, row.id);
-  if (!processingToken) return false;
+  const claim = await claimOutboxForSending(db, row.id);
+  if (!claim) return false;
+  const processingToken = claim.token;
 
   let acceptedMessageId: string | null | undefined;
   let resolvedTemplateVersion = 0;
 
   try {
-    const storedPayload = parseJsonSafe<Record<string, unknown>>(row.payload_json, {});
+    // A queued message can change after selection. The atomic claim returns
+    // its current payload so a withdrawn snapshot cannot leak from that read.
+    const storedPayload = parseJsonSafe<Record<string, unknown>>(claim.payloadJson, {});
     // Cancel obsolete guarded deliveries before rendering or resolving capability links.
     // The second check immediately before sending still closes eligibility changes during rendering.
     await validateEmailDeliveryGuard(db, storedPayload);

@@ -16,10 +16,12 @@ import { AppError } from "../../../errors";
 import { prepareQueueEmailStatement, type QueueEmailPayload } from "../../../email/outbox";
 import { adminDatabaseUserId } from "../../../auth/admin-identity";
 import { prepareAuditLog } from "../../audit";
+import { prepareRemoveMembershipReviewSnapshots } from "../workflows/review-digest-content";
 import { prepareReleaseApplicationDomainClaim } from "../organization-domain-claims";
 import {
   ON_HOLD_SUBTYPES,
   allowedTransitions,
+  isApplicationTerminalStage,
   type ApplicationStage,
 } from "../../../../../assets/shared/schemas/member-applications";
 import { getMemberApplicationById, type MemberApplicationRow } from "./queries";
@@ -189,6 +191,28 @@ export function prepareApplicationStageTransition(
       .bind(params.toStage === "processing" ? now : null, application.id),
   );
 
+  if (params.toStage === "on_hold" || isApplicationTerminalStage(params.toStage)) {
+    statements.push(...prepareRemoveMembershipReviewSnapshots(db, application.id, now));
+    if (params.toStage === "on_hold") {
+      // Only undelivered digest requirements restart on resume. Sent notices
+      // retain their original review window and historical delivery evidence.
+      statements.push(
+        db
+          .prepare(
+            `UPDATE membership_application_steps
+          SET state = 'waiting', notice_outbox_id = NULL, opened_at = NULL, deadline_at = NULL
+          WHERE application_id = ? AND state = 'active' AND completed_at IS NULL AND opened_at IS NULL
+            AND generation = (SELECT generation FROM membership_application_workflows
+              WHERE application_id = ? AND superseded_at IS NULL)
+            AND notice_outbox_id IN (SELECT id FROM email_outbox
+              WHERE status IN ('queued', 'retrying', 'cancelled') AND sent_at IS NULL
+                AND json_type(payload_json, '$.reviewApplications') = 'object')`,
+          )
+          .bind(application.id, application.id),
+      );
+    }
+  }
+
   const outboxIds: string[] = [];
   if (params.toStage === "declined" || params.toStage === "withdrawn") {
     statements.push(prepareReleaseApplicationDomainClaim(db, application.id));
@@ -255,7 +279,7 @@ export async function executePreparedApplicationStageTransition(
       throw new AppError(
         409,
         "MEMBERSHIP_WORKFLOW_CHANGED",
-        "The application's workflow changed or is missing. Reload the application before resuming its review.",
+        "The application's workflow or review notice changed. Reload and retry after any active email delivery finishes.",
       );
     }
     const current = await getMemberApplicationById(db, application.id);

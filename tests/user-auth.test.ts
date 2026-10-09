@@ -12,6 +12,8 @@ import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { signUserSessionToken, verifyUserSessionToken } from "../functions/_lib/auth/user-session";
 
+import { signJwt } from "../functions/_lib/utils/jwt";
+
 const TEST_SIGNING_SECRET = "test-signing-secret";
 
 async function call(path: string, init: RequestInit = {}, testEnv = env): Promise<Response> {
@@ -104,7 +106,6 @@ describe("canonical user authentication", () => {
       idleExpiresAt: expect.any(String),
       identity: { email: "admin@pkic.org" },
       staff: expect.objectContaining({ idleExpiresAt: expect.any(String) }),
-      staffReauthenticationRequired: false,
       member: expect.any(Object),
     });
     expect(await queryAll(env.DB, "SELECT id FROM sessions")).toHaveLength(1);
@@ -114,14 +115,9 @@ describe("canonical user authentication", () => {
       .bind(new Date(Date.now() - 9 * 60 * 60 * 1000).toISOString())
       .run();
     const expiredElevation = await call("/api/v1/auth/session", { headers: { cookie } });
-    expect(expiredElevation.status).toBe(200);
-    const expiredElevationBody = await expiredElevation.json();
-    expect(expiredElevationBody).toMatchObject({
-      identity: { email: "admin@pkic.org" },
-      staffReauthenticationRequired: true,
-      member: expect.any(Object),
-    });
-    expect(expiredElevationBody).not.toHaveProperty("staff");
+    expect(expiredElevation.status).toBe(401);
+    await expect(expiredElevation.json()).resolves.toMatchObject({ error: { code: "AUTH_EXPIRED" } });
+    expect(expiredElevation.headers.get("x-user-token")).toBeNull();
   });
 
   it("expires the whole session after seven days without acknowledged activity", async () => {
@@ -145,7 +141,7 @@ describe("canonical user authentication", () => {
     await expect(response.json()).resolves.toMatchObject({ error: { code: "AUTH_EXPIRED" } });
   });
 
-  it("drops idle staff elevation after one hour and cannot restore it through session refresh", async () => {
+  it("expires a dual-capacity session after one hour of staff inactivity and requires a new sign-in", async () => {
     await seedDualCapacityUser();
     const [staff] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE normalized_email = ?", [
       "admin@pkic.org",
@@ -165,23 +161,62 @@ describe("canonical user authentication", () => {
     const response = await call("/api/v1/auth/session", {
       headers: { "x-user-token": staleStaffToken },
     });
-    expect(response.status).toBe(200);
-    await expect(response.clone().json()).resolves.toMatchObject({
-      member: expect.any(Object),
-      staffReauthenticationRequired: true,
-    });
-    await expect(response.clone().json()).resolves.not.toHaveProperty("staff");
-
-    const refreshedToken = response.headers.get("x-user-token");
-    expect(refreshedToken).toBeTruthy();
-    const refreshed = await verifyUserSessionToken(TEST_SIGNING_SECRET, refreshedToken!);
-    expect(refreshed).toMatchObject({ ok: true, claims: { staffLastActivityAt: staleStaffActivity } });
+    expect(response.status).toBe(401);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "AUTH_EXPIRED" } });
+    expect(response.headers.get("x-user-token")).toBeNull();
     const repeated = await call("/api/v1/auth/session", {
-      headers: { "x-user-token": refreshedToken! },
+      headers: { "x-user-token": staleStaffToken },
     });
-    expect(repeated.status).toBe(200);
-    await expect(repeated.json()).resolves.not.toHaveProperty("staff");
+    expect(repeated.status).toBe(401);
+
+    const newToken = await createAdminSession(env.DB, staff.id, "renewed-staff-session");
+    const renewed = await call("/api/v1/auth/session", { headers: { "x-user-token": newToken } });
+    expect(renewed.status).toBe(200);
+    await expect(renewed.json()).resolves.toMatchObject({ staff: expect.any(Object), member: expect.any(Object) });
   });
+
+  it.each([true, false])(
+    "does not extend staff activity while staff eligibility is absent (activity claim: %s)",
+    async (hasStaffActivity) => {
+      await seedDualCapacityUser();
+      const [staff] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE normalized_email = ?", [
+        "admin@pkic.org",
+      ]);
+      const token = await createAdminSession(env.DB, staff.id, "staff-eligibility-session");
+      const verified = await verifyUserSessionToken(TEST_SIGNING_SECRET, token);
+      if (!verified.ok) throw new Error("Expected a valid test session");
+      const priorStaffActivity = Math.floor(Date.now() / 1000) - 2 * 60 * 60;
+      const claims: typeof verified.claims = {
+        ...verified.claims,
+        lastActivityAt: Math.floor(Date.now() / 1000),
+        staffLastActivityAt: priorStaffActivity,
+      };
+      if (!hasStaffActivity) delete claims.staffLastActivityAt;
+      const staleToken = await signJwt(TEST_SIGNING_SECRET, { ...claims });
+      const revokedAt = new Date().toISOString();
+      await env.DB.batch([
+        env.DB.prepare("UPDATE user_roles SET revoked_at = ? WHERE user_id = ?").bind(revokedAt, staff.id),
+        env.DB.prepare("UPDATE permission_grants SET revoked_at = ? WHERE user_id = ?").bind(revokedAt, staff.id),
+      ]);
+
+      const response = await call("/api/v1/auth/session", { headers: { "x-user-token": staleToken } });
+      expect(response.status).toBe(200);
+      const body = await response.json();
+      expect(body).toMatchObject({ member: expect.any(Object) });
+      expect(body).not.toHaveProperty("staff");
+      const refreshedToken = response.headers.get("x-user-token");
+      expect(refreshedToken).toBeTruthy();
+      expect(await verifyUserSessionToken(TEST_SIGNING_SECRET, refreshedToken!)).toMatchObject({
+        ok: true,
+        claims: { staffLastActivityAt: hasStaffActivity ? priorStaffActivity : 0 },
+      });
+
+      await env.DB.prepare("UPDATE user_roles SET revoked_at = NULL WHERE user_id = ?").bind(staff.id).run();
+      const restored = await call("/api/v1/auth/session", { headers: { "x-user-token": refreshedToken! } });
+      expect(restored.status).toBe(401);
+      await expect(restored.json()).resolves.toMatchObject({ error: { code: "AUTH_EXPIRED" } });
+    },
+  );
 
   it.each(["/api/v1/admin/auth/request-link", "/api/v1/auth/member/request-link", "/api/v1/auth/portal/request-link"])(
     "does not mount retired human auth route %s",

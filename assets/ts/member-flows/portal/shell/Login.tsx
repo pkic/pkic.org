@@ -34,7 +34,7 @@ import { successResponseSchema } from "../../../../shared/schemas/api-common";
 import { userAuthRequestSchema } from "../../../../shared/schemas/user-auth";
 import { portalMagicLinkReturnPath, portalReturnPath } from "../hash-route";
 import { Alert } from "../../../ui/Alert";
-import { Button, ButtonLink } from "../../../ui/Button";
+import { Button } from "../../../ui/Button";
 import { Field } from "../../../ui/Field";
 import { TextInput } from "../../../ui/TextControl";
 import { LoginBackdrop } from "./LoginBackdrop";
@@ -56,16 +56,12 @@ async function signInWithPasskey(): Promise<void> {
 
 export function Login({
   onSignedIn,
-  onAuthenticationFailed,
-  reauthentication = false,
   copy,
   busy = false,
   status,
   notice,
 }: {
   onSignedIn: () => void | Promise<void>;
-  onAuthenticationFailed?: (error: unknown) => void | Promise<void>;
-  reauthentication?: boolean;
   copy?: PortalLoginCopy;
   busy?: boolean;
   status?: string;
@@ -122,10 +118,7 @@ export function Login({
       await signInWithPasskey();
       await onSignedIn();
     } catch (err) {
-      // A rejected public sign-in ceremony may report 401 while the existing
-      // session remains valid. Recheck that session without repeating the ceremony.
-      if (onAuthenticationFailed) await onAuthenticationFailed(err);
-      else magicLink.setError(err instanceof Error ? err.message : "Verification failed. Please try again.");
+      magicLink.setError(err instanceof Error ? err.message : "Verification failed. Please try again.");
     } finally {
       setPasskeySubmitting(false);
     }
@@ -134,17 +127,15 @@ export function Login({
   return (
     <div class="pk pk-login">
       <LoginBackdrop copy={copy} />
-      <section class="pk-login__panel" aria-label={reauthentication ? "Reauthenticate" : "Sign in"} aria-busy={busy}>
+      <section class="pk-login__panel" aria-label="Sign in" aria-busy={busy}>
         <div class="pk-login__card-wrap">
           <div class="pk-login__card">
             <div class="pk-login__card-rule" aria-hidden="true" />
             <div class="pk-login__card-body pk-stack">
               <div class="pk-stack pk-stack--tight">
-                <h1 class="pk-login__title">{reauthentication ? "Reauthenticate" : "Sign in"}</h1>
+                <h1 class="pk-login__title">Sign in</h1>
                 <p class="pk-small pk-muted">
-                  {reauthentication
-                    ? "Your administrator access has expired. Verify your identity to continue on this page. Your session stays signed in."
-                    : "Your passkey is the fastest and safest way in — nothing to remember, nothing to phish."}
+                  Your passkey is the fastest and safest way in — nothing to remember, nothing to phish.
                 </p>
               </div>
 
@@ -229,31 +220,21 @@ export function Login({
               </fieldset>
 
               <SignInError error={magicLink.error} />
-              {reauthentication && (
-                <ButtonLink variant="ghost" href="#/home">
-                  Continue to Home
-                </ButtonLink>
-              )}
-
               <p class="pk-small pk-muted pk-login__note">
                 Trouble signing in? <a href="mailto:contact@pkic.org">Ask the secretariat</a>.
               </p>
             </div>
-            {!reauthentication && (
-              <div class="pk-login__card-foot">
-                <p class="pk-small pk-login__note">
-                  Not a member yet? <a href="/join/">Become a member</a> — participation is open to any organization
-                  working on PKI.
-                </p>
-              </div>
-            )}
+            <div class="pk-login__card-foot">
+              <p class="pk-small pk-login__note">
+                Not a member yet? <a href="/join/">Become a member</a> — participation is open to any organization
+                working on PKI.
+              </p>
+            </div>
           </div>
-          {!reauthentication && (
-            <p class="pk-small pk-muted pk-login__terms">
-              By signing in you accept the <a href="/about/bylaws/">bylaws</a> and{" "}
-              <a href="/about/privacy-policy/">privacy policy</a>.
-            </p>
-          )}
+          <p class="pk-small pk-muted pk-login__terms">
+            By signing in you accept the <a href="/about/bylaws/">bylaws</a> and{" "}
+            <a href="/about/privacy-policy/">privacy policy</a>.
+          </p>
         </div>
       </section>
     </div>

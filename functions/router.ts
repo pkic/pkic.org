@@ -19,7 +19,7 @@ import type { Env } from "./_lib/types";
 import { processIncomingEmail } from "./_lib/services/calendar-rsvp-email-ingest";
 import { decorateOpenApiSpec, filterOpenApiSpecForMcp } from "./_lib/openapi/mcp";
 import { OPENAPI_INFO, OPENAPI_TAGS, OPENAPI_TAG_GROUPS } from "./_lib/openapi/document";
-import { createMcpWorkerFetch, MCP_OPENAPI_JSON_PATH } from "./_lib/mcp/worker";
+import { createMcpWorkerFetch, MCP_OPENAPI_JSON_PATH } from "./_lib/api-tools/mcp-worker";
 import { getStaticAssetsBinding } from "./_lib/static-assets";
 import { primaryFirstDb, requestSessionDb } from "./_lib/db/session";
 import { WorkerEntrypoint } from "cloudflare:workers";

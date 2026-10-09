@@ -10,10 +10,8 @@ import {
   portalSession,
   profile,
   savePortalSession,
-  expireStaffCapacity,
 } from "../../assets/ts/member-flows/portal/state";
 import type { PortalSession } from "../../assets/ts/member-flows/portal/types";
-import { portalSessionFixture } from "../helpers/portal-session";
 
 const SESSION: PortalSession = {
   success: true,
@@ -21,7 +19,6 @@ const SESSION: PortalSession = {
   expiresAt: "2099-01-01T00:00:00.000Z",
   idleExpiresAt: "2099-01-01T00:00:00.000Z",
   identity: { id: "user-1", email: "user@example.test" },
-  staffReauthenticationRequired: false,
   sponsors: [],
   pendingIdentityCount: 0,
 };
@@ -41,16 +38,6 @@ describe("portal API interceptors", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
     resetPortalState();
-  });
-
-  it("keeps affiliation-only account access when staff elevation expires", () => {
-    savePortalSession({ ...portalSessionFixture({ staff: true }), hasActiveAffiliation: true });
-    expireStaffCapacity();
-    expect(authStatus.value).toBe("authenticated");
-    expect(portalSession.value?.staff).toBeUndefined();
-    expect(portalSession.value?.hasActiveAffiliation).toBe(true);
-    expect(portalSession.value?.member).toBeUndefined();
-    expect(portalSession.value?.staffReauthenticationRequired).toBe(true);
   });
 
   it("clears the portal session and records the current path after an unauthorized canonical API error", async () => {

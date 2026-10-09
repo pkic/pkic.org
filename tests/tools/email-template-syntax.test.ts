@@ -17,22 +17,30 @@
  * until a sponsor does. This is that join — every block tag in every seeded
  * template, checked against the small set the renderer opens and closes.
  *
- * It reads the migration text rather than a database because the templates are
- * data in a migration, and `resetDb()` empties the table they land in.
+ * It reads migration text and the canonical seed definitions without requiring
+ * a database or executing the seed CLI.
  */
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
+import { DEFAULT_TEMPLATES } from "../../scripts/seed-email-templates.mjs";
+import { renderEmail } from "../../functions/_lib/email/render";
 
 /** The block helpers `functions/_lib/email/render.ts` opens and closes. */
 const SUPPORTED_BLOCKS = new Set(["if", "unless", "each"]);
 
 const MIGRATIONS_DIR = join(process.cwd(), "migrations");
 
-function migrationSources(): Array<{ file: string; text: string }> {
-  return readdirSync(MIGRATIONS_DIR)
-    .filter((name) => name.endsWith(".sql"))
-    .map((file) => ({ file, text: readFileSync(join(MIGRATIONS_DIR, file), "utf8") }));
+function templateSources(): Array<{ file: string; text: string }> {
+  return [
+    ...readdirSync(MIGRATIONS_DIR)
+      .filter((name) => name.endsWith(".sql"))
+      .map((file) => ({ file, text: readFileSync(join(MIGRATIONS_DIR, file), "utf8") })),
+    ...DEFAULT_TEMPLATES.map((template) => ({
+      file: `seed-email-templates.mjs:${template.key}`,
+      text: `${template.subjectTemplate ?? ""}\n${template.content}`,
+    })),
+  ];
 }
 
 /** Every `{{#name` and `{{/name` in the text, with the line it sits on. */
@@ -51,9 +59,39 @@ function blockTags(text: string): Array<{ tag: string; name: string; line: numbe
 }
 
 describe("seeded email templates", () => {
+  it.each(["Example Reviewer", ""])("keeps multiline objections quoted with author %j", async (author) => {
+    const template = DEFAULT_TEMPLATES.find((item) => item.key === "partial_membership_review_details");
+    expect(template).toBeDefined();
+    const { html, text } = await renderEmail(
+      template!.content,
+      {
+        applicationName: "Example Organization",
+        categoryCode: "A",
+        categoryLabel: "Example Category",
+        applicantName: "Example Applicant",
+        applicantEmail: "applicant@example.test",
+        answerRows: [],
+        objections: [{ author, body: "First concern.\r\n\r\nSecond paragraph.\r\nFinal line." }],
+        reviewUrl: "https://example.test/review",
+      },
+      "{{{body_html}}}",
+    );
+    const quotes = [...html.matchAll(/<blockquote[^>]*>([\s\S]*?)<\/blockquote>/g)];
+    expect(quotes).toHaveLength(1);
+    const quote = quotes[0][1];
+    expect(quote).toContain("First concern.");
+    expect(quote).toContain("Second paragraph.");
+    expect(quote).toContain("Final line.");
+    expect(quote).not.toContain("Read the application form and respond");
+    if (author) expect(html.match(/<strong>Example Reviewer:<\/strong>/g)).toHaveLength(1);
+    expect(text).toContain("First concern.");
+    expect(text).toContain("Second paragraph.");
+    expect(text).toContain("Final line.");
+  });
+
   it("open and close only the blocks the renderer implements", () => {
     const offenders: string[] = [];
-    for (const { file, text } of migrationSources()) {
+    for (const { file, text } of templateSources()) {
       for (const { tag, name, line } of blockTags(text)) {
         if (!SUPPORTED_BLOCKS.has(name)) offenders.push(`${file}:${line} ${tag}`);
       }
@@ -73,7 +111,7 @@ describe("seeded email templates", () => {
   });
 
   it("balance every block they open", () => {
-    for (const { file, text } of migrationSources()) {
+    for (const { file, text } of templateSources()) {
       const depth = new Map<string, number>();
       for (const { name, tag } of blockTags(text)) {
         const open = tag.startsWith("{{#");

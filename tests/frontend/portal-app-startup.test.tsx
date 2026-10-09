@@ -3,7 +3,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { serviceAvailability } from "../../assets/ts/shared/availability-state";
-import { clearAuth, expirePortalSession, portalSession } from "../../assets/ts/member-flows/portal/state";
+import { clearAuth, portalSession } from "../../assets/ts/member-flows/portal/state";
 const mocks = vi.hoisted(() => ({
   registerWorker: vi.fn(),
   clearPreparation: vi.fn(),
@@ -62,7 +62,6 @@ vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/Offl
 }));
 import { App } from "../../assets/ts/member-flows/portal/App";
 import { portalSessionFixture } from "../helpers/portal-session";
-import type { PortalSession } from "../../assets/ts/member-flows/portal/types";
 import { userAuthVerifySchema, userAuthRequestSchema } from "../../assets/shared/schemas/user-auth";
 import { scannerTransportUnavailable } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context";
 let host: HTMLElement;
@@ -345,165 +344,4 @@ it("does not let an initial pending session response overwrite a new same-tab li
     operatorUserId: oldSession.identity.id,
   });
   expect(window.location.hash).toBe("#/groups/synthetic");
-});
-
-const agendaPath = "/events/synthetic/agenda";
-
-function expiredAdministratorSession(): PortalSession {
-  return {
-    ...portalSessionFixture({ pendingIdentityCount: 1 }),
-    hasActiveAffiliation: true,
-    staffReauthenticationRequired: true,
-  };
-}
-
-function renewedAdministratorSession() {
-  const session = portalSessionFixture({ staff: true, pendingIdentityCount: 1 });
-  session.staff!.expiresAt = "2099-01-01T00:00:00.000Z";
-  session.staff!.idleExpiresAt = "2099-01-01T00:00:00.000Z";
-  return session;
-}
-
-async function openPortalPath(path: string) {
-  await act(async () => {
-    history.replaceState({}, "", `/portal/#${path}`);
-    window.dispatchEvent(new HashChangeEvent("hashchange"));
-  });
-}
-
-it.each(["server", "browser"] as const)(
-  "gates expired administrator pages after %s expiry while keeping the session and explicit Home access",
-  async (expiry) => {
-    history.replaceState({}, "", `/portal/#${agendaPath}`);
-    const session = expiry === "server" ? expiredAdministratorSession() : renewedAdministratorSession();
-    if (expiry === "browser" && session.staff) {
-      session.staff!.expiresAt = new Date(Date.now() - 1_000).toISOString();
-      session.staff!.idleExpiresAt = session.staff!.expiresAt;
-    }
-    fetchMock.mockResolvedValue(Response.json(session));
-    await mount();
-    await vi.waitFor(() => expect(card().querySelector("h1")?.textContent).toBe("Reauthenticate"));
-    expect(host.textContent).not.toContain("Authenticated portal content");
-    expect(host.textContent).not.toContain("Sign out and sign in again");
-    expect(portalSession.value?.sessionId).toBe(session.sessionId);
-    expect(portalSession.value?.staff).toBeUndefined();
-    expect(window.location.hash).toBe(`#${agendaPath}`);
-    const home = card().querySelector<HTMLAnchorElement>('a[href="#/home"]');
-    expect(home?.textContent).toBe("Continue to Home");
-    await openPortalPath("/home");
-    await vi.waitFor(() => expect(host.textContent).toContain("Authenticated portal content"));
-    expect(portalSession.value?.staffReauthenticationRequired).toBe(true);
-    await openPortalPath(agendaPath);
-    await vi.waitFor(() => expect(card().querySelector("h1")?.textContent).toBe("Reauthenticate"));
-    expect(mocks.signOut).not.toHaveBeenCalled();
-    expect(mocks.clearPreparation).not.toHaveBeenCalled();
-    expect(fetchMock.mock.calls.map(([input]) => String(input))).toEqual(["/api/v1/auth/session"]);
-  },
-);
-
-it("keeps a failed passkey prompt and resumes the same agenda only after canonical renewed authority", async () => {
-  history.replaceState({}, "", "/portal/#/home");
-  mocks.supportsPasskeys.mockReturnValue(true);
-  let session = expiredAdministratorSession();
-  fetchMock.mockImplementation(async () => Response.json(session));
-  await mount();
-  // Resolve the lazy shell at the allowed Home landing first, so a transient
-  // protected render cannot hide behind an unresolved module import.
-  await vi.waitFor(() => expect(host.textContent).toContain("Authenticated portal content"));
-  await openPortalPath(agendaPath);
-  await vi.waitFor(() => expect(card().querySelector("h1")?.textContent).toBe("Reauthenticate"));
-  mocks.renderShell.mockClear();
-  const signIn = () =>
-    [...card().querySelectorAll("button")].find((button) => button.textContent === "Sign in with a passkey")!;
-  mocks.authenticateWithPasskey.mockImplementationOnce(async () => {
-    // The shared 401 interceptor clears local portal state for a rejected
-    // public ceremony; the session endpoint remains the authority on its validity.
-    expirePortalSession();
-    throw new Error("No passkey was selected.");
-  });
-  await vi.waitFor(() => expect(signIn()?.disabled).toBe(false));
-  await act(async () => signIn().click());
-  await vi.waitFor(() =>
-    expect(card().querySelector('[role="alert"]')?.textContent).toContain("No passkey was selected."),
-  );
-  expect(portalSession.value?.sessionId).toBe(session.sessionId);
-  expect(window.location.hash).toBe(`#${agendaPath}`);
-  mocks.authenticateWithPasskey.mockResolvedValue(undefined);
-  await vi.waitFor(() => expect(signIn()?.disabled).toBe(false));
-  await act(async () => signIn().click());
-  await vi.waitFor(() => expect(signIn()?.disabled).toBe(false));
-  expect(portalSession.value?.staffReauthenticationRequired).toBe(true);
-  expect(host.textContent).not.toContain("Authenticated portal content");
-  session = { ...expiredAdministratorSession(), staffReauthenticationRequired: false };
-  await vi.waitFor(() => expect(signIn()?.disabled).toBe(false));
-  await act(async () => signIn().click());
-  await vi.waitFor(() => expect(card().textContent).toContain("Administrator access unavailable"));
-  expect(mocks.renderShell).not.toHaveBeenCalled();
-  expect(host.textContent).not.toContain("Authenticated portal content");
-  await vi.waitFor(() => expect(signIn()?.disabled).toBe(false));
-  expect(portalSession.value?.staff).toBeUndefined();
-  session = { ...renewedAdministratorSession(), hasActiveAffiliation: true };
-  await vi.waitFor(() => expect(signIn()?.disabled).toBe(false));
-  await act(async () => signIn().click());
-  await vi.waitFor(() => expect(host.textContent).toContain("Authenticated portal content"));
-  expect(portalSession.value?.staff).toBeDefined();
-  expect(portalSession.value?.staffReauthenticationRequired).toBe(false);
-  expect(window.location.hash).toBe(`#${agendaPath}`);
-  expect(mocks.authenticateWithPasskey).toHaveBeenCalledTimes(4);
-  expect(mocks.renderShell).toHaveBeenCalled();
-  expect(mocks.signOut).not.toHaveBeenCalled();
-});
-
-it("keeps email reauthentication failures signed in and carries the agenda through retry and verification", async () => {
-  history.replaceState({}, "", `/portal/#${agendaPath}`);
-  let verified = false;
-  const session = expiredAdministratorSession();
-  fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
-    const url = String(input);
-    if (url.endsWith("/request-link")) {
-      expect(userAuthRequestSchema.parse(JSON.parse(String(init?.body)))).toEqual({
-        email: "synthetic@example.test",
-        returnPath: agendaPath,
-      });
-      return Response.json({ success: true });
-    }
-    if (url.endsWith("/verify-link")) {
-      const { token } = userAuthVerifySchema.parse(JSON.parse(String(init?.body)));
-      if (token === "synthetic-expired-reauthentication") return refusal(410, "This link has expired.");
-      expect(token).toBe("synthetic-renewed-reauthentication");
-      verified = true;
-      return Response.json(renewedAdministratorSession());
-    }
-    return Response.json(verified ? renewedAdministratorSession() : session);
-  });
-  await mount();
-  const requestLink = async () => {
-    await act(async () => {
-      const input = card().querySelector<HTMLInputElement>("input")!;
-      input.value = "synthetic@example.test";
-      input.dispatchEvent(new Event("input", { bubbles: true }));
-    });
-    await act(async () => {
-      card()
-        .querySelector("form")!
-        .dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
-    });
-    await vi.waitFor(() => expect(card().textContent).toContain("Check your email"));
-  };
-  await vi.waitFor(() => expect(card().querySelector("h1")?.textContent).toBe("Reauthenticate"));
-  await requestLink();
-  await openPortalPath(`/verify?token=synthetic-expired-reauthentication&next=${encodeURIComponent(agendaPath)}`);
-  await vi.waitFor(() =>
-    expect(card().querySelector('[role="alert"]')?.textContent).toContain("This link has expired."),
-  );
-  expect(portalSession.value?.sessionId).toBe(session.sessionId);
-  expect(portalSession.value?.staffReauthenticationRequired).toBe(true);
-  expect(host.textContent).not.toContain("Authenticated portal content");
-  await requestLink();
-  await openPortalPath(`/verify?token=synthetic-renewed-reauthentication&next=${encodeURIComponent(agendaPath)}`);
-  await vi.waitFor(() => expect(host.textContent).toContain("Authenticated portal content"));
-  expect(window.location.hash).toBe(`#${agendaPath}`);
-  expect(portalSession.value?.staff).toBeDefined();
-  expect(mocks.signOut).not.toHaveBeenCalled();
-  expect(fetchMock.mock.calls.filter(([input]) => String(input).endsWith("/verify-link"))).toHaveLength(2);
 });

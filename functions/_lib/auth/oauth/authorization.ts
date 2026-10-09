@@ -5,18 +5,20 @@ import {
   type ResolveExternalTokenInput,
 } from "@cloudflare/workers-oauth-provider";
 import { z } from "zod";
-import { permissionSchema } from "../../../assets/shared/schemas/permissions";
-import { getCachedAdminAuthTransport, requireAdminFromRequest } from "../auth/admin";
-import { resolveUserSessionFromRequest } from "../auth/user-session";
-import { AUTH_SCOPES, grantableScopesForActor, type AuthScope } from "../auth/scopes";
-import { getConfig, resolveAppBaseUrl } from "../config";
-import { processOutboxByIdBackground } from "../email/outbox";
-import { AppError } from "../errors";
-import { getClientIp, getUserAgent, hashOptional, requireInternalSecret } from "../request";
-import { enforceRateLimit } from "../rate-limit";
-import { buildManagementLink } from "../services/management-links";
-import { requestUserSignInLink } from "../services/user-auth-flow";
-import type { AuthAdmin, Env, UserBackedAuthAdmin } from "../types";
+import { permissionSchema } from "../../../../assets/shared/schemas/permissions";
+import { utcInstantSchema } from "../../../../assets/shared/schemas/api-common";
+import { mcpOauthContextSchema } from "../../../../assets/shared/schemas/mcp-oauth";
+import { getCachedAdminAuthTransport, requireAdminFromRequest } from "../admin";
+import { resolveUserSessionFromRequest, type UserSessionResult } from "../user-session";
+import { AUTH_SCOPES, grantableScopesForActor, type AuthScope } from "../scopes";
+import { getConfig, resolveAppBaseUrl } from "../../config";
+import { processOutboxByIdBackground } from "../../email/outbox";
+import { AppError } from "../../errors";
+import { getClientIp, getUserAgent, hashOptional, requireInternalSecret } from "../../request";
+import { enforceRateLimit } from "../../rate-limit";
+import { buildManagementLink } from "../../services/management-links";
+import { requestUserSignInLink } from "../../services/user-auth-flow";
+import type { AuthAdmin, Env } from "../../types";
 
 export const MCP_OAUTH_AUTHORIZE_PATH = "/api/v1/auth/oauth/authorize";
 export const MCP_OAUTH_TOKEN_PATH = "/api/v1/auth/oauth/token";
@@ -37,7 +39,8 @@ export const mcpOAuthPropsSchema = z.discriminatedUnion("identityType", [
       identityType: z.literal("user"),
       ...mcpOAuthPropsBaseSchema,
       sessionId: z.string().min(1),
-      sessionExpiresAt: z.string().min(1),
+      sessionExpiresAt: utcInstantSchema,
+      sessionIdleExpiresAt: utcInstantSchema,
       state: z.string().nullable(),
       authTransport: z.enum(["oauth", "bearer", "cookie"]),
     })
@@ -96,6 +99,7 @@ export function buildMcpOauthProps(
   admin: AuthAdmin,
   scopes: readonly AuthScope[],
   authTransport: McpOAuthTransport,
+  staffIdleExpiresAt?: string,
 ): McpOAuthProps {
   const shared = { id: admin.id, email: admin.email, scopes: [...scopes] };
 
@@ -106,7 +110,7 @@ export function buildMcpOauthProps(
     return { identityType: "service", role: admin.role, ...shared, authTransport };
   }
 
-  if (authTransport === "api-key" || !admin.sessionId || !admin.expiresAt) {
+  if (authTransport === "api-key" || !admin.sessionId || !admin.expiresAt || !staffIdleExpiresAt) {
     throw new AppError(
       500,
       "MCP_AUTH_TRANSPORT_INVALID",
@@ -119,6 +123,7 @@ export function buildMcpOauthProps(
     ...shared,
     sessionId: admin.sessionId,
     sessionExpiresAt: admin.expiresAt,
+    sessionIdleExpiresAt: staffIdleExpiresAt,
     state: admin.state ?? null,
     authTransport,
   };
@@ -183,9 +188,9 @@ export async function parseOauthRequestFromReturnTo(
   return oauthProvider.parseAuthRequest(new Request(url, { method: "GET", headers: request.headers }));
 }
 
-export async function requireMcpOauthAdmin(request: Request, env: Env): Promise<UserBackedAuthAdmin | null> {
+export async function resolveMcpOauthSession(request: Request, env: Env): Promise<UserSessionResult | null> {
   try {
-    return (await resolveUserSessionFromRequest(env.DB, request, env)).staff ?? null;
+    return await resolveUserSessionFromRequest(env.DB, request, env);
   } catch (error) {
     if (error instanceof AppError && (error.status === 401 || error.status === 403)) return null;
     throw error;
@@ -196,20 +201,10 @@ export async function describeMcpAuthorization(
   request: Request,
   env: McpOAuthEnv,
   returnTo: string,
-): Promise<{
-  authenticated: boolean;
-  authorized: boolean;
-  returnTo: string;
-  clientId: string;
-  clientName: string;
-  requestedScopes: AuthScope[];
-  grantedScopes: AuthScope[];
-  userEmail: string | null;
-  staffEmail: string | null;
-}> {
+): Promise<z.infer<typeof mcpOauthContextSchema>> {
   const authRequest = await parseOauthRequestFromReturnTo(request, env.OAUTH_PROVIDER, returnTo);
   const clientInfo = await env.OAUTH_PROVIDER.lookupClient(authRequest.clientId);
-  const session = await resolveUserSessionFromRequest(env.DB, request, env).catch(() => null);
+  const session = await resolveMcpOauthSession(request, env);
   const admin = session?.staff ?? null;
   const requestedScopes = normalizeMcpOauthScopes(authRequest.scope);
   const grantedScopes = admin ? grantedMcpOauthScopes(admin, requestedScopes) : [];
@@ -239,11 +234,19 @@ export async function resolveMcpExternalToken({
   try {
     const admin = await requireAdminFromRequest(env.DB as Env["DB"], authRequest, env as Env);
     const transport = getCachedAdminAuthTransport(authRequest) ?? "bearer";
+    const session = admin.identityType === "user" ? await resolveMcpOauthSession(authRequest, env as Env) : null;
+    if (admin.identityType === "user" && !session?.staff) return null;
     return {
-      props: buildMcpOauthProps(admin, normalizeMcpOauthScopes(admin.scopes ?? []), transport),
+      props: buildMcpOauthProps(
+        admin,
+        normalizeMcpOauthScopes(admin.scopes ?? []),
+        transport,
+        session?.staffIdleExpiresAt,
+      ),
     };
-  } catch {
-    return null;
+  } catch (error) {
+    if (error instanceof AppError && (error.status === 401 || error.status === 403)) return null;
+    throw error;
   }
 }
 

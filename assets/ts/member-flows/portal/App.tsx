@@ -82,16 +82,6 @@ export function App() {
   const [verifying, setVerifying] = useState(() => Boolean(portalMagicLinkToken(window.location.hash)));
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
-  const [reauthenticationRefusedFor, setReauthenticationRefusedFor] = useState<string | null>(null);
-  const [checkingReauthentication, setCheckingReauthentication] = useState(false);
-  useEffect(() => {
-    if (portalPath === "/home" || reauthenticationRefusedFor !== portalSession.value?.sessionId)
-      setReauthenticationRefusedFor(null);
-  }, [portalPath, portalSession.value?.sessionId, reauthenticationRefusedFor]);
-
-  function checkRenewedStaff(session: PortalSession): void {
-    setReauthenticationRefusedFor(!session.staff && !session.staffReauthenticationRequired ? session.sessionId : null);
-  }
 
   async function loadPortalSession(isCurrent: () => boolean = () => true): Promise<boolean> {
     if (!isCurrent()) return portalSession.value !== null;
@@ -142,16 +132,6 @@ export function App() {
     return portalSession.value !== null;
   }
 
-  async function refreshReauthentication(): Promise<void> {
-    setCheckingReauthentication(true);
-    try {
-      await loadPortalSession();
-      if (portalSession.value) checkRenewedStaff(portalSession.value);
-    } finally {
-      setCheckingReauthentication(false);
-    }
-  }
-
   useSessionExpiry();
   useSessionActivity();
 
@@ -175,16 +155,11 @@ export function App() {
         return;
       }
       const existingSession = portalSession.value;
-      const restoringStaff = Boolean(
-        existingSession &&
-        (existingSession.staffReauthenticationRequired || existingSession.sessionId === reauthenticationRefusedFor),
-      );
       const userToken = magicLinkToken;
       if (userToken) {
         try {
           const session = await verifyMagicLink(userToken, () => !cancelled);
           if (!session || cancelled) return;
-          if (restoringStaff) checkRenewedStaff(session);
           // Recorded before the redirect below rewrites the hash: after that
           // there is nothing left on the page saying this session began with a
           // link rather than with a passkey.
@@ -315,46 +290,6 @@ export function App() {
     );
 
   if (isAuthed.value) {
-    const reauthenticationRefused = reauthenticationRefusedFor === portalSession.value?.sessionId;
-    if (
-      (checkingReauthentication || portalSession.value?.staffReauthenticationRequired || reauthenticationRefused) &&
-      portalPath !== "/home"
-    ) {
-      return (
-        <Login
-          key={`reauthentication:${magicLinkToken ?? ""}`}
-          reauthentication
-          busy={checkingReauthentication}
-          notice={
-            <>
-              {sessionNotice}
-              {reauthenticationRefused && (
-                <Alert tone="info" title="Administrator access unavailable">
-                  This account does not currently have administrator access. Continue to Home to use your remaining
-                  portal access.
-                </Alert>
-              )}
-              {verifyError && (
-                <Alert tone="danger" title="Verification failed">
-                  {verifyError}
-                </Alert>
-              )}
-            </>
-          }
-          onAuthenticationFailed={async (error) => {
-            setVerifyError(error instanceof Error ? error.message : "Verification failed. Please try again.");
-            await refreshReauthentication();
-          }}
-          onSignedIn={async () => {
-            setVerifyError(null);
-            const returnPath = portalMagicLinkReturnPath(window.location.hash);
-            await refreshReauthentication();
-            if (returnPath && portalSession.value?.staff && !portalSession.value.staffReauthenticationRequired)
-              history.replaceState({}, "", `/portal/#${returnPath}`);
-          }}
-        />
-      );
-    }
     const meetingDestination = meetingEntryReturnUrl(window.location.hash);
     if (meetingDestination) return <MeetingEntryReturn destination={meetingDestination} />;
     return (

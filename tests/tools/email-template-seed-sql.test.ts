@@ -19,6 +19,7 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
   "donation_payment_failed",
   "donation_thank_you",
   "email_layout",
+  "membership-workflow-review-digest",
   "msg_attendee_inperson_check_plans",
   "msg_attendee_session_favorites",
   "msg_attendee_session_reminder",
@@ -28,6 +29,8 @@ const EXPECTED_BASELINE_TEMPLATE_KEYS = [
   "msg_message_only",
   "partial_about_pkic",
   "partial_donation_request",
+  "partial_membership_review_details",
+  "partial_membership_review_summary",
   "partial_reg_details",
   "partial_sponsors_block",
   "presentation_upload_reminder",
@@ -217,7 +220,10 @@ describe("buildTemplateSqlStatements", () => {
     expect(rows.map((row) => row.template_key)).toEqual(
       expect.arrayContaining([
         "email_layout",
+        "membership-workflow-review-digest",
         "partial_about_pkic",
+        "partial_membership_review_details",
+        "partial_membership_review_summary",
         "partial_reg_details",
         "partial_sponsors_block",
         "partial_donation_request",

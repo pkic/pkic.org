@@ -40,8 +40,6 @@ const userCapacityFields = {
   idleExpiresAt: utcInstantSchema,
   identity: userIdentitySchema,
   staff: publicStaffCapacitySchema.optional(),
-  /** The identity is still staff-eligible, but its shorter-lived elevation has ended. */
-  staffReauthenticationRequired: z.boolean().default(false),
   member: authMemberSchema.optional(),
   sponsors: z.array(sponsorCapacitySchema).default([]),
   eventParticipation: z.boolean().optional(),
