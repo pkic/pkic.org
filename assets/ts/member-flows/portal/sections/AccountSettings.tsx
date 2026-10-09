@@ -1,7 +1,6 @@
-/** Member account email, access summary, acting capacity, passkeys, and notifications. */
+/** Member account email, access summary, passkeys, and notifications; the acting identity is switched from the account menu. */
 import { useEffect, useState } from "preact/hooks";
 import { Link } from "wouter";
-import { ActingIdentitySwitcher } from "./ActingIdentitySwitcher";
 import { PasskeySettings } from "../../../components/passkey-settings";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { Spinner } from "../../../components/Spinner";
@@ -183,10 +182,6 @@ export function AccountSettings() {
         </Panel>
 
         {session && <AccessSummaryCard session={session} />}
-        {/* Which capacity the portal is acting as is a setting on this
-            session, so it sits beside the list of capacities rather than on
-            the reader's own record, which states facts about a person. */}
-        {profile.value && <ActingIdentitySwitcher profile={profile.value} />}
         {hasAccountSecurityCapacity && <PasskeySettings toastTargetId="portal-toast-area" />}
         {hasMemberCapacity && <NotificationPreferencesCard />}
       </div>

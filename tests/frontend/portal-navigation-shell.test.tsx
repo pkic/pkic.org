@@ -3,6 +3,9 @@ import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PortalNavigationShell } from "../../assets/ts/member-flows/portal/shell/PortalNavigationShell";
 import { portalSessionFixture } from "../helpers/portal-session";
+import { myActiveIdentitySwitchSchema } from "../../assets/shared/schemas/me";
+import { rememberedActingIdentityId } from "../../assets/ts/member-flows/portal/acting-identity";
+import { memoryStorage } from "./helpers/browser-storage";
 
 vi.mock("wouter", () => ({
   Link: ({ children, href, ...props }: JSX.HTMLAttributes<HTMLAnchorElement> & { href: string }) => (
@@ -207,6 +210,77 @@ describe("portal navigation shell", () => {
     expect(entries).toEqual(["Architecture", "Coordination"]);
     // The menu navigates; role and permission details belong to the account view.
     expect(groupsList.querySelector(".portal-sidebar-group-role")).toBeNull();
+  });
+
+  it("names the acting identity in the account menu and switches it from a submenu", async () => {
+    const puts: string[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        if (url.pathname === "/api/v1/users/current/identities/active" && init?.method === "PUT") {
+          puts.push(myActiveIdentitySwitchSchema.parse(JSON.parse(String(init.body))).identityId);
+          return json({ ...session, actingIdentityId: puts.at(-1) });
+        }
+        if (url.pathname === "/api/v1/users/current/organizations") return json(emptyPage("organizations"));
+        if (url.pathname === "/api/v1/users/current/groups") return json(emptyPage("groups"));
+        if (url.pathname === "/api/v1/groups") return json(emptyPage("groups"));
+        throw new Error(`Unexpected request: ${url.pathname}`);
+      }),
+    );
+    vi.stubGlobal("localStorage", memoryStorage());
+    const alpha = {
+      id: "00000000-0000-4000-8000-0000000000a1",
+      organizationId: "00000000-0000-4000-8000-0000000000b1",
+      organizationName: "Alpha Org",
+      jobTitle: "Delegate",
+    };
+    const individual = {
+      id: "00000000-0000-4000-8000-0000000000a2",
+      organizationId: null,
+      organizationName: null,
+      jobTitle: null,
+    };
+    const session = {
+      ...portalSessionFixture({ staff: true }),
+      actingIdentities: [alpha, individual],
+      actingIdentityId: alpha.id,
+    };
+    mountNavigation(session);
+    await settle();
+
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Account menu"]')!.click();
+    });
+    expect(container.querySelector(".pk-menu__heading")?.textContent).toBe("Acting as Alpha Org · Delegate");
+    const switchItem = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) =>
+      item.textContent?.includes("Switch identity"),
+    )!;
+    await act(async () => switchItem.click());
+    const choices = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitemradio"]')];
+    expect(
+      choices.map((choice) => [choice.textContent?.replace("✓", ""), choice.getAttribute("aria-checked")]),
+    ).toEqual([
+      ["Alpha Org · Delegate", "true"],
+      ["Individual", "false"],
+    ]);
+    await act(async () => choices[1].click());
+    await settle();
+    expect(puts).toEqual([individual.id]);
+    expect(rememberedActingIdentityId(session.identity.id)).toBe(individual.id);
+  });
+
+  it("offers no identity switch to a person with one identity", async () => {
+    mountNavigation(portalSessionFixture({ staff: true, member: true }));
+    await settle();
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>('button[aria-label="Account menu"]')!.click();
+    });
+    expect(container.querySelector(".pk-menu__heading")?.textContent).toBe("Acting as Individual");
+    expect(container.textContent).not.toContain("Switch identity");
   });
 
   it("lists applicant reminders as its own Settings page", async () => {

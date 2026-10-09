@@ -16,6 +16,7 @@ import {
 } from "../../assets/ts/components/event-badges/badge-print-artifacts";
 import { clearAuth, savePortalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
+import { memoryStorage } from "./helpers/browser-storage";
 
 const navigate = vi.fn();
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", navigate] }));
@@ -91,26 +92,9 @@ function path(input: RequestInfo | URL) {
   return new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, location.origin)
     .pathname;
 }
-function browserStorage(): Storage {
-  const values = new Map<string, string>();
-  return {
-    get length() {
-      return values.size;
-    },
-    clear: () => values.clear(),
-    getItem: (key) => values.get(key) ?? null,
-    key: (index) => [...values.keys()][index] ?? null,
-    removeItem: (key) => {
-      values.delete(key);
-    },
-    setItem: (key, value) => {
-      values.set(key, value);
-    },
-  };
-}
 beforeEach(() => {
-  vi.stubGlobal("localStorage", browserStorage());
-  vi.stubGlobal("sessionStorage", browserStorage());
+  vi.stubGlobal("localStorage", memoryStorage());
+  vi.stubGlobal("sessionStorage", memoryStorage());
   clearAuth();
   savePortalSession(portalSessionFixture({ member: true }));
   navigate.mockReset();

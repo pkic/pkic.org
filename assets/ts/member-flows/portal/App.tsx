@@ -53,6 +53,9 @@ import { meetingEntryReturnUrl } from "../../../shared/meeting-entry-navigation"
 import { MeetingEntryReturn } from "./shell/MeetingEntryReturn";
 import { useSessionExpiry } from "./use-session-expiry";
 import { useSessionActivity } from "./use-session-activity";
+import { applyRememberedActingIdentity } from "./acting-identity";
+import { ActingIdentitySwitcher } from "./shell/ActingIdentitySwitcher";
+import { sessionActingIdentityChoiceRequired } from "../../../shared/session-acting-identity";
 const PortalShell = lazy(() => import("./shell/PortalShell").then((module) => ({ default: module.PortalShell })));
 const loadOfflineScannerBootstrap = () => import("./sections/events/detail/scanner/OfflineScannerBootstrap");
 const OfflineScannerBootstrap = lazy(() =>
@@ -92,7 +95,9 @@ export function App() {
     try {
       checkedLocalSession = await readActiveUserSession();
       if (!isCurrent()) return portalSession.value !== null;
-      const session = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
+      const fetched = await getJson("/api/v1/auth/session", userAuthSessionResponseSchema);
+      if (!isCurrent()) return portalSession.value !== null;
+      const session = await applyRememberedActingIdentity(fetched);
       if (!isCurrent()) return portalSession.value !== null;
       const recorded = await recordCanonicalSession({
         sessionId: session.sessionId,
@@ -299,13 +304,25 @@ export function App() {
   if (isAuthed.value) {
     const meetingDestination = meetingEntryReturnUrl(window.location.hash);
     if (meetingDestination) return <MeetingEntryReturn destination={meetingDestination} />;
+    const signedIn = portalSession.value;
+    if (signedIn && sessionActingIdentityChoiceRequired(signedIn))
+      return (
+        <ActingIdentitySwitcher
+          session={signedIn}
+          onChosen={async () => {
+            await loadPortalSession();
+          }}
+        />
+      );
     return (
       <>
         {pendingNotice}
         {sessionNotice}
         <ScannerCodePreparation.Provider value={prepareOfflineScannerCode}>
           <Suspense fallback={<Login busy status="Opening your portal…" onSignedIn={() => {}} />}>
-            <PortalShell key={`${portalSession.value?.identity.id}:${portalSession.value?.member?.identityId ?? ""}`} />
+            <PortalShell
+              key={`${portalSession.value?.identity.id}:${portalSession.value?.actingIdentityId ?? ""}:${portalSession.value?.member?.identityId ?? ""}`}
+            />
           </Suspense>
         </ScannerCodePreparation.Provider>
         <ConfirmDialogHost />

@@ -7,6 +7,8 @@ import { completeSyntheticMembershipReview } from "./helpers/member-provisioning
  * the requested membership against the caller's own live eligibility, which is
  * the part worth proving in a browser: a context the caller does not hold must
  * be refused even though the request is well formed and the session is valid.
+ * Holding both, the person chooses one on arrival and switches from the
+ * account menu.
  * @covers account.7.9
  */
 import { expect, test, type Page } from "@playwright/test";
@@ -29,6 +31,22 @@ async function readProfile(page: Page): Promise<Profile> {
   });
   expect(result.status, JSON.stringify(result.body)).toBe(200);
   return result.body;
+}
+
+/** Switches the acting identity the way a person does: from the account menu, which reloads the portal. */
+async function switchIdentityFromMenu(page: Page, organizationName: string): Promise<void> {
+  await page.getByRole("button", { name: "Account menu" }).click();
+  await page.getByRole("menuitem", { name: "Switch identity" }).click();
+  const switched = page.waitForResponse(
+    (response) =>
+      response.url().endsWith("/api/v1/users/current/identities/active") && response.request().method() === "PUT",
+  );
+  await page.getByRole("menuitemradio", { name: new RegExp(organizationName) }).click();
+  expect((await switched).status()).toBe(200);
+  await expect(page.locator("#portal-root")).toBeVisible({ timeout: 15_000 });
+  await page.getByRole("button", { name: "Account menu" }).click();
+  await expect(page.getByText(`Acting as ${organizationName}`)).toBeVisible();
+  await page.keyboard.press("Escape");
 }
 
 /** Approves an application for `email`, creating a real member and user. */
@@ -76,10 +94,12 @@ test("a person representing two organizations can switch between both contexts",
   );
   expect(created.status, JSON.stringify(created.body)).toBe(201);
 
+  // Holding both, the person is asked which one to continue as on arrival.
   await page.context().clearCookies();
-  await signInToPortal(page, email);
+  await signInToPortal(page, email, { continueAs: firstOrganization });
 
   const profile = await readProfile(page);
+  expect(profile.organizationName).toBe(firstOrganization);
   const names = profile.activeIdentities.map((identity) => identity.organizationName);
   expect(names, JSON.stringify(profile.activeIdentities)).toContain(firstOrganization);
   expect(names).toContain(secondOrganization);
@@ -90,7 +110,7 @@ test("a person representing two organizations can switch between both contexts",
 
   // The identity-scoped fields live on the person's own record — the same
   // page anybody else's record is — and switching which identity the portal
-  // acts as is a session setting, so it lives in Account Settings. The walk
+  // acts as is a session setting, so it lives in the account menu. The walk
   // below moves between the two the way a member does.
   await openMyProfile(page);
   // The record opens with the member, not a page title: ProfileHeader names
@@ -113,14 +133,7 @@ test("a person representing two organizations can switch between both contexts",
     page.getByRole("button", { name: "Save changes" }).click(),
   ]);
 
-  await page.goto("/portal/#/account");
-  const targetCapacity = page.getByRole("listitem").filter({ hasText: target!.organizationName! });
-  const switched = page.waitForResponse(
-    (response) =>
-      response.url().endsWith("/api/v1/users/current/identities/active") && response.request().method() === "PUT",
-  );
-  await targetCapacity.getByRole("button", { name: "Switch" }).click();
-  expect((await switched).status()).toBe(200);
+  await switchIdentityFromMenu(page, target!.organizationName!);
 
   await openMyProfile(page);
   await openProfileEditor(page);
@@ -154,14 +167,7 @@ test("a person representing two organizations can switch between both contexts",
     links: ["https://example.test/second-capacity"],
   });
 
-  await page.goto("/portal/#/account");
-  const firstCapacity = page.getByRole("listitem").filter({ hasText: profile.organizationName! });
-  const switchedBack = page.waitForResponse(
-    (response) =>
-      response.url().endsWith("/api/v1/users/current/identities/active") && response.request().method() === "PUT",
-  );
-  await firstCapacity.getByRole("button", { name: "Switch" }).click();
-  expect((await switchedBack).status()).toBe(200);
+  await switchIdentityFromMenu(page, profile.organizationName!);
 
   await openMyProfile(page);
   await openProfileEditor(page);

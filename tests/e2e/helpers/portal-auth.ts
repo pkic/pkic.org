@@ -71,7 +71,7 @@ export async function openMyOrganization(page: Page, organizationName: string): 
 }
 
 /** Establishes a real portal session through the same mailbox capability used by users. */
-export async function signInToPortal(page: Page, email: string): Promise<void> {
+export async function signInToPortal(page: Page, email: string, options: { continueAs?: string } = {}): Promise<void> {
   // Model independent users arriving from independent clients. The complete
   // serial suite otherwise funnels every sign-in through Wrangler's one local
   // address and exhausts the production-equivalent per-IP limiter.
@@ -94,6 +94,13 @@ export async function signInToPortal(page: Page, email: string): Promise<void> {
   // The login heading remains visible while the hash verifier redeems the
   // capability, so waiting for that text would return before a session exists.
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toHaveCount(0, { timeout: 15_000 });
+  // A person holding several identities is asked which one to continue as.
+  const chooser = page.getByRole("heading", { name: "Choose an identity" });
+  await expect(page.locator("#portal-root").or(chooser)).toBeVisible({ timeout: 15_000 });
+  if (await chooser.isVisible()) {
+    const choices = page.getByRole("button", { name: /^Continue as / });
+    await (options.continueAs ? choices.filter({ hasText: options.continueAs }) : choices.first()).click();
+  }
   await expect(page.locator("#portal-root")).toBeVisible({ timeout: 15_000 });
   await expect(page).toHaveURL(/\/portal\/#\/(?!verify(?:$|[/?]))[^?#]+/, { timeout: 15_000 });
 }

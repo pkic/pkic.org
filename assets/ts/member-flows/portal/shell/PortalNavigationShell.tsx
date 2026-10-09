@@ -19,6 +19,7 @@ import {
   type PortalNavItem,
 } from "./portal-navigation";
 import { SidebarGroups } from "./SidebarGroups";
+import { useActingIdentityMenu } from "./ActingIdentitySwitcher";
 import { AppTabBar } from "./AppTabBar";
 import "./PortalAppChrome.css";
 import { portalAppTabForLocation, portalAppTabs } from "./portal-app-tabs";
@@ -113,6 +114,7 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
     [Boolean(session?.member)],
   );
   const [signOutError, setSignOutError] = useState<string | null>(null);
+  const actingIdentityMenu = useActingIdentityMenu(session);
   const closeNavigation = () => setNavigationOpen(false);
 
   // Attach once and test the state inside, rather than attaching only while
@@ -224,9 +226,9 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
           );
         })}
         <div class="portal-sidebar-footer">
-          {signOutError && (
+          {(signOutError ?? actingIdentityMenu.error) && (
             <div class="pk">
-              <Alert tone="danger">{signOutError}</Alert>
+              <Alert tone="danger">{signOutError ?? actingIdentityMenu.error}</Alert>
             </div>
           )}
           {/* The trigger is a person, not an icon, so the menu renders it
@@ -234,6 +236,7 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
           <Menu
             label="Account menu"
             variant="plain"
+            heading={actingIdentityMenu.heading}
             items={[
               /*
                * "My profile" is the reader's own user record, at the same
@@ -261,6 +264,7 @@ export function PortalNavigationShell({ children, displayName, headshotUrl, sess
                   navigate(`/organizations/${encodeURIComponent(organization.organizationId)}`);
                 },
               })),
+              ...actingIdentityMenu.items,
               ...(portalSectionEnabled(session, "account")
                 ? [
                     {

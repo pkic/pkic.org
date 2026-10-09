@@ -61,6 +61,9 @@ vi.mock("../../assets/ts/member-flows/portal/sections/events/detail/scanner/Offl
   ),
 }));
 import { App } from "../../assets/ts/member-flows/portal/App";
+import { rememberedActingIdentityId } from "../../assets/ts/member-flows/portal/acting-identity";
+import { myActiveIdentitySwitchSchema } from "../../assets/shared/schemas/me";
+import { memoryStorage } from "./helpers/browser-storage";
 import { portalSessionFixture } from "../helpers/portal-session";
 import { userAuthVerifySchema, userAuthRequestSchema } from "../../assets/shared/schemas/user-auth";
 import { scannerTransportUnavailable } from "../../assets/ts/member-flows/portal/sections/events/detail/scanner/scanner-offline-context";
@@ -359,4 +362,93 @@ it("does not let an initial pending session response overwrite a new same-tab li
     operatorUserId: oldSession.identity.id,
   });
   expect(window.location.hash).toBe("#/groups/synthetic");
+});
+
+const ALPHA_IDENTITY = {
+  id: "00000000-0000-4000-8000-0000000000a1",
+  organizationId: "00000000-0000-4000-8000-0000000000b1",
+  organizationName: "Alpha Org",
+  jobTitle: "Delegate",
+};
+const INDIVIDUAL_IDENTITY = {
+  id: "00000000-0000-4000-8000-0000000000a2",
+  organizationId: null,
+  organizationName: null,
+  jobTitle: null,
+};
+
+/** A person holding two identities; the server answers the session and the active-identity endpoint. */
+function serveSeveralIdentities() {
+  const base = {
+    ...portalSessionFixture({ pendingIdentityCount: 1 }),
+    actingIdentities: [ALPHA_IDENTITY, INDIVIDUAL_IDENTITY],
+  };
+  const state = { session: { ...base, actingIdentityId: null as string | null }, selections: [] as string[] };
+  fetchMock.mockImplementation(async (input: RequestInfo | URL, init?: RequestInit) => {
+    if (String(input).endsWith("/api/v1/users/current/identities/active") && init?.method === "PUT") {
+      const { identityId } = myActiveIdentitySwitchSchema.parse(JSON.parse(String(init.body)));
+      state.selections.push(identityId);
+      state.session = { ...base, actingIdentityId: identityId };
+      return Response.json(state.session);
+    }
+    return Response.json(state.session);
+  });
+  return state;
+}
+
+/** This device's storage, empty: nothing remembered yet. */
+function clearRememberedIdentity(): void {
+  vi.stubGlobal("localStorage", memoryStorage());
+}
+
+it("asks a person with several identities which one to continue as, then remembers it on this device", async () => {
+  clearRememberedIdentity();
+  const server = serveSeveralIdentities();
+  await mount();
+  await vi.waitFor(() => expect(card().textContent).toContain("Choose an identity"));
+  const choices = [...card().querySelectorAll("button")].map((button) => button.textContent);
+  expect(choices).toEqual(["Continue as Alpha Org · Delegate", "Continue as Individual"]);
+  expect(mocks.renderShell).not.toHaveBeenCalled();
+
+  await act(async () => {
+    [...card().querySelectorAll("button")].find((button) => button.textContent === "Continue as Individual")!.click();
+  });
+  await vi.waitFor(() => expect(host.textContent).toContain("Authenticated portal content"));
+  expect(server.selections).toEqual([INDIVIDUAL_IDENTITY.id]);
+  expect(portalSession.value?.actingIdentityId).toBe(INDIVIDUAL_IDENTITY.id);
+  expect(rememberedActingIdentityId(portalSession.value!.identity.id)).toBe(INDIVIDUAL_IDENTITY.id);
+});
+
+it("continues silently as the identity remembered on this device while it is still held", async () => {
+  clearRememberedIdentity();
+  const server = serveSeveralIdentities();
+  await mount();
+  await vi.waitFor(() => expect(card().textContent).toContain("Choose an identity"));
+  await act(async () => {
+    [...card().querySelectorAll("button")].find((button) => button.textContent?.includes("Alpha Org"))!.click();
+  });
+  await vi.waitFor(() => expect(host.textContent).toContain("Authenticated portal content"));
+
+  // The next sign-in on this device starts a session that has chosen nothing.
+  await act(() => render(null, host));
+  clearAuth();
+  server.session = { ...server.session, actingIdentityId: null };
+  server.selections.length = 0;
+  mocks.renderShell.mockReset();
+  await mount();
+  await vi.waitFor(() => expect(host.textContent).toContain("Authenticated portal content"));
+  expect(host.textContent).not.toContain("Choose an identity");
+  expect(server.selections).toEqual([ALPHA_IDENTITY.id]);
+});
+
+it("asks again when the identity remembered on this device is no longer held", async () => {
+  clearRememberedIdentity();
+  localStorage.setItem(
+    `portal-acting-identity:${portalSessionFixture({}).identity.id}`,
+    "00000000-0000-4000-8000-0000000000ff",
+  );
+  const server = serveSeveralIdentities();
+  await mount();
+  await vi.waitFor(() => expect(card().textContent).toContain("Choose an identity"));
+  expect(server.selections).toEqual([]);
 });
