@@ -2,9 +2,9 @@
 /**
  * The day-by-day state of a partly waitlisted registration.
  *
- * The version this replaces said "confirmed" and "pending" with three badge
- * fills — green, amber, blue — and nothing else, so the difference between a
- * confirmed day and a pending one was carried entirely by hue.
+ * Days are grouped by what they amount to, so identical days read once, and a
+ * waiting-list or offered day is its own row that says its state in words —
+ * the tint repeats the words, it never carries them alone.
  */
 import { render } from "preact";
 import { act } from "preact/test-utils";
@@ -54,70 +54,60 @@ describe("RegistrationDayStatusSummary", () => {
     expect(root.innerHTML).toBe("");
   });
 
-  it("announces confirmed days as a status without a pending-days warning", () => {
-    const root = mount([{ dayDate: "2026-09-01", attendanceType: "in_person", label: "Day one" }]);
-
-    const status = root.querySelector('[role="status"]');
-    expect(status).not.toBeNull();
-    expect(root.textContent).not.toContain("pending days");
-    expect(root.querySelector(".pk-alert__title")?.textContent).toBe("What is confirmed right now");
+  it("states identical confirmed days once, as all the days", () => {
+    const root = mount([
+      { dayDate: "2026-09-01", attendanceType: "in_person", label: "Day one" },
+      { dayDate: "2026-09-02", attendanceType: "in_person", label: "Day two" },
+      { dayDate: "2026-09-03", attendanceType: "in_person", label: null },
+    ]);
+    const rows = [...root.querySelectorAll<HTMLElement>(".pk-day-status__row")];
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.textContent).toContain("In-person");
+    expect(rows[0]!.textContent).toContain("All 3 days");
   });
 
-  it("announces pending days as a warning with recovery guidance", () => {
-    const root = mount(
-      [{ dayDate: "2026-09-01", attendanceType: "in_person", label: "Day one" }],
-      [{ dayDate: "2026-09-01", status: "waiting" }],
-    );
-
-    expect(root.querySelector('[role="alert"]')).not.toBeNull();
-    expect(root.textContent).toContain("In-person still pending");
-    expect(root.textContent).toContain("switch days");
-  });
-
-  it("pairs each day with its state as a term and a value", () => {
+  it("splits only where days differ, with the offered seat first and the waiting list in words", () => {
     const root = mount(
       [
-        { dayDate: "2026-09-01", attendanceType: "in_person", label: "Day one" },
-        { dayDate: "2026-09-02", attendanceType: "in_person", label: "Day two" },
-        { dayDate: "2026-09-03", attendanceType: "virtual", label: null },
-      ],
-      [
-        { dayDate: "2026-09-02", status: "waiting" },
-        { dayDate: "2026-09-04", status: "offered" },
-      ],
-    );
-
-    const list = root.querySelector("dl.pk-datalist");
-    expect(list).not.toBeNull();
-    const terms = [...root.querySelectorAll("dt")].map((term) => term.textContent);
-    // A day with no label falls back to its date rather than rendering blank.
-    expect(terms).toEqual(["Day one", "Day two", "2026-09-03"]);
-  });
-
-  it("says what each day's state is, so the badge tone is never the only signal", () => {
-    const root = mount(
-      [
-        { dayDate: "2026-09-01", attendanceType: "in_person", label: "Day one" },
-        { dayDate: "2026-09-02", attendanceType: "in_person", label: "Day two" },
-        { dayDate: "2026-09-03", attendanceType: "in_person", label: "Day three" },
-        { dayDate: "2026-09-04", attendanceType: "on_demand", label: "Day four" },
+        { dayDate: "2026-09-01", attendanceType: "in_person", label: null },
+        { dayDate: "2026-09-02", attendanceType: "in_person", label: null },
+        { dayDate: "2026-09-03", attendanceType: "in_person", label: null },
+        { dayDate: "2026-09-04", attendanceType: "on_demand", label: null },
       ],
       [
         { dayDate: "2026-09-02", status: "waiting" },
         { dayDate: "2026-09-03", status: "offered" },
       ],
     );
-
-    const values = [...root.querySelectorAll("dd .pk-badge")].map((badge) => ({
-      text: badge.textContent,
-      tone: [...badge.classList].find((name) => name.startsWith("pk-badge--") && name !== "pk-badge--dot"),
-    }));
-    expect(values).toEqual([
-      { text: "In-person confirmed", tone: "pk-badge--ok" },
-      { text: "In-person still pending", tone: "pk-badge--warn" },
-      { text: "Spot available — review in manage page", tone: "pk-badge--info" },
-      { text: "On-demand confirmed", tone: "pk-badge--ok" },
+    const rows = [...root.querySelectorAll<HTMLElement>(".pk-day-status__row")];
+    expect(rows.map((row) => row.dataset.kind)).toEqual(["offered", "waiting", "confirmed", "confirmed"]);
+    expect(rows[0]!.textContent).toContain("An in-person seat is yours to claim");
+    expect(rows[1]!.textContent).toContain("On the waiting list for an in-person seat");
+    expect(rows[1]!.textContent).toContain("You stay registered");
+    expect(rows.map((row) => row.querySelector(".pk-day-status__title")?.textContent).slice(2)).toEqual([
+      "In-person",
+      "On-demand",
     ]);
+    // Without a claim handler the screen only states the offer.
+    expect(root.querySelector("button")).toBeNull();
+  });
+
+  it("offers the claim where the screen can act on it", async () => {
+    container = document.createElement("div");
+    document.body.append(container);
+    const claimed: string[][] = [];
+    await act(() =>
+      render(
+        <RegistrationDayStatusSummary
+          dayAttendance={[{ dayDate: "2026-09-01", attendanceType: "in_person", label: null }]}
+          dayWaitlist={[{ dayDate: "2026-09-01", status: "offered" }]}
+          onClaim={(days) => claimed.push(days)}
+        />,
+        container!,
+      ),
+    );
+    await act(async () => container!.querySelector("button")!.click());
+    expect(claimed).toEqual([["2026-09-01"]]);
   });
 
   it("writes no Bootstrap class names", () => {

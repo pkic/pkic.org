@@ -4,7 +4,6 @@
  * since there is no stored "not attending" type.
  */
 import type { RegistrationManageReadResponse } from "../../../shared/schemas/registration";
-import { attendanceTypeLabel } from "../../shared/attendance";
 
 export const IN_PERSON = "in_person";
 
@@ -38,20 +37,4 @@ export function registrationDays(data: RegistrationManageReadResponse): Registra
               : { kind: "absent" };
       return { dayDate: day.dayDate, label: day.label, state };
     });
-}
-
-/** The words for a day's state, without relying on the badge colour. */
-export function dayStateLabel(state: DayState): string {
-  switch (state.kind) {
-    case "attending":
-      return attendanceTypeLabel(state.attendanceType);
-    case "waiting":
-      return state.attendanceType
-        ? `${attendanceTypeLabel(state.attendanceType)} · waiting for an in-person seat`
-        : "Waiting for an in-person seat";
-    case "offered":
-      return "An in-person seat is yours to claim";
-    case "absent":
-      return "Not attending";
-  }
 }

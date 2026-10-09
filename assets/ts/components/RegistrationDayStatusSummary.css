@@ -1,0 +1,69 @@
+/*
+ * The registration day summary: one row per group of days, an icon tile, what
+ * the days amount to and which days. Waiting and offered rows carry a tint and
+ * a left rule so the state reads before the words do.
+ */
+@layer components {
+  .pk-day-status {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius-card);
+    background: var(--pk-surface);
+    overflow: hidden;
+  }
+
+  .pk-day-status__row {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr) auto;
+    align-items: center;
+    gap: var(--pk-3);
+    padding: var(--pk-3);
+    border-left: 4px solid transparent;
+  }
+
+  .pk-day-status__row + .pk-day-status__row {
+    border-top: 1px solid var(--pk-line);
+  }
+
+  .pk-day-status__row[data-kind="waiting"] {
+    border-left-color: var(--pk-warn);
+    background: var(--pk-warn-soft);
+  }
+
+  .pk-day-status__row[data-kind="offered"] {
+    border-left-color: var(--pk-info);
+    background: var(--pk-info-soft);
+  }
+
+  .pk-day-status__icon {
+    display: grid;
+    place-items: center;
+    width: 2.5rem;
+    height: 2.5rem;
+    border-radius: var(--pk-radius);
+    background: var(--pk-accent-soft);
+    color: var(--pk-accent-ink);
+  }
+
+  .pk-day-status__row[data-kind="waiting"] .pk-day-status__icon {
+    background: var(--pk-surface);
+    color: var(--pk-warn-ink);
+  }
+
+  .pk-day-status__body {
+    display: grid;
+    gap: var(--pk-1);
+    min-width: 0;
+  }
+
+  .pk-day-status__title {
+    font-weight: 600;
+  }
+
+  .pk-day-status__days {
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+}

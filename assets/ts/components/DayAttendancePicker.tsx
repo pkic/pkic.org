@@ -1,6 +1,6 @@
 import type { ComponentType, JSX } from "preact";
 import type { EventFormsResponse } from "../shared/types";
-import { IconMapPin, IconVirtual, IconOnDemand, IconCalendarCheck } from "./icons";
+import { IconMapPin, IconVirtual, IconOnDemand, IconCalendarCheck, IconRemove } from "./icons";
 
 type EventDay = EventFormsResponse["eventDays"][number];
 
@@ -28,11 +28,26 @@ const OPTION_CONFIG: Record<string, OptionConfig> = {
   },
 };
 
+/** The value a controlled picker reports for "not attending this day". */
+export const NOT_ATTENDING = "";
+
+const NOT_ATTENDING_CONFIG: OptionConfig = {
+  Icon: IconRemove,
+  themeClass: "event-flow-attendance-card--default",
+  description: "Free this day for someone else",
+};
+
 const FALLBACK_CONFIG: OptionConfig = {
   Icon: IconCalendarCheck,
   themeClass: "event-flow-attendance-card--default",
   description: "Select your attendance preference",
 };
+
+/** The icon a way of attending is shown with, wherever attendance is shown. */
+export function AttendanceIcon({ type }: { type: string | null }) {
+  const { Icon } = type === null ? NOT_ATTENDING_CONFIG : (OPTION_CONFIG[type] ?? FALLBACK_CONFIG);
+  return <Icon width="18" height="18" aria-hidden="true" />;
+}
 
 function labelForDay(day: EventDay): string {
   return day.label?.trim() || day.dayDate;
@@ -43,12 +58,16 @@ interface AttendanceOptionProps {
   option: EventDay["attendanceOptions"][number];
   index: number;
   lowCapacityThreshold: number;
+  /** Controlled use: whether this option is the day's current choice, and how to choose it. */
+  checked?: boolean;
+  onSelect?: () => void;
 }
 
-function AttendanceOption({ day, option, index, lowCapacityThreshold }: AttendanceOptionProps) {
-  const config = OPTION_CONFIG[option.value] ?? FALLBACK_CONFIG;
+function AttendanceOption({ day, option, index, lowCapacityThreshold, checked, onSelect }: AttendanceOptionProps) {
+  const config =
+    option.value === NOT_ATTENDING ? NOT_ATTENDING_CONFIG : (OPTION_CONFIG[option.value] ?? FALLBACK_CONFIG);
   const { Icon } = config;
-  const inputId = `dayAttendance-${day.dayDate}-${option.value}`;
+  const inputId = `dayAttendance-${day.dayDate}-${option.value || "none"}`;
   const showBadge =
     lowCapacityThreshold > 0 &&
     option.spotsRemainingPercent != null &&
@@ -62,7 +81,8 @@ function AttendanceOption({ day, option, index, lowCapacityThreshold }: Attendan
         name={`dayAttendance.${day.dayDate}`}
         value={option.value}
         id={inputId}
-        required={index === 0}
+        required={!onSelect && index === 0}
+        {...(onSelect ? { checked: Boolean(checked), onChange: onSelect } : {})}
       />
       <label class={`event-flow-attendance-card ${config.themeClass}`} htmlFor={inputId}>
         <span class="event-flow-attendance-icon">
@@ -86,9 +106,24 @@ function AttendanceOption({ day, option, index, lowCapacityThreshold }: Attendan
 interface DayAttendancePickerProps {
   days: EventFormsResponse["eventDays"];
   lowCapacityThreshold?: number;
+  /**
+   * Controlled use, for changing an existing registration: each day's current
+   * choice (`NOT_ATTENDING` for none) and how to change it. Without these the
+   * radios are a plain form field set read on submit, as in the public form.
+   */
+  value?: Readonly<Record<string, string>>;
+  onChange?: (dayDate: string, attendanceType: string) => void;
+  /** Adds a "Not attending" choice per day; a registration may drop a day. */
+  allowNotAttending?: boolean;
 }
 
-export function DayAttendancePicker({ days, lowCapacityThreshold = 0 }: DayAttendancePickerProps) {
+export function DayAttendancePicker({
+  days,
+  lowCapacityThreshold = 0,
+  value,
+  onChange,
+  allowNotAttending = false,
+}: DayAttendancePickerProps) {
   if (days.length === 0) {
     return <p class="pk-small">No per-day attendance required for this event.</p>;
   }
@@ -110,13 +145,22 @@ export function DayAttendancePicker({ days, lowCapacityThreshold = 0 }: DayAtten
         <fieldset key={day.dayDate} class="pk-fieldset event-flow-day">
           <legend class="event-flow-day-label">{labelForDay(day)}</legend>
           <div class="event-flow-attendance-options">
-            {day.attendanceOptions.map((option, i) => (
+            {[
+              ...day.attendanceOptions,
+              ...(allowNotAttending ? [{ value: NOT_ATTENDING, label: "Not attending" }] : []),
+            ].map((option, i) => (
               <AttendanceOption
                 key={option.value}
                 day={day}
                 option={option}
                 index={i}
                 lowCapacityThreshold={lowCapacityThreshold}
+                {...(onChange
+                  ? {
+                      checked: (value?.[day.dayDate] ?? NOT_ATTENDING) === option.value,
+                      onSelect: () => onChange(day.dayDate, option.value),
+                    }
+                  : {})}
               />
             ))}
           </div>

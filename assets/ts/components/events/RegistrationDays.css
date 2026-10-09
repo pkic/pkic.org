@@ -1,7 +1,4 @@
-/*
- * Registration days: one list with a calendar tile per day, the way the
- * session dialog dates a session, and segmented choices when changing them.
- */
+/* The registration's days section: the shared day summary and its commands. */
 @layer components {
   .pk-reg-days {
     display: grid;
@@ -13,128 +10,9 @@
     font-size: var(--pk-text-md);
   }
 
-  .pk-reg-days__list {
-    margin: 0;
-    padding: 0;
-    list-style: none;
-    border: 1px solid var(--pk-line);
-    border-radius: var(--pk-radius-card);
-    background: var(--pk-surface);
-  }
-
-  .pk-reg-day {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr) auto;
-    align-items: center;
-    gap: var(--pk-3);
-    padding: var(--pk-3);
-  }
-
-  .pk-reg-day + .pk-reg-day {
-    border-top: 1px solid var(--pk-line);
-  }
-
-  .pk-reg-day[data-state="offered"] {
-    background: var(--pk-info-soft);
-  }
-
-  .pk-reg-day__date {
-    display: grid;
-    justify-items: center;
-    min-width: 3.25rem;
-    padding: var(--pk-1) var(--pk-2);
-    border-radius: var(--pk-radius);
-    background: var(--pk-accent-soft);
-    color: var(--pk-accent-ink);
-    line-height: 1.1;
-  }
-
-  .pk-reg-day[data-state="absent"] .pk-reg-day__date {
-    background: var(--pk-surface-sunk);
-    color: var(--pk-ink-muted);
-  }
-
-  .pk-reg-day__weekday,
-  .pk-reg-day__month {
-    font-family: var(--pk-font-mono);
-    font-size: var(--pk-text-xs);
-    letter-spacing: var(--pk-tracking-label);
-    text-transform: uppercase;
-  }
-
-  .pk-reg-day__number {
-    font-size: var(--pk-text-lg);
-    font-weight: 600;
-  }
-
-  .pk-reg-day__body {
-    display: grid;
-    gap: var(--pk-1);
-    min-width: 0;
-  }
-
-  .pk-reg-day__mode {
-    display: inline-flex;
-    align-items: center;
-    gap: var(--pk-2);
-    font-weight: 600;
-  }
-
-  .pk-reg-day[data-state="absent"] .pk-reg-day__mode {
-    color: var(--pk-ink-muted);
-    font-weight: 400;
-  }
-
   .pk-reg-days__form {
     display: grid;
     gap: var(--pk-3);
-  }
-
-  .pk-reg-days__choice {
-    display: grid;
-    grid-template-columns: auto minmax(0, 1fr);
-    align-items: center;
-    gap: var(--pk-3);
-    margin: 0;
-    padding: var(--pk-3);
-    border: 1px solid var(--pk-line);
-    border-radius: var(--pk-radius-card);
-  }
-
-  .pk-reg-days__legend {
-    float: left;
-    padding: 0;
-  }
-
-  /* The day's choices as one segmented row: a selected segment is filled. */
-  .pk-reg-days__segments {
-    display: flex;
-    flex-wrap: wrap;
-    gap: var(--pk-2);
-  }
-
-  .pk-reg-days__segment {
-    padding: var(--pk-1) var(--pk-3);
-    border: 1px solid var(--pk-line-strong);
-    border-radius: var(--pk-radius-pill);
-    cursor: pointer;
-  }
-
-  .pk-reg-days__segment:has(:checked) {
-    border-color: var(--pk-accent);
-    background: var(--pk-accent-soft);
-    color: var(--pk-accent-ink);
-  }
-
-  .pk-reg-days__segment:has(:focus-visible) {
-    outline: 2px solid var(--pk-accent);
-    outline-offset: 2px;
-  }
-
-  .pk-reg-days__segment .pk-check__input {
-    position: absolute;
-    opacity: 0;
-    pointer-events: none;
   }
 
   .pk-reg-days__form > p {

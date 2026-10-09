@@ -53,9 +53,8 @@ export function ParticipantRegistrationForm({
     organizationName: data.user.organization_name ?? "",
     jobTitle: data.user.job_title ?? "",
   });
-  const [days, setDays] = useState(
-    data.dayAttendance.map(({ dayDate, attendanceType }) => ({ dayDate, attendanceType })),
-  );
+  // Days change in the registration's own days section; this form sends them as they are.
+  const days = data.dayAttendance.map(({ dayDate, attendanceType }) => ({ dayDate, attendanceType }));
   const [attendanceType, setAttendanceType] = useState(data.registration.attendance_type);
   const [answers, setAnswers] = useState(data.registration.custom_answers ?? {});
   const [busy, setBusy] = useState(false);
@@ -144,32 +143,6 @@ export function ParticipantRegistrationForm({
             )}
           </Field>
         )}
-        {data.eventDays.map((day) => (
-          <Field key={day.dayDate} label={day.label ?? day.dayDate} {...form.of("dayAttendance")}>
-            {(control) => (
-              <Select
-                {...control}
-                name={`dayAttendance.${day.dayDate}`}
-                value={days.find((entry) => entry.dayDate === day.dayDate)?.attendanceType ?? ""}
-                onChange={(event) =>
-                  setDays([
-                    ...days.filter((entry) => entry.dayDate !== day.dayDate),
-                    ...(event.currentTarget.value
-                      ? [{ dayDate: day.dayDate, attendanceType: event.currentTarget.value }]
-                      : []),
-                  ])
-                }
-              >
-                <option value="">Not attending</option>
-                {day.attendanceOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </Select>
-            )}
-          </Field>
-        ))}
         {forms.form && (
           <div class="pk-stack" onInput={readAnswers} onChange={readAnswers}>
             <CustomFieldList

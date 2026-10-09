@@ -1,21 +1,19 @@
 /**
- * What a partly-waitlisted registration actually has, day by day.
+ * Where a registration stands, day by day — the one summary every
+ * registration screen shows: the public result and confirmation pages, the
+ * capability manage page and the portal.
  *
- * The list is a description list rather than a stripped `ul` of flex rows: it
- * is a set of term/value pairs — a day and what is confirmed for it — and
- * `pk-datalist` lays those out in two columns without every row having to
- * re-derive the same flex declarations.
- *
- * Each status carries its meaning in words as well as in the badge's tone,
- * because a reader who cannot separate the hues gets nothing from the tone.
+ * Days are grouped by what they amount to (`groupRegistrationDays`), so three
+ * confirmed in-person days read as one line, and only a difference splits
+ * them. A waiting-list place is its own amber line that says so in words; an
+ * offered seat leads, with the claim when the screen can act on it.
  */
-import { Fragment } from "preact";
-
-import { Alert } from "../ui/Alert";
-import { Badge, type BadgeTone } from "../ui/Badge";
-// `pk-datalist` is defined in Content.css, which ships in a lazy chunk rather
-// than the entry stylesheet, so the module writing the class name imports it.
-import "../ui/Content.css";
+import { formatDateTime, formatDayList } from "../../shared/format-date";
+import { attendanceTypeLabel } from "../shared/attendance";
+import { groupRegistrationDays, hasWaitingDays, type DayStatusGroup } from "../shared/registration-day-status";
+import { Button } from "../ui/Button";
+import { AttendanceIcon } from "./DayAttendancePicker";
+import "./RegistrationDayStatusSummary.css";
 
 export interface RegistrationDayAttendanceSummaryItem {
   dayDate: string;
@@ -26,6 +24,7 @@ export interface RegistrationDayAttendanceSummaryItem {
 export interface RegistrationDayWaitlistSummaryItem {
   dayDate: string;
   status: string;
+  offerExpiresAt?: string | null;
 }
 
 export function isPendingRegistrationDayWaitlistStatus(status: string): boolean {
@@ -36,50 +35,81 @@ export function hasPendingRegistrationDayWaitlist(dayWaitlist: RegistrationDayWa
   return dayWaitlist.some((entry) => isPendingRegistrationDayWaitlistStatus(entry.status));
 }
 
-/** What one day's state says, and the tone that agrees with the words. */
-function dayStatus(attendanceType: string, waitlistStatus: string | undefined): { label: string; tone: BadgeTone } {
-  if (waitlistStatus === "offered") return { label: "Spot available — review in manage page", tone: "info" };
-  if (waitlistStatus === "waiting") return { label: "In-person still pending", tone: "warn" };
-  if (attendanceType === "virtual") return { label: "Virtual confirmed", tone: "ok" };
-  if (attendanceType === "on_demand") return { label: "On-demand confirmed", tone: "ok" };
-  return { label: "In-person confirmed", tone: "ok" };
+function whichDays(group: DayStatusGroup, total: number): string {
+  if (group.dayDates.length === total && total > 1) return `All ${total} days`;
+  return formatDayList(group.dayDates);
+}
+
+function GroupRow({
+  group,
+  total,
+  busy,
+  onClaim,
+}: {
+  group: DayStatusGroup;
+  total: number;
+  busy: boolean;
+  onClaim?: (dayDates: string[]) => void;
+}) {
+  const title =
+    group.kind === "offered"
+      ? "An in-person seat is yours to claim"
+      : group.kind === "waiting"
+        ? "On the waiting list for an in-person seat"
+        : attendanceTypeLabel(group.attendanceType);
+  return (
+    <li class="pk-day-status__row" data-kind={group.kind}>
+      <span class="pk-day-status__icon">
+        <AttendanceIcon type={group.kind === "confirmed" ? group.attendanceType : "in_person"} />
+      </span>
+      <span class="pk-day-status__body">
+        <span class="pk-day-status__title">{title}</span>
+        <span class="pk-day-status__days">{whichDays(group, total)}</span>
+        {group.kind === "waiting" && (
+          <span class="pk-small">You stay registered. We email you as soon as a seat opens.</span>
+        )}
+        {group.kind === "offered" && group.offerExpiresAt && (
+          <span class="pk-small">Claim it before {formatDateTime(group.offerExpiresAt)}.</span>
+        )}
+      </span>
+      {group.kind === "offered" && onClaim && (
+        <Button variant="primary" size="sm" loading={busy} onClick={() => onClaim(group.dayDates)}>
+          Claim seat
+        </Button>
+      )}
+    </li>
+  );
 }
 
 export function RegistrationDayStatusSummary({
   dayAttendance,
   dayWaitlist,
+  busy = false,
+  onClaim,
 }: {
   dayAttendance: RegistrationDayAttendanceSummaryItem[];
   dayWaitlist: RegistrationDayWaitlistSummaryItem[];
+  busy?: boolean;
+  /** Where the screen can act on an offered seat; without it the offer is stated only. */
+  onClaim?: (dayDates: string[]) => void;
 }) {
   if (dayAttendance.length === 0) return null;
-
-  const waitlistByDay = new Map(dayWaitlist.map((entry) => [entry.dayDate, entry.status] as const));
-
-  const pending = hasPendingRegistrationDayWaitlist(dayWaitlist);
+  const groups = groupRegistrationDays(dayAttendance, dayWaitlist);
   return (
-    <Alert tone={pending ? "warn" : "ok"} title="What is confirmed right now">
-      <div class="pk-stack pk-stack--snug">
-        <dl class="pk-datalist">
-          {dayAttendance.map((entry) => {
-            const status = dayStatus(entry.attendanceType, waitlistByDay.get(entry.dayDate));
-            return (
-              <Fragment key={entry.dayDate}>
-                <dt>{entry.label ?? entry.dayDate}</dt>
-                <dd>
-                  <Badge tone={status.tone}>{status.label}</Badge>
-                </dd>
-              </Fragment>
-            );
-          })}
-        </dl>
-        {pending && (
-          <p class="pk-small">
-            If this mix of confirmed and pending days no longer works for you, use the manage page to switch days, move
-            to on-demand, or cancel the registration.
-          </p>
-        )}
-      </div>
-    </Alert>
+    <ul
+      class="pk-day-status"
+      data-waiting={hasWaitingDays(groups) ? "true" : undefined}
+      aria-label="Your registration, day by day"
+    >
+      {groups.map((group) => (
+        <GroupRow
+          key={`${group.kind}:${group.attendanceType ?? ""}`}
+          group={group}
+          total={dayAttendance.length}
+          busy={busy}
+          onClaim={onClaim}
+        />
+      ))}
+    </ul>
   );
 }

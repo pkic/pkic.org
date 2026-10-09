@@ -83,6 +83,18 @@ export function calendarDateParts(value: string): { weekday: string; day: string
 }
 
 /**
+ * A short list of `YYYY-MM-DD` days as one phrase in the viewer's locale:
+ * "Tue 1 Dec and Wed 2 Dec". For the days of one event, so no year.
+ */
+export function formatDayList(values: readonly string[]): string {
+  const days = values.map((value) => {
+    const parts = calendarDateParts(value);
+    return `${parts.weekday} ${formatDayAndMonth(value)}`;
+  });
+  return new Intl.ListFormat(undefined, { style: "long", type: "conjunction" }).format(days);
+}
+
+/**
  * An instant that stands for a calendar day — a seat's start, a leadership
  * term's end. A manager picks "1 June 2022" and it is stored as that day's
  * midnight UTC, so the UTC calendar is the value's meaning; rendering it in

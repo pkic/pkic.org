@@ -146,16 +146,13 @@ function RegistrationRecord({
     await run(() => save({ action: "update", dayAttendance }, "Your days are updated. Thank you for letting us know."));
   }
 
-  function claimSeat(dayDate: string): void {
+  function claimSeats(dayDates: string[]): void {
     void run(() =>
       save(
         {
           action: "update",
-          dayAttendance: data.dayAttendance.map(({ dayDate: date, attendanceType }) => ({
-            dayDate: date,
-            attendanceType,
-          })),
-          claimDayWaitlistOffers: [dayDate],
+          dayAttendance: data.dayAttendance.map(({ dayDate, attendanceType }) => ({ dayDate, attendanceType })),
+          claimDayWaitlistOffers: dayDates,
         },
         "The seat is yours. See you there!",
       ),
@@ -198,7 +195,7 @@ function RegistrationRecord({
                 editable={status === "registered"}
                 focusDay={focusDay}
                 onSave={(dayAttendance) => void saveDays(dayAttendance)}
-                onClaim={claimSeat}
+                onClaim={claimSeats}
               />
               <section class="pk-stack pk-stack--snug" aria-label="Your details">
                 <h3>Your details</h3>
