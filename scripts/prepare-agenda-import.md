@@ -1,6 +1,6 @@
 # Preparing historical agendas
 
-This temporary tool converts event Markdown front matter or standalone YAML into the existing agenda transfer format. It prepares reviewable documents; it does not create database records, upload files, approve historical credits, or publish an agenda.
+This tool converts event Markdown front matter or standalone YAML into the existing agenda transfer format. It prepares reviewable documents; it does not create database records, upload files, approve historical credits, or publish an agenda.
 
 Use Node 22.15 or newer and install the repository dependencies with pnpm.
 

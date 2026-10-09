@@ -157,12 +157,12 @@ test("organizer resolves a reviewed versioned copy and imports only to the draft
   });
 });
 
-test("temporary migration CLI reviews and applies through the real API without publishing", async ({
+test("agenda import CLI reviews and applies through the real API without publishing", async ({
   page,
 }, testInfo) => {
   await signInAsE2eStaff(page, e2eAdminEmail("portal-agenda-transfer-cli"));
   const before = agendaSnapshotSchema.parse(await (await page.request.get(`/api/v1/events/${slug}/agenda`)).json());
-  const title = "Temporary CLI source session";
+  const title = "CLI source session";
   const created = await page.request.post(`/api/v1/events/${slug}/agenda/occurrences`, {
     data: agendaOccurrenceCreateSchema.parse({
       expectedRevision: before.revision,

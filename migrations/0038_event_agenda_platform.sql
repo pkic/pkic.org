@@ -257,7 +257,7 @@ CREATE INDEX event_offline_spends_grant ON event_offline_admission_spends(grant_
 
 CREATE TABLE event_entry_admissions(id TEXT PRIMARY KEY,event_id TEXT NOT NULL REFERENCES events(id),day_date TEXT NOT NULL,user_id TEXT NOT NULL REFERENCES users(id),operation_id TEXT NOT NULL UNIQUE,admitted_at TEXT NOT NULL,UNIQUE(event_id,day_date,user_id));
 CREATE INDEX event_entry_admissions_capacity ON event_entry_admissions(event_id,day_date,user_id);
--- Add to the single agenda migration; archive metadata belongs to the mutable draft.
+-- Archive metadata belongs to the mutable draft.
 -- Approved event_agenda_publications.snapshot_json freezes it at publication time.
 CREATE TABLE event_agenda_session_history (
  occurrence_id TEXT PRIMARY KEY REFERENCES event_agenda_occurrences(id) ON DELETE CASCADE,
@@ -286,7 +286,7 @@ CREATE TABLE event_agenda_promotion_render_jobs (
 );
 CREATE INDEX event_agenda_promotion_render_due ON event_agenda_promotion_render_jobs(status,next_attempt_at,lease_expires_at);
 
--- Fold into the agenda platform migration; no standalone migration or remote application.
+-- Session participation approval and waitlist state.
 ALTER TABLE agenda_session_participations ADD COLUMN approval_state TEXT NOT NULL DEFAULT 'none';
 ALTER TABLE agenda_session_participations ADD COLUMN waitlisted_at TEXT;
 CREATE TABLE agenda_session_holds (
@@ -612,9 +612,9 @@ INSERT INTO role_permissions(id,role_id,permission,created_at)
 SELECT lower(hex(randomblob(16))),'role-admin','agenda:appearance_approve',strftime('%Y-%m-%dT%H:%M:%fZ','now')
 WHERE NOT EXISTS(SELECT 1 FROM role_permissions WHERE role_id='role-admin' AND permission='agenda:appearance_approve');
 
--- Root merge instruction: the UNRELEASED base event_attendance_observations
--- attempt_id must be nullable; camera observations retain their unique attempt FK.
--- Imported evidence has its own provenance rather than fabricated scan attempts.
+-- event_attendance_observations.attempt_id is nullable: camera observations keep
+-- their unique attempt reference, while imported evidence has its own provenance
+-- rather than fabricated scan attempts.
 CREATE TABLE event_attendance_import_reviews (
  id TEXT PRIMARY KEY,event_id TEXT NOT NULL REFERENCES events(id),
  operation_id TEXT NOT NULL UNIQUE,actor_user_id TEXT NOT NULL REFERENCES users(id),

@@ -39,7 +39,7 @@ const options = {
   token: "private-token",
   documents: [document],
 };
-describe("Temporary authenticated agenda importer", () => {
+describe("Authenticated agenda importer", () => {
   it("defaults to review only and validates its canonical request without conflating source and destination", async () => {
     const fetcher = transport([snapshot(7), review]);
     const result = await importPreparedAgenda({ ...options, fetcher });
