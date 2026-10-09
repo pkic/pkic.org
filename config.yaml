@@ -192,9 +192,6 @@ module:
     - source: i18n
       target: i18n
       files: *siteFiles
-    - source: layouts
-      target: layouts
-      files: *siteFiles
     - source: static
       target: static
       files: *siteFiles
