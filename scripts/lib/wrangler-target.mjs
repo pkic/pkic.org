@@ -1,21 +1,13 @@
 /**
- * Selects the Wrangler configuration for a data target. Local and production
- * are Wrangler environments in wrangler.jsonc. Workers Previews have no
- * environment of their own: their shared D1 database is addressed through the
- * documented preview migrations config, never through a production binding.
+ * Selects the Wrangler arguments for a D1 data target. Workers Previews share
+ * pkic-db-preview, which wrangler.jsonc declares as the production DB binding's
+ * preview_database_id; `--preview` selects it. Commands without a --preview
+ * option (such as `d1 export`) must address pkic-db-preview by name instead.
  */
-export const PREVIEW_RESOURCES_CONFIG = "wrangler.preview-migrations.jsonc";
-
-const D1_BINDINGS = { local: "DB", preview: "PREVIEW_DB", production: "DB" };
+export const PREVIEW_DATABASE_NAME = "pkic-db-preview";
 
 export function wranglerTargetArgs(target) {
-  if (target === "preview") return ["--config", PREVIEW_RESOURCES_CONFIG];
+  if (target === "preview") return ["--env", "production", "--preview"];
   if (target === "local" || target === "production") return ["--env", target];
   throw new Error(`Unsupported Wrangler target: ${String(target)}`);
-}
-
-export function d1BindingForTarget(target) {
-  const binding = D1_BINDINGS[target];
-  if (!binding) throw new Error(`Unsupported Wrangler target: ${String(target)}`);
-  return binding;
 }

@@ -33,7 +33,8 @@ const ENVS = {
   preview: {
     wranglerFlag: "--remote",
     wranglerEnv: "preview", // the shared Workers Previews database
-    database: "pkic-db-preview",
+    // The production DB binding; --preview selects its preview_database_id (pkic-db-preview).
+    database: "DB",
     assetsBucket: "pkic-assets-preview",
     speakerBucket: "pkic-speaker-uploads-preview",
     label: "preview (remote)",
@@ -49,8 +50,13 @@ const ENVS = {
 };
 
 /** Wrangler arguments that address the selected target's resources. */
-function envFlag(cfg) {
+function wranglerArgs(cfg) {
   return wranglerTargetArgs(cfg.wranglerEnv);
+}
+
+/** Seed sub-scripts take the target name and map it through the same helper. */
+function targetFlag(cfg) {
+  return ["--env", cfg.wranglerEnv];
 }
 
 // ── CLI parsing ─────────────────────────────────────────────────────────────
@@ -115,11 +121,11 @@ function applyMigrations(cfg) {
     run("node", [script("apply-d1-migrations.mjs"), cfg.wranglerEnv]);
     return;
   }
-  run("pnpm", ["exec", "wrangler", "d1", "migrations", "apply", cfg.database, ...envFlag(cfg), cfg.wranglerFlag]);
+  run("pnpm", ["exec", "wrangler", "d1", "migrations", "apply", cfg.database, ...wranglerArgs(cfg), cfg.wranglerFlag]);
 }
 
 function seedAdmin(cfg) {
-  run("node", [script("seed-initial-admin.mjs"), cfg.wranglerFlag, "--db", cfg.database, ...envFlag(cfg)]);
+  run("node", [script("seed-initial-admin.mjs"), cfg.wranglerFlag, "--db", cfg.database, ...targetFlag(cfg)]);
 }
 
 function seedEvent(cfg) {
@@ -128,7 +134,7 @@ function seedEvent(cfg) {
     cfg.wranglerFlag,
     "--db",
     cfg.database,
-    ...envFlag(cfg),
+    ...targetFlag(cfg),
     "--bucket",
     cfg.assetsBucket,
     "--skip-email-templates",
@@ -141,7 +147,7 @@ function seedTemplates(cfg) {
     cfg.wranglerFlag,
     "--db",
     cfg.database,
-    ...envFlag(cfg),
+    ...targetFlag(cfg),
     "--bucket",
     cfg.assetsBucket,
   ]);

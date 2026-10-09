@@ -1,8 +1,9 @@
+import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { experimental_readRawConfig as readRawConfig, unstable_readConfig as readConfig } from "wrangler";
 import { describe, expect, it } from "vitest";
-import { PREVIEW_RESOURCES_CONFIG, wranglerTargetArgs } from "../../scripts/lib/wrangler-target.mjs";
-import { workersPreviewBaseUrl } from "../../scripts/lib/workers-preview-url.mjs";
+import { PREVIEW_DATABASE_NAME, wranglerTargetArgs } from "../../scripts/lib/wrangler-target.mjs";
+import { previewOriginVars, workersPreviewBaseUrl } from "../../scripts/lib/workers-preview-url.mjs";
 
 const root = resolve(import.meta.dirname, "../..");
 const production = readConfig({ config: resolve(root, "wrangler.jsonc"), env: "production" });
@@ -56,12 +57,33 @@ describe("Workers Previews configuration", () => {
     expect(new Set(bindingNames(previews))).toEqual(new Set(bindingNames(production)));
   });
 
-  it("keeps production identities and live payment keys out of Preview variables", () => {
+  it("keeps production identities, fixed hosts, and live payment keys out of Preview variables", () => {
     const vars = previews.vars ?? {};
-    expect(new URL(String(vars.APP_BASE_URL)).hostname).toMatch(/\.workers\.dev$/);
+    // Each Preview's origin is injected from its own branch at build time.
+    expect(vars).not.toHaveProperty("APP_BASE_URL");
+    expect(vars).not.toHaveProperty("WEBAUTHN_ORIGIN");
+    expect(vars).not.toHaveProperty("TURNSTILE_HOSTNAMES");
+    expect(vars.TURNSTILE_ENABLED).toBe("false");
+    const serialized = JSON.stringify(vars);
+    expect(serialized).not.toMatch(/pkic-org-preview|\/\/pkic\.org|"pkic\.org"/);
     expect(vars.WEBAUTHN_RP_ID).not.toBe(production.vars.WEBAUTHN_RP_ID);
     expect(String(vars.STRIPE_PUBLISHABLE_KEY)).toMatch(/^pk_test_/);
     expect(vars.RSVP_EMAIL).not.toBe(production.vars.RSVP_EMAIL);
+  });
+
+  it("injects a branch Preview origin and refuses a build without a branch", () => {
+    const vars = previewOriginVars("feature/Workers_Previews");
+    expect(vars).toEqual({
+      APP_BASE_URL: "https://feature-workers-previews-pkic-org.pkic.workers.dev",
+      WEBAUTHN_ORIGIN: "https://feature-workers-previews-pkic-org.pkic.workers.dev",
+    });
+    for (const origin of Object.values(vars)) {
+      const { hostname } = new URL(origin);
+      expect(hostname).toMatch(/^[a-z0-9-]+-pkic-org\.pkic\.workers\.dev$/);
+      expect(hostname).not.toBe(new URL(production.vars.APP_BASE_URL as string).hostname);
+    }
+    expect(() => previewOriginVars("main")).toThrow(/non-main branch/);
+    expect(() => previewOriginVars("")).toThrow(/non-main branch/);
   });
 
   it("replaces the separate preview Worker environment", () => {
@@ -70,20 +92,19 @@ describe("Workers Previews configuration", () => {
   });
 
   it("migrates the same shared database the Previews bind", () => {
-    const migrations = readConfig({ config: resolve(root, PREVIEW_RESOURCES_CONFIG) });
-    const [database] = migrations.d1_databases;
+    const [productionDatabase] = production.d1_databases;
     const [previewDatabase] = previews.d1_databases ?? [];
 
-    expect(migrations.d1_databases).toHaveLength(1);
-    expect(database).toMatchObject({
-      binding: "PREVIEW_DB",
-      database_name: previewDatabase?.database_name,
-      database_id: previewDatabase?.database_id,
-      migrations_dir: "migrations",
-    });
-    expect(migrations.account_id).toBe(production.account_id);
-    expect(wranglerTargetArgs("preview")).toEqual(["--config", PREVIEW_RESOURCES_CONFIG]);
+    // `--env production --preview` selects preview_database_id on the DB binding.
+    expect(productionDatabase?.binding).toBe("DB");
+    expect(productionDatabase?.preview_database_id).toBe(previewDatabase?.database_id);
+    expect(previewDatabase?.database_name).toBe(PREVIEW_DATABASE_NAME);
+    expect(wranglerTargetArgs("preview")).toEqual(["--env", "production", "--preview"]);
     expect(wranglerTargetArgs("production")).toEqual(["--env", "production"]);
+    // d1 export has no --preview option, so the backup names the preview database.
+    const scripts = JSON.parse(readFileSync(resolve(root, "package.json"), "utf8")).scripts as Record<string, string>;
+    expect(scripts["backup:preview"]).toContain(`d1 export ${PREVIEW_DATABASE_NAME} --env production --remote`);
+    expect(scripts["migrate:preview"]).toBe("node scripts/apply-d1-migrations.mjs preview");
   });
 
   it("derives a branch Preview URL only for non-production branches", () => {

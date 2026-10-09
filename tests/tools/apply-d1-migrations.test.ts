@@ -14,13 +14,8 @@ describe("remote D1 migration import", () => {
     );
   });
 
-  it("addresses the shared Preview database only through the preview migrations config", () => {
-    expect(remoteD1Args("preview")).toEqual([
-      "PREVIEW_DB",
-      "--config",
-      "wrangler.preview-migrations.jsonc",
-      "--remote",
-    ]);
+  it("addresses the shared Preview database through the DB binding's preview database", () => {
+    expect(remoteD1Args("preview")).toEqual(["DB", "--env", "production", "--preview", "--remote"]);
     expect(remoteD1Args("production")).toEqual(["DB", "--env", "production", "--remote"]);
     expect(() => remoteD1Args("staging")).toThrow(/Unsupported Wrangler target/);
   });

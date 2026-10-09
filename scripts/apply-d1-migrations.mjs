@@ -3,7 +3,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmdirSync, rmSync, writeFileSyn
 import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { d1BindingForTarget, wranglerTargetArgs } from "./lib/wrangler-target.mjs";
+import { wranglerTargetArgs } from "./lib/wrangler-target.mjs";
 
 const migrationName = "0035_membership_portal_governance.sql";
 const retirementMigrationName = "0037_retire_legacy_account_role.sql";
@@ -21,9 +21,9 @@ function wrangler(args, stdio = "inherit") {
   return result.stdout;
 }
 
-/** Wrangler D1 arguments that address the target's remote database. */
+/** Wrangler D1 arguments for the target's remote database; preview adds --preview. */
 export function remoteD1Args(environment) {
-  return [d1BindingForTarget(environment), ...wranglerTargetArgs(environment), "--remote"];
+  return ["DB", ...wranglerTargetArgs(environment), "--remote"];
 }
 
 export function buildImportSql(sql, name = migrationName) {

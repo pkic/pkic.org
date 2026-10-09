@@ -55,11 +55,11 @@ describe("shared seed SQL and Wrangler helpers", () => {
   });
 
   it("builds local and remote D1 execute arguments without dropping environment options", () => {
-    // Workers Previews have no Wrangler environment; the shared preview database
-    // is addressed through its dedicated config, never through env.production.
+    // Workers Previews share the production DB binding's preview database;
+    // --preview is what keeps a preview seed off production.
     expect(
-      buildWranglerD1ExecuteArgs({ database: "preview-db", wranglerEnv: "preview", mode: "remote", persistTo: null }),
-    ).toEqual(["wrangler", "d1", "execute", "preview-db", "--config", "wrangler.preview-migrations.jsonc", "--remote"]);
+      buildWranglerD1ExecuteArgs({ database: "DB", wranglerEnv: "preview", mode: "remote", persistTo: null }),
+    ).toEqual(["wrangler", "d1", "execute", "DB", "--env", "production", "--preview", "--remote"]);
     expect(
       buildWranglerD1ExecuteArgs({ database: "pkic-db", wranglerEnv: "production", mode: "remote", persistTo: null }),
     ).toEqual(["wrangler", "d1", "execute", "pkic-db", "--env", "production", "--remote"]);

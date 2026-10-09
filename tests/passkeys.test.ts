@@ -299,7 +299,7 @@ describe("passkeys (WebAuthn)", () => {
     const previewEnv = {
       ...env,
       WEBAUTHN_RP_ID: rpId,
-      WEBAUTHN_ORIGIN: "https://pkic-org-preview.pkic.workers.dev",
+      WEBAUTHN_ORIGIN: "https://feature-workers-previews-pkic-org.pkic.workers.dev",
       WEBAUTHN_PREVIEW_WORKER_NAME: "pkic-org",
     };
     const previewCall = (url: string, path: string, init: RequestInit = {}, bearer?: string) => {
@@ -339,7 +339,7 @@ describe("passkeys (WebAuthn)", () => {
     expect(deploymentBegin.status).toBe(200);
 
     const stableBegin = await previewCall(
-      "https://pkic-org-preview.pkic.workers.dev",
+      "https://feature-workers-previews-pkic-org.pkic.workers.dev",
       "/api/v1/auth/passkeys/authenticate/begin",
     );
     expect(stableBegin.status).toBe(200);
