@@ -38,11 +38,11 @@ test("attendee manages a registration and downloads a personal event calendar", 
   await page.goto("/portal/#/events");
   await page.getByRole("link", { name: "Open Post-Quantum Cryptography Conference", exact: true }).click();
   await page.getByRole("link", { name: "Manage registration", exact: true }).click();
-  // The registration opens read-only: its details are facts, not fields.
+  // The registration opens read-only: its details are facts, not fields (the invitation link is a read-only copy field).
   const registration = page.getByRole("region", { name: "Registration", exact: true });
   await expect(registration.getByText(email, { exact: true })).toBeVisible();
-  await expect(registration.getByRole("textbox")).toHaveCount(0);
-  await registration.getByRole("button", { name: "Edit", exact: true }).click();
+  await expect(registration.locator("input:not([readonly]):not([type=hidden]), textarea, select")).toHaveCount(0);
+  await registration.getByRole("button", { name: "Edit details", exact: true }).click();
   await expect(page.getByLabel("Email address", { exact: true })).toHaveValue(email);
   await expect(page.getByLabel("Country", { exact: true })).toHaveValue("US");
   await expect(registration.getByRole("button", { name: "Registration actions" })).toHaveCount(0);
@@ -62,23 +62,22 @@ test("attendee manages a registration and downloads a personal event calendar", 
   registrationManageUpdateResponseSchema.parse(await saved.json());
   await expect(page.getByText("Registration updated.", { exact: true })).toBeVisible();
   await expect(registration.getByText("Updated attendee", { exact: true })).toBeVisible();
-  await expect(registration.getByRole("textbox")).toHaveCount(0);
+  await expect(registration.locator("input:not([readonly]):not([type=hidden]), textarea, select")).toHaveCount(0);
   await page.reload();
   await expect(registration.getByText("Updated attendee", { exact: true })).toBeVisible();
   // Discarding an edit sends nothing and returns to the saved facts.
-  await registration.getByRole("button", { name: "Edit", exact: true }).click();
+  await registration.getByRole("button", { name: "Edit details", exact: true }).click();
   await expect(page.getByLabel("Job title", { exact: true })).toHaveValue("Updated attendee");
   await page.getByLabel("Job title", { exact: true }).fill("Discarded title");
   await registration.getByRole("button", { name: "Discard changes", exact: true }).click();
   await expect(registration.getByText("Updated attendee", { exact: true })).toBeVisible();
   await expect(registration.getByText("Discarded title")).toHaveCount(0);
-  // Cancelling is a whole-record command: the record menu, then the confirmation.
-  await registration.getByRole("button", { name: "Registration actions" }).click();
-  await page.getByRole("menuitem", { name: "Cancel my registration…" }).click();
+  // Cancelling sits apart at the end of the record, behind the confirmation.
+  await registration.getByRole("button", { name: "Cancel my registration…", exact: true }).click();
   await acceptConfirmDialog(page, "Cancel registration");
   await expect(page.getByRole("button", { name: "Restore registration" })).toBeVisible();
   await page.getByRole("button", { name: "Restore registration" }).click();
-  await expect(registration.getByRole("button", { name: "Registration actions" })).toBeEnabled();
+  await expect(registration.getByRole("button", { name: "Edit details", exact: true })).toBeEnabled();
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(registration.getByText(email, { exact: true })).toBeVisible();
   await expect.poll(() => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);

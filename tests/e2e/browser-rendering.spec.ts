@@ -553,16 +553,17 @@ test.describe("browser workflows", () => {
       .locator("[data-agenda-session]")
       .filter({ has: page.getByRole("heading", { name: "Opening", exact: true }) });
     await expect(opening).toHaveCount(1);
-    await expect(opening.locator(".pk-content-agenda__session-body > .pk-content-agenda__speaker strong")).toHaveText([
-      "Paul van Brouwershaven",
-      "Albert de Ruiter",
-    ]);
+    await expect(
+      opening.locator(".pk-content-agenda__session-body").getByRole("button", { name: /^View speaker profile: / }),
+    ).toHaveCount(2);
+    for (const name of ["Paul van Brouwershaven", "Albert de Ruiter"])
+      await expect(opening.getByRole("button", { name: `View speaker profile: ${name}`, exact: true })).toBeVisible();
     await expect(panel.locator(".pk-content-agenda__cell > .pk-content-agenda__speaker")).toHaveCount(0);
     await opening.getByRole("button", { name: "Open session details: Opening", exact: true }).click();
     await expect(page.getByRole("dialog").filter({ visible: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog").filter({ visible: true })).toHaveCount(0);
-    await page.getByRole("tab", { name: "Wednesday", exact: true }).click();
+    await page.getByRole("tab", { name: /^Wednesday/ }).click();
     await expect(page.getByRole("tabpanel", { name: "Wednesday" })).toBeVisible();
     await page.keyboard.press("ArrowRight");
     await expect(page.getByRole("tab", { name: "Thursday" })).toBeFocused();
@@ -586,7 +587,8 @@ test.describe("browser workflows", () => {
 
     await page.goto("/events/2023/pqc-conference-amsterdam-nl/");
     const recordedSession = page
-      .getByRole("tabpanel", { name: "Tuesday", exact: true })
+      // Day tabs carry the date beside the weekday ("Tuesday · Nov 7, 2023").
+      .getByRole("tabpanel", { name: /^Tuesday/ })
       .locator("article[data-agenda-session-dialog]")
       .filter({ has: page.locator("a[data-agenda-watch-recording]") })
       .first();
@@ -598,9 +600,9 @@ test.describe("browser workflows", () => {
     expect(watchUrl.origin).toBe("https://www.youtube.com");
     expect(watchUrl.pathname).toBe("/watch");
     expect(watchUrl.searchParams.get("v")).toBeTruthy();
-    const modal = recordedSession.getByRole("dialog", { includeHidden: true });
+    // The session's dialog is rendered once per session, addressed by the id its actions open.
+    const modal = page.locator(`dialog[id="${await watchLink.getAttribute("data-agenda-open-session")}"]`);
     await expect(modal).toHaveCount(1);
-    expect(await modal.getAttribute("id")).toBe(await watchLink.getAttribute("data-agenda-open-session"));
     await expect(modal.locator("iframe")).not.toHaveAttribute("src");
     const agendaUrl = page.url();
     await watchLink.click();
@@ -618,7 +620,7 @@ test.describe("browser workflows", () => {
     await expect.poll(() => embedRequestCounts.get(embedUrl!) ?? 0).toBe(1);
     const requestsBeforeClose = embedRequestCounts.get(embedUrl!)!;
 
-    await modal.getByRole("button", { name: "Close", exact: true }).first().click();
+    await modal.getByRole("button", { name: "Close session details", exact: true }).first().click();
     await expect(modal).toBeHidden();
     await expect(iframe).not.toHaveAttribute("src");
     expect(embedRequestCounts.get(embedUrl ?? "") ?? 0).toBe(requestsBeforeClose);
