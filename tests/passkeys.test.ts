@@ -196,12 +196,27 @@ describe("passkeys (WebAuthn)", () => {
       );
     };
 
-    const unsupportedBegin = await previewCall(
+    // Workers Previews serve <preview>-pkic-org and <deployment-id>-pkic-org on the
+    // account subdomain. The production Worker's own host and other shapes stay out.
+    for (const lookalike of [
       "https://other-worker.pkic.workers.dev",
+      "https://pkic-org.pkic.workers.dev",
+      "https://nested.branch-pkic-org.pkic.workers.dev",
+      "https://branch-pkic-org.pkic.workers.dev.evil.example",
+      "https://branch--pkic-org.pkic.workers.dev",
+      "http://branch-pkic-org.pkic.workers.dev",
+      "https://branch-pkic-org.pkic.workers.dev:8443",
+    ]) {
+      const unsupportedBegin = await previewCall(lookalike, "/api/v1/auth/passkeys/authenticate/begin");
+      expect(unsupportedBegin.status, lookalike).toBe(400);
+      await expect(unsupportedBegin.json()).resolves.toMatchObject({ error: { code: "PASSKEY_ORIGIN_INVALID" } });
+    }
+
+    const deploymentBegin = await previewCall(
+      "https://3f2a9c1e-pkic-org.pkic.workers.dev",
       "/api/v1/auth/passkeys/authenticate/begin",
     );
-    expect(unsupportedBegin.status).toBe(400);
-    await expect(unsupportedBegin.json()).resolves.toMatchObject({ error: { code: "PASSKEY_ORIGIN_INVALID" } });
+    expect(deploymentBegin.status).toBe(200);
 
     const stableBegin = await previewCall(
       "https://pkic-org-preview.pkic.workers.dev",
