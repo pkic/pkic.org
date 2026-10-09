@@ -1734,3 +1734,35 @@ BEGIN DELETE FROM event_agenda_revision_guards WHERE id=NEW.id; END;
 -- Acquisition owns retry state; this scheduler only advances bounded due work.
 INSERT INTO scheduled_jobs(job_key,interval_seconds,next_run_at)
 VALUES('recording_acquisitions',60,strftime('%Y-%m-%dT%H:%M:%fZ','now'));
+
+-- The identity a person's session acted as when it wrote the audit row: the
+-- organization affiliation or individual capacity they spoke for. NULL for
+-- system, public and API-key actors, and while a person holding several
+-- identities had not chosen one. No foreign key, like the row's other actor
+-- columns: the audit trail outlives any identity it names. No index: rows are
+-- read by scope, entity, actor and time, never by acting identity.
+ALTER TABLE audit_log ADD COLUMN actor_identity_id TEXT;
+
+-- Earlier user rows name an identity only where it is certain: the actor held
+-- exactly one identity active at the row's instant. Older rows may carry a
+-- space-separated timestamp, so instants compare through julianday().
+UPDATE audit_log
+   SET actor_identity_id = (
+         SELECT identity.id
+           FROM identities identity
+          WHERE identity.user_id = audit_log.actor_id
+            AND identity.started_at IS NOT NULL
+            AND julianday(identity.started_at) <= julianday(audit_log.created_at)
+            AND (identity.ended_at IS NULL OR julianday(identity.ended_at) > julianday(audit_log.created_at))
+       )
+ WHERE actor_type = 'user'
+   AND actor_id IS NOT NULL
+   AND actor_identity_id IS NULL
+   AND (
+         SELECT COUNT(*)
+           FROM identities identity
+          WHERE identity.user_id = audit_log.actor_id
+            AND identity.started_at IS NOT NULL
+            AND julianday(identity.started_at) <= julianday(audit_log.created_at)
+            AND (identity.ended_at IS NULL OR julianday(identity.ended_at) > julianday(audit_log.created_at))
+       ) = 1;

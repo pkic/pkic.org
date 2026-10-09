@@ -1,4 +1,5 @@
 import { auditLogDetailResponseSchema } from "../../../../shared/schemas/audit-log";
+import { auditActorName } from "../../../components/AuditLogTable";
 import { DetailsSummary } from "../../../components/DetailsSummary";
 import { Spinner } from "../../../components/Spinner";
 import { useData } from "../../../hooks/useData";
@@ -34,7 +35,7 @@ export function SystemAuditLogDetail({ id }: { id: string }) {
               <DescriptionList
                 items={[
                   { term: "When", value: fmt(entry.created_at) },
-                  { term: "Actor", value: entry.actor_display ?? entry.actor_id ?? "System" },
+                  { term: "Actor", value: auditActorName(entry) ?? entry.actor_id ?? "System" },
                   { term: "Actor type", value: entry.actor_type },
                   { term: "Action", value: entry.action },
                   { term: "Entity", value: entry.entity_type },

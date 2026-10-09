@@ -292,6 +292,8 @@ describe("shared management presentation components", () => {
                   actor_type: "system",
                   actor_id: null,
                   actor_display: null,
+                  actor_identity_id: null,
+                  actor_organization_name: null,
                   action: "updated",
                   entity_type: "proposal",
                   entity_id: "proposal-1",

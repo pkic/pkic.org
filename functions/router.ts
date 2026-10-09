@@ -1,3 +1,4 @@
+import { runWithAuditActorScope } from "./_lib/services/audit-actor";
 import { AppError } from "./_lib/errors";
 import { withDependencyHandling } from "./_lib/dependency-bindings";
 import { handleError } from "./_lib/http";
@@ -125,7 +126,10 @@ app.route("/", site_Router);
 const fetchWithMcp = createMcpWorkerFetch({ app, getMcpOpenApiSchema });
 
 function handleHttpRequest(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
-  return fetchWithMcp(request, withDependencyHandling({ ...env, DB: requestSessionDb(env.DB, request) }), ctx);
+  // Each request owns the scope that tells its audit records which identity the signed-in person acts as.
+  return runWithAuditActorScope(() =>
+    fetchWithMcp(request, withDependencyHandling({ ...env, DB: requestSessionDb(env.DB, request) }), ctx),
+  );
 }
 
 /** This entrypoint is reached only after the uncached gateway checks the request. */

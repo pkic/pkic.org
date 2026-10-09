@@ -2,7 +2,10 @@ import type { z } from "zod";
 import { identitiesListResponseSchema, type ActingIdentity } from "../../shared/schemas/identity";
 import type { ServerCatalog } from "./server-catalog";
 
-export function actingIdentityLabel(identity: Pick<ActingIdentity, "organizationName" | "jobTitle" | "email">): string {
+/** "Organization · Job title · address", or "Individual" for the individual capacity; the address is optional. */
+export function actingIdentityLabel(
+  identity: Pick<ActingIdentity, "organizationName" | "jobTitle"> & Partial<Pick<ActingIdentity, "email">>,
+): string {
   return [identity.organizationName ?? "Individual", identity.jobTitle, identity.email].filter(Boolean).join(" · ");
 }
 

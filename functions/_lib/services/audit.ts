@@ -3,6 +3,7 @@ import { uuid } from "../utils/ids";
 import { nowIso } from "../utils/time";
 import { parseJsonSafe, stringifyJson } from "../utils/json";
 import type { DatabaseLike, StatementLike } from "../types";
+import { auditActorIdentityId } from "./audit-actor";
 
 interface AuditDeltaLike {
   from: unknown;
@@ -19,6 +20,8 @@ export interface AuditLogReadRow {
   actor_type: string;
   actor_id: string | null;
   actor_display: string | null;
+  actor_identity_id: string | null;
+  actor_organization_name: string | null;
   action: string;
   entity_type: string;
   entity_id: string | null;
@@ -69,12 +72,14 @@ export async function writeAuditLog(
   await run(
     db,
     `INSERT INTO audit_log (
-      id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at, scope_type, scope_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      id, actor_type, actor_id, actor_identity_id, action, entity_type, entity_id, details_json, created_at,
+      scope_type, scope_id
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
     [
       uuid(),
       actorType,
       actorId,
+      auditActorIdentityId(actorType, actorId),
       action,
       entityType,
       entityId,
@@ -105,15 +110,16 @@ function prepareAuditLogInsert(
   return db
     .prepare(
       `INSERT INTO audit_log (
-      id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at,
+      id, actor_type, actor_id, actor_identity_id, action, entity_type, entity_id, details_json, created_at,
       idempotency_key, scope_type, scope_id
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     ${conflictMode === "ignore" ? "ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING" : ""}`,
     )
     .bind(
       uuid(),
       actorType,
       actorId,
+      auditActorIdentityId(actorType, actorId),
       action,
       entityType,
       entityId,
@@ -238,15 +244,16 @@ export function prepareAuditLogAfterExpectedChanges(
   return db
     .prepare(
       `INSERT INTO audit_log (
-        id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at,
+        id, actor_type, actor_id, actor_identity_id, action, entity_type, entity_id, details_json, created_at,
         idempotency_key, scope_type, scope_id
-      ) VALUES (?, ?, ?, CASE WHEN changes() = ? THEN ? ELSE NULL END, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, CASE WHEN changes() = ? THEN ? ELSE NULL END, ?, ?, ?, ?, ?, ?, ?)
         ON CONFLICT(idempotency_key) WHERE idempotency_key IS NOT NULL DO NOTHING`,
     )
     .bind(
       uuid(),
       actorType,
       actorId,
+      auditActorIdentityId(actorType, actorId),
       expectedChanges,
       action,
       entityType,
@@ -376,16 +383,17 @@ export function prepareAuditLogWhen(
   return db
     .prepare(
       `INSERT INTO audit_log (
-         id, actor_type, actor_id, action, entity_type, entity_id, details_json, created_at,
+         id, actor_type, actor_id, actor_identity_id, action, entity_type, entity_id, details_json, created_at,
          scope_type, scope_id
        )
-       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
+       SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?
        WHERE EXISTS (${input.conditionSql})`,
     )
     .bind(
       uuid(),
       input.actorType,
       input.actorId,
+      auditActorIdentityId(input.actorType, input.actorId),
       input.action,
       input.entityType,
       input.entityId,

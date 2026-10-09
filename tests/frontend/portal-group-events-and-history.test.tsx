@@ -193,6 +193,8 @@ describe("group history panel", () => {
                 actor_type: "admin",
                 actor_id: null,
                 actor_display: "Group Manager",
+                actor_identity_id: null,
+                actor_organization_name: null,
                 action: "group_updated",
                 entity_type: "group",
                 entity_id: GROUP_ID,

@@ -6,6 +6,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AuditLogEntry } from "../../assets/shared/schemas/audit-log";
 import { AuditLogSection } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/AuditLogSection";
 import { ProposalAuditLog } from "../../assets/ts/components/proposals/ProposalAuditLog";
+import { AuditActor } from "../../assets/ts/components/AuditLogTable";
 import { RegistrationAuditLogSection } from "../../assets/ts/member-flows/portal/sections/events/detail/registration-detail/RegistrationPanels";
 
 const mounted: HTMLElement[] = [];
@@ -30,6 +31,8 @@ function auditEntry(id: string, action: string, actor: string): AuditLogEntry {
     actor_type: "admin",
     actor_id: null,
     actor_display: actor,
+    actor_identity_id: null,
+    actor_organization_name: null,
     action,
     entity_type: "audit_test",
     entity_id: id,
@@ -216,5 +219,26 @@ describe("scoped audit-log server pagination", () => {
       "registration_updated",
       "registration_updated",
     );
+  });
+});
+
+describe("audit actor", () => {
+  it("names the identity the actor acted as when the entry records one", async () => {
+    const container = document.createElement("div");
+    document.body.append(container);
+    mounted.push(container);
+    const person = { ...auditEntry("audit-actor", "profile_updated", "Paul van Brouwershaven"), actor_id: "user-1" };
+    const rendered = async (entry: AuditLogEntry) => {
+      await act(() => render(<AuditActor entry={entry} href={null} />, container));
+      return container.textContent;
+    };
+
+    expect(
+      await rendered({ ...person, actor_identity_id: "identity-1", actor_organization_name: "PKI Consortium" }),
+    ).toBe("Paul van Brouwershaven · PKI Consortium");
+    expect(await rendered({ ...person, actor_identity_id: "identity-2", actor_organization_name: null })).toBe(
+      "Paul van Brouwershaven · Individual",
+    );
+    expect(await rendered(person)).toBe("Paul van Brouwershaven");
   });
 });

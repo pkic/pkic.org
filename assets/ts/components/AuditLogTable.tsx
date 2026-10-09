@@ -4,14 +4,22 @@ import type { CollectionLoader } from "../hooks/useServerCollection";
 import { ApiDataTable } from "./ApiDataTable";
 import { formatDateTime } from "../shared/ui";
 import { EntityLink } from "./EntityLink";
+import { actingIdentityLabel } from "../shared/acting-identity-catalog";
 
-function actorCell(
-  entry: AuditLogEntry,
-  entityHref?: (entityType: string, entityId: string) => string | null,
-): ComponentChildren {
+/** The actor's name and, when known, the identity they acted as: "Paul van Brouwershaven · PKI Consortium". */
+export function auditActorName(
+  entry: Pick<AuditLogEntry, "actor_display" | "actor_identity_id" | "actor_organization_name">,
+): string | null {
+  if (!entry.actor_display) return null;
+  if (!entry.actor_identity_id) return entry.actor_display;
+  return `${entry.actor_display} · ${actingIdentityLabel({ organizationName: entry.actor_organization_name, jobTitle: null })}`;
+}
+
+/** One rendering of an audit entry's actor for every audit list. */
+export function AuditActor({ entry, href }: { entry: AuditLogEntry; href: string | null }): ComponentChildren {
   if (entry.actor_type === "system") return <span class="pk-muted">System</span>;
-  const href = entry.actor_id && entityHref ? entityHref(entry.actor_type, entry.actor_id) : null;
-  if (entry.actor_display) return <EntityLink href={href}>{entry.actor_display}</EntityLink>;
+  const name = auditActorName(entry);
+  if (name) return <EntityLink href={href}>{name}</EntityLink>;
   if (entry.actor_id)
     return (
       <EntityLink href={href}>
@@ -66,7 +74,12 @@ export function AuditLogTable({
         },
         {
           header: "Actor",
-          cell: (entry) => actorCell(entry, entityHref),
+          cell: (entry) => (
+            <AuditActor
+              entry={entry}
+              href={entry.actor_id && entityHref ? entityHref(entry.actor_type, entry.actor_id) : null}
+            />
+          ),
           className: "pk-small",
           sort: { asc: "actor", desc: "-actor" },
         },

@@ -177,6 +177,8 @@ describe("portal selected-group collections", () => {
                 actor_type: "member",
                 actor_id: "90000000-0000-4000-8000-000000000002",
                 actor_display: "Group Chair",
+                actor_identity_id: null,
+                actor_organization_name: null,
                 action: "group_updated",
                 entity_type: "group",
                 entity_id: GROUP_ID,

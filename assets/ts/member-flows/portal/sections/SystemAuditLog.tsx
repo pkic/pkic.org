@@ -1,6 +1,7 @@
 import { Badge } from "../../../components/Badge";
 import { ApiDataTable } from "../../../components/ApiDataTable";
 import { formatDateTime } from "../../../shared/ui";
+import { AuditActor, auditActorName } from "../../../components/AuditLogTable";
 import { EntityLink } from "../../../components/EntityLink";
 import { USER_BACKED_AUDIT_ACTOR_TYPES, auditLogListResponseSchema } from "../../../../shared/schemas/audit-log";
 import { PageHeader } from "../../../ui/PageHeader";
@@ -54,20 +55,11 @@ export function SystemAuditLog() {
             header: "Actor",
             cell: (entry) => (
               <>
-                <span class="pk-table__clamp" title={entry.actor_display ?? entry.actor_id ?? entry.actor_type}>
-                  {entry.actor_type === "system" ? (
-                    <span class="pk-muted">System</span>
-                  ) : (
-                    <EntityLink href={entry.actor_id ? portalEntityHref(entry.actor_type, entry.actor_id) : null}>
-                      {entry.actor_display ? (
-                        entry.actor_display
-                      ) : entry.actor_id ? (
-                        <span class="pk-small pk-mono">{entry.actor_id}</span>
-                      ) : (
-                        <span class="pk-muted">{entry.actor_type}</span>
-                      )}
-                    </EntityLink>
-                  )}
+                <span class="pk-table__clamp" title={auditActorName(entry) ?? entry.actor_id ?? entry.actor_type}>
+                  <AuditActor
+                    entry={entry}
+                    href={entry.actor_id ? portalEntityHref(entry.actor_type, entry.actor_id) : null}
+                  />
                 </span>
                 <div class="pk-small">{entry.actor_type}</div>
               </>

@@ -177,6 +177,8 @@ export function stubFetch(
               actor_type: "admin",
               actor_id: "reviewer-1",
               actor_display: "Reviewer",
+              actor_identity_id: null,
+              actor_organization_name: null,
               action: "proposal_decision_recorded",
               entity_type: "proposal",
               entity_id: PROPOSAL_ID,
