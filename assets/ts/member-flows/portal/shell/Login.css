@@ -227,3 +227,13 @@ body:has(.pk-login) > main > #portal-app {
   padding: 0;
   border: 0;
 }
+
+/*
+ * The sign-in methods are alternative ways through one narrow card, so they
+ * are full width: equal-weight choices and large touch targets. This is the
+ * single-purpose choice card exception to label-width buttons.
+ */
+.pk-login__controls .pk-btn {
+  align-self: stretch;
+  inline-size: 100%;
+}

@@ -14,5 +14,5 @@
 - Render an event, meeting, or occurrence time in the entity's configured IANA zone when the wall clock is what participants agreed to, and label which zone is shown.
 - List behavior (loading, error, empty, filter, sort, paging) is tested once in the shared list component; screen tests cover only what the screen adds.
 - One implementation per UI job (buttons, downloads, pictures, confirmations, dialogs, tabs, menus, headers, person rows, empty states, pills, toasts, file pickers, pagination, copy, formatting, icons): extend the existing shared one; never add a parallel variant, and delete superseded ones in the same change.
-- Buttons are label-width, grouped with the shared gap; a form's main action is primary; destructive actions confirm through `confirmAction()`.
+- Buttons are label-width, grouped with the shared gap; only stacked alternative choices in a narrow single-purpose card (sign-in methods) are full width. A form's main action is primary; destructive actions confirm through `confirmAction()`.
 - Do not repeat tab navigation as "Back" buttons, show features that do not work yet, or expose implementation words (URL, token, credential, JSON) to attendees and members.
