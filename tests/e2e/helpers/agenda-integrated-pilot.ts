@@ -219,21 +219,13 @@ export async function preparePilotSpeaker(staff: Page, speaker: Page, info: Test
   await expect(speaker.getByRole("button", { name: "Confirm participation", exact: true })).toBeDisabled();
   await expect(speaker.locator("[data-speaker-consents]").getByRole("checkbox").first()).toBeVisible();
   await acceptVisibleTerms(speaker, "[data-speaker-consents]");
-  await speaker
-    .getByRole("radio", { name: "No — I am not employed by and do not own an organization", exact: true })
-    .check();
-  await speaker
-    .getByRole("checkbox", {
-      name: "I am not employed by, do not own, and am not authorized to represent an organization.",
-      exact: true,
-    })
-    .check();
+  await speaker.getByRole("radio", { name: "As an individual", exact: true }).check();
   await speaker
     .locator("[data-speaker-identity]")
-    .getByRole("textbox", { name: "Your email address", exact: true })
+    .getByRole("textbox", { name: "Email address", exact: true })
     .fill(email);
   const proofSince = await capturedEmailCount();
-  await speaker.getByRole("button", { name: "Verify my email", exact: true }).click();
+  await speaker.getByRole("button", { name: "Verify email", exact: true }).click();
   const proofMail = await waitForCapturedEmail(email, "Verify your email for", { since: proofSince });
   await speaker.goto(extractEmailUrl(proofMail, "/propose/"));
   await expect(speaker.locator("[data-consents]").getByRole("checkbox").first()).toBeVisible();

@@ -374,23 +374,15 @@ async function fillProposalParticipant(
   await agreeToAllTerms(page);
   await page.getByRole("button", { name: /Continue/i }).click();
   const identity = page.locator("[data-proposer-identity]");
-  await identity
-    .getByRole("radio", { name: "No — I am not employed by and do not own an organization", exact: true })
-    .check();
-  await identity
-    .getByRole("checkbox", {
-      name: "I am not employed by, do not own, and am not authorized to represent an organization.",
-      exact: true,
-    })
-    .check();
-  await identity.getByRole("textbox", { name: "Your email address", exact: true }).fill(person.email);
+  await identity.getByRole("radio", { name: "As an individual", exact: true }).check();
+  await identity.getByRole("textbox", { name: "Email address", exact: true }).fill(person.email);
   const since = await capturedEmailCount();
   const started = page.waitForResponse(
     (response) =>
       new URL(response.url()).pathname === "/api/v1/events/pqc-conference-amsterdam-nl/proposals/proof" &&
       response.request().method() === "POST",
   );
-  await identity.getByRole("button", { name: "Verify my email", exact: true }).click();
+  await identity.getByRole("button", { name: "Verify email", exact: true }).click();
   const startResponse = await started;
   expect(startResponse.status(), await startResponse.text()).toBe(200);
   expect(eventProposalProofStartSchema.parse(startResponse.request().postDataJSON()).unaffiliatedAttestation).toBe(
@@ -427,7 +419,7 @@ async function fillProposalParticipant(
     const missing = resolved.getByRole("textbox", { name, exact: true });
     if (await missing.count()) await missing.fill(value);
   }
-  await expect(resolved.getByRole("textbox", { name: "Your email address", exact: true })).toHaveCount(0);
+  await expect(resolved.getByRole("textbox", { name: "Email address", exact: true })).toHaveCount(0);
   await expect(resolved.locator('input[name="organizationName"]')).toHaveCount(0);
   return proof.entryContext;
 }
@@ -439,18 +431,10 @@ async function resolveInvitedSpeaker(page: Page, email: string): Promise<void> {
   const confirmation = page.getByRole("button", { name: "Confirm participation", exact: true });
   if (await confirmation.isEnabled()) return;
   const identity = page.locator("[data-speaker-identity]");
-  await identity
-    .getByRole("radio", { name: "No — I am not employed by and do not own an organization", exact: true })
-    .check();
-  await identity
-    .getByRole("checkbox", {
-      name: "I am not employed by, do not own, and am not authorized to represent an organization.",
-      exact: true,
-    })
-    .check();
-  await identity.getByRole("textbox", { name: "Your email address", exact: true }).fill(email);
+  await identity.getByRole("radio", { name: "As an individual", exact: true }).check();
+  await identity.getByRole("textbox", { name: "Email address", exact: true }).fill(email);
   const since = await capturedEmailCount();
-  await identity.getByRole("button", { name: "Verify my email", exact: true }).click();
+  await identity.getByRole("button", { name: "Verify email", exact: true }).click();
   const mail = await waitForCapturedEmail(email, "Verify your email for", { since });
   await page.goto(extractEmailUrl(mail, "/propose/"));
   await agreeToAllTerms(page);
@@ -483,9 +467,6 @@ async function fillProposal(
     lastName: "Proposal",
     email: "proposal-speaker@example.test",
   });
-  if (options.proposerPresenting) {
-    await setNativeChecked(page, "input#proposal-is-presenting");
-  }
   await page.getByRole("button", { name: /Continue/i }).click();
   await setNativeChecked(page, type === "panel" ? "input#type-panel" : "input#type-talk");
   await page
@@ -507,6 +488,7 @@ async function fillProposal(
   await page.getByRole("button", { name: /Continue/i }).click();
 
   if (options.proposerPresenting) {
+    await setNativeChecked(page, "input#proposal-is-presenting");
     // Located by the region name the card exposes, not by a class: the class
     // was a legacy stylesheet's and left with the Bootstrap migration, and a
     // name is what a reader actually uses to tell the cards apart.

@@ -145,17 +145,10 @@ test("proposer and invited speaker manage their own event records without emaile
     );
     expect(before.speaker.status).toBe("invited");
     expect(before.profile.actingIdentitySelection).toBe("unrecorded");
-    await speaker
-      .getByRole("radio", { name: "No — I am not employed by and do not own an organization", exact: true })
-      .check();
-    const attestation = speaker.getByRole("checkbox", {
-      name: "I am not employed by, do not own, and am not authorized to represent an organization.",
-      exact: true,
-    });
-    await expect(attestation).not.toBeChecked();
-    await attestation.click();
+    const individual = speaker.getByRole("radio", { name: "As an individual", exact: true });
+    await individual.check();
     await expect(speaker.getByText("Individual participation", { exact: true })).toBeVisible();
-    await expect(attestation).toHaveCount(0);
+    await expect(individual).toHaveCount(0);
     await expect(speaker.getByLabel("Organization", { exact: true })).toHaveCount(0);
     await expect(speaker.getByLabel("Job title", { exact: true })).toHaveCount(0);
     const selectionResponse = speaker.waitForResponse(

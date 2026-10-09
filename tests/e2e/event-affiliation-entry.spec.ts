@@ -71,11 +71,13 @@ async function capture(page: Page, info: TestInfo, phase: string) {
 }
 
 async function requestOrganizationProof(page: Page, email: string, speakerToken?: string, continuationToken?: string) {
-  await page.getByRole("radio", { name: "Yes — I am employed by or own an organization", exact: true }).check();
-  await page.getByLabel("Your official work or organization email address", { exact: true }).fill(email);
+  await page
+    .getByRole("radio", { name: "On behalf of an organization (my employer or my own company)", exact: true })
+    .check();
+  await page.getByLabel("Work email address", { exact: true }).fill(email);
   const since = await capturedEmailCount();
   const sent = responseFor(page, `${endpoint}/proof`);
-  await page.getByRole("button", { name: "Verify organization email", exact: true }).click();
+  await page.getByRole("button", { name: "Verify work email", exact: true }).click();
   const response = await sent;
   expect(response.status(), await response.text()).toBe(200);
   const started = eventProposalProofStartSchema.parse(response.request().postDataJSON());
@@ -93,7 +95,7 @@ async function openProposalProof(page: Page, mailUrl: string) {
   const verified = responseFor(page, `${endpoint}/proof/verify`);
   await page.goto(mailUrl);
   const terms = page.locator("[data-consents]").getByRole("checkbox").first();
-  const contact = page.getByLabel("I will also be presenting — add me as one of the speakers", { exact: true });
+  const contact = page.locator('[data-step="2"]');
   await expect.poll(async () => (await terms.isVisible()) || (await contact.isVisible())).toBe(true);
   if (await terms.isVisible()) {
     await acceptVisibleTerms(page, "[data-consents]");
@@ -111,13 +113,13 @@ async function openProposalProof(page: Page, mailUrl: string) {
 }
 
 async function submitOwnProofProposal(page: Page, title: string, continuationToken: string) {
-  await page.getByLabel("I will also be presenting — add me as one of the speakers", { exact: true }).check();
   await page.getByRole("button", { name: "Continue →", exact: true }).click();
   await page.getByRole("radio", { name: "Talk", exact: true }).check();
   await page.getByLabel(fieldLabel("Title")).fill(title);
   await page.getByRole("textbox", { name: "Abstract", exact: true }).fill(abstract);
   await answerRequiredProposalFields(page);
   await page.getByRole("button", { name: "Continue →", exact: true }).click();
+  await page.getByLabel("I will also be presenting — add me as one of the speakers", { exact: true }).check();
   await page
     .getByRole("region", { name: "You — as a speaker", exact: true })
     .getByRole("textbox", { name: "Bio", exact: true })
@@ -223,13 +225,13 @@ test("guest event entry creates a nonmember affiliation and an invited known per
     await expect(identity.locator(".pk-datalist")).not.toContainText(organizationName);
     await expect(identity.getByRole("combobox")).toHaveCount(0);
     await capture(guest, info, "new-nonmember-details");
-    await guest.getByLabel("I will also be presenting — add me as one of the speakers", { exact: true }).check();
     await guest.getByRole("button", { name: "Continue →", exact: true }).click();
     await guest.getByRole("radio", { name: "Talk", exact: true }).check();
     await guest.getByLabel(fieldLabel("Title")).fill(`New nonmember affiliation ${suffix}`);
     await guest.getByRole("textbox", { name: "Abstract", exact: true }).fill(abstract);
     await answerRequiredProposalFields(guest);
     await guest.getByRole("button", { name: "Continue →", exact: true }).click();
+    await guest.getByLabel("I will also be presenting — add me as one of the speakers", { exact: true }).check();
     const ownCard = guest.getByRole("region", { name: "You — as a speaker", exact: true });
     await expect(ownCard.getByText("New Participant", { exact: true })).toBeVisible();
     await expect(ownCard.getByText(organizationName, { exact: true })).toBeVisible();

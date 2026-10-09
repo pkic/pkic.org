@@ -123,7 +123,7 @@ test("terms-first proposals and invited speakers verify identity without duplica
     });
     await ownerPage.goto(PROPOSE_PAGE);
     const qualifier = ownerPage.getByRole("group", {
-      name: "Are you employed by, or do you own, an organization?",
+      name: "In what capacity are you submitting this proposal?",
       exact: true,
     });
     await expect(ownerPage.locator("[data-consents]").getByRole("checkbox").first()).toBeVisible();
@@ -134,7 +134,9 @@ test("terms-first proposals and invited speakers verify identity without duplica
     await ownerPage.getByRole("button", { name: "Continue →", exact: true }).click();
     await expect(qualifier).toBeVisible();
     await captureResponsive(ownerPage, testInfo, "proposal-participation-qualifier");
-    await qualifier.getByRole("radio", { name: "Yes — I am employed by or own an organization", exact: true }).check();
+    await qualifier
+      .getByRole("radio", { name: "On behalf of an organization (my employer or my own company)", exact: true })
+      .check();
     await chooseOwnedIdentity(ownerPage, ownIdentity);
     const ownSummary = ownerPage.locator("[data-proposer-identity]").locator("dl");
     await expect(ownSummary.getByText("Identity Owner", { exact: true })).toBeVisible();
@@ -146,13 +148,13 @@ test("terms-first proposals and invited speakers verify identity without duplica
         ownerPage.locator("[data-proposer-identity]").getByRole("textbox", { name: fieldLabel(label) }),
       ).toHaveCount(0);
     await captureResponsive(ownerPage, testInfo, "own-proposal-identity");
-    await ownerPage.getByLabel("I will also be presenting — add me as one of the speakers", { exact: true }).check();
     await ownerPage.getByRole("button", { name: "Continue →", exact: true }).click();
     await ownerPage.getByRole("radio", { name: "Talk", exact: true }).check();
     await ownerPage.getByLabel(fieldLabel("Title")).fill(`Explicit speaker identity ${own.userId}`);
     await ownerPage.getByRole("textbox", { name: "Abstract", exact: true }).fill(ABSTRACT);
     await answerRequiredProposalFields(ownerPage);
     await ownerPage.getByRole("button", { name: "Continue →", exact: true }).click();
+    await ownerPage.getByLabel("I will also be presenting — add me as one of the speakers", { exact: true }).check();
     const ownCard = ownerPage.getByRole("region", { name: "You — as a speaker", exact: true });
     await ownCard.getByRole("textbox", { name: "Bio", exact: true }).fill(BIO);
     await expect(ownCard.getByText("Identity Owner", { exact: true })).toBeVisible();
@@ -243,7 +245,7 @@ test("terms-first proposals and invited speakers verify identity without duplica
     expect(await userCount()).toBe(0);
     await guestPage.goto(PROPOSE_PAGE);
     const anonymousQualifier = guestPage.getByRole("group", {
-      name: "Are you employed by, or do you own, an organization?",
+      name: "In what capacity are you submitting this proposal?",
       exact: true,
     });
     await expect(guestPage.locator("[data-consents]").getByRole("checkbox").first()).toBeVisible();
@@ -252,21 +254,13 @@ test("terms-first proposals and invited speakers verify identity without duplica
     await expect(anonymousQualifier).toHaveCount(0);
     await acceptVisibleTerms(guestPage, "[data-consents]");
     await guestPage.getByRole("button", { name: "Continue →", exact: true }).click();
-    await anonymousQualifier
-      .getByRole("radio", { name: "No — I am not employed by and do not own an organization", exact: true })
-      .check();
-    await guestPage
-      .getByRole("checkbox", {
-        name: "I am not employed by, do not own, and am not authorized to represent an organization.",
-        exact: true,
-      })
-      .check();
-    await guestPage.getByLabel("Your email address", { exact: true }).fill(anonymousEmail);
+    await anonymousQualifier.getByRole("radio", { name: "As an individual", exact: true }).check();
+    await guestPage.getByLabel("Email address", { exact: true }).fill(anonymousEmail);
     const proofSince = await capturedEmailCount();
     const proofStart = guestPage.waitForResponse(
       (response) => new URL(response.url()).pathname === `${PROPOSALS}/proof` && response.request().method() === "POST",
     );
-    await guestPage.getByRole("button", { name: "Verify my email", exact: true }).click();
+    await guestPage.getByRole("button", { name: "Verify email", exact: true }).click();
     const started = await proofStart;
     expect(started.status()).toBe(200);
     expect(eventProposalProofStartSchema.parse(started.request().postDataJSON()).unaffiliatedAttestation).toBe(true);
@@ -297,13 +291,13 @@ test("terms-first proposals and invited speakers verify identity without duplica
       guestPage.locator("[data-proposer-identity]").getByText("Individual participation", { exact: true }),
     ).toBeVisible();
     await captureResponsive(guestPage, testInfo, "verified-anonymous-proposal");
-    await guestPage.getByLabel("I will also be presenting — add me as one of the speakers", { exact: true }).check();
     await guestPage.getByRole("button", { name: "Continue →", exact: true }).click();
     await guestPage.getByRole("radio", { name: "Talk", exact: true }).check();
     await guestPage.getByLabel(fieldLabel("Title")).fill(`Verified individual proposal ${crypto.randomUUID()}`);
     await guestPage.getByRole("textbox", { name: "Abstract", exact: true }).fill(ABSTRACT);
     await answerRequiredProposalFields(guestPage);
     await guestPage.getByRole("button", { name: "Continue →", exact: true }).click();
+    await guestPage.getByLabel("I will also be presenting — add me as one of the speakers", { exact: true }).check();
     const anonymousCard = guestPage.getByRole("region", { name: "You — as a speaker", exact: true });
     await anonymousCard.getByRole("textbox", { name: "Bio", exact: true }).fill(BIO);
     await expect(anonymousCard.getByText("Independent Fixture", { exact: true })).toBeVisible();
@@ -337,7 +331,7 @@ test("terms-first proposals and invited speakers verify identity without duplica
     };
     await guestPage.goto(guestSpeakerUrl);
     const guestQualifier = guestPage.getByRole("group", {
-      name: "Are you employed by, or do you own, an organization?",
+      name: "In what capacity are you presenting?",
       exact: true,
     });
     await expect(guestPage.getByRole("button", { name: "Save profile", exact: true })).toBeVisible();
@@ -365,11 +359,11 @@ test("terms-first proposals and invited speakers verify identity without duplica
     await expect(ownerPage.getByRole("button", { name: "Save profile", exact: true })).toBeVisible();
     await acceptVisibleTerms(ownerPage, "[data-speaker-consents]");
     const wrongQualifier = ownerPage.getByRole("group", {
-      name: "Are you employed by, or do you own, an organization?",
+      name: "In what capacity are you presenting?",
       exact: true,
     });
     await wrongQualifier
-      .getByRole("radio", { name: "Yes — I am employed by or own an organization", exact: true })
+      .getByRole("radio", { name: "On behalf of an organization (my employer or my own company)", exact: true })
       .check();
     await expect(
       ownerPage.getByRole("combobox", { name: "Your organization representation", exact: true }),
@@ -387,17 +381,15 @@ test("terms-first proposals and invited speakers verify identity without duplica
     await expect(confirmation).toBeDisabled();
     await acceptVisibleTerms(guestPage, "[data-speaker-consents]");
     await guestQualifier
-      .getByRole("radio", { name: "Yes — I am employed by or own an organization", exact: true })
+      .getByRole("radio", { name: "On behalf of an organization (my employer or my own company)", exact: true })
       .check();
-    await guestPage
-      .getByLabel("Your official work or organization email address", { exact: true })
-      .fill(secondaryEmail);
+    await guestPage.getByLabel("Work email address", { exact: true }).fill(secondaryEmail);
     await captureResponsive(guestPage, testInfo, "invited-speaker-work-proof");
     const speakerProofSince = await capturedEmailCount();
     const speakerProofStart = guestPage.waitForResponse(
       (response) => new URL(response.url()).pathname === `${PROPOSALS}/proof` && response.request().method() === "POST",
     );
-    await guestPage.getByRole("button", { name: "Verify organization email", exact: true }).click();
+    await guestPage.getByRole("button", { name: "Verify work email", exact: true }).click();
     const speakerStarted = await speakerProofStart;
     expect(speakerStarted.status()).toBe(200);
     const speakerStartInput = eventProposalProofStartSchema.parse(speakerStarted.request().postDataJSON());
