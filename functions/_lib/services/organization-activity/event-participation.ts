@@ -44,7 +44,8 @@ interface EventParticipationRow {
  */
 const EVENT_SCHEDULE_END = "COALESCE(e.ends_at, e.starts_at)";
 const NOW = "strftime('%Y-%m-%dT%H:%M:%fZ','now')";
-const EVENT_IS_UPCOMING = `(${EVENT_SCHEDULE_END} IS NOT NULL AND ${EVENT_SCHEDULE_END} >= ${NOW})`;
+// An event without a start date is unscheduled, even when an end date was set: never upcoming.
+const EVENT_IS_UPCOMING = `(e.starts_at IS NOT NULL AND ${EVENT_SCHEDULE_END} >= ${NOW})`;
 // Deliberately not `NOT (upcoming)`: an unscheduled event is false for both,
 // and negating the upcoming predicate would sweep it into "past".
 const EVENT_IS_PAST = `(${EVENT_SCHEDULE_END} IS NOT NULL AND ${EVENT_SCHEDULE_END} < ${NOW})`;
