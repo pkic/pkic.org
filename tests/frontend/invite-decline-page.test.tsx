@@ -1,35 +1,18 @@
 // @vitest-environment jsdom
 /**
- * The invite-decline page's script against the shortcode's markup.
+ * The invite-decline page's script against the markup the site serves.
  *
- * The shortcode has already moved to the design system, so what this guards
- * is the half that is easy to get wrong and that no gate can see: the script
- * repainting those elements. Assigning `alert alert-warning` to a banner the
- * template renders as `pk-alert` removes the styling entirely, and the score
- * buttons signalled the chosen value with a fill and nothing else.
+ * The page body is the `InvitationDeclineForm` component, rendered at build
+ * time and then driven by the client script. What this guards is the half that
+ * is easy to get wrong and that no gate can see: the script repainting those
+ * elements. Assigning `alert alert-warning` to a banner rendered as `pk-alert`
+ * removes the styling entirely, and the score buttons signalled the chosen
+ * value with a fill and nothing else.
  */
+import { render } from "preact";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { inviteDeclineSchema } from "../../assets/shared/schemas/registration";
-import inviteDeclineTemplate from "../../layouts/shortcodes/invite-decline.html?raw";
-import { mountTemplate } from "./helpers/hugo-template";
-
-/**
- * Hugo's `range seq 1 10` writes the ten score buttons; the raw template holds
- * the one that is repeated. Cloning it keeps the shipped classes and
- * attributes — which is what these tests assert on — instead of restating them.
- */
-function expandScoreButtons(): void {
-  const group = document.querySelector<HTMLElement>("[data-nps-buttons]");
-  const button = group?.querySelector("button");
-  if (!group || !button) return;
-  const scores = Array.from({ length: 10 }, (_, index) => {
-    const clone = button.cloneNode(true) as HTMLButtonElement;
-    clone.dataset.nps = String(index + 1);
-    clone.textContent = String(index + 1);
-    return clone;
-  });
-  button.replaceWith(...scores);
-}
+import { InvitationDeclineForm } from "../../assets/ts/site/InvitationDeclineForm";
 
 const VALID_INVITE = {
   status: "valid",
@@ -61,17 +44,15 @@ async function boot(): Promise<void> {
 }
 
 beforeEach(() => {
-  // The shipped markup, not a copy of it. The copy this replaced had drifted
-  // to loose labels, missing `pk-check` wrappers and a `data-forward-max` the
-  // template does not set — every assertion still passing against markup the
-  // site no longer serves.
-  mountTemplate(inviteDeclineTemplate);
+  // The component the site ships, not a copy of it, so a class or wrapper
+  // removed from the page is removed from the test at the same moment.
+  render(<InvitationDeclineForm />, document.body);
   document.querySelector<HTMLElement>("[data-invite-decline]")!.dataset.forwardMax = "3";
-  expandScoreButtons();
   history.replaceState({}, "", "/?token=tok-abc");
 });
 
 afterEach(() => {
+  render(null, document.body);
   document.body.innerHTML = "";
   history.replaceState({}, "", "/");
   vi.unstubAllGlobals();

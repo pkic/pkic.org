@@ -205,7 +205,7 @@ main {
 }
 
 // Tables written in authored markdown are drawn by the design system now:
-// `layouts/_default/_markup/render-table.html` renders `pk-table`, and
+// the Markdown table renderer emits `pk-table`, and
 // `assets/ts/ui/Table.css` is the one stylesheet that dresses both a content
 // table and a portal list. Element rules for `table` used to live here; they
 // are gone rather than left as a second opinion the cascade has to settle.

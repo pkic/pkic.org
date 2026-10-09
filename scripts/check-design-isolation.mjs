@@ -24,8 +24,8 @@ const root = process.cwd();
 /**
  * Surfaces that have adopted the design system and must stay free of
  * Bootstrap. This list is the ratchet for the framework removal: a surface
- * joins it once it is clean, and can then never regress. Nothing is ever
- * removed from it.
+ * joins it once it is clean, and can then never regress. An entry leaves the
+ * list only when the surface itself is deleted.
  *
  * Deliberately NOT a baseline of tolerated violations — a surface is added
  * only after its violations are gone, so the gate always demands zero.
@@ -34,16 +34,8 @@ const scanned = [
   "assets/ts/ui",
   "assets/ts/site",
   "assets/design",
-  "layouts/design",
   // Individual files, so a directory can be locked in one surface at a time
   // rather than waiting for every file in it to be migrated at once.
-  "layouts/wg/wg-sub.html",
-  "layouts/wg/section.html",
-  "layouts/shortcodes/joinform.html",
-  "layouts/shortcodes/invite-decline.html",
-  "layouts/shortcodes/event-proposal.html",
-  "layouts/shortcodes/event-proposal-manage.html",
-  "layouts/shortcodes/event-sponsor-checkout.html",
   "assets/ts/member-flows/portal/sections/AccountSettings.tsx",
   "assets/ts/components/proposals/ProposalDecisionPanel.tsx",
   // The shared components every surface renders. Migrating their internals
@@ -114,7 +106,6 @@ const scanned = [
   "assets/ts/components/UserPicker.tsx",
   "assets/ts/components/EnumSelect.tsx",
   "assets/ts/components/FilterSelect.tsx",
-  "layouts/partials/navbar.html",
   "assets/js/session-registration.js",
   "assets/js",
   "assets/ts/member-flows/portal/sections/management/GroupStatistics.tsx",
@@ -137,12 +128,8 @@ const scanned = [
   "assets/ts/member-flows/portal/sections/management/MeetingSeriesFields.tsx",
   "assets/ts/member-flows/portal/shell/McpAuthorization.tsx",
   "assets/ts/member-flows/portal/shell/Login.tsx",
-  "layouts/partials/hero.html",
-  "layouts/index.html",
   "assets/ts/member-flows/portal/sections/management/GroupLeadership.tsx",
   "assets/ts/member-flows/portal/sections/management/GroupLeadershipAssignmentForm.tsx",
-  "layouts/shortcodes/agenda.html",
-  "layouts/shortcodes/event-speaker-presentation.html",
   "assets/ts/member-flows/portal/sections/system-analytics/AnalyticsOverview.tsx",
   "assets/ts/member-flows/portal/sections/system-analytics/RegistrationAnalytics.tsx",
   "assets/ts/member-flows/portal/sections/system-analytics/Tables.tsx",
@@ -166,7 +153,6 @@ const scanned = [
   "assets/ts/shared/widgets/share-panel.tsx",
   "assets/ts/shared/donation/widget.tsx",
   "assets/ts/shared/donation/form.tsx",
-  "layouts/partials/footer.html",
   "assets/ts/member-flows/vote-detail-page.tsx",
   "assets/ts/member-flows/portal/sections/Votes/VoteDetails.tsx",
   "assets/ts/member-flows/portal/sections/management/MeetingOccurrenceFields.tsx",
@@ -183,11 +169,6 @@ const scanned = [
   "assets/ts/shared/donation/thank-you.tsx",
   "assets/ts/member-flows/portal/sections/system-users/UserDetail.tsx",
   "assets/ts/member-flows/member-detail-page.tsx",
-  "layouts/shortcodes/event-registration-confirm.html",
-  "layouts/events/list.html",
-  "layouts/shortcodes/sponsorform.html",
-  "layouts/shortcodes/event-registration.html",
-  "layouts/partials/donations/form-widget.html",
   "assets/ts/shared/form/button-busy.ts",
   "assets/ts/shared/form/success-panel.tsx",
   "assets/ts/member-flows/portal/sections/management/GroupVoteLifecycleActions.tsx",
@@ -195,7 +176,6 @@ const scanned = [
   "assets/ts/member-flows/portal/sections/access-control/roles/RoleEditForm.tsx",
   "assets/ts/components/RecurrenceEditor.tsx",
   "assets/ts/member-flows/portal/sections/sponsors/management/SponsorshipTierConfig.tsx",
-  "layouts/partials/wg-sub-navigation.html",
   "assets/ts/member-flows/portal/sections/access-control/roles/RoleAssignForm.tsx",
   "assets/ts/member-flows/portal/sections/events/detail/settings/SponsorTiersTab.tsx",
   "assets/ts/member-flows/portal/sections/management/EventFormPlacementEditor.tsx",
@@ -206,7 +186,6 @@ const scanned = [
   "assets/ts/member-flows/portal/sections/sponsors/management/CompanyDetailPanel.tsx",
   "assets/ts/member-flows/portal/sections/management/EventRegistrationSettingsEditor.tsx",
   "assets/ts/components/MembershipCategoryPicker.tsx",
-  "layouts/shortcodes/news.html",
   "assets/ts/event-flows/speaker-manage-page.tsx",
   "assets/ts/components/forms/FormSubmissionForm.tsx",
   "assets/ts/member-flows/portal/sections/management/MeetingOccurrenceEditor.tsx",
@@ -214,25 +193,16 @@ const scanned = [
   "assets/ts/member-flows/portal/sections/sponsors/index.tsx",
   "assets/ts/member-flows/portal/sections/access-control/TargetPicker.tsx",
   "assets/ts/shared/widgets/link-recovery.tsx",
-  "layouts/shortcodes/livestream.html",
   "assets/ts/member-flows/portal/sections/management/ResourceCapabilities.tsx",
   "assets/ts/member-flows/portal/sections/system-operations/ScheduledWork.tsx",
-  "layouts/partials/social.html",
-  "layouts/shortcodes/carousel.html",
   "assets/ts/member-flows/portal/sections/settings/SettingsSection.tsx",
   "assets/ts/member-flows/portal/sections/settings/SettingsIndex.tsx",
   "assets/ts/member-flows/portal/sections/system-organizations/OrganizationLogo.tsx",
-  "layouts/partials/menu.html",
-  "layouts/shortcodes/members.html",
   "assets/ts/components/icons/index.tsx",
   "assets/ts/member-flows/portal/sections/events/detail/proposal-detail/AuditLogSection.tsx",
   "assets/ts/member-flows/portal/sections/management/GroupEventCommunications.tsx",
   "assets/ts/member-flows/portal/sections/events/EventWorkspace.tsx",
-  "layouts/shortcodes/glossary.html",
   "assets/ts/member-flows/portal/sections/management/GroupMeetingSeriesDetail.tsx",
-  "layouts/partials/events/webinar-disclaimer.html",
-  "layouts/partials/events/conference-schema.html",
-  "layouts/partials/wg/spotlight-card.html",
   "assets/ts/components/proposals/ProposalCoSpeakerInviteForm.tsx",
   "assets/ts/member-flows/portal/sections/Votes/BallotForm.tsx",
   "assets/ts/member-flows/meeting-join/App.tsx",
@@ -258,7 +228,7 @@ function isAdopted(rel) {
 
 /** Everything still on Bootstrap, measured by `--report` so the remaining
  *  distance is visible without pretending it is acceptable. */
-const remaining = ["assets/ts", "assets/js", "assets/scss", "layouts"];
+const remaining = ["assets/ts", "assets/js", "assets/scss"];
 
 /**
  * Bootstrap utilities and components, matched as WHOLE class tokens.

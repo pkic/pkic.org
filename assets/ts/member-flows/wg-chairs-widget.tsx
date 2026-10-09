@@ -1,7 +1,6 @@
 /**
  * Working group chair/vice-chair display. Replaces the static
- * content/wg/&lt;slug&gt;/_index.md `chair:`/`viceChair:` frontmatter and
- * layouts/wg/section.html's `{{ with .Params.chair }}` block, both of which
+ * content/wg/&lt;slug&gt;/_index.md `chair:`/`viceChair:` frontmatter, which
  * required a git commit + rebuild to update — chairs are now assigned in
  * the group's Leadership tab in the portal (capacity-bound user_roles with
  * the title the group type configures) and this widget fetches them
@@ -11,11 +10,11 @@
  * Two render modes, chosen via the mount's `data-mode` attribute — both use
  * the same PublicPersonCard ring card, differing only in avatar size
  * and page wrapper:
- *   - "compact" (default) — layouts/partials/wg/chairs-app.html's sidebar
+ *   - "compact" (default) — the sidebar
  *     mount on the public WG page, wrapped in the "Working Group Leadership"
  *     label + .consortium-leaders grid, avatar size "md" (80px).
- *   - "card" — layouts/partials/wg/chairs-og-card.html's mount on the
- *     Puppeteer-rendered OG social-share card (all.og-card.html), bare
+ *   - "card" — the mount on the
+ *     Puppeteer-rendered OG social-share card, bare
  *     (no wrapper), avatar size "sm" (72px). That page is
  *     screenshotted with `waitUntil: networkidle0`
  *     (functions/og/[...path].ts), which waits for this fetch

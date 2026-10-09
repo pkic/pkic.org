@@ -26,11 +26,10 @@ import "./ui/Button.css";
 import "./ui/Badge.css";
 // The public shortcodes are largely forms — join, registration, speaker and
 // proposal management — so the field and control styles have to be available
-// to server-rendered markup too. This one addition unblocks roughly 600 of the
-// remaining Bootstrap references in layouts/.
+// to server-rendered markup too.
 import "./ui/Field.css";
-// Every table an author writes in Markdown is server-rendered by the table
-// render hook in `layouts/_default/_markup/`, which writes the same class
+// Every table an author writes in Markdown is server-rendered by the Markdown
+// table renderer, which writes the same class
 // names as `ui/DataTable`. Only the static skin is in this sheet — what a data
 // table does with a pointer stays in that component's chunk.
 import "./ui/Table.css";

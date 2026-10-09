@@ -1,8 +1,8 @@
 /*
  * The table skin, shared by the two things that draw a table.
  *
- * `DataTable` draws the portal's lists. The Markdown table render hook
- * (`layouts/_default/_markup/render-table.html`) draws every table an author
+ * `DataTable` draws the portal's lists. The Markdown table renderer
+ * draws every table an author
  * writes in a content file. Both write `pk-table`, and this file is what makes
  * them one table rather than two stylesheets kept in agreement by hand.
  *

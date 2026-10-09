@@ -8,7 +8,6 @@ it("recognizes shared Field nesting while rejecting orphaned parts and unrelated
   const script = resolve("scripts/check-field-structure.mjs");
   const root = await createTemporaryDirectory("pkic-field-structure");
   try {
-    await mkdir(resolve(root, "layouts"));
     await mkdir(resolve(root, "assets/ts"), { recursive: true });
     const check = async (source: string) => {
       await writeFile(resolve(root, "assets/ts/Form.tsx"), source);
@@ -31,7 +30,6 @@ it("requires a common spacing body for shared fields and actions inside native d
   const script = resolve("scripts/check-field-structure.mjs");
   const root = await createTemporaryDirectory("pkic-disclosure-structure");
   try {
-    await mkdir(resolve(root, "layouts"));
     await mkdir(resolve(root, "assets/ts"), { recursive: true });
     const check = async (body: string, imports = sharedImports) => {
       await writeFile(

@@ -1,7 +1,6 @@
 /**
- * Member directory listing. Replaces the Hugo-data-driven
- * A-Z grid (layouts/partials/members/listing.html, driven by hugo.Data.members
- * at build time) with a Preact component that fetches GET /api/v1/members.
+ * Member directory listing. Replaces the build-time,
+ * YAML-driven A-Z grid with a Preact component that fetches GET /api/v1/members.
  *
  * D1 is now the source of truth (Step 2 has run). Search, sorting, and
  * pagination are sent to the API and performed in D1; the browser only

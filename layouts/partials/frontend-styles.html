@@ -1,4 +1,0 @@
-{{- with index (index hugo.Data "asset-manifest") "loader" -}}
-  {{- $entry := . -}}
-  {{- range index $entry "stylesheets" }}<link rel="stylesheet" href="{{ .url }}"{{ with .integrity }} integrity="{{ . }}" crossorigin="anonymous"{{ end }}>{{ end -}}
-{{- end -}}

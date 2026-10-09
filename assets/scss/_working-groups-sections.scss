@@ -20,9 +20,9 @@
   border-bottom: 1px solid rgba(255, 255, 255, 0.08);
   padding: 0;
 
-  // Both layouts that render this nav — `wg/section.html` and
-  // `wg/sub-navigation.html` — are on `.pk-container` now. The rail must keep
-  // its horizontal scroll.
+  // Both pages that render this nav — the working-group section and its
+  // sub-pages — are on `.pk-container` now. The rail must keep its horizontal
+  // scroll.
   .pk-container {
     overflow-x: auto;
     scrollbar-width: none;
@@ -57,12 +57,10 @@
 }
 
 // ─── Version switcher (PKIMM) ──────────────────────────────────────────
-// Rendered as a footer block at the bottom of the Model tree panel (see
-// layouts/partials/wg/pkimm-version-switcher.html). Lives inside the
+// Rendered as a footer block at the bottom of the Model tree panel. Lives inside the
 // `.wg-nav-tree-panel`, which already handles its own positioning, so the
 // switcher itself is in normal flow — no `position: fixed`, no JS-driven
-// repositioning. Path-preserving link rewriting is resolved at build time
-// in layouts/partials/wg/pkimm-version-switcher.html.
+// repositioning. Path-preserving link rewriting is resolved at build time.
 
 .wg-version-switcher {
   margin-top: 0.75rem;

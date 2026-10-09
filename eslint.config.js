@@ -40,7 +40,6 @@ export default tseslint.config(
       "backups/**",
       "coverage/**",
       "dist/**",
-      "layouts/**",
       "node_modules/**",
       "playwright-report/**",
       "public/**",

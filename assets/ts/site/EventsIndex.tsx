@@ -121,7 +121,7 @@ function Sidebar({ events }: { events: SiteEventsIndex }) {
 }
 
 /**
- * The events index, as `layouts/events/list.html` lays it out.
+ * The events index.
  *
  * Two columns: the consortium's own events grouped by year in the main one,
  * and the sponsored webinars beside them. Upcoming events come first and are

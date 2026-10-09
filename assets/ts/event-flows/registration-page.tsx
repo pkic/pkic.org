@@ -53,7 +53,7 @@ function showSuccessPanel(
   eventSlug: string,
   days?: number,
 ): void {
-  // The form's markup (layouts/shortcodes/event-registration.html) no longer
+  // The form's markup no longer
   // carries Bootstrap, so `d-none` would stop hiding it the moment that page
   // drops `main.scss`. The stepper below already uses the platform attribute;
   // the form now does too.

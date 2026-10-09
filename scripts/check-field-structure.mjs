@@ -24,7 +24,7 @@ import { join, relative } from "node:path";
 const root = process.cwd();
 const reportOnly = process.argv.includes("--report");
 
-const roots = ["layouts", "assets/ts"];
+const roots = ["assets/ts"];
 
 const VOID = new Set([
   "area",

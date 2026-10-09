@@ -1,4 +1,5 @@
 // @vitest-environment jsdom
+import { render } from "preact";
 import { afterEach, describe, expect, it } from "vitest";
 import {
   ORGANIZATION_EMAIL_POLICY_MESSAGE,
@@ -14,8 +15,7 @@ import {
   renderMembershipCategories,
 } from "../../assets/ts/member-flows/join-form";
 import type { MemberApplicationFormResponse } from "../../assets/shared/schemas/member-applications";
-import joinFormTemplate from "../../layouts/shortcodes/joinform.html?raw";
-import { mountTemplate } from "./helpers/hugo-template";
+import { JoinFlow } from "../../assets/ts/site/JoinFlow";
 
 type Category = MemberApplicationFormResponse["categories"][number];
 type FormField = NonNullable<MemberApplicationFormResponse["form"]>["fields"][number];
@@ -103,9 +103,11 @@ function buildForm(overrides: Partial<Record<string, string>> = {}): HTMLFormEle
   return form;
 }
 
-/** The shipped markup, so a template change that breaks these flows fails here. */
+/** The shipped component, so a markup change that breaks these flows fails here. */
 function buildJoinStartForm(): HTMLFormElement {
-  const host = mountTemplate(joinFormTemplate);
+  const host = document.createElement("div");
+  document.body.append(host);
+  render(<JoinFlow documents={[]} />, host);
   return host.querySelector<HTMLFormElement>("[data-join-start-form]")!;
 }
 
@@ -268,7 +270,7 @@ describe("join-form helpers", () => {
     const individualPolicy = form.querySelector<HTMLElement>("[data-join-individual-policy]")!;
     const individualCategories = form.querySelector<HTMLElement>("[data-join-individual-categories]")!;
     const email = form.querySelector<HTMLInputElement>("#joinEmail")!;
-    const label = form.querySelector<HTMLElement>("[data-join-email-label]")!;
+    const label = form.querySelector<HTMLElement>('label[for="joinEmail"]')!;
 
     applyJoinApplicantKindUI(form, null);
     expect(details.hidden).toBe(true);

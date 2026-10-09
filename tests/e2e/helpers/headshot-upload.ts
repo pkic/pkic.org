@@ -44,7 +44,7 @@ export async function chooseHeadshotThroughUploadButton(page: Page): Promise<voi
  * Agrees to the publication terms, and hands back the crop dialog that follows.
  *
  * Both dialogs are mounted from `<template>` elements in
- * `layouts/partials/headshot-modals.html` and opened with `showModal()`, so
+ * `HeadshotDialogTemplates` and opened with `showModal()`, so
  * each is reachable by role — which also proves the roots no longer carry the
  * static `aria-hidden="true"` that once put every control inside them outside
  * the accessibility tree. The `hsd-*`/`crop-headshot-*` classes are the

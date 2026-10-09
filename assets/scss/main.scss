@@ -1,6 +1,6 @@
 // Every stylesheet authored before the design system.
 //
-// This file is not linked directly. layouts/partials/site-stylesheet.html
+// This file is not linked directly. The site stylesheet build
 // compiles it, wraps the compiled output in `@layer legacy`, and prepends the
 // site-wide layer order — so nothing in here can win against a design-system
 // component regardless of how specific its selectors are. Add legacy partials

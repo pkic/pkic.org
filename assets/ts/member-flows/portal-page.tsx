@@ -5,8 +5,8 @@
  * real multi-section portal (nav shell + My Profile edit + Account Settings
  * incl. passkeys + My Application) — see assets/ts/member-flows/portal/ for
  * the shell, sections, and state. This file is kept as the mount point so
- * layouts/portal/single.html's data-module attribute and loader.ts's module
- * map don't need to change.
+ * the portal page's data-module attribute and loader.ts's module map don't
+ * need to change.
  */
 import "../../scss/portal-entry.scss";
 import { render } from "preact";

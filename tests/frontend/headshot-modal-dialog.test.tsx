@@ -16,16 +16,17 @@
  * the element is a dialog, nothing hides it, every way out settles the caller,
  * and focus goes back where it came from.
  */
+import { renderToString } from "preact-render-to-string";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { showHeadshotDisclaimer } from "../../assets/ts/shared/headshot/upload";
-import headshotModals from "../../layouts/partials/headshot-modals.html?raw";
+import { HeadshotDialogTemplates } from "../../assets/ts/site/HeadshotDialogTemplates";
 
 function mountPartial(): void {
-  // Hugo drops its own comments before the browser ever sees the partial, and
-  // so must this: the comment names `<template>` in prose, and an HTML parser
-  // reading it verbatim would open an element there and swallow the markup.
-  document.body.innerHTML = String(headshotModals).replace(/\{\{\/\*[\s\S]*?\*\/\}\}/g, "");
+  // Parsed from the server-rendered string, as the browser receives it: a
+  // client-side render would put the children inside the <template> element
+  // instead of into its inert `content` fragment.
+  document.body.innerHTML = renderToString(<HeadshotDialogTemplates />);
 }
 
 function openerButton(): HTMLButtonElement {
@@ -80,7 +81,7 @@ describe("headshot disclaimer dialog", () => {
     const settled = showHeadshotDisclaimer({ texts: ["I hold the copyright."], confirmText: "Upload photo" });
 
     const confirm = control<HTMLButtonElement>(".hsd-confirm");
-    const agree = control<HTMLInputElement>(".hsd-agree");
+    const agree = control<HTMLInputElement>("[data-headshot-agreement]");
     expect(confirm.disabled).toBe(true);
     expect(control(".hsd-list").textContent).toBe("I hold the copyright.");
 
@@ -130,7 +131,7 @@ describe("headshot disclaimer dialog", () => {
     // flow clones it into the page.
     const template = document.getElementById("headshot-disclaimer-template");
     if (!(template instanceof HTMLTemplateElement)) throw new Error("the partial rendered no template");
-    template.content.querySelector(".hsd-agree")?.remove();
+    template.content.querySelector("[data-headshot-agreement]")?.remove();
 
     await expect(showHeadshotDisclaimer()).resolves.toBe(false);
     expect(logged).toHaveBeenCalledWith("Headshot disclaimer template is incomplete");

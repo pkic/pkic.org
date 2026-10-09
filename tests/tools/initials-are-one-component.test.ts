@@ -31,7 +31,7 @@ const OWNERS = new Set([
  *
  * This is an inventory, not an exemption: it exists so a *new* surface cannot
  * quietly become the seventh, and it shrinks as each entry migrates. Every
- * one of these is markup a Hugo template emits, so using the component means
+ * one of these is markup rendered at publication time, so using the component means
  * making the surface an island first — a rendering change, not a restyle.
  *
  * Delete an entry when its surface moves to `Avatar`; the test then requires
@@ -44,7 +44,7 @@ const TEMPLATE_RENDERED = new Map([
   // as of a date — a privacy decision, not a refactor (#8).
   ["assets/scss/_blog.scss", "blog author cards, blocked on #8's people-search question"],
   // The agenda is a shortcode over event front matter, not a fetched surface.
-  ["assets/scss/_agenda.scss", "agenda speaker portraits, rendered by layouts/shortcodes/agenda.html"],
+  ["assets/scss/_agenda.scss", "agenda speaker portraits, rendered from event front matter"],
   // The member grid and profile hero, rendered by Preact but with the public
   // site's own `initial-color-N` palette rather than the design tokens.
   ["assets/scss/_bento.scss", "public member cards, pending the palette decision"],
