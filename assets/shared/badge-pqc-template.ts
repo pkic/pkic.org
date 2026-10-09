@@ -23,12 +23,17 @@ export const PQC_CONFERENCE_BADGE_LINKS = {
 } as const;
 
 /**
- * The site's own Roboto files, which the badge embeds so it prints identically everywhere. Callers supply the bytes
- * (the browser loads these URLs on demand) so the font payload never ships inside a script bundle.
+ * The site's own font files, which the badge embeds so it prints identically everywhere: Roboto for text, Roboto Mono
+ * for labels and codes, and Barokah Signature (Alifinart Studio, https://www.behance.net/alifinart) for the city line.
+ * Callers supply the bytes (the browser loads these URLs on demand) so the font payload never ships inside a script
+ * bundle. Provenance and licenses are in static/fonts/BadgeDesign-PROVENANCE.md.
  */
 export const PQC_CONFERENCE_BADGE_FONT_URLS = {
   roboto_latin: "/fonts/Roboto-latin.woff2",
   roboto_latin_ext: "/fonts/Roboto-latin-ext.woff2",
+  roboto_mono_latin: "/fonts/RobotoMono-latin.woff2",
+  roboto_mono_latin_ext: "/fonts/RobotoMono-latin-ext.woff2",
+  barokah_signature: "/fonts/BarokahSignature.woff2",
 } as const;
 const fontAssetSchema = badgeTemplateAssetSchema.refine((asset) => asset.mime === "font/woff2", "Use WOFF2 fonts.");
 
@@ -53,7 +58,15 @@ export const pqcConferenceBadgeTemplateInputSchema = z
       .array(badgeTemplateSponsorGroupSchema.omit({ key: true }).extend({ source: badgeSponsorSourceSchema }))
       .max(BADGE_TEMPLATE_SPONSOR_GROUPS_MAX_COUNT)
       .default(() => PQC_CONFERENCE_BADGE_SPONSOR_GROUPS.map((group) => ({ ...group }))),
-    fonts: z.object({ roboto_latin: fontAssetSchema, roboto_latin_ext: fontAssetSchema }).strict(),
+    fonts: z
+      .object({
+        roboto_latin: fontAssetSchema,
+        roboto_latin_ext: fontAssetSchema,
+        roboto_mono_latin: fontAssetSchema,
+        roboto_mono_latin_ext: fontAssetSchema,
+        barokah_signature: fontAssetSchema,
+      })
+      .strict(),
     links: z
       .object({ agenda: printedLine(60), questions: printedLine(60), join: printedLine(60) })
       .strict()
@@ -61,6 +74,20 @@ export const pqcConferenceBadgeTemplateInputSchema = z
   })
   .strict();
 export type PqcConferenceBadgeTemplateInput = z.input<typeof pqcConferenceBadgeTemplateInputSchema>;
+
+/** Roboto Mono's Google Fonts subsets use the same Unicode ranges as the Roboto subsets in the generic font CSS. */
+const MONO_LATIN_EXT_RANGE =
+  "U+0100-02BA,U+02BD-02C5,U+02C7-02CC,U+02CE-02D7,U+02DD-02FF,U+0304,U+0308,U+0329,U+1D00-1DBF,U+1E00-1E9F,U+1EF2-1EFF,U+2020,U+20A0-20AB,U+20AD-20C0,U+2113,U+2C60-2C7F,U+A720-A7FF";
+const MONO_LATIN_RANGE =
+  "U+0000-00FF,U+0131,U+0152-0153,U+02BB-02BC,U+02C6,U+02DA,U+02DC,U+0304,U+0308,U+0329,U+2000-206F,U+20AC,U+2122,U+2191,U+2193,U+2212,U+2215,U+FEFF,U+FFFD";
+const monoFace = (asset: keyof typeof PQC_CONFERENCE_BADGE_FONT_URLS, range: string) =>
+  `@font-face{font-family:"Roboto Mono";font-style:normal;font-weight:100 700;font-display:swap;src:url("asset:${asset}") format("woff2");unicode-range:${range}}`;
+/** The label and code face, and the signature script of the city line; both embedded so they print as designed. */
+const PQC_FONT_FACE_CSS = [
+  monoFace("roboto_mono_latin_ext", MONO_LATIN_EXT_RANGE),
+  monoFace("roboto_mono_latin", MONO_LATIN_RANGE),
+  `@font-face{font-family:"Barokah Signature";font-style:normal;font-weight:400;font-display:block;src:url("asset:barokah_signature") format("woff2")}`,
+].join("\n");
 
 /** Design px (420 × 592 at A6) to millimeters. */
 const mm = (px: number) => `${Math.round(px * 0.25 * 1000) / 1000}mm`;
@@ -135,6 +162,7 @@ function css(): string {
   const mono = `font-family:${c["font-mono"]}`;
   const script = `font-family:"Barokah Signature","Mrs Saint Delafield","Snell Roundhand","Segoe Script",cursive`;
   return `${BADGE_GENERIC_FONT_CSS}
+${PQC_FONT_FACE_CSS}
 .pqc-badge{position:relative;width:105mm;height:148mm;overflow:hidden;display:flex;flex-direction:column;background:${c["pqc-paper"]};color:${c["pqc-ink"]};font-family:${c.font}}
 .pqc-badge,.pqc-badge *{box-sizing:border-box;-webkit-print-color-adjust:exact;print-color-adjust:exact}.pqc-badge p{margin:0}
 .pqc-field{position:relative;flex:0 0 ${mm(232)};overflow:hidden;display:flex;flex-direction:column;justify-content:space-between;padding:${mm(30)} ${mm(32)} ${mm(22)};background:${c["pqc-field"]};color:${c["pqc-on-field"]}}

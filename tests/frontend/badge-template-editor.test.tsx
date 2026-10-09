@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { render } from "preact";
 import { act } from "preact/test-utils";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import { BadgeTemplateEditor } from "../../assets/ts/member-flows/portal/sections/events/detail/badges/BadgeTemplateEditor";
 import { eventBadgeTemplateSchema } from "../../assets/shared/schemas/event-badge-template";
@@ -10,6 +12,7 @@ import {
 } from "../../assets/shared/schemas/group-events";
 import { exportBadgeTemplateHtml } from "../../assets/shared/badge-template-import";
 import { BADGE_GENERIC_BRAND_ASSETS } from "../../assets/shared/badge-generic-template-assets";
+import { PQC_CONFERENCE_BADGE_FONT_URLS } from "../../assets/shared/badge-pqc-template";
 import { clearAuth, savePortalSession } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
 import { controlFor } from "./helpers/labelled-control";
@@ -188,7 +191,7 @@ it("starts from the PQC conference preset with consortium sponsors, keeps two ev
       if (path.endsWith("/printing")) return json({ revision: "1".repeat(64), template: current, branding: [] });
       if (path.startsWith("/fonts/")) {
         fonts.push(path);
-        return new Response(Buffer.from(BADGE_GENERIC_BRAND_ASSETS.roboto_latin.base64, "base64"));
+        return new Response(readFileSync(resolve(process.cwd(), `static${path}`)));
       }
       if (init?.method === "PATCH") {
         bodies.push(groupEventSettingsUpdateSchema.parse(JSON.parse(String(init.body))));
@@ -227,6 +230,7 @@ it("starts from the PQC conference preset with consortium sponsors, keeps two ev
   expect(draft).toContain("&quot;source&quot;:&quot;consortium&quot;");
   expect(saved.frontHtml).toContain("{{qrImage}}");
   expect(saved.frontHtml).toContain("{{badgeCode}}");
-  expect(fonts.sort()).toEqual(["/fonts/Roboto-latin-ext.woff2", "/fonts/Roboto-latin.woff2"]);
+  expect(fonts.sort()).toEqual(Object.values(PQC_CONFERENCE_BADGE_FONT_URLS).sort());
+  expect(Object.values(saved.assets).filter((asset) => asset.mime === "font/woff2")).toHaveLength(5);
   expect(Object.values(saved.assets)).toContainEqual(BADGE_GENERIC_BRAND_ASSETS.roboto_latin);
 });

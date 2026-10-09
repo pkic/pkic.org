@@ -22,9 +22,16 @@ import { BADGE_FACE_CREDENTIAL, badgeFaceBadge } from "./helpers/badge-face-fixt
 
 const sponsorSvg = (fill: string) =>
   `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 40 10"><rect width="40" height="10" fill="${fill}"/></svg>`;
+const bundledFont = (key: keyof typeof PQC_CONFERENCE_BADGE_FONT_URLS) => ({
+  mime: "font/woff2" as const,
+  base64: readFileSync(resolve(process.cwd(), `static${PQC_CONFERENCE_BADGE_FONT_URLS[key]}`)).toString("base64"),
+});
 const fonts = {
   roboto_latin: BADGE_GENERIC_BRAND_ASSETS.roboto_latin,
   roboto_latin_ext: BADGE_GENERIC_BRAND_ASSETS.roboto_latin_ext,
+  roboto_mono_latin: bundledFont("roboto_mono_latin"),
+  roboto_mono_latin_ext: bundledFont("roboto_mono_latin_ext"),
+  barokah_signature: bundledFont("barokah_signature"),
 };
 const template = createPqcConferenceBadgeTemplate({
   fonts,
@@ -260,6 +267,42 @@ describe("PQC conference badge preset", () => {
         fonts: { ...fonts, roboto_latin: { mime: "font/ttf", base64: fonts.roboto_latin.base64 } },
       }),
     ).toThrow();
+  });
+
+  it("embeds the designed mono and signature fonts and uses them first for labels, codes, and the city line", () => {
+    for (const family of ["Roboto Mono", "Barokah Signature"])
+      expect(template.css).toContain(`@font-face{font-family:"${family}"`);
+    for (const key of ["roboto_mono_latin", "roboto_mono_latin_ext", "barokah_signature"] as const) {
+      expect(template.css).toContain(`url("asset:${key}")`);
+      expect(template.assets[key]).toEqual(fonts[key]);
+    }
+    expect(/\.pqc-city\{[^}]*font-family:"Barokah Signature",/.test(template.css)).toBe(true);
+    expect(/\.pqc-dates\{[^}]*font-family:"Roboto Mono",/.test(template.css)).toBe(true);
+    expect(/\.pqc-code\{[^}]*font-family:"Roboto Mono",/.test(template.css)).toBe(true);
+    expect(() =>
+      createPqcConferenceBadgeTemplate({
+        title: "PQC",
+        dates: "",
+        city: "",
+        fonts: { roboto_latin: fonts.roboto_latin, roboto_latin_ext: fonts.roboto_latin_ext } as typeof fonts,
+      }),
+    ).toThrow();
+  });
+
+  it("records provenance, license, and the required Alifinart Studio attribution for the bundled design fonts", () => {
+    const provenance = readFileSync(resolve(process.cwd(), "static/fonts/BadgeDesign-PROVENANCE.md"), "utf8");
+    for (const key of ["roboto_mono_latin", "roboto_mono_latin_ext", "barokah_signature"] as const) {
+      const path = `static${PQC_CONFERENCE_BADGE_FONT_URLS[key]}`;
+      const bytes = readFileSync(resolve(process.cwd(), path));
+      expect(provenance, path).toContain(createHash("sha256").update(bytes).digest("hex"));
+      expect(provenance, path).toContain(`${bytes.length}`);
+    }
+    const signatureLicense = readFileSync(resolve(process.cwd(), "static/fonts/BarokahSignature-LICENSE.txt"), "utf8");
+    expect(signatureLicense).toContain("Alifinart Studio");
+    expect(signatureLicense).toContain("https://www.behance.net/alifinart");
+    expect(readFileSync(resolve(process.cwd(), "static/fonts/RobotoMono-LICENSE.txt"), "utf8")).toContain(
+      "Apache License",
+    );
   });
 
   it("snapshots canonical public artwork and requires regeneration when it changes", () => {
