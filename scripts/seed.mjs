@@ -6,7 +6,7 @@
  *
  * Usage:
  *   node scripts/seed.mjs --local                  # local D1 / local R2
- *   node scripts/seed.mjs --preview                # remote preview env
+ *   node scripts/seed.mjs --preview                # remote shared Preview database
  *   node scripts/seed.mjs --production             # remote production env
  *
  * Optional flags:
@@ -17,6 +17,7 @@
 import { execFileSync } from "node:child_process";
 import { resolve } from "node:path";
 import { requireEmptyProductionSeedDatabase } from "./lib/production-seed-guard.mjs";
+import { wranglerTargetArgs } from "./lib/wrangler-target.mjs";
 
 // ── Environment definitions ────────────────────────────────────────────────
 
@@ -31,8 +32,9 @@ const ENVS = {
   },
   preview: {
     wranglerFlag: "--remote",
-    wranglerEnv: "preview", // maps to env.preview in wrangler.jsonc
-    database: "pkic-db-preview",
+    wranglerEnv: "preview", // the shared Workers Previews database
+    // The production DB binding; --preview selects its preview_database_id (pkic-db-preview).
+    database: "DB",
     assetsBucket: "pkic-assets-preview",
     speakerBucket: "pkic-speaker-uploads-preview",
     label: "preview (remote)",
@@ -47,9 +49,14 @@ const ENVS = {
   },
 };
 
-/** Return ["--env", name] when an env name is set, otherwise []. */
-function envFlag(cfg) {
-  return cfg.wranglerEnv ? ["--env", cfg.wranglerEnv] : [];
+/** Wrangler arguments that address the selected target's resources. */
+function wranglerArgs(cfg) {
+  return wranglerTargetArgs(cfg.wranglerEnv);
+}
+
+/** Seed sub-scripts take the target name and map it through the same helper. */
+function targetFlag(cfg) {
+  return ["--env", cfg.wranglerEnv];
 }
 
 // ── CLI parsing ─────────────────────────────────────────────────────────────
@@ -114,11 +121,11 @@ function applyMigrations(cfg) {
     run("node", [script("apply-d1-migrations.mjs"), cfg.wranglerEnv]);
     return;
   }
-  run("pnpm", ["exec", "wrangler", "d1", "migrations", "apply", cfg.database, ...envFlag(cfg), cfg.wranglerFlag]);
+  run("pnpm", ["exec", "wrangler", "d1", "migrations", "apply", cfg.database, ...wranglerArgs(cfg), cfg.wranglerFlag]);
 }
 
 function seedAdmin(cfg) {
-  run("node", [script("seed-initial-admin.mjs"), cfg.wranglerFlag, "--db", cfg.database, ...envFlag(cfg)]);
+  run("node", [script("seed-initial-admin.mjs"), cfg.wranglerFlag, "--db", cfg.database, ...targetFlag(cfg)]);
 }
 
 function seedEvent(cfg) {
@@ -127,7 +134,7 @@ function seedEvent(cfg) {
     cfg.wranglerFlag,
     "--db",
     cfg.database,
-    ...envFlag(cfg),
+    ...targetFlag(cfg),
     "--bucket",
     cfg.assetsBucket,
     "--skip-email-templates",
@@ -140,7 +147,7 @@ function seedTemplates(cfg) {
     cfg.wranglerFlag,
     "--db",
     cfg.database,
-    ...envFlag(cfg),
+    ...targetFlag(cfg),
     "--bucket",
     cfg.assetsBucket,
   ]);

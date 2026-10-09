@@ -692,6 +692,32 @@ describe("public endpoints — accessible without credentials", () => {
     expect(response.status).toBe(403);
   });
 
+  it("GET /api/v1/geolocation/country accepts only its own configured Preview origin", async () => {
+    const previewOrigin = "https://feature-x-pkic-org.pkic.workers.dev";
+    const previewEnv = { ...appEnv, APP_BASE_URL: previewOrigin };
+    const request = (origin: string) =>
+      geolocationCountryRequest(
+        createContext(
+          previewEnv,
+          new Request(`${previewOrigin}/api/v1/geolocation/country`, {
+            headers: { "sec-fetch-site": "same-origin", origin },
+          }),
+          {},
+        ),
+      );
+
+    expect((await request(previewOrigin)).status).toBe(200);
+    for (const lookalike of [
+      "https://other-branch-pkic-org.pkic.workers.dev",
+      "https://pkic-org.pkic.workers.dev",
+      "https://feature-x-pkic-org.pkic.workers.dev.evil.example",
+      "http://feature-x-pkic-org.pkic.workers.dev",
+      "https://x.pkic.pages.dev",
+    ]) {
+      expect((await request(lookalike)).status).toBe(403);
+    }
+  });
+
   it("GET /api/v1/events/:slug/forms/placements/:purpose returns 200 without Authorization header", async () => {
     const response = await callApp(
       new Request("https://app.test/api/v1/events/pqc-2026/forms/placements/event_registration"),

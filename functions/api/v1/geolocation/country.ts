@@ -17,6 +17,7 @@
  *   - null when the code is unavailable (e.g. local / localhost / private IP).
  */
 
+import { configuredAppOrigin } from "../../../_lib/config";
 import { dispatchRequestMethod, json } from "../../../_lib/http";
 import { openApiRoute } from "../../../_lib/openapi/route";
 import {
@@ -26,7 +27,8 @@ import {
 
 /**
  * Allowed origins. Must exactly match the site origin (scheme + host + optional
- * port). Add staging/preview origins as needed. An empty string in the set
+ * port). The deployment's configured APP_BASE_URL origin is also allowed, which
+ * covers a branch Preview's own URL without trusting any other host. An empty string in the set
  * means same-origin requests that don't send an Origin header (e.g. direct
  * navigation or same-origin fetch from some older browsers) are allowed.
  *
@@ -41,15 +43,9 @@ const ALLOWED_ORIGINS = new Set([
   "http://localhost:1313",
 ]);
 
-/** Returns true for exact known origins and *.pkic.pages.dev preview deploys. */
-function isAllowedOrigin(origin: string): boolean {
-  if (ALLOWED_ORIGINS.has(origin)) return true;
-  try {
-    const { hostname, protocol } = new URL(origin);
-    return protocol === "https:" && /^[a-z0-9-]+\\.pkic\\.pages\\.dev$/.test(hostname);
-  } catch {
-    return false;
-  }
+/** Returns true for exact known origins and this deployment's configured origin. */
+function isAllowedOrigin(origin: string, configuredOrigin: string | null): boolean {
+  return ALLOWED_ORIGINS.has(origin) || origin === configuredOrigin;
 }
 
 function geolocationCountryResponse(c: any): Response {
@@ -73,7 +69,7 @@ export async function onRequest(c: any): Promise<Response> {
     return json({ error: "forbidden" }, 403);
   }
   const origin = request.headers.get("origin");
-  if (origin !== null && !isAllowedOrigin(origin)) {
+  if (origin !== null && !isAllowedOrigin(origin, configuredAppOrigin(c.env ?? {}))) {
     return json({ error: "forbidden" }, 403);
   }
 

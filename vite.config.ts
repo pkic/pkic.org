@@ -1,6 +1,6 @@
 import { astroMarkdownWorkerPlugin } from "./scripts/lib/astro-markdown-worker-plugin.mjs";
-import { publicationEnvironment } from "./scripts/publication/build-context.mjs";
-import { readFileSync, writeFileSync } from "node:fs";
+import { publicationEnvironment, wranglerEnvironment } from "./scripts/publication/build-context.mjs";
+import { previewOriginVars } from "./scripts/lib/workers-preview-url.mjs";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { cloudflare } from "@cloudflare/vite-plugin";
@@ -12,27 +12,18 @@ import { trustListPlugin } from "./scripts/lib/trust-list-plugin.mjs";
 const projectRoot = fileURLToPath(new URL(".", import.meta.url));
 
 export default defineConfig(() => {
-  process.env.CLOUDFLARE_ENV = publicationEnvironment();
+  // The Cloudflare plugin selects the Wrangler environment. A preview build
+  // emits the production Worker config, whose previews block binds preview resources.
+  // Vite evaluates this config more than once, so pin the publication target
+  // before CLOUDFLARE_ENV is rewritten to the Wrangler environment.
+  const target = process.env.PKIC_PUBLICATION_TARGET ?? publicationEnvironment();
+  process.env.PKIC_PUBLICATION_TARGET = target;
+  process.env.CLOUDFLARE_ENV = wranglerEnvironment(target);
 
-  const ciBranch = process.env.WORKERS_CI_BRANCH;
-  if (ciBranch && ciBranch.toLowerCase() !== "main") {
-    const sanitized = ciBranch
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, "-")
-      .replace(/^-|-$/g, "");
-    const previewUrl = `https://${sanitized}-pkic-org.pkic.workers.dev`;
-    process.env.APP_BASE_URL = previewUrl;
-    const configFile = resolve(projectRoot, "wrangler.jsonc");
-    const content = readFileSync(configFile, "utf8");
-    const patched = content.replace(
-      /("APP_BASE_URL"\s*:\s*)"https:\/\/[^"]*\.pkic\.workers\.dev\/?"/,
-      `$1"${previewUrl}"`,
-    );
-    if (patched !== content) {
-      writeFileSync(configFile, patched);
-      console.log(`Preview APP_BASE_URL set to ${previewUrl}`);
-    }
-  }
+  // Each Preview's links and passkey origin come from its own branch URL.
+  // Only previews.vars changes; production and local builds inject nothing.
+  const previewVars = target === "preview" ? previewOriginVars() : null;
+  if (previewVars) console.log(`Preview origin set to ${previewVars.APP_BASE_URL}`);
 
   return {
     clearScreen: false,
@@ -66,7 +57,7 @@ export default defineConfig(() => {
       contentMediaPlugin(projectRoot),
       trustListPlugin(projectRoot),
       bylinesPlugin(projectRoot),
-      cloudflare(),
+      cloudflare(previewVars ? { config: { previews: { vars: previewVars } } } : {}),
     ],
   };
 });
