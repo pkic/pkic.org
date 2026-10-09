@@ -24,3 +24,27 @@ export function composeBadgePrintSvg(svg: string, credential: string): string {
   const text = `<g fill="#000" text-anchor="middle" font-family="monospace"><text x="${width / 2}" y="${qrHeight + width * 0.075}" font-size="${captionFontSize}">Badge code</text><text x="${width / 2}" y="${qrHeight + width * 0.18}" font-size="${codeFontSize}" textLength="${width * 0.9}" lengthAdjust="spacingAndGlyphs">${code}</text></g>`;
   return `${svg.slice(0, root.index ?? 0)}${opening}<rect width="${width}" height="${height}" fill="#fff"/>${qr}${text}</svg>`;
 }
+
+const COMPOSED = new RegExp(
+  '^(<svg\\b[^>]*?)viewBox="0 0 ([0-9.]+) ([0-9.]+)"([^>]*)><rect [^>]*/><g transform="translate\\(([0-9.]+) 0\\)">([\\s\\S]*)</g>' +
+    '<g fill="#000" text-anchor="middle" font-family="monospace"><text [^>]*>Badge code</text><text [^>]*>([A-Z0-9]{4}(?:-[A-Z0-9]{4}){3})</text></g></svg>$',
+);
+
+/**
+ * The inverse of `composeBadgePrintSvg` for templates that place the manual code themselves: the untouched QR
+ * (with its quiet zone) as a square SVG, and the formatted code. Anything else, such as a design preview's
+ * placeholder, is not split.
+ */
+export function splitBadgePrintSvg(svg: string): { qr: string; code: string } | null {
+  const match = COMPOSED.exec(svg.trim());
+  if (!match) return null;
+  const [, opening, widthText, heightText, rest, offsetText, original, code] = match;
+  const [width, height, offset] = [Number(widthText), Number(heightText), Number(offsetText)];
+  const qrWidth = width - 2 * offset;
+  const qrHeight = height - width * 0.2;
+  if (!(qrWidth > 0 && qrHeight > 0)) return null;
+  return {
+    qr: `${opening}viewBox="${offset} 0 ${qrWidth} ${qrHeight}"${rest}><g transform="translate(${offset} 0)">${original}</g></svg>`,
+    code,
+  };
+}

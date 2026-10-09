@@ -9,3 +9,23 @@
   width: min(100%, 18rem);
   height: auto;
 }
+
+/* A badge face fills the column up to its printed width; the frame keeps the printed proportions.
+   The outline takes no layout space, so the measured width is the frame's whole width. */
+.pk-badge-face {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--pk-3);
+  width: 100%;
+  min-width: 0;
+}
+
+.pk-badge-face__frame {
+  display: block;
+  max-width: 100%;
+  border: 0;
+  outline: 1px solid var(--pk-line);
+  box-shadow: var(--pk-shadow-2);
+  background: var(--pk-surface);
+}

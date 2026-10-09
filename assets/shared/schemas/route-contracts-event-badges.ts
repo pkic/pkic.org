@@ -5,6 +5,8 @@ import { eventSlugParamsSchema, jsonErrorResponse, successResponseSchema, utcIns
 import { databaseIdSchema } from "./identifiers";
 import { userCatalogItemSchema } from "./user-catalog";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
+import { badgeDisplayRoleSchema } from "./participant-roles";
+import { badgeTemplateBrandingSchema, eventBadgeTemplateSchema } from "./event-badge-template";
 export const badgeAttendeeQuerySchema = listQuerySchema(["email"] as const);
 export const badgeAttendeesResponseSchema = paginatedResponseSchema(
   "users",
@@ -31,8 +33,14 @@ export const badgeIssueRequestSchema = z
     userId: databaseIdSchema,
     expiresAt: utcInstantSchema.optional(),
     replaceBadgeId: databaseIdSchema.optional(),
+    /** Return the attendee's active reprintable badge instead of adding a second credential. */
+    reuseActive: z.boolean().optional(),
   })
-  .strict();
+  .strict()
+  .refine((request) => !(request.reuseActive && request.replaceBadgeId), {
+    message: "Replace a badge or reuse the active one, not both.",
+    path: ["reuseActive"],
+  });
 export type BadgeIssueRequest = z.infer<typeof badgeIssueRequestSchema>;
 const badgeIssueResultSchema = z.object({
   id: databaseIdSchema,
@@ -43,6 +51,8 @@ const badgeIssueResultSchema = z.object({
 export const badgeIssueResponseSchema = z.discriminatedUnion("result", [
   badgeIssueResultSchema.extend({ result: z.literal("issued"), credential: badgeCredentialSchema }).strict(),
   badgeIssueResultSchema.extend({ result: z.literal("replayed"), credential: z.null() }).strict(),
+  /** `reuseActive` found an active badge; its print artifact is recovered through the print action. */
+  badgeIssueResultSchema.extend({ result: z.literal("existing"), credential: z.null() }).strict(),
 ]);
 export type BadgeIssueResponse = z.infer<typeof badgeIssueResponseSchema>;
 export const badgeCredentialStatusSchema = z.enum(["active", "expired", "revoked"]);
@@ -142,16 +152,51 @@ export const badgeRevokeRouteSchema = {
 };
 
 /** Printing never issues, replaces, or extends a credential. */
-export const badgePrintRequestSchema = z.object({ operationId: databaseIdSchema }).strict();
+export const badgePrintingRevisionSchema = z.string().regex(/^[a-f0-9]{64}$/);
+export const badgePrintRequestSchema = z
+  .object({ operationId: databaseIdSchema, printingRevision: badgePrintingRevisionSchema })
+  .strict();
 export type BadgePrintRequest = z.infer<typeof badgePrintRequestSchema>;
 export const badgePrintResponseSchema = z
   .object({
     id: databaseIdSchema,
     svg: z.string().min(1).max(100000),
     displayName: badgeCredentialMetadataSchema.shape.displayName,
+    firstName: userCatalogItemSchema.shape.first_name,
+    lastName: userCatalogItemSchema.shape.last_name,
+    organization: z.string().max(500).nullable(),
+    /** The job title confirmed at registration, as the registration shows it. */
+    jobTitle: z.string().max(500).nullable().default(null),
+    badgeRole: badgeDisplayRoleSchema,
+    printingRevision: badgePrintingRevisionSchema,
     expiresAt: utcInstantSchema,
   })
   .strict();
+export const badgePrintingResponseSchema = z
+  .object({
+    revision: badgePrintingRevisionSchema,
+    template: eventBadgeTemplateSchema.nullable(),
+    branding: badgeTemplateBrandingSchema,
+  })
+  .strict();
+export type BadgePrintingContext = z.infer<typeof badgePrintingResponseSchema>;
+export const badgePrintingRouteSchema = {
+  ...requiresPermissions("events:manage"),
+  tags: ["Events"],
+  summary: "Prepare the current event badge template and approved sponsor artwork once per print document",
+  request: { params: eventSlugParamsSchema },
+  responses: {
+    "200": {
+      description: "Transient authenticated event print context",
+      content: { "application/json": { schema: badgePrintingResponseSchema } },
+    },
+    "403": jsonErrorResponse("Event management permission required or changed"),
+    "409": jsonErrorResponse("Badge template or approved sponsor artwork changed"),
+    "413": jsonErrorResponse("Owned sponsor artwork exceeds the print document limits"),
+    "422": jsonErrorResponse("Badge template or approved sponsor artwork is invalid or requires replacement"),
+    "503": jsonErrorResponse("Asset storage is unavailable"),
+  },
+};
 export const badgePrintRouteSchema = {
   ...requiresPermissions("events:manage"),
   tags: ["Events"],
@@ -171,6 +216,7 @@ export const badgePrintRouteSchema = {
     "403": jsonErrorResponse("Event management permission required or changed"),
     "404": jsonErrorResponse("Badge unavailable"),
     "409": jsonErrorResponse("Badge inactive, changed, or has no recoverable print artifact"),
+    "422": jsonErrorResponse("Badge template or sponsor configuration is invalid"),
     "503": jsonErrorResponse("Badge print encryption is unavailable"),
   },
 };

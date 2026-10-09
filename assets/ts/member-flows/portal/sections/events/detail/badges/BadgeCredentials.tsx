@@ -1,3 +1,8 @@
+import { lazy, Suspense } from "preact/compat";
+import { RegistrationBadgePrinting } from "../../../../../../components/event-badges/RegistrationBadgePrinting";
+import type { BadgePrintScope } from "../../../../../../components/event-badges/badge-print-population";
+import type { PortalSession } from "../../../../types";
+import { isAuthed, portalSession } from "../../../../state";
 import { useState } from "preact/hooks";
 import {
   badgeCredentialMetadataSchema,
@@ -18,10 +23,14 @@ import { DescriptionList } from "../../../../../../ui/DescriptionList";
 import { PageHeader } from "../../../../../../ui/PageHeader";
 import { Menu } from "../../../../../../ui/Menu";
 import { RowActions } from "../../../../../../ui/RowActions";
-import { EmptyState } from "../../../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../../../ui/EmptyState";
 import { usePortalHashLocation } from "../../../../hash-location";
 import { BadgeIssuance } from "../scanner/BadgeIssuance";
 import { BadgeCredentialPrint } from "./BadgeCredentialPrint";
+
+const BadgeTemplateEditor = lazy(() =>
+  import("./BadgeTemplateEditor").then((module) => ({ default: module.BadgeTemplateEditor })),
+);
 
 export function BadgeCredentials({
   slug,
@@ -29,6 +38,10 @@ export function BadgeCredentials({
   credentialId,
   segment,
   userId,
+  eventId,
+  groupId,
+  printRequest,
+  onPrintClose,
 }: {
   slug: string;
   basePath: string;
@@ -36,14 +49,43 @@ export function BadgeCredentials({
   segment?: string;
   /** Optional canonical user scope; filtering remains a bounded server query. */
   userId?: string;
+  eventId?: string;
+  groupId?: string;
+  printRequest?: { scope: BadgePrintScope; session: PortalSession | null } | null;
+  onPrintClose?: () => void;
 }) {
   const [, navigate] = usePortalHashLocation();
+  const printContextCurrent = () =>
+    Boolean(
+      printRequest?.session &&
+      isAuthed.value &&
+      portalSession.value === printRequest.session &&
+      Math.min(Date.parse(printRequest.session.expiresAt), Date.parse(printRequest.session.idleExpiresAt)) > Date.now(),
+    );
+  if (printRequest && eventId && onPrintClose)
+    return printContextCurrent() ? (
+      <RegistrationBadgePrinting
+        slug={slug}
+        eventId={eventId}
+        scope={printRequest.scope}
+        isCurrent={printContextCurrent}
+        onBack={onPrintClose}
+      />
+    ) : (
+      <ErrorAlert error="Sign in again before printing these badges." />
+    );
   const requestedUser = databaseIdSchema.safeParse(
     new URLSearchParams(window.location.hash.split("?")[1] ?? "").get("userId"),
   );
   const scopedUserId = userId ?? (requestedUser.success ? requestedUser.data : undefined);
   const scopeQuery = scopedUserId ? `?userId=${encodeURIComponent(scopedUserId)}` : "";
   const recordPath = (id: string) => `${basePath}/${encodeURIComponent(id)}`;
+  if (credentialId === "design")
+    return (
+      <Suspense fallback={<Spinner label="Loading badge design…" />}>
+        <BadgeTemplateEditor slug={slug} groupId={groupId} eventId={eventId} onBack={() => navigate(basePath)} />
+      </Suspense>
+    );
   if (credentialId === "new")
     return (
       <BadgeIssuance
@@ -85,6 +127,12 @@ export function BadgeCredentials({
       paginate
       initialSort="-createdAt"
       searchPlaceholder="name or credential reference"
+      toolbar={() => (
+        <Menu
+          label="Badge collection actions"
+          items={[{ id: "design", label: "Badge design", onSelect: () => navigate(`${basePath}/design`) }]}
+        />
+      )}
       createAction={{ label: "Create badge", onSelect: () => navigate(`${basePath}/new${scopeQuery}`) }}
       rowKey={(badge) => badge.id}
       columns={[

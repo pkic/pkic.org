@@ -38,6 +38,27 @@ function prepareRevocation(db: DatabaseLike, eventId: string, badge: OwnedBadge,
     .bind(now, badge.id, eventId, badge.user_id, badge.credential_hash, badge.created_at, badge.expires_at);
 }
 const receiptKey = (eventId: string, operationId: string) => `badge-issuance:${eventId}:${operationId}`;
+/** One predicate for "this attendee already holds a badge whose print file can be recovered". */
+const ACTIVE_REPRINTABLE_BADGE_SQL = `FROM event_badge_credentials WHERE event_id=? AND user_id=? AND revoked_at IS NULL
+  AND expires_at>? AND print_credential_json IS NOT NULL`;
+
+/** Newest active badge whose sealed print credential lets the holder or an organizer recover the same QR. */
+export async function findActiveReprintableBadge(db: DatabaseLike, eventId: string, userId: string) {
+  return first<{ id: string; expires_at: string }>(
+    db,
+    `SELECT id,expires_at ${ACTIVE_REPRINTABLE_BADGE_SQL} ORDER BY created_at DESC,id DESC LIMIT 1`,
+    [eventId, userId, nowIso()],
+  );
+}
+function existingBadge(badge: { id: string; expires_at: string }): BadgeIssueResponse {
+  return badgeIssueResponseSchema.parse({
+    result: "existing",
+    id: badge.id,
+    credential: null,
+    expiresAt: badge.expires_at,
+    replacedBadgeId: null,
+  });
+}
 function throwBadgeCommandError(error: unknown): never {
   if (isAuditChangeGuardFailure(error))
     throw new AppError(409, "BADGE_CHANGED", "The badge or event registration changed. Refresh before continuing.");
@@ -90,10 +111,15 @@ export async function issueBadge(
       userId: input.userId,
       expiresAt: input.expiresAt ?? null,
       replaceBadgeId: input.replaceBadgeId ?? null,
+      ...(input.reuseActive ? { reuseActive: true } : {}),
     }),
   );
   const replay = await completedIssue(db, eventId, actorId, input, requestDigest);
   if (replay) return replay;
+  if (input.reuseActive) {
+    const active = await findActiveReprintableBadge(db, eventId, input.userId);
+    if (active) return existingBadge(active);
+  }
   const event = await first<{ ends_at: string | null }>(db, "SELECT ends_at FROM events WHERE id=?", [eventId]);
   if (!event) throw new AppError(404, "EVENT_NOT_FOUND", "Event unavailable.");
   if (!(await first(db, "SELECT id FROM registrations WHERE event_id=? AND user_id=?", [eventId, input.userId])))
@@ -163,7 +189,8 @@ export async function issueBadge(
     statements.push(
       db
         .prepare(
-          "INSERT INTO event_badge_credentials(id,event_id,user_id,credential_hash,created_at,expires_at,print_credential_json) SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM registrations WHERE event_id=? AND user_id=?) AND EXISTS(SELECT 1 FROM events WHERE id=? AND ends_at IS ?)",
+          `INSERT INTO event_badge_credentials(id,event_id,user_id,credential_hash,created_at,expires_at,print_credential_json) SELECT ?,?,?,?,?,?,? WHERE EXISTS(SELECT 1 FROM registrations WHERE event_id=? AND user_id=?) AND EXISTS(SELECT 1 FROM events WHERE id=? AND ends_at IS ?)
+            AND (?=0 OR NOT EXISTS(SELECT 1 ${ACTIVE_REPRINTABLE_BADGE_SQL}))`,
         )
         .bind(
           id,
@@ -177,6 +204,10 @@ export async function issueBadge(
           input.userId,
           eventId,
           event.ends_at,
+          input.reuseActive ? 1 : 0,
+          eventId,
+          input.userId,
+          now,
         ),
       prepareScopedAuditLogAfterOneChange(
         db,
@@ -207,6 +238,12 @@ export async function issueBadge(
         /UNIQUE constraint failed: event_badge_credentials\.credential_hash(?:\s|:|$)/.test(error.message)
       )
         continue;
+      // A concurrent request issued the reusable badge first; return that one rather than a second credential.
+      const concurrent =
+        input.reuseActive && isAuditChangeGuardFailure(error)
+          ? await findActiveReprintableBadge(db, eventId, input.userId)
+          : null;
+      if (concurrent) return existingBadge(concurrent);
       throwBadgeCommandError(error);
     }
     return badgeIssueResponseSchema.parse({

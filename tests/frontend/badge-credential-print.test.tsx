@@ -6,6 +6,7 @@ import {
   badgeCredentialMetadataSchema,
   badgePrintRequestSchema,
   badgePrintResponseSchema,
+  badgePrintingResponseSchema,
 } from "../../assets/shared/schemas/route-contracts-event-badges";
 import { BadgeCredentials } from "../../assets/ts/member-flows/portal/sections/events/detail/badges/BadgeCredentials";
 import { BadgePrintPreview } from "../../assets/ts/components/event-badges/BadgePrintPreview";
@@ -39,9 +40,15 @@ const metadata = badgeCredentialMetadataSchema.parse({
   status: "active",
   reprintAvailable: true,
 });
+const printing = badgePrintingResponseSchema.parse({ revision: "1".repeat(64), template: null, branding: [] });
 const printable = badgePrintResponseSchema.parse({
   id: ID,
   svg: SVG,
+  firstName: "Synthetic",
+  lastName: "Attendee",
+  organization: null,
+  badgeRole: "attendee",
+  printingRevision: printing.revision,
   expiresAt: metadata.expiresAt,
   displayName: metadata.displayName,
 });
@@ -139,6 +146,7 @@ describe("authorized badge reprinting", () => {
         bodies.push(JSON.parse(String(init.body)));
         return json(printable);
       }
+      if (path(input).endsWith("/printing")) return json(printing);
       expect(path(input)).toBe(ENDPOINT);
       return json(metadata);
     });
@@ -150,24 +158,24 @@ describe("authorized badge reprinting", () => {
     const preview = host.querySelector<HTMLImageElement>("img")!;
     expect(decodeURIComponent(preview.src)).toContain(SVG);
     expect(host.querySelector("iframe")?.getAttribute("srcdoc")).toContain(metadata.displayName);
-    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch).toHaveBeenCalledTimes(4);
     await click("Download print files");
     expect(host.textContent).not.toContain("Printing CSV with QR codes");
     await click("QR code (SVG)");
     await rendered(() => expect(downloadBadgeArtifact).toHaveBeenCalledTimes(1));
-    expect(fetch).toHaveBeenCalledTimes(4);
+    expect(fetch).toHaveBeenCalledTimes(6);
     expect(downloadBadgeArtifact).toHaveBeenCalledExactlyOnceWith(SVG, "image/svg+xml", "attendee-badge-qr.svg");
     expect(localStorage.length).toBe(0);
     expect(sessionStorage.length).toBe(0);
     await act(async () => render(null, host));
     await mount();
     expect(host.querySelector("img,iframe")).toBeNull();
-    expect(bodies).toHaveLength(1);
+    expect(bodies).toHaveLength(2);
   });
 
   it("keeps fresh issuance CSV available only when the supplied inputs contain fresh credentials", async () => {
     const issued: FreshBadgePrint = { ...printable, displayName: "Synthetic Attendee", credential: "ABCDEFGHJKLMNPQR" };
-    await mount(<BadgePrintPreview badges={[issued]} />);
+    await mount(<BadgePrintPreview badges={[issued]} printing={printing} />);
     await click("Download print files");
     await click("Printing CSV with QR codes");
     expect(downloadBadgeArtifact).toHaveBeenCalledWith(
@@ -194,6 +202,7 @@ describe("authorized badge reprinting", () => {
       vi.stubGlobal(
         "fetch",
         vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+          if (path(_input).endsWith("/printing")) return json(printing);
           if (init?.method === "POST") return json({ ...printable, id: reason === "wrong credential" ? OTHER : ID });
           reads++;
           return json(
@@ -216,6 +225,7 @@ describe("authorized badge reprinting", () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (path(_input).endsWith("/printing")) return json(printing);
         if (init?.method !== "POST") return json(metadata);
         bodies.push(JSON.parse(String(init.body)));
         return bodies.length === 1
@@ -242,6 +252,7 @@ describe("authorized badge reprinting", () => {
       vi.stubGlobal(
         "fetch",
         vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+          if (path(_input).endsWith("/printing")) return json(printing);
           if (init?.method !== "POST") return json(metadata);
           signal = init.signal ?? undefined;
           return new Promise<Response>((resolve) => {
@@ -272,9 +283,11 @@ describe("authorized badge reprinting", () => {
   it("purges an already displayed preview on sign-out", async () => {
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
-        json(init?.method === "POST" ? printable : metadata),
-      ),
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (path(_input).endsWith("/printing")) return json(printing);
+        if (init?.method === "POST") badgePrintRequestSchema.parse(JSON.parse(String(init.body)));
+        return json(init?.method === "POST" ? printable : metadata);
+      }),
     );
     await mount();
     await click("Prepare print preview");
@@ -284,14 +297,20 @@ describe("authorized badge reprinting", () => {
     expect(host.textContent).toContain("Sign in again");
   });
 
-  it("blocks download after a fresh revocation read and clears the preview", async () => {
-    let reads = 0;
+  it("blocks download after a fresh canonical print refusal and clears the preview", async () => {
+    let posts = 0;
     vi.stubGlobal(
       "fetch",
       vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-        if (init?.method === "POST") return json(printable);
-        reads++;
-        return json(reads > 2 ? { ...metadata, status: "revoked", reprintAvailable: false } : metadata);
+        if (path(_input).endsWith("/printing")) return json(printing);
+        if (init?.method === "POST") {
+          badgePrintRequestSchema.parse(JSON.parse(String(init.body)));
+          posts++;
+          return posts > 1
+            ? json({ error: { code: "BADGE_PRINT_UNAVAILABLE", message: "Badge was revoked." } }, 409)
+            : json(printable);
+        }
+        return json(metadata);
       }),
     );
     await mount();
@@ -306,9 +325,11 @@ describe("authorized badge reprinting", () => {
   it("clears the private preview at credential expiry without a network request", async () => {
     vi.useFakeTimers();
     const expiresAt = new Date(Date.now() + 1000).toISOString();
-    const fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) =>
-      json(init?.method === "POST" ? { ...printable, expiresAt } : { ...metadata, expiresAt }),
-    );
+    const fetch = vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+      if (path(_input).endsWith("/printing")) return json(printing);
+      if (init?.method === "POST") badgePrintRequestSchema.parse(JSON.parse(String(init.body)));
+      return json(init?.method === "POST" ? { ...printable, expiresAt } : { ...metadata, expiresAt });
+    });
     vi.stubGlobal("fetch", fetch);
     await mount();
     await click("Prepare print preview");
@@ -318,6 +339,6 @@ describe("authorized badge reprinting", () => {
     });
     expect(host.querySelector("img,iframe")).toBeNull();
     expect(host.textContent).toContain("has expired");
-    expect(fetch).toHaveBeenCalledTimes(3);
+    expect(fetch).toHaveBeenCalledTimes(4);
   });
 });

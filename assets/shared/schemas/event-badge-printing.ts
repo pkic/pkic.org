@@ -10,7 +10,7 @@ import { requiresSession } from "./route-contract";
 import { jsonErrorResponse } from "./api-common";
 
 export const eventBadgePrintPopulationQuerySchema = eventAttendanceRegistrationsQuerySchema
-  .pick({ q: true, status: true, waitlisted: true })
+  .pick({ q: true, status: true, waitlisted: true, attendance_type: true, badge_role: true })
   .merge(cursorPaginationQuerySchema(databaseIdSchema))
   .strict();
 export type EventBadgePrintPopulationQuery = z.infer<typeof eventBadgePrintPopulationQuerySchema>;

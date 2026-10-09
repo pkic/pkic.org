@@ -99,6 +99,33 @@ describe("group-owned badge print population", () => {
     expect((await f.page("?q=ada%40example.test")).registrations[0]?.id).toBe(waiting.id);
     expect(pending.id).not.toBe(waiting.id);
   });
+  it("scopes a print run by attendance type and by the role band the badge prints", async () => {
+    const f = await fixture();
+    const ada = await registration(f.eventId, "Ada");
+    const grace = await registration(f.eventId, "Grace");
+    const linus = await registration(f.eventId, "Linus");
+    const sam = await registration(f.eventId, "Sam");
+    await env.DB.prepare("UPDATE registrations SET attendance_type='virtual' WHERE id=?").bind(grace.id).run();
+    for (const [id, role] of [
+      [grace.id, "moderator"],
+      [linus.id, "organizer"],
+      [sam.id, "sponsor"],
+    ])
+      await env.DB.prepare(
+        "INSERT INTO registration_badge_role_overrides(registration_id,role,set_by_user_id,created_at,updated_at) VALUES(?,?,?,?,?)",
+      )
+        .bind(id, role, f.admin.id, new Date().toISOString(), new Date().toISOString())
+        .run();
+    const ids = async (query: string) => (await f.page(query)).registrations.map((row) => row.id).sort();
+    expect(await ids("?attendance_type=in_person")).toEqual([ada.id, linus.id, sam.id].sort());
+    expect(await ids("?attendance_type=virtual")).toEqual([grace.id]);
+    expect(await ids("?badge_role=attendee")).toEqual([ada.id]);
+    expect(await ids("?badge_role=speaker")).toEqual([grace.id]);
+    expect(await ids("?badge_role=staff")).toEqual([linus.id]);
+    expect(await ids("?badge_role=sponsor&attendance_type=in_person")).toEqual([sam.id]);
+    expect(await ids("?badge_role=speaker&attendance_type=in_person")).toEqual([]);
+    expect((await f.request("?badge_role=organizer")).status).toBe(400);
+  });
   it("reaches matching registrations beyond the shared offset ceiling with a bounded page", async () => {
     const f = await fixture();
     await env.DB.batch([

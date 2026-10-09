@@ -5,9 +5,12 @@ import {
   badgeCredentialsRouteSchema,
   badgeCredentialRouteSchema,
   badgePrintRouteSchema,
+  badgePrintingRouteSchema,
 } from "../../../../../assets/shared/schemas/route-contracts-event-badges";
+import { currentBadgeRouteSchema } from "../../../../../assets/shared/schemas/route-contracts-event-current-badge";
 import { guardPermissionDatabase } from "../../../../_lib/auth/permissions";
-import { markResponseSensitive, type AdminContext } from "../../../../_lib/db/context";
+import { requireIdentityFromRequest } from "../../../../_lib/auth/user-session";
+import { markResponseSensitive, requestDb, type AdminContext } from "../../../../_lib/db/context";
 import { AppError } from "../../../../_lib/errors";
 import { json } from "../../../../_lib/http";
 import { openApiRoute } from "../../../../_lib/openapi/route";
@@ -16,12 +19,29 @@ import {
   listBadgeCredentials,
   getBadgeCredential,
 } from "../../../../_lib/services/event-participation/badge-credentials";
+import { getBadgePrintingContext } from "../../../../_lib/services/event-participation/badge-print-branding";
 import { prepareBadgePrint } from "../../../../_lib/services/event-participation/badge-print";
 import { requireEventPermission } from "./authorization";
 import { badgeAttendees } from "../../../../_lib/services/event-participation/badge-attendees";
+import { prepareBadgeHolderTicket } from "../../../../_lib/services/event-participation/badge-holder-ticket";
+import { getEventBySlug } from "../../../../_lib/services/events";
+/** The signed-in holder's own badge only; no identifier selects another attendee's credential. */
+export const EventBadgeCurrentPut = openApiRoute(currentBadgeRouteSchema, async (c: AdminContext, data) => {
+  markResponseSensitive(c);
+  const db = requestDb(c);
+  const holder = await requireIdentityFromRequest(db, c.req.raw, c.env);
+  const event = await getEventBySlug(db, data.params.eventSlug);
+  return json(
+    await prepareBadgeHolderTicket(db, c.env, event.id, { userId: holder.userId, sessionId: holder.sessionId }),
+  );
+});
 export const EventBadgeAttendeesGet = openApiRoute(badgeAttendeesRouteSchema, async (c: AdminContext, data) => {
   const { db, event } = await badgeManagementContext(c, data.params.eventSlug);
   return json(await badgeAttendees(db, event.id, data.query));
+});
+export const EventBadgePrintingGet = openApiRoute(badgePrintingRouteSchema, async (c: AdminContext, data) => {
+  const { db, event } = await badgeManagementContext(c, data.params.eventSlug);
+  return json(await getBadgePrintingContext(db, c.env, event.id));
 });
 export const EventBadgesGet = openApiRoute(badgeCredentialsRouteSchema, async (c: AdminContext, data) => {
   const { db, event } = await badgeManagementContext(c, data.params.eventSlug);

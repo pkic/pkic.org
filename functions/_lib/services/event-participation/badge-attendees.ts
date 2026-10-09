@@ -1,3 +1,4 @@
+import { registrationOrganizationSql } from "../registrations/selected-identity";
 import {
   badgeAttendeeQuerySchema,
   badgeAttendeesResponseSchema,
@@ -16,7 +17,7 @@ export async function badgeAttendees(db: DatabaseLike, eventId: string, raw: unk
   const count = await first<{ total: number }>(db, `SELECT COUNT(*) AS total ${from}`, bindings);
   const users = await all(
     db,
-    `SELECT u.id,u.email,u.first_name,u.last_name,u.organization_name ${from} ORDER BY u.email ${query.sort === "-email" ? "DESC" : "ASC"},u.id LIMIT ? OFFSET ?`,
+    `SELECT u.id,u.email,u.first_name,u.last_name,${registrationOrganizationSql("reg")} AS organization_name ${from} ORDER BY u.email ${query.sort === "-email" ? "DESC" : "ASC"},u.id LIMIT ? OFFSET ?`,
     [...bindings, query.limit, query.offset],
   );
   return badgeAttendeesResponseSchema.parse({
