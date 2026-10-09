@@ -202,6 +202,33 @@ describe("portal System Users detail record", () => {
     }
   });
 
+  it("lets a reader vouch for somebody else's skills but never for their own", async () => {
+    stubDetail(user);
+    const withoutSkills = apiClient.getJson.getMockImplementation()!;
+    apiClient.getJson.mockImplementation(async (url: string) =>
+      url === `/api/v1/users/${user.id}/skills`
+        ? {
+            skills: [{ skillId: "skill-1", slug: "eidas", name: "eIDAS", vouchCount: 2, vouchedByViewer: false }],
+            totalVouches: 2,
+          }
+        : withoutSkills(url),
+    );
+
+    // Somebody else's record: each skill is a toggle carrying its own state.
+    const other = await mountDetail(READ_ONLY, "somebody-else");
+    const skills = other.querySelector('[aria-label="Skills"]')!;
+    expect(skills.querySelector('button[aria-pressed="false"]')?.textContent).toContain("eIDAS");
+    expect(skills.textContent).toContain("only members who share a group can vouch");
+
+    // The reader's own record states the rule instead of offering a control
+    // that could only ever answer with a refusal.
+    const own = await mountDetail(READ_ONLY, user.id);
+    const ownSkills = own.querySelector('[aria-label="Skills"]')!;
+    expect(ownSkills.textContent).toContain("eIDAS");
+    expect(ownSkills.querySelector("button")).toBeNull();
+    expect(ownSkills.textContent).toContain("Nobody vouches for their own skills.");
+  });
+
   it("offers editing in the record's own actions menu, not as a band across the page", async () => {
     /*
      * Issue #46: "Edit profile" was a section of the record whose entire

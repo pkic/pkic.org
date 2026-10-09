@@ -33,12 +33,14 @@ export const ORGANIZATION_FLOW = {
     {
       id: "10.5",
       title: "A representative sees their organization, their role, and a pending review",
-      status: "covered",
+      status: "unit",
+      note: "Covered in portal-represented-organizations and portal-home: the list names its table and columns, states the reader's role and a waiting review in words on the organization that has one, and each row opens the organization through a real link; Home carries a pending review as a to-do that opens the organization. The feed itself, including the review flag, is covered in user-organizations-feed.",
     },
     {
       id: "10.6",
       title: "Somebody who represents nothing sees an honest empty state",
-      status: "covered",
+      status: "unit",
+      note: "Covered in portal-represented-organizations and portal-home: an empty list is explained in a sentence rather than drawn as a blank table, and Home says the member participates as an individual. Worker behavior is covered in user-organizations-feed.",
     },
     {
       id: "10.7",

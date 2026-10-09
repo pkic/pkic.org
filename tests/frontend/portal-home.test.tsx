@@ -362,4 +362,39 @@ describe("portal landing", () => {
     expect(badges).toEqual(["Primary contact", "Contact"]);
     expect(organizations.querySelector("a[href='#/organizations']")?.textContent).toBe("View all");
   });
+
+  it("lists a pending organization review as a to-do that opens the organization", async () => {
+    portalSession.value = portalSessionFixture({ member: true });
+    stubFeeds(
+      feeds({
+        "/api/v1/users/current/organizations": {
+          organizations: [organizationRow({ hasPendingReview: true })],
+          page: onePage,
+        },
+      }),
+    );
+
+    const container = mount();
+    await settle();
+
+    const item = [...panelNamed(container, "Needs your voice").querySelectorAll("a")].find(
+      (link) => link.textContent === "Review pending: Organization A",
+    );
+    expect(item?.getAttribute("href")).toBe("#/organizations/50000000-0000-4000-8000-000000000001");
+    // One organization is listed in full, so there is nothing more to view.
+    expect(container.querySelector(".pk-home-affiliation")?.textContent).not.toContain("View all");
+  });
+
+  it("says an unaffiliated member participates as an individual, and waits on nothing", async () => {
+    portalSession.value = portalSessionFixture({ member: true });
+    stubFeeds(feeds());
+
+    const container = mount();
+    await settle();
+
+    expect(container.querySelector(".pk-home-affiliation")?.textContent).toContain("Participating as an individual");
+    expect([...container.querySelectorAll("h3")].some((heading) => heading.textContent === "Needs your voice")).toBe(
+      false,
+    );
+  });
 });

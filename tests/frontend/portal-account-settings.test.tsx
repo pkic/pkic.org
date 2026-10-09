@@ -221,6 +221,26 @@ describe("portal account settings capacity cutover", () => {
     expect(container.textContent).toContain("event event-1");
   });
 
+  it("says a plain member holds no individual permissions, with nothing to list and no sponsor access", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        throw new Error("Unexpected request");
+      }),
+    );
+    portalSession.value = portalSessionFixture({ staff: true, administrator: false });
+
+    mount(<AccountSettings />);
+    await settle();
+
+    // The explicit "none granted" sentence is what tells a member they hold
+    // nothing extra; an absent heading would read the same as a failed load.
+    expect(container.textContent).toContain("Permissions");
+    expect(container.textContent).toContain("No individual permissions are granted to this account.");
+    expect(container.querySelector("code")).toBeNull();
+    expect(container.textContent).not.toContain("Sponsor access");
+  });
+
   it("lists every member capacity, including organization-less ones", async () => {
     vi.stubGlobal(
       "fetch",

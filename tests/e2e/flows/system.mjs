@@ -60,8 +60,8 @@ export const SYSTEM_FLOW = {
     {
       id: "12.11",
       title: "Staff read the members roll and grant an individual membership from it",
-      status: "covered",
-      note: "Membership is a grant on somebody who already exists, not a record created from nothing — so the roll and the grant are one surface. Only the API could do it before, which meant an H5/H6/H7 member could not be added without curl.",
+      status: "unit",
+      note: "Covered in portal-membership-roll, portal-membership-members, admin-members and membership-settings-endpoints: the roll marks each membership's kind by name and asks the server for the staff projection, the grant is a page of its own that finds the person by server search and sends the shared contract with only individual categories offered, editing offers only the categories the membership's kind can hold, and ending a membership is confirmed and recorded as a standing rather than a deletion. Membership is a grant on somebody who already exists, which the Worker covers for individual and organization members.",
     },
     {
       id: "12.0",

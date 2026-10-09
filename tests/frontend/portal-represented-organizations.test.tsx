@@ -104,6 +104,26 @@ describe("RepresentedOrganizations", () => {
     expect(root.textContent).toContain("Review pending");
   });
 
+  it("flags a review only on the organization that has one waiting", async () => {
+    respondWith(() =>
+      ok([
+        {
+          ...ORGANIZATION,
+          name: "Settled Corp",
+          organizationId: "33333333333333333333333333333333",
+          hasPendingReview: false,
+        },
+        ORGANIZATION,
+      ]),
+    );
+    const root = await mount();
+
+    const rows = [...root.querySelectorAll("tbody tr")];
+    const flagged = rows.filter((row) => row.textContent?.includes("Review pending"));
+    expect(flagged).toHaveLength(1);
+    expect(flagged[0]?.textContent).toContain("Example Corp");
+  });
+
   it("explains an empty list instead of showing an unexplained blank table", async () => {
     respondWith(() => ok([]));
     const root = await mount();

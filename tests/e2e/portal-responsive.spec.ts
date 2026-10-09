@@ -48,7 +48,16 @@ const SCREENS = [
   { name: "events", path: "#/events" },
   { name: "forms", path: "#/forms" },
   { name: "donations", path: "#/donations" },
+  { name: "groups-new", path: "#/groups/new" },
+  // The seeded Post-Quantum Cryptography working group (by its identifier) and
+  // the Board (by its slug) are addressable without a record this sweep would
+  // have to create, so a group's own workspace is walked as well.
+  { name: "group-mailing-lists", path: "#/groups/20000000-0000-4000-8000-000000000003/mailing-lists" },
+  { name: "group-settings", path: "#/groups/20000000-0000-4000-8000-000000000003/settings" },
+  { name: "group-leadership", path: "#/groups/board/leadership" },
+  { name: "group-leadership-add", path: "#/groups/board/leadership/add" },
   { name: "members", path: "#/members" },
+  { name: "members-grant", path: "#/members/grant" },
   { name: "members-analytics", path: "#/members/analytics" },
   { name: "access-control", path: "#/settings/access-control" },
   { name: "audit-log", path: "#/settings/audit-log" },

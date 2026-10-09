@@ -64,7 +64,8 @@ export const ACCOUNT_FLOW = {
     {
       id: "7.10",
       title: "Notification preferences persist, and the access summary names what the identity holds",
-      status: "covered",
+      status: "unit",
+      note: "Covered in portal-notification-preferences and portal-account-settings: the card opens as On and Off facts, edits only on request, forgets an abandoned draft, sends a body the shared update contract accepts and shows the stored result; the access summary names the identity's organizations and categories, lists granular grants with their scopes, and says in words when none are granted. Persistence is covered in me-endpoints.",
     },
   ],
 };

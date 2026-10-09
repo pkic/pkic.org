@@ -12,7 +12,10 @@ import { act } from "preact/test-utils";
 import { beginRecordEdit } from "./helpers/record-edit";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { mailingListLifecycleTransitionSchema, type MailingList } from "../../assets/shared/schemas/mailing-lists";
+import { mailingListSyncUpdateSchema } from "../../assets/shared/schemas/mailing-list-sync";
+import { BreadcrumbScope } from "../../assets/ts/ui/BreadcrumbScope";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
+import { controlFor, toggleChoice } from "./helpers/labelled-control";
 
 const navigate = vi.fn();
 vi.mock("wouter/use-hash-location", () => ({
@@ -94,6 +97,7 @@ function stubApi(
       representation: { people: { count: 1 }, organizations: { count: 1 } },
       page: PAGE,
     }),
+  synchronization = { enabled: true, revision: 0 },
 ): Array<{ url: URL; method: string; body?: unknown }> {
   const calls: Array<{ url: URL; method: string; body?: unknown }> = [];
   vi.stubGlobal(
@@ -108,7 +112,14 @@ function stubApi(
       }
       if (method === "GET" && url.pathname.endsWith("/grants")) return json({ grants: [], page: PAGE });
       if (method === "GET" && url.pathname === "/api/v1/groups") return json({ groups: [], page: PAGE });
-      if (url.pathname.endsWith("/synchronization")) return json({ synchronization: { enabled: true, revision: 0 } });
+      if (url.pathname.endsWith("/synchronization")) {
+        // The settings are the server's: a save changes what the next read answers.
+        if (method === "PATCH") {
+          const sent = calls.at(-1)?.body as { enabled: boolean };
+          Object.assign(synchronization, { enabled: sent.enabled, revision: synchronization.revision + 1 });
+        }
+        return json({ synchronization: { ...synchronization } });
+      }
       if (method === "GET") return json({ mailingList: list });
       return write(url, method);
     }),
@@ -228,6 +239,8 @@ describe("group mailing-list record", () => {
     // Without a tab segment the page opens on the people the list reaches.
     expect(container.querySelector('section[aria-label="Architecture discussion subscribers"]')).not.toBeNull();
     expect(container.textContent).toContain("Ada Lovelace");
+    // Each person is placed by the organization they represent.
+    expect(container.textContent).toContain("Analytical Engines");
     const portrait = container.querySelector<HTMLImageElement>(".pk-person-cell img");
     // Row avatars ask the headshot route for its smallest square rendition.
     expect(portrait?.getAttribute("src")).toBe(`${subscriber.user.headshotUrl}?width=96`);
@@ -279,6 +292,89 @@ describe("group mailing-list record", () => {
       postingPolicy: "members",
       moderationPolicy: "moderated",
     });
+  });
+
+  it("trails the group, the collection, the list, and the tab the reader is on", async () => {
+    stubApi(activeList);
+    const container = mount(
+      <BreadcrumbScope
+        route={`${GROUP_ID}/mailing-lists/${LIST_ID}/settings`}
+        label="Group navigation"
+        items={[
+          { label: "Groups", href: "#/groups" },
+          { label: "Architecture Committee", href: `#/groups/${GROUP_ID}` },
+          { label: "Mailing lists", href: `#/groups/${GROUP_ID}/mailing-lists` },
+        ]}
+      >
+        <GroupMailingListRecord groupId={GROUP_ID} listId={LIST_ID} initialTab="settings" onLeave={() => {}} />
+      </BreadcrumbScope>,
+    );
+    await settle();
+
+    const trail = container.querySelector('nav[aria-label="Group navigation"]')!;
+    expect([...trail.querySelectorAll("li")].map((item) => item.textContent)).toEqual([
+      "Groups",
+      "Architecture Committee",
+      "Mailing lists",
+      activeList.label,
+      "Settings",
+    ]);
+    expect(trail.querySelector('[aria-current="page"]')?.textContent).toBe("Settings");
+    // The list's own crumb returns to the list, on its default tab.
+    expect(
+      [...trail.querySelectorAll("a")].find((link) => link.textContent === activeList.label)?.getAttribute("href"),
+    ).toBe(`#/groups/${GROUP_ID}/mailing-lists/${LIST_ID}`);
+  });
+
+  it("discards an abandoned edit of a settings section without sending it", async () => {
+    const calls = stubApi(activeList);
+    const container = mount(
+      <GroupMailingListRecord groupId={GROUP_ID} listId={LIST_ID} initialTab="settings" onLeave={() => {}} />,
+    );
+    await settle();
+    const delivery = container.querySelector('section[aria-label="Delivery"]')!;
+
+    await beginRecordEdit(delivery, "Delivery actions", "Edit");
+    const label = controlFor(delivery, "Label");
+    label.value = "Unsaved change";
+    await act(() => {
+      label.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await act(() => buttonNamed(delivery, "Cancel").click());
+
+    expect(delivery.querySelector("input")).toBeNull();
+    expect(delivery.textContent).toContain(activeList.label);
+    expect(calls.some(({ method }) => method === "PATCH")).toBe(false);
+  });
+
+  it("pauses Google Groups synchronization from the settings tab, and withholds Sync now while paused", async () => {
+    const calls = stubApi(activeList);
+    const container = mount(
+      <GroupMailingListRecord groupId={GROUP_ID} listId={LIST_ID} initialTab="settings" onLeave={() => {}} />,
+    );
+    await settle();
+    await settle();
+
+    const panel = container.querySelector('section[aria-label="Google Groups synchronization"]')!;
+    const enable = controlFor(panel, "Enable Google Groups synchronization");
+    expect(enable.checked).toBe(true);
+    // Nothing to save until the choice differs from the stored one.
+    expect(buttonNamed(panel, "Save synchronization settings").disabled).toBe(true);
+
+    await toggleChoice(enable);
+    await act(() => buttonNamed(panel, "Save synchronization settings").click());
+    await settle();
+
+    const saved = calls.find(({ method }) => method === "PATCH");
+    expect(saved?.url.pathname).toBe(`/api/v1/groups/${GROUP_ID}/mailing-lists/${LIST_ID}/synchronization`);
+    expect(mailingListSyncUpdateSchema.parse(saved?.body)).toEqual({ enabled: false, expectedRevision: 0 });
+    expect(container.querySelector('[role="status"]')?.textContent).toBe("Synchronization settings saved.");
+
+    await act(() => buttonNamed(container, `Mailing list actions for ${activeList.label}`).click());
+    const syncNow = [...container.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+      (item) => item.textContent?.trim() === "Sync now",
+    );
+    expect(syncNow?.disabled).toBe(true);
   });
 
   it("opens the tab the URL names, and asks the server for the roster it shows", async () => {

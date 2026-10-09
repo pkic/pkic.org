@@ -113,38 +113,6 @@ export async function submitProposal(
   }
 }
 
-/** The proposer's own view of their proposal. */
-export async function readProposalAccess(page: Page, token: string) {
-  return page.evaluate(async (token) => {
-    const response = await fetch(`/api/v1/proposals/access/${encodeURIComponent(token)}`);
-    return {
-      status: response.status,
-      body: (await response.json()) as {
-        proposal?: { id: string; title: string; abstract: string; status: string };
-        speakers?: Array<{ userId: string; email: string; role: string }>;
-      },
-    };
-  }, token);
-}
-
-export async function patchProposalAsProposer(
-  page: Page,
-  token: string,
-  changes: Record<string, unknown>,
-): Promise<number> {
-  return page.evaluate(
-    async ({ token, changes }) => {
-      const response = await fetch(`/api/v1/proposals/access/${encodeURIComponent(token)}`, {
-        method: "PATCH",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify(changes),
-      });
-      return response.status;
-    },
-    { token, changes },
-  );
-}
-
 export async function inviteCoSpeaker(
   page: Page,
   token: string,
@@ -160,37 +128,6 @@ export async function inviteCoSpeaker(
       return response.status;
     },
     { token, speaker },
-  );
-}
-
-export async function removeSpeaker(page: Page, token: string, userId: string): Promise<number> {
-  return page.evaluate(
-    async ({ token, userId }) => {
-      const response = await fetch(
-        `/api/v1/proposals/access/${encodeURIComponent(token)}/speakers/${encodeURIComponent(userId)}`,
-        { method: "DELETE" },
-      );
-      return response.status;
-    },
-    { token, userId },
-  );
-}
-
-export async function updateSpeaker(
-  page: Page,
-  token: string,
-  userId: string,
-  changes: Record<string, unknown>,
-): Promise<number> {
-  return page.evaluate(
-    async ({ token, userId, changes }) => {
-      const response = await fetch(
-        `/api/v1/proposals/access/${encodeURIComponent(token)}/speakers/${encodeURIComponent(userId)}`,
-        { method: "PATCH", headers: { "content-type": "application/json" }, body: JSON.stringify(changes) },
-      );
-      return response.status;
-    },
-    { token, userId, changes },
   );
 }
 

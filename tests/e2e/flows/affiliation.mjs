@@ -92,8 +92,8 @@ export const AFFILIATION_FLOW = {
     {
       id: "14.7",
       title: "A proposer editing a co-speaker changes only that proposal",
-      status: "covered",
-      note: "The proposer may set another speaker's name, organization, job title, biography and links. It writes a per-proposal override rather than the person's own profile, which is the design that makes the authority safe to hand out.",
+      status: "unit",
+      note: "Covered in proposal-self-service-states, which sets a co-speaker's job title as the proposer and reads it back from the proposal while the person's own profile stays empty, and in proposal-speaker-public-profile for the override reaching the public badge. The proposer may set another speaker's name, organization, job title, biography and links. It writes a per-proposal override rather than the person's own profile, which is the design that makes the authority safe to hand out.",
     },
   ],
 };

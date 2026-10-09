@@ -260,6 +260,36 @@ describe("presentation versions tab", () => {
     expect(alert.textContent).toContain("You cannot review this version.");
   });
 
+  it("uploads on behalf of a speaker as the file itself, naming and sizing it in headers", async () => {
+    const uploads: Array<{ headers: Headers; body: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          uploads.push({ headers: new Headers(init.headers), body: init.body });
+          return jsonResponse({ success: true });
+        }
+        return jsonResponse({ versions: [version], page: { limit: 25, offset: 0, total: 1, hasMore: false } });
+      }),
+    );
+    const root = await mount();
+
+    await act(() => buttonNamed(root, "Upload on behalf of speaker").click());
+    const fileInput = root.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["%PDF-1.7 admin upload"], "admin-upload.pdf", { type: "application/pdf" });
+    Object.defineProperty(fileInput, "files", { value: [file], configurable: true });
+    await act(() => {
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await settle();
+
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]!.headers.get("content-type")).toBe("application/pdf");
+    expect(uploads[0]!.headers.get("x-presentation-file-name")).toBe("admin-upload.pdf");
+    expect(uploads[0]!.headers.get("x-presentation-file-size")).toBe(String(file.size));
+    expect(uploads[0]!.body).toBe(file);
+  });
+
   it("states an upload failure in its dedicated upload view", async () => {
     stubFetch(() => jsonResponse({ error: { code: "TOO_LARGE", message: "That file is too large." } }, 413));
     const root = await mount();

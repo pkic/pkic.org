@@ -239,6 +239,28 @@ describe("group settings form", () => {
     expect(saved?.textContent).toContain("Group settings updated.");
   });
 
+  it("refuses an emptied name on the field itself, sends nothing, and keeps the draft", async () => {
+    const onUpdated = vi.fn(async () => undefined);
+    const { bodies } = stubPatch(() => json(saveResponse));
+    const container = mount(<GroupSettingsForm group={group} onUpdated={onUpdated} />);
+    await settle();
+
+    await beginRecordEdit(container, "Group settings actions");
+    const name = labelled(container, "Name")[0] as HTMLInputElement;
+    name.value = "";
+    await act(async () => {
+      name.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await save(container);
+
+    // The shared contract speaks, not a local check: the field is marked and
+    // nothing leaves the form.
+    expect((labelled(container, "Name")[0] as HTMLInputElement).getAttribute("aria-invalid")).toBe("true");
+    expect(bodies).toEqual([]);
+    expect(onUpdated).not.toHaveBeenCalled();
+    expect(container.querySelector("form")).not.toBeNull();
+  });
+
   it("reports a rejected save as an alert and leaves the form usable", async () => {
     const onUpdated = vi.fn(async () => undefined);
     stubPatch(() => json({ error: { code: "CONFLICT", message: "Revision mismatch" } }, 409));

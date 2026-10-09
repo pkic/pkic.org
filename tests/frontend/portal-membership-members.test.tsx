@@ -11,8 +11,12 @@
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { individualMembershipGrantSchema } from "../../assets/shared/schemas/membership-management";
-import type { MembershipCategoryCatalogEntry } from "../../assets/shared/schemas/membership-categories";
+import { controlFor, submitForm, typeInto } from "./helpers/labelled-control";
+import {
+  individualMembershipGrantSchema,
+  memberCapacityMutationResponseSchema,
+} from "../../assets/shared/schemas/membership-management";
+import { catalogEntry } from "./helpers/membership-roll-fixtures";
 import { GrantIndividualMembershipForm } from "../../assets/ts/member-flows/portal/sections/membership-members/GrantIndividualMembershipForm";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/members/grant", vi.fn()] }));
@@ -24,22 +28,6 @@ function mount(node: preact.ComponentChildren): HTMLDivElement {
   document.body.append(container);
   void act(() => render(node, container!));
   return container;
-}
-
-function catalogEntry(code: string, label: string): MembershipCategoryCatalogEntry {
-  return {
-    code: code as MembershipCategoryCatalogEntry["code"],
-    label,
-    description: null,
-    displayOrder: 0,
-    isIndividual: true,
-    requiresUniversityEmail: false,
-    isVoting: false,
-    active: true,
-    workflowVersionId: null,
-    revision: 0,
-    updatedAt: "2026-01-01T00:00:00.000Z",
-  };
 }
 
 afterEach(() => {
@@ -56,8 +44,8 @@ describe("granting an individual membership", () => {
     const root = mount(
       <GrantIndividualMembershipForm
         categories={[
-          catalogEntry("COMMUNITY", "Community users"),
-          { ...catalogEntry("PARTNER", "Partner organizations"), isIndividual: false },
+          catalogEntry("COMMUNITY", "Community users", true),
+          catalogEntry("PARTNER", "Partner organizations", false),
         ]}
         onGranted={() => undefined}
         onCancel={() => undefined}
@@ -85,7 +73,7 @@ describe("granting an individual membership", () => {
     const first = "RESEARCH";
     const root = mount(
       <GrantIndividualMembershipForm
-        categories={[catalogEntry(first, "PhD students researching PKI or cryptography")]}
+        categories={[catalogEntry(first, "PhD students researching PKI or cryptography", true)]}
         onGranted={() => undefined}
         onCancel={() => undefined}
       />,
@@ -115,5 +103,79 @@ describe("granting an individual membership", () => {
     // nothing is sent.
     expect(onGranted).not.toHaveBeenCalled();
     expect(root.querySelector('[role="alert"]')?.textContent ?? "").not.toBe("");
+  });
+
+  it("grants the person picked from the server search through the shared contract", async () => {
+    const person = { id: "00000000-0000-4000-8000-000000000042", email: "grace@example.test" };
+    const posts: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(String(input), location.origin);
+        if (init?.method === "POST") {
+          expect(url.pathname).toBe("/api/v1/members/capacities");
+          posts.push(JSON.parse(String(init.body)));
+          return new Response(
+            JSON.stringify(
+              memberCapacityMutationResponseSchema.parse({
+                member: {
+                  id: "00000000-0000-4000-8000-000000000043",
+                  userId: person.id,
+                  organizationId: null,
+                  membershipCategory: "H6",
+                  status: "active",
+                  showOnOrgProfile: false,
+                },
+              }),
+            ),
+            {
+              status: 201,
+              headers: { "content-type": "application/json" },
+            },
+          );
+        }
+        return new Response(
+          JSON.stringify({
+            users: [{ ...person, first_name: "Grace", last_name: "Hopper", organization_name: null }],
+            page: { limit: 10, offset: 0, total: 1, hasMore: false },
+          }),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }),
+    );
+    const onGranted = vi.fn();
+    const root = mount(
+      <GrantIndividualMembershipForm
+        categories={[catalogEntry("H6", "Individual supporter", true), catalogEntry("H7", "Community member", true)]}
+        onGranted={onGranted}
+        onCancel={() => undefined}
+      />,
+    );
+
+    // The person is found by the debounced server search, not typed as an id.
+    vi.useFakeTimers();
+    await typeInto(root.querySelector<HTMLInputElement>('input[placeholder="email or name"]')!, "grace");
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(250);
+    });
+    vi.useRealTimers();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    const match = [...root.querySelectorAll("button")].find((button) => button.textContent?.includes(person.email));
+    await act(async () => match!.click());
+
+    await typeInto(controlFor(root, "Activation reason"), "Individual membership granted from the roll");
+    await submitForm(root);
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+
+    expect(individualMembershipGrantSchema.parse(posts[0])).toEqual({
+      userId: person.id,
+      membershipCategory: "H6",
+      activationReason: "Individual membership granted from the roll",
+    });
+    expect(onGranted).toHaveBeenCalledTimes(1);
   });
 });
