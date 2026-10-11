@@ -55,3 +55,17 @@ export function reviewedManifest(localDirectory: string | null = null) {
     })),
   };
 }
+
+export function applicationBackfillFixture(directory: string) {
+  const manifest = reviewedManifest(directory);
+  const original = manifest.entries[0]!;
+  const entry = {
+    ...original,
+    sourceIssueNumber: 123,
+    source: {
+      ...original.source,
+      issue: { ...original.source.issue, id: 123, number: 123, html_url: "https://github.com/pkic/members/issues/123" },
+    },
+  };
+  return { manifest: { ...manifest, entries: [entry] }, entry, directory, signal: new AbortController().signal };
+}

@@ -128,7 +128,7 @@ describe("private backfill files", () => {
     const result = runCommand(process.execPath, ["-e", "setInterval(() => {}, 1000)"], controller.signal);
     const timer = setTimeout(() => controller.abort(), 200);
     try {
-      await expect(result).rejects.toThrow("Operational command failed");
+      await expect(result).rejects.toThrow("Operational command interrupted");
     } finally {
       clearTimeout(timer);
     }

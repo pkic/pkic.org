@@ -14,9 +14,36 @@ function previewManifest() {
 }
 
 describe("application backfill destinations", () => {
-  it.each(["local", "preview"])("refuses private evidence in %s", (environment) => {
+  it("refuses private evidence in preview", () => {
+    const environment = "preview";
     const input = { ...reviewedManifest("/tmp/example"), environment, sourceData: "private" };
     expect(() => parseManifest(input, contracts, databaseId)).toThrow("synthetic");
+  });
+  it("allows private local rehearsal and revalidates its GitHub evidence", async () => {
+    const manifest = parseManifest(
+      { ...reviewedManifest("/tmp/example"), sourceData: "private" },
+      contracts,
+      databaseId,
+    );
+    const entry = manifest.entries[0]!;
+    if (entry.decision !== "import") throw new Error("Expected reviewed fixture");
+    const readSource = vi.fn(async () => ({
+      ...entry.source,
+      issue: { ...entry.source.issue, title: "Changed source" },
+    }));
+    const command = vi.fn();
+    expect(
+      await importEntry({
+        manifest,
+        entry,
+        directory: "/tmp/example",
+        signal: new AbortController().signal,
+        readSource,
+        command,
+      }),
+    ).toMatchObject({ status: "failed", error: "source_changed" });
+    expect(readSource).toHaveBeenCalledWith(entry.sourceIssueNumber, expect.any(AbortSignal), command);
+    expect(command).not.toHaveBeenCalled();
   });
   it("requires an explicit local path and rejects local paths on remote targets", () => {
     expect(() =>
@@ -43,7 +70,8 @@ describe("application backfill destinations", () => {
       "execute",
       "DB",
       "--env",
-      environment,
+      environment === "preview" ? "production" : environment,
+      ...(environment === "preview" ? ["--preview"] : []),
       ...flags,
       "--json",
     ]);
@@ -65,14 +93,15 @@ describe("application backfill destinations", () => {
     let written = false;
     const command = vi.fn(async (name: string, args: string[]) => {
       expect(name).toBe("pnpm");
-      expect(args.slice(0, 9)).toEqual([
+      expect(args.slice(0, 10)).toEqual([
         "exec",
         "wrangler",
         "d1",
         "execute",
         "DB",
         "--env",
-        "preview",
+        "production",
+        "--preview",
         "--remote",
         "--json",
       ]);

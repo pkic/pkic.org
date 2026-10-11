@@ -1,19 +1,25 @@
 import { fileURLToPath } from "node:url";
 import { spawn } from "node:child_process";
+import { ImportCommandError } from "./diagnostics.mjs";
 
 export const repositoryRoot = fileURLToPath(new URL("../../", import.meta.url));
 
 /** Capture private command output; terminate the whole child group on interruption. */
 export function runCommand(command, args, signal) {
   return new Promise((resolve, reject) => {
+    const failure = (kind, extra = {}) =>
+      new ImportCommandError({ command, args, kind, stdout: output, stderr, ...extra });
+    const abortKind = () => (signal.reason?.name === "TimeoutError" ? "timeout" : "interrupted");
+    let output = "";
+    let stderr = "";
     if (signal.aborted) {
-      reject(new Error("Operation interrupted"));
+      reject(failure(abortKind()));
       return;
     }
     const grouped = process.platform !== "win32";
     const child = spawn(command, args, { stdio: ["ignore", "pipe", "pipe"], cwd: repositoryRoot, detached: grouped });
     child.stdout.setEncoding("utf8");
-    let output = "";
+    child.stderr.setEncoding("utf8");
     let size = 0;
     let exceeded = false;
     const terminate = () => {
@@ -30,18 +36,24 @@ export function runCommand(command, args, signal) {
         exceeded = true;
         terminate();
       } else if (stdout) output += chunk.toString("utf8");
+      else stderr += chunk.toString("utf8");
     };
     child.stdout.on("data", (chunk) => receive(chunk, true));
     child.stderr.on("data", (chunk) => receive(chunk, false));
     signal.addEventListener("abort", terminate, { once: true });
-    child.on("error", () => {
+    child.on("error", (error) => {
       signal.removeEventListener("abort", terminate);
-      reject(new Error("Operational command could not start"));
+      reject(failure("spawn", { systemCode: error.code }));
     });
-    child.on("close", (code) => {
+    child.on("close", (code, terminationSignal) => {
       signal.removeEventListener("abort", terminate);
       if (code !== 0 || signal.aborted || exceeded)
-        reject(new Error("Operational command failed; inspect credentials, target, and reviewed evidence"));
+        reject(
+          failure(exceeded ? "output_limit" : signal.aborted ? abortKind() : terminationSignal ? "signal" : "exit", {
+            exitCode: code,
+            signal: terminationSignal,
+          }),
+        );
       else resolve(output);
     });
   });

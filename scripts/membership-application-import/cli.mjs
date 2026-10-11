@@ -7,6 +7,7 @@ import { backfillEnvironmentSchema, parseManifest } from "./manifest.mjs";
 import { loadImportContracts } from "./load-contracts.mjs";
 import { privatePaths, readJson, existingReport, lockReport, writeReport } from "./files.mjs";
 import { createReport, resumeReport, executeBatch } from "./batch.mjs";
+import { logImportFailure } from "./diagnostics.mjs";
 
 const help = `Usage: pnpm import:applications --manifest /secure/reviewed.json --report /secure/results.json [--execute [--resume]]
 
@@ -17,9 +18,9 @@ Default: offline dry-run. --dry-run makes this explicit.
 --help             Show help.
 
 Use reviewed version-2 manifests. Unsupported history and active work remain unresolved.
-Production revalidates sources through gh. Remote destinations use Wrangler credentials.
-Local and preview use embedded synthetic evidence. No portal token is needed.
-The manifest selects production, preview, or local. Local and preview require synthetic data.
+Production and private local imports revalidate sources through gh. Remote destinations use Wrangler credentials.
+Synthetic local and preview imports use embedded evidence. No portal token is needed.
+The manifest selects production, preview, or local. Preview requires synthetic data; local and production allow private data.
 Production requires separately authorized data backfill.
 The command does not deploy code, change schema, activate workflows, or edit GitHub issues.
 Keep manifests and reports outside the repository.
@@ -64,9 +65,9 @@ export async function runCli(argv) {
   const input = await readJson(paths.manifest);
   const target = backfillEnvironmentSchema.safeParse(input?.environment);
   if (!target.success) throw new Error("Manifest environment must be production, preview, or local");
-  const databaseId = config.config.env?.[target.data]?.d1_databases?.find(
-    (binding) => binding.binding === "DB",
-  )?.database_id;
+  const environment = target.data === "preview" ? "production" : target.data;
+  const binding = config.config.env?.[environment]?.d1_databases?.find((binding) => binding.binding === "DB");
+  const databaseId = target.data === "preview" ? binding?.preview_database_id : binding?.database_id;
   if (!databaseId) throw new Error("Selected environment has no configured DB binding");
   const manifest = parseManifest(input, contracts, databaseId);
   if (manifest.localDirectory) {
@@ -97,6 +98,7 @@ export async function runCli(argv) {
         signal: controller.signal,
         timeoutMs: seconds * 1000,
         save: (state) => writeReport(paths.report, state),
+        onFailure: (failure) => logImportFailure(`${paths.report}.diagnostics.jsonl`, failure),
         onResult: (entry) =>
           console.log(`Issue #${entry.sourceIssueNumber}: ${entry.status}${entry.error ? ` (${entry.error})` : ""}`),
       });
@@ -108,7 +110,7 @@ export async function runCli(argv) {
     console.log(`Results report: ${paths.report}`);
     if (!options.execute)
       console.log(
-        "Offline validation only; execution rechecks existing records, identities, and categories. Production also rechecks GitHub evidence.",
+        "Offline validation only; execution rechecks existing records, identities, and categories. Production and private local imports also recheck GitHub evidence.",
       );
     return exitCode;
   } finally {

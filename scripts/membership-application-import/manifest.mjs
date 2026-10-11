@@ -85,8 +85,8 @@ export function parseManifest(input, contracts, databaseId) {
   }
   const manifest = parsed.data;
   if (manifest.databaseId !== databaseId) throw new Error("Destination must match the configured database");
-  if (manifest.environment !== "production" && manifest.sourceData !== "synthetic")
-    throw new Error("Local and preview rehearsal require synthetic data");
+  if (manifest.environment === "preview" && manifest.sourceData !== "synthetic")
+    throw new Error("Preview rehearsal requires synthetic data");
   if (manifest.environment === "local" && !manifest.localDirectory)
     throw new Error("Local rehearsal requires a local database directory");
   if (manifest.environment !== "local" && manifest.localDirectory !== null)

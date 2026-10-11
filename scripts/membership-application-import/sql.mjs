@@ -60,7 +60,8 @@ export function applicationBackfillSql(manifest, entry, now = new Date().toISOSt
   const guard = [
     `EXISTS(SELECT 1 FROM users WHERE id = ${actor} AND active = 1 AND pii_redacted_at IS NULL)`,
     `EXISTS(SELECT 1 FROM membership_categories WHERE code = ${quote(m.membershipCategory)} AND ((is_individual = 1 AND ${quote(m.organizationName)} IS NULL) OR (is_individual = 0 AND ${quote(m.organizationName)} IS NOT NULL)))`,
-    `(${quote(m.applicantUserId)} IS NULL OR EXISTS(SELECT 1 FROM users WHERE id = ${quote(m.applicantUserId)} AND normalized_email = ${quote(m.applicantEmail)} AND pii_redacted_at IS NULL))`,
+    // Historical identity matching follows the staff alias policy in services/users.ts, not login verification.
+    `(${quote(m.applicantUserId)} IS NULL OR EXISTS(SELECT 1 FROM users u WHERE u.id = ${quote(m.applicantUserId)} AND u.pii_redacted_at IS NULL AND (u.normalized_email = ${quote(m.applicantEmail)} OR EXISTS(SELECT 1 FROM user_emails ue WHERE ue.user_id = u.id AND ue.normalized_email = ${quote(m.applicantEmail)}))))`,
     `NOT EXISTS(SELECT 1 FROM member_applications WHERE lower(applicant_email) = ${quote(m.applicantEmail)} AND created_at = ${quote(source.issue.created_at)} AND id <> ${id})`,
   ].join(" AND ");
   const values = [

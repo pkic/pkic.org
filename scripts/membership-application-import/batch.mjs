@@ -119,6 +119,7 @@ export async function executeBatch({
   timeoutMs = 120_000,
   performImport = importEntry,
   onResult = () => {},
+  onFailure = /** @type {import("./diagnostics.mjs").ImportFailureListener | undefined} */ (undefined),
 }) {
   report.phase = "running";
   const checkpoint = async () => {
@@ -142,6 +143,7 @@ export async function executeBatch({
       directory,
       timeoutMs,
       signal,
+      onFailure,
     });
     Object.assign(entry, result, { updatedAt: new Date().toISOString() });
     await checkpoint();
