@@ -8,6 +8,14 @@ export function publicationEnvironment() {
   return environment;
 }
 
+/** A SQL-only local rehearsal can reference images absent from its isolated R2 buckets. */
+export function publicationAllowsMissingMedia() {
+  if (process.env.PKIC_PUBLICATION_ALLOW_MISSING_MEDIA !== "true") return false;
+  if (publicationEnvironment() !== "local" || !process.env.PKIC_PUBLICATION_LOCAL_STATE)
+    throw new Error("Missing-image fallbacks require an explicit local rehearsal state");
+  return true;
+}
+
 /** Previews are a mode of the production Worker: wrangler.jsonc declares their
  * preview-only bindings in env.production.previews, not in a separate env. */
 export function wranglerEnvironment(target = publicationEnvironment()) {

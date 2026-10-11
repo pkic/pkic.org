@@ -1,5 +1,9 @@
 import { parseEventFlowPath } from "../assets/shared/event-flow-paths";
-import { publicationStagingDirectory, wranglerEnvironment } from "../scripts/publication/build-context.mjs";
+import {
+  publicationStagingDirectory,
+  publicationAllowsMissingMedia,
+  wranglerEnvironment,
+} from "../scripts/publication/build-context.mjs";
 import { cp, mkdir, readFile, writeFile } from "node:fs/promises";
 import { resolve } from "node:path";
 import { getPlatformProxy, unstable_readConfig as readConfig } from "wrangler";
@@ -24,6 +28,7 @@ import { sponsorPublicationKey } from "../assets/shared/sponsor-publication-quer
 
 /** The build uses the same native bindings as the target, without public export APIs. */
 export async function readPublicationSource() {
+  const allowMissingMedia = publicationAllowsMissingMedia();
   const output = publicationStagingDirectory();
   await mkdir(output, { recursive: true });
   await writeFile(
@@ -54,6 +59,9 @@ export async function readPublicationSource() {
   await writeFile(configPath, JSON.stringify(publicationBindingConfig(config, environment)));
   const platform = await getPlatformProxy<Pick<Env, "DB" | "ASSETS_BUCKET" | "SPEAKER_UPLOADS_BUCKET">>({
     configPath,
+    // This generated config has already selected and flattened its bindings.
+    environment: "",
+    remoteBindings: environment !== "local",
     persist:
       environment === "local"
         ? { path: resolve(process.env.PKIC_PUBLICATION_LOCAL_STATE ?? ".wrangler/state/v3") }
@@ -84,6 +92,7 @@ export async function readPublicationSource() {
         snapshot,
         keys,
         manifest,
+        allowMissingMedia,
         getObject: (key: string, options?: R2GetOptions) =>
           requireProfileImageBucket(platform.env, key).get(key, options),
         output: resolve(output, "media"),

@@ -46,8 +46,9 @@ export async function copyPublicMedia({
   keys,
   getObject,
   output,
-  cacheDirectory = undefined,
+  cacheDirectory = /** @type {string | undefined} */ (undefined),
   manifest = /** @type {import("./public-media-cache.mjs").PublicMediaManifest | undefined} */ (undefined),
+  allowMissingMedia = false,
 }) {
   const started = performance.now();
   const revision = createHash("sha256")
@@ -64,11 +65,20 @@ export async function copyPublicMedia({
     manifest,
   );
   let serialized = JSON.stringify(snapshot);
-  const missingLogo = (reference) => {
-    console.warn(`[publication] Unusable approved member logo ${reference}; using the missing-logo fallback`);
+  let missingSources = 0;
+  const omitImage = (reference) => {
     serialized = serialized.replaceAll(JSON.stringify(reference), "null");
   };
+  const missingLogo = (reference) => {
+    console.warn(`[publication] Unusable approved member logo ${reference}; using the missing-logo fallback`);
+    omitImage(reference);
+  };
   for (const [reference, key] of Object.entries(keys)) {
+    if (allowMissingMedia && manifest && !manifest.has(key)) {
+      omitImage(reference);
+      missingSources++;
+      continue;
+    }
     const { object, cached, store } = await cache.read(key);
     if (cached) {
       const path = `/_published/media/${cached.filename}`;
@@ -130,6 +140,10 @@ export async function copyPublicMedia({
   // Profile/directory logos are nullable and render initials. Legacy logo walls
   // require a URL and already use the consortium mark when a logo is missing.
   for (const entry of published.memberWall ?? []) entry.logoUrl ??= "/img/logo.svg";
+  if (missingSources)
+    console.warn(
+      `[publication] Using image fallbacks for ${missingSources} references missing from local rehearsal R2. Database values and R2 objects are unchanged.`,
+    );
   console.log(
     `[publication] R2 media: ${cache.stats.reused} reused, ${cache.stats.downloaded} downloaded (${(cache.stats.downloadedBytes / 1024 / 1024).toFixed(2)} MiB), ${((performance.now() - started) / 1000).toFixed(2)} s`,
   );

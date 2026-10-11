@@ -7,7 +7,12 @@ export function buildRehearsalSite(root, state, env, runBuild = execFileSync) {
   runBuild(process.execPath, ["--experimental-strip-types", "scripts/build-site.mjs"], {
     cwd: root,
     // The CLI appends v3 to --persist-to; getPlatformProxy uses its path directly.
-    env: { ...env, CLOUDFLARE_ENV: "local", PKIC_PUBLICATION_LOCAL_STATE: path.join(state, "v3") },
+    env: {
+      ...env,
+      CLOUDFLARE_ENV: "local",
+      PKIC_PUBLICATION_LOCAL_STATE: path.join(state, "v3"),
+      PKIC_PUBLICATION_ALLOW_MISSING_MEDIA: "true",
+    },
     stdio: "inherit",
   });
   const deployPath = path.join(root, ".wrangler/deploy/config.json");
