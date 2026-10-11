@@ -79,11 +79,12 @@ export function applicationBackfillSql(manifest, entry, now = new Date().toISOSt
   values.splice(
     4,
     0,
-    `CASE WHEN (SELECT is_individual FROM membership_categories WHERE code = ${quote(m.membershipCategory)}) = 1 THEN NULL ELSE ${quote(m.applicantEmail.split("@")[1])} END`,
+    `CASE WHEN (SELECT is_individual FROM membership_categories WHERE code = ${quote(m.membershipCategory)}) = 1 THEN NULL ELSE ${quote(m.applicantEmail.split("@")[1])} END AS organization_domain`,
   );
+  // Aliases leave whitespace after END so Wrangler recognizes CASE boundaries when splitting the file.
   const statements = [
     `INSERT INTO member_applications (id, applicant_user_id, applicant_email, applicant_name, organization_name, organization_domain, membership_category, stage, stage_entered_at, manage_token_hash, created_at, updated_at)
-SELECT CASE WHEN ${guard} THEN ${id} ELSE NULL END, ${values.join(", ")}
+SELECT CASE WHEN ${guard} THEN ${id} ELSE NULL END AS id, ${values.join(", ")}
 WHERE NOT EXISTS(SELECT 1 FROM member_applications WHERE id = ${id});`,
   ];
   for (const note of sourceNotes(entry))

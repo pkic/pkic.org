@@ -54,6 +54,22 @@ it("captures a real command's stderr and exit code without echoing private outpu
   expect((await stat(join(directory, "execution.json.diagnostics.jsonl"))).mode & 0o777).toBe(0o600);
 });
 
+it("reports statement-size failures without echoing applicant data", async () => {
+  const diagnostic = await record(
+    new ImportCommandError({
+      kind: "exit",
+      command: "pnpm",
+      args: [],
+      exitCode: 1,
+      stdout: '{"error":{"text":"statement too long: SQLITE_TOOBIG"}}',
+      stderr: "private-applicant@example.org",
+    }),
+  );
+  expect(diagnostic.summary).toBe("Command exited with code 1; statement too long");
+  expect(JSON.stringify(consoleError.mock.calls)).toContain("statement too long");
+  expect(JSON.stringify(consoleError.mock.calls)).not.toContain("private-applicant@example.org");
+});
+
 it("distinguishes a missing executable from a command exit", async () => {
   const error = await runCommand(join(directory, "missing-command"), [], new AbortController().signal).catch(
     (cause: unknown) => cause,

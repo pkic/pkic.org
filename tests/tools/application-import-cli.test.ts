@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { unstable_splitSqlQuery as splitSqlQuery } from "wrangler";
 import {
   existingReport,
   lockReport,
@@ -252,6 +253,45 @@ describe("backfill against the unchanged D1 schema", () => {
     expect((await query(evidenceQuery))[0].results).toEqual(before);
   });
 
+  it("imports a message over 100 KB without losing evidence or duplicating it on replay", async () => {
+    const input = parsedReviewedManifest(localDirectory);
+    const entry = input.entries[0];
+    entry.source.issue.id = 7109;
+    entry.mapping.applicantEmail = "large-message@example.org";
+    const message = "Applicant's evidence; CASE BEGIN END, 🙂 漢字\n".repeat(3000);
+    entry.source.issue.body = message;
+    entry.source.comments[0].body = message;
+    const sql = applicationBackfillSql(input, entry);
+    expect(Buffer.byteLength(message)).toBeGreaterThan(100_000);
+    expect(Buffer.byteLength(sql)).toBeGreaterThan(200_000);
+    const statements = splitSqlQuery(sql);
+    expect(statements.length).toBeGreaterThan(20);
+    expect(statements.every((statement) => Buffer.byteLength(statement) < 90_000)).toBe(true);
+    const evidenceQuery = `SELECT id, body FROM application_communications WHERE application_id = '${sourceId(entry.source)}' ORDER BY id`;
+    await sqlFile(sql);
+    const before = (await query(evidenceQuery))[0].results;
+    const notes = new Map(before.map((note) => [note.id, String(note.body)]));
+    for (const key of ["source", `comment:${entry.source.comments[0].id}`]) {
+      const parts = [];
+      for (let part = 0; ; part++) {
+        const body = notes.get(sourceId(entry.source, `${key}:${part}`));
+        if (body === undefined) break;
+        parts.push(body.slice(body.indexOf("\n") + 1));
+      }
+      expect(parts.length).toBeGreaterThan(1);
+      expect(parts.join("")).toContain(message);
+    }
+    expect((await query(confirmationQuery(entry.source)))[0].results).toEqual([
+      { id: sourceId(entry.source), source_note: 1 },
+    ]);
+    await sqlFile(sql);
+    expect((await query(evidenceQuery))[0].results).toEqual(before);
+    expect(
+      (await query(`SELECT count(*) AS n FROM audit_log WHERE entity_id = '${sourceId(entry.source)}'`))[0].results[0]
+        .n,
+    ).toBe(1);
+  });
+
   it("records approved and withdrawn history without provisioning or workflow side effects", async () => {
     const input = parsedReviewedManifest(localDirectory);
     for (const [index, outcome] of ["approved", "withdrawn"].entries()) {
@@ -294,6 +334,7 @@ describe("backfill against the unchanged D1 schema", () => {
     const entry = input.entries[0];
     entry.source.issue.id = 999;
     entry.mapping.applicantEmail = "rollback@example.org";
+    entry.source.issue.body = "Large rollback evidence; 🙂\n".repeat(5000);
     const sql =
       applicationBackfillSql(input, entry) +
       `\nINSERT INTO application_communications (id, application_id, kind, actor_user_id, body, created_at) VALUES ('bad', 'missing', 'note', '${actorId}', 'failure', '2026-01-01T00:00:00.000Z');`;

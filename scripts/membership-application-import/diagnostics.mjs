@@ -42,7 +42,7 @@ function describe(error) {
   }[details.kind];
   // Only recognized database/network diagnostics enter console output; never echo arbitrary stderr or SQL.
   const outputCause = `${details.stderr}\n${details.stdout}`.match(
-    /(?:no such (?:table|column): [A-Za-z_][A-Za-z0-9_.]*|(?:NOT NULL|UNIQUE) constraint failed: [A-Za-z_][A-Za-z0-9_.]*(?:, [A-Za-z_][A-Za-z0-9_.]*)*|FOREIGN KEY constraint failed|database is locked|SQLITE_(?:ERROR|BUSY|LOCKED|CONSTRAINT)|authentication error|HTTP (?:401|403|404|429|5[0-9]{2})|\b(?:ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT)\b)/i,
+    /(?:no such (?:table|column): [A-Za-z_][A-Za-z0-9_.]*|(?:NOT NULL|UNIQUE) constraint failed: [A-Za-z_][A-Za-z0-9_.]*(?:, [A-Za-z_][A-Za-z0-9_.]*)*|FOREIGN KEY constraint failed|database is locked|statement too long|SQLITE_(?:ERROR|BUSY|LOCKED|CONSTRAINT|TOOBIG)|authentication error|HTTP (?:401|403|404|429|5[0-9]{2})|\b(?:ENOTFOUND|EAI_AGAIN|ECONNREFUSED|ECONNRESET|ETIMEDOUT)\b)/i,
   )?.[0];
   return { ...details, summary: `${summary}${outputCause ? `; ${outputCause}` : ""}` };
 }
