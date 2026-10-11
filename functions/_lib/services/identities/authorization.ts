@@ -28,8 +28,7 @@ export function organizationIdentityManagementEvidence(input: IdentityManagement
                AND member.organization_id IS NOT NULL
                AND member.status = 'active'
                AND (
-                 actor.role = 'admin'
-                 OR EXISTS (
+                 EXISTS (
                    SELECT 1
                      FROM user_roles role
                      JOIN role_permissions permission ON permission.role_id = role.role_id

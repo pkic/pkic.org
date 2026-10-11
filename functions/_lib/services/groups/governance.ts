@@ -46,7 +46,7 @@ function groupAuthorizationEvidence(
   }
 
   const hasGlobalSnapshot =
-    actor.role === "admin" ||
+    (!isUserBackedAuthAdmin(actor) && actor.role === "admin") ||
     (actor.grants ?? []).some(
       (grant) => grant.permission === permission && grant.contextType === null && grant.contextId === null,
     );
@@ -123,8 +123,7 @@ function groupAuthorizationEvidence(
             FROM users active_actor
            WHERE active_actor.id = ? AND active_actor.active = 1
              AND (
-               active_actor.role = 'admin'
-               OR EXISTS (
+               EXISTS (
                  SELECT 1
                    FROM user_roles actor_role
                    JOIN role_permissions role_permission ON role_permission.role_id = actor_role.role_id

@@ -1,3 +1,4 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env as workerEnv } from "cloudflare:workers";
@@ -73,7 +74,7 @@ describe("email outbox batch processing", () => {
     await resetDb();
     const seed = await seedEventAndAdmin(env.DB);
     eventId = seed.eventId;
-    const adminRows = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+    const adminRows = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
     adminId = adminRows[0].id;
     await seedRequiredTemplates(env.DB, adminId);
   });

@@ -175,7 +175,7 @@ afterEach(() => {
 
 describe("create sponsorship form error surfacing", () => {
   it("names a contract refusal on the fallback field itself without a round trip, and keeps the draft", async () => {
-    portalSession.value = portalSessionFixture({ staff: true, staffRole: "user", grants: [] });
+    portalSession.value = portalSessionFixture({ staff: true, administrator: false, grants: [] });
     const bodies: unknown[] = [];
     stubFetch(bodies);
     const onCreated = vi.fn();

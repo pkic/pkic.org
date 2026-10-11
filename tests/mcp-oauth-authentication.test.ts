@@ -8,13 +8,14 @@ import {
   describeMcpAuthorization,
   sendMcpAuthorizeMagicLink,
   type McpOAuthEnv,
-} from "../functions/_lib/mcp/oauth";
+} from "../functions/_lib/auth/oauth/authorization";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { deliveredEmailPayload, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { insertIndividualMember } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
-import { createMcpAuthorizeHandler } from "../functions/_lib/mcp/authorize";
+import { createMcpAuthorizeHandler } from "../functions/_lib/auth/oauth/consent";
 import { Hono } from "hono";
+import { addRepresentative, insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 
 const RETURN_TO = `${MCP_OAUTH_AUTHORIZE_PATH}?client_id=client-1&redirect_uri=https%3A%2F%2Fclient.example%2Fcallback&scope=events%3Aread&state=state-1`;
 
@@ -87,6 +88,32 @@ describe("MCP authorization through canonical portal authentication", () => {
       authenticated: true,
       authorized: false,
       userEmail: "member@example.test",
+      staffEmail: null,
+      grantedScopes: [],
+    });
+  });
+
+  it("offers reauthentication when a representative's staff capacity has timed out", async () => {
+    await seedEventAndAdmin(env.DB);
+    const [staff] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE normalized_email = ?", [
+      "admin@pkic.org",
+    ]);
+    const organizationId = await insertOrganization(env.DB, "Example Organization");
+    const memberId = await seedOrganizationAggregate(env.DB, organizationId);
+    await addRepresentative(env.DB, memberId, staff.id);
+    const token = await createAdminSession(env.DB, staff.id, crypto.randomUUID());
+    await env.DB.prepare("UPDATE sessions SET created_at = ? WHERE user_id = ?")
+      .bind(new Date(Date.now() - 9 * 60 * 60 * 1000).toISOString(), staff.id)
+      .run();
+    const context = await describeMcpAuthorization(
+      new Request(`https://app.test${MCP_OAUTH_AUTHORIZE_PATH}`, { headers: { cookie: `pkic_session=${token}` } }),
+      oauthEnv(),
+      RETURN_TO,
+    );
+    expect(context).toMatchObject({
+      authenticated: false,
+      authorized: false,
+      userEmail: null,
       staffEmail: null,
       grantedScopes: [],
     });

@@ -43,7 +43,7 @@ async function settle(): Promise<void> {
 function analyticsReader() {
   return portalSessionFixture({
     staff: true,
-    staffRole: "user",
+    administrator: false,
     grants: [{ permission: "analytics:read", contextType: null, contextId: null }],
   });
 }
@@ -143,7 +143,7 @@ describe("portal donation analytics", () => {
   });
 
   it("refuses the analytics page and fetches nothing without analytics:read", async () => {
-    portalSession.value = portalSessionFixture({ staff: true, staffRole: "user", grants: [] });
+    portalSession.value = portalSessionFixture({ staff: true, administrator: false, grants: [] });
     const { requests } = requestRecorder(analyticsResponse);
 
     const container = mount(<Donations pageSegment="analytics" />);

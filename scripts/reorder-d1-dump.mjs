@@ -16,21 +16,24 @@ if (!inputPath) {
 // inserted before the referenced table exists. `PRAGMA defer_foreign_keys`
 // (already present in every dump) only defers the row-existence check to
 // commit time — it can't help when the referenced table doesn't exist yet.
-// Moving every CREATE statement ahead of all INSERTs (order preserved within
-// each group) fixes this: by the time any row is inserted, every table
-// already exists, so the deferred FK checks only need to resolve at commit.
+// Create tables, indexes, and views before loading data, but install triggers
+// afterward. Restoring a snapshot must not replay workflow guards or mutation
+// side effects (such as revision increments and outbox writes).
 const sql = fs.readFileSync(inputPath, "utf8");
 const statements = unstable_splitSqlQuery(sql);
 
 const pragmas = [];
 const schema = [];
 const data = [];
+const triggers = [];
 
 for (const statement of statements) {
   const trimmed = statement.trimStart();
   if (/^PRAGMA/i.test(trimmed)) {
     pragmas.push(statement);
-  } else if (/^CREATE\s+(TABLE|(UNIQUE\s+)?INDEX|VIEW|TRIGGER)/i.test(trimmed)) {
+  } else if (/^CREATE\s+(TEMP(?:ORARY)?\s+)?TRIGGER\b/i.test(trimmed)) {
+    triggers.push(statement);
+  } else if (/^CREATE\s+(TABLE|(UNIQUE\s+)?INDEX|VIEW)/i.test(trimmed)) {
     schema.push(statement);
   } else {
     data.push(statement);
@@ -38,17 +41,21 @@ for (const statement of statements) {
 }
 
 const tmpPath = `${inputPath}.tmp`;
-const out = fs.createWriteStream(tmpPath);
-for (const statement of [...pragmas, ...schema, ...data]) {
+const inputMode = fs.statSync(inputPath).mode & 0o777;
+const out = fs.createWriteStream(tmpPath, { mode: inputMode });
+for (const statement of [...pragmas, ...schema, ...data, ...triggers]) {
   out.write(statement);
   out.write(";\n");
 }
 await new Promise((resolve, reject) => {
   out.end((err) => (err ? reject(err) : resolve()));
 });
+// Creation mode is filtered through umask; restore the original bits explicitly.
+fs.chmodSync(tmpPath, inputMode);
 fs.renameSync(tmpPath, inputPath);
 
 console.log(
   `Reordered ${statements.length} statement(s) in ${path.relative(process.cwd(), inputPath)} ` +
-    `(${pragmas.length} pragma, ${schema.length} schema, ${data.length} data) so schema precedes data.`,
+    `(${pragmas.length} pragma, ${schema.length} schema, ${data.length} data, ${triggers.length} trigger) ` +
+    `so tables precede data and triggers follow data.`,
 );

@@ -1,3 +1,4 @@
+import { administratorGrants } from "./helpers/administrator";
 /**
  * permission-grants.test.ts
  *
@@ -34,8 +35,8 @@ async function call(token: string, path: string, init: RequestInit = {}): Promis
 async function insertUser(email: string): Promise<string> {
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-     VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+    `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+     VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
   )
     .bind(id, email, email)
     .run();
@@ -331,7 +332,6 @@ describe("permission_grants (Permission grants)", () => {
       identityType: "user",
       id: "wg-chair-user",
       email: "chair@example.test",
-      role: "user",
       grants: [
         {
           permission: "groups:write",
@@ -350,7 +350,7 @@ describe("permission_grants (Permission grants)", () => {
       identityType: "user",
       id: "oauth-admin",
       email: "oauth-admin@example.test",
-      role: "admin",
+      grants: administratorGrants,
       scopes: ["proposals:read"],
       scopeRestricted: true,
     };
@@ -395,10 +395,12 @@ describe("permission_grants (Permission grants)", () => {
       identityType: "user",
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
+      grants: administratorGrants,
     };
     const racingDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(adminId).run(),
+      env.DB.prepare("UPDATE user_roles SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE user_id = ?")
+        .bind(adminId)
+        .run(),
     );
 
     await expect(
@@ -424,7 +426,7 @@ describe("permission_grants (Permission grants)", () => {
       identityType: "user",
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
+      grants: administratorGrants,
     };
     const racingDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare(
@@ -472,10 +474,12 @@ describe("permission_grants (Permission grants)", () => {
       identityType: "user",
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
+      grants: administratorGrants,
     };
     const racingDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(adminId).run(),
+      env.DB.prepare("UPDATE user_roles SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE user_id = ?")
+        .bind(adminId)
+        .run(),
     );
 
     await expect(revokeAccessGrant(racingDb, actor, grantId)).rejects.toMatchObject({
@@ -501,7 +505,7 @@ describe("permission_grants (Permission grants)", () => {
       identityType: "user",
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
+      grants: administratorGrants,
     };
     const racingDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE permission_grants SET revoked_at = datetime('now') WHERE id = ?").bind(grantId).run(),

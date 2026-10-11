@@ -9,7 +9,6 @@ import { getJson, postJson, ApiClientError } from "../../shared/api-client";
 import {
   authStatus,
   clearUserSession,
-  expirePortalSession,
   finishAuthCheck,
   isAuthed,
   portalSession,
@@ -27,7 +26,6 @@ import { PortalShell } from "./shell/PortalShell";
 import { VerifyingOverlay } from "../../components/VerifyingOverlay";
 import { myProfileSchema } from "../../../shared/schemas/me";
 import { userAuthEstablishedResponseSchema, userAuthSessionResponseSchema } from "../../../shared/schemas/user-auth";
-import { successResponseSchema } from "../../../shared/schemas/api-common";
 import { SponsorAccess } from "./sections/sponsors/Access";
 import { portalHashPath, portalMagicLinkReturnPath, portalMagicLinkToken } from "./hash-route";
 import { IdentityInvitationAcceptance } from "./shell/IdentityInvitationAcceptance";
@@ -53,7 +51,6 @@ export function App() {
   const [verifying, setVerifying] = useState(() => Boolean(portalMagicLinkToken(window.location.hash)));
   const [verifyError, setVerifyError] = useState<string | null>(null);
   const [sessionError, setSessionError] = useState<string | null>(null);
-  const [reauthenticating, setReauthenticating] = useState(false);
 
   async function loadPortalSession(): Promise<boolean> {
     setSessionError(null);
@@ -78,20 +75,6 @@ export function App() {
 
   useSessionExpiry();
   useSessionActivity();
-
-  async function restartSignIn(): Promise<void> {
-    setSessionError(null);
-    setReauthenticating(true);
-    try {
-      await postJson("/api/v1/auth/logout", {}, successResponseSchema);
-      expirePortalSession();
-    } catch (error) {
-      if (error instanceof ApiClientError && error.status === 401) expirePortalSession();
-      else setSessionError("We could not end your current session. Try again before signing in.");
-    } finally {
-      setReauthenticating(false);
-    }
-  }
 
   useEffect(() => {
     let cancelled = false;
@@ -168,14 +151,6 @@ export function App() {
     return (
       <>
         {sessionNotice}
-        {portalSession.value?.staffReauthenticationRequired && (
-          <Alert tone="warn" title="Administrator access expired">
-            <p>You are still signed in with your other portal access. Sign in again to restore administrator access.</p>
-            <Button variant="secondary" loading={reauthenticating} onClick={() => void restartSignIn()}>
-              Sign out and sign in again
-            </Button>
-          </Alert>
-        )}
         <PortalShell key={`${portalSession.value?.identity.id}:${portalSession.value?.member?.identityId ?? ""}`} />
         <ConfirmDialogHost />
       </>

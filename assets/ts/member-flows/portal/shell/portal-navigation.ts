@@ -19,7 +19,6 @@ export interface PortalNavItem {
 export function portalHasGlobalPermission(session: PortalSession | null, permission: string): boolean {
   const staff = session?.staff;
   if (!staff) return false;
-  if (staff.role === "admin") return true;
   return staff.grants.some(
     (grant) => grant.permission === permission && grant.contextType === null && grant.contextId === null,
   );
@@ -36,7 +35,6 @@ export function portalHasAnyGlobalPermission(session: PortalSession | null, perm
 export function portalHasPermissionAtAnyScope(session: PortalSession | null, permission: string): boolean {
   const staff = session?.staff;
   if (!staff) return false;
-  if (staff.role === "admin") return true;
   return staff.grants.some((grant) => grant.permission === permission);
 }
 

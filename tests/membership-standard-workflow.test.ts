@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import app from "../functions/router";
 import { resetDb } from "./helpers/reset-db";
+import { seedMembershipReviewDigestTemplates } from "./helpers/membership-review-email-templates";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createApplicationFormSubmission, seedMemberApplication } from "./helpers/member-applications";
@@ -13,6 +14,7 @@ import { evaluateMembershipApplication } from "../functions/_lib/services/member
 
 it("runs the standard staff, voting-member, and council requirements with independent full notice windows", async () => {
   await resetDb();
+  await seedMembershipReviewDigestTemplates(env.DB);
   await seedEventAndAdmin(env.DB);
   const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'");
   const token = await createAdminSession(env.DB, admin.id, "standard-workflow");

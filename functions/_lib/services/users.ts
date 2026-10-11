@@ -215,8 +215,8 @@ async function resolveUserWrite(
       query: `INSERT INTO users (
         id, email, normalized_email, first_name, last_name, preferred_name,
         organization_name, job_title, biography, links_json,
-        data_json, role, active, created_at, updated_at
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'user', 1, ?, ?)`,
+        data_json, active, created_at, updated_at
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?, ?)`,
       values: [
         user.id,
         user.email,

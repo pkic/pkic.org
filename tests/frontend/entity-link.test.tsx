@@ -46,7 +46,7 @@ describe("EntityLink", () => {
 
 describe("portalEntityHref", () => {
   it("returns null for a null or empty entity id, regardless of entity type", () => {
-    portalSession.value = portalSessionFixture({ staff: true, staffRole: "admin" });
+    portalSession.value = portalSessionFixture({ staff: true, administrator: true });
     expect(portalEntityHref("user", null)).toBeNull();
     expect(portalEntityHref("user", undefined)).toBeNull();
     expect(portalEntityHref("user", "")).toBeNull();
@@ -55,19 +55,19 @@ describe("portalEntityHref", () => {
   it("resolves a user route when the viewer has users:read", () => {
     portalSession.value = portalSessionFixture({
       staff: true,
-      staffRole: "staff",
+      administrator: false,
       grants: [{ permission: "users:read", contextType: null, contextId: null }],
     });
     expect(portalEntityHref("user", "user-1")).toBe("/users/user-1");
   });
 
   it("denies a user route without users:read, degrading to text", () => {
-    portalSession.value = portalSessionFixture({ staff: true, staffRole: "staff", grants: [] });
+    portalSession.value = portalSessionFixture({ staff: true, administrator: false, grants: [] });
     expect(portalEntityHref("user", "user-1")).toBeNull();
   });
 
   it("resolves a group route whenever the groups section is enabled for the session", () => {
-    portalSession.value = portalSessionFixture({ staff: true, staffRole: "staff", grants: [] });
+    portalSession.value = portalSessionFixture({ staff: true, administrator: false, grants: [] });
     expect(portalEntityHref("group", "group-1")).toBe("/groups/group-1");
   });
 
@@ -79,7 +79,7 @@ describe("portalEntityHref", () => {
   it("resolves an organization route when the viewer has organizations:read", () => {
     portalSession.value = portalSessionFixture({
       staff: true,
-      staffRole: "staff",
+      administrator: false,
       grants: [{ permission: "organizations:read", contextType: null, contextId: null }],
     });
     expect(portalEntityHref("organization", "org-1")).toBe("/organizations/org-1");
@@ -88,21 +88,21 @@ describe("portalEntityHref", () => {
   it("resolves an organization route when the viewer has membership:write instead of organizations:read", () => {
     portalSession.value = portalSessionFixture({
       staff: true,
-      staffRole: "staff",
+      administrator: false,
       grants: [{ permission: "membership:write", contextType: null, contextId: null }],
     });
     expect(portalEntityHref("organization", "org-1")).toBe("/organizations/org-1");
   });
 
   it("denies an organization route without either organizations:read or membership:write", () => {
-    portalSession.value = portalSessionFixture({ staff: true, staffRole: "staff", grants: [] });
+    portalSession.value = portalSessionFixture({ staff: true, administrator: false, grants: [] });
     expect(portalEntityHref("organization", "org-1")).toBeNull();
   });
 
   it("resolves a membership application route when the membership section is enabled", () => {
     portalSession.value = portalSessionFixture({
       staff: true,
-      staffRole: "staff",
+      administrator: false,
       grants: [{ permission: "membership:read", contextType: null, contextId: null }],
     });
     expect(portalEntityHref("membership_application", "app-1")).toBe("/membership/applications/app-1");
@@ -110,13 +110,13 @@ describe("portalEntityHref", () => {
   });
 
   it("denies a membership application route without membership:read", () => {
-    portalSession.value = portalSessionFixture({ staff: true, staffRole: "staff", grants: [] });
+    portalSession.value = portalSessionFixture({ staff: true, administrator: false, grants: [] });
     expect(portalEntityHref("membership_application", "app-1")).toBeNull();
     expect(portalEntityHref("application", "app-1")).toBeNull();
   });
 
   it("returns null for entity types that need an owning group to route", () => {
-    portalSession.value = portalSessionFixture({ staff: true, staffRole: "admin" });
+    portalSession.value = portalSessionFixture({ staff: true, administrator: true });
     expect(portalEntityHref("event", "event-1")).toBeNull();
     expect(portalEntityHref("vote", "vote-1")).toBeNull();
     expect(portalEntityHref("some_unknown_type", "id-1")).toBeNull();

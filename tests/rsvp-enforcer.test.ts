@@ -71,8 +71,8 @@ async function seedTwoDayRegistration(): Promise<SeededRegistration> {
     ),
     env.DB.prepare(
       `INSERT INTO users
-           (id, email, normalized_email, first_name, role, active, created_at, updated_at)
-         VALUES (?, ?, ?, 'Alice', 'user', 1, ?, ?)`,
+           (id, email, normalized_email, first_name, active, created_at, updated_at)
+         VALUES (?, ?, ?, 'Alice', 1, ?, ?)`,
     ).bind(userId, userEmail, userEmail, at, at),
     env.DB.prepare(
       `INSERT INTO registrations

@@ -1199,8 +1199,8 @@ describe("Secondary contact nomination & confirmation", () => {
     const { organizationId, userId: primaryUserId } = await seedOrgWithContact("primary10@example.test", "F");
     const outsiderUserId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+       VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
     )
       .bind(outsiderUserId, "outsider@example.test", "outsider@example.test")
       .run();

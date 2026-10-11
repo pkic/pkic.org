@@ -11,15 +11,11 @@ import { postJson } from "../../shared/api-client";
 import type { ToastType } from "../../shared/ui";
 import { useContractForm } from "../../hooks/useContractForm";
 import { Button } from "../../ui/Button";
+import { EmailHtmlPreview } from "../../ui/EmailHtmlPreview";
 import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../ui/Panel";
 import { Textarea, TextInput } from "../../ui/TextControl";
-
-// `pk-framed` on the preview iframe comes from the content stylesheet, which
-// is not in the entry chunk: a class written here is only styled if this
-// module pulls its sheet in.
-import "../../ui/Content.css";
 
 export type BulkInviteType = "attendee" | "speaker";
 
@@ -379,18 +375,7 @@ export function BulkInviteComposer({
               <span class="pk-small">Subject</span>
               <span class="pk-strong">{preview.subject}</span>
             </div>
-            {/*
-             * The rendered invitation is author-supplied HTML, so it stays in
-             * an iframe with an empty `sandbox`: no scripts, no forms, no
-             * same-origin access, no navigation. Neither may be relaxed.
-             */}
-            <iframe
-              sandbox=""
-              srcdoc={preview.html}
-              class="pk-framed"
-              height={600}
-              title={`${label} invitation preview`}
-            />
+            <EmailHtmlPreview title={`${label} invitation preview`} html={preview.html} height={600} />
             <Checkbox
               id={confirmId}
               checked={confirmed}

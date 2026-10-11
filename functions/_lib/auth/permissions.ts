@@ -114,7 +114,7 @@ export function hasPermission(actor: AuthAdmin, permission: string, context?: Pe
   if (actor.scopeRestricted && actor.scopes?.includes(permission) !== true) {
     return false;
   }
-  if (actor.role === "admin") {
+  if (!isUserBackedAuthAdmin(actor) && actor.role === "admin") {
     return true;
   }
 
@@ -158,8 +158,8 @@ export function requireAnyPermission(
 
 /**
  * Canonical live-D1 evidence for one or more permissions. Request preflight
- * uses `hasPermission`; protected mutation batches use this equivalent SQL so
- * revocation between authentication and commit fails atomically.
+ * uses `hasPermission`; protected reads and mutation batches use this equivalent
+ * SQL so revocation between authentication and database access fails atomically.
  */
 export function permissionsAuthorizationEvidence(
   actor: AuthAdmin,
@@ -173,6 +173,41 @@ export function permissionsAuthorizationEvidence(
       ]),
     ).values(),
   ];
+  return buildPermissionsAuthorizationEvidence(actor, unique, {
+    sql: `SELECT json_extract(value, '$.permission') AS permission,
+                 json_extract(value, '$.contextType') AS context_type,
+                 json_extract(value, '$.contextId') AS context_id
+            FROM json_each(?)`,
+    bindings: [
+      JSON.stringify(
+        unique.map(({ permission, context }) => ({
+          permission,
+          contextType: context?.type ?? null,
+          contextId: context?.id ?? null,
+        })),
+      ),
+    ],
+  });
+}
+
+/** The resource ID expression is a trusted source column, never request input. */
+export function permissionAuthorizationEvidenceForResource(
+  actor: AuthAdmin,
+  permission: string,
+  context: { type: string; idSql: string },
+): AuthorizationEvidence {
+  if (!isUserBackedAuthAdmin(actor)) return permissionsAuthorizationEvidence(actor, [{ permission }]);
+  return buildPermissionsAuthorizationEvidence(actor, [{ permission }], {
+    sql: `SELECT ? AS permission, ? AS context_type, ${context.idSql} AS context_id`,
+    bindings: [permission, context.type],
+  });
+}
+
+function buildPermissionsAuthorizationEvidence(
+  actor: AuthAdmin,
+  unique: readonly PermissionRequirement[],
+  required: AuthorizationEvidence,
+): AuthorizationEvidence {
   if (unique.length === 0) return { sql: "SELECT 1", bindings: [] };
   if (unique.some(({ permission }) => actor.scopeRestricted && actor.scopes?.includes(permission) !== true)) {
     return { sql: "SELECT 1 WHERE 0", bindings: [] };
@@ -184,12 +219,7 @@ export function permissionsAuthorizationEvidence(
   }
 
   return {
-    sql: `WITH required(permission, context_type, context_id) AS (
-            SELECT json_extract(value, '$.permission'),
-                   json_extract(value, '$.contextType'),
-                   json_extract(value, '$.contextId')
-              FROM json_each(?)
-          )
+    sql: `WITH required(permission, context_type, context_id) AS (${required.sql})
           SELECT 1
             FROM users actor
            WHERE actor.id = ? AND actor.active = 1
@@ -197,8 +227,7 @@ export function permissionsAuthorizationEvidence(
                SELECT 1
                  FROM required requirement
                 WHERE NOT (
-                  actor.role = 'admin'
-                  OR EXISTS (
+                  EXISTS (
                     SELECT 1
                       FROM user_roles role
                       JOIN role_permissions role_permission ON role_permission.role_id = role.role_id
@@ -244,17 +273,7 @@ export function permissionsAuthorizationEvidence(
                 )
              )
            LIMIT 1`,
-    bindings: [
-      JSON.stringify(
-        unique.map(({ permission, context }) => ({
-          permission,
-          contextType: context?.type ?? null,
-          contextId: context?.id ?? null,
-        })),
-      ),
-      actor.id,
-      actor.memberId ?? null,
-    ],
+    bindings: [...required.bindings, actor.id, actor.memberId ?? null],
   };
 }
 
@@ -318,8 +337,7 @@ interface PermissionRecipientRow {
  */
 export function staffPermissionPredicate(userAlias = "u"): string {
   return `(
-    ${userAlias}.role = 'admin'
-    OR EXISTS (
+    EXISTS (
       SELECT 1
       FROM user_roles ur
       JOIN role_permissions rp ON rp.role_id = ur.role_id
@@ -353,17 +371,14 @@ export async function findUserPermissionRecipients(
 }
 
 /**
- * Every user who can act on `permission` — role='admin' (always, matching
- * hasPermission's bypass) plus every user_roles/permission_grants holder,
+ * Every user who holds `permission` through user_roles or permission_grants,
  * global grants only (no context filtering — used for email fanout, e.g.
  * "Staff admins with organizations:content-review permission").
  */
 export async function findUsersWithPermission(db: DatabaseLike, permission: string): Promise<string[]> {
   const rows = await all<EmailRow>(
     db,
-    `SELECT DISTINCT email FROM users WHERE role = 'admin'
-     UNION
-     SELECT DISTINCT u.email FROM users u
+    `SELECT DISTINCT u.email FROM users u
        JOIN user_roles ur ON ur.user_id = u.id
        JOIN role_permissions rp ON rp.role_id = ur.role_id
      WHERE rp.permission = ?

@@ -25,6 +25,11 @@ function isPublicToken(name: string): boolean {
   return name.startsWith("public-") || name.startsWith("wg-");
 }
 
+/** Template highlights travel with the editor chunk, not the site entry. */
+function isTemplateToken(name: string): boolean {
+  return name.startsWith("template-");
+}
+
 function partition(entries: Record<string, string>, wanted: (name: string) => boolean): Record<string, string> {
   return Object.fromEntries(Object.entries(entries).filter(([name]) => wanted(name)));
 }
@@ -66,7 +71,7 @@ ${block(paletteEntries, "    ")}
 ${block(accentPair(defaultAccent), "    ")}
 
 ${block(
-  partition(constants, (name) => !isPublicToken(name)),
+  partition(constants, (name) => !isPublicToken(name) && !isTemplateToken(name)),
   "    ",
 )}
 
@@ -140,6 +145,17 @@ ${block(dark, "      ")}
 
   :root[data-theme="dark"] {
 ${block(dark, "    ")}
+  }
+}
+`;
+}
+
+/** The template palette is loaded only by source and visual template editors. */
+export function emitTemplateTokenCss(): string {
+  return `/* Generated from assets/design/tokens.ts. Regenerate: pnpm run build:tokens. */
+@layer tokens {
+  :root {
+${block(partition(constants, isTemplateToken), "    ")}
   }
 }
 `;

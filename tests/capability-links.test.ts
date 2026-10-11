@@ -39,8 +39,8 @@ async function seedRegistrationCapability(): Promise<void> {
   ]);
   await run(
     env.DB,
-    "INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ["user-capability", "user@example.test", "user@example.test", "user", 1, now, now],
+    "INSERT INTO users (id, email, normalized_email, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    ["user-capability", "user@example.test", "user@example.test", 1, now, now],
   );
   await run(
     env.DB,
@@ -63,8 +63,8 @@ async function seedSpeakerCapability(): Promise<void> {
   );
   await run(
     env.DB,
-    "INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-    ["user-speaker", "speaker@example.test", "speaker@example.test", "user", 1, now, now],
+    "INSERT INTO users (id, email, normalized_email, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+    ["user-speaker", "speaker@example.test", "speaker@example.test", 1, now, now],
   );
   await run(
     env.DB,
@@ -365,8 +365,8 @@ describe("public capability links", () => {
     ]);
     await run(
       env.DB,
-      "INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
-      ["old-email-owner", "speaker@example.test", "speaker@example.test", "user", 1, nowIso(), nowIso()],
+      "INSERT INTO users (id, email, normalized_email, active, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)",
+      ["old-email-owner", "speaker@example.test", "speaker@example.test", 1, nowIso(), nowIso()],
     );
     await expect(
       materializeQueuedCapabilityLinks(env.DB, { INTERNAL_SIGNING_SECRET: signingSecret }, storedPayload),

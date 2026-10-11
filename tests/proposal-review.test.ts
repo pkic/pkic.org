@@ -1,3 +1,4 @@
+import { administratorGrants, grantAdministrator } from "./helpers/administrator";
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { seedPersona } from "./personas/seed";
@@ -40,8 +41,8 @@ async function seedProposal(
 
   await env.DB.batch([
     env.DB.prepare(`
-      INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-      VALUES ('${admin2Id}', 'committee2@pkic.org', 'committee2@pkic.org', 'admin', 1, datetime('now'), datetime('now'))
+      INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+      VALUES ('${admin2Id}', 'committee2@pkic.org', 'committee2@pkic.org', 1, datetime('now'), datetime('now'))
     `),
     env.DB.prepare(`
       INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, job_title, data_json, created_at, updated_at)
@@ -58,6 +59,7 @@ async function seedProposal(
     `),
   ]);
 
+  await grantAdministrator(env.DB, admin2Id);
   return { proposalId, admin1Id, admin2Id };
 }
 
@@ -297,8 +299,8 @@ describe("proposal review and finalize", () => {
         [moderatorId, "moderator-owner-test@pkic.org"],
       ].map(([id, email]) =>
         env.DB.prepare(
-          `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-             VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+          `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+             VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
         ).bind(id, email, email),
       ),
       ...[
@@ -393,7 +395,12 @@ describe("proposal review and finalize", () => {
   it("keeps the D1 update owner-bound when ownership changes after the service read", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, admin1Id, admin2Id } = await seedProposal(env.DB, eventId);
-    const actor: AuthAdmin = { identityType: "user", id: admin1Id, email: "admin@pkic.org", role: "admin" };
+    const actor: AuthAdmin = {
+      identityType: "user",
+      id: admin1Id,
+      email: "admin@pkic.org",
+      grants: administratorGrants,
+    };
     await upsertProposalReview(env.DB, actor, proposalId, { recommendation: "accept", score: 9 });
     const [review] = await queryAll<{ id: string }>(
       env.DB,
@@ -452,7 +459,12 @@ describe("proposal review and finalize", () => {
   it("does not create a review when finalization wins immediately before the write", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, admin1Id } = await seedProposal(env.DB, eventId);
-    const actor: AuthAdmin = { identityType: "user", id: admin1Id, email: "admin@pkic.org", role: "admin" };
+    const actor: AuthAdmin = {
+      identityType: "user",
+      id: admin1Id,
+      email: "admin@pkic.org",
+      grants: administratorGrants,
+    };
     const baseDb: DatabaseLike = env.DB;
     let injectedFinalization = false;
     const racingDb: DatabaseLike = {
@@ -491,7 +503,12 @@ describe("proposal review and finalize", () => {
   it("does not update a review when finalization wins immediately before the write", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, admin1Id } = await seedProposal(env.DB, eventId);
-    const actor: AuthAdmin = { identityType: "user", id: admin1Id, email: "admin@pkic.org", role: "admin" };
+    const actor: AuthAdmin = {
+      identityType: "user",
+      id: admin1Id,
+      email: "admin@pkic.org",
+      grants: administratorGrants,
+    };
     await upsertProposalReview(env.DB, actor, proposalId, { recommendation: "accept", score: 9 });
 
     const baseDb: DatabaseLike = env.DB;

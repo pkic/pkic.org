@@ -1,3 +1,4 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
 import { createUserBackedAuthAdmin } from "../functions/_lib/auth/admin-identity";
@@ -61,7 +62,7 @@ describe("canonical email-outbox commands", () => {
   beforeEach(async () => {
     await resetDb();
     ({ eventId } = await seedEventAndAdmin(env.DB));
-    [{ id: adminId }] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin'");
+    [{ id: adminId }] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
     adminToken = await createAdminSession(env.DB, adminId, "email-command-admin");
     await seedTemplates(adminId);
   });
@@ -127,7 +128,6 @@ describe("canonical email-outbox commands", () => {
     const actor = createUserBackedAuthAdmin({
       id: userId,
       email: "email-operator@example.test",
-      role: "user",
       grants: [
         { permission: "email:read", contextType: null, contextId: null },
         { permission: "email:manage", contextType: null, contextId: null },
@@ -159,7 +159,6 @@ describe("canonical email-outbox commands", () => {
     const actor = createUserBackedAuthAdmin({
       id: userId,
       email: operator.email,
-      role: "user",
       grants: [
         { permission: "email:read", contextType: null, contextId: null },
         { permission: "email:manage", contextType: null, contextId: null },
@@ -184,7 +183,7 @@ describe("canonical email-outbox commands", () => {
 
   it("delivers one row at most once when cron and a manual command race", async () => {
     await queue("race@example.test");
-    const actor = createUserBackedAuthAdmin({ id: adminId, email: "admin@pkic.org", role: "admin" });
+    const actor = createUserBackedAuthAdmin({ id: adminId, email: "admin@pkic.org" });
     const fetchMock = sendGridAccepted();
     vi.stubGlobal("fetch", fetchMock);
 

@@ -1,3 +1,5 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
+import { grantAdministrator } from "./helpers/administrator";
 import {
   dispatchEventEmailCampaignPage,
   dispatchEventEmailCampaignPages,
@@ -136,7 +138,7 @@ describe("event email campaign recipients", () => {
 
   it.each(["attendee", "speaker"] as const)("stages invited %s recipients after acceptance or expiry", async (type) => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+    const [admin] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
     await seedCampaignTemplates(admin.id);
     await env.DB.prepare(
       "UPDATE events SET starts_at = '2029-01-01T09:00:00.000Z', ends_at = '2029-01-01T17:00:00.000Z' WHERE id = ?",
@@ -359,7 +361,7 @@ describe("event email campaign recipients", () => {
 
   it("accepts over 10,000 recipients before delivery and resumes bounded pages without duplicate sends", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     if (!admin) throw new Error("Expected the seeded admin to exist");
     const rawToken = await createAdminSession(env.DB, admin.id, "campaign-bulk-test-token");
     await seedCampaignTemplates(admin.id);
@@ -523,7 +525,7 @@ describe("event email campaign recipients", () => {
 
   it("keeps BCC pages within the reviewed size and skips recipients who no longer match", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+    const [admin] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
     await seedCampaignTemplates(admin.id);
     const token = await createAdminSession(env.DB, admin.id, "campaign-bcc-pages");
     for (let index = 0; index < 5; index += 1) {
@@ -567,10 +569,7 @@ describe("event email campaign recipients", () => {
 
   it("supports event-scoped writers and atomically rejects permission revocation before queue commit", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const [{ id: administratorId }] = await queryAll<{ id: string }>(
-      env.DB,
-      "SELECT id FROM users WHERE role = 'admin' LIMIT 1",
-    );
+    const [{ id: administratorId }] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
     await seedCampaignTemplates(administratorId);
     const writerId = await insertUser(env.DB, `campaign-writer-${crypto.randomUUID()}@example.test`);
     await env.DB.prepare(
@@ -624,12 +623,13 @@ describe("event email campaign recipients", () => {
 
   it("uses the same campaign resource for a selected group event manager", async () => {
     const administratorId = await insertUser(env.DB, `campaign-admin-${crypto.randomUUID()}@example.test`);
-    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(administratorId).run();
+    const grants = await grantAdministrator(env.DB, administratorId);
     const administrator = {
       identityType: "user" as const,
       id: administratorId,
       email: `campaign-admin-${administratorId}@example.test`,
-      role: "admin",
+      role: "user",
+      grants,
     };
     const group = await createGroup(env.DB, administrator, {
       typeKey: "working_group",

@@ -1,3 +1,4 @@
+import { grantAdministrator } from "./helpers/administrator";
 /**
  * Who may read a community profile, and who may vouch on one.
  *
@@ -185,13 +186,10 @@ describe("reading one user record", () => {
 
   it("does not let a scope-restricted client read its own operator's record", async () => {
     const operator = await insertUser(env.DB, "operator8@example.test");
-    await env.DB.prepare(`UPDATE users SET role = 'admin' WHERE id = ?`).bind(operator).run();
-    const token = await createMcpSession(
-      env.DB,
-      { id: operator, email: "operator8@example.test", role: "admin" },
-      "mcp-token-8",
-      ["groups:read"],
-    );
+    await grantAdministrator(env.DB, operator);
+    const token = await createMcpSession(env.DB, { id: operator, email: "operator8@example.test" }, "mcp-token-8", [
+      "groups:read",
+    ]);
 
     // The machine header is what routes the bearer token to the MCP verifier.
     const response = await call(token, `/api/v1/users/${operator}`, {

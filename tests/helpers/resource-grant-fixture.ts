@@ -1,3 +1,4 @@
+import { grantAdministrator } from "./administrator";
 import { env } from "cloudflare:workers";
 import { createManagedFormPlacement } from "../../functions/_lib/services/forms";
 import { createGroup, joinGroup } from "../../functions/_lib/services/groups";
@@ -18,8 +19,8 @@ export interface ResourceGrantFixture {
 export async function insertResourceGrantActor(label: string, role = "user"): Promise<UserBackedAuthAdmin> {
   const email = `${label}-${crypto.randomUUID()}@example.test`;
   const id = await insertUser(env.DB, email);
-  await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
-  return { identityType: "user", id, email, role };
+  const grants = role === "admin" ? await grantAdministrator(env.DB, id) : [];
+  return { identityType: "user", id, email, grants };
 }
 
 export async function addResourceGrantParticipant(groupId: string, label: string): Promise<UserBackedAuthAdmin> {

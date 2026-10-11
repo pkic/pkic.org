@@ -172,7 +172,7 @@ function buildOrganizersSql(config) {
     statements.push(`
 INSERT INTO users (
   id, email, normalized_email, first_name, last_name, organization_name, job_title,
-  role, active, created_at, updated_at
+  active, created_at, updated_at
 ) VALUES (
   ${sqlString(randomUUID())},
   ${sqlString(email)},
@@ -181,10 +181,9 @@ INSERT INTO users (
   ${toSqlNullableText(organizer.lastName)},
   ${toSqlNullableText(organizer.organizationName)},
   ${toSqlNullableText(organizer.jobTitle)},
-  'user',
   1,
-  datetime('now'),
-  datetime('now')
+  strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+  strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 )
 ON CONFLICT(email) DO UPDATE SET
   first_name = COALESCE(excluded.first_name, users.first_name),
@@ -192,7 +191,7 @@ ON CONFLICT(email) DO UPDATE SET
   organization_name = COALESCE(excluded.organization_name, users.organization_name),
   job_title = COALESCE(excluded.job_title, users.job_title),
   active = 1,
-  updated_at = datetime('now');
+  updated_at = strftime('%Y-%m-%dT%H:%M:%fZ', 'now');
 
 INSERT INTO event_participants (
   id, event_id, user_id, role, subrole, status, source_type, source_ref, created_at, updated_at
@@ -206,8 +205,8 @@ SELECT
   'active',
   'seed',
   'scripts/seed-event.yaml',
-  datetime('now'),
-  datetime('now')
+  strftime('%Y-%m-%dT%H:%M:%fZ', 'now'),
+  strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE NOT EXISTS (
   SELECT 1 FROM event_participants ep
   WHERE ep.event_id = (SELECT id FROM events WHERE slug = ${sqlString(config.event.slug)})

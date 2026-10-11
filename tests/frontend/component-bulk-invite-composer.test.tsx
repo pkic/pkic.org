@@ -282,9 +282,9 @@ describe("bulk invite composer", () => {
       "I reviewed this preview and confirm sending this email.",
     );
 
-    // The preview is untrusted author HTML and must stay fully sandboxed.
+    // The trusted renderer isolates the author HTML in its nested sandbox.
     const frame = container.querySelector<HTMLIFrameElement>("iframe");
-    expect(frame?.getAttribute("sandbox")).toBe("");
+    expect(frame?.getAttribute("src")).toBe("/email/preview/");
     expect(frame?.title).toBe("attendee invitation preview");
   });
 });

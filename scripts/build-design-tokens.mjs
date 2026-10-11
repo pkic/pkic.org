@@ -17,7 +17,7 @@ import { fileURLToPath } from "node:url";
 
 import { layers } from "../assets/design/tokens.ts";
 
-import { emitPublicTokenCss, emitTokenCss } from "../assets/design/emit-css.ts";
+import { emitPublicTokenCss, emitTemplateTokenCss, emitTokenCss } from "../assets/design/emit-css.ts";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const checkOnly = process.argv.includes("--check");
@@ -29,6 +29,7 @@ const sheets = [
   },
   { name: "tokens.generated.css", render: emitTokenCss },
   { name: "tokens.public.generated.css", render: emitPublicTokenCss },
+  { name: "tokens.template.generated.css", render: emitTemplateTokenCss },
 ];
 
 for (const sheet of sheets) {

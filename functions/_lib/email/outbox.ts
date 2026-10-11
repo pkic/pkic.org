@@ -141,18 +141,19 @@ function resolveEmailBaseUrl(payload: Record<string, unknown>, env: Env): string
   return resolveAppBaseUrl(env);
 }
 
-async function claimOutboxForSending(db: DatabaseLike, outboxId: string): Promise<string | null> {
+async function claimOutboxForSending(db: DatabaseLike, outboxId: string) {
   const lease = createDurableJobLease();
-  const claimed = await run(
+  const claimed = await first<{ payload_json: string }>(
     db,
     `UPDATE email_outbox
      SET status = 'sending', processing_token = ?, lease_expires_at = ?, updated_at = ?
      WHERE id = ?
        AND send_after <= ?
-       AND status IN ('queued', 'retrying')`,
+       AND status IN ('queued', 'retrying')
+     RETURNING payload_json`,
     [lease.token, lease.expiresAt, lease.claimedAt, outboxId, lease.claimedAt],
   );
-  return claimed.changes === 1 ? lease.token : null;
+  return claimed ? { token: lease.token, payloadJson: claimed.payload_json } : null;
 }
 
 async function markOutboxSent(
@@ -260,14 +261,17 @@ async function processOutboxRow(
   // row. Claim it with a guarded write before contacting SendGrid so only one
   // invocation owns the external side effect.
   if (getAvailability(env, Date.now(), "email").mode !== "normal") return false;
-  const processingToken = await claimOutboxForSending(db, row.id);
-  if (!processingToken) return false;
+  const claim = await claimOutboxForSending(db, row.id);
+  if (!claim) return false;
+  const processingToken = claim.token;
 
   let acceptedMessageId: string | null | undefined;
   let resolvedTemplateVersion = 0;
 
   try {
-    const storedPayload = parseJsonSafe<Record<string, unknown>>(row.payload_json, {});
+    // A queued message can change after selection. The atomic claim returns
+    // its current payload so a withdrawn snapshot cannot leak from that read.
+    const storedPayload = parseJsonSafe<Record<string, unknown>>(claim.payloadJson, {});
     const payload = await materializeQueuedCapabilityLinks(db, env, storedPayload);
     const { partials, layoutHtml } = await loadRenderResources(db, context);
     const emailBaseUrl = resolveEmailBaseUrl(payload, env);

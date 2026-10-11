@@ -261,7 +261,6 @@ describe("canonical organization management", () => {
     const actor = createUserBackedAuthAdmin({
       id: writer.userId,
       email: `organization-actor-${writer.userId}@example.test`,
-      role: "user",
       scopes: [],
       grants: [{ permission: "organizations:write", contextType: null, contextId: null }],
     });

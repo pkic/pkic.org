@@ -1,5 +1,49 @@
 import type { D1StatementResult, DatabaseLike, StatementLike } from "../../functions/_lib/types";
 
+/** Runs one mutation immediately before a selected query, after request authentication. */
+export function mutateBeforeMatchingQuery(
+  db: DatabaseLike,
+  matches: (sql: string) => boolean,
+  mutation: () => Promise<unknown>,
+): DatabaseLike {
+  let applied = false;
+  const originals = new WeakMap<StatementLike, { statement: StatementLike; sql: string }>();
+  const apply = async (sql: string) => {
+    if (applied || !matches(sql)) return;
+    applied = true;
+    await mutation();
+  };
+  const wrap = (statement: StatementLike, sql: string): StatementLike => {
+    const wrapped: StatementLike = {
+      bind: (...values) => wrap(statement.bind(...values), sql),
+      async run<T = Record<string, unknown>>() {
+        await apply(sql);
+        return statement.run<T>();
+      },
+      async all<T = Record<string, unknown>>() {
+        await apply(sql);
+        return statement.all<T>();
+      },
+      async first<T = Record<string, unknown>>(columnName?: string) {
+        await apply(sql);
+        return statement.first<T>(columnName);
+      },
+    };
+    originals.set(wrapped, { statement, sql });
+    return wrapped;
+  };
+  return {
+    prepare: (sql) => wrap(db.prepare(sql), sql),
+    async batch(statements) {
+      for (const statement of statements) {
+        const original = originals.get(statement);
+        if (original) await apply(original.sql);
+      }
+      return db.batch(statements.map((statement) => originals.get(statement)?.statement ?? statement));
+    },
+  };
+}
+
 /** Runs one caller-owned mutation after service preflight and before its next D1 batch. */
 export function mutateBeforeNextBatch(db: DatabaseLike, mutation: () => Promise<unknown>): DatabaseLike {
   let pending = mutation;

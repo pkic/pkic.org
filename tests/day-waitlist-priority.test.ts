@@ -1,3 +1,4 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { describe, expect, it, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import type { DatabaseLike } from "../functions/_lib/types";
@@ -657,10 +658,7 @@ describe("day waitlist priorities", () => {
 
     expect(Number(dayWaitlist.total)).toBe(0);
 
-    const [admin] = await queryAll<{ id: string; email: string }>(
-      env.DB,
-      "SELECT id, email FROM users WHERE role = 'admin' LIMIT 1",
-    );
+    const [admin] = await queryAll<{ id: string; email: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
     await updateRegistrationDayAttendance(env.DB, {
       event,
       registrationId: organizer.registration.id,

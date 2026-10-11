@@ -1,3 +1,4 @@
+import { administratorGrants } from "./helpers/administrator";
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
@@ -513,7 +514,12 @@ describe("proposal participants", () => {
 
     await finalizeProposalDecision(env.DB, {
       proposalId: proposal.id,
-      actor: { identityType: "user", id: adminRow.id, email: "admin@pkic.org", role: "admin" },
+      actor: {
+        identityType: "user",
+        id: adminRow.id,
+        email: "admin@pkic.org",
+        grants: administratorGrants,
+      },
       finalStatus: "accepted",
       minReviewsRequired: 0,
     });

@@ -9,6 +9,7 @@ import fs from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import { execFileSync, spawn } from "node:child_process";
+import { wranglerTargetArgs } from "../lib/wrangler-target.mjs";
 
 /**
  * Requires an exact `<slug>.<ext>` match. Falling back to "the first file
@@ -50,8 +51,7 @@ export function runWranglerD1(root, envConfig, cli, sql) {
     "d1",
     "execute",
     cli.database,
-    "--env",
-    envConfig.wranglerEnv,
+    ...wranglerTargetArgs(envConfig.wranglerEnv),
     envConfig.wranglerFlag,
     ...(cli.persistTo ? [`--persist-to=${cli.persistTo}`] : []),
     "--file",
@@ -76,8 +76,7 @@ export function queryWranglerD1(root, envConfig, cli, sql) {
     "d1",
     "execute",
     cli.database,
-    "--env",
-    envConfig.wranglerEnv,
+    ...wranglerTargetArgs(envConfig.wranglerEnv),
     envConfig.wranglerFlag,
     ...(cli.persistTo ? [`--persist-to=${cli.persistTo}`] : []),
     "--json",

@@ -44,6 +44,8 @@ export interface QueueEmailPayload {
   replyTo?: string;
   bounceAddress?: string;
   sendAfterSeconds?: number;
+  /** Absolute UTC delivery eligibility for calendar-aligned notifications. */
+  sendAt?: string;
 }
 
 const EMAIL_OUTBOX_COLUMNS = `id, event_id, template_key, template_version, recipient_user_id, recipient_email,
@@ -110,9 +112,10 @@ function buildEmailOutboxValues(payload: QueueEmailPayload, id: string, queuedAt
     recipientEmail: payload.recipientEmail,
   });
   const sendAfter =
-    payload.sendAfterSeconds && payload.sendAfterSeconds > 0
+    payload.sendAt ??
+    (payload.sendAfterSeconds && payload.sendAfterSeconds > 0
       ? new Date(Date.now() + payload.sendAfterSeconds * 1000).toISOString()
-      : queuedAt;
+      : queuedAt);
   return [
     id,
     payload.eventId ?? null,

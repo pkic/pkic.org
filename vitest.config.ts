@@ -65,7 +65,7 @@ export default defineConfig(async () => {
     },
     setupFiles: ["./tests/helpers/apply-migrations.ts"],
   };
-  // Only SELF.fetch needs an eagerly loaded entry point. Other tests import
+  // Only SELF.fetch needs the application entry point. Other tests import
   // their actual router/service explicitly, still inside isolated workerd
   // with the same bindings and real migrations.
   const workerFetchFiles = ["tests/api-security.test.ts", "tests/public-site-rendering.test.ts"];
@@ -111,8 +111,14 @@ export default defineConfig(async () => {
         },
         {
           ...siteOptions,
-          plugins: [...sitePlugins(), cloudflareTest({ ...workerOptions, main: "./functions/router.ts" })],
-          test: { ...testOptions, name: "worker-fetch", include: workerFetchFiles, exclude: ["**/._*"] },
+          plugins: [...sitePlugins(), cloudflareTest({ ...workerOptions, main: "./functions/worker.ts" })],
+          test: {
+            ...testOptions,
+            setupFiles: [...testOptions.setupFiles, "./tests/helpers/load-worker-application.ts"],
+            name: "worker-fetch",
+            include: workerFetchFiles,
+            exclude: ["**/._*"],
+          },
         },
       ],
     },

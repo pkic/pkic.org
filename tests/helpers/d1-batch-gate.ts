@@ -47,6 +47,15 @@ export function gateNextBatch(database: DatabaseLike): BatchGate {
 
 /** Pauses the next standalone D1 statement run after its preceding reads. */
 export function gateNextRun(database: DatabaseLike): BatchGate {
+  return gateNextStatement(database, "run");
+}
+
+/** Pause a matching first() statement, including UPDATE ... RETURNING claims. */
+export function gateNextFirst(database: DatabaseLike, matchingSql: string): BatchGate {
+  return gateNextStatement(database, "first", matchingSql);
+}
+
+function gateNextStatement(database: DatabaseLike, method: "run" | "first", matchingSql = ""): BatchGate {
   let signalReached!: () => void;
   let release!: () => void;
   const reached = new Promise<void>((resolve) => {
@@ -63,14 +72,14 @@ export function gateNextRun(database: DatabaseLike): BatchGate {
         if (property === "bind") {
           return (...values: unknown[]) => wrapStatement(target.bind(...values));
         }
-        if (property !== "run") return Reflect.get(target, property, receiver);
-        return async (...args: Parameters<typeof target.run>) => {
+        if (property !== method) return Reflect.get(target, property, receiver);
+        return async (...args: Parameters<typeof target.first>) => {
           if (!gated) {
             gated = true;
             signalReached();
             await released;
           }
-          return target.run(...args);
+          return method === "first" ? target.first(...args) : target.run();
         };
       },
     });
@@ -78,7 +87,8 @@ export function gateNextRun(database: DatabaseLike): BatchGate {
   const db = interceptDatabase(database, {
     get(target, property, receiver) {
       if (property !== "prepare") return Reflect.get(target, property, receiver);
-      return (query: string) => wrapStatement(target.prepare(query));
+      return (query: string) =>
+        query.includes(matchingSql) ? wrapStatement(target.prepare(query)) : target.prepare(query);
     },
   });
   return { db, reached, release };

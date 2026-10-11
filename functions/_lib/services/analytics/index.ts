@@ -211,7 +211,7 @@ export async function getOrganizationAnalytics(db: DatabaseLike, now = new Date(
   });
 }
 
-/** Accounts: standing, role, and whether they act in any capacity. */
+/** Accounts: standing, live role assignments, and whether they act in any capacity. */
 export async function getUserAnalytics(db: DatabaseLike, now = new Date()): Promise<UserAnalytics> {
   const [totalsResult, roleResult, reachResult, createdResult] = await executeAnalyticsQueries(
     db,

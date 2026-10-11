@@ -39,16 +39,25 @@
     --sponsors-logo-height: 3.125rem;
   }
 
+  /* Diamond gets a prominent 120px frame; higher catalog weights keep growing. */
   .sponsors-tier.sponsor-weight-6 {
-    --sponsors-logo-height: 4.5rem;
+    --sponsors-logo-height: 7.5rem;
   }
 
   .sponsors-tier.sponsor-weight-7 {
-    --sponsors-logo-height: 5rem;
+    --sponsors-logo-height: 8.75rem;
   }
 
   .sponsors-tier.sponsor-weight-8 {
-    --sponsors-logo-height: 5.5rem;
+    --sponsors-logo-height: 10rem;
+  }
+
+  /* Top-tier wordmarks use the row on phones instead of a narrow half-column. */
+  .sponsors-tier:is(.sponsor-weight-6, .sponsor-weight-7, .sponsor-weight-8) {
+    --sponsors-logo-width: min(
+      calc(var(--sponsors-logo-height) * var(--sponsors-logo-aspect)),
+      calc(100% - 2 * var(--sponsors-edge-inset))
+    );
   }
 
   .sponsor-level {
@@ -87,10 +96,11 @@
     justify-content: center;
   }
 
-  .pk-public-prose .sponsors-tier .sponsor-logo {
-    width: auto;
+  .sponsors .sponsors-tier .sponsor-logo {
+    /* Scale small source artwork too, containing every aspect ratio in the tier frame. */
+    width: 100%;
     max-width: 100%;
-    height: auto;
+    height: 100%;
     max-height: 100%;
     margin: 0;
     object-fit: contain;

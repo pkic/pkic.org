@@ -1,3 +1,4 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import {
@@ -15,8 +16,8 @@ import { resetDb } from "./helpers/reset-db";
 async function seedUser(email: string): Promise<string> {
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-     VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+    `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+     VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
   )
     .bind(id, email, email)
     .run();
@@ -40,7 +41,7 @@ describe("event participant role sources", () => {
 
   it("preserves proposal and direct source multiplicity while deriving one effective role", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const [{ id: adminId }] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin'");
+    const [{ id: adminId }] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
     const speakerId = await seedUser("multi-source-speaker@example.test");
     const firstProposalId = await acceptedProposal(eventId, adminId, "First source proposal");
     const secondProposalId = await acceptedProposal(eventId, adminId, "Second source proposal");
@@ -97,7 +98,7 @@ describe("event participant role sources", () => {
 
   it("keeps proposal-role mapping aligned with the persisted event-role contract", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const [{ id: adminId }] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin'");
+    const [{ id: adminId }] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
     const proposalId = await acceptedProposal(eventId, adminId, "Role mapping proposal");
     const roles = ["proposer", "speaker", "co_speaker", "moderator", "panelist"] as const;
     for (const role of roles) {

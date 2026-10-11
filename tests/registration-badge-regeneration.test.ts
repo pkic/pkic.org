@@ -48,9 +48,9 @@ async function seedRegistrationWithReferral(): Promise<{
     ownerId: registrationId,
     length: 7,
   });
-  const [admin] = await queryAll<{ id: string; email: string; role: string }>(
+  const [admin] = await queryAll<{ id: string; email: string }>(
     env.DB,
-    "SELECT id, email, role FROM users WHERE normalized_email = 'admin@pkic.org'",
+    "SELECT id, email FROM users WHERE normalized_email = 'admin@pkic.org'",
   );
   return {
     actor: { identityType: "user", ...admin },

@@ -42,7 +42,7 @@ export async function createAdminSession(
 /** Creates an explicitly marked, scope-restricted MCP machine session. */
 export async function createMcpSession(
   db: DatabaseLike,
-  user: { id: string; email: string; role: string },
+  user: { id: string; email: string },
   rawToken: string,
   scopes: readonly AuthScope[],
   signingSecret: string = env.INTERNAL_SIGNING_SECRET ?? "test-signing-secret",
@@ -63,7 +63,6 @@ export async function createMcpSession(
     sub: user.id,
     sid: sessionId,
     email: user.email,
-    role: user.role,
     scopes: [...scopes],
     exp: Math.floor(new Date(expiresAt).getTime() / 1000),
   });

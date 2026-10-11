@@ -18,6 +18,18 @@ function expectRenderLimit(action: () => unknown): void {
 
 describe("email template engine (compileSimpleTemplate)", () => {
   describe("variable substitution", () => {
+    it("continues fragment blockquotes only in Markdown mode", () => {
+      const template = "> **{{author}}:** {{body}}";
+      const data = { author: "Reviewer", body: "First concern\r\n\r\nSecond paragraph" };
+      expect(compileSimpleTemplate(template, data, "markdown")).toBe(
+        "> **Reviewer:** First concern\n> \n> Second paragraph",
+      );
+      const literal = "> **Reviewer:** First concern\r\n\r\nSecond paragraph";
+      expect(compileSimpleTemplate(template, data)).toBe(literal);
+      expect(compileSimpleTemplate(template, data, "text")).toBe(literal);
+      expect(compileSimpleTemplate(template, data, "html")).toBe(literal);
+    });
+
     it("replaces simple variables", () => {
       const result = compileSimpleTemplate("Hello {{name}}", { name: "Alice" });
       expect(result).toBe("Hello Alice");
@@ -622,6 +634,19 @@ describe("email renderer", () => {
 });
 
 describe("Markdown callout interpolation", () => {
+  it("preserves nested quote markers without repeating the author label", async () => {
+    const { html } = await renderEmail(
+      "> > **{{author}}:** {{body}}\n\nAfter the objection.",
+      { author: "Example Reviewer", body: "First concern.\n\nSecond paragraph." },
+      "{{{body_html}}}",
+    );
+    const quote = html.match(/<blockquote[^>]*>\s*<blockquote[^>]*>([\s\S]*?)<\/blockquote>/)?.[1];
+    expect(quote).toContain("First concern.");
+    expect(quote).toContain("Second paragraph.");
+    expect(quote).not.toContain("After the objection.");
+    expect(html.match(/<strong>Example Reviewer:<\/strong>/g)).toHaveLength(1);
+  });
+
   it("keeps paragraphs and lists inside the committee note", async () => {
     const { html } = await renderEmail(
       "Note:\n\n> {{note}}\n\nAfter the note.",

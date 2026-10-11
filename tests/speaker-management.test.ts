@@ -1,3 +1,5 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
+import { administratorGrants } from "./helpers/administrator";
 /**
  * speaker-management.test.ts
  *
@@ -115,7 +117,7 @@ let adminSessionToken: string;
 
 async function setupWorkflow() {
   const { eventId, adminSessionToken: sessionToken } = await setupProposalSpeakerCapacityWorkflow();
-  const adminUser = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+  const adminUser = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
   adminSessionToken = sessionToken;
   return { eventId, adminUserId: adminUser.id };
 }
@@ -832,7 +834,12 @@ describe("speaker self-management endpoints", () => {
 
     await expect(
       removeProposalSpeakerByManager(racingDb, {
-        actor: { identityType: "user", id: adminUserId, email: "admin@pkic.org", role: "admin" },
+        actor: {
+          identityType: "user",
+          id: adminUserId,
+          email: "admin@pkic.org",
+          grants: administratorGrants,
+        },
         proposalId,
         userId: before.proposer_user_id,
         replacementProposerUserId: coSpeakerUserId,
@@ -2494,7 +2501,7 @@ describe("speaker self-management endpoints", () => {
       .bind(
         crypto.randomUUID(),
         proposalId,
-        (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0].id,
+        (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0].id,
       )
       .run();
 
@@ -2556,7 +2563,12 @@ describe("speaker self-management endpoints", () => {
         sendProposalSpeakerReminders(env.DB, {
           proposalId,
           kind,
-          actor: { identityType: "user", id: adminUserId, email: "admin@example.test", role: "admin" },
+          actor: {
+            identityType: "user",
+            id: adminUserId,
+            email: "admin@example.test",
+            grants: administratorGrants,
+          },
           appBaseUrl: "https://app.test",
         }),
       ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_CLOSED" });
@@ -2664,7 +2676,12 @@ describe("speaker self-management endpoints", () => {
         proposalId,
         userId: coSpeakerUserId,
         kind: "profile",
-        actor: { identityType: "user", id: adminUserId, email: "admin@example.test", role: "admin" },
+        actor: {
+          identityType: "user",
+          id: adminUserId,
+          email: "admin@example.test",
+          grants: administratorGrants,
+        },
         appBaseUrl: "https://app.test",
       }),
     ).rejects.toThrow("forced admin reminder audit failure");

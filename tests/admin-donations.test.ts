@@ -1,3 +1,4 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 /**
  * donations-management.test.ts
  *
@@ -276,7 +277,7 @@ describe("donation-management authorization", () => {
   });
 
   it("removes the legacy admin donation routes", async () => {
-    const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+    const [admin] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
     const token = await createAdminSession(env.DB, admin.id, `legacy-donation-${crypto.randomUUID()}`);
     expect((await call(token, "/api/v1/admin/donations")).status).toBe(404);
     expect((await call(token, "/api/v1/admin/donations/sync", { method: "POST", body: "{}" })).status).toBe(404);
@@ -329,7 +330,7 @@ describe("POST /api/v1/donations/sync", () => {
   beforeEach(async () => {
     await resetDb();
     await seedEventAndAdmin(env.DB);
-    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     adminToken = await createAdminSession(env.DB, admin.id, "admin-donation-sync-token");
   });
 

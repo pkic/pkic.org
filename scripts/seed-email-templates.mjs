@@ -132,6 +132,57 @@ export const DEFAULT_TEMPLATES = [
     contentType: "html",
     content: DEFAULT_LAYOUT_HTML,
   },
+  // Membership consultation and Executive Council review digests.
+  {
+    key: "membership-workflow-review-digest",
+    subjectTemplate: "{{stepLabel}}: membership applications \u2014 {{reviewDate}} UTC",
+    contentType: "markdown",
+    content: `Dear {{#if isMemberConsultation}}Members{{else}}{{#if isExecutiveCouncil}}Executive Council{{else}}Reviewers{{/if}}{{/if}},
+
+We have received the following membership applications:
+
+{{applicationSummary}}
+
+Applications must be approved by the Executive Council after feedback from the Members. Feedback and approval on a membership application by each Member and the Executive Council shall be based solely on a determination of whether the applicant meets the stated membership criteria, and not on any other basis including competitive considerations.
+
+We would also like to remind you that welcoming new members must not be done with commercial objectives. Outreach should focus on collaboration and community, not on selling products or services.
+
+Please only respond to this email if you have any questions or concerns regarding these membership applications. You can also record questions and objections on each application's review page.
+
+{{#if deliveryWindowClosesOn}}{{#if isMemberConsultation}}The feedback period{{else}}The review period{{/if}} will close on {{deliveryWindowClosesOn}} (UTC){{#if isMemberConsultation}}, at which point we will forward eligible applications to the Executive Council for final approval{{/if}}.{{else}}The feedback and review period will close {{durationDays}} days after this email is sent.{{/if}} Each review page shows the exact deadline and current requirements.
+
+{{instructions}}
+
+Below you will find the complete application details:
+
+{{applicationDetails}}
+
+Best regards,
+
+PKI Consortium`,
+  },
+  {
+    key: "partial_membership_review_summary",
+    subjectTemplate: null,
+    contentType: "markdown",
+    content: `[Membership application from {{applicationName}}]({{reviewUrl}})`,
+  },
+  {
+    key: "partial_membership_review_details",
+    subjectTemplate: null,
+    contentType: "markdown",
+    content: `### Membership application from {{applicationName}}
+
+Category: ({{categoryCode}}) {{categoryLabel}}  
+Applicant name: {{applicantName}}  
+Email: {{applicantEmail}}  
+{{#if organizationName}}Organization: {{organizationName}}  
+{{/if}}{{#each answerRows}}{{label}}: {{value}}  
+{{/each}}
+{{#each objections}}> {{#if author}}**{{author}}:** {{/if}}{{body}}
+
+{{/each}}[Read the application form and respond]({{reviewUrl}})`,
+  },
   // ─────────────────────────────────────────────────────────────────────────
   // Shared PKI Consortium description
   // Variables: brandBaseUrl

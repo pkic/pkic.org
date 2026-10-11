@@ -207,7 +207,7 @@ describe("registration detail", () => {
     });
 
     const announced = container.querySelector('[role="status"].pk-alert');
-    expect(announced?.textContent).toContain("Confirmation email queued.");
+    expect(announced?.textContent).toContain("Registration email queued.");
   });
 
   it("announces a refused resend instead of tinting the same span red", async () => {

@@ -3,15 +3,18 @@
  */
 import { expect, test } from "@playwright/test";
 import {
+  groupEventDetailResponseSchema,
   groupEventDaysResponseSchema,
   groupEventRegistrationSettingsResponseSchema,
   groupEventTermsResponseSchema,
   groupEventsListResponseSchema,
 } from "../../assets/shared/schemas/group-events";
+import { eventInvitePreviewResponseSchema } from "../../assets/shared/schemas/event-invite-bulk";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { openRow } from "./helpers/data-table";
 import { signInToPortal } from "./helpers/portal-auth";
 import { publishE2eSite } from "./helpers/site-publication";
+import { expectStyledEmailPreview, useEmailPreviewLogoFixture } from "./helpers/email-preview";
 import { tab } from "./helpers/tabs";
 
 test.use({ timezoneId: "Europe/Amsterdam" });
@@ -19,6 +22,7 @@ test.use({ timezoneId: "Europe/Amsterdam" });
 const GROUP_ID = "20000000-0000-4000-8000-000000000003";
 
 test("a portal manager creates and edits a group-owned standalone event", async ({ page }) => {
+  await useEmailPreviewLogoFixture(page);
   await signInToPortal(page, e2eAdminEmail("portal-event-management"));
   await page.goto(`/portal/#/groups/${GROUP_ID}/events`);
   await expect(page.getByRole("heading", { name: "Post-Quantum Cryptography Working Group" })).toBeVisible();
@@ -56,7 +60,9 @@ test("a portal manager creates and edits a group-owned standalone event", async 
       response.request().method() === "POST",
   );
   await eventForm.getByRole("button", { name: "Create event", exact: true }).click();
-  expect((await eventCreated).status()).toBe(201);
+  const createdEvent = await eventCreated;
+  expect(createdEvent.status()).toBe(201);
+  const { event } = groupEventDetailResponseSchema.parse(await createdEvent.json());
   // And it returns to the list it added to.
   await expect(page).toHaveURL(new RegExp(`#/groups/${GROUP_ID}/events$`));
 
@@ -112,6 +118,27 @@ test("a portal manager creates and edits a group-owned standalone event", async 
   expect((await campaignPreview).status()).toBe(200);
   await expect(communications.getByText("Email Preview", { exact: true })).toBeVisible();
   await expect(communications.getByText("0 recipients", { exact: true })).toBeVisible();
+  // Give the campaign a purpose-created recipient so it renders the email layout.
+  const invitePath = `/api/v1/groups/${GROUP_ID}/events/${event.id}/invites/attendees`;
+  const invites = [{ email: `campaign-preview-${unique}@example.test`, firstName: "Alex", lastName: "Example" }];
+  const invitationPreviewResponse = await page.request.post(`${invitePath}/preview`, { data: { invites } });
+  expect(invitationPreviewResponse.status()).toBe(200);
+  const invitationPreview = eventInvitePreviewResponseSchema.parse(await invitationPreviewResponse.json());
+  const invitationCreated = await page.request.post(`${invitePath}/bulk`, {
+    data: { invites, previewToken: invitationPreview.previewToken, inviteDigest: invitationPreview.inviteDigest },
+  });
+  expect(invitationCreated.status()).toBe(200);
+  await audience.selectOption("attendee_invitations");
+  await communications.getByRole("button", { name: "Preview Email" }).click();
+  await expect(communications.getByText("1 recipients", { exact: true })).toBeVisible();
+  const preview = communications.getByTitle("Rendered campaign email preview", { exact: true });
+  await expectStyledEmailPreview(preview);
+  await tab(communications, "Text").click();
+  await expect(preview).toHaveCount(0);
+  await tab(communications, "HTML").click();
+  await expectStyledEmailPreview(preview);
+  await preview.scrollIntoViewIfNeeded();
+  await communications.screenshot({ path: test.info().outputPath("campaign-email-preview.png") });
 
   await tab(detail, "Settings").click();
   let registrationSetup = page.getByRole("region", { name: `Configure ${eventName} registration` });

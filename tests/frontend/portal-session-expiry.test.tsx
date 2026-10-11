@@ -64,20 +64,24 @@ it("checks the deadline immediately when a suspended page returns", async () => 
   });
   expect(root.textContent).toBe("Sign in");
 });
-it("removes expired staff authority, keeps another capacity signed in, and cancels an old session timer", async () => {
+it("cancels an old session timer when a new session is saved", async () => {
   await signIn(1000);
   await signIn(5000);
   await act(async () => {
     await vi.advanceTimersByTimeAsync(1000);
   });
   expect(root.textContent).toContain("Private organization");
+});
+it("signs out a representative when staff access expires and clears private details", async () => {
+  window.location.hash = "#/organizations/example";
   await signIn(5000, true);
   await act(async () => {
     await vi.advanceTimersByTimeAsync(500);
   });
-  expect(root.textContent).toContain("Private organization");
-  expect(portalSession.value?.staff).toBeUndefined();
-  expect(portalSession.value?.staffReauthenticationRequired).toBe(true);
+  expect(root.textContent).toBe("Sign in");
+  expect(portalSession.value).toBeNull();
+  expect(profile.value).toBeNull();
+  expect(sessionStorage.getItem("pkic_portal_return_path")).toBe("#/organizations/example");
 });
 it("signs out a staff-only identity when its sole capacity expires", async () => {
   await signIn(5000, true, false);

@@ -59,7 +59,7 @@ describe("create sponsorship form refusals", () => {
     // picker fail; they keep the raw id input instead.
     portalSession.value = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "sponsorships:write", contextType: null, contextId: null }],
     });
     const bodies: unknown[] = [];
@@ -93,7 +93,7 @@ describe("create sponsorship form refusals", () => {
   });
 
   it("names a contract refusal on the fallback field itself without a round trip, and keeps the draft", async () => {
-    portalSession.value = portalSessionFixture({ staff: true, staffRole: "user", grants: [] });
+    portalSession.value = portalSessionFixture({ staff: true, administrator: false, grants: [] });
     const bodies: unknown[] = [];
     stubFetch(bodies);
     const onCreated = vi.fn();

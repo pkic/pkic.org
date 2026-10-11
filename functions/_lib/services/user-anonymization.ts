@@ -40,7 +40,7 @@ export async function anonymizeUser(db: DatabaseLike, actor: UserBackedAuthAdmin
              first_name = NULL, last_name = NULL, preferred_name = NULL, organization_name = NULL,
              job_title = NULL, biography = NULL, links_json = NULL, data_json = NULL,
              headshot_r2_key = NULL, headshot_updated_at = NULL,
-             role = 'user', active = 0, is_ec_member = 0, pii_redacted_at = ?, updated_at = ?
+             active = 0, is_ec_member = 0, pii_redacted_at = ?, updated_at = ?
          WHERE id = ? AND pii_redacted_at IS NULL AND updated_at = ?`,
       )
       .bind(redactedEmail, redactedEmail, at, at, user.id, user.updated_at),

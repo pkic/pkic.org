@@ -4,7 +4,6 @@ import OAuthProvider from "@cloudflare/workers-oauth-provider";
 import { createMcpHandler } from "agents/mcp";
 import { WorkerEntrypoint } from "cloudflare:workers";
 import type { Hono } from "hono";
-import { signMcpSessionToken } from "../auth/mcp-session";
 import { AUTH_SCOPES } from "../auth/scopes";
 import type { Env } from "../types";
 import {
@@ -13,10 +12,16 @@ import {
   MCP_OAUTH_TOKEN_PATH,
   parseMcpOauthProps,
   resolveMcpExternalToken,
+  toOAuthErrorResponse,
   type McpOAuthEnv,
   type McpOAuthProps,
-} from "./oauth";
-import { createMcpAuthorizeHandler } from "./authorize";
+} from "../auth/oauth/authorization";
+import { createMcpAuthorizeHandler } from "../auth/oauth/consent";
+import {
+  authorizationHeaderForMcp,
+  mcpAuthenticationError,
+  mcpTokenLifetime,
+} from "../auth/oauth/session-authorization";
 
 export const MCP_PATH = "/api/v1/mcp";
 export const MCP_OPENAPI_JSON_PATH = "/api/v1/mcp/openapi.json";
@@ -87,36 +92,6 @@ function apiRequestFromMcp(
   };
 }
 
-async function authorizationHeaderForMcp(
-  request: Request,
-  env: Env,
-  oauthProps?: McpOAuthProps,
-): Promise<string | null> {
-  if (!oauthProps) {
-    return request.headers.get("authorization");
-  }
-
-  if (oauthProps.identityType === "service") {
-    return request.headers.get("authorization");
-  }
-
-  if (!env.INTERNAL_SIGNING_SECRET) {
-    return null;
-  }
-
-  const token = await signMcpSessionToken(env.INTERNAL_SIGNING_SECRET, {
-    sub: oauthProps.id,
-    sid: oauthProps.sessionId,
-    exp: Math.floor(new Date(oauthProps.sessionExpiresAt).getTime() / 1000),
-    email: oauthProps.email,
-    role: oauthProps.role,
-    state: oauthProps.state ?? undefined,
-    scopes: oauthProps.scopes,
-  });
-
-  return `Bearer ${token}`;
-}
-
 function createMcpResponse(options: McpWorkerOptions) {
   return async (request: Request, env: Env, ctx: ExecutionContext, oauthProps?: McpOAuthProps): Promise<Response> => {
     const authorization = await authorizationHeaderForMcp(request, env, oauthProps);
@@ -139,8 +114,12 @@ export function createMcpWorkerFetch(
   const mcpResponse = createMcpResponse(options);
 
   class McpApiHandler extends WorkerEntrypoint<McpOAuthEnv> {
-    fetch(request: Request): Promise<Response> {
-      return mcpResponse(request, this.env, this.ctx, parseMcpOauthProps(this.ctx.props));
+    async fetch(request: Request): Promise<Response> {
+      try {
+        return await mcpResponse(request, this.env, this.ctx, parseMcpOauthProps(this.ctx.props));
+      } catch (error) {
+        return mcpAuthenticationError(request, error) ?? toOAuthErrorResponse(error);
+      }
     }
   }
 
@@ -151,6 +130,7 @@ export function createMcpWorkerFetch(
       return await options.app.fetch(request, env, ctx);
     }
 
+    const accessTokenTTL = ttlSeconds(env.MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS, 60 * 60);
     const oauthProvider = new OAuthProvider<McpOAuthEnv>({
       apiRoute: MCP_PATH,
       apiHandler: McpApiHandler,
@@ -159,12 +139,15 @@ export function createMcpWorkerFetch(
       tokenEndpoint: MCP_OAUTH_TOKEN_PATH,
       clientRegistrationEndpoint: MCP_OAUTH_REGISTER_PATH,
       scopesSupported: [...AUTH_SCOPES],
-      accessTokenTTL: ttlSeconds(env.MCP_OAUTH_ACCESS_TOKEN_TTL_SECONDS, 60 * 60),
+      accessTokenTTL,
       refreshTokenTTL: ttlSeconds(env.MCP_OAUTH_REFRESH_TOKEN_TTL_SECONDS, 8 * 60 * 60),
       allowPlainPKCE: false,
       clientIdMetadataDocumentEnabled: true,
       resolveExternalToken: resolveMcpExternalToken,
+      tokenExchangeCallback: ({ props, requestedScope }) =>
+        mcpTokenLifetime(env, props, accessTokenTTL, requestedScope),
       resourceMetadata: {
+        resource: new URL(MCP_PATH, request.url).toString(),
         scopes_supported: [...AUTH_SCOPES],
         bearer_methods_supported: ["header"],
         resource_name: "PKI Consortium MCP",

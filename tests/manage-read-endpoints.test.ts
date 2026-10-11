@@ -1,3 +1,4 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { describe, expect, it, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
@@ -57,7 +58,7 @@ describe("manage read endpoints", () => {
 
   it("does not retain the retired capability route operations", async () => {
     await seedEventAndAdmin(env.DB);
-    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     const sessionToken = await createAdminSession(env.DB, admin.id, "retired-capability-route-test");
 
     for (const route of retiredCapabilityRoutes) {
@@ -267,7 +268,7 @@ describe("manage read endpoints", () => {
 
   it("enforces admin manage JWT IP and user-agent binding", async () => {
     await seedEventAndAdmin(env.DB);
-    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     const adminToken = await createAdminSession(env.DB, admin.id, "admin-manage-token");
 
     await env.DB.prepare(
@@ -431,12 +432,12 @@ describe("manage read endpoints", () => {
     const registrationId = crypto.randomUUID();
     await env.DB.batch([
       env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-         VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+        `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+         VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
       ).bind(scopedAdminId, "scoped-admin@example.test", "scoped-admin@example.test"),
       env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at)
-         VALUES (?, ?, ?, 'Managed', 'Attendee', 'user', 1, datetime('now'), datetime('now'))`,
+        `INSERT INTO users (id, email, normalized_email, first_name, last_name, active, created_at, updated_at)
+         VALUES (?, ?, ?, 'Managed', 'Attendee', 1, datetime('now'), datetime('now'))`,
       ).bind(registrationUserId, "managed-attendee@example.test", "managed-attendee@example.test"),
       env.DB.prepare(
         `INSERT INTO registrations (

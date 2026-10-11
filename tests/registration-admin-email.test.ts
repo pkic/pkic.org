@@ -1,3 +1,4 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
@@ -9,7 +10,7 @@ import { queueRegistrationStatusEmail } from "../functions/_lib/services/registr
 
 async function seedPendingRegistration(): Promise<{ registrationId: string; adminId: string }> {
   const { eventId } = await seedEventAndAdmin(env.DB);
-  const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+  const [admin] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
   const userId = crypto.randomUUID();
   await env.DB.prepare(
     `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)

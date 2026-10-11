@@ -369,11 +369,11 @@ representatives:
     // carol@acme.example: already an alternate address of a live account
     // whose login address is a different one.
     queryD1Batch(persistTo, [
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at, pending_email)
-       VALUES ('20000000-0000-4000-8000-000000000001', 'old@example.org', 'old@example.org', 'user', 1,
+      `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at, pending_email)
+       VALUES ('20000000-0000-4000-8000-000000000001', 'old@example.org', 'old@example.org', 1,
                '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z', 'alice@acme.example')`,
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES ('20000000-0000-4000-8000-000000000002', 'carol@other.example', 'carol@other.example', 'user', 1,
+      `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+       VALUES ('20000000-0000-4000-8000-000000000002', 'carol@other.example', 'carol@other.example', 1,
                '2026-01-01T00:00:00.000Z', '2026-01-01T00:00:00.000Z')`,
       `INSERT INTO user_emails (id, user_id, email, normalized_email, verified_at, created_at)
        VALUES ('20000000-0000-4000-8000-000000000003', '20000000-0000-4000-8000-000000000002',

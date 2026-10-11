@@ -655,8 +655,8 @@ describe("canonical Forms resource endpoints", () => {
     const secondUserId = crypto.randomUUID();
 
     await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES (?, 'forms-attendee@example.test', 'forms-attendee@example.test', 'user', 1, ?, ?)`,
+      `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+       VALUES (?, 'forms-attendee@example.test', 'forms-attendee@example.test', 1, ?, ?)`,
     )
       .bind(secondUserId, timestamp, timestamp)
       .run();

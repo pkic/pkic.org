@@ -1,3 +1,5 @@
+import { administratorGrants } from "./helpers/administrator";
+import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { createGroupManagedEvent } from "../functions/_lib/services/events/group-management";
@@ -46,7 +48,7 @@ interface Fixture {
 async function user(emailPrefix: string, role = "user"): Promise<{ id: string; email: string }> {
   const email = emailPrefix + "-" + crypto.randomUUID() + "@example.test";
   const id = await insertUser(env.DB, email);
-  await env.DB.prepare("UPDATE users SET role = ? WHERE id = ?").bind(role, id).run();
+  if (role === "admin") await grantAdministrator(env.DB, id);
   return { id, email };
 }
 
@@ -61,7 +63,7 @@ async function grant(userId: string, eventId: string, permission: string): Promi
 
 async function setupFixture(): Promise<Fixture> {
   const administrator = await user("proposal-route-administrator", "admin");
-  const adminActor: AuthAdmin = { identityType: "user", ...administrator, role: "admin" };
+  const adminActor: AuthAdmin = { identityType: "user", ...administrator, grants: administratorGrants };
   const owner = await createGroup(env.DB, adminActor, {
     typeKey: "working_group",
     name: "Proposal route owner " + crypto.randomUUID(),
@@ -184,12 +186,7 @@ async function scopedMcpToken(
 ): Promise<string> {
   const actor = await user("proposal-route-scoped-mcp-actor");
   for (const permission of permissions) await grant(actor.id, fixture.eventId, permission);
-  return createMcpSession(
-    env.DB,
-    { ...actor, role: "user" },
-    "proposal-route-scoped-mcp-" + crypto.randomUUID(),
-    scopes,
-  );
+  return createMcpSession(env.DB, actor, "proposal-route-scoped-mcp-" + crypto.randomUUID(), scopes);
 }
 
 async function addCurrentRoundReviews(fixture: Fixture, count: number): Promise<void> {
@@ -226,7 +223,6 @@ async function proposalManager(fixture: Fixture): Promise<AuthAdmin> {
   return {
     identityType: "user",
     ...manager,
-    role: "user",
     grants: [{ permission: "proposals:manage", contextType: "event", contextId: fixture.eventId }],
   };
 }
@@ -1262,7 +1258,6 @@ describe("event proposal collection and canonical proposal resource routes", () 
       identityType: "user",
       id: actor.id,
       email: actor.email,
-      role: "user",
       grants: [{ permission: "proposals:manage", contextType: "event", contextId: fixture.eventId }],
     };
 
@@ -1309,7 +1304,6 @@ describe("event proposal collection and canonical proposal resource routes", () 
       identityType: "user",
       id: actor.id,
       email: actor.email,
-      role: "user",
       grants: [{ permission: "proposals:manage", contextType: "event", contextId: fixture.eventId }],
     };
 

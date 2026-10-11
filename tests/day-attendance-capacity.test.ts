@@ -1,3 +1,4 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { describe, expect, it, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
@@ -455,9 +456,7 @@ describe("day attendance capacity", () => {
       waitlistClaimWindowHours: 24,
       signingSecret: "test-signing-secret",
     });
-    const admin = (
-      await queryAll<{ id: string; email: string }>(env.DB, "SELECT id, email FROM users WHERE role = 'admin' LIMIT 1")
-    )[0];
+    const admin = (await queryAll<{ id: string; email: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await updateRegistrationDayAttendance(env.DB, {
       event,
       registrationId: attendee.registration.id,
@@ -551,7 +550,7 @@ describe("day attendance capacity", () => {
       waitlistClaimWindowHours: 24,
       signingSecret: "test-signing-secret",
     });
-    const [admin] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1");
+    const [admin] = await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
     await admitRegistration(env.DB, {
       registrationId: attendee.registration.id,
       event,
@@ -978,10 +977,7 @@ describe("day attendance capacity", () => {
       confirmationTtlHours: 48,
       signingSecret: "test-signing-secret",
     });
-    const [admin] = await queryAll<{ id: string; email: string }>(
-      env.DB,
-      "SELECT id, email FROM users WHERE role = 'admin' LIMIT 1",
-    );
+    const [admin] = await queryAll<{ id: string; email: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL);
     const gate = gateNextBatch(env.DB);
     const stale = updateRegistrationDayAttendance(gate.db, {
       event,

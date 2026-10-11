@@ -210,8 +210,8 @@ async function resolveUserSessionContext(
     STAFF_SESSION_IDLE_TTL_HOURS,
   );
   const staffActive = new Date(staffIdleExpiresAt).getTime() > Date.now();
-  if (!staffActive && !member && sponsors.length === 0 && pendingIdentityCount === 0 && !eventParticipation) {
-    throw new AppError(403, "AUTH_FORBIDDEN", "This account has no active portal capacity");
+  if (staff && !staffActive) {
+    throw new AppError(401, "AUTH_EXPIRED", "Your session expired. Sign in again.");
   }
   const staffActor =
     staff && staffActive
@@ -233,7 +233,6 @@ async function resolveUserSessionContext(
       idleExpiresAt,
       ...(staffActor ? { staff: staffActor } : {}),
       ...(staffActor ? { staffIdleExpiresAt } : {}),
-      ...(staff && !staffActive ? { staffReauthenticationRequired: true } : {}),
       ...(member ? { member: { ...member, sessionId: row.id, expiresAt: row.expiresAt } } : {}),
       sponsors,
       pendingIdentityCount,
@@ -274,8 +273,6 @@ export async function refreshUserSessionFromRequest(
     identityId: resolved.claims.iid,
     state: resolved.claims.state,
     lastActivityAt: activityAt,
-    // An expired staff elevation can only be restored through authentication,
-    // never by refreshing the remaining member/sponsor session.
     staffLastActivityAt: session.staff ? activityAt : (resolved.claims.staffLastActivityAt ?? 0),
   });
   return {

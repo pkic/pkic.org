@@ -27,7 +27,6 @@ export function publicStaffCapacity(actor: AuthAdmin): PublicStaffCapacity {
   return publicStaffCapacitySchema.parse({
     id: actor.id,
     email: actor.email,
-    role: actor.role,
     scopes: actor.scopes ?? [],
     grants: actor.grants ?? [],
     expiresAt: isUserBackedAuthAdmin(actor) ? (actor.expiresAt ?? null) : null,

@@ -1,3 +1,4 @@
+import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
 import { currentUserRegistrationsListResponseSchema } from "../assets/shared/schemas/current-user-registrations";
@@ -115,7 +116,7 @@ describe("GET /api/v1/users/current/registrations", () => {
 
   it("allows a staff-only identity with no member capacity to read its own registrations", async () => {
     const staffOnlyUserId = await insertUser(env.DB, `current-registrations-staff-${crypto.randomUUID()}@example.test`);
-    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(staffOnlyUserId).run();
+    await grantAdministrator(env.DB, staffOnlyUserId);
     const eventId = await insertEvent();
     const registrationId = await insertRegistration(eventId, staffOnlyUserId);
     const token = await createMemberSession(

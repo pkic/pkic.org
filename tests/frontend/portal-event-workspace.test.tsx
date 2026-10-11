@@ -21,7 +21,7 @@ describe("event workspace list view proposal-programs gating", () => {
   it("hides proposal programs for an identity that can already read the events management list at any scope", () => {
     const session = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [{ permission: "events:read", contextType: "event", contextId: "10000000-0000-4000-8000-000000000001" }],
     });
     expect(eventListShowsProposalPrograms(session)).toBe(false);
@@ -30,7 +30,7 @@ describe("event workspace list view proposal-programs gating", () => {
   it("shows proposal programs for a proposal-only reviewer without events:read at any scope", () => {
     const session = portalSessionFixture({
       staff: true,
-      staffRole: "user",
+      administrator: false,
       grants: [
         { permission: "proposals:read", contextType: "event", contextId: "10000000-0000-4000-8000-000000000001" },
       ],

@@ -6,7 +6,7 @@ import { json } from "../../../../_lib/http";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { getEventDetail, getEventIdBySlug } from "../../../../_lib/services/events/detail";
 import { getVisibleEventAudienceDetail } from "../../../../_lib/services/events/catalog";
-import { eventAudienceViewer } from "../../../../_lib/services/events/visibility";
+import { eventAudienceViewer, guardEventReadDatabase } from "../../../../_lib/services/events/visibility";
 import { hasPermission } from "../../../../_lib/auth/permissions";
 import { eventManagementCapabilities, resolveOptionalEventUserSession } from "./authorization";
 
@@ -23,7 +23,11 @@ export const EventDetailGet = openApiRoute(eventDetailRouteSchema, async (c: Adm
     return json(
       eventDetailResponseSchema.parse({
         event: await withParticipation(
-          await getEventDetail(db, data.params.eventSlug, eventManagementCapabilities(session.staff, context)),
+          await getEventDetail(
+            guardEventReadDatabase(db, session.staff, context),
+            data.params.eventSlug,
+            eventManagementCapabilities(session.staff, context),
+          ),
         ),
       }),
     );

@@ -5,6 +5,6 @@
  */
 export default {
   fetch(): Response {
-    throw new Error("SELF.fetch requires the worker-fetch test project with functions/router.ts as its entry point");
+    throw new Error("SELF.fetch requires the worker-fetch test project with functions/worker.ts as its entry point");
   },
 };

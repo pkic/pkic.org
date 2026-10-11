@@ -1,5 +1,6 @@
 import { createExecutionContext } from "cloudflare:test";
-import app from "../functions/router";
+import app from "../functions/worker";
+import "./helpers/load-worker-application";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { processIncomingEmail, type IncomingRsvpEmail } from "../functions/_lib/services/calendar-rsvp-email-ingest";

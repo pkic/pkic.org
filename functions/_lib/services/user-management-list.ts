@@ -16,7 +16,6 @@ interface UserRow {
   email: string;
   first_name: string | null;
   last_name: string | null;
-  role: string;
   active: number;
   created_at: string;
   headshot_r2_key: string | null;
@@ -42,10 +41,6 @@ const USER_HAS_EVENT_PARTICIPATION = "EXISTS (SELECT 1 FROM event_participant_ro
 export function buildUsersPageQuery(query: UsersListQuery) {
   const conditions: string[] = [];
   const bindings: unknown[] = [];
-  if (query.role) {
-    conditions.push("u.role = ?");
-    bindings.push(query.role);
-  }
   if (query.type === "member") {
     conditions.push(USER_HAS_MEMBERSHIP);
   } else if (query.type === "event_attendee") {
@@ -59,7 +54,7 @@ export function buildUsersPageQuery(query: UsersListQuery) {
     bindings.push(...search.bindings);
   }
   const where = conditions.length > 0 ? `WHERE ${conditions.join(" AND ")}` : "";
-  const orderBy = resolveOrderBy(query.sort, USERS_SORT_COLUMNS, "ORDER BY u.role ASC, u.email ASC", "u.id ASC");
+  const orderBy = resolveOrderBy(query.sort, USERS_SORT_COLUMNS, "ORDER BY u.email ASC", "u.id ASC");
 
   return {
     source: {
@@ -68,7 +63,7 @@ export function buildUsersPageQuery(query: UsersListQuery) {
       // the old "1 active identity · 1 event" counts — a name tells the
       // reader which Ada this is; a count of events did not, and cost a
       // DISTINCT over the participation table for every row.
-      selectSql: `SELECT u.id, u.email, u.first_name, u.last_name, u.role, u.active, u.created_at,
+      selectSql: `SELECT u.id, u.email, u.first_name, u.last_name, u.active, u.created_at,
               u.headshot_r2_key,
               (SELECT COUNT(*) FROM identities active_identity
                 WHERE active_identity.user_id = u.id

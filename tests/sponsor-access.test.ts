@@ -63,8 +63,8 @@ async function seedConsentingRegistration(eventId: string, email: string, term: 
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO users
-           (id, email, normalized_email, first_name, last_name, organization_name, job_title, role, active, created_at, updated_at)
-         VALUES (?, ?, ?, 'Ada', 'Attendee', 'Attendee Org', 'Engineer', 'user', 1, datetime('now'), datetime('now'))`,
+           (id, email, normalized_email, first_name, last_name, organization_name, job_title, active, created_at, updated_at)
+         VALUES (?, ?, ?, 'Ada', 'Attendee', 'Attendee Org', 'Engineer', 1, datetime('now'), datetime('now'))`,
     ).bind(userId, email, email),
     env.DB.prepare(
       `INSERT INTO registrations
@@ -126,8 +126,8 @@ describe("sponsor capacity in the canonical portal session", () => {
     if (!user) {
       const userId = crypto.randomUUID();
       await env.DB.prepare(
-        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-           VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+        `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+           VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
       )
         .bind(userId, email, email)
         .run();

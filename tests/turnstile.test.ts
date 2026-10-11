@@ -110,9 +110,9 @@ describe("public route Turnstile policy", () => {
   });
   it("requires the declared OAuth scope and rechecks session revocation", async () => {
     await seedEventAndAdmin(env.DB);
-    const [actor] = await queryAll<{ id: string; email: string; role: string }>(
+    const [actor] = await queryAll<{ id: string; email: string }>(
       env.DB,
-      "SELECT id, email, role FROM users WHERE normalized_email = 'admin@pkic.org'",
+      "SELECT id, email FROM users WHERE normalized_email = 'admin@pkic.org'",
     );
     const limited = await createMcpSession(env.DB, actor, "limited", ["membership:read"]);
     expect((await post({ authorization: `Bearer ${limited}`, "x-pkic-machine-auth": "mcp" })).status).toBe(403);

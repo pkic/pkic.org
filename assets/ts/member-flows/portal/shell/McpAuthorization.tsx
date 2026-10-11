@@ -1,22 +1,8 @@
-/**
- * The consent screen an MCP client is sent to before it may act as a member of
- * staff. It is the whole page, so it carries its own `.pk` root.
- *
- * Three things the Bootstrap version could not say, and this one does:
- *
- *   - "Signed in as … / Client: …" was two bold `div`s inside a tinted box. It
- *     is a name/value pair, so it is a description list, and a reader can now
- *     tell which half is the label.
- *   - The unauthorized case is an `Alert` with the `warn` tone, whose
- *     `role="alert"` announces it. The old version carried its meaning in an
- *     amber background and nothing else.
- *   - The permission lists are headed by real `h3`s beneath the panel's `h2`,
- *     rather than by bold text that no heading navigation could reach. They
- *     take their size from `pk-small pk-strong` so the structure is honest
- *     without a sub-heading printing larger than the panel it sits in.
- */
+import { OAuthPermissionSelection, readOnlyPermissionScopes } from "./OAuthPermissionSelection";
+import type { Permission } from "../../../../shared/schemas/permissions";
 import { browserSupportsWebAuthn } from "@simplewebauthn/browser";
 import { useEffect, useState } from "preact/hooks";
+import { useHashLocation } from "wouter/use-hash-location";
 import type { z } from "zod";
 import {
   mcpOauthAuthorizeActionSchema,
@@ -27,7 +13,7 @@ import {
 import { userAuthEstablishedResponseSchema } from "../../../../shared/schemas/user-auth";
 import { VerifyingOverlay } from "../../../components/VerifyingOverlay";
 import { useContractForm } from "../../../hooks/useContractForm";
-import { requestJson } from "../../../shared/api-client";
+import { ApiClientError, requestJson } from "../../../shared/api-client";
 import { authenticateWithPasskey } from "../../../shared/passkey-authentication";
 import { Alert } from "../../../ui/Alert";
 import { Button } from "../../../ui/Button";
@@ -73,12 +59,12 @@ async function verifyUserMagicLink(token: string): Promise<void> {
   });
 }
 
-async function submitOauthDecision(action: "approve" | "deny", returnTo: string): Promise<string> {
+async function submitOauthDecision(body: McpOauthAuthorizeAction): Promise<string> {
   const data = await requestJson(OAUTH_AUTHORIZE_PATH, mcpOauthRedirectResponseSchema, {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json" },
     credentials: "same-origin",
-    body: JSON.stringify({ action, return_to: returnTo }),
+    body: JSON.stringify(body),
   });
   return data.redirectTo;
 }
@@ -88,12 +74,14 @@ function authorizationHash(returnTo: string): string {
 }
 
 export function McpAuthorization() {
-  const initial = authorizationParameters(window.location.hash);
+  const [authorizationLocation] = useHashLocation();
+  const initial = authorizationParameters(authorizationLocation);
   const initialReturnTo = initial.get("return_to") ?? "";
   const initialToken = initial.get("token") ?? "";
   const [returnTo, setReturnTo] = useState(initialReturnTo);
   const [context, setContext] = useState<McpOauthContext | null>(null);
   const [email, setEmail] = useState("");
+  const [selectedScopes, setSelectedScopes] = useState<Permission[]>([]);
   const [sent, setSent] = useState(false);
   const [loading, setLoading] = useState(Boolean(initialReturnTo));
   const [verifying, setVerifying] = useState(Boolean(initialToken));
@@ -102,47 +90,58 @@ export function McpAuthorization() {
   const passkeysSupported = typeof window !== "undefined" && browserSupportsWebAuthn();
 
   useEffect(() => {
-    if (!initialToken) return;
-
-    verifyUserMagicLink(initialToken)
-      .then(() => {
-        history.replaceState({}, "", `/portal/${authorizationHash(initialReturnTo)}`);
-        setError(null);
-      })
-      .catch((err: unknown) => {
-        setError((err as Error).message);
-      })
-      .finally(() => {
-        setVerifying(false);
-      });
-  }, [initialReturnTo, initialToken]);
-
-  useEffect(() => {
-    if (!returnTo || verifying) {
+    let cancelled = false;
+    setReturnTo(initialReturnTo);
+    setContext(null);
+    setSelectedScopes([]);
+    setSent(false);
+    if (!initialReturnTo) {
       setLoading(false);
       return;
     }
 
-    setLoading(true);
-    fetchOauthContext(returnTo)
-      .then((data) => {
+    async function loadAuthorization(): Promise<void> {
+      setLoading(true);
+      setVerifying(Boolean(initialToken));
+      try {
+        if (initialToken) {
+          await verifyUserMagicLink(initialToken);
+          if (cancelled) return;
+          history.replaceState({}, "", `/portal/${authorizationHash(initialReturnTo)}`);
+        }
+        const data = await fetchOauthContext(initialReturnTo);
+        if (cancelled) return;
         setContext(data);
+        setSelectedScopes(readOnlyPermissionScopes(data.grantedScopes));
         setReturnTo(data.returnTo);
         setError(null);
-      })
-      .catch((err: unknown) => {
-        setError((err as Error).message);
-      })
-      .finally(() => {
-        setLoading(false);
-      });
-  }, [returnTo, verifying]);
+      } catch (err) {
+        if (!cancelled) setError((err as Error).message);
+      } finally {
+        if (!cancelled) {
+          setVerifying(false);
+          setLoading(false);
+        }
+      }
+    }
 
-  async function refreshContext(): Promise<void> {
+    void loadAuthorization();
+    return () => {
+      cancelled = true;
+    };
+  }, [initialReturnTo, initialToken]);
+
+  async function refreshContext(preserveSelection = false): Promise<void> {
+    setContext(null);
     setLoading(true);
     try {
       const data = await fetchOauthContext(returnTo);
       setContext(data);
+      setSelectedScopes((previous) =>
+        preserveSelection
+          ? previous.filter((scope) => data.grantedScopes.includes(scope))
+          : readOnlyPermissionScopes(data.grantedScopes),
+      );
       setReturnTo(data.returnTo);
       setError(null);
     } catch (err) {
@@ -196,13 +195,31 @@ export function McpAuthorization() {
     }
   }
 
+  const decisionForm = useContractForm(mcpOauthAuthorizeActionSchema, {
+    action: "approve",
+    return_to: returnTo,
+    scopes: selectedScopes,
+  });
+
   async function handleDecision(action: "approve" | "deny"): Promise<void> {
     if (!returnTo) return;
+    let body: McpOauthAuthorizeAction = { action: "deny", return_to: returnTo };
+    if (action === "approve") {
+      const checked = decisionForm.submit();
+      if (!checked.data) {
+        setError(checked.message);
+        return;
+      }
+      body = checked.data;
+    }
     setSubmitting(true);
     try {
-      window.location.assign(await submitOauthDecision(action, returnTo));
+      window.location.assign(await submitOauthDecision(body));
     } catch (err) {
-      setError((err as Error).message);
+      if (err instanceof ApiClientError && (err.status === 401 || err.status === 403)) {
+        await refreshContext(true);
+      }
+      setError(decisionForm.refuse(err));
       setSubmitting(false);
     }
   }
@@ -292,49 +309,42 @@ export function McpAuthorization() {
                 <dd>{context.clientName}</dd>
               </dl>
 
-              <div class="pk-stack pk-stack--tight">
-                <h3 class="pk-small pk-strong">Requested permissions</h3>
-                <ul class="pk-answer-list">
-                  {context.requestedScopes.map((scope) => (
-                    <li key={scope}>{scope}</li>
-                  ))}
-                </ul>
-              </div>
-
-              <div class="pk-stack pk-stack--tight">
-                <h3 class="pk-small pk-strong">Granted permissions</h3>
-                {context.grantedScopes.length > 0 ? (
-                  <ul class="pk-answer-list">
-                    {context.grantedScopes.map((scope) => (
-                      <li key={scope}>{scope}</li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p class="pk-muted">No requested permissions can be granted by this account.</p>
-                )}
-              </div>
-
-              <div class="pk-stack pk-stack--snug">
-                <Button
-                  variant="primary"
-                  block
-                  disabled={submitting || context.grantedScopes.length === 0}
-                  onClick={() => {
-                    void handleDecision("approve");
-                  }}
-                >
-                  Approve
-                </Button>
-                <Button
-                  block
+              <form
+                noValidate
+                class="pk-stack"
+                {...decisionForm.handlers}
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void handleDecision("approve");
+                }}
+              >
+                <p class="pk-small pk-muted">
+                  Choose what this client may do. Read-only permissions are selected by default. Write access can change
+                  forms, organizations, or users. Resource limits remain in effect.
+                </p>
+                <OAuthPermissionSelection
+                  requested={context.requestedScopes}
+                  available={context.grantedScopes}
+                  selected={selectedScopes}
+                  grants={context.grantableGrants}
                   disabled={submitting}
-                  onClick={() => {
-                    void handleDecision("deny");
-                  }}
-                >
-                  Deny
-                </Button>
-              </div>
+                  onChange={setSelectedScopes}
+                />
+                <div class="pk-stack pk-stack--snug">
+                  <Button type="submit" variant="primary" block disabled={submitting || selectedScopes.length === 0}>
+                    Approve
+                  </Button>
+                  <Button
+                    block
+                    disabled={submitting}
+                    onClick={() => {
+                      void handleDecision("deny");
+                    }}
+                  >
+                    Deny
+                  </Button>
+                </div>
+              </form>
             </>
           )}
 

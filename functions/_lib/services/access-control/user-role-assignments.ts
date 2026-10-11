@@ -364,22 +364,12 @@ export async function revokeUserRoleAssignment(
     row.context_type,
     row.context_id,
   );
-  const retiresLegacyAdminAuthority =
-    row.role_id === SYSTEM_ROLE_IDS.admin && row.context_type === null && row.context_id === null;
   await commitAccessControlMutation(
     db,
     actor,
     [{ permission: "access:revoke" }],
     [
       ...semanticGuards,
-      ...(retiresLegacyAdminAuthority
-        ? [
-            db
-              .prepare("UPDATE users SET role = 'user', updated_at = ? WHERE id = ? AND role = 'admin'")
-              .bind(now, userId),
-            db.prepare("UPDATE sessions SET revoked_at = ? WHERE user_id = ? AND revoked_at IS NULL").bind(now, userId),
-          ]
-        : []),
       db.prepare("UPDATE user_roles SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL").bind(now, row.id),
       prepareAuditLogAfterOneChange(
         db,
@@ -388,7 +378,7 @@ export async function revokeUserRoleAssignment(
         "user_role_revoked",
         "user_roles",
         row.id,
-        { userId, roleId: row.role_id, retiredLegacyAdminAuthority: retiresLegacyAdminAuthority },
+        { userId, roleId: row.role_id },
         now,
       ),
     ],

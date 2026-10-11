@@ -1,3 +1,4 @@
+import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:test";
 import {
@@ -28,7 +29,7 @@ describe("proposal resend-manage-link endpoint", () => {
 
   it("queues fresh links for matching active proposals without invalidating earlier links", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
     const now = nowIso();
     const proposerId = crypto.randomUUID();
@@ -36,8 +37,8 @@ describe("proposal resend-manage-link endpoint", () => {
     await run(
       env.DB,
       `INSERT INTO users (
-        id, email, normalized_email, first_name, last_name, role, active, created_at, updated_at
-      ) VALUES (?, ?, ?, 'Proposal', 'Owner', 'user', 1, ?, ?)`,
+        id, email, normalized_email, first_name, last_name, active, created_at, updated_at
+      ) VALUES (?, ?, ?, 'Proposal', 'Owner', 1, ?, ?)`,
       [proposerId, "proposal-owner@example.test", "proposal-owner@example.test", now, now],
     );
     await run(
@@ -112,7 +113,7 @@ describe("proposal resend-manage-link endpoint", () => {
 
   it("does not recover proposer or speaker management links for a canceled proposal", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
     const now = nowIso();
     const proposerId = crypto.randomUUID();
@@ -120,9 +121,9 @@ describe("proposal resend-manage-link endpoint", () => {
     const proposalId = crypto.randomUUID();
     await run(
       env.DB,
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES (?, 'canceled-owner@example.test', 'canceled-owner@example.test', 'user', 1, ?, ?),
-              (?, 'canceled-speaker@example.test', 'canceled-speaker@example.test', 'user', 1, ?, ?)`,
+      `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+       VALUES (?, 'canceled-owner@example.test', 'canceled-owner@example.test', 1, ?, ?),
+              (?, 'canceled-speaker@example.test', 'canceled-speaker@example.test', 1, ?, ?)`,
       [proposerId, now, now, speakerId, now, now],
     );
     await run(
@@ -160,7 +161,7 @@ describe("proposal resend-manage-link endpoint", () => {
 
   it("does not recover an expired pending speaker invitation but keeps confirmed speaker recovery available", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
-    const admin = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE role = 'admin' LIMIT 1"))[0];
+    const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     await seedWorkflowEmailTemplates(env.DB, admin.id);
     const now = nowIso();
     const proposerId = crypto.randomUUID();
@@ -169,10 +170,10 @@ describe("proposal resend-manage-link endpoint", () => {
     const proposalId = crypto.randomUUID();
     await run(
       env.DB,
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES (?, 'recovery-owner@example.test', 'recovery-owner@example.test', 'user', 1, ?, ?),
-              (?, 'expired-speaker@example.test', 'expired-speaker@example.test', 'user', 1, ?, ?),
-              (?, 'confirmed-speaker@example.test', 'confirmed-speaker@example.test', 'user', 1, ?, ?)`,
+      `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+       VALUES (?, 'recovery-owner@example.test', 'recovery-owner@example.test', 1, ?, ?),
+              (?, 'expired-speaker@example.test', 'expired-speaker@example.test', 1, ?, ?),
+              (?, 'confirmed-speaker@example.test', 'confirmed-speaker@example.test', 1, ?, ?)`,
       [proposerId, now, now, expiredSpeakerId, now, now, confirmedSpeakerId, now, now],
     );
     await run(
@@ -233,8 +234,8 @@ describe("proposal resend-manage-link endpoint", () => {
     await run(
       env.DB,
       `INSERT INTO users (
-        id, email, normalized_email, role, active, created_at, updated_at
-      ) VALUES (?, ?, ?, 'user', 1, ?, ?)`,
+        id, email, normalized_email, active, created_at, updated_at
+      ) VALUES (?, ?, ?, 1, ?, ?)`,
       [proposerId, "expired-proposal@example.test", "expired-proposal@example.test", now, now],
     );
     await run(

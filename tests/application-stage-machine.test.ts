@@ -418,8 +418,8 @@ describe("Application stage machine, communications, notes", () => {
     const { id } = await createApplication();
     const userId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-       VALUES (?, 'plain@example.test', 'plain@example.test', 'user', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+       VALUES (?, 'plain@example.test', 'plain@example.test', 1, datetime('now'), datetime('now'))`,
     )
       .bind(userId)
       .run();

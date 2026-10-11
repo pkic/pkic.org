@@ -20,8 +20,8 @@ export async function seedRsvpRegistration(db: DatabaseLike): Promise<{ registra
       .bind(eventId, at, at),
     db
       .prepare(
-        `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-         VALUES (?, 'alice@example.com', 'alice@example.com', 'user', 1, ?, ?)`,
+        `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+         VALUES (?, 'alice@example.com', 'alice@example.com', 1, ?, ?)`,
       )
       .bind(userId, at, at),
     db

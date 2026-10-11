@@ -286,13 +286,13 @@ export function buildUpsertUserStatements({
   const createAccount = `
 INSERT INTO users (
   id, email, normalized_email, first_name, last_name, job_title, biography, links_json,
-  headshot_r2_key, role, active, created_at, updated_at
+  headshot_r2_key, active, created_at, updated_at
 )
 SELECT ${sqlString(randomUUID())}, ${sqlString(email)}, ${emailLiteral},
   ${toSqlNullableText(firstName)}, ${toSqlNullableText(lastName)}, ${toSqlNullableText(jobTitle)},
   ${toSqlNullableText(biography)}, ${linksJson ? sqlString(linksJson) : "NULL"},
   ${toSqlNullableText(headshotR2Key)},
-  'user', 1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
+  1, strftime('%Y-%m-%dT%H:%M:%fZ', 'now'), strftime('%Y-%m-%dT%H:%M:%fZ', 'now')
 WHERE NOT EXISTS (
   SELECT 1 FROM users WHERE normalized_email = ${emailLiteral} OR pending_email = ${emailLiteral}
 ) AND NOT EXISTS (

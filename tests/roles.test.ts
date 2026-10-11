@@ -1,3 +1,4 @@
+import { administratorGrants, grantAdministrator } from "./helpers/administrator";
 /**
  * roles.test.ts
  *
@@ -41,8 +42,8 @@ async function call(token: string, path: string, init: RequestInit = {}): Promis
 async function insertUser(email: string): Promise<string> {
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-     VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+    `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+     VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
   )
     .bind(id, email, email)
     .run();
@@ -373,7 +374,7 @@ describe("roles (Built-in and custom roles)", () => {
         identityType: "user",
         id: adminId,
         email: "admin@pkic.org",
-        role: "admin",
+        grants: administratorGrants,
       };
       const roleId = crypto.randomUUID();
       const now = new Date().toISOString();
@@ -384,7 +385,9 @@ describe("roles (Built-in and custom roles)", () => {
         .bind(roleId, `racing_role_update_${crypto.randomUUID()}`, now, now)
         .run();
       const racingDb = mutateBeforeNextBatch(env.DB, () =>
-        env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(adminId).run(),
+        env.DB.prepare("UPDATE user_roles SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE user_id = ?")
+          .bind(adminId)
+          .run(),
       );
 
       await expect(
@@ -780,11 +783,13 @@ describe("roles (Built-in and custom roles)", () => {
       identityType: "user",
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
+      grants: administratorGrants,
     };
     const name = `Racing role ${crypto.randomUUID()}`;
     const racingDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(adminId).run(),
+      env.DB.prepare("UPDATE user_roles SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE user_id = ?")
+        .bind(adminId)
+        .run(),
     );
 
     await expect(createRole(racingDb, actor, { name, permissions: ["events:read"] })).rejects.toMatchObject({
@@ -799,7 +804,7 @@ describe("roles (Built-in and custom roles)", () => {
       identityType: "user",
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
+      grants: administratorGrants,
     };
     const roleId = crypto.randomUUID();
     await env.DB.prepare(
@@ -809,7 +814,9 @@ describe("roles (Built-in and custom roles)", () => {
       .bind(roleId, `Racing deletion ${crypto.randomUUID()}`)
       .run();
     const racingDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(adminId).run(),
+      env.DB.prepare("UPDATE user_roles SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE user_id = ?")
+        .bind(adminId)
+        .run(),
     );
 
     await expect(deleteRole(racingDb, actor, roleId)).rejects.toMatchObject({
@@ -824,7 +831,7 @@ describe("roles (Built-in and custom roles)", () => {
       identityType: "user",
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
+      grants: administratorGrants,
     };
     const roleId = crypto.randomUUID();
     await env.DB.prepare(
@@ -851,10 +858,12 @@ describe("roles (Built-in and custom roles)", () => {
       identityType: "user",
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
+      grants: administratorGrants,
     };
     const racingDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(adminId).run(),
+      env.DB.prepare("UPDATE user_roles SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE user_id = ?")
+        .bind(adminId)
+        .run(),
     );
 
     await expect(
@@ -878,7 +887,7 @@ describe("roles (Built-in and custom roles)", () => {
       identityType: "user",
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
+      grants: administratorGrants,
     };
     const assignmentId = crypto.randomUUID();
     await env.DB.prepare(
@@ -889,7 +898,9 @@ describe("roles (Built-in and custom roles)", () => {
       .bind(assignmentId, staffUserId, adminId)
       .run();
     const revokeDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(adminId).run(),
+      env.DB.prepare("UPDATE user_roles SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE user_id = ?")
+        .bind(adminId)
+        .run(),
     );
     await expect(revokeUserRoleAssignment(revokeDb, actor, staffUserId, assignmentId)).rejects.toMatchObject({
       status: 409,
@@ -901,9 +912,11 @@ describe("roles (Built-in and custom roles)", () => {
       ]),
     ).toEqual([{ revoked_at: null }]);
 
-    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(adminId).run();
+    await grantAdministrator(env.DB, adminId);
     const expiryDb = mutateBeforeNextBatch(env.DB, () =>
-      env.DB.prepare("UPDATE users SET role = 'user' WHERE id = ?").bind(adminId).run(),
+      env.DB.prepare("UPDATE user_roles SET revoked_at = strftime('%Y-%m-%dT%H:%M:%fZ','now') WHERE user_id = ?")
+        .bind(adminId)
+        .run(),
     );
     await expect(
       updateUserRoleAssignmentExpiry(expiryDb, actor, staffUserId, assignmentId, {
@@ -925,7 +938,7 @@ describe("roles (Built-in and custom roles)", () => {
       identityType: "user",
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
+      grants: administratorGrants,
     };
     const revokeId = crypto.randomUUID();
     const expiryId = crypto.randomUUID();
@@ -976,10 +989,9 @@ describe("roles (Built-in and custom roles)", () => {
     ).toHaveLength(0);
   });
 
-  it("retires the legacy admin bypass and active sessions when the global admin role is revoked", async () => {
+  it("revokes administrator authority through the live assignment", async () => {
     const assignmentId = crypto.randomUUID();
     await env.DB.batch([
-      env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(staffUserId),
       env.DB.prepare(
         `INSERT INTO user_roles
              (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
@@ -992,23 +1004,19 @@ describe("roles (Built-in and custom roles)", () => {
     expect(response.status).toBe(200);
     expect(await response.json()).toEqual({ success: true });
 
-    expect(await queryAll<{ role: string }>(env.DB, "SELECT role FROM users WHERE id = ?", [staffUserId])).toEqual([
-      { role: "user" },
-    ]);
     expect(
       await queryAll<{ revoked_at: string | null }>(
         env.DB,
         "SELECT revoked_at FROM sessions WHERE user_id = ? AND revoked_at IS NOT NULL",
         [staffUserId],
       ),
-    ).toHaveLength(1);
-    expect((await call(targetToken, "/api/v1/roles")).status).toBe(401);
+    ).toHaveLength(0);
+    expect([401, 403]).toContain((await call(targetToken, "/api/v1/roles")).status);
   });
 
-  it("rolls back legacy admin demotion and session revocation when the role target changes concurrently", async () => {
+  it("does not revoke sessions when the role target changes concurrently", async () => {
     const assignmentId = crypto.randomUUID();
     await env.DB.batch([
-      env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(staffUserId),
       env.DB.prepare(
         `INSERT INTO user_roles
              (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at)
@@ -1020,7 +1028,7 @@ describe("roles (Built-in and custom roles)", () => {
       identityType: "user",
       id: adminId,
       email: "admin@pkic.org",
-      role: "admin",
+      grants: administratorGrants,
     };
     const racedDb = mutateBeforeNextBatch(env.DB, () =>
       env.DB.prepare("UPDATE user_roles SET revoked_at = datetime('now') WHERE id = ?").bind(assignmentId).run(),
@@ -1030,9 +1038,6 @@ describe("roles (Built-in and custom roles)", () => {
       status: 409,
       code: "ACCESS_CONTROL_TARGET_CHANGED",
     });
-    expect(await queryAll<{ role: string }>(env.DB, "SELECT role FROM users WHERE id = ?", [staffUserId])).toEqual([
-      { role: "admin" },
-    ]);
     expect(
       await queryAll<{ revoked_at: string | null }>(env.DB, "SELECT revoked_at FROM sessions WHERE user_id = ?", [
         staffUserId,
@@ -1198,7 +1203,6 @@ describe("roles (Built-in and custom roles)", () => {
         identityType: "user",
         id: staffUserId,
         email: "staff-roles@example.test",
-        role: "user",
         grants: [
           { permission: "access:grant", contextType: null, contextId: null },
           {
@@ -1238,7 +1242,7 @@ describe("roles (Built-in and custom roles)", () => {
         identityType: "user",
         id: adminId,
         email: "admin@pkic.org",
-        role: "admin",
+        grants: administratorGrants,
       };
       const assignment = await assignUserRole(env.DB, adminActor, representative.userId, {
         roleId: REPRESENTATIVE_ROLE_IDS.secondaryContact,

@@ -1,3 +1,4 @@
+import { administratorGrants } from "./helpers/administrator";
 import { describe, expect, it } from "vitest";
 import { grantableScopesForActor, type AuthScope } from "../functions/_lib/auth/scopes";
 import {
@@ -7,7 +8,11 @@ import {
   MCP_EXTENSION,
 } from "../functions/_lib/openapi/mcp";
 import type { AuthAdmin } from "../functions/_lib/types";
-import { buildMcpOauthProps, normalizeMcpOauthScopes, parseMcpOauthProps } from "../functions/_lib/mcp/oauth";
+import {
+  buildMcpOauthProps,
+  normalizeMcpOauthScopes,
+  parseMcpOauthProps,
+} from "../functions/_lib/auth/oauth/authorization";
 
 const mcpWriteMetadata = {
   expose: true,
@@ -215,16 +220,30 @@ describe("MCP scope delegation", () => {
       identityType: "user",
       id: "user-1",
       email: "user@example.test",
-      role: "admin",
+      grants: administratorGrants,
       sessionId: "session-1",
       expiresAt: "2099-01-01T00:00:00.000Z",
     };
-    expect(buildMcpOauthProps(userActor, ["admin:read"], "oauth")).toMatchObject({
+    expect(buildMcpOauthProps(userActor, ["admin:read"], "oauth", "2098-12-31T23:00:00.000Z")).toMatchObject({
       identityType: "user",
       id: "user-1",
       authTransport: "oauth",
       sessionId: "session-1",
+      sessionIdleExpiresAt: "2098-12-31T23:00:00.000Z",
     });
+    const userProps = buildMcpOauthProps(userActor, ["admin:read"], "oauth", "2098-12-31T23:00:00.000Z");
+    expect(userProps).not.toHaveProperty("role");
+    expect(() => buildMcpOauthProps(userActor, ["admin:read"], "oauth")).toThrowError(
+      expect.objectContaining({ code: "MCP_AUTH_TRANSPORT_INVALID" }),
+    );
+    if (userProps.identityType !== "user") throw new Error("Expected a user-backed OAuth grant");
+    const { sessionIdleExpiresAt: _idleDeadline, ...unboundedProps } = userProps;
+    expect(() => parseMcpOauthProps(unboundedProps)).toThrowError(
+      expect.objectContaining({ code: "MCP_AUTH_PROPS_INVALID" }),
+    );
+    expect(() => parseMcpOauthProps({ ...userProps, role: "admin" })).toThrowError(
+      expect.objectContaining({ status: 401, code: "MCP_AUTH_PROPS_INVALID" }),
+    );
     expect(() => buildMcpOauthProps(userActor, ["admin:read"], "api-key")).toThrowError(
       expect.objectContaining({ code: "MCP_AUTH_TRANSPORT_INVALID" }),
     );
@@ -240,7 +259,6 @@ describe("MCP scope delegation", () => {
       identityType: "user",
       id: "user-1",
       email: "reviewer@example.test",
-      role: "user",
       grants: [{ permission: "proposals:read", contextType: null, contextId: null }],
     };
     const requested: AuthScope[] = ["proposals:read", "proposals:score", "proposals:manage"];
@@ -253,7 +271,7 @@ describe("MCP scope delegation", () => {
       identityType: "user",
       id: "admin-1",
       email: "admin@example.test",
-      role: "admin",
+      grants: administratorGrants,
     };
     const requested: AuthScope[] = ["proposals:read", "proposals:score"];
 

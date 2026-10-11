@@ -1,4 +1,8 @@
 /**
+ * One-time member cutover tool. Remove this entrypoint, its import-only modules,
+ * and migrate:members after preview and production imports are reconciled and
+ * accepted. Ongoing member onboarding and edits belong in the portal.
+ *
  * Step 2/3/3b — Import member organizations & representatives to D1.
  *
  * Reads `data/members/*.yaml` (the Hugo-era member directory) and the
@@ -95,11 +99,11 @@
  * command rather than invoking this module directly so the runtime flags stay
  * consistent with the repository's supported Node versions.
  *
- * Environment flags mirror scripts/seed.mjs's ENVS table (binding is always
- * "DB"; --env/--local|--remote select which wrangler.jsonc environment
- * block resolves it):
+ * Environment flags mirror scripts/seed.mjs's ENVS table; the database is
+ * addressed through scripts/lib/wrangler-target.mjs:
  *   --local        --env local --local     (database pkic-db-local)
- *   --preview      --env preview --remote  (database pkic-db-preview)
+ *   --preview      --env production --preview --remote
+ *                  (binding DB's preview database pkic-db-preview, shared by Workers Previews)
  *   --production   --env production --remote (database pkic-db)
  *
  * Other flags:

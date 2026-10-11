@@ -1,3 +1,5 @@
+import { administratorGrants } from "./helpers/administrator";
+import { grantAdministrator } from "./helpers/administrator";
 import { configureMeetingOccurrence } from "./helpers/meeting-occurrence";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -25,8 +27,13 @@ const NOW = "2027-06-01T00:00:00.000Z";
 
 async function adminActor(): Promise<UserBackedAuthAdmin> {
   const id = await insertUser(env.DB, `current-meetings-admin-${crypto.randomUUID()}@example.test`);
-  await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(id).run();
-  return { identityType: "user", id, email: "current-meetings-admin@example.test", role: "admin" };
+  await grantAdministrator(env.DB, id);
+  return {
+    identityType: "user",
+    id,
+    email: "current-meetings-admin@example.test",
+    grants: administratorGrants,
+  };
 }
 
 async function createSeriesWithOccurrence(
@@ -222,7 +229,7 @@ describe("GET /api/v1/users/current/meetings", () => {
     expect((await callApi(env, "/api/v1/users/current/meetings/series")).status).toBe(401);
 
     const staffOnlyUserId = await insertUser(env.DB, `current-meetings-staff-${crypto.randomUUID()}@example.test`);
-    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(staffOnlyUserId).run();
+    await grantAdministrator(env.DB, staffOnlyUserId);
     const staffToken = await createMemberSession(
       env.DB,
       staffOnlyUserId,

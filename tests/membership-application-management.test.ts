@@ -1,3 +1,4 @@
+import { administratorGrants } from "./helpers/administrator";
 /**
  * membership-application-management.test.ts
  *
@@ -46,8 +47,8 @@ async function call(token: string, path: string, init: RequestInit = {}): Promis
 async function insertUser(email: string): Promise<string> {
   const id = crypto.randomUUID();
   await env.DB.prepare(
-    `INSERT INTO users (id, email, normalized_email, role, active, created_at, updated_at)
-     VALUES (?, ?, ?, 'user', 1, datetime('now'), datetime('now'))`,
+    `INSERT INTO users (id, email, normalized_email, active, created_at, updated_at)
+     VALUES (?, ?, ?, 1, datetime('now'), datetime('now'))`,
   )
     .bind(id, email, email)
     .run();
@@ -93,7 +94,12 @@ describe("PATCH /api/v1/members/applications/:id (Fix 3 — edit application fie
     await seedEventAndAdmin(env.DB);
     const adminRow = (await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE email = 'admin@pkic.org'"))[0];
     adminId = adminRow.id;
-    adminActor = { identityType: "user", id: adminId, email: "admin@pkic.org", role: "admin" };
+    adminActor = {
+      identityType: "user",
+      id: adminId,
+      email: "admin@pkic.org",
+      grants: administratorGrants,
+    };
     adminToken = await createAdminSession(env.DB, adminId, "membership-application-management-token");
   });
 

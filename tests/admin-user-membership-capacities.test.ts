@@ -1,3 +1,4 @@
+import { administratorGrants, grantAdministrator } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { userDetailSchema } from "../assets/shared/schemas/user-management";
@@ -88,7 +89,7 @@ describe("admin user membership capacities", () => {
       identityType: "user",
       id: userId,
       email: "representative-conflict@example.test",
-      role: "admin",
+      grants: administratorGrants,
     };
     await expect(
       grantIndividualMembership(env.DB, actor, {
@@ -116,9 +117,9 @@ describe("admin user membership capacities", () => {
       identityType: "user",
       id: actorUserId,
       email: "capacity-admin@example.test",
-      role: "admin",
+      grants: administratorGrants,
     };
-    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(actorUserId).run();
+    await grantAdministrator(env.DB, actorUserId);
     const individual = await insertIndividualMember(env.DB, "H6", "individual-conflict@example.test");
     const organizationId = await insertOrganization(env.DB, "Individual Conflict Organization");
     await seedOrganizationAggregate(env.DB, organizationId, "A");
@@ -156,13 +157,13 @@ describe("admin user membership capacities", () => {
 
   it("does not create an individual capacity after its target is anonymized during the commit race", async () => {
     const actorId = await insertUser(env.DB, "membership-race-admin@example.test");
-    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(actorId).run();
+    await grantAdministrator(env.DB, actorId);
     const targetUserId = await insertUser(env.DB, "membership-race-target@example.test");
     const actor: UserBackedAuthAdmin = {
       identityType: "user",
       id: actorId,
       email: "membership-race-admin@example.test",
-      role: "admin",
+      grants: administratorGrants,
     };
     const gate = gateNextBatch(env.DB);
     const mutation = grantIndividualMembership(gate.db, actor, {
@@ -186,13 +187,13 @@ describe("admin user membership capacities", () => {
 
   it("does not re-enroll a capacity after it is concurrently offboarded", async () => {
     const actorId = await insertUser(env.DB, "membership-update-race-admin@example.test");
-    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(actorId).run();
+    await grantAdministrator(env.DB, actorId);
     const target = await insertIndividualMember(env.DB, "H6", "membership-update-race-target@example.test");
     const actor: UserBackedAuthAdmin = {
       identityType: "user",
       id: actorId,
       email: "membership-update-race-admin@example.test",
-      role: "admin",
+      grants: administratorGrants,
     };
     const gate = gateNextBatch(env.DB);
     const mutation = updateMembershipCapacity(gate.db, actor, target.identityId, { membershipCategory: "H7" });
@@ -221,7 +222,7 @@ describe("admin user membership capacities", () => {
     },
   ])("does not reactivate or enroll a $name capacity", async ({ mutation }) => {
     const actorId = await insertUser(env.DB, "membership-lifecycle-admin@example.test");
-    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(actorId).run();
+    await grantAdministrator(env.DB, actorId);
     const target = await insertIndividualMember(env.DB, "H6", "membership-lifecycle-target@example.test");
     await env.DB.prepare("UPDATE members SET status = 'inactive' WHERE id = ?").bind(target.memberId).run();
     await env.DB.prepare(mutation).bind(target.userId).run();
@@ -229,7 +230,7 @@ describe("admin user membership capacities", () => {
       identityType: "user",
       id: actorId,
       email: "membership-lifecycle-admin@example.test",
-      role: "admin",
+      grants: administratorGrants,
     };
 
     await expect(
@@ -250,13 +251,13 @@ describe("admin user membership capacities", () => {
 
   it("returns the existing category for a status-only individual capacity update", async () => {
     const actorId = await insertUser(env.DB, "membership-response-admin@example.test");
-    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(actorId).run();
+    await grantAdministrator(env.DB, actorId);
     const target = await insertIndividualMember(env.DB, "H6", "membership-response-target@example.test");
     const actor: UserBackedAuthAdmin = {
       identityType: "user",
       id: actorId,
       email: "membership-response-admin@example.test",
-      role: "admin",
+      grants: administratorGrants,
     };
 
     await expect(
@@ -270,7 +271,7 @@ describe("admin user membership capacities", () => {
 
   it("writes an individual capacity's own profile and leaves untouched fields alone", async () => {
     const actorId = await insertUser(env.DB, "profile-admin@example.test");
-    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(actorId).run();
+    await grantAdministrator(env.DB, actorId);
     const target = await insertIndividualMember(env.DB, "H6", "profile-target@example.test");
     await env.DB.prepare("UPDATE identities SET links_json = '[\"https://kept.example/\"]' WHERE id = ?")
       .bind(target.identityId)
@@ -279,7 +280,7 @@ describe("admin user membership capacities", () => {
       identityType: "user",
       id: actorId,
       email: "profile-admin@example.test",
-      role: "admin",
+      grants: administratorGrants,
     };
 
     await updateMembershipCapacity(env.DB, actor, target.identityId, {
@@ -297,7 +298,7 @@ describe("admin user membership capacities", () => {
 
   it("refuses to write a representative's profile through the capacity route", async () => {
     const actorId = await insertUser(env.DB, "representative-profile-admin@example.test");
-    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(actorId).run();
+    await grantAdministrator(env.DB, actorId);
     const representedUserId = await insertUser(env.DB, "representative-profile-target@example.test");
     const organizationId = await insertOrganization(env.DB, "Representative Profile Organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
@@ -306,7 +307,7 @@ describe("admin user membership capacities", () => {
       identityType: "user",
       id: actorId,
       email: "representative-profile-admin@example.test",
-      role: "admin",
+      grants: administratorGrants,
     };
 
     await expect(
@@ -316,7 +317,7 @@ describe("admin user membership capacities", () => {
 
   it("returns the organization aggregate category and status for a representative update", async () => {
     const actorId = await insertUser(env.DB, "representative-response-admin@example.test");
-    await env.DB.prepare("UPDATE users SET role = 'admin' WHERE id = ?").bind(actorId).run();
+    await grantAdministrator(env.DB, actorId);
     const representedUserId = await insertUser(env.DB, "representative-response-target@example.test");
     const organizationId = await insertOrganization(env.DB, "Representative Response Organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
@@ -325,7 +326,7 @@ describe("admin user membership capacities", () => {
       identityType: "user",
       id: actorId,
       email: "representative-response-admin@example.test",
-      role: "admin",
+      grants: administratorGrants,
     };
 
     await expect(

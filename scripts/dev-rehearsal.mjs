@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import { spawn, execFileSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import { parseRehearsalOptions, rehearsalMemberArguments } from "./rehearsal/options.mjs";
+import { buildRehearsalSite } from "./rehearsal/build.mjs";
 import {
   rehearsalConfig,
   rehearsalEnvironment,
@@ -63,14 +64,7 @@ async function main() {
     run(process.execPath, [...wrangler, ...operation], state);
     return;
   }
-  run(process.execPath, ["scripts/build-frontend.mjs", "--dev"]);
-  execFileSync("hugo", ["--configDir=", "--baseURL=/", "-e", "development"], {
-    cwd: root,
-    env: { ...env, HUGO_PARAMS_SKIPREMOTEFEEDS: "true" },
-    stdio: "inherit",
-  });
-  fs.rmSync(path.join(state, "site"), { recursive: true, force: true });
-  fs.cpSync(path.join(root, "public"), path.join(state, "site"), { recursive: true });
+  buildRehearsalSite(root, state, env);
   const { createCaptureServer } = await import("./email-capture/server.mjs");
   const inbox = createCaptureServer();
   await new Promise((resolve, reject) => {

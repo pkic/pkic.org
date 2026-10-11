@@ -3,7 +3,6 @@ import type { AuthMember, DatabaseLike, UserBackedAuthAdmin } from "../types";
 import { createUserBackedAuthAdmin } from "./admin-identity";
 import type { EligibleStaffUser } from "./identity-capacities";
 import { computeGrantsForUser } from "./permissions";
-import { AUTH_SCOPES } from "./scopes";
 import {
   DEFAULT_USER_SESSION_IDLE_TTL_HOURS,
   sessionIdleExpiresAt,
@@ -19,7 +18,6 @@ export interface UserSessionResult {
   idleExpiresAt: string;
   staff?: UserBackedAuthAdmin;
   staffIdleExpiresAt?: string;
-  staffReauthenticationRequired?: boolean;
   member?: AuthMember;
   sponsors: SponsorCapacity[];
   pendingIdentityCount: number;
@@ -43,8 +41,7 @@ export async function createStaffSessionActor(
   return createUserBackedAuthAdmin({
     id: staff.id,
     email: staff.email,
-    role: staff.role,
-    scopes: staff.role === "admin" ? [...AUTH_SCOPES] : [],
+    scopes: [],
     grants: await computeGrantsForUser(db, staff.id, memberId),
     memberId,
     sessionId,

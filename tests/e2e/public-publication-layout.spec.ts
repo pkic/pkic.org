@@ -1,6 +1,67 @@
 /** Opt-in geometry checks against synthetic build-time publication data. @covers presentation.13.7 */
 import { expect, test } from "@playwright/test";
 
+test("sponsor tier frames scale small artwork and stay contained across screen sizes", async ({ page }) => {
+  await page.route("**/img/synthetic-tier-logo.svg?*", (route) => {
+    const shape = new URL(route.request().url()).searchParams.get("shape");
+    const [width, height] = shape === "wide" ? [40, 10] : shape === "tall" ? [10, 40] : [10, 10];
+    return route.fulfill({
+      contentType: "image/svg+xml",
+      body: `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}"><rect width="${width}" height="${height}" fill="#198754"/></svg>`,
+    });
+  });
+  for (const theme of ["light", "dark"]) {
+    for (const width of [1440, 768, 390, 320]) {
+      await page.setViewportSize({ width, height: 1000 });
+      await page.goto("/sponsors/");
+      await page.evaluate((theme) => {
+        document.documentElement.dataset.theme = theme;
+      }, theme);
+      const diamond = page.locator('.sponsors-tier[data-weight="6"]');
+      const platinum = page.locator('.sponsors-tier[data-weight="4"]');
+      const frame = diamond.getByRole("link");
+      const logo = diamond.getByRole("img");
+      await expect(logo).toBeVisible();
+      expect(await frame.evaluate((element) => parseFloat(getComputedStyle(element).height))).toBe(120);
+      if (width <= 390) expect((await frame.boundingBox())!.width).toBeGreaterThan(width * 0.65);
+      expect((await frame.boundingBox())!.height).toBeGreaterThan(
+        (await platinum.getByRole("link").boundingBox())!.height,
+      );
+      await page.screenshot({ path: test.info().outputPath(`sponsors-page-${theme}-${width}.png`), fullPage: true });
+      for (const shape of ["wide", "square", "tall"]) {
+        await logo.evaluate((image, shape) => {
+          image
+            .closest("picture")
+            ?.querySelectorAll("source")
+            .forEach((source) => source.remove());
+          image.removeAttribute("srcset");
+          image.setAttribute("src", `/img/synthetic-tier-logo.svg?shape=${shape}`);
+        }, shape);
+        await expect
+          .poll(() => logo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0))
+          .toBe(true);
+        const imageBox = (await logo.boundingBox())!;
+        const frameBox = (await frame.boundingBox())!;
+        // Even tiny source artwork fills its tier frame; contain preserves the drawing's aspect ratio.
+        const content = await frame.evaluate((element) => {
+          const style = getComputedStyle(element);
+          return {
+            width: element.clientWidth - parseFloat(style.paddingLeft) - parseFloat(style.paddingRight),
+            height: element.clientHeight - parseFloat(style.paddingTop) - parseFloat(style.paddingBottom),
+          };
+        });
+        expect(imageBox.width).toBeCloseTo(content.width, 0);
+        expect(imageBox.height).toBeCloseTo(content.height, 0);
+        expect(imageBox.x).toBeGreaterThanOrEqual(frameBox.x);
+        expect(imageBox.x + imageBox.width).toBeLessThanOrEqual(frameBox.x + frameBox.width + 1);
+        expect(await logo.evaluate((image) => getComputedStyle(image).objectFit)).toBe("contain");
+      }
+      expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(width);
+      await diamond.screenshot({ path: test.info().outputPath(`diamond-sponsor-${theme}-${width}.png`) });
+    }
+  }
+});
+
 test("member profile logos keep a balanced frame across wide, square, and tall artwork", async ({ page }) => {
   await page.goto("/members/example-corp/");
   const logo = page.locator(".member-profile-logo");

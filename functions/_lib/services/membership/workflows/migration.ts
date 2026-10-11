@@ -18,6 +18,7 @@ import { requireMembershipCategory } from "../categories";
 import { getMembershipWorkflowVersion } from "./catalog";
 import { prepareMembershipWorkflowPin } from "./pinning";
 import { workflowWriteConflict } from "./drafts";
+import { prepareRemoveMembershipReviewSnapshots } from "./review-digest-content";
 
 async function migrationSnapshot(db: DatabaseLike, applicationId: string, versionId: string) {
   const application = await getMemberApplicationById(db, applicationId);
@@ -100,6 +101,7 @@ export async function migrateMembershipWorkflow(
           current.revision,
         ],
       }),
+      ...prepareRemoveMembershipReviewSnapshots(db, applicationId, now),
       db
         .prepare(
           "UPDATE membership_application_workflows SET superseded_at = ?, next_evaluation_at = NULL WHERE application_id = ? AND superseded_at IS NULL",

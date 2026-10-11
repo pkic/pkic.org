@@ -8,6 +8,13 @@ export function publicationEnvironment() {
   return environment;
 }
 
+/** Previews are a mode of the production Worker: wrangler.jsonc declares their
+ * preview-only bindings in env.production.previews, not in a separate env. */
+export function wranglerEnvironment(target = publicationEnvironment()) {
+  if (!["local", "preview", "production"].includes(target)) throw new Error("Invalid publication environment");
+  return target === "local" ? "local" : "production";
+}
+
 export function publicationStagingDirectory() {
   const id = process.env.PKIC_PUBLICATION_BUILD_ID;
   if (!id || !/^[a-f0-9-]{36}$/.test(id)) throw new Error("Publication requires an isolated build identifier");
