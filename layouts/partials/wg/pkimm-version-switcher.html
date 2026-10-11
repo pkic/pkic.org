@@ -1,57 +1,8 @@
-{{/*
-  PKIMM version switcher.
-
-  Renders inline at the bottom of the Model tree panel (see
-  layouts/partials/wg/sub-navigation.html and its sibling layouts). Reads
-  data/pkimm-versions.yaml, detects the current version from the page URL,
-  and emits one link per version.
-
-  Path preservation is resolved at build time: for each non-current version
-  we ask Hugo whether the equivalent sub-path exists in that version's
-  content tree. If yes, link to the sub-path; if not, fall back to the
-  version root. This eliminates runtime 404s when versions diverge
-  structurally and removes the need for any client-side href rewriting.
-*/}}
-{{- $versions := index hugo.Data "pkimm-versions" -}}
-{{- if and $versions $versions.versions -}}
-  {{- $current := "" -}}
-  {{- $currentPath := "" -}}
-  {{- range $versions.versions -}}
-    {{- if and (not $current) (strings.HasPrefix $.RelPermalink .path) -}}
-      {{- $current = .id -}}
-      {{- $currentPath = .path -}}
-    {{- end -}}
-  {{- end -}}
-  {{- $subPath := "" -}}
-  {{- if $currentPath -}}
-    {{- $subPath = strings.TrimPrefix $currentPath $.RelPermalink -}}
-  {{- end -}}
-<div class="wg-version-switcher" data-current="{{ $current }}">
-  <p class="wg-version-eyebrow">Switch version</p>
-  <div class="wg-version-list" role="group" aria-label="Switch PKIMM model version">
-    {{- range $versions.versions -}}
-      {{- $href := .path -}}
-      {{- $exists := true -}}
-      {{- if eq .id $current -}}
-        {{- $href = $.RelPermalink -}}
-      {{- else if $subPath -}}
-        {{- $candidate := printf "%s%s" .path $subPath -}}
-        {{- if $.Site.GetPage $candidate -}}
-          {{- $href = $candidate -}}
-        {{- else -}}
-          {{- $exists = false -}}
-        {{- end -}}
-      {{- end -}}
-    <a class="wg-version-item{{ if eq $current .id }} is-active{{ end }}" href="{{ $href }}">
-      <span class="wg-version-badge">{{ .label }}</span>
-      {{- if .isLatestRelease }}
-      <span class="wg-version-hint">Latest release</span>
-      {{- end }}
-      {{- if not $exists }}
-      <span class="wg-version-hint wg-version-hint--fallback" title="This page is not available in {{ .label }} — go to the version overview instead">Overview</span>
-      {{- end }}
-    </a>
-    {{- end }}
-  </div>
-</div>
+{{- $data := index hugo.Data "pkimm-versions" -}}
+{{- if and $data $data.versions -}}
+  {{- partial "wg/model-version-switcher.html" (dict
+    "page" .
+    "versions" $data.versions
+    "modelName" "PKIMM"
+  ) -}}
 {{- end -}}

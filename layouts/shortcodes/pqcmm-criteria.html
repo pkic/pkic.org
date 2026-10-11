@@ -1,0 +1,24 @@
+{{/* Render the approved criteria for one PQCMM level from the canonical model YAML. */}}
+{{- $levelNumber := int (.Get "level") -}}
+{{- $model := partial "pqcmm/model-data.html" (dict "page" .Page "version" (.Get "version")) -}}
+{{- $matches := where $model.data.levels "number" $levelNumber -}}
+{{- if ne (len $matches) 1 -}}
+  {{- errorf "PQCMM level %d is missing or duplicated in %s" $levelNumber $model.resource.Name -}}
+{{- end -}}
+{{- $level := index $matches 0 -}}
+<div class="criteria-box" role="region" aria-label="Level criteria">
+  <div class="criteria-box-label" aria-hidden="true">
+    <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 16 16" fill="currentColor" aria-hidden="true">
+      <path d="M13.854 3.646a.5.5 0 0 1 0 .708l-7 7a.5.5 0 0 1-.708 0l-3.5-3.5a.5.5 0 1 1 .708-.708L6.5 10.293l6.646-6.647a.5.5 0 0 1 .708 0z"/>
+    </svg>
+    Requirements
+  </div>
+  <div class="criteria-box-body">
+    {{- $level.criteria.introduction | .Page.RenderString -}}
+    <ul>
+      {{- range $criterion := $level.criteria.items }}
+      <li id="criterion-{{ $criterion.id | anchorize }}">{{ $criterion.text | $.Page.RenderString }}</li>
+      {{- end }}
+    </ul>
+  </div>
+</div>
