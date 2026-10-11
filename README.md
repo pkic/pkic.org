@@ -19,6 +19,8 @@ Some basic git knowledge is required, please check https://guides.github.com/ to
 Backend development, validation, database behavior, and deployment are covered
 in [CONTRIBUTING.md](CONTRIBUTING.md).
 
+For an initialized local migration rehearsal, run `pnpm dev:rehearsal start --state ../pkic-rehearsal/`. Startup builds the Astro publication from that directory's local D1/R2 state and serves the Vite-built Worker with rehearsal bindings and captured email. Hugo is not required. Startup does not apply migrations or seed data; apply any required rehearsal migrations explicitly before starting.
+
 ## Static publication
 
 `pnpm run build` assembles the complete Vite Worker assets and the Astro publication into one deployment. The publication reads approved public data through native D1/R2 bindings. Originals stay in R2; optimized, content-hashed images ship with the static HTML and Pagefind index.
