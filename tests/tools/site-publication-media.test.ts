@@ -5,6 +5,56 @@ import sharp from "sharp";
 import { expect, it, vi } from "vitest";
 import { copyPublicMedia } from "../../scripts/publication/copy-public-media.mjs";
 
+it("uses rehearsal fallbacks only for absent objects while publishing available images", async () => {
+  const output = await mkdtemp(resolve(tmpdir(), "pkic-rehearsal-media-"));
+  const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    const logo = "/api/v1/members/synthetic/logo";
+    const photo = "/api/v1/users/synthetic/photo";
+    const sponsor = "/api/v1/sponsors/synthetic/logo";
+    const snapshot = {
+      member: { logoUrl: logo, identities: [{ photoUrl: photo }] },
+      sponsor: { logoUrl: sponsor },
+      memberWall: [{ logoUrl: logo }],
+    };
+    const original = JSON.stringify(snapshot);
+    const bytes = await sharp({ create: { width: 16, height: 16, channels: 4, background: "green" } })
+      .png()
+      .toBuffer();
+    const getObject = vi.fn(async () => ({ etag: "synthetic", size: bytes.length, arrayBuffer: async () => bytes }));
+    const request = {
+      output,
+      cacheDirectory: resolve(output, "cache"),
+      snapshot,
+      keys: { [logo]: "private/absent-logo", [photo]: "private/absent-photo", [sponsor]: "private/available-logo" },
+      manifest: new Map([["private/available-logo", { etag: "synthetic", size: bytes.length }]]),
+      getObject,
+    };
+    await expect(copyPublicMedia(request)).rejects.toThrow("missing from R2");
+    expect(getObject).not.toHaveBeenCalled();
+    const published = await copyPublicMedia({ ...request, allowMissingMedia: true });
+    expect(published.member).toEqual({ logoUrl: null, identities: [{ photoUrl: null }] });
+    expect(published.memberWall).toEqual([{ logoUrl: "/img/logo.svg" }]);
+    expect(published.sponsor.logoUrl).toMatch(/^\/_published\/media\/[a-f0-9]{64}\.webp$/);
+    expect(getObject).toHaveBeenCalledOnce();
+    expect(JSON.stringify(snapshot)).toBe(original);
+    expect(JSON.stringify(warning.mock.calls)).not.toContain("private/");
+    await expect(
+      copyPublicMedia({
+        ...request,
+        allowMissingMedia: true,
+        cacheDirectory: resolve(output, "unavailable-cache"),
+        getObject: async () => {
+          throw new Error("Storage unavailable");
+        },
+      }),
+    ).rejects.toThrow("Storage unavailable");
+  } finally {
+    warning.mockRestore();
+    await rm(output, { recursive: true, force: true });
+  }
+});
+
 it.each([true, false])(
   "publishes normalized vectors with or without a legacy SVG namespace (%s)",
   async (namespace) => {

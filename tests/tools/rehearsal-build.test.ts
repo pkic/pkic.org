@@ -45,7 +45,11 @@ describe("rehearsal application build", () => {
     buildRehearsalSite(root, state, rehearsalEnvironment({ PATH: "/bin", CLOUDFLARE_ENV: "production" }), run);
     expect(run.mock.calls[0]?.[2]).toMatchObject({
       cwd: root,
-      env: { CLOUDFLARE_ENV: "local", PKIC_PUBLICATION_LOCAL_STATE: path.join(state, "v3") },
+      env: {
+        CLOUDFLARE_ENV: "local",
+        PKIC_PUBLICATION_LOCAL_STATE: path.join(state, "v3"),
+        PKIC_PUBLICATION_ALLOW_MISSING_MEDIA: "true",
+      },
     });
     const runtime = JSON.parse(readFileSync(configPath, "utf8"));
     expect(runtime).toEqual({ ...config, main: path.join(state, "worker/index.js"), no_bundle: true, rules });
