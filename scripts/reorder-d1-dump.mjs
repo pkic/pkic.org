@@ -41,7 +41,8 @@ for (const statement of statements) {
 }
 
 const tmpPath = `${inputPath}.tmp`;
-const out = fs.createWriteStream(tmpPath, { mode: fs.statSync(inputPath).mode & 0o777 });
+const inputMode = fs.statSync(inputPath).mode & 0o777;
+const out = fs.createWriteStream(tmpPath, { mode: inputMode });
 for (const statement of [...pragmas, ...schema, ...data, ...triggers]) {
   out.write(statement);
   out.write(";\n");
@@ -49,6 +50,8 @@ for (const statement of [...pragmas, ...schema, ...data, ...triggers]) {
 await new Promise((resolve, reject) => {
   out.end((err) => (err ? reject(err) : resolve()));
 });
+// Creation mode is filtered through umask; restore the original bits explicitly.
+fs.chmodSync(tmpPath, inputMode);
 fs.renameSync(tmpPath, inputPath);
 
 console.log(
