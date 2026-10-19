@@ -78,27 +78,9 @@ async function main() {
   if (plan.sourceDigest && plan.sourceDigest !== sourceDigest)
     throw new Error("The authored source changed since the plan was reviewed; refresh the plan.");
 
-  const agendaUrl = `${baseUrl}/api/v1/events/${encodeURIComponent(plan.eventSlug)}/agenda`;
+  const agendaPath = `/api/v1/events/${encodeURIComponent(plan.eventSlug)}/agenda`;
   async function api(suffix, body) {
-    const response = await fetch(`${agendaUrl}${suffix}`, {
-      method: body === undefined ? "GET" : "POST",
-      headers: {
-        authorization: `Bearer ${token}`,
-        ...(body === undefined ? {} : { "content-type": "application/json" }),
-      },
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-      redirect: "error",
-    });
-    if (!response.ok) {
-      let code = "REQUEST_FAILED";
-      try {
-        code = (await response.json())?.error?.code ?? code;
-      } catch {
-        /* Never report response contents. */
-      }
-      throw new Error(`Agenda request failed: HTTP ${response.status} ${code}`);
-    }
-    return agendaSnapshotSchema.parse(await response.json());
+    return agendaSnapshotSchema.parse(await request(`${agendaPath}${suffix}`, body));
   }
 
   async function request(path, body) {

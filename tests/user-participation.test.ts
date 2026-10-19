@@ -153,7 +153,10 @@ describe("user participation read model", () => {
     await env.DB.prepare("UPDATE group_memberships SET title = 'Legacy treasurer' WHERE user_id = ?")
       .bind(member.userId)
       .run();
-    expect((await getUserParticipation(env.DB, member.userId)).groups).toMatchObject([{ title: null }, { title: null }]);
+    expect((await getUserParticipation(env.DB, member.userId)).groups).toMatchObject([
+      { title: null },
+      { title: null },
+    ]);
     const leadership = await grantGroupLeadershipCapacity(env.DB, groupId, member.userId);
     await env.DB.prepare("UPDATE user_roles SET title = 'Chair' WHERE id = ?").bind(leadership.roleAssignmentId).run();
     const participation = await getUserParticipation(env.DB, member.userId);
