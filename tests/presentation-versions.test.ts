@@ -1,3 +1,5 @@
+// Prepare the real HTTP graph before timed journeys, as the shared API test helper does.
+import "../functions/http-router";
 import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { administratorGrants } from "./helpers/administrator";
 /**
@@ -30,7 +32,7 @@ import {
   reviewPresentationVersion,
 } from "../functions/_lib/services/presentation-versions";
 import { getPresentationUploader } from "../functions/_lib/services/proposals-speaker-profile";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { processPendingStorageDeletions } from "../functions/_lib/services/storage-deletion-outbox";
 import {
   MAX_PRESENTATION_BYTES,
@@ -997,6 +999,23 @@ describe("presentation versioning", () => {
     const reviewBody = (await reviewRes.json()) as { version: { latestReview: { status: string; note: string } } };
     expect(reviewBody.version.latestReview.status).toBe("needs_revision");
     expect(reviewBody.version.latestReview.note).toBe("Please add speaker notes.");
+    const repeatedReview = await app.fetch(
+      new Request(`https://app.test/api/v1/proposals/${proposalId}/presentations/${versionId}/reviews`, {
+        method: "POST",
+        headers: { authorization: `Bearer ${adminToken}`, "content-type": "application/json" },
+        body: JSON.stringify({ status: "needs_revision", note: "Second review of the same document" }),
+      }),
+      envWithBucket,
+      execCtx,
+    );
+    expect(repeatedReview.status).toBe(200);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT points FROM user_standing_awards WHERE reason_key='document_reviewed' AND source_ref=?",
+        versionId,
+      ),
+    ).toEqual([{ points: 20 }]);
   });
 
   it("rechecks scoped presentation access while listing and loading a version", async () => {

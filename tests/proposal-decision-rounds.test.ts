@@ -1,7 +1,7 @@
 import { grantAdministrator, administratorGrants } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import type { DatabaseLike } from "../functions/_lib/types";
 import {
   createProposal,
@@ -10,7 +10,10 @@ import {
   updateProposalByManageToken,
 } from "../functions/_lib/services/proposals";
 import { buildProposalDecisionEmailPlan, recordProposalDecision } from "../functions/_lib/services/proposal-decisions";
-import { remindProposalSpeakerByProposer } from "../functions/_lib/services/proposal-reminders";
+import {
+  remindProposalSpeakerByProposer,
+  sendProposalSpeakerReminders,
+} from "../functions/_lib/services/proposal-reminders";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
@@ -122,6 +125,54 @@ describe("proposal decision review rounds", () => {
   beforeEach(async () => {
     await resetDb();
   });
+
+  it.each([false, true])(
+    "uses the presentation flag for initial requests and manual resends (%s)",
+    async (required) => {
+      const seeded = await seedDecisionWorkflow();
+      await env.DB.prepare("UPDATE session_proposals SET proposal_type = 'panel' WHERE id = ?")
+        .bind(seeded.proposalId)
+        .run();
+      await env.DB.prepare(
+        "UPDATE events SET settings_json = ? WHERE id = (SELECT event_id FROM session_proposals WHERE id = ?)",
+      )
+        .bind(
+          JSON.stringify({
+            proposal: {
+              sessionTypes: [{ label: "panel", name: "Expert conversation", requiresPresentation: required }],
+            },
+          }),
+          seeded.proposalId,
+        )
+        .run();
+      const plan = await buildAcceptedDecisionPlan(seeded);
+      await recordProposalDecision(env.DB, {
+        proposalId: seeded.proposalId,
+        actor: decisionActor(seeded.adminId),
+        finalStatus: "accepted",
+        minReviewsRequired: 0,
+        expectedProposalUpdatedAt: plan.proposal.updated_at,
+        expectedEventSnapshot: plan.eventSnapshot,
+        expectedSpeakerSnapshot: plan.speakerSnapshot,
+        presentationReminderUserIds: plan.presentationReminderUserIds,
+        notifications: plan.messages,
+      });
+      expect(
+        await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'presentation_upload_request'"),
+      ).toHaveLength(required ? 1 : 0);
+      const resend = sendProposalSpeakerReminders(env.DB, {
+        proposalId: seeded.proposalId,
+        kind: "presentation",
+        actor: decisionActor(seeded.adminId),
+        appBaseUrl: "https://app.test",
+      });
+      if (required) await expect(resend).resolves.toMatchObject({ outboxIds: [expect.any(String)] });
+      else await expect(resend).rejects.toMatchObject({ code: "PRESENTATION_NOT_REQUIRED" });
+      expect(
+        await queryAll(env.DB, "SELECT id FROM email_outbox WHERE template_key = 'presentation_upload_request'"),
+      ).toHaveLength(required ? 2 : 0);
+    },
+  );
 
   it("rejects a direct decision command from an actor without proposals:manage", async () => {
     const seeded = await seedDecisionWorkflow();

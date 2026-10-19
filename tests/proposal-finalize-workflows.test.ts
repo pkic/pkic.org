@@ -4,7 +4,7 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { createProposal, addProposalSpeaker, finalizeProposalDecision } from "../functions/_lib/services/proposals";
 import { activateTemplateVersion, createTemplateVersion } from "../functions/_lib/email/templates";
 import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";

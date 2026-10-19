@@ -1,10 +1,16 @@
+import { attachPersonPreview } from "../ts/site/static-person-preview";
+import { h, render } from "preact";
+import { Avatar } from "../ts/ui/Avatar";
 import { loadEventData, getHashParams, getSpeakersData, findSpeakerByFlexibleName } from "./event-common.js";
 
 const conferenceTitle = document.body.dataset.conferenceTitle ?? document.title;
 let speakersData = [];
 let currentSpeakerIndex = 0;
+let stopPersonPreview = () => {};
 
 function showSpeakerCard() {
+  stopPersonPreview();
+  stopPersonPreview = () => {};
   const { name, speaker, index } = getHashParams();
 
   let selectedSpeaker = null;
@@ -51,24 +57,26 @@ function showSpeakerCard() {
 
     // Set speaker photo
     if (speakerPhotoEl) {
-      if (selectedSpeaker.headshot && selectedSpeaker.headshot.x250) {
-        const image = document.createElement("img");
-        image.src = selectedSpeaker.headshot.x250;
-        image.alt = selectedSpeaker.name;
-        speakerPhotoEl.replaceChildren(image);
-      } else {
-        // Create initials placeholder
-        const names = (selectedSpeaker.name || "Speaker").split(" ");
-        const initials = names
-          .map((name) => name.charAt(0))
-          .join("")
-          .substring(0, 2)
-          .toUpperCase();
-        const placeholder = document.createElement("div");
-        placeholder.className = "speaker-photo-placeholder";
-        placeholder.textContent = initials;
-        speakerPhotoEl.replaceChildren(placeholder);
-      }
+      render(
+        h(Avatar, {
+          key: selectedSpeaker.headshot?.x250 ?? selectedSpeaker.name,
+          name: selectedSpeaker.name || "Speaker",
+          src: selectedSpeaker.headshot?.x250,
+          class: "pk-speaker-card-avatar",
+          original: true,
+        }),
+        speakerPhotoEl,
+      );
+    }
+
+    if (speakerPhotoEl) {
+      speakerPhotoEl.tabIndex = 0;
+      stopPersonPreview = attachPersonPreview(speakerPhotoEl, {
+        name: selectedSpeaker.name || "Speaker",
+        photoUrl: selectedSpeaker.headshot?.x250,
+        affiliation: selectedSpeaker.title ? { title: selectedSpeaker.title } : null,
+        roles: ["speaker"],
+      });
     }
 
     // Update page title for better SEO and sharing

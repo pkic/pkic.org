@@ -1,4 +1,8 @@
+import contentMediaPaths from "virtual:pkic-content-media";
+import { resolveContentMediaUrl } from "../../../assets/shared/content-media-url";
+import type { z } from "zod";
 import { parseJsonSafe } from "../utils/json";
+import { eventVirtualRoomRoute } from "../../../assets/shared/event-participation-link";
 import { buildEventFlowPath } from "../../../assets/shared/event-flow-paths";
 import { proposalSessionTypeSchema } from "../../../assets/shared/schemas/proposal-management";
 import { AppError } from "../errors";
@@ -19,13 +23,10 @@ interface EventSettings {
   frontend?: { routes?: EventSettingsRoutes };
   venue?: string | null;
   virtualUrl?: string | null;
-  proposal?: { sessionTypes?: Array<{ label: string; requiresPresentation: boolean }> };
+  proposal?: { sessionTypes?: SessionTypeConfig[] };
 }
 
-export interface SessionTypeConfig {
-  label: string;
-  requiresPresentation: boolean;
-}
+export type SessionTypeConfig = z.infer<typeof proposalSessionTypeSchema>;
 
 const DEFAULT_SESSION_TYPES: readonly SessionTypeConfig[] = [
   { label: "talk", requiresPresentation: true },
@@ -34,8 +35,11 @@ const DEFAULT_SESSION_TYPES: readonly SessionTypeConfig[] = [
 ];
 
 /** Normalizes both current session-type objects and legacy string entries. */
-export function resolveSessionTypes(settings: { proposal?: { sessionTypes?: unknown[] } }): SessionTypeConfig[] {
-  const raw = settings.proposal?.sessionTypes;
+export function resolveSessionTypes(
+  settings: { proposal?: { sessionTypes?: unknown[] } | null } | null,
+): SessionTypeConfig[] {
+  // Legacy settings may hold JSON null for the whole object or for its proposal container.
+  const raw = settings?.proposal?.sessionTypes;
   if (!Array.isArray(raw) || raw.length === 0) return [...DEFAULT_SESSION_TYPES];
 
   const sessionTypes: SessionTypeConfig[] = [];
@@ -54,7 +58,17 @@ export function resolveSessionTypes(settings: { proposal?: { sessionTypes?: unkn
 }
 
 export function resolveEventSessionTypes(settingsJson: string): SessionTypeConfig[] {
-  return resolveSessionTypes(parseJsonSafe<{ proposal?: { sessionTypes?: unknown[] } }>(settingsJson, {}));
+  return resolveSessionTypes(
+    parseJsonSafe<{ proposal?: { sessionTypes?: unknown[] } | null } | null>(settingsJson, {}),
+  );
+}
+
+/** Presentation communication follows the current event policy, never the display name. */
+export function eventSessionTypeRequiresPresentation(settingsJson: string, proposalType: string): boolean {
+  return resolveEventSessionTypes(settingsJson).some(
+    (type) =>
+      type.label.toLocaleLowerCase("en-US") === proposalType.toLocaleLowerCase("en-US") && type.requiresPresentation,
+  );
 }
 
 /** Returns the canonical configured label and rejects labels not enabled for this event. */
@@ -94,6 +108,7 @@ export interface EventEmailVariables {
   eventEndsAt: string;
   eventUrl: string;
   sponsorsImageUrl: string | null;
+  virtualRoomUrl: string;
 }
 
 export function deriveEventBasePath(event: Pick<EventRecord, "slug" | "base_path" | "starts_at">): string {
@@ -180,9 +195,12 @@ export function resolveSponsorsImageUrl(
   return `${siteBaseUrl}${deriveEventBasePath(event)}sponsors.jpg`;
 }
 
+const publishedContentMedia = new Set(contentMediaPaths);
+
 export function resolveHeroImageUrl(event: Pick<EventRecord, "settings_json">): string | null {
   const settings = parseJsonSafe<{ heroImageUrl?: string | null }>(event.settings_json, {});
-  return "heroImageUrl" in settings ? settings.heroImageUrl?.trim() || null : null;
+  const image = settings.heroImageUrl?.trim();
+  return image ? resolveContentMediaUrl(image, publishedContentMedia) : null;
 }
 
 export function resolveEventVenue(event: Pick<EventRecord, "settings_json">): string | null {
@@ -192,9 +210,8 @@ export function resolveEventVenue(event: Pick<EventRecord, "settings_json">): st
 export function resolveEventVirtualUrl(
   event: Pick<EventRecord, "slug" | "base_path" | "starts_at" | "settings_json">,
   siteBaseUrl: string,
-): string | null {
-  const explicit = parseJsonSafe<EventSettings>(event.settings_json, {}).virtualUrl?.trim();
-  return explicit || `${siteBaseUrl}${deriveEventBasePath(event)}virtual/`;
+): string {
+  return new URL(`/portal/#${eventVirtualRoomRoute(event.slug)}`, siteBaseUrl).href;
 }
 
 export function resolveEventUrl(
@@ -212,6 +229,7 @@ export function buildEventEmailVariables(event: EventEmailSource, siteBaseUrl: s
     eventStartsAt: event.starts_at ?? "",
     eventEndsAt: event.ends_at ?? "",
     eventUrl: resolveEventUrl(event, siteBaseUrl),
+    virtualRoomUrl: resolveEventVirtualUrl(event, siteBaseUrl),
     sponsorsImageUrl: resolveSponsorsImageUrl(event, siteBaseUrl),
   };
 }

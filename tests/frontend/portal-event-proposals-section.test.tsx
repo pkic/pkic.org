@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 /**
  * The event's proposals section: its tab strip and the two presentation
- * archive downloads above the catalogue. Downloads retain link semantics.
+ * archive downloads above the catalog. Downloads retain link semantics.
  */
 import type { ComponentChildren } from "preact";
 import { render } from "preact";
@@ -158,7 +158,7 @@ describe("event Proposals section", () => {
     });
     respond(ACCESS, [proposal]);
     const root = await mount();
-    const row = root.querySelector<HTMLInputElement>(`input[aria-label="Selected session"]`);
+    const row = root.querySelector<HTMLInputElement>(`input[aria-label="Select Selected session"]`);
     expect(row).not.toBeNull();
     await act(async () => row?.click());
     const current = root.querySelector<HTMLAnchorElement>(

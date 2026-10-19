@@ -7,12 +7,13 @@ import {
   proposalSpeakerPatchResponseSchema,
   proposalSpeakersResponseSchema,
 } from "../assets/shared/schemas/proposal-speakers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { onRequestGet as getProposalDetail } from "../functions/api/v1/proposals/[proposalId]";
 import { onRequestPost as openProposalManage } from "../functions/api/v1/proposals/[proposalId]/open-manage";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
-import { addProposalSpeaker, createProposal, getProposalByManageToken } from "../functions/_lib/services/proposals";
+import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
+import { getProposalByManageToken } from "../functions/_lib/services/proposals";
 import {
   eventProposalDetailResponseSchema,
   eventProposalsResponseSchema,
@@ -146,8 +147,8 @@ async function seedProposalWithReviews(
 
   await env.DB.batch([
     env.DB.prepare(`
-      INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, job_title, data_json, created_at, updated_at)
-      VALUES ('${proposerId}', 'speaker@pkic.org', 'speaker@pkic.org', 'Speaker', 'One', 'Org', 'Role', NULL, datetime('now'), datetime('now'))
+      INSERT INTO users (id, email, normalized_email, first_name, last_name, data_json, created_at, updated_at)
+      VALUES ('${proposerId}', 'speaker@pkic.org', 'speaker@pkic.org', 'Speaker', 'One', NULL, datetime('now'), datetime('now'))
     `),
     env.DB.prepare(`
       INSERT INTO session_proposals (
@@ -306,9 +307,8 @@ async function seedProposalSpeaker(
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO users (
-           id, email, normalized_email, first_name, last_name, organization_name, job_title,
-           biography, links_json, created_at, updated_at
-         ) VALUES (?, ?, ?, 'Profile', 'Speaker', 'Old Org', 'Old Role', NULL, NULL, datetime('now'), datetime('now'))`,
+           id, email, normalized_email, first_name, last_name, created_at, updated_at
+         ) VALUES (?, ?, ?, 'Profile', 'Speaker', datetime('now'), datetime('now'))`,
     ).bind(speakerId, email, email),
     env.DB.prepare(
       `INSERT INTO proposal_speakers (
@@ -397,7 +397,7 @@ describe("admin proposal endpoints", () => {
     ]);
   });
 
-  it("selects archived proposals explicitly without mixing them into the active catalogue", async () => {
+  it("selects archived proposals explicitly without mixing them into the active catalog", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
     const adminToken = await createAdminSession(env.DB, adminId, "token-archived-proposal-list");
@@ -480,8 +480,8 @@ describe("admin proposal endpoints", () => {
 
     await env.DB.batch([
       env.DB.prepare(`
-        INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, job_title, data_json, created_at, updated_at)
-        VALUES ('${secondProposerId}', 'speaker-two@pkic.org', 'speaker-two@pkic.org', 'Speaker', 'Two', 'Org', 'Role', NULL, datetime('now'), datetime('now'))
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, data_json, created_at, updated_at)
+        VALUES ('${secondProposerId}', 'speaker-two@pkic.org', 'speaker-two@pkic.org', 'Speaker', 'Two', NULL, datetime('now'), datetime('now'))
       `),
       env.DB.prepare(`
         INSERT INTO session_proposals (
@@ -534,8 +534,8 @@ describe("admin proposal endpoints", () => {
 
     await env.DB.batch([
       env.DB.prepare(`
-        INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, job_title, data_json, created_at, updated_at)
-        VALUES ('${secondProposerId}', 'speaker-paged@pkic.org', 'speaker-paged@pkic.org', 'Speaker', 'Paged', 'Org', 'Role', NULL, datetime('now'), datetime('now'))
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, data_json, created_at, updated_at)
+        VALUES ('${secondProposerId}', 'speaker-paged@pkic.org', 'speaker-paged@pkic.org', 'Speaker', 'Paged', NULL, datetime('now'), datetime('now'))
       `),
       env.DB.prepare(`
         INSERT INTO session_proposals (
@@ -575,94 +575,68 @@ describe("admin proposal endpoints", () => {
     expect(secondPagePayload.proposals[0].title).not.toBe(firstPagePayload.proposals[0].title);
   });
 
-  it("updates a proposal speaker profile including links", async () => {
+  it("changes a proposal speaker's role and refuses profile fields the proposal does not hold", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
     const { speakerId } = await seedProposalSpeaker(proposalId);
-    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-speaker-profile");
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-speaker-role");
+
+    const refused = await callAdminProposalSpeakers(adminToken, proposalId, `/${speakerId}`, {
+      method: "PATCH",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ biography: "A copy the proposal must not keep.", role: "moderator" }),
+    });
+    expect(refused.status).toBe(400);
 
     const response = await callAdminProposalSpeakers(adminToken, proposalId, `/${speakerId}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({
-        firstName: "Updated",
-        lastName: "Speaker",
-        organizationName: "PKIC Labs",
-        jobTitle: "Moderator",
-        biography: "Updated biography from the admin proposal detail screen.",
-        links: ["https://example.test/speaker", "https://github.com/speaker"],
-        role: "moderator",
-      }),
+      body: JSON.stringify({ role: "moderator" }),
     });
-
     expect(response.status).toBe(200);
-    const payload = proposalSpeakerPatchResponseSchema.parse(await response.json());
-    expect(payload.speaker).toMatchObject({
+    expect(proposalSpeakerPatchResponseSchema.parse(await response.json()).speaker).toMatchObject({
       userId: speakerId,
-      firstName: "Updated",
-      organizationName: "PKIC Labs",
       role: "moderator",
-      links: ["https://example.test/speaker", "https://github.com/speaker"],
     });
-    const user = (
-      await queryAll<{
-        first_name: string | null;
-        organization_name: string | null;
-        job_title: string | null;
-        biography: string | null;
-        links_json: string | null;
-      }>(env.DB, "SELECT first_name, organization_name, job_title, biography, links_json FROM users WHERE id = ?", [
-        speakerId,
-      ])
-    )[0];
-    const speaker = (
-      await queryAll<{ role: string }>(
-        env.DB,
-        "SELECT role FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
-        [proposalId, speakerId],
-      )
-    )[0];
-    expect(user).toEqual({
-      first_name: "Profile",
-      organization_name: "Old Org",
-      job_title: "Old Role",
-      biography: null,
-      links_json: null,
-    });
-    const [scoped] = await queryAll<{ profile_overrides_json: string }>(
+    const [speaker] = await queryAll<{ role: string }>(
       env.DB,
-      "SELECT profile_overrides_json FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+      "SELECT role FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
       [proposalId, speakerId],
     );
-    expect(JSON.parse(scoped.profile_overrides_json)).toMatchObject({
-      firstName: "Updated",
-      organizationName: "PKIC Labs",
-      jobTitle: "Moderator",
-      biography: "Updated biography from the admin proposal detail screen.",
-      links: ["https://example.test/speaker", "https://github.com/speaker"],
-    });
-
-    const second = await createProposal(env.DB, {
-      eventId,
-      proposerUserId: speakerId,
-      proposalType: "talk",
-      title: "Second proposal",
-      abstract: "A separate proposal for the same account.",
-    });
-    await addProposalSpeaker(env.DB, {
-      proposalId: second.proposal.id,
-      userId: speakerId,
-      role: "proposer",
-    });
-    const [secondSpeaker] = await queryAll<{ first_name: string | null; organization_name: string | null }>(
-      env.DB,
-      `SELECT u.first_name, u.organization_name
-       FROM proposal_speakers ps JOIN users u ON u.id = ps.user_id
-       WHERE ps.proposal_id = ? AND ps.user_id = ?`,
-      [second.proposal.id, speakerId],
-    );
-    expect(secondSpeaker).toEqual({ first_name: "Profile", organization_name: "Old Org" });
     expect(speaker.role).toBe("moderator");
+  });
+
+  it("shows each speaker as the identity they speak as, never a copy on the roster row", async () => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+    const { speakerId } = await seedProposalSpeaker(proposalId, { status: "confirmed" });
+    const identityId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare(
+        `INSERT INTO identities (id, user_id, organization_id, biography, links_json, source, show_on_organization_profile,
+                                 invited_at, started_at, created_at, updated_at)
+         VALUES (?, ?, NULL, 'The identity biography.', '["https://example.test/identity"]', 'staff', 0,
+                 datetime('now'), datetime('now'), datetime('now'), datetime('now'))`,
+      ).bind(identityId, speakerId),
+      env.DB.prepare(
+        "INSERT INTO individual_job_titles (user_id, job_title, created_at, updated_at) VALUES (?, 'Researcher', datetime('now'), datetime('now'))",
+      ).bind(speakerId),
+    ]);
+    const adminToken = await createAdminSession(env.DB, adminId, "token-admin-speaker-identity");
+
+    const payload = proposalSpeakersResponseSchema.parse(
+      await (await callAdminProposalSpeakers(adminToken, proposalId)).json(),
+    );
+    expect(payload.speakers[0]).toMatchObject({
+      userId: speakerId,
+      identityId,
+      firstName: "Profile",
+      organizationName: null,
+      jobTitle: "Researcher",
+      biography: "The identity biography.",
+      links: ["https://example.test/identity"],
+      hasBio: true,
+    });
   });
 
   it("returns the proposal speaker roster through its canonical response schema", async () => {
@@ -680,7 +654,7 @@ describe("admin proposal endpoints", () => {
       userId: speakerId,
       role: "speaker",
       links: [],
-      registrationStatus: null,
+      registration: null,
     });
   });
 
@@ -754,7 +728,7 @@ describe("admin proposal endpoints", () => {
     const response = await callAdminProposalSpeakers(adminToken, proposalId, `/${speakerId}`, {
       method: "PATCH",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ firstName: "Must Roll Back", role: "moderator" }),
+      body: JSON.stringify({ role: "moderator" }),
     });
     await env.DB.prepare("DROP TRIGGER fail_admin_speaker_audit").run();
 
@@ -769,7 +743,7 @@ describe("admin proposal endpoints", () => {
     expect(speaker.role).toBe("speaker");
   });
 
-  it("rejects a stale proposal speaker plan without committing its profile, role, or audit fallout", async () => {
+  it("rejects a stale proposal speaker role change without committing the role or its audit", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
     const { speakerId } = await seedProposalSpeaker(proposalId);
@@ -781,8 +755,8 @@ describe("admin proposal endpoints", () => {
         if (!injectedChange) {
           injectedChange = true;
           await baseDb
-            .prepare("UPDATE users SET first_name = 'Concurrent', updated_at = ? WHERE id = ?")
-            .bind("2099-01-01T00:00:00.000Z", speakerId)
+            .prepare("UPDATE session_proposals SET updated_at = ? WHERE id = ?")
+            .bind("2099-01-01T00:00:00.000Z", proposalId)
             .run();
         }
         return baseDb.batch(statements);
@@ -795,19 +769,13 @@ describe("admin proposal endpoints", () => {
         { identityType: "user", id: adminId, email: "admin@pkic.org", grants: administratorGrants },
         proposalId,
         speakerId,
-        { biography: "This stale biography must not be stored.", role: "moderator" },
+        { role: "moderator" },
         "https://app.test",
       ),
     ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
-    const [user] = await queryAll<{ first_name: string; biography: string | null }>(
-      env.DB,
-      "SELECT first_name, biography FROM users WHERE id = ?",
-      [speakerId],
-    );
     const [speaker] = await queryAll<{ role: string }>(env.DB, "SELECT role FROM proposal_speakers WHERE user_id = ?", [
       speakerId,
     ]);
-    expect(user).toEqual({ first_name: "Concurrent", biography: null });
     expect(speaker.role).toBe("speaker");
     await expect(
       queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'speaker_profile_updated'"),
@@ -851,6 +819,74 @@ describe("admin proposal endpoints", () => {
     const payload = (await response.json()) as { proposals: Array<{ title: string }>; page: { total: number } };
     expect(payload.proposals.map((proposal) => proposal.title)).toEqual(["Endpoint Proposal"]);
     expect(payload.page.total).toBe(1);
+  });
+
+  describe("speaker search", () => {
+    async function addRosterSpeaker(
+      proposalId: string,
+      person: { first: string; last: string; email: string },
+      status = "confirmed",
+    ): Promise<string> {
+      const userId = await insertUser(env.DB, person.email);
+      await env.DB.prepare("UPDATE users SET first_name = ?, last_name = ? WHERE id = ?")
+        .bind(person.first, person.last, userId)
+        .run();
+      await env.DB.prepare(
+        `INSERT INTO proposal_speakers (id, proposal_id, user_id, role, status, created_at)
+         VALUES (?, ?, ?, 'co_speaker', ?, '2026-09-01T10:00:00.000Z')`,
+      )
+        .bind(crypto.randomUUID(), proposalId, userId, status)
+        .run();
+      return userId;
+    }
+
+    async function searchTitles(token: string, q: string) {
+      const response = await callAdminProposalsList(
+        token,
+        `/api/v1/events/pqc-2026/proposals?q=${encodeURIComponent(q)}`,
+      );
+      expect(response.status).toBe(200);
+      const payload = eventProposalsResponseSchema.parse(await response.json());
+      return { titles: payload.proposals.map((proposal) => proposal.title), payload };
+    }
+
+    it("finds a proposal by any speaker's name, email or organization without duplicating rows", async () => {
+      const { eventId } = await seedEventAndAdmin(env.DB);
+      const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+      const token = await createAdminSession(env.DB, adminId, "token-speaker-search");
+      const second = await addRosterSpeaker(proposalId, { first: "Quillon", last: "Marchetti", email: "q.m@co.test" });
+      await addRosterSpeaker(proposalId, { first: "Quillon", last: "Marchetti", email: "q.second@co.test" });
+      const memberId = await seedOrganizationAggregate(
+        env.DB,
+        await insertOrganization(env.DB, "Zebracrypt Holdings"),
+        "A",
+      );
+      await addRepresentative(env.DB, memberId, second);
+
+      for (const q of ["Marchetti", "q.m@co.test", "zebracrypt"]) {
+        const { titles, payload } = await searchTitles(token, q);
+        expect(titles, q).toEqual(["Endpoint Proposal"]);
+        expect(payload.page.total, q).toBe(1);
+      }
+      const { payload } = await searchTitles(token, "Marchetti");
+      expect(payload.proposals[0].co_speaker_names).toEqual(["Quillon Marchetti", "Quillon Marchetti"]);
+      expect((await searchTitles(token, "nobody-here")).payload.page.total).toBe(0);
+    });
+
+    it("ignores declined and redacted speakers", async () => {
+      const { eventId } = await seedEventAndAdmin(env.DB);
+      const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
+      const token = await createAdminSession(env.DB, adminId, "token-speaker-search-excluded");
+      await addRosterSpeaker(proposalId, { first: "Declina", last: "Zzdeclined", email: "d@co.test" }, "declined");
+      const redacted = await addRosterSpeaker(proposalId, { first: "Reda", last: "Zzredacted", email: "r@co.test" });
+      await env.DB.prepare("UPDATE users SET pii_redacted_at = '2026-09-02T00:00:00.000Z' WHERE id = ?")
+        .bind(redacted)
+        .run();
+
+      for (const q of ["Zzdeclined", "Zzredacted"]) {
+        expect((await searchTitles(token, q)).payload.page.total, q).toBe(0);
+      }
+    });
   });
 
   it("returns proposal detail with parsed answers and active form fields", async () => {
@@ -1068,7 +1104,7 @@ describe("admin proposal endpoints", () => {
     });
   });
 
-  it("lets the narrow event capability update only an accepted abstract", async () => {
+  it("lets the narrow event capability update an accepted abstract", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
     const editor = await seedScopedProposalEditor(eventId, adminId, ["proposals:edit_accepted_abstract"]);
@@ -1085,7 +1121,7 @@ describe("admin proposal endpoints", () => {
     expect(payload.proposal.title).toBe("Endpoint Proposal");
   });
 
-  it("does not let the accepted-abstract capability change an accepted title", async () => {
+  it("lets the accepted-abstract capability change an accepted title", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
     const editor = await seedScopedProposalEditor(eventId, adminId, ["proposals:edit_accepted_abstract"]);
@@ -1093,10 +1129,19 @@ describe("admin proposal endpoints", () => {
 
     const response = await callAdminProposalPatch(editor.token, proposalId, { title: "Changed accepted title" });
 
-    expect(response.status).toBe(403);
+    expect(response.status).toBe(200);
+    const payload = proposalPatchResponseSchema.parse(await response.json());
+    expect(payload.proposal.title).toBe("Changed accepted title");
+    const [audit] = await queryAll<{ details_json: string }>(
+      env.DB,
+      "SELECT details_json FROM audit_log WHERE action = 'proposal_edited'",
+    );
+    expect(JSON.parse(audit.details_json)).toEqual({
+      title: { from: "Endpoint Proposal", to: "Changed accepted title" },
+    });
   });
 
-  it("keeps accepted titles manageable while reserving accepted abstracts for the narrow capability", async () => {
+  it("requires the same narrow capability for accepted titles and abstracts", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
     const manager = await seedScopedProposalEditor(eventId, adminId, ["proposals:manage"]);
@@ -1113,7 +1158,7 @@ describe("admin proposal endpoints", () => {
     ).toBe(403);
     expect(
       (await callAdminProposalPatch(manager.token, proposalId, { title: "Corrected accepted title" })).status,
-    ).toBe(200);
+    ).toBe(403);
 
     await env.DB.prepare("UPDATE session_proposals SET status = 'submitted' WHERE id = ?").bind(proposalId).run();
     expect(
@@ -1126,7 +1171,7 @@ describe("admin proposal endpoints", () => {
     ).toBe(403);
   });
 
-  it("rolls back accepted abstract edits when the capability is revoked before commit", async () => {
+  it("rolls back accepted title and abstract edits when the capability is revoked before commit", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const { proposalId, adminId } = await seedProposalWithReviews(env.DB, eventId);
     const editor = await seedScopedProposalEditor(eventId, adminId, ["proposals:edit_accepted_abstract"]);
@@ -1138,13 +1183,17 @@ describe("admin proposal endpoints", () => {
     );
 
     await expect(
-      editProposal(racingDb, editor.actor, proposalId, { abstract: "This edit must roll back." }),
+      editProposal(racingDb, editor.actor, proposalId, {
+        title: "This title must roll back",
+        abstract: "This edit must roll back.",
+      }),
     ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_AUTHORIZATION_CHANGED" });
-    const [proposal] = await queryAll<{ abstract: string }>(
+    const [proposal] = await queryAll<{ title: string; abstract: string }>(
       env.DB,
-      "SELECT abstract FROM session_proposals WHERE id = ?",
+      "SELECT title, abstract FROM session_proposals WHERE id = ?",
       [proposalId],
     );
+    expect(proposal.title).toBe("Endpoint Proposal");
     expect(proposal.abstract).toContain("realistic content");
     await expect(queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'proposal_edited'")).resolves.toHaveLength(
       0,

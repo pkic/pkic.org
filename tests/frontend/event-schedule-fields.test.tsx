@@ -12,7 +12,7 @@ import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { EventScheduleFields } from "../../assets/ts/components/EventScheduleFields";
-import { controlFor } from "./helpers/labelled-control";
+import { controlFor } from "./helpers/labeled-control";
 
 const mounted: HTMLElement[] = [];
 

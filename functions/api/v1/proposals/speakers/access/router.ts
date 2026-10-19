@@ -8,6 +8,7 @@ import {
   ProposalSpeakerAccessProfilePatch,
 } from "./[token]";
 import token_Router from "./[token]/router";
+import { ProposalSpeakerIdentitiesGet } from "./[token]/identities";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -20,6 +21,7 @@ app.use("*", async (c, next) => {
 openapi.get("/:token", ProposalSpeakerAccessGet);
 openapi.patch("/:token/participation", ProposalSpeakerAccessParticipationPatch);
 openapi.patch("/:token/profile", ProposalSpeakerAccessProfilePatch);
+openapi.get("/:token/identities", ProposalSpeakerIdentitiesGet);
 openapi.route("/:token", token_Router);
 app.all("/:token", () => methodNotAllowed(["GET"]));
 app.all("/:token/participation", () => methodNotAllowed(["PATCH"]));

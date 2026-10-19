@@ -1,0 +1,251 @@
+{
+  "sourcePath": "content/events/2023/post-quantum-cryptography-conference/index.md",
+  "sourceDigest": "c01aae59982e47a6b9bbd3fa64b72bee52d62ae58845b2d55a1ed97ac7c18c41",
+  "publicBasePath": "/content-media/events/2023/post-quantum-cryptography-conference",
+  "publicBaseVerification": "content-relative event asset directory; /content-media publication prefix; exact publicBasePath match",
+  "presentationUrls": {
+    "pkic-pqcc-welcome-paul-van-brouwershaven.pdf": "/content-media/events/2023/post-quantum-cryptography-conference/pkic-pqcc-welcome-paul-van-brouwershaven.pdf",
+    "pkic-pqcc-pqc-standardization-status-rene-peralta-nist.pdf": "/content-media/events/2023/post-quantum-cryptography-conference/pkic-pqcc-pqc-standardization-status-rene-peralta-nist.pdf",
+    "pkic-pqcc-pqc-at-ietf-mike-ounsworth-entrust.pdf": "/content-media/events/2023/post-quantum-cryptography-conference/pkic-pqcc-pqc-at-ietf-mike-ounsworth-entrust.pdf",
+    "pkic-pqcc-pqc-at-etsi-matthew-campagna-etsi-aws.pdf": "/content-media/events/2023/post-quantum-cryptography-conference/pkic-pqcc-pqc-at-etsi-matthew-campagna-etsi-aws.pdf",
+    "pkic-pqcc-mixed-chains-sebastian-paul-bosch.pdf": "/content-media/events/2023/post-quantum-cryptography-conference/pkic-pqcc-mixed-chains-sebastian-paul-bosch.pdf",
+    "pkic-pqcc-how-gc-preparing-for-pqc-melanie-anderson-jonathan-hammell-canadian-government.pdf": "/content-media/events/2023/post-quantum-cryptography-conference/pkic-pqcc-how-gc-preparing-for-pqc-melanie-anderson-jonathan-hammell-canadian-government.pdf",
+    "pkic-pqcc-hapkido-gabriele-spini-tno.pdf": "/content-media/events/2023/post-quantum-cryptography-conference/pkic-pqcc-hapkido-gabriele-spini-tno.pdf",
+    "pkic-pqcc-summary-and-closing-paul-van-brouwershaven.pdf": "/content-media/events/2023/post-quantum-cryptography-conference/pkic-pqcc-summary-and-closing-paul-van-brouwershaven.pdf"
+  },
+  "recordingUrls": {
+    "o-1sSF_xP5Q?start=1499": "https://www.youtube.com/watch?v=o-1sSF_xP5Q&start=1499",
+    "o-1sSF_xP5Q?start=2132": "https://www.youtube.com/watch?v=o-1sSF_xP5Q&start=2132",
+    "o-1sSF_xP5Q?start=5713": "https://www.youtube.com/watch?v=o-1sSF_xP5Q&start=5713",
+    "o-1sSF_xP5Q?start=8338": "https://www.youtube.com/watch?v=o-1sSF_xP5Q&start=8338",
+    "o-1sSF_xP5Q?start=10682": "https://www.youtube.com/watch?v=o-1sSF_xP5Q&start=10682",
+    "o-1sSF_xP5Q?start=16437": "https://www.youtube.com/watch?v=o-1sSF_xP5Q&start=16437",
+    "o-1sSF_xP5Q?start=18196": "https://www.youtube.com/watch?v=o-1sSF_xP5Q&start=18196",
+    "o-1sSF_xP5Q?start=19903": "https://www.youtube.com/watch?v=o-1sSF_xP5Q&start=19903",
+    "o-1sSF_xP5Q?start=21092": "https://www.youtube.com/watch?v=o-1sSF_xP5Q&start=21092",
+    "o-1sSF_xP5Q?start=23574": "https://www.youtube.com/watch?v=o-1sSF_xP5Q&start=23574"
+  },
+  "mediaDigests": {
+    "pkic-pqcc-welcome-paul-van-brouwershaven.pdf": "5fa2fb3f5c0cc521a21ddd3fb79d15f22d203e4156f69d77c0a1333b111a771e",
+    "pkic-pqcc-pqc-standardization-status-rene-peralta-nist.pdf": "37762c5fe84ec80d956d71936415baf32cc2ac268a7eb39d9266b0c95b429ae7",
+    "pkic-pqcc-pqc-at-ietf-mike-ounsworth-entrust.pdf": "ff477765bcb4c47fff4a1ee8e153ee270962b093b20a034aca1bf1aa8a59b432",
+    "pkic-pqcc-pqc-at-etsi-matthew-campagna-etsi-aws.pdf": "e3a56bb67bbf10a78b02e7fa444e3d59d51fece8cdeaec2df267dd7ce6dd9c0e",
+    "pkic-pqcc-mixed-chains-sebastian-paul-bosch.pdf": "a0a981a026906d63e8844a8c2b7c4715b7dbf7db9eab8597bbf4a09f97c62958",
+    "pkic-pqcc-how-gc-preparing-for-pqc-melanie-anderson-jonathan-hammell-canadian-government.pdf": "1829798c612358f8323f23aba165de6be1346ada2eee6a5b552386aae6416650",
+    "pkic-pqcc-hapkido-gabriele-spini-tno.pdf": "54e0e697a56614c540574a6a9a69ad4398cd5de5ef84cf518b71e491c2f2548b",
+    "pkic-pqcc-summary-and-closing-paul-van-brouwershaven.pdf": "34e7f970f5ce35f2f531c7272f6ebf7d3a0f56a87fe3fd7e595d9cc1d03991a0"
+  },
+  "unresolved": [],
+  "assets": [
+    {
+      "kind": "presentation",
+      "authoredReference": "pkic-pqcc-welcome-paul-van-brouwershaven.pdf",
+      "relativePath": "pkic-pqcc-welcome-paul-van-brouwershaven.pdf",
+      "publicUrl": "/content-media/events/2023/post-quantum-cryptography-conference/pkic-pqcc-welcome-paul-van-brouwershaven.pdf",
+      "sourceDigest": "5fa2fb3f5c0cc521a21ddd3fb79d15f22d203e4156f69d77c0a1333b111a771e",
+      "bytes": 903915
+    },
+    {
+      "kind": "presentation",
+      "authoredReference": "pkic-pqcc-pqc-standardization-status-rene-peralta-nist.pdf",
+      "relativePath": "pkic-pqcc-pqc-standardization-status-rene-peralta-nist.pdf",
+      "publicUrl": "/content-media/events/2023/post-quantum-cryptography-conference/pkic-pqcc-pqc-standardization-status-rene-peralta-nist.pdf",
+      "sourceDigest": "37762c5fe84ec80d956d71936415baf32cc2ac268a7eb39d9266b0c95b429ae7",
+      "bytes": 646791
+    },
+    {
+      "kind": "presentation",
+      "authoredReference": "pkic-pqcc-pqc-at-ietf-mike-ounsworth-entrust.pdf",
+      "relativePath": "pkic-pqcc-pqc-at-ietf-mike-ounsworth-entrust.pdf",
+      "publicUrl": "/content-media/events/2023/post-quantum-cryptography-conference/pkic-pqcc-pqc-at-ietf-mike-ounsworth-entrust.pdf",
+      "sourceDigest": "ff477765bcb4c47fff4a1ee8e153ee270962b093b20a034aca1bf1aa8a59b432",
+      "bytes": 1059170
+    },
+    {
+      "kind": "presentation",
+      "authoredReference": "pkic-pqcc-pqc-at-etsi-matthew-campagna-etsi-aws.pdf",
+      "relativePath": "pkic-pqcc-pqc-at-etsi-matthew-campagna-etsi-aws.pdf",
+      "publicUrl": "/content-media/events/2023/post-quantum-cryptography-conference/pkic-pqcc-pqc-at-etsi-matthew-campagna-etsi-aws.pdf",
+      "sourceDigest": "e3a56bb67bbf10a78b02e7fa444e3d59d51fece8cdeaec2df267dd7ce6dd9c0e",
+      "bytes": 1067646
+    },
+    {
+      "kind": "presentation",
+      "authoredReference": "pkic-pqcc-mixed-chains-sebastian-paul-bosch.pdf",
+      "relativePath": "pkic-pqcc-mixed-chains-sebastian-paul-bosch.pdf",
+      "publicUrl": "/content-media/events/2023/post-quantum-cryptography-conference/pkic-pqcc-mixed-chains-sebastian-paul-bosch.pdf",
+      "sourceDigest": "a0a981a026906d63e8844a8c2b7c4715b7dbf7db9eab8597bbf4a09f97c62958",
+      "bytes": 1972213
+    },
+    {
+      "kind": "presentation",
+      "authoredReference": "pkic-pqcc-how-gc-preparing-for-pqc-melanie-anderson-jonathan-hammell-canadian-government.pdf",
+      "relativePath": "pkic-pqcc-how-gc-preparing-for-pqc-melanie-anderson-jonathan-hammell-canadian-government.pdf",
+      "publicUrl": "/content-media/events/2023/post-quantum-cryptography-conference/pkic-pqcc-how-gc-preparing-for-pqc-melanie-anderson-jonathan-hammell-canadian-government.pdf",
+      "sourceDigest": "1829798c612358f8323f23aba165de6be1346ada2eee6a5b552386aae6416650",
+      "bytes": 849000
+    },
+    {
+      "kind": "presentation",
+      "authoredReference": "pkic-pqcc-hapkido-gabriele-spini-tno.pdf",
+      "relativePath": "pkic-pqcc-hapkido-gabriele-spini-tno.pdf",
+      "publicUrl": "/content-media/events/2023/post-quantum-cryptography-conference/pkic-pqcc-hapkido-gabriele-spini-tno.pdf",
+      "sourceDigest": "54e0e697a56614c540574a6a9a69ad4398cd5de5ef84cf518b71e491c2f2548b",
+      "bytes": 1453783
+    },
+    {
+      "kind": "presentation",
+      "authoredReference": "pkic-pqcc-summary-and-closing-paul-van-brouwershaven.pdf",
+      "relativePath": "pkic-pqcc-summary-and-closing-paul-van-brouwershaven.pdf",
+      "publicUrl": "/content-media/events/2023/post-quantum-cryptography-conference/pkic-pqcc-summary-and-closing-paul-van-brouwershaven.pdf",
+      "sourceDigest": "34e7f970f5ce35f2f531c7272f6ebf7d3a0f56a87fe3fd7e595d9cc1d03991a0",
+      "bytes": 203867
+    }
+  ],
+  "document": {
+    "format": "pkic-agenda",
+    "version": 1,
+    "source": {
+      "kind": "hugo",
+      "eventRef": "content/events/2023/post-quantum-cryptography-conference/index.md",
+      "exportedAt": "2026-10-04T08:13:29.222Z",
+      "sourceDigest": "c01aae59982e47a6b9bbd3fa64b72bee52d62ae58845b2d55a1ed97ac7c18c41"
+    },
+    "people": [
+      {
+        "ref": "Paul van Brouwershaven",
+        "label": "Paul van Brouwershaven",
+        "canonicalUserId": null,
+        "actingIdentityId": null,
+        "role": "speaker"
+      }
+    ],
+    "rooms": [
+      {
+        "ref": "plenary",
+        "label": "plenary",
+        "canonicalRoomId": null
+      }
+    ],
+    "occurrences": [
+      {
+        "ref": "legacy:73d96be446f2779f7c5befb7dd314f702fb06f90e5126e3139f1671fdfce10ae",
+        "sourceKey": "legacy:73d96be446f2779f7c5befb7dd314f702fb06f90e5126e3139f1671fdfce10ae",
+        "sourceAnchor": null,
+        "sourcePath": "content/events/2023/post-quantum-cryptography-conference/index.md",
+        "sourceDigest": "c01aae59982e47a6b9bbd3fa64b72bee52d62ae58845b2d55a1ed97ac7c18c41",
+        "fields": {
+          "title": "Welcome",
+          "description": "",
+          "kind": "session",
+          "track": null,
+          "visibility": "public",
+          "admissionPolicy": "preference",
+          "capacity": null,
+          "remoteCapacity": null
+        },
+        "timing": {
+          "timeZone": "America/Toronto",
+          "authoredDate": "2023-03-03",
+          "authoredStart": "9:00",
+          "startAt": "2023-03-03T14:00:00.000Z",
+          "endAt": "2023-03-03T14:15:00.000Z",
+          "endSource": "next_start",
+          "transitionMinutes": 0,
+          "transitionSource": "explicit"
+        },
+        "roomRefs": ["plenary"],
+        "personRefs": ["Paul van Brouwershaven"],
+        "media": [
+          {
+            "kind": "presentation",
+            "authoredReference": "pkic-pqcc-welcome-paul-van-brouwershaven.pdf",
+            "publicUrl": "/content-media/events/2023/post-quantum-cryptography-conference/pkic-pqcc-welcome-paul-van-brouwershaven.pdf",
+            "sourceDigest": "5fa2fb3f5c0cc521a21ddd3fb79d15f22d203e4156f69d77c0a1333b111a771e",
+            "bytes": 903915
+          },
+          {
+            "kind": "recording",
+            "authoredReference": "o-1sSF_xP5Q?start=1499",
+            "publicUrl": "https://www.youtube.com/watch?v=o-1sSF_xP5Q&start=1499",
+            "sourceDigest": null
+          }
+        ],
+        "archive": {
+          "sessionSlug": null,
+          "legacyPaths": [],
+          "prerequisites": "",
+          "sourceDecisions": [],
+          "appearances": [],
+          "archivalCredits": [],
+          "archivalTiming": null,
+          "materials": [],
+          "legacyFragments": [
+            {
+              "sourcePath": "content/events/2023/post-quantum-cryptography-conference/index.md",
+              "sourceDigest": "c01aae59982e47a6b9bbd3fa64b72bee52d62ae58845b2d55a1ed97ac7c18c41",
+              "sourceLocator": "legacy:73d96be446f2779f7c5befb7dd314f702fb06f90e5126e3139f1671fdfce10ae",
+              "authoredDate": "2023-03-03",
+              "authoredStart": "9:00",
+              "authoredTitle": "Welcome",
+              "roomRef": "plenary",
+              "roomId": null,
+              "anchor": "sessionModal-900-0-welcome",
+              "kind": "dialog"
+            },
+            {
+              "sourcePath": "content/events/2023/post-quantum-cryptography-conference/index.md",
+              "sourceDigest": "c01aae59982e47a6b9bbd3fa64b72bee52d62ae58845b2d55a1ed97ac7c18c41",
+              "sourceLocator": "legacy:73d96be446f2779f7c5befb7dd314f702fb06f90e5126e3139f1671fdfce10ae",
+              "authoredDate": "2023-03-03",
+              "authoredStart": "9:00",
+              "authoredTitle": "Welcome",
+              "roomRef": "plenary",
+              "roomId": null,
+              "anchor": "sessionModal-900-0-welcome-label",
+              "kind": "dialog_label"
+            }
+          ],
+          "legacyDownloads": [
+            {
+              "sourcePath": "content/events/2023/post-quantum-cryptography-conference/index.md",
+              "sourceDigest": "c01aae59982e47a6b9bbd3fa64b72bee52d62ae58845b2d55a1ed97ac7c18c41",
+              "sourceLocator": "legacy:73d96be446f2779f7c5befb7dd314f702fb06f90e5126e3139f1671fdfce10ae",
+              "url": "/events/2023/post-quantum-cryptography-conference/pkic-pqcc-welcome-paul-van-brouwershaven.pdf",
+              "targetUrl": "/content-media/events/2023/post-quantum-cryptography-conference/pkic-pqcc-welcome-paul-van-brouwershaven.pdf",
+              "pdfDigest": "5fa2fb3f5c0cc521a21ddd3fb79d15f22d203e4156f69d77c0a1333b111a771e",
+              "pdfBytes": 903915
+            }
+          ]
+        }
+      }
+    ]
+  },
+  "preparationUnresolved": [
+    {
+      "sourceKey": "legacy:73d96be446f2779f7c5befb7dd314f702fb06f90e5126e3139f1671fdfce10ae",
+      "date": "2023-03-03",
+      "time": "9:00",
+      "title": "Welcome",
+      "kind": "speaker",
+      "value": "Paul van Brouwershaven"
+    },
+    {
+      "sourceKey": "legacy:73d96be446f2779f7c5befb7dd314f702fb06f90e5126e3139f1671fdfce10ae",
+      "date": "2023-03-03",
+      "time": "9:00",
+      "title": "Welcome",
+      "kind": "historical_representation",
+      "value": "Paul van Brouwershaven",
+      "message": "Explicitly map the canonical person, acting identity (or null) and historical-credit approval time."
+    },
+    {
+      "sourceKey": "legacy:73d96be446f2779f7c5befb7dd314f702fb06f90e5126e3139f1671fdfce10ae",
+      "date": "2023-03-03",
+      "time": "9:00",
+      "title": "Welcome",
+      "kind": "room",
+      "value": "plenary"
+    }
+  ]
+}

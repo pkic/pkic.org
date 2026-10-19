@@ -1,8 +1,9 @@
-import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
-import { administratorGrants } from "./helpers/administrator";
+import { declineSpeakerParticipation } from "../functions/_lib/services/proposal-speaker-decline";
+import { selectIndividualSpeakerRepresentation } from "./helpers/proposal-proof";
+import { ADMINISTRATOR_FIXTURE_USER_SQL, administratorGrants } from "./helpers/administrator";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import type { DatabaseLike } from "../functions/_lib/types";
 import {
   addProposalSpeaker,
@@ -10,13 +11,10 @@ import {
   finalizeProposalDecision,
   getProposalByManageToken,
 } from "../functions/_lib/services/proposals";
-import {
-  confirmSpeakerParticipation,
-  declineSpeakerParticipation,
-} from "../functions/_lib/services/proposals-speaker-profile";
+import { confirmSpeakerParticipation } from "../functions/_lib/services/proposals-speaker-profile";
 import {
   getProposerManagedSpeakerContext,
-  updateProposalSpeakerByProposer,
+  updateProposalSpeakerRoleByProposer,
 } from "../functions/_lib/services/proposer-speaker-profile";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll, registrationAdmissionRole } from "./helpers/context";
@@ -161,6 +159,7 @@ describe("proposal speaker capacity conflicts", () => {
 
     await expect(
       declineSpeakerParticipation(racingDb, speakerManageToken, env.INTERNAL_SIGNING_SECRET!, {
+        appBaseUrl: "https://app.test",
         reason: "Unavailable",
       }),
     ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
@@ -176,6 +175,13 @@ describe("proposal speaker capacity conflicts", () => {
   it("rolls back consent when confirmation loses to a concurrent decline", async () => {
     const { proposalId, coSpeakerUserId, speakerManageToken } =
       await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
+    await selectIndividualSpeakerRepresentation({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email: "cospeaker@example.test",
+      consents: [{ termKey: "speaker-terms", version: "v1" }],
+      speakerManagementToken: speakerManageToken,
+    });
     const racingDb = raceBeforeFirstBatch(async () => {
       await env.DB.prepare("UPDATE proposal_speakers SET status = 'declined' WHERE proposal_id = ? AND user_id = ?")
         .bind(proposalId, coSpeakerUserId)
@@ -206,6 +212,13 @@ describe("proposal speaker capacity conflicts", () => {
   it("does not restore capacity or consent when confirmation loses to concurrent removal", async () => {
     const { proposalId, coSpeakerUserId, speakerManageToken } =
       await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
+    await selectIndividualSpeakerRepresentation({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email: "cospeaker@example.test",
+      consents: [{ termKey: "speaker-terms", version: "v1" }],
+      speakerManagementToken: speakerManageToken,
+    });
     const registrationId = await seedAcceptedSpeakerRegistration({
       eventId,
       proposalId,
@@ -249,6 +262,13 @@ describe("proposal speaker capacity conflicts", () => {
   it("reconciles accepted-proposal capacity when a speaker confirms", async () => {
     const { proposalId, coSpeakerUserId, speakerManageToken } =
       await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
+    await selectIndividualSpeakerRepresentation({
+      environment: env,
+      eventSlug: "pqc-2026",
+      email: "cospeaker@example.test",
+      consents: [{ termKey: "speaker-terms", version: "v1" }],
+      speakerManagementToken: speakerManageToken,
+    });
     const registrationId = await seedAcceptedSpeakerRegistration({
       eventId,
       proposalId,
@@ -285,6 +305,7 @@ describe("proposal speaker capacity conflicts", () => {
 
     await expect(
       declineSpeakerParticipation(racingDb, speakerManageToken, env.INTERNAL_SIGNING_SECRET!, {
+        appBaseUrl: "https://app.test",
         reason: "Unavailable",
       }),
     ).rejects.toMatchObject({ status: 409, code: "REGISTRATION_CHANGED" });
@@ -313,7 +334,7 @@ describe("proposal speaker capacity conflicts", () => {
     });
 
     await expect(
-      updateProposalSpeakerByProposer(racingDb, { proposal, speaker: context.speaker, patch: { role: "panelist" } }),
+      updateProposalSpeakerRoleByProposer(racingDb, { proposal, speaker: context.speaker, role: "panelist" }),
     ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
     await expect(
       queryAll(env.DB, "SELECT role FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
@@ -416,11 +437,13 @@ describe("proposal speaker capacity conflicts", () => {
 
     const racingDb = raceBeforeFirstBatch(async () => {
       await declineSpeakerParticipation(env.DB, secondSpeakerToken, env.INTERNAL_SIGNING_SECRET!, {
+        appBaseUrl: "https://app.test",
         reason: "Concurrent schedule conflict",
       });
     });
     await expect(
       declineSpeakerParticipation(racingDb, speakerManageToken, env.INTERNAL_SIGNING_SECRET!, {
+        appBaseUrl: "https://app.test",
         reason: "Primary schedule conflict",
       }),
     ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
@@ -458,6 +481,7 @@ describe("proposal speaker capacity conflicts", () => {
     });
     await expect(
       declineSpeakerParticipation(racingDb, speakerManageToken, env.INTERNAL_SIGNING_SECRET!, {
+        appBaseUrl: "https://app.test",
         reason: "Primary schedule conflict",
       }),
     ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });

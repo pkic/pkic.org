@@ -37,6 +37,7 @@ import {
   proposalReviewWriteResponseSchema,
 } from "./proposal-reviews";
 import { httpCapabilityUrlSchema } from "./urls";
+import { independentCapacityDecisionResponseSchema, independentCapacityDecisionSchema } from "./independent-capacity";
 import { eventProposalDetailResponseSchema } from "./event-proposals";
 import { proposalCancelAuth, proposalManageAuth, proposalReadAuth, proposalScoreAuth } from "./proposal-contract-auth";
 
@@ -86,7 +87,7 @@ export const proposalPatchRouteSchema = {
   tags: ["Proposal management"],
   summary: "Update proposal title or abstract",
   description:
-    "Updates editable proposal text fields. Ordinary proposals and title changes require proposals:manage. Accepted-proposal abstract changes require the event-scoped proposals:edit_accepted_abstract capability; changing both fields requires both capabilities.",
+    "Updates editable proposal text fields. Ordinary proposals require proposals:manage. Accepted-proposal title and abstract changes require the same event-scoped proposals:edit_accepted_abstract capability.",
   "x-pkic-auth": {
     required: true,
     scopesAnyOf: [["proposals:manage"], ["proposals:edit_accepted_abstract"]],
@@ -488,5 +489,30 @@ export const proposalSpeakersReminderRouteSchema = {
       description: "Reminders queued.",
       content: { "application/json": { schema: proposalSpeakerRemindersResponseSchema } },
     },
+  },
+};
+
+export const proposalSpeakerDisclosureReviewRouteSchema = {
+  tags: ["Proposal speakers"],
+  summary: "Review an independent speaker's disclosure",
+  "x-pkic-auth": proposalManageAuth,
+  description:
+    "Marks the speaker's current independence disclosure verified, or requests organizational representation and emails the speaker their representation link. Audited.",
+  request: {
+    params: proposalSpeakerIdParamsSchema,
+    body: {
+      content: { "application/json": { schema: independentCapacityDecisionSchema } },
+      required: true,
+    },
+  },
+  responses: {
+    "200": {
+      description: "The recorded review.",
+      content: { "application/json": { schema: independentCapacityDecisionResponseSchema } },
+    },
+    "401": { description: "Authentication required." },
+    "403": { description: "The actor lacks proposal management permission." },
+    "404": { description: "Proposal, speaker or current disclosure not found." },
+    "409": { description: "The disclosure changed while it was reviewed." },
   },
 };

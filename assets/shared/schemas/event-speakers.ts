@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
+import { independentCapacityReviewStatusSchema } from "./independent-capacity";
 import { listQuerySchema, paginatedResponseSchema, sortColumnSchemaWithDefault } from "./pagination";
 import { registrationDayStateSchema } from "./event-registrations";
 import { registrationLifecycleStatusSchema, attendanceTypeSchema } from "./registration";
@@ -21,14 +22,18 @@ export const eventSpeakersListQuerySchema = listQuerySchema(EVENT_SPEAKER_SORT_C
 export type EventSpeakersListQuery = z.infer<typeof eventSpeakersListQuerySchema>;
 
 export const eventProposalSpeakerSchema = proposalSpeakerProfileSchema
-  .pick({ firstName: true, lastName: true, organizationName: true, status: true })
+  .pick({ email: true, firstName: true, lastName: true, organizationName: true, status: true })
   .extend({
     id: databaseIdSchema,
     proposalId: databaseIdSchema,
     proposalTitle: z.string(),
+    /** The speaker's portrait for the roster row, as a same-origin path; null without one. */
+    headshotUrl: z.string().nullable(),
     registrationStatus: registrationLifecycleStatusSchema.nullable(),
     attendanceType: attendanceTypeSchema.nullable(),
     days: z.array(registrationDayStateSchema),
+    /** Set only for a speaker taking part as an individual: where their independence disclosure stands. */
+    independentCapacityStatus: independentCapacityReviewStatusSchema.nullable(),
   });
 export type EventProposalSpeaker = z.infer<typeof eventProposalSpeakerSchema>;
 

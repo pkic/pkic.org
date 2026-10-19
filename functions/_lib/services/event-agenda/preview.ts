@@ -1,0 +1,65 @@
+import { storedAgendaSnapshotSchema } from "../../../../assets/shared/schemas/event-agenda-stored";
+import type { CountryCode } from "../../../../assets/shared/countries";
+import { agendaSnapshotSchema, type AgendaSnapshot } from "../../../../assets/shared/schemas/event-agenda";
+import type { DatabaseLike } from "../../types";
+import { first } from "../../db/queries";
+import { AppError } from "../../errors";
+import { projectLiveAgendaMaterials } from "../site-agenda-material-eligibility";
+import { getAgenda } from "./read";
+import { preparePublicAgendaSnapshot } from "./public-snapshot";
+import { publicAgendaProjection } from "./public-projection";
+import { withSpeakerProfileSlugs } from "../people/profile-addresses";
+import { withSessionPageSlugs } from "./session-page-slugs";
+import { withAgendaSpeakerOrganizations } from "./speaker-organizations";
+
+/**
+ * Read-only: public rendering never activates or approves the draft being reviewed.
+ * `privateOccurrenceIds` admits named private sessions into one participant's projection.
+ */
+export async function previewAgenda(
+  db: DatabaseLike,
+  eventId: string,
+  eventSlug: string,
+  revision: "draft" | "approved",
+  privateOccurrenceIds: ReadonlySet<string> = new Set(),
+): Promise<AgendaSnapshot> {
+  const event = await first<{
+    base_path: string | null;
+    visibility: string;
+    city: string | null;
+    country: CountryCode | null;
+  }>(db, "SELECT base_path,visibility,city,country FROM events WHERE id=?", [eventId]);
+  let snapshot: AgendaSnapshot;
+  if (revision === "approved") {
+    const frozen = await first<{ snapshot_json: string }>(
+      db,
+      "SELECT publication.snapshot_json FROM event_agenda_publications publication JOIN event_agenda_state state ON state.event_id=publication.event_id AND state.published_revision=publication.revision WHERE publication.event_id=?",
+      [eventId],
+    );
+    if (!frozen)
+      throw new AppError(404, "AGENDA_APPROVED_REVISION_NOT_FOUND", "No agenda revision has been approved yet");
+    snapshot = storedAgendaSnapshotSchema.parse(JSON.parse(frozen.snapshot_json));
+  } else {
+    const draft = await getAgenda(db, eventId, eventSlug);
+    snapshot = { ...preparePublicAgendaSnapshot(draft, draft.revision), publishedRevision: draft.publishedRevision };
+  }
+  return agendaSnapshotSchema.parse(
+    await withSessionPageSlugs(
+      db,
+      eventId,
+      await withSpeakerProfileSlugs(
+        db,
+        publicAgendaProjection(
+          await withAgendaSpeakerOrganizations(db, await projectLiveAgendaMaterials(db, eventId, snapshot)),
+          {
+            basePath: event?.base_path ?? null,
+            visibility: event?.visibility ?? "invitation_only",
+            city: event?.city ?? null,
+            country: event?.country ?? null,
+          },
+          privateOccurrenceIds,
+        ),
+      ),
+    ),
+  );
+}
