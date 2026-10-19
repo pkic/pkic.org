@@ -2,7 +2,7 @@
 /**
  * The event registrations list.
  *
- * This surface carried more signal in colour than any other in the portal: a
+ * This surface carried more signal in color than any other in the portal: a
  * green tick with a `title` for sponsor consent, four tinted numbers in the
  * stats strip, and a `<span>` wearing button classes in the last column. Two
  * of its four filters had no accessible name at all. What is asserted here is
@@ -47,6 +47,8 @@ function registration(overrides: Partial<EventRegistrationSummary> = {}): Record
     display_name: "Ada Lovelace",
     headshot_url: null,
     organization_name: null,
+    personal_email: false,
+    waitlist_handled_last: false,
     job_title: null,
     referral_code: null,
     status: "registered",
@@ -98,8 +100,8 @@ async function settle(): Promise<void> {
 /** Every filter control's accessible name, however it was given one. */
 function filterNames(root: ParentNode): string[] {
   return [...root.querySelectorAll("select")].map((select) => {
-    const labelled = select.id ? root.querySelector(`label[for="${select.id}"]`)?.textContent : null;
-    return labelled ?? select.getAttribute("aria-label") ?? "";
+    const labeled = select.id ? root.querySelector(`label[for="${select.id}"]`)?.textContent : null;
+    return labeled ?? select.getAttribute("aria-label") ?? "";
   });
 }
 
@@ -283,7 +285,7 @@ describe("event registrations list", () => {
     const strip = page.querySelector("[role='group']");
     expect(strip?.getAttribute("aria-label")).toBe("Registration totals");
     // Each figure is a card whose label says what it counts (#110); the tone
-    // a card wears repeats the label for readers who see colour and is not
+    // a card wears repeats the label for readers who see color and is not
     // what says which figure is which.
     const figures = Object.fromEntries(
       [...(strip?.querySelectorAll(".pk-stat-card") ?? [])].map((card) => [
@@ -291,7 +293,7 @@ describe("event registrations list", () => {
         card.querySelector(".pk-stat-card__value")?.textContent?.trim(),
       ]),
     );
-    expect(figures).toMatchObject({ registered: "1", "pending confirmation": "2", "in-person": "1", bounced: "3" });
+    expect(figures).toMatchObject({ Registered: "1", "Pending confirmation": "2", "In-person": "1", Bounced: "3" });
     expect(strip?.querySelector("[class*='text-']")).toBeNull();
   });
 

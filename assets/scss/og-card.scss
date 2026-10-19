@@ -18,15 +18,7 @@
 // (top stripe and footer bottom edge) without duplicating the color stops.
 // Uses the canonical SCSS tokens from _theme-and-bootstrap.
 %rainbow-gradient {
-  background: linear-gradient(
-    90deg,
-    $green 0%,
-    $teal 18%,
-    $blue 46%,
-    $yellow 78%,
-    $orange 89%,
-    $red 100%
-  );
+  background: linear-gradient(90deg, $green 0%, $teal 18%, $blue 46%, $yellow 78%, $orange 89%, $red 100%);
 }
 
 // ── Canvas sizing ─────────────────────────────────────────────────────────
@@ -56,10 +48,7 @@ body {
   padding: 0 !important;
   height: 100%;
   perspective: 600px;
-  background: var(
-    --og-theme-gradient,
-    linear-gradient(135deg, #0a1f14 0%, #0d3d24 55%, #0a2f40 100%)
-  );
+  background: var(--og-theme-gradient, linear-gradient(135deg, #0a1f14 0%, #0d3d24 55%, #0a2f40 100%));
 }
 
 // Brand watermark — large logo in the background.
@@ -72,8 +61,7 @@ body {
   top: 50%;
   left: 40%;
   // Uses the per-page --og-watermark-url var (WG icon, custom override, or default logo)
-  background: var(--og-watermark-url, url("/img/logo.svg")) 28% 18% / 52% auto
-    no-repeat;
+  background: var(--og-watermark-url, url("/img/logo.svg")) 28% 18% / 52% auto no-repeat;
   opacity: 0.015;
   transform: scale(2);
   transform-origin: center center;
@@ -93,11 +81,7 @@ body {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(
-      ellipse at 6% 30%,
-      rgba(255, 255, 255, 0.09) 0%,
-      transparent 45%
-    ),
+    radial-gradient(ellipse at 6% 30%, rgba(255, 255, 255, 0.09) 0%, transparent 45%),
     radial-gradient(
       ellipse at 88% 85%,
       color-mix(in srgb, var(--page-accent, #198754) 28%, transparent) 0%,
@@ -113,12 +97,7 @@ body {
   position: absolute;
   inset: 0;
   background-image:
-    linear-gradient(
-      105deg,
-      rgba(4, 7, 13, 0.82) 0%,
-      rgba(4, 7, 13, 0.38) 55%,
-      rgba(4, 7, 13, 0.6) 100%
-    ),
+    linear-gradient(105deg, rgba(4, 7, 13, 0.82) 0%, rgba(4, 7, 13, 0.38) 55%, rgba(4, 7, 13, 0.6) 100%),
     var(--og-hero-bg-url);
   background-size: auto, cover;
   background-position: center, center;
@@ -128,7 +107,7 @@ body {
 
 // ── Hero inner grid ───────────────────────────────────────────────────────
 // Safe-zone padding: 84px horizontal keeps content away from platform crops.
-// align-content centres the block vertically in the hero height.
+// align-content centers the block vertically in the hero height.
 .og-hero-inner {
   position: relative;
   z-index: 2;
@@ -147,7 +126,7 @@ body {
 }
 
 // ── Kicker / eyebrow ─────────────────────────────────────────────────────
-// Override the site's small grey kicker with a coloured pill badge —
+// Override the site's small grey kicker with a colored pill badge —
 // it adds immediate hierarchy and brings the page accent into the composition.
 .pkic-page-hero-kicker {
   display: inline-flex;
@@ -164,7 +143,7 @@ body {
   color: rgba(255, 255, 255, 0.92) !important;
   margin-bottom: 20px !important;
 
-  // Accent dot — uses the page accent colour for an instant colour pop
+  // Accent dot — uses the page accent color for an instant color pop
   &::before {
     content: "";
     width: 7px;
@@ -226,7 +205,7 @@ body {
   background: rgba(255, 255, 255, 0.08);
   border: 1px solid rgba(255, 255, 255, 0.15);
   padding: 32px;
-  // Warm shadow + subtle accent glow ties the panel to the page colour
+  // Warm shadow + subtle accent glow ties the panel to the page color
   box-shadow:
     0 32px 72px rgba(0, 0, 0, 0.5),
     0 0 0 1px rgba(255, 255, 255, 0.06),
@@ -459,4 +438,8 @@ body {
   height: 36px;
   width: auto;
   display: block;
+}
+
+.pk-member-wall-avatar {
+  --pk-avatar-size: 1.75rem;
 }

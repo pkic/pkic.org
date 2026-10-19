@@ -15,7 +15,7 @@ import {
   labelNames,
   namedGroup,
   typeInto,
-} from "./helpers/labelled-control";
+} from "./helpers/labeled-control";
 import { rowActionControlNames, runRowAction } from "./helpers/row-actions";
 
 const navigate = vi.fn();
@@ -69,8 +69,9 @@ async function pickUser(container: HTMLElement, email: string): Promise<void> {
     input.dispatchEvent(new Event("input", { bubbles: true }));
   });
   await act(async () => new Promise((resolve) => setTimeout(resolve, 275)));
+  // A result names the person and their organization; the address is what the search matched.
   const option = [...container.querySelectorAll<HTMLButtonElement>("button")].find((button) =>
-    button.textContent?.includes(email),
+    button.textContent?.includes("Selected PersonExample Member"),
   );
   expect(option).toBeDefined();
   void act(() => option!.click());
@@ -386,7 +387,7 @@ describe("portal group management resources", () => {
     expect(rowActionControlNames(container)).toEqual(["Actions for Member Person"]);
 
     // The search box is reached through its own `for`/`id` pair, so this
-    // lookup fails exactly when the labelling does.
+    // lookup fails exactly when the labeling does.
     const search = controlFor(container, "Search members");
     await typeInto(search, "member@example.test");
     await settle();
@@ -497,7 +498,7 @@ describe("portal group management resources", () => {
     await settle();
     await settle();
 
-    // The refusal is announced rather than left as coloured text, and it is a
+    // The refusal is announced rather than left as colored text, and it is a
     // sentence rather than the transport's own phrasing.
     const alert = [...container.querySelectorAll('[role="alert"]')].find((node) =>
       node.textContent?.includes("You don't have access to this"),
@@ -548,7 +549,14 @@ describe("portal group management resources", () => {
     await settle();
 
     expect(container.textContent).toContain("Roster Person");
-    expect(container.textContent).toContain("Roster Organization");
+    expect(container.textContent?.match(/Roster Organization/g)).toHaveLength(1);
+    const person = container.querySelector<HTMLButtonElement>(".pk-person-cell-preview")!;
+    await act(() => person.click());
+    expect(container.querySelector('[role="dialog"][aria-label="About Roster Person"]')).not.toBeNull();
+    await act(() => {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true }));
+    });
+    expect(container.querySelector('[role="dialog"]')).toBeNull();
     // No management affordances: no add-person action and no row commands at
     // all — neither inline buttons nor menus.
     expect([...container.querySelectorAll("button")].some((button) => button.textContent === "Add person")).toBe(false);

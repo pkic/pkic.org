@@ -1,0 +1,47 @@
+/* The phone's first tab: the session's people, then the ready-made messages, with tight gutters. */
+@layer components {
+  .pk-studio-home {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-2);
+    padding: var(--pk-2);
+  }
+  .pk-studio-home .pk-live-speakers.pk-live-speakers {
+    padding: 0;
+  }
+  /* Ready-made messages as small chips, two to a row, each marked with its tone. */
+  .pk-studio-home__chips {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--pk-1);
+  }
+  .pk-studio-home__chip.pk-btn {
+    justify-content: flex-start;
+    gap: var(--pk-1);
+    min-inline-size: 0;
+    min-block-size: 2.75rem;
+    padding-inline: var(--pk-2);
+    -webkit-touch-callout: none;
+    user-select: none;
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface-sunk);
+    color: var(--pk-ink);
+    font-size: var(--pk-text-xs);
+    font-weight: 500;
+    text-align: start;
+  }
+  .pk-studio-home__chip.pk-btn::before {
+    content: "";
+    flex: none;
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 50%;
+    background: var(--speaker-tone);
+    box-shadow: inset 0 0 0 1px var(--pk-line);
+  }
+  .pk-studio-home__chip.pk-btn[aria-pressed="true"] {
+    background: var(--pk-accent-soft);
+    color: var(--pk-accent-ink);
+    font-weight: 600;
+  }
+}

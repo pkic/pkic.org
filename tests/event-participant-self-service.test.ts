@@ -269,10 +269,10 @@ describe("session-owned event participation", () => {
     expect(JSON.stringify(body)).not.toMatch(/manageToken|manage_link_secret|\/access\//);
     expect((await request(path, f.tokens[0])).status).toBe(404);
     expect((await request(path, f.tokens[2])).status).toBe(404);
-    const update = await request(path + "/profile", f.tokens[1], { biography: "Updated speaker biography." });
+    const update = await request(path + "/profile", f.tokens[1], { firstName: "Updated" });
     expect(update.status, await update.clone().text()).toBe(200);
-    expect((await request(path + "/profile", f.tokens[2], { biography: "Unauthorized" })).status).toBe(404);
+    expect((await request(path + "/profile", f.tokens[2], { firstName: "Unauthorized" })).status).toBe(404);
     await env.DB.prepare("UPDATE session_proposals SET status = 'withdrawn' WHERE id = ?").bind(f.proposalId).run();
-    expect((await request(path + "/profile", f.tokens[1], { biography: "Closed" })).status).toBe(409);
+    expect((await request(path + "/profile", f.tokens[1], { firstName: "Closed" })).status).toBe(409);
   });
 });

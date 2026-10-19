@@ -8,6 +8,8 @@ import {
   ROLE_BASED_CAPACITY_EXEMPT_ROLE_SQL,
 } from "./day-waitlist-capacity";
 import type { DayWaitlistRow } from "./day-waitlist-types";
+import { prioritizeWorkAddresses } from "../../email-domains/contact-kind";
+import { parseVerifiedAddresses, verifiedAddressesJsonSql } from "../user-emails";
 
 export async function expireDayWaitlistOffers(db: DatabaseLike, eventId: string): Promise<void> {
   const now = nowIso();
@@ -44,10 +46,11 @@ export async function promoteDayWaitlistIfCapacity(
   const reserved = confirmed + (await countActiveOffersForDay(db, payload.eventDayId));
   if (reserved >= day.in_person_capacity) return null;
 
-  const candidates = await all<DayWaitlistRow>(
+  const waiting = await all<DayWaitlistRow & { verified_addresses: string | null }>(
     db,
     `SELECT w.id, w.event_id, w.event_day_id, w.registration_id, w.user_id,
-            w.priority_lane, w.status, w.position, w.offer_expires_at, w.reason_code
+            w.priority_lane, w.status, w.position, w.offer_expires_at, w.reason_code,
+            ${verifiedAddressesJsonSql("w.user_id")} AS verified_addresses
      FROM event_day_waitlist_entries w
      JOIN registrations r ON r.id = w.registration_id
      WHERE w.event_id = ? AND w.event_day_id = ? AND w.status = 'waiting'
@@ -59,6 +62,10 @@ export async function promoteDayWaitlistIfCapacity(
        ))
      ORDER BY CASE w.priority_lane WHEN 'continuity' THEN 1 ELSE 2 END ASC, w.position ASC`,
     [payload.eventId, payload.eventDayId],
+  );
+  // Personal-address entries are handled last; each group keeps its lane and position order.
+  const candidates = prioritizeWorkAddresses(waiting, (entry) => parseVerifiedAddresses(entry.verified_addresses)).map(
+    ({ verified_addresses: _addresses, ...entry }) => entry,
   );
 
   for (const candidate of candidates) {

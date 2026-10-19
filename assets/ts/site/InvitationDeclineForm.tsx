@@ -136,7 +136,7 @@ export function InvitationDeclineForm() {
               <div class="pk-cluster" data-nps-buttons role="group" aria-label="Likelihood score 1 to 10">
                 <span class="pk-muted">Very unlikely</span>
                 {Array.from({ length: 10 }, (_, index) => index + 1).map((score) => (
-                  <Button key={score} type="button" variant="secondary" size="sm" data-nps={score}>
+                  <Button key={score} type="button" variant="secondary" data-nps={score}>
                     {score}
                   </Button>
                 ))}
@@ -172,7 +172,7 @@ export function InvitationDeclineForm() {
                   )}
                 </Field>
                 <div class="event-flow-invite-list" data-forward-list />
-                <Button type="button" variant="secondary" size="sm" data-add-forward>
+                <Button type="button" variant="secondary" data-add-forward>
                   + Add a contact
                 </Button>
               </div>

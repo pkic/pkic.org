@@ -1,9 +1,11 @@
+@use "sass:map";
+
 // The brand palette and the site's own general element styles.
 //
 // This file used to import Bootstrap and override its variables. Bootstrap is
 // gone: every class it provided has been replaced by the design system in
 // `assets/design` and `assets/ts/ui`. What remains here is what was always
-// ours — the colour palette, the per-location colour map, and a handful of
+// ours — the color palette, the per-location color map, and a handful of
 // element defaults for authored markdown content.
 
 // --- PKIC Variable Overrides & Custom Colors ---
@@ -164,8 +166,8 @@ $all-pkic-locations-colors: (
 
 // Function to get the base color for any location
 @function pkic-color($key) {
-  @if map-has-key($all-pkic-locations-colors, $key) {
-    @return map-get($all-pkic-locations-colors, $key);
+  @if map.has-key($all-pkic-locations-colors, $key) {
+    @return map.get($all-pkic-locations-colors, $key);
   } @else {
     @return null;
   }
@@ -201,11 +203,11 @@ body {
 // so they are unaffected by this rule.
 main {
   overflow-x: clip; // `clip` (unlike `hidden`) does not create a scroll container,
-                    // so position:sticky inside <main> still works correctly.
+  // so position:sticky inside <main> still works correctly.
 }
 
 // Tables written in authored markdown are drawn by the design system now:
-// `layouts/_default/_markup/render-table.html` renders `pk-table`, and
+// the Markdown table renderer emits `pk-table`, and
 // `assets/ts/ui/Table.css` is the one stylesheet that dresses both a content
 // table and a portal list. Element rules for `table` used to live here; they
 // are gone rather than left as a second opinion the cascade has to settle.

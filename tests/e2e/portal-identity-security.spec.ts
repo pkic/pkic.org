@@ -12,8 +12,14 @@
  * @covers account.7.5
  */
 import { expect, test } from "@playwright/test";
+import {
+  ownEmailAddressResponseSchema,
+  ownEmailAddressUpdateSchema,
+  ownEmailAddressesListResponseSchema,
+} from "../../assets/shared/schemas/own-email-addresses";
+import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { openEmailSignIn, signInToPortal } from "./helpers/portal-auth";
+import { openEmailSignIn, openMyProfile, signInToPortal } from "./helpers/portal-auth";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
 import { ensureAppOrigin, uniqueSuffix } from "./helpers/membership";
 
@@ -29,7 +35,10 @@ async function requestSignInLink(page: import("@playwright/test").Page, email: s
   return extractEmailUrl(message, "/portal/");
 }
 
-test("the sign-in capability is single-use and cannot be replayed", async ({ page, context }) => {
+test("sign-in capabilities require address permission, revoke with it, and cannot be replayed", async ({
+  page,
+  context,
+}) => {
   const email = e2eAdminEmail("portal-identity-security");
   await page.setExtraHTTPHeaders({ "cf-connecting-ip": `2001:db8::9a${uniqueSuffix().slice(-4)}` });
 
@@ -55,6 +64,58 @@ test("the sign-in capability is single-use and cannot be replayed", async ({ pag
   });
   expect(replaySession, "a replayed capability must not create a session").toBe(401);
   await replayPage.context().close();
+
+  // Proving another mailbox does not grant it account sign-in.
+  await openMyProfile(page);
+  const owner = userAuthSessionResponseSchema.parse(await (await page.request.get("/api/v1/auth/session")).json());
+  const aliasEmail = `address-permission-${uniqueSuffix()}@example.test`;
+  await page.getByRole("button", { name: "Email addresses actions" }).click();
+  await page.getByRole("menuitem", { name: "Add email address" }).click();
+  await page.getByRole("textbox", { name: /^Email address/ }).fill(aliasEmail);
+  const since = await capturedEmailCount();
+  const addedResponse = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/users/current/emails" && response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Send verification link", exact: true }).click();
+  const added = ownEmailAddressResponseSchema.parse(await (await addedResponse).json()).email;
+  expect(added.signInEnabled).toBe(false);
+  const verification = await waitForCapturedEmail(aliasEmail, "Verify your email address", { since });
+  const proofPage = await context.newPage();
+  await proofPage.goto(extractEmailUrl(verification, "/portal/"));
+  await proofPage.getByRole("button", { name: "Verify this address", exact: true }).click();
+  await expect(proofPage.getByText(`${aliasEmail} is verified`, { exact: true })).toBeVisible();
+  await proofPage.close();
+  const addresses = ownEmailAddressesListResponseSchema.parse(
+    await (await page.request.get("/api/v1/users/current/emails")).json(),
+  );
+  expect(addresses.emails.find((address) => address.id === added.id)).toMatchObject({
+    verifiedAt: expect.any(String),
+    signInEnabled: false,
+  });
+
+  // The account owner separately enables sign-in through the canonical address update contract.
+  const path = `/api/v1/users/current/emails/${added.id}`;
+  const enabled = await page.request.patch(path, { data: ownEmailAddressUpdateSchema.parse({ signInEnabled: true }) });
+  expect(enabled.status()).toBe(200);
+  const aliasContext = await context.browser()!.newContext({ baseURL: new URL(page.url()).origin });
+  try {
+    const aliasPage = await aliasContext.newPage();
+    await signInToPortal(aliasPage, aliasEmail);
+    const aliasSession = userAuthSessionResponseSchema.parse(
+      await (await aliasPage.request.get("/api/v1/auth/session")).json(),
+    );
+    expect(aliasSession.identity.id).toBe(owner.identity.id);
+    const disabled = await page.request.patch(path, {
+      data: ownEmailAddressUpdateSchema.parse({ signInEnabled: false }),
+    });
+    expect(disabled.status()).toBe(200);
+    expect((await aliasPage.request.get("/api/v1/auth/session")).status()).toBe(401);
+    expect((await page.request.get("/api/v1/auth/session")).status()).toBe(200);
+  } finally {
+    await aliasContext.close();
+  }
+  expect((await page.request.delete(path)).status()).toBe(200);
 });
 
 test("the capability is removed from the address bar and not left in history", async ({ page }) => {
@@ -80,28 +141,36 @@ test("the capability is removed from the address bar and not left in history", a
   expect(page.url()).not.toContain("verify=");
 });
 
-test("signing out revokes the session rather than only clearing the view", async ({ page }) => {
-  const email = e2eAdminEmail("portal-identity-logout");
-  await signInToPortal(page, email);
+for (const withoutRandomUUID of [false, true]) {
+  test(`signing out revokes the session ${withoutRandomUUID ? "without crypto.randomUUID" : "with crypto.randomUUID"}`, async ({
+    page,
+  }) => {
+    if (withoutRandomUUID) {
+      // Network HTTP origins expose getRandomValues but omit the secure-context UUID API.
+      await page.addInitScript(() => Object.defineProperty(crypto, "randomUUID", { value: undefined }));
+    }
+    const email = e2eAdminEmail("portal-identity-logout");
+    await signInToPortal(page, email);
 
-  const before = await page.evaluate(async () => {
-    const response = await fetch("/api/v1/auth/session", { credentials: "same-origin" });
-    return response.status;
+    const before = await page.evaluate(async () => {
+      const response = await fetch("/api/v1/auth/session", { credentials: "same-origin" });
+      return response.status;
+    });
+    expect(before).toBe(200);
+    const originalCookies = (await page.context().cookies()).map(({ name, value }) => `${name}=${value}`).join("; ");
+
+    // Sign out now lives in the sidebar footer's account menu rather than as a
+    // standalone button.
+    await page.getByRole("button", { name: "Account menu" }).click();
+    await page.getByRole("menuitem", { name: "Sign out" }).click();
+    await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible({ timeout: 15_000 });
+
+    // Replay the original cookie to prove server revocation. The request context
+    // survives the sign-out navigation and does not confuse a cleared cookie with revocation.
+    const after = await page.request.get("/api/v1/auth/session", { headers: { cookie: originalCookies } });
+    expect(after.status(), "sign out must revoke the session, not just the rendered state").toBe(401);
   });
-  expect(before).toBe(200);
-  const originalCookies = (await page.context().cookies()).map(({ name, value }) => `${name}=${value}`).join("; ");
-
-  // Sign out now lives in the sidebar footer's account menu rather than as a
-  // standalone button.
-  await page.getByRole("button", { name: "Account menu" }).click();
-  await page.getByRole("menuitem", { name: "Sign out" }).click();
-  await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible({ timeout: 15_000 });
-
-  // Replay the original cookie to prove server revocation. The request context
-  // survives the sign-out navigation and does not confuse a cleared cookie with revocation.
-  const after = await page.request.get("/api/v1/auth/session", { headers: { cookie: originalCookies } });
-  expect(after.status(), "sign out must revoke the session, not just the rendered state").toBe(401);
-});
+}
 
 test("a membership join capability cannot be redeemed as a portal sign-in", async ({ page }) => {
   const suffix = uniqueSuffix();

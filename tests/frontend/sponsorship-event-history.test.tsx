@@ -11,9 +11,13 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { h, render } from "preact";
 import { act } from "preact/test-utils";
-import { sponsorshipEventsListResponseSchema } from "../../assets/shared/schemas/sponsorship-management";
+import {
+  sponsorshipEventsListResponseSchema,
+  sponsorshipUpdateSchema,
+  sponsorshipStageUpdateSchema,
+} from "../../assets/shared/schemas/sponsorship-management";
 import { SponsorshipDetail } from "../../assets/ts/member-flows/portal/sections/sponsors/management/SponsorshipDetail";
-import { buttonNamed, controlFor, groupNames, markdownControl, namedGroup, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, controlFor, groupNames, markdownControl, namedGroup, typeInto } from "./helpers/labeled-control";
 
 const SPONSORSHIP_ID = "000000000000000000000000000000aa";
 
@@ -47,7 +51,7 @@ function tiersResponse() {
   });
 }
 
-function sponsorshipResponse(id: string) {
+function sponsorshipResponse(id: string, renewalDate: string | null = null) {
   return Response.json({
     sponsorship: {
       id,
@@ -64,7 +68,7 @@ function sponsorshipResponse(id: string) {
       tier: "Gold",
       pipelineStage: "active",
       startDate: null,
-      renewalDate: null,
+      renewalDate,
       assignedToUserId: null,
       assignedToName: null,
       notes: null,
@@ -360,9 +364,49 @@ describe("sponsorship record forms", () => {
     // announced inside the form they belong to.
     expect(groupNames(container)).toEqual(["Assigned staff"]);
     expect([...container.querySelectorAll("form")].map((form) => form.getAttribute("aria-label"))).toEqual([
+      "Move sponsorship stage",
       "Edit sponsorship record",
     ]);
     expect(container.querySelector("dialog")?.textContent).toContain("Move stage");
+  });
+
+  it("sends an explicit end reason and never carries it into a nonterminal stage", async () => {
+    const patches: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (isHistoryRequest(input)) return historyResponse([]);
+        if (init?.method === "PATCH") patches.push(sponsorshipStageUpdateSchema.parse(JSON.parse(String(init.body))));
+        return sponsorshipResponse(SPONSORSHIP_ID);
+      }),
+    );
+    const container = await detail();
+    await openCommand(container, "Move stage…");
+    expect(container.querySelector('form[aria-label="Move sponsorship stage"]')?.hasAttribute("novalidate")).toBe(true);
+    const stage = controlFor(container, "Move to stage");
+    await act(async () => {
+      stage.value = "lapsed";
+      stage.dispatchEvent(new Event("change", { bubbles: true }));
+      await flush();
+    });
+    const reason = controlFor(container, "End reason");
+    expect(reason.value).toBe("termination");
+    await act(async () => {
+      reason.value = "ordinary_expiry";
+      reason.dispatchEvent(new Event("change", { bubbles: true }));
+      await flush();
+    });
+    await act(async () => {
+      buttonNamed(container, "Move stage").click();
+      await flush();
+    });
+    expect(patches).toEqual([{ toStage: "lapsed", endReason: "ordinary_expiry", note: null }]);
+    await openCommand(container, "Move stage…");
+    await act(async () => {
+      buttonNamed(container, "Move stage").click();
+      await flush();
+    });
+    expect(patches[1]).toEqual({ toStage: "contacted", note: null });
   });
 
   it("reports a failed stage move without losing the note the reader typed", async () => {
@@ -391,8 +435,52 @@ describe("sponsorship record forms", () => {
       await flush();
     });
 
-    expect(toastArea.textContent).toContain("Stage change refused");
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Stage change refused");
     expect(controlFor(container, "Note (optional)").value).toBe("Waiting on signature");
     expect(advance.getAttribute("aria-busy")).toBeNull();
+  });
+
+  it("sends the chosen renewal day as a calendar date and reads it back as the same day", async () => {
+    const toastArea = document.createElement("div");
+    toastArea.id = "portal-toast-area";
+    document.body.append(toastArea);
+    let renewalDate: string | null = null;
+    const patches: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        if (isHistoryRequest(input)) return historyResponse([]);
+        if (String(input).split("?", 1)[0].endsWith("/sponsors/tiers")) return tiersResponse();
+        if (init?.method === "PATCH") {
+          const body = sponsorshipUpdateSchema.parse(JSON.parse(String(init.body)));
+          patches.push(body);
+          renewalDate = body.renewalDate ?? null;
+        }
+        return sponsorshipResponse(SPONSORSHIP_ID, renewalDate);
+      }),
+    );
+    const container = await detail();
+    expect(container.textContent).not.toContain("Renews");
+
+    await openCommand(container, "Edit record…");
+    await act(flush);
+    await typeInto(controlFor(container, "Renewal date"), "2027-01-01");
+    await act(async () => {
+      buttonNamed(container, "Save").click();
+      await flush();
+    });
+    await act(flush);
+
+    expect(patches).toHaveLength(1);
+    expect(patches[0]).toMatchObject({ renewalDate: "2027-01-01" });
+    // A calendar day has no zone, so every reader sees the day that was chosen.
+    const day = new Intl.DateTimeFormat(undefined, { dateStyle: "medium", timeZone: "UTC" }).format(
+      new Date("2027-01-01T00:00:00Z"),
+    );
+    expect(container.textContent).toContain(`Renews ${day}`);
+
+    await openCommand(container, "Edit record…");
+    await act(flush);
+    expect(controlFor(container, "Renewal date").value).toBe("2027-01-01");
   });
 });

@@ -86,7 +86,6 @@ export function useMeetingCancellation<Row extends { id: string }>({
         }}
       >
         <Button
-          size="sm"
           disabled={busy || !targets.length || targets.some((row) => !canCancel(row))}
           onClick={() => void cancelRows(targets)}
         >

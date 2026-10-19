@@ -1,4 +1,5 @@
 import fs from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
 import { pathToFileURL } from "node:url";
@@ -6,6 +7,8 @@ import YAML from "yaml";
 import { buildWranglerD1ExecuteArgs, parseSeedCliArgs } from "./lib/seed-cli.mjs";
 import { sqlString } from "./lib/sql.mjs";
 import { buildTemplateSqlStatements } from "./lib/email-template-seed-sql.mjs";
+import { DEFAULT_EVENT_MESSAGE_TEMPLATES } from "./lib/event-message-default-templates.mjs";
+import { DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES } from "./lib/transactional-email-default-templates.mjs";
 
 const DEFAULT_CONFIG_PATH = path.join(process.cwd(), "scripts", "seed-event.yaml");
 const DEFAULT_BUCKET = process.env.ASSETS_BUCKET_NAME ?? "pkic-assets";
@@ -126,11 +129,73 @@ export const DEFAULT_LAYOUT_HTML = `<!doctype html>
 // NOTE: shared email partials are seeded here and managed through the portal.
 // Keep these in sync with the editor labels and the partial loader.
 export const DEFAULT_TEMPLATES = [
+  ...DEFAULT_EVENT_MESSAGE_TEMPLATES,
+  ...DEFAULT_TRANSACTIONAL_EMAIL_TEMPLATES,
+  {
+    key: "agenda_changed",
+    subjectTemplate: "Your schedule has changed — {{eventName}}",
+    content:
+      "The organizers have approved changes to **{{eventName}}** that affect a session in your personal agenda. Open the event portal to review your updated schedule before attending. Your existing registration remains in place.",
+    contentType: "markdown",
+    messageType: "transactional",
+  },
   {
     key: "email_layout",
     subjectTemplate: null,
     contentType: "html",
     content: DEFAULT_LAYOUT_HTML,
+  },
+  {
+    key: "sponsorship-new-inquiry",
+    subjectTemplate: "New sponsorship inquiry",
+    contentType: "markdown",
+    content: `A new sponsorship inquiry is ready for follow-up.
+
+- Contact: {{contactNameText}} ({{contactEmailText}})
+- Organization: {{organizationNameText}}
+- Sponsor type: {{sponsorTypeText}}
+- Tier: {{tierText}}
+{{#if notesText}}- Notes: {{notesText}}
+{{/if}}
+[View sponsorship]({{managementUrl}})`,
+  },
+  {
+    key: "org-content-review-digest",
+    subjectTemplate: "Pending organization content reviews",
+    contentType: "markdown",
+    content: `## Organization content reviews
+
+{{pendingCount}} organization {{#if eq pendingCount "1"}}profile is{{else}}profiles are{{/if}} awaiting review in the shared queue.
+
+{{#each reviews}}- {{organizationName}}
+{{/each}}
+{{#if hasMore}}This email lists the first 50 organizations. Open the queue to see every pending review.
+{{/if}}
+[Review pending organization profiles]({{reviewUrl}})
+
+The queue shows the latest changes and review status.`,
+  },
+  {
+    key: "membership-participation-warning",
+    subjectTemplate: "Action required: {{organizationNameText}}'s PKI Consortium membership",
+    contentType: "markdown",
+    content: `{{#if contactNameText}}Hello {{contactNameText}},{{else}}Hello,{{/if}}
+
+**{{organizationNameText}}'s PKI Consortium membership is at risk of cancellation.**
+
+{{#if noCurrentRepresentatives}}We do not have a current representative recorded for your organization.{{else}}We have not recorded recent meeting participation from a representative of your organization.{{/if}}
+
+Please reply to this email with the name and work email address of someone who can represent your organization and participate in meetings. If your current representative has left, please let us know who should take their place.
+
+{{#if responseDeadlineText}}Please reply by **{{responseDeadlineText}}**.
+
+{{/if}}If we do not hear from you{{#if responseDeadlineText}} by that date{{/if}}, we will cancel your organization's membership.
+
+If our records are incomplete, please tell us who has been participating so we can review them before taking action.
+
+Thank you for helping us keep your organization's membership active.
+
+The PKI Consortium team`,
   },
   // Membership consultation and Executive Council review digests.
   {
@@ -175,8 +240,8 @@ PKI Consortium`,
 
 Category: ({{categoryCode}}) {{categoryLabel}}  
 Applicant name: {{applicantName}}  
-Email: {{applicantEmail}}  
-{{#if organizationName}}Organization: {{organizationName}}  
+{{#if applicantEmail}}Email: {{applicantEmail}}  
+{{/if}}{{#if organizationName}}Organization: {{organizationName}}  
 {{/if}}{{#each answerRows}}{{label}}: {{value}}  
 {{/each}}
 {{#each objections}}> {{#if author}}**{{author}}:** {{/if}}{{body}}
@@ -301,7 +366,7 @@ Know someone who should attend? Share your personal referral link: [{{shareUrl}}
   // ─────────────────────────────────────────────────────────────────────────
   // 2. Registration confirmed
   // Variables: eventName, eventUrl, firstName, lastName, email, organizationName,
-  //            jobTitle, attendanceType, venue, status, manageUrl, shareUrl,
+  //            jobTitle, attendanceType, venue, status, manageUrl, myAgendaUrl, shareUrl,
   //            sponsorsImageUrl, heroImageUrl, customAnswerRows, acceptedTermsText
   // Partials:  {{> reg_details}}, {{> sponsors_block}}
   // ─────────────────────────────────────────────────────────────────────────
@@ -336,6 +401,10 @@ We are delighted to confirm that **your registration for {{eventName}} has been 
 
 [Manage your registration &rarr;]({{manageUrl}})
 
+{{#if myAgendaUrl}}
+Plan the sessions you want to attend in [My agenda &rarr;]({{myAgendaUrl}})
+{{/if}}
+
 Know someone who should attend? Share your personal referral link and use the attached personal image to help grow the community:
 [{{shareUrl}}]({{shareUrl}})
 
@@ -350,7 +419,7 @@ We look forward to seeing you at the *{{eventName}}**!
   // ─────────────────────────────────────────────────────────────────────────
   // 3. Registration updated
   // Variables: eventName, firstName, lastName, email, organizationName,
-  //            jobTitle, attendanceSummary, statusLabel, manageUrl,
+  //            jobTitle, attendanceSummary, statusLabel, manageUrl, myAgendaUrl,
   //            customAnswerRows, acceptedTermsText
   // ─────────────────────────────────────────────────────────────────────────
   {
@@ -392,6 +461,12 @@ This email confirms that your registration for **{{eventName}}** has been succes
 {{/if}}
 
 If the details above don't look right, use your [registration management link]({{manageUrl}}) to review or edit your registration.
+
+{{#if eq status "cancelled"}}{{else}}
+{{#if myAgendaUrl}}
+Plan the sessions you want to attend in [My agenda &rarr;]({{myAgendaUrl}})
+{{/if}}
+{{/if}}
 `,
   },
 
@@ -454,7 +529,7 @@ We apologise for any inconvenience.
   // ─────────────────────────────────────────────────────────────────────────
   // 10. Management link resend
   // Sent when a registrant requests a fresh management link.
-  // Variables: eventName, firstName, manageUrl
+  // Variables: eventName, firstName, manageUrl, myAgendaUrl, status
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "registration_manage_link",
@@ -464,6 +539,12 @@ We apologise for any inconvenience.
 Here is your management link for **{{eventName}}**. Use it to review, update, or cancel your registration at any time.
 
 <div class="cta"><a href="{{manageUrl}}">Manage your registration &rarr;</a></div>
+
+{{#if eq status "cancelled"}}{{else}}
+{{#if myAgendaUrl}}
+Plan the sessions you want to attend in [My agenda &rarr;]({{myAgendaUrl}})
+{{/if}}
+{{/if}}
 
 If you did not request this email, you can safely ignore it.
 `,
@@ -581,7 +662,7 @@ Join security experts, researchers, and industry leaders to explore the latest d
 <div class="notice notice-warning">A quick follow-up on your speaker invitation for <strong>{{eventName}}</strong>.{{#if daysUntilExpiry}}{{#if lte daysUntilExpiry "2"}} This opportunity closes in {{daysUntilExpiry}} day(s).{{else}} We'd be excited to feature your perspective in this program.{{/if}}{{/if}}</div>
 {{/if}}
 
-{{#if inviterName}}You have been personally nominated by **{{inviterName}}** to speak at **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org).{{else}}We would be honoured to have you present at **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org).{{/if}}
+{{#if inviterName}}You have been personally nominated by **{{inviterName}}** to speak at **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org).{{else}}We would be honored to have you present at **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org).{{/if}}
 
 We believe your expertise would be a valuable contribution to the program. We invite you to submit a proposal for a session, workshop, or roundtable.
 
@@ -644,7 +725,7 @@ Thank you for helping us make room for everyone waiting for a spot.
   // ─────────────────────────────────────────────────────────────────────────
   // 6. Proposal submitted
   // Variables: eventName, firstName, lastName, proposalTitle, proposalAbstract,
-  //            proposalType, speakerLineupText, manageUrl, shareUrl
+  //            proposalType, speakerLineupText, manageUrl, speakerManageUrl, shareUrl
   // ─────────────────────────────────────────────────────────────────────────
   {
     key: "proposal_submitted",
@@ -685,11 +766,63 @@ Please review the details above carefully. If anything looks incorrect, use your
 
 [Manage my proposal &rarr;]({{manageUrl}})
 
+{{#if speakerManageUrl}}
+[Review my speaker representation]({{speakerManageUrl}})
+{{/if}}
+
 Encourage colleagues to attend by sharing your referral link: [{{shareUrl}}]({{shareUrl}})
 
 Thank you for contributing to **{{eventName}}** and the broader PKI community!
 
 {{> donation_request}}
+`,
+  },
+  {
+    key: "agenda_speaker_declined",
+    subjectTemplate: "A speaker declined — {{eventName}}",
+    content: `{{#if firstName}}Hello {{firstName}},{{else}}Hello,{{/if}}
+
+{{speakerName}} declined to speak on **{{proposalTitle}}** at **{{eventName}}**, so they were taken off these sessions in the agenda draft:
+
+{{sessionTitles}}
+
+{{#if sessionsWithoutSpeakers}}
+**These sessions now have no speakers.** They stay on the agenda until you change them:
+
+{{sessionsWithoutSpeakers}}
+{{/if}}
+
+The published agenda still shows the earlier version until you approve the draft again.
+
+[Open the agenda]({{agendaUrl}})
+`,
+  },
+  {
+    key: "proposal_representation_review",
+    subjectTemplate: "Review your speaker representation — {{eventName}}",
+    content: `Hello {{firstName}},
+
+Your proposal **{{proposalTitle}}** has been received for **{{eventName}}**.
+
+Choose and save the identity you will speak as, or choose individual presentation. Your representation must be reviewed before the session can be approved for the agenda.
+
+[Review my speaker representation]({{speakerManageUrl}})
+
+This private link manages only your own speaker profile.
+`,
+  },
+  {
+    key: "proposal_organizational_representation_request",
+    subjectTemplate: "Please speak on behalf of your organization — {{eventName}}",
+    content: `Hello {{firstName}},
+
+Thank you for proposing **{{proposalTitle}}** for **{{eventName}}**.
+
+Our reviewers ask that this talk be given on behalf of the organization connected to its topic, rather than as an individual. Please confirm your work email address and choose the organization you represent; the organization authorizes the talk and may own the material presented.
+
+[Choose the organization I represent]({{speakerManageUrl}})
+
+If you believe you take part independently, contact the event organizers. This private link manages only your own speaker profile.
 `,
   },
   {
@@ -763,13 +896,9 @@ Thank you for your interest in contributing to **{{eventName}}**.
 <div class="notice notice-warning">A quick follow-up: we still need your confirmation for this speaker invitation.</div>
 {{/if}}
 
-{{#if invitedByDisplay}}
-**{{invitedByDisplay}}** invited you as a speaker for **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org).
-{{else}}
-{{proposerFirstName}} has listed you as a speaker on their proposal for **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org).
-{{/if}}
+{{#if invitedByDisplay}}{{invitedByDisplay}}{{else}}{{#if proposerFirstName}}{{proposerFirstName}}{{else}}The proposer{{/if}}{{/if}} has proposed a session for **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org), and invited you to take part as a speaker.
 
-> **Proposal:** {{proposalTitle}}
+> **Proposal:** **{{proposalTitle}}**
 
 {{#if proposalAbstract}}
 ## Proposal abstract
@@ -783,7 +912,7 @@ Thank you for your interest in contributing to **{{eventName}}**.
 {{speakerLineupText}}
 {{/if}}
 
-Please review the proposal and **confirm or decline your participation**. You will also be prompted to review your speaker profile (bio and headshot) so we can promote the session.
+You take part in the session only once you accept. Please review the proposal and **confirm or decline your participation**. You will also be prompted to review your speaker profile (bio and headshot) so we can promote the session.
 
 <div class="cta"><a href="{{manageUrl}}">Review proposal &amp; confirm participation &rarr;</a></div>
 
@@ -909,6 +1038,31 @@ If you have any issues uploading or need to request an extension, please [contac
 <div class="cta-navy"><a href="{{magicLinkUrl}}">Sign in to the portal &rarr;</a></div>
 
 <div class="notice notice-warning">&#9888;&#65039; <strong>Security notice</strong><br>&bull; This link is valid for <strong>{{expiresInMinutes}} minutes</strong> only.<br>&bull; It can only be used <strong>once</strong> and is tied to <code>{{email}}</code>.<br>&bull; If you did not request this link, ignore this email immediately.</div>
+`,
+  },
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Organization identity reinstatement
+  // A person reinstates their own ended organization identity by proving its
+  // address again; the link opens their own record, which confirms it.
+  // Variables: recipientName, organizationName, accountEmail, reinstatementUrl,
+  //            expiresInHours
+  // ─────────────────────────────────────────────────────────────────────────
+  {
+    key: "organization_identity_reinstatement",
+    subjectTemplate: "Confirm reinstating your representation of {{organizationName}}",
+    messageType: "transactional",
+    content: `Hi {{recipientName}},
+
+You asked to reinstate your representation of **{{organizationName}}** while signed in to the **PKI Consortium portal** as {{accountEmail}}.
+
+Confirming makes your identity for {{organizationName}} active again and restores the group seats and roles that ended with it, where they are still available.
+
+<div class="cta-navy"><a href="{{reinstatementUrl}}">Confirm reinstatement &rarr;</a></div>
+
+The link works once, for {{expiresInHours}} hours, while you are signed in to that account. Asking again sends a new link and retires this one.
+
+If you did not ask for this, you can ignore this email. Nothing changes unless the link is confirmed.
 `,
   },
 
@@ -1175,9 +1329,14 @@ function main() {
   ensureAdminExists(cli);
 
   const sql = buildTemplateSqlStatements(cli, seed.templates);
-  const executeArgs = [...buildWranglerD1ExecuteArgs(cli), "--command", sql];
-
-  runWrangler(executeArgs);
+  const directory = fs.mkdtempSync(path.join(tmpdir(), "pkic-email-template-seed-"));
+  const sqlPath = path.join(directory, "templates.sql");
+  try {
+    fs.writeFileSync(sqlPath, sql, { mode: 0o600 });
+    runWrangler([...buildWranglerD1ExecuteArgs(cli), "--file", sqlPath]);
+  } finally {
+    fs.rmSync(directory, { recursive: true, force: true });
+  }
   console.log(
     `Seeded ${seed.templates.length} email template(s) in ${cli.mode} mode${cli.ifMissing ? " (missing only)" : ""}.`,
   );

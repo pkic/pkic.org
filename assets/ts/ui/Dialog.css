@@ -20,6 +20,16 @@
     box-shadow: var(--pk-shadow-3);
   }
 
+  /* An editor for a list of things: wide enough for a list beside its detail, one height throughout. */
+  .pk-dialog--wide {
+    width: min(64rem, calc(100vw - 2rem));
+    block-size: min(46rem, calc(100dvh - 4rem));
+  }
+  .pk-dialog--wide > .pk-dialog__body {
+    flex: 1 1 auto;
+    min-block-size: 0;
+  }
+
   /* The flex layout must not override the native closed-dialog state. */
   .pk-dialog:not([open]) {
     display: none;
@@ -30,7 +40,25 @@
   }
 
   .pk-dialog__head {
+    display: flex;
+    align-items: flex-start;
+    gap: var(--pk-3);
     padding: var(--pk-4) var(--pk-4) 0;
+  }
+
+  .pk-dialog__heading {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-1);
+  }
+
+  .pk-dialog__kicker,
+  .pk-dialog__meta {
+    margin: 0;
+    font-size: var(--pk-text-xs);
+    color: var(--pk-ink-muted);
   }
 
   .pk-dialog__title {
@@ -79,15 +107,18 @@
     color: var(--pk-ink);
   }
 
+  /* Actions keep their label width at every size: on a narrow sheet they
+     wrap onto another line, still aligned to the end and still spaced. */
   .pk-dialog__foot {
     display: flex;
+    flex-wrap: wrap;
     gap: var(--pk-2);
     justify-content: flex-end;
     padding: var(--pk-3) var(--pk-4);
     border-top: 1px solid var(--pk-line-soft);
   }
 
-  /* On a phone a centred card wastes the reachable area; the dialog becomes a
+  /* On a phone a centered card wastes the reachable area; the dialog becomes a
      sheet anchored to the bottom, where the thumb already is. */
   @media (max-width: 30rem) {
     .pk-dialog {
@@ -96,14 +127,6 @@
       margin: auto 0 0;
       border-radius: var(--pk-radius-lg) var(--pk-radius-lg) 0 0;
       border-bottom: 0;
-    }
-
-    .pk-dialog__foot {
-      flex-direction: column-reverse;
-    }
-
-    .pk-dialog__foot .pk-btn {
-      width: 100%;
     }
   }
 }

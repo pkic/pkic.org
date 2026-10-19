@@ -1,0 +1,4 @@
+{
+  // Oxlint type-aware linting finds only a file's nearest tsconfig.json. This points it at the project that owns the directory.
+  "extends": "../../tsconfig.tools.json"
+}

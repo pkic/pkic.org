@@ -2,7 +2,7 @@
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { chooseColumnFilter } from "./helpers/column-menu";
-import { controlFor } from "./helpers/labelled-control";
+import { controlFor } from "./helpers/labeled-control";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { groupMemberAddBodySchema, groupMembershipUpdateSchema } from "../../assets/shared/schemas/groups";
 import { GroupMembers } from "../../assets/ts/member-flows/portal/sections/management/GroupMembers";
@@ -198,7 +198,7 @@ describe("portal group seat history", () => {
     });
     await settle();
     const result = [...container.querySelectorAll<HTMLButtonElement>("button")].find((candidate) =>
-      candidate.textContent?.includes("past@example.test"),
+      candidate.textContent?.includes("Past Chair"),
     )!;
     await act(async () => result.click());
 

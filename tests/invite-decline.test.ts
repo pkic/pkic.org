@@ -4,7 +4,7 @@ import { env } from "cloudflare:workers";
 import { createContext, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createInvite } from "../functions/_lib/services/invites";
 import { renderEmail } from "../functions/_lib/email/render";
-import app from "../functions/router";
+import app from "./helpers/app";
 
 const EMAIL_LAYOUT = "<!doctype html><html><body>{{{body_html}}}</body></html>";
 

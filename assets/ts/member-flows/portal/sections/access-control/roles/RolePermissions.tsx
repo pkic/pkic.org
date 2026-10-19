@@ -1,38 +1,37 @@
-import { PERMISSIONS, type Permission } from "../../../../../../shared/schemas/permissions";
-import { Checkbox } from "../../../../../ui/Checkbox";
-// `pk-mono` comes from Content.css and is written here as a class name rather
-// than reached through a component, so this module pulls the stylesheet into
-// its own chunk.
-import "../../../../../ui/Content.css";
+import { permissionAreas } from "../../../../../../shared/permission-metadata";
+import { isPermission, PERMISSIONS, type Permission } from "../../../../../../shared/schemas/permissions";
+import { type MatrixArea, PermissionMatrix } from "../../../../../components/PermissionMatrix";
+
+/** Every permission in the catalog by area; the opened list names each one's code as well. */
+const CATALOG_AREAS: readonly MatrixArea[] = permissionAreas(PERMISSIONS).map((area) => ({
+  ...area,
+  permissions: area.permissions.map((item) => ({ ...item, hint: item.permission })),
+}));
 
 /**
- * Shared permission-bundle checkbox grid used by both role creation and
- * editing. Both callers wrap it in a `<fieldset>` whose `<legend>` names the
- * group, so this renders the controls and nothing else.
+ * A role's permission bundle in the shared permission matrix, for role
+ * creation, editing and the role's details. The form callers wrap it in a
+ * `<fieldset>` whose `<legend>` names the group.
  */
-export function PermissionCheckboxes({
+export function RolePermissions({
   selected,
-  onToggle,
+  onSelect,
   disabled,
 }: {
-  selected: Set<Permission>;
-  onToggle: (permission: Permission) => void;
+  selected: ReadonlySet<Permission>;
+  /** Without it the matrix is read only. */
+  onSelect?: (next: Set<Permission>) => void;
   disabled?: boolean;
 }) {
   return (
-    // The frame and the inset moved into `.portal-access-role-permissions`
-    // beside the scroll behaviour they belong with; the markup keeps only the
-    // arrangement.
-    <div class="pk-cluster portal-access-role-permissions">
-      {PERMISSIONS.map((permission) => (
-        <Checkbox
-          key={permission}
-          checked={selected.has(permission)}
-          onChange={() => onToggle(permission)}
-          disabled={disabled}
-          label={<span class="pk-mono pk-small">{permission}</span>}
-        />
-      ))}
+    <div class="portal-access-role-permissions">
+      <PermissionMatrix
+        areas={CATALOG_AREAS}
+        selected={selected}
+        disabled={disabled}
+        readOnly={!onSelect}
+        onSelect={(next) => onSelect?.(new Set([...next].filter(isPermission)))}
+      />
     </div>
   );
 }

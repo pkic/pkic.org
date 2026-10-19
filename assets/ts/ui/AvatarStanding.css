@@ -2,7 +2,7 @@
   /*
    * A portrait carrying a standing: ring, then the label across its foot.
    *
-   * The ring is two nested rounds — the tone, then a surface-coloured gap —
+   * The ring is two nested rounds — the tone, then a surface-colored gap —
    * so the brand gradient reads as a ring rather than a halo bleeding into
    * the portrait. The label overlaps the foot deliberately: it belongs to the
    * portrait, and set below it instead it would read as the first line of
@@ -17,7 +17,7 @@
 
   .pk-avatar-standing__ring {
     display: block;
-    padding: 3px;
+    padding: 0.1875rem;
     border-radius: 50%;
     background: var(--pk-grad-brand);
   }

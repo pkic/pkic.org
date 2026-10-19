@@ -11,8 +11,25 @@ import type { Page } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { expectStaffSessionLanding, signInAsE2eStaff } from "./helpers/staff-auth";
 import { tab } from "./helpers/tabs";
+import { continueRegistrationWithEmail, ownDomainEmail } from "./helpers/registration";
+import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
+import { runRowAction } from "./helpers/data-table";
 import { createPortalWaitlistEvent } from "./helpers/waitlist-event";
 import { publishE2eSite } from "./helpers/site-publication";
+import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
+import {
+  eventProposalProofStartSchema,
+  eventProposalProofStartResponseSchema,
+  eventProposalProofVerifyResponseSchema,
+} from "../../assets/shared/schemas/event-proposal-proof";
+import {
+  speakerSelfProfilePatchSchema,
+  proposalCreateResponseSchema,
+  proposalCreateSchema,
+} from "../../assets/shared/schemas/proposal-management";
+import type { ProposalEntryContext } from "../../assets/shared/schemas/proposal-entry";
+import { defaultedSourceTypeSchema } from "../../assets/shared/schemas/source";
+import { completeIndependentCapacityDisclosure } from "./helpers/independent-capacity";
 
 const SENDGRID_URL_FILE = process.env.E2E_SENDGRID_URL_FILE ?? "test-results/e2e-sendgrid-url";
 
@@ -119,12 +136,7 @@ function monitorErrors(page: Page, options: ErrorMonitorOptions = {}): ErrorMoni
 // ── Step screenshots ──────────────────────────────────────────────────────────
 function createScreenshotter(page: Page): (label: string) => Promise<void> {
   let n = 0;
-  const dir = `test-results/screenshots/${test
-    .info()
-    .title.replace(/\s+/g, "-")
-    .replace(/[^\w-]/g, "")
-    .replace(/-+/g, "-")
-    .slice(0, 70)}`;
+  const dir = test.info().outputPath("steps");
   mkdirSync(dir, { recursive: true });
   return async (label: string) => {
     n++;
@@ -278,15 +290,10 @@ async function setupPage(page: Page): Promise<void> {
 
 async function fillRegistrationStep1(
   page: Page,
-  values: { firstName: string; lastName: string; email: string },
+  values: { firstName: string; lastName: string; email: string; organization?: string },
 ): Promise<void> {
-  await expect(page.locator("[data-event-registration] [data-step-next]")).toBeEnabled();
   await expect(page.locator("[data-event-registration] form")).toBeVisible();
-  await page.getByLabel("First name").fill(values.firstName);
-  await page.getByLabel("Last name").fill(values.lastName);
-  await page.getByLabel("Work email").fill(values.email);
-  await expect(page.getByLabel("Work email")).toHaveValue(values.email);
-  await page.getByRole("button", { name: /Continue/i }).click();
+  await continueRegistrationWithEmail(page, values);
   await expect(page.locator("[data-day-attendance] label").first()).toBeVisible({ timeout: 15_000 });
 }
 
@@ -298,8 +305,6 @@ async function fillRegistrationStep2(page: Page): Promise<void> {
 }
 
 async function fillRegistrationStep3(page: Page, options?: { dietaryRestriction?: string }): Promise<void> {
-  await page.getByLabel("Organization").fill("Test Org");
-  await page.getByLabel("Job title").fill("Engineer");
   await page.getByLabel("Country").selectOption("US");
   if (options?.dietaryRestriction) {
     await setNativeChecked(page, `input[name='custom.dietary_restrictions[]'][value='${options.dietaryRestriction}']`);
@@ -313,63 +318,148 @@ async function fillRegistrationStep3WithoutQuestions(page: Page): Promise<void> 
 
 async function fillRegistrationStep4(page: Page, expectedEmail?: string, expectProfileDetails = true): Promise<void> {
   await expect(page.locator("[data-registration-review]")).toBeVisible();
-  if (expectedEmail) {
-    await expect(page.locator("[data-registration-review-email]")).toHaveText(expectedEmail);
-    await expect(page.getByRole("checkbox", { name: /I checked that/ })).toHaveAccessibleName(
-      new RegExp(expectedEmail.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")),
-    );
-  }
+  if (expectedEmail) await expect(page.locator("[data-registration-review]")).toContainText(expectedEmail);
   await expect(page.locator("[data-registration-review]")).toContainText("Contact");
   if (expectProfileDetails) {
     await expect(page.locator("[data-registration-review]")).toContainText("Profile details");
   }
-  await setNativeChecked(page, "#registration-email-review-confirmed");
   await agreeToTerm(page, "privacy policy");
   await agreeToTerm(page, "code of conduct");
   await agreeToTerm(page, "photos and videos");
-  await page.getByRole("button", { name: /Submit registration/i }).click();
+  await page.getByRole("button", { name: "Register", exact: true }).click();
 }
 
 async function fillInviteRegistration(
   page: Page,
-  values: { firstName: string; lastName: string; email: string },
+  values: { firstName: string; lastName: string; email: string; organization?: string },
 ): Promise<void> {
   await fillRegistrationStep1(page, values);
   await setNativeChecked(page, "input#dayAttendance-2026-12-01-on_demand");
   await setNativeChecked(page, "input#dayAttendance-2026-12-02-on_demand");
   await setNativeChecked(page, "input#dayAttendance-2026-12-03-on_demand");
   await page.getByRole("button", { name: /Continue/i }).click();
-  await page.getByLabel("Organization").fill("Test Org");
-  await page.getByLabel("Job title").fill("Engineer");
   await page.getByLabel("Country").selectOption("US");
   await page.getByRole("button", { name: /Continue/i }).click();
-  await expect(page.locator("[data-registration-review-email]")).toHaveText(values.email);
+  await expect(page.locator("[data-registration-review]")).toContainText(values.email);
   await expect(page.locator("[data-registration-review]")).toContainText("State / Province");
   await expect(page.locator("[data-registration-review]")).toContainText("Interests (topics)");
   await expect(page.locator("[data-registration-review]")).toContainText("None provided");
-  await setNativeChecked(page, "#registration-email-review-confirmed");
   await agreeToTerm(page, "privacy policy");
   await agreeToTerm(page, "code of conduct");
   await agreeToTerm(page, "photos and videos");
-  await page.getByRole("button", { name: /Submit registration/i }).click();
+  await page.getByRole("button", { name: "Register", exact: true }).click();
+}
+
+/** Follow real email proof; known person details are reused rather than filled again. */
+async function fillProposalParticipant(
+  page: Page,
+  person: { email: string; firstName: string; lastName: string },
+): Promise<ProposalEntryContext | undefined> {
+  const originalQuery = new URL(page.url()).searchParams;
+  await page.context().clearCookies();
+  // The terms come first; the contact step then starts from the work email.
+  await agreeToAllTerms(page);
+  await page.getByRole("button", { name: /Continue/i }).click();
+  const identity = page.locator("[data-proposer-identity]");
+  await identity.getByRole("radio", { name: EMAIL_FIRST_COPY.proposal.personal.title, exact: true }).check();
+  await identity
+    .getByRole("textbox", { name: EMAIL_FIRST_COPY.proposal.personal.label, exact: true })
+    .fill(person.email);
+  const since = await capturedEmailCount();
+  const started = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/events/pqc-conference-amsterdam-nl/proposals/proof" &&
+      response.request().method() === "POST",
+  );
+  await identity.getByRole("button", { name: EMAIL_FIRST_COPY.proposal.personal.action, exact: true }).click();
+  const startResponse = await started;
+  expect(startResponse.status(), await startResponse.text()).toBe(200);
+  expect(eventProposalProofStartSchema.parse(startResponse.request().postDataJSON()).unaffiliatedAttestation).toBe(
+    true,
+  );
+  expect(eventProposalProofStartResponseSchema.parse(await startResponse.json()).status).toBe("verification_sent");
+  const mail = await waitForCapturedEmail(person.email, "Verify your email for", { since });
+  const verified = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/events/pqc-conference-amsterdam-nl/proposals/proof/verify" &&
+      response.request().method() === "POST",
+  );
+  // The terms agreed before the email was sent travel with the link; they are not asked again.
+  await page.goto(extractEmailUrl(mail, "/propose/"));
+  const result = await verified;
+  expect(result.status(), await result.text()).toBe(200);
+  const proof = eventProposalProofVerifyResponseSchema.parse(await result.json());
+  expect(proof.status).toBe("ready");
+  if (proof.status !== "ready") throw new Error("The browser participant requires successful mailbox proof.");
+  if (originalQuery.has("invite")) {
+    expect(proof.entryContext?.inviteToken).toMatch(/^pkc1_/);
+    expect(proof.entryContext?.inviteId).toBe(originalQuery.get("id"));
+    expect(proof.entryContext?.sourceType).toBe(
+      defaultedSourceTypeSchema.parse(originalQuery.get("source") ?? undefined),
+    );
+  }
+  const resolved = page.locator("[data-proposer-identity]");
+  await expect(resolved).toContainText(person.email);
+  for (const [name, value] of [
+    ["First name", person.firstName],
+    ["Last name", person.lastName],
+  ] as const) {
+    const missing = resolved.getByRole("textbox", { name, exact: true });
+    if (await missing.count()) await missing.fill(value);
+  }
+  await expect(resolved.locator('input[name="email"]')).toHaveCount(0);
+  await expect(resolved.locator('input[name="organizationName"]')).toHaveCount(0);
+  await completeIndependentCapacityDisclosure(resolved);
+  return proof.entryContext;
+}
+
+/** Resolve a real guest invitation before confirming it, retaining the original same-person capability boundary. */
+async function resolveInvitedSpeaker(page: Page, email: string): Promise<void> {
+  await page.context().clearCookies();
+  await agreeToAllTerms(page);
+  const confirmation = page.getByRole("button", { name: "Confirm participation", exact: true });
+  if (await confirmation.isEnabled()) return;
+  const identity = page.locator("[data-speaker-identity]");
+  await identity.getByRole("radio", { name: EMAIL_FIRST_COPY.speaker.personal.title, exact: true }).check();
+  await identity.getByRole("textbox", { name: EMAIL_FIRST_COPY.speaker.personal.label, exact: true }).fill(email);
+  const since = await capturedEmailCount();
+  await identity.getByRole("button", { name: EMAIL_FIRST_COPY.speaker.personal.action, exact: true }).click();
+  const mail = await waitForCapturedEmail(email, "Verify your email for", { since });
+  // The proposal page reads the link at once and hands a speaker's proof on.
+  await page.goto(extractEmailUrl(mail, "/propose/"));
+  await expect(page).toHaveURL(/\/propose\/speaker\/.*#verify=/);
+  await expect(page.locator("[data-speaker-identity]")).toContainText(email);
+  await expect(page.locator('[data-profile-form] input[name="organizationName"]')).toHaveCount(0);
+  await completeIndependentCapacityDisclosure(page.locator("[data-speaker-identity]"));
+  const saved = page.waitForResponse(
+    (response) => new URL(response.url()).pathname.endsWith("/profile") && response.request().method() === "PATCH",
+  );
+  await page.getByRole("button", { name: "Save speaker identity", exact: true }).click();
+  const response = await saved;
+  expect(response.status(), await response.text()).toBe(200);
+  const body = speakerSelfProfilePatchSchema.parse(response.request().postDataJSON());
+  expect(body.unaffiliatedAttestation).toBe(true);
+  expect(body.actingIdentityId).toBeNull();
+  expect(body.continuationToken).toBeTruthy();
+  await expect(confirmation).toBeEnabled();
+  await expect(page).not.toHaveURL(/#verify=/);
 }
 
 async function fillProposal(
   page: Page,
-  options: { type?: "talk" | "panel"; proposerPresenting?: boolean; addPanelist?: boolean } = {},
+  options: {
+    type?: "talk" | "panel";
+    proposerPresenting?: boolean;
+    addPanelist?: boolean;
+    proposerEmail?: string;
+  } = {},
 ): Promise<void> {
   const type = options.type ?? "talk";
-  // Step 1: accept all speaker consent terms
-  await agreeToAllTerms(page);
-  await page.getByRole("button", { name: /Continue/i }).click();
-  await page.getByLabel("First name").fill("Priya");
-  await page.getByLabel("Last name").fill("Proposal");
-  await page.getByLabel("Work email").fill("proposal-speaker@example.test");
-  await page.getByLabel("Organization").fill("Example Org");
-  await page.getByLabel("Job title").fill("Engineer");
-  if (options.proposerPresenting) {
-    await setNativeChecked(page, "input#proposal-is-presenting");
-  }
+  await fillProposalParticipant(page, {
+    firstName: "Priya",
+    lastName: "Proposal",
+    email: options.proposerEmail ?? "proposal-speaker@example.test",
+  });
   await page.getByRole("button", { name: /Continue/i }).click();
   await setNativeChecked(page, type === "panel" ? "input#type-panel" : "input#type-talk");
   await page
@@ -391,11 +481,15 @@ async function fillProposal(
   await page.getByRole("button", { name: /Continue/i }).click();
 
   if (options.proposerPresenting) {
+    await setNativeChecked(page, "input#proposal-is-presenting");
     // Located by the region name the card exposes, not by a class: the class
     // was a legacy stylesheet's and left with the Bootstrap migration, and a
     // name is what a reader actually uses to tell the cards apart.
     const proposerCard = page.getByRole("region", { name: "You — as a speaker", exact: true });
     await expect(proposerCard).toBeVisible();
+    await expect(proposerCard).toContainText("Priya Proposal");
+    await expect(proposerCard.locator('input[name="proposerSpeakerFirstName"]')).toHaveCount(0);
+    await expect(proposerCard.locator('input[name="proposerSpeakerOrg"]')).toHaveCount(0);
     await expect(proposerCard.locator('input[name="proposerSpeakerRole"][value="moderator"]')).toBeChecked();
     await proposerCard
       .getByRole("textbox", { name: "Bio", exact: true })
@@ -409,8 +503,6 @@ async function fillProposal(
     await panelistCard.locator('input[name="speaker.1.firstName"]').fill("Panelist");
     await panelistCard.locator('input[name="speaker.1.lastName"]').fill("One");
     await panelistCard.locator('input[name="speaker.1.email"]').fill("panelist-one@example.test");
-    await panelistCard.locator('input[name="speaker.1.organizationName"]').fill("Panelist Org");
-    await panelistCard.locator('input[name="speaker.1.jobTitle"]').fill("Migration Lead");
     await panelistCard
       .locator('input[name="speaker.1.role"][value="panelist"]')
       .evaluate((el) => (el as HTMLInputElement).click());
@@ -452,16 +544,17 @@ test.describe("browser workflows", () => {
       .locator("[data-agenda-session]")
       .filter({ has: page.getByRole("heading", { name: "Opening", exact: true }) });
     await expect(opening).toHaveCount(1);
-    await expect(opening.locator(".pk-content-agenda__session-body > .pk-content-agenda__speaker strong")).toHaveText([
-      "Paul van Brouwershaven",
-      "Albert de Ruiter",
-    ]);
+    await expect(
+      opening.locator(".pk-content-agenda__session-body").getByRole("button", { name: /^View speaker profile: / }),
+    ).toHaveCount(2);
+    for (const name of ["Paul van Brouwershaven", "Albert de Ruiter"])
+      await expect(opening.getByRole("button", { name: `View speaker profile: ${name}`, exact: true })).toBeVisible();
     await expect(panel.locator(".pk-content-agenda__cell > .pk-content-agenda__speaker")).toHaveCount(0);
     await opening.getByRole("button", { name: "Open session details: Opening", exact: true }).click();
     await expect(page.getByRole("dialog").filter({ visible: true })).toBeVisible();
     await page.keyboard.press("Escape");
     await expect(page.getByRole("dialog").filter({ visible: true })).toHaveCount(0);
-    await page.getByRole("tab", { name: "Wednesday", exact: true }).click();
+    await page.getByRole("tab", { name: /^Wednesday/ }).click();
     await expect(page.getByRole("tabpanel", { name: "Wednesday" })).toBeVisible();
     await page.keyboard.press("ArrowRight");
     await expect(page.getByRole("tab", { name: "Thursday" })).toBeFocused();
@@ -484,30 +577,46 @@ test.describe("browser workflows", () => {
     });
 
     await page.goto("/events/2023/pqc-conference-amsterdam-nl/");
-    const watchButton = page.getByRole("button", { name: "Watch recording", exact: true }).first();
-    await watchButton.click();
-
-    // The session detail is a native <dialog>; an open one is the only visible
-    // dialog on the page, so the role locator is enough and survives the next
-    // restyle in a way a class selector would not.
-    const modal = page
-      .getByRole("dialog", { includeHidden: true })
-      .filter({ has: page.locator("iframe") })
+    const recordedSession = page
+      // Day tabs carry the date beside the weekday ("Tuesday · Nov 7, 2023").
+      .getByRole("tabpanel", { name: /^Tuesday/ })
+      .locator("article[data-agenda-session-dialog]")
+      .filter({ has: page.locator("a[data-agenda-watch-recording]") })
       .first();
+    const watchLink = recordedSession
+      .locator(".pk-content-agenda__card-footer")
+      .getByRole("link", { name: "Watch recording", exact: true });
+    await expect(watchLink).toBeVisible();
+    const watchUrl = new URL((await watchLink.getAttribute("href"))!);
+    expect(watchUrl.origin).toBe("https://www.youtube.com");
+    expect(watchUrl.pathname).toBe("/watch");
+    expect(watchUrl.searchParams.get("v")).toBeTruthy();
+    // The session's dialog is rendered once per session, addressed by the id its actions open.
+    const modal = page.locator(`dialog[id="${await watchLink.getAttribute("data-agenda-open-session")}"]`);
+    await expect(modal).toHaveCount(1);
+    await expect(modal.locator("iframe")).not.toHaveAttribute("src");
+    const agendaUrl = page.url();
+    await watchLink.click();
+    expect(page.url()).toBe(agendaUrl);
+
     await expect(modal).toBeVisible();
     const iframe = modal.locator("iframe").first();
     await expect(iframe).toBeVisible();
 
     const embedUrl = await iframe.getAttribute("src");
     expect(embedUrl).toBeTruthy();
-    const requestsBeforeClose = embedRequestCounts.get(embedUrl ?? "") ?? 0;
+    const embed = new URL(embedUrl!);
+    expect(embed.origin).toBe("https://www.youtube-nocookie.com");
+    expect(embed.pathname).toBe(`/embed/${watchUrl.searchParams.get("v")}`);
+    await expect.poll(() => embedRequestCounts.get(embedUrl!) ?? 0).toBe(1);
+    const requestsBeforeClose = embedRequestCounts.get(embedUrl!)!;
 
-    await modal.getByRole("button", { name: "Close", exact: true }).first().click();
+    await modal.getByRole("button", { name: "Close session details", exact: true }).first().click();
     await expect(modal).toBeHidden();
     await expect(iframe).not.toHaveAttribute("src");
     expect(embedRequestCounts.get(embedUrl ?? "") ?? 0).toBe(requestsBeforeClose);
 
-    await watchButton.click();
+    await watchLink.click();
     await expect(modal).toBeVisible();
     await expect(iframe).toHaveAttribute("src", embedUrl ?? "");
     await expect.poll(() => embedRequestCounts.get(embedUrl ?? "") ?? 0).toBeGreaterThan(requestsBeforeClose);
@@ -524,6 +633,9 @@ test.describe("browser workflows", () => {
     });
     const screenshot = createScreenshotter(page);
 
+    // The second registrant shares the first one's domain, which the first confirmation gives an organization.
+    const capacityOne = ownDomainEmail("capacity-one");
+    const capacityTwo = `capacity-two@${capacityOne.split("@")[1]}`;
     await signInAsAdmin(page, "browser-waitlist");
     const event = await createPortalWaitlistEvent(page, `e2e-waitlist-${Date.now()}-${test.info().workerIndex}`);
     await publishE2eSite(page, `/events/2026/${event.slug}/register/`);
@@ -531,32 +643,23 @@ test.describe("browser workflows", () => {
     await fillRegistrationStep1(page, {
       firstName: "Capacity",
       lastName: "One",
-      email: "capacity-one@example.test",
+      email: capacityOne,
+      organization: "Capacity Test Org",
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3WithoutQuestions(page);
-    await fillRegistrationStep4(page, "capacity-one@example.test", false);
-
-    const firstConfirmEmail = await waitForEmail("capacity-one@example.test", "confirm");
-    const firstConfirmationUrl = extractUrlFromEmail(firstConfirmEmail, "/register/confirm");
-    await page.goto(firstConfirmationUrl);
-    await page.getByRole("button", { name: /Confirm my registration/i }).click();
+    await fillRegistrationStep4(page, capacityOne, false);
     await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
 
     await page.goto(`/events/2026/${event.slug}/register/`);
     await fillRegistrationStep1(page, {
       firstName: "Capacity",
       lastName: "Two",
-      email: "capacity-two@example.test",
+      email: capacityTwo,
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3WithoutQuestions(page);
-    await fillRegistrationStep4(page, "capacity-two@example.test", false);
-
-    const secondConfirmEmail = await waitForEmail("capacity-two@example.test", "confirm");
-    const secondConfirmationUrl = extractUrlFromEmail(secondConfirmEmail, "/register/confirm");
-    await page.goto(secondConfirmationUrl);
-    await page.getByRole("button", { name: /Confirm my registration/i }).click();
+    await fillRegistrationStep4(page, capacityTwo, false);
     await expect(page.getByRole("heading", { name: /registration is in place/i })).toBeVisible({ timeout: 15_000 });
     await expect(
       page.getByText(
@@ -565,7 +668,7 @@ test.describe("browser workflows", () => {
     ).toBeVisible();
     await screenshot("01-partial-capacity-confirmed");
 
-    const secondRegisteredEmail = await waitForEmail("capacity-two@example.test", "confirmed");
+    const secondRegisteredEmail = await waitForEmail(capacityTwo, "confirmed");
     const secondManageUrl = extractUrlFromEmail(secondRegisteredEmail, "/register/manage/");
     await page.goto(secondManageUrl);
 
@@ -586,51 +689,44 @@ test.describe("browser workflows", () => {
     const errorMonitor = monitorErrors(page);
     const screenshot = createScreenshotter(page);
 
+    const alice = ownDomainEmail("alice");
     await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
     await expect(page).toHaveTitle(/Post-Quantum Cryptography Conference/);
 
     await fillRegistrationStep1(page, {
       firstName: "Alice",
       lastName: "Attendee",
-      email: "alice@example.test",
+      email: alice,
+      organization: "Test Org",
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3(page, { dietaryRestriction: "Vegetarian" });
     await expect(page.getByRole("button", { name: "Return to step 3" })).toBeVisible();
     await page.getByRole("button", { name: "Return to step 3" }).click();
-    await expect(page.getByLabel("Organization")).toBeVisible();
+    await expect(page.getByLabel("Country")).toBeVisible();
     await page.getByRole("button", { name: /Continue/i }).click();
     await expect(page.locator("[data-registration-review]")).toContainText("Vegetarian");
     await page.getByRole("button", { name: /Edit profile details/i }).click();
-    await expect(page.getByLabel("Organization")).toBeVisible();
+    await expect(page.getByLabel("Country")).toBeVisible();
     await page.getByRole("button", { name: /Continue/i }).click();
-    await fillRegistrationStep4(page, "alice@example.test");
+    await fillRegistrationStep4(page, alice);
 
-    await expect(page.getByRole("heading", { name: /Check your email to finish registration, Alice/i })).toBeVisible();
-    await expect(page.getByText(/IMPORTANT: Click the link in the email/i)).toBeVisible();
+    // The address was verified first, so the registration is final once submitted.
     await expect(page.locator(".event-flow-stepper")).toBeHidden();
-    await expect(page.locator(".event-flow-submission-review-value")).toHaveText("alice@example.test");
-    await expect(page.getByRole("link", { name: /Edit email address/i })).toBeVisible();
-    await screenshot("01-registration-pending-email-confirmation");
-
-    // Wait for the confirmation email to arrive at the intercept server
-    const confirmEmail = await waitForEmail("alice@example.test", "confirm");
-    const confirmationUrl = extractUrlFromEmail(confirmEmail, "/register/confirm");
-
-    await page.goto(confirmationUrl);
-    await expect(page.getByText(/one click away/i)).toBeVisible();
-    await page.getByRole("button", { name: /Confirm my registration/i }).click();
-    // The confirmed-state heading appears once the API call completes
     await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
     await screenshot("02-registration-confirmed");
 
     // Wait for the "confirmed" email which carries the manage URL
-    const confirmedEmail = await waitForEmail("alice@example.test", "confirmed");
+    const confirmedEmail = await waitForEmail(alice, "confirmed");
     const manageUrl = extractUrlFromEmail(confirmedEmail, "/register/manage/");
 
     const registrationManageRoute = `/events/2026/pqc-conference-amsterdam-nl/register/manage/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(new URL(manageUrl).searchParams.get("token") ?? "")}`;
     await page.goto(registrationManageRoute);
     await expect(page.getByText(/Hi Alice, we're looking forward to seeing you/i)).toBeVisible();
+    // The page opens on the registration's details; the form waits for Edit details.
+    await expect(page.getByRole("definition").filter({ hasText: "Vegetarian" })).toBeVisible();
+    await expect(page.getByRole("button", { name: /Save changes/i })).toBeHidden();
+    await page.getByRole("button", { name: "Edit details", exact: true }).click();
     await expect(page.locator("input[name='custom.dietary_restrictions[]'][value='Vegetarian']")).toBeChecked();
     const onDemandRadio = page.getByRole("radio", { name: /On-demand/i }).first();
     await onDemandRadio.scrollIntoViewIfNeeded();
@@ -674,6 +770,7 @@ test.describe("browser workflows", () => {
       firstName: "First",
       lastName: "Friend",
       email: "friend-accept@example.test",
+      organization: "Friend Org",
     });
     await expect(page.getByRole("heading", { name: /You're registered, First!/i })).toBeVisible();
     await screenshot("04-invited-attendee-registered");
@@ -722,16 +819,18 @@ test.describe("browser workflows", () => {
     await setupPage(page);
     const errorMonitor = monitorErrors(page);
     const screenshot = createScreenshotter(page);
+    const proposerEmail = ownDomainEmail("proposal-speaker");
+    const invitedSpeakerEmail = ownDomainEmail("speaker");
 
     await page.goto("/events/2026/pqc-conference-amsterdam-nl/propose/");
     await expect(page).toHaveTitle(/Submit a Session Proposal/);
 
-    await fillProposal(page, { type: "panel", proposerPresenting: true, addPanelist: true });
+    await fillProposal(page, { type: "panel", proposerPresenting: true, addPanelist: true, proposerEmail });
     await page.getByRole("button", { name: /Submit proposal/i }).click();
     await expect(page.getByRole("heading", { name: /Proposal submitted, Priya!/i })).toBeVisible();
     await screenshot("01-proposal-submitted");
 
-    const proposalSubmittedEmail = await waitForEmail("proposal-speaker@example.test", "proposal");
+    const proposalSubmittedEmail = await waitForEmail(proposerEmail, "proposal");
     const proposalManageUrl = extractUrlFromEmail(proposalSubmittedEmail, "/propose/manage/");
     const originalProposalManageToken = new URL(proposalManageUrl).searchParams.get("token") ?? "";
     expect(originalProposalManageToken).toMatch(/^pkc1_/);
@@ -744,11 +843,11 @@ test.describe("browser workflows", () => {
     await expect(page.locator("[data-resend-proposal-manage-section]")).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/request a fresh link below/i)).toBeVisible();
     await clearOutbox();
-    await page.locator("[data-resend-proposal-manage-email]").fill("proposal-speaker@example.test");
+    await page.locator("[data-resend-proposal-manage-email]").fill(proposerEmail);
     await page.locator("[data-resend-proposal-manage-btn]").click();
     await expect(page.getByText(/you will receive an email shortly/i)).toBeVisible({ timeout: 10_000 });
 
-    const recoveredProposalEmail = await waitForEmail("proposal-speaker@example.test", "Proposal received");
+    const recoveredProposalEmail = await waitForEmail(proposerEmail, "Proposal received");
     const recoveredProposalManageUrl = extractUrlFromEmail(recoveredProposalEmail, "/propose/manage/");
     const recoveredProposalManageToken = new URL(recoveredProposalManageUrl).searchParams.get("token") ?? "";
     expect(recoveredProposalManageToken).toMatch(/^pkc1_/);
@@ -757,17 +856,17 @@ test.describe("browser workflows", () => {
     await page.goto(proposalManageRoute);
     await expect(page.getByText(/Open this page from your proposal management link/i)).toBeVisible();
     await expect(page.locator("#manage-proposal-type")).toHaveValue("panel");
-    const proposerSpeakerCard = page
-      .locator("[data-speaker-card]")
-      .filter({ hasText: "proposal-speaker@example.test" });
+    const proposerSpeakerCard = page.locator(`[data-speaker-card][data-speaker-email="${proposerEmail}"]`);
     await expect(proposerSpeakerCard).toBeVisible();
+    await proposerSpeakerCard.getByRole("button", { name: /^Actions for / }).click();
+    await proposerSpeakerCard.getByRole("menuitem", { name: "Change role…", exact: true }).click();
     await expect(proposerSpeakerCard.getByLabel("Role")).toHaveValue("moderator");
     await proposerSpeakerCard.getByLabel("Role").selectOption("speaker");
-    await proposerSpeakerCard.getByRole("button", { name: /Save speaker details/i }).click();
-    await expect(page.getByText(/Saved speaker details for proposal-speaker@example.test/i)).toBeVisible({
+    await proposerSpeakerCard.getByRole("button", { name: "Save role", exact: true }).click();
+    await expect(page.getByText(`Saved the role of ${proposerEmail}`)).toBeVisible({
       timeout: 15_000,
     });
-    await expect(proposerSpeakerCard.getByLabel("Role")).toHaveValue("speaker");
+    await expect(proposerSpeakerCard.getByText("Speaker", { exact: true })).toBeVisible();
     await page.locator("#manage-proposal-title").fill("Operational Trust in a Post-Quantum Transition, Revised");
     await page
       .locator("#manage-proposal-abstract")
@@ -779,47 +878,40 @@ test.describe("browser workflows", () => {
     await screenshot("02-proposal-updated");
 
     const inviteForm = page.locator("[data-cospeaker-form]");
-    await inviteForm.locator("#cs-email").fill("speaker@example.test");
+    await inviteForm.locator("#cs-email").fill(invitedSpeakerEmail);
     await inviteForm.locator("#cs-first-name").fill("Sam");
     await inviteForm.locator("#cs-last-name").fill("Speaker");
     await inviteForm.locator("#cs-role").selectOption("co_speaker");
     await inviteForm.getByRole("button", { name: /Send invite/i }).click();
-    await expect(page.getByText(/Invite sent to speaker@example.test/i)).toBeVisible();
+    await expect(page.getByText(`Invite sent to ${invitedSpeakerEmail}`)).toBeVisible();
     await screenshot("03-speaker-invited");
 
-    const speakerInviteEmail = await waitForEmail("speaker@example.test", "speaker");
+    const speakerInviteEmail = await waitForEmail(invitedSpeakerEmail, "speaker");
     const speakerManageUrl = extractUrlFromEmail(speakerInviteEmail, "/propose/speaker/");
 
     const speakerManageRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/speaker/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(new URL(speakerManageUrl).searchParams.get("token") ?? "")}`;
     await page.goto(speakerManageRoute);
     await expect(page.getByText(/Please confirm whether you would like to participate/i)).toBeVisible();
-    // Accept all speaker consent terms
-    await agreeToAllTerms(page);
-    await page.getByRole("button", { name: /Confirm participation/i }).click();
+    const participationConfirmation = page.getByRole("button", { name: /Confirm participation/i });
+    await expect(participationConfirmation).toBeDisabled();
+    await resolveInvitedSpeaker(page, invitedSpeakerEmail);
+    await participationConfirmation.click();
     await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
     await screenshot("04-speaker-participation-confirmed");
 
-    // After confirmation the profile section is revealed with the form directly visible;
-    // "Edit profile" only appears after a profile has already been saved.
-    await page
+    // After confirmation the speaker edits the profile of the identity they speak as, on the identity itself.
+    const identityProfile = page.locator("[data-identity-profile-form]");
+    await identityProfile
       .getByLabel(/Biography/i)
       .fill("Updated speaker biography with enough detail to satisfy validation and demonstrate the browser workflow.");
-    await page.getByLabel("Profile URL").fill("https://example.com/portfolio");
-    await page.getByRole("button", { name: /Add profile link/i }).click();
-    await page.getByRole("button", { name: /Save profile/i }).click();
+    await identityProfile
+      .getByRole("textbox", { name: "Profile link URL", exact: true })
+      .fill("https://example.com/portfolio");
+    await identityProfile.getByRole("button", { name: "Add profile link", exact: true }).click();
+    await expect(identityProfile.getByRole("group", { name: "Added profile links" })).toBeVisible();
+    await identityProfile.getByRole("button", { name: "Save changes", exact: true }).click();
     await expect(page.getByText(/Profile updated/i)).toBeVisible();
     await screenshot("05-speaker-profile-saved");
-
-    // Verify the saved-state banner is shown and the edit round-trip works
-    await expect(page.locator("[data-profile-saved-state]")).toBeVisible();
-    await page.locator("[data-profile-edit]").click();
-    await expect(page.locator("[data-profile-form-wrap]")).toBeVisible();
-    await page
-      .getByLabel(/Biography/i)
-      .fill("Second revision of the speaker biography, confirming the edit round-trip works.");
-    await page.getByRole("button", { name: /Save profile/i }).click();
-    await expect(page.getByText(/Profile updated/i)).toBeVisible();
-    await screenshot("06-speaker-profile-round-trip");
 
     // Upload a headshot via the browser, exercising the real R2 upload path
     const speakerToken = new URL(speakerManageUrl).searchParams.get("token") ?? "";
@@ -846,7 +938,10 @@ test.describe("browser workflows", () => {
 
     // Reload the speaker page and verify the headshot <img> element is rendered
     await page.goto(speakerManageRoute);
-    await expect(page.locator("[data-headshot-preview] img")).toBeVisible();
+    await expect(page.locator("[data-headshot-section] img")).toBeVisible();
+    await expect(
+      identityProfile.getByRole("group", { name: "Added profile links" }).getByTitle("https://example.com/portfolio"),
+    ).toBeVisible();
     await screenshot("07-speaker-headshot-visible");
 
     // Accept the proposal via the API so the presentation-upload section becomes visible
@@ -898,49 +993,26 @@ test.describe("browser workflows", () => {
     // ── Setup: register an attendee ─────────────────────────────────────────────
     // The bio field has no character restriction so we can store the XSS payload
     // there to verify it is HTML-escaped wherever it's reflected.
+    const sec = ownDomainEmail("sec");
     await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
     await fillRegistrationStep1(page, {
       firstName: "Sec",
       lastName: "Tester",
-      email: "sec@example.test",
+      email: sec,
+      organization: "Security Test Org",
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3(page);
-    await fillRegistrationStep4(page, "sec@example.test");
+    await fillRegistrationStep4(page, sec);
 
-    const confirmEmail = await waitForEmail("sec@example.test", "confirm");
-    const confirmationUrl = extractUrlFromEmail(confirmEmail, "/register/confirm");
-
-    // ── 1. XSS: firstName on the confirmation page must be escaped ──────────
-    await page.goto(confirmationUrl);
-    await expect(page.getByText(/one click away/i)).toBeVisible();
-    expect(await page.evaluate(() => (window as unknown as Record<string, unknown>).__xss_fired)).toBeUndefined();
-    await screenshot("01-xss-firstname-escaped-on-confirm-page");
-
-    // ── 2. Confirm the registration ──────────────────────────────────────
-    const [confirmResponse] = await Promise.all([
-      page.waitForResponse((r) => r.url().includes("/registrations/confirm-email")),
-      page.getByRole("button", { name: /Confirm my registration/i }).click(),
-    ]);
-    expect(confirmResponse.status()).toBe(200);
+    // ── 1–2. XSS: the name is escaped on the review and the success panel ───
+    await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
     expect(await page.evaluate(() => (window as unknown as Record<string, unknown>).__xss_fired)).toBeUndefined();
     await screenshot("02-xss-firstname-escaped-on-success-panel");
 
-    const confirmedEmail = await waitForEmail("sec@example.test", "confirmed");
+    const confirmedEmail = await waitForEmail(sec, "confirmed");
     const manageUrl = extractUrlFromEmail(confirmedEmail, "/register/manage/");
     const validToken = new URL(manageUrl).searchParams.get("token") ?? "";
-
-    // ── 3. Confirmation token is single-use ────────────────────────────────
-    await page.goto(confirmationUrl);
-    const retryBtn = page.getByRole("button", { name: /Confirm my registration/i });
-    if (await retryBtn.isVisible({ timeout: 4000 }).catch(() => false)) {
-      const [retryResponse] = await Promise.all([
-        page.waitForResponse((r) => r.url().includes("/registrations/confirm-email")),
-        retryBtn.click(),
-      ]);
-      expect(retryResponse.status()).not.toBe(200);
-    }
-    await screenshot("03-confirmation-token-single-use-rejected");
 
     // ── 4. Invalid manage token: graceful error, no crash ─────────────────
     await page.goto(
@@ -1016,8 +1088,7 @@ test.describe("browser workflows", () => {
     // Confirm the real speaker and verify their bio was NOT tampered with
     const spkRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/speaker/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(spkToken)}`;
     await page.goto(spkRoute);
-    // Accept all speaker consent terms
-    await agreeToAllTerms(page);
+    await resolveInvitedSpeaker(page, "speaker-sec@example.test");
     await page.getByRole("button", { name: /Confirm participation/i }).click();
     await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
 
@@ -1050,23 +1121,20 @@ test.describe("browser workflows", () => {
     const screenshot = createScreenshotter(page);
 
     // Register and confirm a fresh attendee
+    const resendTester = ownDomainEmail("resend-tester");
     await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
     await fillRegistrationStep1(page, {
       firstName: "Resend",
       lastName: "Tester",
-      email: "resend-tester@example.test",
+      email: resendTester,
+      organization: "Resend Test Org",
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3(page);
-    await fillRegistrationStep4(page, "resend-tester@example.test");
-
-    const confirmEmail = await waitForEmail("resend-tester@example.test", "confirm");
-    const confirmationUrl = extractUrlFromEmail(confirmEmail, "/register/confirm");
-    await page.goto(confirmationUrl);
-    await page.getByRole("button", { name: /Confirm my registration/i }).click();
+    await fillRegistrationStep4(page, resendTester);
     await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
 
-    const originalManageEmail = await waitForEmail("resend-tester@example.test", "confirmed");
+    const originalManageEmail = await waitForEmail(resendTester, "confirmed");
     const originalManageUrl = extractUrlFromEmail(originalManageEmail, "/register/manage/");
     const originalManageToken = new URL(originalManageUrl).searchParams.get("token") ?? "";
     expect(originalManageToken).toMatch(/^pkc1_/);
@@ -1080,13 +1148,13 @@ test.describe("browser workflows", () => {
     await screenshot("01-resend-manage-form-visible");
 
     // Fill the email address and request a fresh link
-    await page.locator("[data-resend-manage-email]").fill("resend-tester@example.test");
+    await page.locator("[data-resend-manage-email]").fill(resendTester);
     await page.locator("[data-resend-manage-btn]").click();
     await expect(page.getByText(/you will receive an email shortly/i)).toBeVisible({ timeout: 10_000 });
     await screenshot("02-resend-manage-submitted");
 
     // Wait for fresh management link email (subject: "Your management link for …")
-    const newManageEmail = await waitForEmail("resend-tester@example.test", "Your management link");
+    const newManageEmail = await waitForEmail(resendTester, "Your management link");
     const newManageUrl = extractUrlFromEmail(newManageEmail, "/register/manage/");
     const newManageToken = new URL(newManageUrl).searchParams.get("token") ?? "";
     expect(newManageToken).toMatch(/^pkc1_/);
@@ -1117,23 +1185,20 @@ test.describe("browser workflows", () => {
     const screenshot = createScreenshotter(page);
 
     // Register and confirm a nominator so we have a valid manage token
+    const nominator = ownDomainEmail("nominator");
     await page.goto("/events/2026/pqc-conference-amsterdam-nl/register/");
     await fillRegistrationStep1(page, {
       firstName: "Nominator",
       lastName: "User",
-      email: "nominator@example.test",
+      email: nominator,
+      organization: "Nominator Test Org",
     });
     await fillRegistrationStep2(page);
     await fillRegistrationStep3(page);
-    await fillRegistrationStep4(page, "nominator@example.test");
-
-    const nominatorConfirmEmail = await waitForEmail("nominator@example.test", "confirm");
-    const nominatorConfirmUrl = extractUrlFromEmail(nominatorConfirmEmail, "/register/confirm");
-    await page.goto(nominatorConfirmUrl);
-    await page.getByRole("button", { name: /Confirm my registration/i }).click();
+    await fillRegistrationStep4(page, nominator);
     await expect(page.getByRole("heading", { name: /You're registered/i })).toBeVisible({ timeout: 15_000 });
 
-    const nominatorConfirmedEmail = await waitForEmail("nominator@example.test", "confirmed");
+    const nominatorConfirmedEmail = await waitForEmail(nominator, "confirmed");
     const nominatorManageUrl = extractUrlFromEmail(nominatorConfirmedEmail, "/register/manage/");
     const nominatorManageToken = new URL(nominatorManageUrl).searchParams.get("token") ?? "";
     expect(nominatorManageToken).toBeTruthy();
@@ -1181,26 +1246,34 @@ test.describe("browser workflows", () => {
     const samProposalUrl = extractUrlFromEmail(samInviteEmail, "/propose/");
     await page.goto(samProposalUrl);
     await expect(page).toHaveTitle(/Submit a Session Proposal/);
-    // Accept all speaker consent terms
-    await agreeToAllTerms(page);
-    await page.getByRole("button", { name: /Continue/i }).click();
-    await page.getByLabel("First name").fill("Sam");
-    await page.getByLabel("Last name").fill("Speaker");
-    await page.getByLabel("Work email").fill("sam-speaker@example.test");
-    await page.getByLabel("Organization").fill("Speaker Org");
-    await page.getByLabel("Job title").fill("Security Researcher");
+    const samEntry = await fillProposalParticipant(page, {
+      firstName: "Sam",
+      lastName: "Speaker",
+      email: "sam-speaker@example.test",
+    });
     await page.getByRole("button", { name: /Continue/i }).click();
     await page.getByRole("radio", { name: /^Talk$/i }).check();
     await page.locator("#proposal-title").fill("Speaker-Nominated Session on Post-Quantum Readiness");
     await page
       .locator("#proposal-abstract")
       .fill(
-        "An overview of post-quantum readiness programmes, covering the technical and organisational steps required to prepare enterprise infrastructure for cryptographic agility.",
+        "An overview of post-quantum readiness programs, covering the technical and organizational steps required to prepare enterprise infrastructure for cryptographic agility.",
       );
     await page.getByLabel("Preferred track").selectOption("Technical Deep Dive");
     await page.getByLabel("Target audience level").selectOption("Intermediate");
     await page.getByRole("button", { name: /Continue/i }).click();
+    const samSubmitted = page.waitForResponse(
+      (response) =>
+        new URL(response.url()).pathname === "/api/v1/events/pqc-conference-amsterdam-nl/proposals" &&
+        response.request().method() === "POST",
+    );
     await page.getByRole("button", { name: /Submit proposal/i }).click();
+    const samResponse = await samSubmitted;
+    expect(samResponse.status(), await samResponse.text()).toBe(200);
+    const samPayload = proposalCreateSchema.parse(samResponse.request().postDataJSON());
+    expect(samPayload.inviteId).toBe(samEntry?.inviteId);
+    expect(samPayload.inviteToken).toBe(samEntry?.inviteToken);
+    expect(samPayload.sourceType).toBe(samEntry?.sourceType);
     await expect(page.getByRole("heading", { name: /Proposal submitted, Sam!/i })).toBeVisible();
     await screenshot("04-proposal-submitted-via-invite-link");
 
@@ -1222,63 +1295,16 @@ test.describe("browser workflows", () => {
     await nominationInviteForm.getByRole("button", { name: /Send invite/i }).click();
     await expect(page.getByText(/Invite sent to co-sam-speaker@example.test/i)).toBeVisible();
 
-    const coSpeakerCard = page.locator("[data-speaker-card]").filter({ hasText: "co-sam-speaker@example.test" });
+    const coSpeakerCard = page.locator('[data-speaker-card][data-speaker-email="co-sam-speaker@example.test"]');
     await expect(coSpeakerCard).toBeVisible();
-    await coSpeakerCard.getByLabel("First name").fill("Co");
-    await coSpeakerCard.getByLabel("Last name").fill("Sam Speaker");
-    await coSpeakerCard.getByLabel("Organization").fill("PKIC Partner Org");
-    await coSpeakerCard.getByLabel("Job title").fill("Applied Cryptography Lead");
-    await coSpeakerCard
-      .getByLabel("Biography")
-      .fill("Profile drafted by the proposer so the invited speaker can refine it later.");
-    await coSpeakerCard.getByLabel("Profile URL").fill("https://github.com/co-sam-speaker");
-    await coSpeakerCard.getByRole("button", { name: /Add profile link/i }).click();
-    await coSpeakerCard.getByRole("button", { name: /Save speaker details/i }).click();
-    await expect(page.getByText(/Saved speaker details for co-sam-speaker@example.test/i)).toBeVisible({
-      timeout: 15_000,
-    });
-
-    const speakerUserId = await coSpeakerCard
-      .locator("form[data-speaker-user-id]")
-      .getAttribute("data-speaker-user-id");
-    if (!speakerUserId) throw new Error("the co-speaker card names no user id");
-    const proposerHeadshotResult = await page.evaluate(
-      async ({ token, userId }) => {
-        const formData = new FormData();
-        const bytes = Uint8Array.from(
-          atob("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAusB9WnR0L8AAAAASUVORK5CYII="),
-          (char) => char.charCodeAt(0),
-        );
-        formData.append("file", new File([bytes], "co-speaker-headshot.png", { type: "image/png" }));
-
-        const res = await fetch(
-          `/api/v1/proposals/access/${encodeURIComponent(token)}/speakers/${encodeURIComponent(userId)}/headshot`,
-          {
-            method: "PUT",
-            body: formData,
-          },
-        );
-        return (await res.json()) as { success?: boolean; headshotUrl?: string | null; error?: { message?: string } };
-      },
-      { token: samProposalManageToken, userId: speakerUserId },
-    );
-    expect(proposerHeadshotResult.success).toBe(true);
-    expect(proposerHeadshotResult.headshotUrl).toBeTruthy();
-
-    await page.reload();
-    const refreshedCoSpeakerCard = page
-      .locator("[data-speaker-card]")
-      .filter({ hasText: "co-sam-speaker@example.test" });
-    await expect(refreshedCoSpeakerCard).toBeVisible();
-    // The preview is an `<img>` named for the speaker it belongs to, which is
-    // steadier than the class this used to select on — that class no longer
-    // exists anywhere in the product. Checking the `src` too proves the image
-    // on the card is this speaker's headshot resource, rather than merely that
-    // the card has an image somewhere. The URL carries a `?v=` cache buster,
-    // so the path is what is pinned.
-    const coSpeakerHeadshot = refreshedCoSpeakerCard.getByRole("img", { name: "Co Sam Speaker" });
-    await expect(coSpeakerHeadshot).toBeVisible({ timeout: 15_000 });
-    await expect(coSpeakerHeadshot).toHaveAttribute("src", new RegExp(`/speakers/${speakerUserId}/headshot(?:\\?|$)`));
+    await coSpeakerCard.getByRole("button", { name: /^Actions for / }).click();
+    await coSpeakerCard.getByRole("menuitem", { name: "Change role…", exact: true }).click();
+    // The proposer changes the role only: a speaker's name, photo and profile are their own.
+    await expect(coSpeakerCard.getByLabel("First name", { exact: true })).toHaveCount(0);
+    await expect(coSpeakerCard.getByLabel("Biography", { exact: true })).toHaveCount(0);
+    await coSpeakerCard.getByLabel("Role").selectOption("speaker");
+    await coSpeakerCard.getByRole("button", { name: "Save role", exact: true }).click();
+    await expect(page.getByText(/Saved the role of co-sam-speaker@example.test/i)).toBeVisible({ timeout: 15_000 });
     await screenshot("05-co-speaker-invited");
 
     // ── Resend the co-speaker manage link via the browser ────────────────────
@@ -1307,17 +1333,17 @@ test.describe("browser workflows", () => {
     await page.goto(refreshedRoute);
     await expect(page.getByText(/Please confirm whether you would like to participate/i)).toBeVisible();
     await expect(page.locator("[data-profile-section]")).toBeVisible();
-    await expect(page.locator("[data-headshot-preview] img")).toBeVisible();
-    await expect(page.getByLabel("Organization (optional)", { exact: true })).toHaveValue("PKIC Partner Org");
-    await expect(page.getByLabel("Job title (optional)", { exact: true })).toHaveValue("Applied Cryptography Lead");
-    await page.getByLabel("Job title (optional)", { exact: true }).fill("Cryptography Programme Manager");
+    await resolveInvitedSpeaker(page, "co-sam-speaker@example.test");
+    await expect(page.locator('[data-profile-form] input[name="organizationName"]')).toHaveCount(0);
     await page
-      .locator("#speaker-bio")
-      .fill("Updated by the invited speaker after reviewing the proposer-provided draft.");
-    await page.getByRole("button", { name: /Save profile/i }).click();
+      .locator("[data-identity-profile-form]")
+      .getByLabel(/Biography/i)
+      .fill("Written by the invited speaker on the identity they speak as.");
+    await page
+      .locator("[data-identity-profile-form]")
+      .getByRole("button", { name: "Save changes", exact: true })
+      .click();
     await expect(page.getByText(/Profile updated./i)).toBeVisible({ timeout: 10_000 });
-    // Accept all speaker consent terms
-    await agreeToAllTerms(page);
     await page.getByRole("button", { name: /Confirm participation/i }).click();
     await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
     await screenshot("08-co-speaker-confirmed-via-refreshed-link");
@@ -1338,11 +1364,14 @@ test.describe("browser workflows", () => {
 
     // Capture the proposalId from the submission API response before the page redirects
     const submitResponsePromise = page.waitForResponse(
-      (res) => res.url().includes("/api/v1/events/pqc-conference-amsterdam-nl/proposals") && res.status() === 200,
+      (res) =>
+        new URL(res.url()).pathname === "/api/v1/events/pqc-conference-amsterdam-nl/proposals" &&
+        res.request().method() === "POST" &&
+        res.status() === 200,
     );
     await page.getByRole("button", { name: /Submit proposal/i }).click();
     const submitResponse = await submitResponsePromise;
-    const submitData = (await submitResponse.json()) as { proposalId?: string; manageToken?: string };
+    const submitData = proposalCreateResponseSchema.parse(await submitResponse.json());
     const proposalId = submitData.proposalId ?? "";
     expect(proposalId).toBeTruthy();
 
@@ -1379,6 +1408,17 @@ test.describe("browser workflows", () => {
     const speakerToken = new URL(speakerManageUrl).searchParams.get("token") ?? "";
     expect(speakerToken).toBeTruthy();
 
+    // Keep the staff session separate while the invited speaker confirms through their own capability.
+    const staffCookies = await page.context().cookies();
+    await page.context().clearCookies();
+    await page.goto(speakerManageUrl);
+    await expect(page.locator("[data-speaker-content]")).toBeVisible();
+    if (await page.locator("[data-confirm-panel]").isVisible()) {
+      await resolveInvitedSpeaker(page, "proposal-speaker@example.test");
+      await page.getByRole("button", { name: "Confirm participation", exact: true }).click();
+      await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
+    }
+
     // ── 5. Speaker uploads a presentation ─────────────────────────────────────
 
     await page.goto(
@@ -1414,6 +1454,8 @@ test.describe("browser workflows", () => {
     });
     await screenshot("05-presentation-uploaded");
 
+    await page.context().addCookies(staffCookies);
+
     // ── 6. Admin views the Presentation tab and submits a review ──────────────
     await page.goto(`/portal/#/events/pqc-conference-amsterdam-nl/proposals/detail/${proposalId}`);
     await expect(page.getByRole("heading", { name: /Operational Trust in a Post-Quantum Transition/i })).toBeVisible({
@@ -1425,11 +1467,13 @@ test.describe("browser workflows", () => {
     await expect(page.getByText(/pqc-migration-talk\.pdf/i)).toBeVisible();
     await screenshot("06-admin-presentation-tab");
 
-    // Open the review form and submit a "needs_revision" review
+    // Open the version action menu and its dedicated review form.
     const versionRow = page.getByRole("row", { name: /Version 1/i });
-    await versionRow.getByRole("button", { name: /^Review$/i }).click();
-    const reviewForm = page.locator(".pk-table__detail form");
-    const statusSelect = reviewForm.locator("select");
+    await runRowAction(page, versionRow, "Review");
+    await expect(page.getByRole("heading", { name: "Review presentation version", exact: true })).toBeVisible();
+    const reviewForm = page.locator('form[id^="presentation-review-"]');
+    await expect(reviewForm).toHaveCount(1);
+    const statusSelect = reviewForm.getByRole("combobox", { name: "Review outcome", exact: true });
     await expect(statusSelect).toBeVisible({ timeout: 5_000 });
     await statusSelect.selectOption("needs_revision");
     const noteInput = reviewForm.getByRole("textbox", { name: "Note for the speaker", exact: true });

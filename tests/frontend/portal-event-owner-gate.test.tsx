@@ -1,13 +1,18 @@
 // @vitest-environment jsdom
 /**
- * Canonical event homes are groups: standalone /events/:slug management
- * views redirect to the owning group's event workspace. Events without an
- * owning group never gain a second, system-level management surface.
+ * Canonical event management lives in groups: standalone /events/:slug
+ * management views redirect to the owning group's event workspace for a
+ * caller who can open it. Everyone else, and every attendee-facing tab, gets
+ * the group-independent event page instead of a redirect into a refusal.
+ * Events without an owning group never gain a second, system-level
+ * management surface.
  */
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { EventWorkspace } from "../../assets/ts/member-flows/portal/sections/events/EventWorkspace";
+import { portalSession } from "../../assets/ts/member-flows/portal/state";
+import { portalSessionFixture } from "../helpers/portal-session";
 
 const navigate = vi.fn();
 
@@ -45,7 +50,8 @@ function detailResponse(ownerGroupId: string | null) {
       venue: null,
       virtualUrl: null,
       heroImageUrl: null,
-      location: null,
+      city: null,
+      country: null,
       sessionTypes: null,
       links: [],
       settings: {},
@@ -66,6 +72,7 @@ let container: HTMLDivElement;
 
 beforeEach(() => {
   navigate.mockReset();
+  portalSession.value = portalSessionFixture({ member: true });
   container = document.createElement("div");
   document.body.append(container);
 });
@@ -73,6 +80,7 @@ beforeEach(() => {
 afterEach(() => {
   void act(() => render(null, container));
   container.remove();
+  portalSession.value = null;
   vi.unstubAllGlobals();
 });
 
@@ -119,12 +127,12 @@ describe("standalone event views redirect to the owning group", () => {
     {
       label: "event settings",
       props: { tab: "settings", subTab: "sponsor-tiers" },
-      destination: `/groups/${GROUP_ID}/events/${EVENT_ID}/settings`,
+      destination: `/groups/${GROUP_ID}/events/${EVENT_ID}/settings/sponsor-tiers`,
     },
     {
       label: "the add-team-member page",
       props: { tab: "settings", subTab: "team", detailSegment: "new" },
-      destination: `/groups/${GROUP_ID}/events/${EVENT_ID}/team/new`,
+      destination: `/groups/${GROUP_ID}/events/${EVENT_ID}/settings/team/new`,
     },
   ])("preserves $label when redirecting a legacy event URL", async ({ props, destination }) => {
     stubDetail(GROUP_ID);
@@ -150,13 +158,63 @@ describe("standalone event views redirect to the owning group", () => {
     });
   });
 
-  it("rejects a management route for an event without an owning group", async () => {
+  it("opens the event page, never a management surface, for an event without an owning group", async () => {
     stubDetail(null);
     await act(() => render(<EventWorkspace view="detail" slug="summit" tab="registrations" />, container));
     await settle();
-    expect(navigate).toHaveBeenCalledWith("/events", { replace: true });
+    await vi.waitFor(() => expect(container.querySelector(".pk-event-hero__title")?.textContent).toBe("Summit"), {
+      timeout: 15_000,
+    });
+    expect(navigate).not.toHaveBeenCalled();
     expect(container.textContent).not.toContain("Registrations");
   });
+
+  it("opens the group-independent event page for a group manager instead of redirecting the overview", async () => {
+    stubDetail(GROUP_ID);
+    await act(() => render(<EventWorkspace view="detail" slug="summit" />, container));
+    await settle();
+    await vi.waitFor(() => expect(container.querySelector(".pk-event-hero__title")?.textContent).toBe("Summit"));
+    expect(container.textContent).toContain("My agenda");
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    {
+      label: "an event-scoped staff identity",
+      session: () =>
+        portalSessionFixture({
+          staff: true,
+          grants: [{ permission: "events:manage", contextType: "event", contextId: EVENT_ID }],
+        }),
+    },
+    {
+      label: "a staff identity scoped to another group",
+      session: () =>
+        portalSessionFixture({
+          staff: true,
+          grants: [{ permission: "events:manage", contextType: "group", contextId: "other-group" }],
+        }),
+    },
+  ])("keeps $label on the event page instead of redirecting into a group it cannot open", async ({ session }) => {
+    portalSession.value = session();
+    stubDetail(GROUP_ID);
+    await act(() => render(<EventWorkspace view="detail" slug="summit" tab="registrations" />, container));
+    await settle();
+    await vi.waitFor(() => expect(container.querySelector(".pk-event-hero__title")?.textContent).toBe("Summit"));
+    expect(navigate).not.toHaveBeenCalled();
+  });
+
+  it("redirects a staff identity granted on the owning group into its workspace", async () => {
+    portalSession.value = portalSessionFixture({
+      staff: true,
+      grants: [{ permission: "events:manage", contextType: "group", contextId: GROUP_ID }],
+    });
+    stubDetail(GROUP_ID);
+    await act(() => render(<EventWorkspace view="detail" slug="summit" tab="registrations" />, container));
+    await settle();
+    expect(navigate).toHaveBeenCalledWith(`/groups/${GROUP_ID}/events/${EVENT_ID}/registrations`, { replace: true });
+  });
+
   it("shows the current viewer's registration without requesting management-only data", async () => {
     vi.stubGlobal(
       "fetch",
@@ -175,10 +233,18 @@ describe("standalone event views redirect to the owning group", () => {
                 registrationPolicy: "public",
                 visibility: "public",
                 accessLevel: "participant",
-                location: "Amsterdam",
+                sponsorLeadAccess: false,
+                city: "Amsterdam",
+                country: "NL",
                 links: [],
                 basePath: "/events/summit/",
-                viewer: { registrationStatus: "registered", attendanceType: "in_person", waitlisted: false, days: [] },
+                viewer: {
+                  registrationStatus: "registered",
+                  attendanceType: "in_person",
+                  waitlisted: false,
+                  days: [],
+                  holdsWorkAddress: true,
+                },
               },
             }),
             { status: 200, headers: { "content-type": "application/json" } },
@@ -187,8 +253,9 @@ describe("standalone event views redirect to the owning group", () => {
     );
     await act(() => render(<EventWorkspace view="detail" slug="summit" />, container));
     await settle();
-    expect(container.textContent).toContain("Your registration");
-    expect(container.textContent).toContain("Registered");
+    // The event home's ticket card carries the viewer's own registration.
+    expect(container.textContent).toContain("Your ticket");
+    expect(container.textContent).toContain("You're registered");
     expect(container.textContent).toContain("Amsterdam");
     expect(navigate).not.toHaveBeenCalled();
     expect(vi.mocked(fetch).mock.calls.map(([input]) => String(input))).toEqual(["/api/v1/events/summit"]);
@@ -213,7 +280,9 @@ describe("standalone event views redirect to the owning group", () => {
                 registrationPolicy: "public",
                 visibility: "public",
                 accessLevel: "participant",
-                location: "Amsterdam",
+                sponsorLeadAccess: false,
+                city: "Amsterdam",
+                country: "NL",
                 links: [],
                 basePath: "/events/summit/",
                 viewer: null,
@@ -245,5 +314,59 @@ describe("standalone event views redirect to the owning group", () => {
 
     expect(navigate).not.toHaveBeenCalled();
     await vi.waitFor(() => expect(container.textContent).toContain("Your event proposals"));
+  });
+  it("opens assigned promotion kits in the participant workspace without management requests", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(String(input), location.origin);
+        if (url.pathname === "/api/v1/events/summit") {
+          return new Response(
+            JSON.stringify({
+              event: {
+                id: EVENT_ID,
+                slug: "summit",
+                name: "Summit",
+                timezone: "UTC",
+                startsAt: null,
+                endsAt: null,
+                profileKey: "conference",
+                registrationPolicy: "public",
+                visibility: "public",
+                accessLevel: "participant",
+                sponsorLeadAccess: false,
+                city: "Amsterdam",
+                country: "NL",
+                links: [],
+                basePath: "/events/summit/",
+                viewer: null,
+                participation: {
+                  registrationId: null,
+                  registrationStatus: null,
+                  proposals: 1,
+                  speakerProposals: 0,
+                  proposalStates: ["submitted"],
+                  speakerStates: [],
+                },
+              },
+            }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        if (url.pathname === "/api/v1/events/summit/agenda/promotion") {
+          return new Response(
+            JSON.stringify({ occurrences: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } }),
+            { status: 200, headers: { "content-type": "application/json" } },
+          );
+        }
+        return new Response(JSON.stringify({ error: { code: "NOT_FOUND", message: "nope" } }), { status: 404 });
+      }),
+    );
+
+    await act(() => render(<EventWorkspace view="detail" slug="summit" tab="promotion" />, container));
+    await settle();
+
+    expect(navigate).not.toHaveBeenCalled();
+    await vi.waitFor(() => expect(container.textContent).toContain("My promotion kits"));
   });
 });

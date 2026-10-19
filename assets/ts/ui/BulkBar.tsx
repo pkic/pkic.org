@@ -8,6 +8,7 @@
 import type { ComponentChildren, JSX } from "preact";
 
 import { Button } from "./Button";
+import { formatNumber } from "../../shared/format-number";
 import "./BulkBar.css";
 
 export interface BulkBarProps extends Omit<JSX.HTMLAttributes<HTMLDivElement>, "role"> {
@@ -27,12 +28,12 @@ export function BulkBar({ count, total, onClear, class: className, children, ...
   const classes = ["pk-bulk-bar", className].filter(Boolean).join(" ");
 
   return (
-    <div class={classes} role="status" {...rest}>
+    <div class={classes} role="status" data-density="compact" {...rest}>
       <div class="pk-bulk-bar__count">
-        {count} of {total} selected
+        {formatNumber(count)} of {formatNumber(total)} selected
       </div>
 
-      <Button variant="ghost" size="sm" onClick={onClear}>
+      <Button variant="ghost" onClick={onClear}>
         Clear selection
       </Button>
 

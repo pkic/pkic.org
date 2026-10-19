@@ -6,7 +6,7 @@ import { processPendingOutbox, queueEmail } from "../functions/_lib/email/outbox
 import { activateTemplateVersion, createTemplateVersion } from "../functions/_lib/email/templates";
 import { processEmailOutboxCommand, resetFailedEmailOutboxCommand } from "../functions/_lib/services/email-outbox";
 import type { Env } from "../functions/_lib/types";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { mutateBeforeNextBatch } from "./helpers/database-races";

@@ -1,0 +1,289 @@
+/*
+ * The studio grid: twelve columns of fixed-height rows, each panel placed at
+ * its own column, row, width and height through custom properties. Below
+ * 760px of grid width, measured on the grid itself so a narrow window and a
+ * split screen fold the same way, the panels stack in reading order.
+ */
+@layer components {
+  /* The grid's frame is the container its width is measured on, so the grid itself can fold too. */
+  .pk-studio-grid-frame {
+    container: studio / inline-size;
+    min-inline-size: 0;
+  }
+  .pk-studio-grid {
+    position: relative;
+    display: grid;
+    grid-template-columns: repeat(12, minmax(0, 1fr));
+    grid-auto-rows: var(--pk-6);
+    gap: var(--pk-3);
+  }
+  @container studio (width < 760px) {
+    .pk-studio-grid {
+      grid-auto-rows: auto;
+    }
+  }
+  .pk-studio-grid[data-gesture] {
+    user-select: none;
+  }
+  .pk-studio-grid[data-gesture="move"] {
+    cursor: grabbing;
+  }
+  .pk-studio-grid[data-gesture="resize"] {
+    cursor: nwse-resize;
+  }
+  .pk-studio-cell,
+  .pk-studio-grid__placeholder {
+    grid-column: var(--studio-col, auto) / span var(--studio-w, 4);
+    grid-row: var(--studio-row, auto) / span var(--studio-h, 6);
+  }
+  .pk-studio-cell {
+    position: relative;
+    z-index: 1;
+    display: flex;
+    min-inline-size: 0;
+    min-block-size: 0;
+    border-radius: var(--pk-radius-lg);
+  }
+  /* While a gesture runs, the panel follows the pointer above the others; the placeholder shows where it lands. */
+  .pk-studio-cell[data-gesture] {
+    z-index: 3;
+    box-shadow: var(--pk-shadow-3);
+    will-change: transform;
+  }
+  .pk-studio-cell[data-gesture="move"] {
+    opacity: 0.92;
+  }
+  /* An edge or corner to resize from: a thin strip along each side, a square at each corner, invisible until used. */
+  .pk-studio-cell__edge {
+    position: absolute;
+    z-index: 2;
+    touch-action: none;
+  }
+  .pk-studio-cell__edge[data-edge="n"],
+  .pk-studio-cell__edge[data-edge="s"] {
+    inset-inline: var(--pk-3);
+    block-size: 0.5rem;
+    cursor: ns-resize;
+  }
+  .pk-studio-cell__edge[data-edge="e"],
+  .pk-studio-cell__edge[data-edge="w"] {
+    inset-block: var(--pk-3);
+    inline-size: 0.5rem;
+    cursor: ew-resize;
+  }
+  .pk-studio-cell__edge[data-edge="n"] {
+    inset-block-start: -0.25rem;
+  }
+  .pk-studio-cell__edge[data-edge="s"] {
+    inset-block-end: -0.25rem;
+  }
+  .pk-studio-cell__edge[data-edge="e"] {
+    inset-inline-end: -0.25rem;
+  }
+  .pk-studio-cell__edge[data-edge="w"] {
+    inset-inline-start: -0.25rem;
+  }
+  .pk-studio-cell__edge:is([data-edge="ne"], [data-edge="nw"], [data-edge="sw"]) {
+    inline-size: var(--pk-4);
+    block-size: var(--pk-4);
+  }
+  .pk-studio-cell__edge[data-edge="ne"] {
+    inset-block-start: -0.25rem;
+    inset-inline-end: -0.25rem;
+    cursor: nesw-resize;
+  }
+  .pk-studio-cell__edge[data-edge="nw"] {
+    inset-block-start: -0.25rem;
+    inset-inline-start: -0.25rem;
+    cursor: nwse-resize;
+  }
+  .pk-studio-cell__edge[data-edge="sw"] {
+    inset-block-end: -0.25rem;
+    inset-inline-start: -0.25rem;
+    cursor: nesw-resize;
+  }
+  .pk-studio-cell__edge:hover {
+    background: color-mix(in srgb, var(--pk-accent) 35%, transparent);
+  }
+  @container studio (width < 760px) {
+    .pk-studio-cell__edge {
+      display: none;
+    }
+  }
+  .pk-studio-grid__placeholder {
+    z-index: 0;
+    display: none;
+    border: 2px dashed var(--pk-accent);
+    border-radius: var(--pk-radius-lg);
+    background: var(--pk-accent-soft);
+    pointer-events: none;
+  }
+  .pk-studio-grid[data-gesture] .pk-studio-grid__placeholder {
+    display: block;
+  }
+  /* Stacked, a panel is as tall as its content, up to most of the screen. */
+  @container studio (width < 760px) {
+    .pk-studio-cell {
+      grid-column: 1 / -1;
+      grid-row: auto;
+    }
+  }
+  /*
+   * On a tablet the panels sit in two columns in reading order; a monitor
+   * keeps the full width, so Preview and Program stay large.
+   */
+  @container studio (480px <= width < 760px) {
+    .pk-studio-grid {
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      align-items: start;
+    }
+    .pk-studio-cell {
+      grid-column: auto;
+    }
+    .pk-studio-cell[data-presence-panel="monitor"] {
+      grid-column: 1 / -1;
+    }
+  }
+  @container studio (width < 760px) {
+    .pk-studio-panel__body {
+      max-block-size: 70dvh;
+    }
+    .pk-studio-panel__header {
+      cursor: default;
+    }
+  }
+  .pk-studio-panel {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-inline-size: 0;
+    min-block-size: 0;
+  }
+  .pk-studio-panel__header {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+    min-block-size: 2.5rem;
+    padding-inline: var(--pk-1) var(--pk-1);
+    border-block-end: 1px solid var(--pk-line-soft);
+    cursor: grab;
+    touch-action: none;
+  }
+  .pk-studio-panel__grip {
+    flex: none;
+    inline-size: var(--pk-3);
+    block-size: var(--pk-4);
+    margin-inline-start: var(--pk-1);
+    background: radial-gradient(circle, var(--pk-ink-faint) 1.5px, transparent 1.6px) 0 0 / 6px 6px;
+  }
+  .pk-studio-panel__title {
+    flex: 1;
+    min-inline-size: 0;
+    margin: 0;
+    overflow: hidden;
+    font-size: var(--pk-text-sm);
+    font-weight: 700;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .pk-studio-panel__actions {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--pk-1);
+    margin-inline-start: auto;
+    cursor: default;
+    touch-action: auto;
+  }
+  .pk-studio-panel__body {
+    flex: 1;
+    min-block-size: 0;
+    overflow: auto;
+  }
+  /*
+   * A box whose content may not fit: its scrollbar stays visible and the
+   * edge with more past it fades out, so nothing ends in a hard cut and the
+   * operator sees there is more (see useScrollEdges).
+   */
+  .pk-scroll-edges {
+    scrollbar-width: thin;
+    scrollbar-color: var(--pk-line-strong) transparent;
+  }
+  .pk-scroll-edges[data-more="below"] {
+    mask-image: linear-gradient(to bottom, currentColor calc(100% - 2.5rem), transparent);
+  }
+  .pk-scroll-edges[data-more="above"] {
+    mask-image: linear-gradient(to top, currentColor calc(100% - 1.5rem), transparent);
+  }
+  .pk-scroll-edges[data-more="above below"] {
+    mask-image: linear-gradient(
+      to bottom,
+      transparent,
+      currentColor 1.5rem,
+      currentColor calc(100% - 2.5rem),
+      transparent
+    );
+  }
+  /*
+   * The resize grip: a 24px target in the corner that draws only a small
+   * two-line mark, faint until the panel is hovered and strong on the grip's
+   * own hover or focus.
+   */
+  .pk-studio-cell__resize {
+    position: absolute;
+    inset-inline-end: 0;
+    inset-block-end: 0;
+    z-index: 2;
+    display: grid;
+    place-items: end;
+    inline-size: var(--pk-5);
+    block-size: var(--pk-5);
+    padding: 0.1875rem;
+    border: 0;
+    border-end-end-radius: var(--pk-radius-lg);
+    background: none;
+    color: var(--pk-line-strong);
+    cursor: nwse-resize;
+    opacity: 0.5;
+    touch-action: none;
+    transition: opacity var(--pk-dur-fast) var(--pk-ease);
+  }
+  .pk-studio-cell__resize::after {
+    content: "";
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    background: linear-gradient(
+      135deg,
+      transparent 45%,
+      currentColor 45%,
+      currentColor 55%,
+      transparent 55%,
+      transparent 70%,
+      currentColor 70%,
+      currentColor 80%,
+      transparent 80%
+    );
+  }
+  .pk-studio-cell:hover > .pk-studio-cell__resize {
+    opacity: 1;
+  }
+  .pk-studio-cell__resize:is(:hover, :focus-visible),
+  .pk-studio-cell[data-gesture="resize"] > .pk-studio-cell__resize {
+    color: var(--pk-accent);
+    opacity: 1;
+  }
+  .pk-studio-cell__resize:hover::after,
+  .pk-studio-cell__resize:focus-visible::after {
+    inline-size: 0.625rem;
+    block-size: 0.625rem;
+  }
+  .pk-studio-cell__resize:focus-visible {
+    outline: 2px solid var(--pk-focus);
+    outline-offset: -2px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pk-studio-cell__resize {
+      transition: none;
+    }
+  }
+}

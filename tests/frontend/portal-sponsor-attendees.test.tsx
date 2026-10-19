@@ -42,6 +42,7 @@ const ONE_ATTENDEE = attendeesResponse([
     lastName: "Lovelace",
     email: "ada@example.test",
     organizationName: "Analytical Engines",
+    personalEmail: false,
     jobTitle: "Analyst",
     attendanceType: "in_person",
   },
@@ -126,7 +127,7 @@ describe("sponsor attendee roster", () => {
     const download = container.querySelector<HTMLAnchorElement>("a[download]")!;
     expect(download.getAttribute("href")).toBe(`${ATTENDEES_PATH}?format=csv`);
     expect(download.getAttribute("download")).toBe("attendees-spring-summit.csv");
-    expect(download.getAttribute("aria-label")).toBe("Download CSV");
+    expect(download.getAttribute("aria-label")).toBe("Download consenting attendees (CSV)");
     expect(download.querySelector("svg")).not.toBeNull();
   });
 

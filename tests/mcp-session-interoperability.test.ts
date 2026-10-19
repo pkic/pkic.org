@@ -1,15 +1,125 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { env } from "cloudflare:workers";
+import { env as workerEnv } from "cloudflare:workers";
+import "../functions/http-router";
+const env = { ...workerEnv, INTERNAL_SIGNING_SECRET: "synthetic-oauth-test-signing-secret-32-plus" };
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import app from "../functions/router";
-import { resolveMcpExternalToken } from "../functions/_lib/auth/oauth/authorization";
-import { requireActiveMcpSession } from "../functions/_lib/auth/oauth/session-authorization";
-import { queryAll } from "./helpers/context";
+import app from "./helpers/app";
 import { MCP_PATH } from "../functions/_lib/api-tools/mcp-worker";
-import { seedEventAndAdmin } from "./helpers/context";
-import { resetDb } from "./helpers/reset-db";
-import { origin, call, authorize, createAuthorization, redeemCode, exchange, initialize } from "./helpers/mcp-oauth";
+import {
+  MCP_OAUTH_AUTHORIZE_PATH,
+  MCP_OAUTH_REGISTER_PATH,
+  MCP_OAUTH_TOKEN_PATH,
+  resolveMcpExternalToken,
+} from "../functions/_lib/auth/oauth/authorization";
+import { resolveActiveMcpSession } from "../functions/_lib/auth/oauth/session-authorization";
 import { AppError } from "../functions/_lib/errors";
+import { createAdminSession } from "./helpers/auth";
+import { queryAll, seedEventAndAdmin } from "./helpers/context";
+import { resetDb } from "./helpers/reset-db";
+
+const origin = "https://app.test";
+const redirectUri = "http://127.0.0.1:1455/callback";
+const verifier = "abcdefghijklmnopqrstuvwxyz0123456789ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+async function call(path: string, init?: RequestInit): Promise<Response> {
+  const context = createExecutionContext();
+  const response = await app.fetch(new Request(`${origin}${path}`, init), env, context);
+  await waitOnExecutionContext(context);
+  return response;
+}
+
+async function createAuthorization(userToken?: string) {
+  const [user] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users WHERE normalized_email = ?", [
+    "admin@pkic.org",
+  ]);
+  const session =
+    userToken ?? (await createAdminSession(env.DB, user.id, crypto.randomUUID(), env.INTERNAL_SIGNING_SECRET));
+  const registration = await call(MCP_OAUTH_REGISTER_PATH, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({
+      client_name: "MCP interoperability test",
+      redirect_uris: [redirectUri],
+      token_endpoint_auth_method: "none",
+      grant_types: ["authorization_code", "refresh_token"],
+      response_types: ["code"],
+    }),
+  });
+  expect(registration.status).toBe(201);
+  const { client_id: clientId } = (await registration.json()) as { client_id: string };
+  const digest = new Uint8Array(await crypto.subtle.digest("SHA-256", new TextEncoder().encode(verifier)));
+  const challenge = btoa(String.fromCharCode(...digest))
+    .replace(/\+/g, "-")
+    .replace(/\//g, "_")
+    .replace(/=+$/, "");
+  const returnTo = `${MCP_OAUTH_AUTHORIZE_PATH}?${new URLSearchParams({ client_id: clientId, redirect_uri: redirectUri, response_type: "code", scope: "forms:read forms:write organizations:read users:read", state: "test-state", code_challenge: challenge, code_challenge_method: "S256", resource: `${origin}${MCP_PATH}` })}`;
+  const approval = await call(MCP_OAUTH_AUTHORIZE_PATH, {
+    method: "POST",
+    headers: { "content-type": "application/json", cookie: `pkic_session=${session}` },
+    body: JSON.stringify({
+      action: "approve",
+      return_to: returnTo,
+      scopes: ["forms:read", "organizations:read", "users:read"],
+      actingIdentityId: null,
+    }),
+  });
+  expect(approval.status).toBe(202);
+  const { authorizationId } = (await approval.json()) as { authorizationId: string };
+  const completed = await call(`/api/v1/auth/oauth/authorizations/${authorizationId}/completion`, {
+    headers: { cookie: `pkic_session=${session}` },
+  });
+  expect(completed.status).toBe(200);
+  const { redirectTo, status } = (await completed.json()) as { redirectTo: string; status: string };
+  expect(status).toBe("active");
+  const callback = new URL(redirectTo);
+  expect(callback.searchParams.get("state")).toBe("test-state");
+  return { authorizationId, clientId, userToken: session, userId: user.id, code: callback.searchParams.get("code")! };
+}
+
+function redeemCode(grant: Awaited<ReturnType<typeof createAuthorization>>) {
+  return exchange({
+    grant_type: "authorization_code",
+    client_id: grant.clientId,
+    redirect_uri: redirectUri,
+    code: grant.code,
+    code_verifier: verifier,
+    resource: `${origin}${MCP_PATH}`,
+  });
+}
+
+async function authorize(userToken?: string) {
+  const grant = await createAuthorization(userToken);
+  const tokens = await redeemCode(grant);
+  expect(tokens.status).toBe(200);
+  return {
+    ...grant,
+    ...((await tokens.json()) as { access_token: string; refresh_token: string; expires_in: number; scope: string }),
+  };
+}
+
+function exchange(body: Record<string, string>) {
+  return call(MCP_OAUTH_TOKEN_PATH, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams(body),
+  });
+}
+
+function initialize(token: string) {
+  return call(MCP_PATH, {
+    method: "POST",
+    headers: {
+      authorization: `Bearer ${token}`,
+      "content-type": "application/json",
+      accept: "application/json, text/event-stream",
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "initialize",
+      params: { protocolVersion: "2025-06-18", capabilities: {}, clientInfo: { name: "test-client", version: "1" } },
+    }),
+  });
+}
 
 describe("MCP OAuth session interoperability", () => {
   afterEach(() => {
@@ -41,6 +151,48 @@ describe("MCP OAuth session interoperability", () => {
     expect(refreshed.status).toBe(200);
     const tokens = (await refreshed.json()) as { access_token: string };
     expect((await initialize(tokens.access_token)).status).toBe(200);
+  });
+
+  it("issues only the approved subset and keeps refresh downscoping", async () => {
+    const grant = await authorize();
+    expect(new Set(grant.scope.split(" "))).toEqual(new Set(["forms:read", "organizations:read", "users:read"]));
+    const refreshed = await exchange({
+      grant_type: "refresh_token",
+      client_id: grant.clientId,
+      refresh_token: grant.refresh_token,
+      scope: "forms:read",
+    });
+    expect(refreshed.status).toBe(200);
+    const tokens = (await refreshed.json()) as { scope: string; refresh_token: string };
+    expect(tokens.scope).toBe("forms:read");
+    const expanded = await exchange({
+      grant_type: "refresh_token",
+      client_id: grant.clientId,
+      refresh_token: tokens.refresh_token,
+      scope: "forms:write",
+    });
+    expect(expanded.status).toBe(400);
+  });
+
+  it("revokes an existing access token and its refresh through the owner route", async () => {
+    const grant = await authorize();
+    const headers = { cookie: `pkic_session=${grant.userToken}` };
+    const review = await call(`/api/v1/auth/oauth/authorizations/${grant.authorizationId}`, { headers });
+    const { authorization } = (await review.json()) as { authorization: { revision: string } };
+    const revoked = await call(`/api/v1/auth/oauth/authorizations/${grant.authorizationId}/revoke`, {
+      method: "POST",
+      headers: { ...headers, "content-type": "application/json" },
+      body: JSON.stringify({ revision: authorization.revision }),
+    });
+    expect(revoked.status).toBe(200);
+    expect((await initialize(grant.access_token)).status).toBe(401);
+    const refresh = await exchange({
+      grant_type: "refresh_token",
+      client_id: grant.clientId,
+      refresh_token: grant.refresh_token,
+    });
+    expect(refresh.status).toBe(400);
+    expect(await refresh.json()).toMatchObject({ error: "invalid_grant" });
   });
 
   it.each(["expired", "revoked", "deactivated"])(
@@ -113,7 +265,7 @@ describe("MCP OAuth session interoperability", () => {
       expect(revoked.revoked_at).toBeNull();
       const context = createExecutionContext();
       const portal = await app.fetch(
-        new Request(`${origin}/api/v1/auth/session`, { headers: { cookie: grant.cookie } }),
+        new Request(`${origin}/api/v1/auth/session`, { headers: { cookie: `pkic_session=${grant.userToken}` } }),
         env,
         context,
       );
@@ -132,15 +284,13 @@ describe("MCP OAuth session interoperability", () => {
     const authorizedAt = Date.now();
     const grant = await authorize();
     const external = await resolveMcpExternalToken({
-      token: grant.cookie.slice("pkic_session=".length),
+      token: grant.userToken,
       request: new Request(`${origin}${MCP_PATH}`),
       env,
     });
     expect(external?.props.identityType).toBe("user");
     vi.setSystemTime(authorizedAt + 30 * 60 * 1000);
-    const activePortal = await call("/api/v1/auth/session", {
-      headers: { "x-user-token": grant.cookie.slice("pkic_session=".length) },
-    });
+    const activePortal = await call("/api/v1/auth/session", { headers: { "x-user-token": grant.userToken } });
     expect(activePortal.status).toBe(200);
     const activeToken = activePortal.headers.get("x-user-token")!;
     expect(activeToken).toBeTruthy();
@@ -149,7 +299,7 @@ describe("MCP OAuth session interoperability", () => {
     if (path === "request") {
       // Access-token expiry can reject before the handler; also exercise its
       // session gate so this case proves that neither path revokes the portal.
-      await expect(requireActiveMcpSession(env, external!.props)).rejects.toMatchObject({ code: "AUTH_EXPIRED" });
+      await expect(resolveActiveMcpSession(env, external!.props)).rejects.toMatchObject({ code: "AUTH_EXPIRED" });
       expect((await initialize(grant.access_token)).status).toBe(401);
     }
     const refresh = await exchange({
@@ -168,7 +318,7 @@ describe("MCP OAuth session interoperability", () => {
       [grant.userId],
     );
     expect(sessions).toEqual([{ revoked_at: null }]);
-    const renewedGrant = await authorize(undefined, undefined, portal.headers.get("x-user-token")!);
+    const renewedGrant = await authorize(portal.headers.get("x-user-token")!);
     expect((await initialize(renewedGrant.access_token)).status).toBe(200);
     expect((await initialize(grant.access_token)).status).toBe(401);
   });
@@ -180,17 +330,20 @@ describe("MCP OAuth session interoperability", () => {
       env,
     });
     expect(grant?.props.identityType).toBe("service");
-    expect(await requireActiveMcpSession(env, grant!.props)).toBeNull();
+    expect(await resolveActiveMcpSession(env, grant!.props)).toMatchObject({ remainingSeconds: null });
     vi.useFakeTimers({ toFake: ["Date"] });
     vi.setSystemTime(Date.now() + 2 * 60 * 60 * 1000);
-    expect(await requireActiveMcpSession(env, grant!.props)).toBeNull();
+    expect(await resolveActiveMcpSession(env, grant!.props)).toMatchObject({ remainingSeconds: null });
   });
 
   it.each(["authorization_code", "refresh_token"] as const)(
     "handles the KV lifetime boundary during %s exchange",
     async (flow) => {
       vi.useFakeTimers({ toFake: ["Date"] });
-      vi.setSystemTime(Math.floor(Date.now() / 1000) * 1000);
+      // Fake timers do not affect the KV simulator's clock. Keep the frozen
+      // application clock ahead so setup latency cannot invalidate native KV writes.
+      // https://developers.cloudflare.com/workers/testing/vitest-integration/known-issues/
+      vi.setSystemTime(Math.ceil(Date.now() / 1000) * 1000 + 60_000);
       for (const remainingSeconds of [59, 60]) {
         const grant = flow === "authorization_code" ? await createAuthorization() : await authorize();
         await env.DB.prepare("UPDATE sessions SET expires_at = ? WHERE user_id = ? AND revoked_at IS NULL")
@@ -229,7 +382,7 @@ describe("MCP OAuth session interoperability", () => {
       return prepare(sql);
     });
     const lookup = resolveMcpExternalToken({
-      token: grant.cookie.slice("pkic_session=".length),
+      token: grant.userToken,
       request: new Request(`${origin}${MCP_PATH}`),
       env,
     });
@@ -255,7 +408,7 @@ describe("MCP OAuth session interoperability", () => {
       refresh_token: grant.refresh_token,
     });
     expect(refreshed.status).toBe(200);
-    const tokens = (await refreshed.json()) as { expires_in: number };
+    const tokens = (await refreshed.json()) as { expires_in: number; scope: string };
     expect(tokens.expires_in).toBeGreaterThan(0);
     expect(tokens.expires_in).toBeLessThanOrEqual(120);
   });

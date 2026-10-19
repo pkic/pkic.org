@@ -15,6 +15,8 @@
 import type { ComponentChildren } from "preact";
 import { useId } from "preact/hooks";
 
+import { useTitleHeading } from "./HeadingOutline";
+
 import "./ProfileHeader.css";
 import "./ProfileHeader.scss";
 
@@ -39,12 +41,18 @@ export interface ProfileHeaderProps {
   /** The commands available on the subject, at the end of the block. */
   actions?: ComponentChildren;
   /**
-   * The heading level. Defaults to 2, matching `PageHeader`: inside the portal
-   * the shell owns the page's `<h1>`, so a record's subject is its `<h2>` and
-   * the document outline stays unbroken. Raise it to 1 only where this header
-   * is the whole page — a standalone public profile.
+   * The authored heading level. Defaults to 2, matching `PageHeader`: the
+   * record is the screen's title, which the portal renders as its `<h1>` (see
+   * `HeadingOutline`). Use 3 only where the record sits below another title on
+   * the same screen; use 1 where this header is a whole public page.
    */
   headingLevel?: 1 | 2 | 3;
+  /**
+   * `field` paints the identity block on the conference field, as the agenda's
+   * session dialog does, for a person's showcase. The page that asks for it
+   * loads the conference kit tokens (tokens.event.generated.css).
+   */
+  tone?: "surface" | "field";
   context?: ComponentChildren;
   /** Optional navigation and content keep a record inside its identity card. */
   navigation?: ComponentChildren;
@@ -59,16 +67,20 @@ export function ProfileHeader({
   facts,
   actions,
   headingLevel = 2,
+  tone = "surface",
   context,
   navigation,
   children,
 }: ProfileHeaderProps) {
-  const Heading = headingLevel === 1 ? "h1" : headingLevel === 3 ? "h3" : "h2";
+  const Heading = useTitleHeading(headingLevel);
   const Container = children === undefined ? "header" : "section";
   const headingId = useId();
 
   return (
-    <Container class="pk-profile-header" aria-labelledby={headingId}>
+    <Container
+      class={`pk-profile-header${tone === "field" ? " pk-profile-header--field" : ""}`}
+      aria-labelledby={headingId}
+    >
       {/* The brand stripe is decoration and carries nothing a reader needs. */}
       <div class="pk-profile-header__stripe" aria-hidden="true" />
       <div class={`pk-profile-header__body${media === undefined ? " pk-profile-header__body--text" : ""}`}>

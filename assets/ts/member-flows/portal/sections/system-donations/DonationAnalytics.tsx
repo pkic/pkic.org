@@ -1,3 +1,4 @@
+import { formatNumber } from "../../../../../shared/format-number";
 /**
  * Donation analytics — what the donations add up to, and how they moved over
  * a day, a week and a month.
@@ -80,24 +81,30 @@ function periodLabel(period: LabeledDonationPeriod): string {
 
 const periodColumns: Column<LabeledDonationPeriod>[] = [
   { header: "Period", cell: periodLabel, className: "pk-mono pk-nowrap" },
-  { header: { label: "Total", className: "pk-end" }, cell: (row) => row.count, className: "pk-mono pk-end" },
+  { header: "Total", cell: (row) => formatNumber(row.count), className: "pk-mono", align: "end", width: "fit" },
   {
-    header: { label: "Completed", className: "pk-end" },
-    cell: (row) => row.completed,
-    className: "pk-mono pk-end",
+    header: "Completed",
+    cell: (row) => formatNumber(row.completed),
+    className: "pk-mono",
+    align: "end",
+    width: "fit",
   },
-  { header: { label: "Pending", className: "pk-end" }, cell: (row) => row.pending, className: "pk-mono pk-end" },
-  { header: { label: "Failed", className: "pk-end" }, cell: (row) => row.failed, className: "pk-mono pk-end" },
-  { header: { label: "Expired", className: "pk-end" }, cell: (row) => row.expired, className: "pk-mono pk-end" },
+  { header: "Pending", cell: (row) => formatNumber(row.pending), className: "pk-mono", align: "end", width: "fit" },
+  { header: "Failed", cell: (row) => formatNumber(row.failed), className: "pk-mono", align: "end", width: "fit" },
+  { header: "Expired", cell: (row) => formatNumber(row.expired), className: "pk-mono", align: "end", width: "fit" },
   {
-    header: { label: "Gross (USD)", className: "pk-end" },
+    header: "Gross (USD)",
     cell: (row) => (row.grossUsd > 0 ? fmtMoney(row.grossUsd, "usd") : "—"),
-    className: "pk-mono pk-end",
+    className: "pk-mono",
+    align: "end",
+    width: "fit",
   },
   {
-    header: { label: "Net (USD)", className: "pk-end" },
+    header: "Net (USD)",
     cell: (row) => (row.netUsd > 0 ? fmtMoney(row.netUsd, "usd") : "—"),
-    className: "pk-mono pk-end",
+    className: "pk-mono",
+    align: "end",
+    width: "fit",
   },
 ];
 
@@ -136,12 +143,12 @@ function AnalyticsViews({ data, active }: { data: DonationAnalyticsData; active:
           reader keeps the overview while looking at one period. */}
       <div class="pk-stat-row">
         <StatCard
-          label="Total Gross (USD)"
+          label="Total gross (USD)"
           value={fmtMoney(donations.totals.grossUsd, "usd")}
           note="Completed USD donations, before fees"
         />
         <StatCard
-          label="Total Net (USD)"
+          label="Total net (USD)"
           value={fmtMoney(donations.totals.netUsd, "usd")}
           note="After payment processing fees"
         />
@@ -213,24 +220,32 @@ function StatusAndCurrency({ rows }: { rows: DonationAnalyticsData["donations"][
           { header: "Status", cell: (row) => <Badge status={row.status} /> },
           { header: "Currency", cell: (row) => row.currency.toUpperCase(), className: "pk-mono" },
           {
-            header: { label: "Count", className: "pk-end" },
-            cell: (row) => row.count,
-            className: "pk-mono pk-end",
+            header: "Count",
+            cell: (row) => formatNumber(row.count),
+            className: "pk-mono",
+            align: "end",
+            width: "fit",
           },
           {
-            header: { label: "Gross", className: "pk-end" },
+            header: "Gross",
             cell: (row) => fmtMoney(row.totalGross, row.currency),
-            className: "pk-mono pk-end",
+            className: "pk-mono",
+            align: "end",
+            width: "fit",
           },
           {
-            header: { label: "Average Gross", className: "pk-end" },
+            header: "Average gross",
             cell: (row) => fmtMoney(row.averageGross, row.currency),
-            className: "pk-mono pk-end",
+            className: "pk-mono",
+            align: "end",
+            width: "fit",
           },
           {
-            header: { label: "Net Total", className: "pk-end" },
+            header: "Net total",
             cell: (row) => (row.totalNet === null ? "—" : fmtMoney(row.totalNet, row.currency)),
-            className: "pk-mono pk-end",
+            className: "pk-mono",
+            align: "end",
+            width: "fit",
           },
         ]}
         data={rows}

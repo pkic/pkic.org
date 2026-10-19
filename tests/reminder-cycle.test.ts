@@ -38,19 +38,13 @@ const BASE_PAYLOAD = {
 
 // ── DB helpers ─────────────────────────────────────────────────────────────────
 
-async function insertUser(
-  id: string,
-  email: string,
-  firstName = "Test",
-  lastName = "User",
-  org: string | null = null,
-): Promise<void> {
+async function insertUser(id: string, email: string, firstName = "Test", lastName = "User"): Promise<void> {
   await db
     .prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, active, created_at, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, first_name, last_name, active, created_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, 1, datetime('now'), datetime('now'))`,
     )
-    .bind(id, email, email.toLowerCase(), firstName, lastName, org)
+    .bind(id, email, email.toLowerCase(), firstName, lastName)
     .run();
 }
 
@@ -81,6 +75,7 @@ async function insertProposalAndSpeaker(opts: {
   speakerRole?: string;
   reminderCount?: number;
   presentationDeadline?: string | null;
+  proposalType?: string;
 }): Promise<void> {
   const proposerId = opts.userId;
   const proposalStatus = opts.proposalStatus ?? "submitted";
@@ -90,10 +85,17 @@ async function insertProposalAndSpeaker(opts: {
       `INSERT INTO session_proposals
          (id, event_id, proposer_user_id, status, proposal_type, title, abstract,
           manage_link_secret, submitted_at, updated_at)
-       VALUES (?, ?, ?, ?, 'talk', 'Test Proposal', 'Abstract text.',
+       VALUES (?, ?, ?, ?, ?, 'Test Proposal', 'Abstract text.',
                ?, datetime('now', '-3 days'), datetime('now', '-3 days'))`,
     )
-    .bind(opts.proposalId, opts.eventId, proposerId, proposalStatus, `proposal-manage-hash-${opts.proposalId}`)
+    .bind(
+      opts.proposalId,
+      opts.eventId,
+      proposerId,
+      proposalStatus,
+      opts.proposalType ?? "talk",
+      `proposal-manage-hash-${opts.proposalId}`,
+    )
     .run();
 
   await db
@@ -252,7 +254,7 @@ describe("runReminderCycle", () => {
     const inviterId = crypto.randomUUID();
     const inviteId = crypto.randomUUID();
     await insertUser(userId, "alice@example.test", "Alice", "Attendee");
-    await insertUser(inviterId, "inviter@example.test", "Bob", "Inviter", "Acme Inc");
+    await insertUser(inviterId, "inviter@example.test", "Bob", "Inviter");
     await insertAttendeeInvite(inviteId, eventId, "alice@example.test");
 
     // Record the inviter
@@ -520,6 +522,108 @@ describe("runReminderCycle", () => {
   });
 
   // ── Section 3: Presentation upload reminders ─────────────────────────────────
+
+  it.each([false, true])("honors the current configured panel presentation flag (%s)", async (required) => {
+    await db
+      .prepare("UPDATE events SET settings_json = ? WHERE id = ?")
+      .bind(
+        JSON.stringify({
+          proposal: { sessionTypes: [{ label: "panel", name: "Expert conversation", requiresPresentation: required }] },
+        }),
+        eventId,
+      )
+      .run();
+    const userId = crypto.randomUUID();
+    const speakerId = crypto.randomUUID();
+    await insertUser(userId, "panelist@example.test");
+    await insertProposalAndSpeaker({
+      proposalId: crypto.randomUUID(),
+      speakerId,
+      userId,
+      eventId,
+      proposalStatus: "accepted",
+      speakerStatus: "confirmed",
+      proposalType: "PANEL",
+      presentationDeadline: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+    });
+    const preview = await runReminderCycle(db, { ...BASE_PAYLOAD, dryRun: true });
+    expect(preview.presentationRemindersQueued).toBe(required ? 1 : 0);
+    const result = await runReminderCycle(db, BASE_PAYLOAD);
+    expect(result.presentationRemindersQueued).toBe(required ? 1 : 0);
+    expect(
+      await queryAll(db, "SELECT id FROM email_outbox WHERE template_key = 'presentation_upload_request'"),
+    ).toHaveLength(required ? 1 : 0);
+    expect(
+      await queryAll(db, "SELECT presentation_reminder_count FROM proposal_speakers WHERE id = ?", [speakerId]),
+    ).toEqual([{ presentation_reminder_count: required ? 1 : 0 }]);
+  });
+
+  it("does not let an optional panel consume the required presentation reminder limit", async () => {
+    await db
+      .prepare("UPDATE events SET settings_json = ? WHERE id = ?")
+      .bind(
+        JSON.stringify({
+          proposal: {
+            sessionTypes: [
+              { label: "panel", requiresPresentation: false },
+              { label: "custom", name: "Research", requiresPresentation: true },
+            ],
+          },
+        }),
+        eventId,
+      )
+      .run();
+    for (const proposalType of ["panel", "custom"]) {
+      const userId = crypto.randomUUID();
+      await insertUser(userId, `${proposalType}@example.test`);
+      await insertProposalAndSpeaker({
+        proposalId: crypto.randomUUID(),
+        speakerId: crypto.randomUUID(),
+        userId,
+        eventId,
+        proposalStatus: "accepted",
+        speakerStatus: "confirmed",
+        proposalType,
+        presentationDeadline: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+      });
+    }
+    const result = await runReminderCycle(db, { ...BASE_PAYLOAD, limit: 1 });
+    expect(result.presentationRemindersQueued).toBe(1);
+    expect(result.preview.presentationUploads[0].recipientEmail).toBe("custom@example.test");
+  });
+
+  it("does not queue or consume a reminder if presentation requirements change during the batch", async () => {
+    const userId = crypto.randomUUID();
+    const speakerId = crypto.randomUUID();
+    await insertUser(userId, "presenter@example.test");
+    await insertProposalAndSpeaker({
+      proposalId: crypto.randomUUID(),
+      speakerId,
+      userId,
+      eventId,
+      proposalStatus: "accepted",
+      speakerStatus: "confirmed",
+      presentationDeadline: new Date(Date.now() + 7 * 86_400_000).toISOString(),
+    });
+    const gate = gateNextBatch(db);
+    const pending = runReminderCycle(gate.db, BASE_PAYLOAD);
+    await gate.reached;
+    await db
+      .prepare("UPDATE events SET settings_json = ? WHERE id = ?")
+      .bind(
+        JSON.stringify({
+          proposal: { sessionTypes: [{ label: "talk", requiresPresentation: false }] },
+        }),
+        eventId,
+      )
+      .run();
+    gate.release();
+    await expect(pending).resolves.toMatchObject({ presentationRemindersQueued: 0 });
+    expect(await queryAll(db, "SELECT id FROM email_outbox")).toHaveLength(0);
+    expect(
+      await queryAll(db, "SELECT presentation_reminder_count FROM proposal_speakers WHERE id = ?", [speakerId]),
+    ).toEqual([{ presentation_reminder_count: 0 }]);
+  });
 
   it("queues an email and updates state for an eligible presentation reminder", async () => {
     const userId = crypto.randomUUID();

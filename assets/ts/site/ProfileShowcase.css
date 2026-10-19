@@ -1,0 +1,84 @@
+/*
+ * ProfileShowcase: the conference-field header, then each section on the
+ * page's own surface, separated by the shared rule.
+ */
+@layer components {
+  .pk-profile-showcase {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-5);
+    max-inline-size: 60rem;
+    margin-inline: auto;
+  }
+
+  .pk-profile-showcase__section {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-3);
+  }
+
+  /* The site's section heading carries its own rule; the section adds none. */
+  .pk-profile-showcase__section > h2 {
+    margin: 0;
+    font-size: var(--pk-text-xl);
+  }
+
+  .pk-profile-showcase__identities,
+  .pk-profile-showcase__list {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-4);
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pk-profile-showcase__list {
+    gap: var(--pk-3);
+  }
+
+  /* Each entry reads as name, then role, then when: three short lines, not one joined string. */
+  .pk-profile-showcase__list > li {
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* The organization's mark beside the capacity, aligned to its first line. */
+  .pk-profile-showcase__identity {
+    display: grid;
+    grid-template-columns: 4rem minmax(0, 1fr);
+    gap: var(--pk-3);
+    align-items: start;
+  }
+
+  /* The column keeps its width without a logo, so every capacity starts on the same line. */
+  .pk-profile-showcase__mark {
+    display: flex;
+    justify-content: center;
+    min-block-size: 2.5rem;
+  }
+
+  .pk-profile-showcase__identity h3,
+  .pk-profile-showcase__identity p {
+    margin: 0;
+  }
+
+  .pk-profile-showcase__identity h3 {
+    font-size: var(--pk-text-lg);
+  }
+
+  .pk-profile-showcase__organization {
+    color: var(--pk-ink-muted);
+  }
+
+  /*
+   * On a profile an event is named, not labeled, so the agenda session list's
+   * heading is the event's name in sentence case rather than a tracked caps label.
+   */
+  .pk-profile-showcase .pk-agenda-speaker-profile__sessions h3 {
+    margin: 0;
+    font-size: var(--pk-text-lg);
+    letter-spacing: normal;
+    text-transform: none;
+  }
+}

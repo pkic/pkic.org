@@ -6,6 +6,7 @@ import { json } from "../../../../_lib/http";
 import { openApiRoute } from "../../../../_lib/openapi/route";
 import { getEventDetail, getEventIdBySlug } from "../../../../_lib/services/events/detail";
 import { getVisibleEventAudienceDetail } from "../../../../_lib/services/events/catalog";
+import { readEventProposalCall } from "../../../../_lib/services/events/proposal-call";
 import { eventAudienceViewer, guardEventReadDatabase } from "../../../../_lib/services/events/visibility";
 import { hasPermission } from "../../../../_lib/auth/permissions";
 import { eventManagementCapabilities, resolveOptionalEventUserSession } from "./authorization";
@@ -18,6 +19,7 @@ export const EventDetailGet = openApiRoute(eventDetailRouteSchema, async (c: Adm
   const withParticipation = async <T extends { id: string }>(event: T) => ({
     ...event,
     participation: (await fetchEventParticipation(db, session?.identity.id ?? null, [event.id])).get(event.id),
+    proposalCall: await readEventProposalCall(db, event.id),
   });
   if (session?.staff && context && hasPermission(session.staff, "events:read", context)) {
     return json(
@@ -27,6 +29,7 @@ export const EventDetailGet = openApiRoute(eventDetailRouteSchema, async (c: Adm
             guardEventReadDatabase(db, session.staff, context),
             data.params.eventSlug,
             eventManagementCapabilities(session.staff, context),
+            eventAudienceViewer(session),
           ),
         ),
       }),

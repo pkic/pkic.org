@@ -14,7 +14,7 @@
   }
 
   .pk-profile-header__stripe {
-    height: 4px;
+    height: 0.25rem;
     background: var(--pk-stripe);
   }
 
@@ -99,17 +99,58 @@
   }
 
   /*
-   * Narrow: the portrait and the name stack, and the commands drop to their
-   * own row at the start edge. A three-column grid at this width leaves the
-   * name a few characters wide between a portrait and two buttons.
+   * Narrow: buttons drop to their own row at the start edge. A three-column
+   * grid at this width leaves the name a few characters wide between a
+   * portrait and two buttons. A lone ⋯ menu is the exception: it is one
+   * square, and the record's actions belong at its top right on every width.
    */
   @media (max-width: 48rem) {
-    .pk-profile-header__body {
+    .pk-profile-header__body:not(:has(> .pk-profile-header__actions > .pk-menu:only-child)) {
       grid-template-columns: auto minmax(0, 1fr);
     }
 
-    .pk-profile-header__actions {
+    .pk-profile-header__actions:not(:has(> .pk-menu:only-child)) {
       grid-column: 1 / -1;
     }
+  }
+
+  /*
+   * The conference field: the session dialog's dark gradient with its dot
+   * grid fading in from the right, dark in both themes, so everything written
+   * on it uses the kit's on-field ink.
+   */
+  .pk-profile-header--field .pk-profile-header__body {
+    position: relative;
+    isolation: isolate;
+    padding: var(--pk-5);
+    background: var(--pk-pqc-light), var(--pk-pqc-field);
+    color: var(--pk-pqc-on-field);
+    /* Whatever reads the ordinary inks inside the field reads the field's own. */
+    --pk-ink: var(--pk-pqc-on-field);
+    --pk-ink-muted: var(--pk-pqc-on-field-muted);
+  }
+
+  .pk-profile-header--field .pk-profile-header__body::before {
+    content: "";
+    position: absolute;
+    inset: 0 0 0 45%;
+    z-index: -1;
+    background: var(--pk-pqc-dots) 0 0 / 32px 32px repeat;
+    mask-image: linear-gradient(90deg, transparent, black 40%);
+    pointer-events: none;
+  }
+
+  .pk-profile-header--field .pk-profile-header__title {
+    color: var(--pk-pqc-on-field);
+  }
+
+  .pk-profile-header--field .pk-profile-header__lede,
+  .pk-profile-header--field .pk-profile-header__facts,
+  .pk-profile-header--field .pk-profile-header__facts > li + li::before {
+    color: var(--pk-pqc-on-field-muted);
+  }
+
+  .pk-profile-header--field .pk-profile-header__facts a {
+    color: inherit;
   }
 }

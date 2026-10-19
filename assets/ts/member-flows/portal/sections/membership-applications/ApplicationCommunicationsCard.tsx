@@ -1,4 +1,4 @@
-import { useState } from "preact/hooks";
+import { useId, useState } from "preact/hooks";
 import { fmt } from "../../ui";
 import {
   applicationCommunicationCreateSchema,
@@ -14,11 +14,10 @@ import { Button } from "../../../../ui/Button";
 import { DataTable } from "../../../../ui/DataTable";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
-import { Textarea, TextInput } from "../../../../ui/TextControl";
-// `pk-mono` is written here as a class name rather than reached through a
-// component, so this module has to pull its stylesheet into its own chunk.
-import "../../../../ui/Content.css";
+import { Markdown } from "../../../../ui/Markdown";
+import { TextInput } from "../../../../ui/TextControl";
 import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
+import { SectionHeading } from "../../../../ui/SectionHeading";
 
 /** What a record on this timeline is. The word carries it; the tone repeats it. */
 const KIND_LABEL: Record<MembershipApplicationCommunication["kind"], string> = {
@@ -41,6 +40,11 @@ const KIND_LABEL: Record<MembershipApplicationCommunication["kind"], string> = {
  * is reported on the control it belongs to, and a failed request is announced
  * instead of discarded.
  *
+ * Messages and notes are both written in the shared Markdown editor and read
+ * back through the shared renderer, so a fenced block (such as the source
+ * metadata on an imported application) shows as code rather than one run of
+ * text.
+ *
  * The message goes out through the `application_request_information`
  * template (#108): the subject typed here is the subject the applicant
  * receives — the template carries none of its own — and the body is set into
@@ -59,6 +63,18 @@ export function ApplicationCommunicationsCard({
   onSendCommunication: (params: ApplicationCommunicationCreate) => Promise<void>;
   onAddNote: (body: string) => Promise<void>;
 }) {
+  const messageId = useId();
+  const [expandedMessages, setExpandedMessages] = useState<ReadonlySet<string>>(new Set());
+
+  function toggleMessage(id: string) {
+    setExpandedMessages((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
+
   const [commSubject, setCommSubject] = useState("");
   const [commBody, setCommBody] = useState("");
   // The editor is uncontrolled; a sent message clears it by remounting it.
@@ -72,6 +88,7 @@ export function ApplicationCommunicationsCard({
   });
 
   const [noteBody, setNoteBody] = useState("");
+  const [noteGeneration, setNoteGeneration] = useState(0);
   const [noteSaving, setNoteSaving] = useState(false);
   const [noteError, setNoteError] = useState("");
   const note = useContractForm(applicationNoteCreateSchema, { body: noteBody });
@@ -114,6 +131,7 @@ export function ApplicationCommunicationsCard({
     try {
       await onAddNote(checked.data.body);
       setNoteBody("");
+      setNoteGeneration((generation) => generation + 1);
       note.reset();
     } catch (error) {
       setNoteError(note.refuse(error));
@@ -131,6 +149,13 @@ export function ApplicationCommunicationsCard({
           rows={detail.communications}
           rowKey={(record) => record.id}
           empty="Nothing has been emailed or noted on this application yet."
+          detailRow={(record) =>
+            expandedMessages.has(record.id) ? (
+              <PanelBody id={`${messageId}-${record.id}`}>
+                <Markdown markdown={record.body} />
+              </PanelBody>
+            ) : null
+          }
           columns={[
             {
               id: "kind",
@@ -143,13 +168,22 @@ export function ApplicationCommunicationsCard({
             {
               id: "message",
               header: "Message",
-              // The first labelled column is fit-width here, so the prose
+              // The first labeled column is fit-width here, so the prose
               // column claims the slack explicitly.
               width: "primary",
               cell: (record) => (
                 <div class="pk-stack pk-stack--tight">
                   {record.subject && <strong>{record.subject}</strong>}
-                  <span class="pk-break">{record.body}</span>
+                  <div>
+                    <Button
+                      variant="ghost"
+                      aria-expanded={expandedMessages.has(record.id)}
+                      aria-controls={expandedMessages.has(record.id) ? `${messageId}-${record.id}` : undefined}
+                      onClick={() => toggleMessage(record.id)}
+                    >
+                      {expandedMessages.has(record.id) ? "Hide message" : "Read message"}
+                    </Button>
+                  </div>
                 </div>
               ),
             },
@@ -172,7 +206,7 @@ export function ApplicationCommunicationsCard({
                 {...communication.handlers}
                 onSubmit={(event) => void submitCommunication(event)}
               >
-                <h4>Send communication</h4>
+                <SectionHeading level={4}>Send communication</SectionHeading>
                 <fieldset class="pk-fieldset pk-stack pk-stack--snug" disabled={commSending}>
                   <Field label="Subject" required {...communication.of("subject")}>
                     {(control) => (
@@ -205,7 +239,7 @@ export function ApplicationCommunicationsCard({
                 </fieldset>
                 {commError && <Alert tone="danger">{commError}</Alert>}
                 <div class="pk-cluster">
-                  <Button type="submit" variant="primary" size="sm" loading={commSending}>
+                  <Button type="submit" variant="primary" loading={commSending}>
                     {commSending ? "Sending…" : "Send"}
                   </Button>
                 </div>
@@ -217,7 +251,7 @@ export function ApplicationCommunicationsCard({
                 {...note.handlers}
                 onSubmit={(event) => void submitNote(event)}
               >
-                <h4>Add internal note</h4>
+                <SectionHeading level={4}>Add internal note</SectionHeading>
                 <fieldset class="pk-fieldset pk-stack pk-stack--snug" disabled={noteSaving}>
                   <Field
                     label="Internal note"
@@ -226,19 +260,21 @@ export function ApplicationCommunicationsCard({
                     {...note.of("body")}
                   >
                     {(control) => (
-                      <Textarea
+                      <MarkdownEditor
+                        key={noteGeneration}
                         {...control}
+                        variant="compact"
                         name="body"
-                        rows={2}
-                        value={noteBody}
-                        onInput={(event) => setNoteBody((event.target as HTMLTextAreaElement).value)}
+                        label="Internal note"
+                        initialValue={noteBody}
+                        onChange={setNoteBody}
                       />
                     )}
                   </Field>
                 </fieldset>
                 {noteError && <Alert tone="danger">{noteError}</Alert>}
                 <div class="pk-cluster">
-                  <Button type="submit" size="sm" loading={noteSaving}>
+                  <Button type="submit" loading={noteSaving}>
                     {noteSaving ? "Adding…" : "Add note"}
                   </Button>
                 </div>

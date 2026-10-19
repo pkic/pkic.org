@@ -11,6 +11,9 @@ import { publicUserHeadshotUrl } from "../user-headshot";
 import { eventDayReadModels } from "../event-read-models";
 import { AppError } from "../../errors";
 import { registrationManageReadResponseSchema } from "../../../../assets/shared/schemas/registration";
+import { readRegistrationSponsorSharing } from "../event-participation/sponsor-consent";
+import { holdsWorkAddress } from "../../email-domains/contact-kind";
+import { parseVerifiedAddresses, verifiedAddressesJsonSql } from "../user-emails";
 
 interface ManageUserRow {
   id: string;
@@ -20,6 +23,7 @@ interface ManageUserRow {
   organization_name: string | null;
   job_title: string | null;
   headshot_r2_key: string | null;
+  verified_addresses: string | null;
 }
 
 export async function buildRegistrationManageView(
@@ -28,11 +32,11 @@ export async function buildRegistrationManageView(
   appBaseUrl: string,
 ) {
   const event = await getEventById(db, registration.event_id);
-  const [identityResults, eventDays, dayAttendance, dayWaitlist, registeredCounts] = await Promise.all([
+  const [identityResults, eventDays, dayAttendance, dayWaitlist, registeredCounts, sponsorSharing] = await Promise.all([
     db.batch([
       db
         .prepare(
-          `SELECT u.id, u.email, u.first_name, u.last_name,
+          `SELECT u.id, u.email, u.first_name, u.last_name, ${verifiedAddressesJsonSql("u.id")} AS verified_addresses,
              ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title, u.headshot_r2_key
              FROM registrations r JOIN users u ON u.id = r.user_id
               WHERE r.id = ?`,
@@ -44,6 +48,7 @@ export async function buildRegistrationManageView(
     getRegistrationDayAttendance(db, registration.id),
     listDayWaitlistForRegistration(db, registration.id),
     countRegisteredByEventDay(db, event.id),
+    readRegistrationSponsorSharing(db, registration),
   ]);
   const user = batchFirst<ManageUserRow>(identityResults[0]);
   if (!user) {
@@ -54,6 +59,7 @@ export async function buildRegistrationManageView(
 
   return registrationManageReadResponseSchema.parse({
     success: true,
+    sponsorSharing,
     identityId: registration.registration_identity_id ?? null,
     badgeVersion: registration.updated_at,
     registration: {
@@ -78,5 +84,6 @@ export async function buildRegistrationManageView(
     eventDays: eventDayReadModels(eventDays, registeredCounts),
     dayAttendance,
     dayWaitlist,
+    waitlistHandledLast: !holdsWorkAddress(parseVerifiedAddresses(user.verified_addresses)),
   });
 }

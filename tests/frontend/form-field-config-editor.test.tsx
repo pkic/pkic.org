@@ -26,8 +26,8 @@ const mounted: HTMLElement[] = [];
 
 function draft(overrides: Partial<FieldDraft> = {}): FieldDraft {
   return {
-    key: "favourite_colour",
-    label: "Favourite colour",
+    key: "favorite_color",
+    label: "Favorite color",
     fieldType: "text",
     required: false,
     sortOrder: 0,
@@ -92,13 +92,13 @@ function legend(root: HTMLElement, text: string): HTMLLegendElement | null {
   return [...root.querySelectorAll("legend")].find((entry) => (entry.textContent ?? "").trim() === text) ?? null;
 }
 
-function labelled(root: HTMLElement, text: string): HTMLLabelElement | null {
+function labeled(root: HTMLElement, text: string): HTMLLabelElement | null {
   return [...root.querySelectorAll("label")].find((label) => (label.textContent ?? "").trim() === text) ?? null;
 }
 
 /** The control a visible label names, resolved through `for` → `id`. */
 function controlFor(root: HTMLElement, text: string): HTMLElement {
-  const label = labelled(root, text);
+  const label = labeled(root, text);
   if (!label) throw new Error(`no label reads "${text}"`);
   // getElementById rather than a `#id` selector: the id comes from useId and
   // jsdom here has no CSS.escape to make it selector-safe.
@@ -178,7 +178,7 @@ describe("form field config editor", () => {
     ]) {
       const control = controlFor(root, name);
       expect(control.id, `${name} control id`).not.toBe("");
-      expect(labelled(root, name)?.htmlFor).toBe(control.id);
+      expect(labeled(root, name)?.htmlFor).toBe(control.id);
     }
 
     // Every control the surface renders is reachable by name. A control that
@@ -209,20 +209,20 @@ describe("form field config editor", () => {
   it("shows only the settings the field type supports", () => {
     const { root: text } = mountEditor(draft({ fieldType: "text" }));
     openFold(text, "Accepted values");
-    expect(labelled(text, "Pattern")).not.toBeNull();
+    expect(labeled(text, "Pattern")).not.toBeNull();
     expect(legend(text, "Choices")).toBeNull();
-    expect(labelled(text, "Allowed domains")).toBeNull();
+    expect(labeled(text, "Allowed domains")).toBeNull();
 
     const { root: email } = mountEditor(draft({ fieldType: "email" }));
     openFold(email, "Accepted values");
-    expect(labelled(email, "Allowed domains")).not.toBeNull();
-    expect(labelled(email, "Pattern")).toBeNull();
+    expect(labeled(email, "Allowed domains")).not.toBeNull();
+    expect(labeled(email, "Pattern")).toBeNull();
 
     const { root: choice } = mountEditor(draft({ fieldType: "multi_select" }));
     openFold(choice, "Accepted values");
     expect(legend(choice, "Choices")).not.toBeNull();
-    expect(labelled(choice, "Min selections")).not.toBeNull();
-    expect(labelled(choice, "Placeholder")).toBeNull();
+    expect(labeled(choice, "Min selections")).not.toBeNull();
+    expect(labeled(choice, "Placeholder")).toBeNull();
   });
 
   it("reports edits as patches on the field it was given", () => {
@@ -339,7 +339,7 @@ describe("form field config editor", () => {
     // The editor stays where the operator is, rather than silently discarding
     // what they typed.
     expect(button(root, "JSON").getAttribute("aria-pressed")).toBe("true");
-    expect(labelled(root, "Placeholder")).toBeNull();
+    expect(labeled(root, "Placeholder")).toBeNull();
 
     const control = controlFor(root, "Validation JSON");
     expect(control.closest(".pk-field")?.classList.contains("pk-field--invalid")).toBe(true);
@@ -384,7 +384,7 @@ describe("buildFieldValidation", () => {
 
   it("rejects raw JSON that is not an object, naming the field", () => {
     expect(() => buildFieldValidation(draft({ rawMode: true, rawValidationText: "[1,2]" }))).toThrow(
-      /Favourite colour: validation must be a JSON object/,
+      /Favorite color: validation must be a JSON object/,
     );
   });
 

@@ -82,7 +82,7 @@ const primitives: ReadonlyArray<[string, () => string]> = [
   ["Spinner", () => render(<Spinner label="Loading" />)],
   ["EmptyState", () => render(<EmptyState title="Nothing yet" body="It will appear here." />)],
   ["Avatar", () => render(<Avatar name="Marit Halvorsen" />)],
-  ["PersonCell", () => render(<PersonCell name="Marit Halvorsen" email="m@example.test" />)],
+  ["PersonCell", () => render(<PersonCell name="Marit Halvorsen" />)],
   ["StatCard", () => render(<StatCard label="Members" value="42" note="6 more" trend="up" />)],
   [
     "Field with a text input",

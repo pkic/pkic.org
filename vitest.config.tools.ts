@@ -1,4 +1,5 @@
 import { defineConfig } from "vitest/config";
+import { contentMediaPlugin } from "./scripts/lib/content-media-plugin.mjs";
 
 // Repository scripts (scripts/*.mjs) run under plain Node, not the
 // Workers sandbox vitest.config.ts's cloudflareTest pool provides — they
@@ -6,10 +7,12 @@ import { defineConfig } from "vitest/config";
 // inside workerd. Separate config/glob, same pattern vitest.config.frontend.ts
 // already established for the jsdom project.
 export default defineConfig({
+  plugins: [contentMediaPlugin(import.meta.dirname)],
   test: {
     include: ["tests/tools/**/*.test.ts"],
     exclude: ["**/._*"],
     environment: "node",
+    pool: "threads",
     // The fresh-D1 smoke test shells out to real wrangler/workerd processes
     // (migrations apply + d1 execute) — observed 42-55s even on an
     // otherwise-idle machine, so 60s cuts it close under any real load.

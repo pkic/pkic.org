@@ -6,14 +6,26 @@
  * panel of eight stacked block buttons ("Operator actions") that the old
  * dashboard had; the commands now live in the record's actions menu, and what
  * is left here is what a reader glances at while reading any facet.
+ *
+ * Every value is plain text. A pill per fact — "Accepted", "Quorum met",
+ * "Needs work 4" — turned a column of facts into a column of color; the one
+ * fact that asks for something, a quorum not yet reached, carries a warning
+ * mark before its words instead.
  */
-import { Badge } from "../../../../../../components/Badge";
-import { Badge as ToneBadge } from "../../../../../../ui/Badge";
+import { formatNumber } from "../../../../../../../shared/format-number";
+import { statusLabel } from "../../../../../../components/Badge";
+import { AttentionMark } from "../../../../../../ui/AttentionList";
 import { DescriptionList } from "../../../../../../ui/DescriptionList";
 import { Panel, PanelBody, PanelHeader } from "../../../../../../ui/Panel";
 import type { ProposalReview } from "../../types";
 import { fmt } from "../../../../ui";
 import type { ProposalDetailRecord } from "./model";
+
+/** "3 reviews (2 required)": the count first, the threshold it is measured against after it. */
+export function reviewTally(reviewCount: number | null, minReviewsRequired: number): string {
+  const count = reviewCount === null ? "…" : String(reviewCount);
+  return `${count} ${reviewCount === 1 ? "review" : "reviews"} (${String(minReviewsRequired)} required)`;
+}
 
 export function ProposalStanding({
   proposal,
@@ -47,21 +59,21 @@ export function ProposalStanding({
         <DescriptionList
           density="compact"
           items={[
-            { term: "Workflow status", value: <Badge status={proposal.status} /> },
-            {
-              term: "Decision",
-              value: proposal.decision_status ? <Badge status={proposal.decision_status} /> : "Pending",
-            },
+            /* One status. A recorded decision moves the workflow to the same
+               word, so "Accepted" beside "Accepted" said one thing twice; the
+               decision is stated on its own only while it differs. */
+            { term: "Status", value: statusLabel(proposal.status) },
+            ...(proposal.decision_status && proposal.decision_status !== proposal.status
+              ? [{ term: "Decision", value: statusLabel(proposal.decision_status) }]
+              : []),
             {
               term: "Reviews",
               value: (
-                <span class="pk-cluster">
-                  <span>
-                    {loading ? "…" : String(reviewCount)} of {String(minReviewsRequired)} required
-                  </span>
-                  {/* The verdict in words, in a badge whose tone repeats it
-                      rather than replaces it. */}
-                  <ToneBadge tone={quorumMet ? "ok" : "warn"}>{quorumMet ? "Quorum met" : "Quorum not met"}</ToneBadge>
+                <span class="pk-stack pk-stack--tight">
+                  <span>{reviewTally(loading ? null : reviewCount, minReviewsRequired)}</span>
+                  {/* Reaching quorum is the normal course and is said plainly;
+                      falling short is what holds a decision back. */}
+                  {quorumMet ? <span>Quorum met</span> : <AttentionMark>Quorum not met</AttentionMark>}
                 </span>
               ),
             },
@@ -75,13 +87,9 @@ export function ProposalStanding({
             {
               term: "Recommendations",
               value:
-                recommendations.length > 0 ? (
-                  <span class="pk-cluster">
-                    {recommendations.map(([status, label, count]) => (
-                      <Badge key={status} status={status} label={`${label} ${String(count)}`} />
-                    ))}
-                  </span>
-                ) : undefined,
+                recommendations.length > 0
+                  ? recommendations.map(([, label, count]) => `${label} ${formatNumber(count)}`).join(", ")
+                  : undefined,
             },
             {
               term: "Decided",

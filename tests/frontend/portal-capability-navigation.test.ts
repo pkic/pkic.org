@@ -4,6 +4,7 @@ import {
   PORTAL_LEGACY_MEMBER_ROUTE_REDIRECTS,
   portalCapacityFallbackPath,
   portalDefaultPath,
+  portalHasCapacity,
   portalHasGlobalPermission,
   portalHasPermissionAtAnyScope,
   portalHasSettingsAccess,
@@ -14,8 +15,39 @@ import {
   portalSectionChildren,
 } from "../../assets/ts/member-flows/portal/shell/portal-navigation";
 import { portalSessionFixture } from "../helpers/portal-session";
+import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
 
 describe("portal capability-derived navigation", () => {
+  it("opens the own user record for an affiliation without granting membership or workspace navigation", () => {
+    const session = userAuthSessionResponseSchema.parse({ ...portalSessionFixture({}), hasActiveIdentity: true });
+    const ownRecord = `/users/${session.identity.id}`;
+    expect(portalDefaultPath(session)).toBe(ownRecord);
+    expect(portalSectionEnabled(session, "users")).toBe(true);
+    expect(portalNavigationItems(session).map((item) => item.label)).toEqual(["Home"]);
+    for (const section of ["groups", "organizations", "members", "events", "sponsors", "settings"] as const) {
+      expect(portalSectionEnabled(session, section)).toBe(false);
+    }
+    expect(portalCapacityFallbackPath(session, "/organizations/unrelated")).toBe(ownRecord);
+  });
+
+  it("gives a user with no capacity Home, their own record, and application history", () => {
+    const session = userAuthSessionResponseSchema.parse({ ...portalSessionFixture({}), hasActiveIdentity: false });
+    expect(portalHasCapacity(session)).toBe(false);
+    expect(portalDefaultPath(session)).toBe("/home");
+    expect(portalNavigationItems(session).map((item) => item.label)).toEqual(["Home"]);
+    expect(portalSectionEnabled(session, "users")).toBe(true);
+    for (const section of ["groups", "organizations", "members", "events", "sponsors", "settings"] as const) {
+      expect(portalSectionEnabled(session, section)).toBe(false);
+    }
+  });
+
+  it("keeps own application history reachable without membership", () => {
+    const session = portalSessionFixture({});
+    expect(portalSectionEnabled(session, "application")).toBe(true);
+    expect(portalCapacityFallbackPath(session, "/application/old-application")).toBeNull();
+    expect(portalSectionEnabled(null, "application")).toBe(false);
+  });
+
   it("does not expose permissioned screens from a stale legacy administrator label", () => {
     const session = portalSessionFixture({ staff: true, grants: [] });
     Object.assign(session.staff!, { role: "admin" });
@@ -39,9 +71,7 @@ describe("portal capability-derived navigation", () => {
     expect(labels).toContain("Settings");
     expect(labels).not.toContain("Management");
     expect(labels).not.toContain("My Profile");
-    // Account settings moved into the user menu; it is a section, not a sidebar item.
     expect(labels).not.toContain("Account Settings");
-    expect(portalSectionEnabled(session, "account")).toBe(true);
   });
 
   it("shows Settings only for the matching global permission", () => {
@@ -176,6 +206,24 @@ describe("portal capability-derived navigation", () => {
     expect(portalCapacityFallbackPath(proposalOnly, "/events/event-1")).toBeNull();
   });
 
+  it.each(["agenda:leads_view", "agenda:leads_export"])("opens event contacts with only %s", (permission) => {
+    const session = portalSessionFixture({
+      staff: true,
+      grants: [{ permission, contextType: "event_sponsor", contextId: "sponsorship-1" }],
+    });
+    expect(session.staff!.grants).toHaveLength(1);
+    expect(portalSectionEnabled(session, "events")).toBe(true);
+    expect(portalNavigationItems(session)).toContainEqual({ path: "/events", section: "events", label: "Events" });
+    expect(portalCapacityFallbackPath(session, "/events/event-1/leads")).toBeNull();
+    expect(portalHasPermissionAtAnyScope(session, "agenda:leads_capture")).toBe(false);
+    for (const unrelated of ["groups:read", "groups:manage", "events:manage", "users:read"]) {
+      expect(portalHasPermissionAtAnyScope(session, unrelated)).toBe(false);
+      expect(portalHasGlobalPermission(session, unrelated)).toBe(false);
+    }
+    expect(portalSectionEnabled(session, "settings")).toBe(false);
+    expect(portalSettingsPages(session)).toEqual([]);
+  });
+
   it("exposes Donations to global readers or synchronizers", () => {
     const reader = portalSessionFixture({
       staff: true,
@@ -193,15 +241,17 @@ describe("portal capability-derived navigation", () => {
       grants: [{ permission: "donations:read", contextType: "group", contextId: "group-1" }],
     });
 
+    expect(portalSectionEnabled(reader, "sponsors")).toBe(false);
+    expect(portalSectionEnabled(reader, "donations")).toBe(true);
     expect(portalNavigationItems(reader)).toContainEqual({
       path: "/donations",
-      section: "donations",
-      label: "Donations",
+      section: "sponsors",
+      label: "Sponsors",
     });
     expect(portalNavigationItems(synchronizer)).toContainEqual({
       path: "/donations",
-      section: "donations",
-      label: "Donations",
+      section: "sponsors",
+      label: "Sponsors",
     });
     expect(portalHasGlobalPermission(reader, "donations:read")).toBe(true);
     expect(portalHasGlobalPermission(synchronizer, "donations:read")).toBe(false);
@@ -322,18 +372,23 @@ describe("portal capability-derived navigation", () => {
       grants: [{ permission: "membership:read", contextType: "group", contextId: "group-1" }],
     });
 
-    // Two entries, one permission: the roll of members the consortium has,
+    // One navigation group, one permission: the roll of members the consortium has,
     // and the queue of applications to become one.
     expect(portalNavigationItems(reader)).toContainEqual({
       path: "/members",
       section: "members",
       label: "Members",
     });
-    expect(portalNavigationItems(reader)).toContainEqual({
-      path: "/membership/applications",
-      section: "membership",
-      label: "Applications",
-    });
+    expect(portalSectionChildren("members", reader)).toContainEqual(
+      expect.objectContaining({
+        path: "/membership/applications",
+        section: "members",
+        label: "Applications",
+      }),
+    );
+    expect(portalSectionChildren("members", contextualReader)).not.toContainEqual(
+      expect.objectContaining({ path: "/membership/applications" }),
+    );
     expect(portalNavigationItems(contextualReader)).not.toContainEqual(
       expect.objectContaining({ path: "/membership/applications" }),
     );
@@ -475,7 +530,6 @@ describe("portal capability-derived navigation", () => {
     expect(labels).not.toContain("Working Groups");
     expect(labels).not.toContain("Management");
     expect(labels).not.toContain("Account Settings");
-    expect(portalSectionEnabled(session, "account")).toBe(true);
   });
 
   it("redirects superseded member group and uploaded-calendar routes to groups", () => {
@@ -496,7 +550,7 @@ describe("portal capability-derived navigation", () => {
   it("keeps shared selected-group routes after member-capacity loss", () => {
     const staffOnly = portalSessionFixture({ staff: true });
     expect(portalDefaultPath(staffOnly)).toBe("/home");
-    expect(portalCapacityFallbackPath(staffOnly, "/application")).toBe("/home");
+    expect(portalCapacityFallbackPath(staffOnly, "/application")).toBeNull();
     expect(portalCapacityFallbackPath(staffOnly, "/groups/group-id/meetings")).toBeNull();
     // Superseded /management and /working-groups URLs redirect within the groups section.
     expect(portalCapacityFallbackPath(staffOnly, "/working-groups")).toBeNull();
@@ -551,6 +605,37 @@ describe("portal capability-derived navigation", () => {
     // them stays open while one is being read.
     expect(portalActiveSection("/donations/promoters")).toBe("donations");
     expect(portalActiveSection("/donations/analytics/weekly")).toBe("donations");
+  });
+
+  it("offers each domain's Analytics page under that domain, and only for analytics:read (#39)", () => {
+    const grant = (permission: string) => ({ permission, contextType: null, contextId: null });
+    const analyst = portalSessionFixture({
+      staff: true,
+      administrator: false,
+      grants: [
+        grant("analytics:read"),
+        grant("events:read"),
+        grant("organizations:read"),
+        grant("membership:read"),
+        grant("users:read"),
+      ],
+    });
+    const withoutAnalytics = portalSessionFixture({
+      staff: true,
+      administrator: false,
+      grants: [grant("events:read"), grant("organizations:read"), grant("membership:read"), grant("users:read")],
+    });
+
+    for (const section of ["events", "organizations", "members", "users"] as const) {
+      expect(
+        portalSectionChildren(section, analyst)
+          .filter((child) => child.path.endsWith("/analytics"))
+          .map((child) => child.path),
+      ).toEqual([`/${section}/analytics`]);
+      expect(
+        portalSectionChildren(section, withoutAnalytics).filter((child) => child.path.endsWith("/analytics")),
+      ).toEqual([]);
+    }
   });
 
   it("preserves a genuine unknown route instead of hiding it behind a redirect", () => {

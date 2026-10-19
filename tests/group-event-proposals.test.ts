@@ -2,6 +2,9 @@ import { administratorGrants } from "./helpers/administrator";
 import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
+import { declineSpeakerParticipation } from "../functions/_lib/services/proposal-speaker-decline";
+import { buildAddProposalSpeaker } from "../functions/_lib/services/proposal-speakers";
+import { computeGrantsForUser, hasPermission } from "../functions/_lib/auth/permissions";
 import { createGroupManagedEvent } from "../functions/_lib/services/events/group-management";
 import { createProposal, getProposalById } from "../functions/_lib/services/proposals";
 import { inviteProposalSpeaker } from "../functions/_lib/services/proposal-speaker-invitations";
@@ -10,7 +13,6 @@ import { preparePermissionsAuthorizationGuard } from "../functions/_lib/auth/per
 import { editProposalSpeaker } from "../functions/_lib/services/proposal-speaker-management";
 import { removeProposalSpeakerByManager } from "../functions/_lib/services/proposal-speaker-removal";
 import { sendProposalSpeakerReminders } from "../functions/_lib/services/proposal-reminders";
-import { removeProposalSpeakerHeadshot } from "../functions/_lib/services/proposal-speaker-headshot";
 import { prepareGroupEventProposalContextGuard } from "../functions/_lib/services/proposal-group-context";
 import { createGroup, joinGroup } from "../functions/_lib/services/groups";
 import type { AuthAdmin, DatabaseLike } from "../functions/_lib/types";
@@ -25,7 +27,7 @@ import {
 } from "../assets/shared/schemas/proposal-management";
 import { proposalDecisionPreviewResponseSchema } from "../assets/shared/schemas/proposal-decisions";
 import { proposalSpeakersResponseSchema } from "../assets/shared/schemas/proposal-speakers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { createAdminSession, createMcpSession } from "./helpers/auth";
 import type { AuthScope } from "../functions/_lib/auth/scopes";
 import { insertOrgRepresentative, insertUser } from "./helpers/membership";
@@ -502,6 +504,36 @@ describe("event proposal collection and canonical proposal resource routes", () 
     ).resolves.toEqual([{ count: 2 }]);
   });
 
+  it("attaches an invited co-speaker to the representation held through the invited address", async () => {
+    const fixture = await setupFixture();
+    const representative = await insertOrgRepresentative(env.DB, {
+      email: `invited-representative-${crypto.randomUUID()}@example.test`,
+    });
+    await env.DB.prepare("UPDATE identities SET job_title='Program lead' WHERE id=?")
+      .bind(representative.identityId)
+      .run();
+    const [person] = await queryAll<{ email: string }>(env.DB, "SELECT email FROM users WHERE id = ?", [
+      representative.userId,
+    ]);
+    const [proposal, event] = await Promise.all([
+      getProposalById(env.DB, fixture.proposalId),
+      getEventById(env.DB, fixture.eventId),
+    ]);
+    await inviteProposalSpeaker(env.DB, {
+      proposal,
+      event,
+      appBaseUrl: "https://app.test",
+      email: person!.email,
+      role: "speaker",
+    });
+    const [speaker] = await queryAll<{ status: string; acting_identity_id: string | null }>(
+      env.DB,
+      "SELECT status, acting_identity_id FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+      [fixture.proposalId, representative.userId],
+    );
+    expect(speaker).toMatchObject({ status: "invited", acting_identity_id: representative.identityId });
+  });
+
   it("does not resurrect an invitation that is declined after duplicate-invite preflight", async () => {
     const fixture = await setupFixture();
     const email = "concurrently-declined-program-speaker@example.test";
@@ -696,11 +728,8 @@ describe("event proposal collection and canonical proposal resource routes", () 
   it("rolls back a mounted group speaker patch when its audit record fails", async () => {
     const fixture = await setupFixture();
     const speakerId = await addProposalSpeaker(fixture, "confirmed");
-    const [before] = await queryAll<{ first_name: string | null }>(
-      env.DB,
-      "SELECT first_name FROM users WHERE id = ?",
-      [speakerId],
-    );
+    const roleSql = "SELECT role FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?";
+    const before = await queryAll<{ role: string }>(env.DB, roleSql, [fixture.proposalId, speakerId]);
     await env.DB.prepare(
       `CREATE TRIGGER reject_group_speaker_patch_audit
          BEFORE INSERT ON audit_log
@@ -710,22 +739,22 @@ describe("event proposal collection and canonical proposal resource routes", () 
 
     const response = await route(fixture, "/" + fixture.proposalId + "/speakers/" + speakerId, {
       method: "PATCH",
-      body: JSON.stringify({ firstName: "Must not persist" }),
+      body: JSON.stringify({ role: "moderator" }),
     });
     expect(response.status).toBeGreaterThanOrEqual(400);
-    await expect(queryAll(env.DB, "SELECT first_name FROM users WHERE id = ?", [speakerId])).resolves.toEqual([before]);
+    await expect(queryAll(env.DB, roleSql, [fixture.proposalId, speakerId])).resolves.toEqual(before);
     await expect(
       queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'speaker_profile_updated' AND entity_id IS NOT NULL"),
     ).resolves.toHaveLength(0);
   });
 
-  it("rolls back speaker profile and reminder writes when management is revoked after preflight", async () => {
+  it("rolls back speaker role and reminder writes when management is revoked after preflight", async () => {
     const fixture = await setupFixture();
     const speakerId = await addProposalSpeaker(fixture, "confirmed");
     const actor = await proposalManager(fixture);
-    const before = await queryAll<{ profile_overrides_json: string }>(
+    const before = await queryAll<{ role: string }>(
       env.DB,
-      "SELECT profile_overrides_json FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
+      "SELECT role FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?",
       [fixture.proposalId, speakerId],
     );
     const racingEditDb = mutateBeforeNextBatch(env.DB, () => revokeProposalManagement(fixture, actor));
@@ -736,13 +765,13 @@ describe("event proposal collection and canonical proposal resource routes", () 
         actor,
         fixture.proposalId,
         speakerId,
-        { firstName: "Revoked update" },
+        { role: "moderator" },
         "https://app.test",
         { contextGuard: proposalContextGuard(racingEditDb, fixture) },
       ),
     ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
     await expect(
-      queryAll(env.DB, "SELECT profile_overrides_json FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
+      queryAll(env.DB, "SELECT role FROM proposal_speakers WHERE proposal_id = ? AND user_id = ?", [
         fixture.proposalId,
         speakerId,
       ]),
@@ -783,16 +812,10 @@ describe("event proposal collection and canonical proposal resource routes", () 
     await expect(queryAll(env.DB, "SELECT id FROM email_outbox")).resolves.toEqual(outboxBefore);
   });
 
-  it("rolls back speaker removal and headshot writes when management is revoked after preflight", async () => {
+  it("rolls back speaker removal when management is revoked after preflight", async () => {
     const fixture = await setupFixture();
     const removedSpeakerId = await addProposalSpeaker(fixture, "confirmed");
     await addProposalSpeaker(fixture, "confirmed");
-    const [speaker] = await queryAll<{ id: string; headshot_override_set: number; headshot_r2_key: string | null }>(
-      env.DB,
-      `SELECT id, headshot_override_set, headshot_r2_key FROM proposal_speakers
-        WHERE proposal_id = ? AND user_id = ?`,
-      [fixture.proposalId, removedSpeakerId],
-    );
     const actor = await proposalManager(fixture);
     const racingRemovalDb = mutateBeforeNextBatch(env.DB, () => revokeProposalManagement(fixture, actor));
     await expect(
@@ -810,35 +833,6 @@ describe("event proposal collection and canonical proposal resource routes", () 
         removedSpeakerId,
       ]),
     ).resolves.toHaveLength(1);
-
-    const secondActor = await proposalManager(fixture);
-    const racingHeadshotDb = mutateBeforeNextBatch(env.DB, () => revokeProposalManagement(fixture, secondActor));
-    await expect(
-      removeProposalSpeakerHeadshot({
-        db: racingHeadshotDb,
-        proposalId: fixture.proposalId,
-        proposalEventId: fixture.eventId,
-        permissionActor: secondActor,
-        proposalSpeakerId: speaker.id,
-        speakerUserId: removedSpeakerId,
-        previousOverrideSet: speaker.headshot_override_set,
-        previousOverrideKey: speaker.headshot_r2_key,
-        authorization: { contextGuard: proposalContextGuard(racingHeadshotDb, fixture) },
-        audit: {
-          actorType: "admin",
-          actorId: secondActor.id,
-          action: "proposal_speaker_headshot_removed_by_manager",
-          scope: { type: "proposal", id: fixture.proposalId },
-        },
-      }),
-    ).rejects.toMatchObject({ status: 409, code: "PROPOSAL_SPEAKER_CONFLICT" });
-    await expect(
-      queryAll(env.DB, "SELECT headshot_override_set, headshot_r2_key FROM proposal_speakers WHERE id = ?", [
-        speaker.id,
-      ]),
-    ).resolves.toEqual([
-      { headshot_override_set: speaker.headshot_override_set, headshot_r2_key: speaker.headshot_r2_key },
-    ]);
   });
 
   it("keeps generic event access and unrelated proposal grants out of the program", async () => {
@@ -955,7 +949,7 @@ describe("event proposal collection and canonical proposal resource routes", () 
     expect(patch.proposal.title).toBe("Updated route proposal");
   });
 
-  it("allows an accepted abstract correction only with the dedicated capability", async () => {
+  it("allows accepted title and abstract corrections with the dedicated capability", async () => {
     const fixture = await setupFixture();
     await env.DB.batch([
       env.DB.prepare("UPDATE session_proposals SET status = 'accepted' WHERE id = ?").bind(fixture.proposalId),
@@ -974,12 +968,17 @@ describe("event proposal collection and canonical proposal resource routes", () 
       method: "PATCH",
       body: JSON.stringify({ title: "Updated accepted title" }),
     });
-    expect(titleResponse.status).toBe(403);
+    expect(titleResponse.status).toBe(200);
     const bothResponse = await route(fixture, "/" + fixture.proposalId, {
       method: "PATCH",
       body: JSON.stringify({ title: "Another accepted title", abstract }),
     });
-    expect(bothResponse.status).toBe(403);
+    expect(bothResponse.status).toBe(200);
+    expect(
+      await env.DB.prepare("SELECT title, abstract FROM session_proposals WHERE id = ?")
+        .bind(fixture.proposalId)
+        .first(),
+    ).toEqual({ title: "Another accepted title", abstract });
   });
 
   it("cancels accepted proposals only with a comment and preserves decisions while deactivating speakers", async () => {
@@ -1377,5 +1376,88 @@ describe("event proposal collection and canonical proposal resource routes", () 
     } finally {
       await env.DB.prepare("DROP TRIGGER IF EXISTS reject_group_proposal_decision_audit").run();
     }
+  });
+});
+
+describe("organizers of a group-managed event", () => {
+  beforeEach(async () => {
+    await resetDb();
+  });
+
+  it("tells exactly the people who may edit the agenda when a speaker declines, once each", async () => {
+    const fixture = await setupFixture();
+    const organizer = await user("group-event-organizer");
+    await env.DB.prepare(
+      "INSERT INTO user_roles (id, user_id, role_id, context_type, context_id, granted_by_user_id, created_at) VALUES (?, ?, 'role-event_organizer', 'event', ?, ?, datetime('now'))",
+    )
+      .bind(crypto.randomUUID(), organizer.id, fixture.eventId, organizer.id)
+      .run();
+    // Held both through the team role and directly: still one notice.
+    await grant(organizer.id, fixture.eventId, "agenda:write");
+    const elsewhere = await user("other-event-organizer");
+    await grant(elsewhere.id, fixture.otherEventId, "agenda:write");
+
+    const speakers: Record<string, string> = {};
+    const coSpeaker = await user("declining-group-speaker");
+    for (const [userId, role] of [
+      [fixture.proposerUserId, "proposer"],
+      [coSpeaker.id, "co_speaker"],
+    ] as const) {
+      const prepared = await buildAddProposalSpeaker(env.DB, {
+        proposalId: fixture.proposalId,
+        userId,
+        role,
+        signingSecret: env.INTERNAL_SIGNING_SECRET!,
+      });
+      await env.DB.batch(prepared.statements);
+      speakers[userId] = prepared.manageToken;
+    }
+    const occurrenceId = crypto.randomUUID();
+    await env.DB.batch([
+      env.DB.prepare("INSERT INTO event_agenda_state(event_id,revision,updated_at) VALUES(?,1,datetime('now'))").bind(
+        fixture.eventId,
+      ),
+      env.DB.prepare(
+        "INSERT INTO event_agenda_occurrences(id,event_id,title,start_at,end_at,source_key) VALUES(?,?,?,?,?,?)",
+      ).bind(
+        occurrenceId,
+        fixture.eventId,
+        "Route proposal",
+        "2027-01-01T10:00:00.000Z",
+        "2027-01-01T11:00:00.000Z",
+        `proposal:${fixture.proposalId}`,
+      ),
+      env.DB.prepare("INSERT INTO event_agenda_occurrence_speakers(occurrence_id,user_id) VALUES(?,?)").bind(
+        occurrenceId,
+        coSpeaker.id,
+      ),
+    ]);
+
+    await declineSpeakerParticipation(env.DB, speakers[coSpeaker.id]!, env.INTERNAL_SIGNING_SECRET!, {
+      appBaseUrl: "https://app.test",
+    });
+
+    const notified = (
+      await queryAll<{ recipient_user_id: string }>(
+        env.DB,
+        "SELECT recipient_user_id FROM email_outbox WHERE template_key = 'agenda_speaker_declined' ORDER BY recipient_user_id",
+      )
+    ).map((row) => row.recipient_user_id);
+    // The same rule that authorizes an agenda edit decides who is told.
+    const people = await queryAll<{ id: string }>(env.DB, "SELECT id FROM users ORDER BY id");
+    const editors: string[] = [];
+    for (const person of people) {
+      const actor: AuthAdmin = {
+        identityType: "user",
+        id: person.id,
+        email: "",
+        grants: await computeGrantsForUser(env.DB, person.id),
+      };
+      if (hasPermission(actor, "agenda:write", { type: "event", id: fixture.eventId })) editors.push(person.id);
+    }
+    expect(notified).toEqual(editors.sort());
+    expect(notified).toContain(organizer.id);
+    expect(notified).not.toContain(elsewhere.id);
+    expect(new Set(notified).size).toBe(notified.length);
   });
 });

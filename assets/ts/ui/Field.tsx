@@ -2,7 +2,7 @@
  * Field — label, control, and validation message as one unit.
  *
  * The validation model has three states, matching what the event flows already
- * ship, and the distinction between them is behavioural rather than cosmetic:
+ * ship, and the distinction between them is behavioral rather than cosmetic:
  *
  *   ok       the value was checked and is good
  *   advisory something worth knowing that does NOT block submission — a
@@ -11,20 +11,23 @@
  *            submit perfectly well.
  *   invalid  submission is blocked
  *
- * Each state carries a mark as well as a colour. Roughly one man in twelve
- * cannot separate the green and red by hue, so colour alone is not a status.
+ * Each state carries a mark as well as a color. Roughly one man in twelve
+ * cannot separate the green and red by hue, so color alone is not a status.
  */
 
 import type { ComponentChildren } from "preact";
 import { useId } from "preact/hooks";
 
 import { FIELD_STATE_ICON, type FieldState } from "./field-state";
+import { StrokeIcon } from "./MediaIcons";
 import "./Field.css";
 
 export type { FieldState };
 
 export interface FieldProps {
   label: ComponentChildren;
+  /** Keep the label accessible without reserving a visual row, such as in toolbars. */
+  labelHidden?: boolean;
   /** Marks the control required and annotates the label. */
   required?: boolean;
   /** Persistent guidance. Replaced by the message when a state is set. */
@@ -41,6 +44,14 @@ export interface FieldProps {
   errorSlot?: string;
   /** A caller-supplied control id, for a form whose markup others address by id. */
   id?: string;
+  /**
+   * Routes the field's message to a `FieldStatus` (ui/FieldStatus) the caller places, by its
+   * id, instead of under the control. For a compact composer whose control
+   * must not move when a message appears: the status keeps its space either
+   * way, the control names it through `aria-describedby`, and the field draws
+   * no state mark inside the control. Every other field leaves this unset.
+   */
+  statusId?: string;
   /**
    * The field is a set of controls rather than one, so its name is a
    * `<legend>` on a `<fieldset>` instead of a `<label for>`.
@@ -67,20 +78,22 @@ export interface FieldControlProps {
 
 export function StateIcon({ state, class: className }: { state: FieldState; class?: string }) {
   return (
-    <svg class={className} viewBox="0 0 16 16" fill="currentColor" aria-hidden="true" focusable="false">
+    <StrokeIcon class={className}>
       <path d={FIELD_STATE_ICON[state]} />
-    </svg>
+    </StrokeIcon>
   );
 }
 
 export function Field({
   label,
+  labelHidden = false,
   required = false,
   help,
   state,
   message,
   errorSlot,
   id: givenId,
+  statusId,
   group = false,
   children,
 }: FieldProps) {
@@ -90,16 +103,18 @@ export function Field({
   const messageId = `${id}-message`;
   const helpId = `${id}-help`;
 
-  const showMessage = Boolean(state && message);
+  const showMessage = Boolean(state && message) && !statusId;
   // With a slot, the control names the help and the slot together, so a
   // message a validator writes later is announced with the field it is about.
-  const describedBy = showMessage
-    ? messageId
-    : errorSlot
-      ? [help ? helpId : null, messageId].filter(Boolean).join(" ")
-      : help
-        ? helpId
-        : undefined;
+  const describedBy = statusId
+    ? [help ? helpId : null, statusId].filter(Boolean).join(" ")
+    : showMessage
+      ? messageId
+      : errorSlot
+        ? [help ? helpId : null, messageId].filter(Boolean).join(" ")
+        : help
+          ? helpId
+          : undefined;
 
   const Frame = group ? "fieldset" : "div";
 
@@ -114,7 +129,7 @@ export function Field({
           twice rather than hoisted, so the required mark stays inside the
           field that styles it. */}
       {group ? (
-        <legend class="pk-field__label">
+        <legend class={`pk-field__label${labelHidden ? " pk-sr-only" : ""}`}>
           {label}
           {required && (
             <span class="pk-field__required">
@@ -124,7 +139,7 @@ export function Field({
           )}
         </legend>
       ) : (
-        <label class="pk-field__label" for={controlId}>
+        <label class={`pk-field__label${labelHidden ? " pk-sr-only" : ""}`} for={controlId}>
           {label}
           {required && (
             <span class="pk-field__required">
@@ -143,7 +158,7 @@ export function Field({
           // Only a blocking state is invalid. An advisory is not an error.
           "aria-invalid": state === "invalid" ? "true" : undefined,
         })}
-        {state && <StateIcon state={state} class="pk-field__state" />}
+        {state && !statusId && <StateIcon state={state} class="pk-field__state" />}
       </div>
 
       {showMessage && (

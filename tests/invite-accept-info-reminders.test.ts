@@ -16,7 +16,7 @@ import { seedWorkflowEmailTemplates } from "./helpers/event-workflow";
 import { run } from "../functions/_lib/db/queries";
 import { createInvite, declineInvite, acceptInvite } from "../functions/_lib/services/invites";
 import { onRequestGet as inviteInfo } from "../functions/api/v1/invites/[token]/info";
-import app from "../functions/router";
+import app from "./helpers/app";
 
 function mounted(c: any): Promise<Response> {
   return app.fetch(c.req.raw, c.env, { passThroughOnException: () => {}, waitUntil: () => {} } as any);
@@ -146,8 +146,8 @@ describe("invite info endpoint", () => {
     // Create a user to be the inviter
     const inviterUserId = crypto.randomUUID();
     await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, active, created_at, updated_at)
-       VALUES (?, 'inviter@example.test', 'inviter@example.test', 'Jane', 'Smith', 'Acme Corp', 1, datetime('now'), datetime('now'))`,
+      `INSERT INTO users (id, email, normalized_email, first_name, last_name, active, created_at, updated_at)
+       VALUES (?, 'inviter@example.test', 'inviter@example.test', 'Jane', 'Smith', 1, datetime('now'), datetime('now'))`,
     )
       .bind(inviterUserId)
       .run();

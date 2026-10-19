@@ -9,10 +9,10 @@ import {
   setupProposalSpeakerCapacityWorkflow,
 } from "./helpers/proposal-speaker-capacity";
 
-describe("proposal-scoped public speaker profiles", () => {
+describe("public speaker profiles", () => {
   beforeEach(resetDb);
 
-  it("uses proposal overrides in referral metadata and badge render data", async () => {
+  it("reads referral metadata and badge render data from the person, never a proposal copy", async () => {
     const { adminSessionToken } = await setupProposalSpeakerCapacityWorkflow();
     const { proposalId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
     const [referral] = await queryAll<{ code: string; created_by_user_id: string }>(
@@ -24,38 +24,25 @@ describe("proposal-scoped public speaker profiles", () => {
     );
     expect(referral).toBeTruthy();
 
-    const scopedHeadshot = `proposal-headshots/${proposalId}/${referral.created_by_user_id}/public.jpg`;
+    const headshot = `headshots/${referral.created_by_user_id}/public.jpg`;
     await env.DB.prepare(
-      `UPDATE proposal_speakers
-       SET profile_overrides_json = ?, headshot_override_set = 1,
-           headshot_r2_key = ?, headshot_updated_at = '2026-08-22T00:00:00.000Z'
-       WHERE proposal_id = ? AND user_id = ?`,
+      `UPDATE users SET first_name = 'Person', last_name = 'Own', headshot_r2_key = ?,
+              headshot_updated_at = '2026-08-22T00:00:00.000Z'
+        WHERE id = ?`,
     )
-      .bind(
-        JSON.stringify({
-          firstName: "Proposal",
-          lastName: "Persona",
-          organizationName: "Scoped Organization",
-          jobTitle: "Scoped Title",
-        }),
-        scopedHeadshot,
-        proposalId,
-        referral.created_by_user_id,
-      )
+      .bind(headshot, referral.created_by_user_id)
       .run();
 
     await expect(lookupOgPerson(env.DB, referral.code)).resolves.toMatchObject({
-      first_name: "Proposal",
-      last_name: "Persona",
+      first_name: "Person",
+      last_name: "Own",
     });
     await expect(
       getProposalSpeakerBadgeRenderData(env.DB, proposalId, referral.created_by_user_id),
     ).resolves.toMatchObject({
-      first_name: "Proposal",
-      last_name: "Persona",
-      organization_name: "Scoped Organization",
-      job_title: "Scoped Title",
-      headshot_r2_key: scopedHeadshot,
+      first_name: "Person",
+      last_name: "Own",
+      headshot_r2_key: headshot,
     });
   });
 });

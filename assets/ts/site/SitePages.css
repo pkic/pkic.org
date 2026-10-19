@@ -192,7 +192,7 @@
     align-items: center;
     padding: var(--pk-6);
     margin-block: var(--pk-7);
-    border-radius: var(--pk-radius-xl);
+    border-radius: var(--pk-radius-card);
     background: var(--pk-public-prose-callout);
     color: var(--pk-on-solid);
     box-shadow: var(--pk-shadow-3);
@@ -218,14 +218,13 @@
     gap: var(--pk-6);
   }
 
-  .pk-content-faq details {
+  .pk-content-faq article {
     padding: var(--pk-4);
     border-block-end: 1px solid var(--pk-line);
   }
 
-  .pk-content-faq summary {
+  .pk-content-faq h3 {
     color: var(--pk-accent-ink);
-    cursor: pointer;
     font-weight: 700;
   }
 
@@ -271,7 +270,7 @@
     width: var(--pk-7);
     height: var(--pk-7);
     flex: 0 0 auto;
-    border-radius: var(--pk-radius-round);
+    border-radius: var(--pk-radius-pill);
     background: var(--pk-accent-soft);
     place-items: center;
   }
@@ -308,7 +307,7 @@
     --pk-public-hero-ground: var(--pk-public-hero-resources);
   }
 
-  /* A page that names its own colour takes that hero theme. */
+  /* A page that names its own color takes that hero theme. */
   .pk-public-hero--blue {
     background: var(--pk-public-hero-blue);
   }
@@ -429,11 +428,6 @@
 
   #content .pk-content-callout {
     border-inline-start: 0;
-  }
-
-  #content .pk-content-callout--warning {
-    color: var(--pk-ink);
-    border-inline-start-color: var(--pk-warn);
   }
 
   #content .pk-content-callout--warning > p {
@@ -845,10 +839,6 @@
     opacity: 0.8;
   }
 
-  .pk-public-home-content {
-    padding-block: var(--pk-7) var(--pk-8);
-  }
-
   .pk-home-announcement {
     padding: var(--pk-5) var(--pk-6);
     border-inline-start: 4px solid var(--pk-accent);
@@ -972,7 +962,7 @@
   .pk-public-card__chip {
     padding: 0.2em 0.55em;
     border: 1px solid var(--pk-line);
-    border-radius: var(--pk-radius-round);
+    border-radius: var(--pk-radius-pill);
     background: var(--pk-surface-sunk);
     color: var(--pk-ink-muted);
     font-size: var(--pk-text-2xs);
@@ -1096,6 +1086,20 @@
     color: var(--pk-on-solid);
   }
 
+  /* The attendee app sits apart from the page tabs as the one action. */
+  .pk-section-navigation a.pk-section-navigation__app {
+    align-self: center;
+    margin-inline-start: auto;
+    padding: var(--pk-1) var(--pk-3);
+    border: 1px solid color-mix(in srgb, var(--pk-on-solid) 45%, transparent);
+    border-radius: var(--pk-radius);
+    color: var(--pk-on-solid);
+  }
+  .pk-section-navigation a.pk-section-navigation__app:hover {
+    border-color: var(--pk-on-solid);
+    background: color-mix(in srgb, var(--pk-on-solid) 10%, transparent);
+  }
+
   .pk-public-page__body:has(.pk-content-agenda) {
     max-width: 84rem;
   }
@@ -1103,9 +1107,10 @@
   #content .pk-content-callout--warning {
     color: var(--pk-ink);
     padding: var(--pk-4) var(--pk-5);
-    border: 1px solid color-mix(in srgb, var(--pk-danger) 40%, var(--pk-line));
+    /* Warn, not danger: a warning callout informs and steers; nothing has gone wrong. */
+    border: 1px solid color-mix(in srgb, var(--pk-warn) 40%, var(--pk-line));
     border-radius: var(--pk-radius-lg);
-    background: var(--pk-danger-soft);
+    background: var(--pk-warn-soft);
   }
 
   @media (max-width: 64rem) {

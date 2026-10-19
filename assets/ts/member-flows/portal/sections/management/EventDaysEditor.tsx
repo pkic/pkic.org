@@ -1,5 +1,6 @@
 import { useCallback, useState } from "preact/hooks";
 import type { z } from "zod";
+import { zonedClock } from "../../../../../shared/timezone";
 import type { EventAttendanceOption } from "../../../../../shared/schemas/event-configuration";
 import {
   groupEventDaysReplaceResponseSchema,
@@ -21,6 +22,7 @@ import { TextInput } from "../../../../ui/TextControl";
 import { useData } from "../../../../hooks/useData";
 import { getJson, putJson } from "../../../../shared/api-client";
 import "../../../../ui/Content.css";
+import { SectionHeading } from "../../../../ui/SectionHeading";
 
 type DaysResponse = z.infer<typeof groupEventDaysResponseSchema>;
 
@@ -112,7 +114,7 @@ function AttendanceOptionRow({
         </Field>
       </div>
       <div class="pk-cluster">
-        <Button size="sm" variant="danger-quiet" onClick={onRemove}>
+        <Button variant="danger-quiet" onClick={onRemove}>
           Remove attendance option {ordinal}
         </Button>
       </div>
@@ -142,12 +144,7 @@ function DaysForm({
       if (!iso) return "";
       const parsed = new Date(iso);
       if (Number.isNaN(parsed.getTime())) return "";
-      return new Intl.DateTimeFormat("en-US", {
-        timeZone: event.timezone,
-        hour: "2-digit",
-        minute: "2-digit",
-        hourCycle: "h23",
-      }).format(parsed);
+      return zonedClock(parsed, event.timezone);
     },
     [event.timezone],
   );
@@ -216,7 +213,6 @@ function DaysForm({
           <Panel key={day.id ?? dayIndex}>
             <PanelHeader title={`Day ${String(dayIndex + 1)}`}>
               <Button
-                size="sm"
                 variant="danger-quiet"
                 onClick={() => setDays((current) => current.filter((_, index) => index !== dayIndex))}
               >
@@ -302,7 +298,7 @@ function DaysForm({
                 )}
               </Field>
 
-              <h4>Attendance options</h4>
+              <SectionHeading level={4}>Attendance options</SectionHeading>
               {day.attendanceOptions.map((option, optionIndex) => (
                 <AttendanceOptionRow
                   key={optionIndex}
@@ -326,7 +322,6 @@ function DaysForm({
               ))}
               <div class="pk-cluster">
                 <Button
-                  size="sm"
                   onClick={() =>
                     updateDay(dayIndex, {
                       attendanceOptions: [...day.attendanceOptions, { value: "", label: "", capacity: null }],
@@ -349,7 +344,6 @@ function DaysForm({
 
         <div class="pk-cluster">
           <Button
-            size="sm"
             onClick={() =>
               setDays((current) => [
                 ...current,
@@ -369,12 +363,10 @@ function DaysForm({
         </div>
 
         <div class="pk-cluster">
-          <Button type="submit" variant="primary" size="sm" loading={saving}>
+          <Button type="submit" variant="primary" loading={saving}>
             {saving ? "Saving days…" : "Save days"}
           </Button>
-          <Button size="sm" onClick={() => void reload()}>
-            Cancel
-          </Button>
+          <Button onClick={() => void reload()}>Cancel</Button>
         </div>
       </fieldset>
 

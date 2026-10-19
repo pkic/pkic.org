@@ -4,7 +4,7 @@ import type { RegistrationCapabilitySafeProjection } from "../../../../assets/sh
 export interface VerifiedRegistrationIdentityContext {
   userId: string;
   registrationGroupId?: string;
-  selectedIdentity?: { id: string; organizationName: string | null; jobTitle: string | null };
+  selectedIdentity?: { id: string };
 }
 
 /** Internal row model extends the stable public subset with storage-only fields. */
@@ -12,8 +12,6 @@ export interface RegistrationRecord extends RegistrationCapabilitySafeProjection
   form_placement_id: string | null;
   registration_group_id: string | null;
   registration_identity_id: string | null;
-  registration_organization_name: string | null;
-  registration_job_title: string | null;
   confirmation_link_secret: string | null;
   manage_link_secret: string;
   /** Internal authorization state; deliberately excluded from public DTOs. */
@@ -33,8 +31,6 @@ const REGISTRATION_COLUMN_NAMES = [
   "form_placement_id",
   "registration_group_id",
   "registration_identity_id",
-  "registration_organization_name",
-  "registration_job_title",
   "referred_by_code",
   "confirmation_link_secret",
   "pending_confirmation_deadline_at",

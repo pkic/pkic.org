@@ -21,7 +21,7 @@ import {
   optionValues,
   typeInto,
   typeMarkdown,
-} from "./helpers/labelled-control";
+} from "./helpers/labeled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const mounted: HTMLElement[] = [];
@@ -60,7 +60,7 @@ describe("group vote proposal form", () => {
       "Proposed closing time",
     ]);
     // Resolving through the pair means the lookup fails exactly when the
-    // labelling is broken, which is the part worth asserting.
+    // labeling is broken, which is the part worth asserting.
     expect(controlFor(container, "Title").required).toBe(true);
     expect((await markdownControl(container, "Description")).getAttribute("aria-required")).toBe("true");
     // "(optional)" used to live in the label. The help text says it instead,
@@ -140,7 +140,7 @@ describe("group vote proposal form", () => {
       voteType: "motion",
     });
 
-    // The failure is announced, not only coloured, and the draft survives so
+    // The failure is announced, not only colored, and the draft survives so
     // the reader does not have to type it all again.
     const alert = container.querySelector('[role="alert"]');
     expect(alert).not.toBeNull();

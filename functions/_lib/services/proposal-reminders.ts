@@ -7,13 +7,10 @@ import type { AuthAdmin } from "../types";
 import { nowIso } from "../utils/time";
 import { isAuditChangeGuardFailure, prepareScopedAuditLog, prepareScopedAuditLogAfterOneChange } from "./audit";
 import { buildEventEmailVariables, getEventById, type EventRecord } from "./events";
+import { eventSessionTypeRequiresPresentation } from "./event-presentation";
 import { speakerManagePageUrl, speakerPresentationPageUrl } from "./frontend-links";
 import { buildProposalInviteEmailContext, proposalInviteEmailTextVariables } from "./proposal-invite-email-context";
-import {
-  proposalSpeakerEffectiveHeadshotExpression,
-  proposalSpeakerEffectiveProfileColumns,
-  queuedSpeakerManageToken,
-} from "./proposal-speakers";
+import { proposalSpeakerProfileColumns, queuedSpeakerManageToken } from "./proposal-speakers";
 import type { ProposalRecord } from "./proposals";
 import { isProposalInactiveStatus } from "./proposal-status-policy";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../db/authorization-guard";
@@ -26,6 +23,7 @@ import {
 } from "../invite-validity";
 
 interface ReminderProposal {
+  proposal_type: string;
   id: string;
   event_id: string;
   title: string;
@@ -52,7 +50,7 @@ interface ReminderSpeaker {
 async function loadReminderProposal(db: DatabaseLike, proposalId: string): Promise<ReminderProposal> {
   const proposal = await first<ReminderProposal>(
     db,
-    `SELECT sp.id, sp.event_id, sp.title, sp.abstract, sp.proposer_user_id, sp.status,
+    `SELECT sp.id, sp.event_id, sp.title, sp.abstract, sp.proposer_user_id, sp.status, sp.proposal_type,
             pd.final_status AS decision_status
      FROM session_proposals sp
      LEFT JOIN proposal_decisions pd ON pd.proposal_id = sp.id
@@ -67,8 +65,8 @@ async function loadReminderSpeakers(db: DatabaseLike, proposalId: string, userId
   const rows = await all<ReminderSpeaker>(
     db,
     `SELECT ps.id AS proposal_speaker_id, ps.user_id, ps.status, ps.manage_link_secret, ps.invite_expires_at,
-            u.email, ${proposalSpeakerEffectiveProfileColumns("u", "ps")},
-            ${proposalSpeakerEffectiveHeadshotExpression("u", "ps")} AS headshot_r2_key,
+            u.email, ${proposalSpeakerProfileColumns("u", "ps")},
+            u.headshot_r2_key AS headshot_r2_key,
             pv.id AS presentation_id
      FROM proposal_speakers ps
      JOIN users u ON u.id = ps.user_id
@@ -89,7 +87,7 @@ function prepareReminderSnapshotGuard(
   db: DatabaseLike,
   proposal: ReminderProposal,
   speakers: readonly ReminderSpeaker[],
-  event: Pick<EventRecord, "starts_at" | "ends_at">,
+  event: Pick<EventRecord, "starts_at" | "ends_at" | "settings_json">,
   now: string,
   userId?: string,
 ): StatementLike {
@@ -110,11 +108,11 @@ function prepareReminderSnapshotGuard(
   );
   return prepareAuthorizationGuard(db, {
     sql: `SELECT 1 FROM session_proposals sp
-          WHERE sp.id = ? AND sp.event_id = ? AND sp.status = ? AND sp.deleted_at IS NULL
+          WHERE sp.id = ? AND sp.event_id = ? AND sp.status = ? AND sp.proposal_type = ? AND sp.deleted_at IS NULL
             AND COALESCE((SELECT final_status FROM proposal_decisions WHERE proposal_id = sp.id), '') = ?
             AND EXISTS (
               SELECT 1 FROM events e
-              WHERE e.id = sp.event_id AND e.starts_at IS ? AND e.ends_at IS ?
+              WHERE e.id = sp.event_id AND e.starts_at IS ? AND e.ends_at IS ? AND e.settings_json IS ?
             )
             AND (SELECT COUNT(*) FROM proposal_speakers ps
                  WHERE ps.proposal_id = sp.id ${userId ? "AND ps.user_id = ?" : "AND ps.status <> 'declined'"}) = ?
@@ -123,9 +121,11 @@ function prepareReminderSnapshotGuard(
       proposal.id,
       proposal.event_id,
       proposal.status,
+      proposal.proposal_type,
       proposal.decision_status ?? "",
       event.starts_at,
       event.ends_at,
+      event.settings_json,
       ...(userId ? [userId] : []),
       speakers.length,
       ...speakers.flatMap((speaker) => [
@@ -174,6 +174,12 @@ export async function sendProposalSpeakerReminders(
     getEventById(db, proposal.event_id),
     loadReminderSpeakers(db, proposal.id, payload.userId),
   ]);
+  if (
+    payload.kind === "presentation" &&
+    !eventSessionTypeRequiresPresentation(event.settings_json, proposal.proposal_type)
+  ) {
+    throw new AppError(409, "PRESENTATION_NOT_REQUIRED", "This session type does not require a presentation");
+  }
   const statements: StatementLike[] = [];
   const outboxIds: string[] = [];
   const now = nowIso();

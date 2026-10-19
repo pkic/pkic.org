@@ -13,7 +13,7 @@
  * the person took part and nothing more. The reader's permissions do not
  * enter into it.
  */
-import { useState } from "preact/hooks";
+import { useRouteView } from "../../../../hooks/useRouteView";
 import type { z } from "zod";
 
 import {
@@ -26,6 +26,7 @@ import { ApiDataTable } from "../../../../components/ApiDataTable";
 // The product adapter, not the design system's Badge: `status` maps this
 // product's vocabulary (a participant role, an upload vs a review) onto the
 // system's tones, which is exactly the translation that layer exists for.
+import { formatEventPlace } from "../../../../../shared/event-place";
 import { Badge } from "../../../../components/Badge";
 import { type Column } from "../../../../components/Table";
 import { usePortalHashLocation } from "../../hash-location";
@@ -47,22 +48,24 @@ function occurred(value: string) {
 }
 
 export function UserParticipationHistory({ userId, canRead }: { userId: string; canRead: boolean }) {
-  const [tab, setTab] = useState<TabId>("events");
+  const [tab, setTab] = useRouteView(
+    `/users/${encodeURIComponent(userId)}`,
+    TABS.map((entry) => entry.id),
+    "events",
+  );
   if (!canRead) return emptyState("Participation history is not available for this account.");
 
   return (
     <div class="pk-stack">
-      <div class="pk-table-list__inset">
-        <TabList
-          label="Participation"
-          idPrefix="participation"
-          items={TABS.map((entry) => ({ id: entry.id, label: entry.label, panelId: "participation-panel" }))}
-          activeId={tab}
-          onSelect={(id) => {
-            setTab(id as TabId);
-          }}
-        />
-      </div>
+      <TabList
+        label="Participation"
+        idPrefix="participation"
+        items={TABS.map((entry) => ({ id: entry.id, label: entry.label, panelId: "participation-panel" }))}
+        activeId={tab}
+        onSelect={(id) => {
+          setTab(id as TabId);
+        }}
+      />
 
       <div id="participation-panel" role="tabpanel" aria-labelledby={`participation-${tab}`}>
         {tab === "events" && <EventsTab userId={userId} />}
@@ -99,11 +102,12 @@ function EventsTab({ userId }: { userId: string }) {
         </span>
       ),
     },
-    { header: "Location", cell: (row) => row.location ?? "—" },
+    { header: "Location", cell: (row) => formatEventPlace(row) ?? "—" },
     { header: "Date", width: "fit", cell: (row) => occurred(row.occurredAt) },
   ];
   return (
     <ApiDataTable
+      urlState="user-events"
       caption="Events attended"
       columns={columns}
       endpoint={`/api/v1/users/${encodeURIComponent(userId)}/participation/events`}
@@ -131,6 +135,7 @@ function MeetingsTab({ userId }: { userId: string }) {
   ];
   return (
     <ApiDataTable
+      urlState="user-meetings"
       caption="Meetings attended"
       columns={columns}
       endpoint={`/api/v1/users/${encodeURIComponent(userId)}/participation/meetings`}
@@ -161,6 +166,7 @@ function DocumentsTab({ userId }: { userId: string }) {
   ];
   return (
     <ApiDataTable
+      urlState="user-documents"
       caption="Documents contributed to"
       columns={columns}
       endpoint={`/api/v1/users/${encodeURIComponent(userId)}/participation/documents`}
@@ -191,6 +197,7 @@ function VotesTab({ userId }: { userId: string }) {
   return (
     <>
       <ApiDataTable
+        urlState="user-votes"
         caption="Votes participated in"
         columns={columns}
         endpoint={`/api/v1/users/${encodeURIComponent(userId)}/participation/votes`}

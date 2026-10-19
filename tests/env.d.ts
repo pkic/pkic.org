@@ -1,5 +1,5 @@
 import type { Env as AppEnv } from "../functions/_lib/types";
-import type { D1Migration } from "@cloudflare/vitest-pool-workers";
+import type { D1Migration } from "@cloudflare/vitest-plugin";
 
 declare global {
   namespace Cloudflare {

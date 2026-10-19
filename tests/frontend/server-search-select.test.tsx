@@ -10,7 +10,7 @@ import { ServerSearchSelect } from "../../assets/ts/components/ServerSearchSelec
 import { Field } from "../../assets/ts/ui/Field";
 import type { CollectionLoader } from "../../assets/ts/hooks/useServerCollection";
 import type { ServerCatalog } from "../../assets/ts/shared/server-catalog";
-import { chooseComboboxOption, controlFor, openCombobox } from "./helpers/labelled-control";
+import { chooseComboboxOption, controlFor, openCombobox } from "./helpers/labeled-control";
 
 const itemSchema = z.object({ id: z.string(), name: z.string() });
 const responseSchema = paginatedResponseSchema("items", itemSchema);
@@ -464,7 +464,7 @@ describe("ServerSearchSelect", () => {
     expect(onChange).toHaveBeenCalledWith({ id: "item-0", name: "Item 0" });
   });
 
-  it("announces a failed load as an error rather than as differently coloured result text", async () => {
+  it("announces a failed load as an error rather than as differently colored result text", async () => {
     vi.useFakeTimers();
     stubFetch(() => json({ error: "nope" }, 503));
     const container = mount(
@@ -487,4 +487,38 @@ describe("ServerSearchSelect", () => {
     expect(alert?.textContent).toContain("Online services are temporarily unavailable.");
     expect(alert?.textContent).not.toContain("HTTP 503");
   });
+});
+
+it("pages a non-searchable provider chooser at100 without unsupported sort or query", async () => {
+  vi.useFakeTimers();
+  const requests = stubFetch((url) => json(pagedItems(url, 201)));
+  const host = mount(
+    <Field label="Provider recordings">
+      {(control) => (
+        <ServerSearchSelect
+          {...control}
+          catalog={{ ...catalog, sort: "" }}
+          searchLabel="Recording"
+          pageSize={100}
+          searchable={false}
+          value={null}
+          onChange={() => {}}
+        />
+      )}
+    </Field>,
+  );
+  await elapse(0);
+  const trigger = host.querySelector<HTMLButtonElement>('[role="combobox"]')!;
+  expect(trigger.tagName).toBe("BUTTON");
+  expect(host.querySelector("input")).toBeNull();
+  await act(async () => trigger.click());
+  const next = Array.from(host.querySelectorAll("button")).find((button) => button.textContent === "Next options")!;
+  await act(async () => next.click());
+  await elapse(0);
+  expect(requests.some((url) => url.searchParams.get("offset") === "100")).toBe(true);
+  for (const url of requests) {
+    expect(url.searchParams.get("limit")).toBe("100");
+    expect(url.searchParams.has("sort")).toBe(false);
+    expect(url.searchParams.has("q")).toBe(false);
+  }
 });

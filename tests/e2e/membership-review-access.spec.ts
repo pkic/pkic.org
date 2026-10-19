@@ -37,6 +37,7 @@ test("applicant opens status emails and staff record an attributed consensus obj
   const updateSince = await capturedEmailCount();
   await transitionStageInUi(page, "on_hold", {
     onHoldSubtype: "request_information",
+    requestDetails: "Please clarify your application.",
     note: "Please clarify eligibility.",
   });
   const update = await waitForCapturedEmail(email, "application", { since: updateSince });

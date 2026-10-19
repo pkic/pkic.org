@@ -1,3 +1,5 @@
+// Compile the real lazy HTTP graph before timed endpoint journeys.
+import "../functions/http-router";
 import { pinReviewedStaffWorkflow } from "./helpers/membership-workflows";
 /**
  * application-stage-machine.test.ts
@@ -7,7 +9,7 @@ import { pinReviewedStaffWorkflow } from "./helpers/membership-workflows";
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -319,6 +321,53 @@ describe("Application stage machine, communications, notes", () => {
     ).toHaveLength(0);
   });
 
+  it.each([undefined, "", " \n "])(
+    "rejects an information hold without applicant details (%j) atomically",
+    async (requestDetails) => {
+      const { id } = await createApplication();
+      const response = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          toStage: "on_hold",
+          onHoldSubtype: "request_information",
+          note: "Internal review only",
+          requestDetails,
+        }),
+      });
+      expect(response.status).toBe(400);
+      expect(await queryAll(env.DB, "SELECT stage FROM member_applications WHERE id = ?", id)).toEqual([
+        { stage: "submitted" },
+      ]);
+      expect(await queryAll(env.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM member_application_events WHERE application_id = ?", id),
+      ).toHaveLength(0);
+    },
+  );
+
+  it("emails information requests separately from internal notes", async () => {
+    const { id } = await createApplication();
+    const response = await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
+      method: "PATCH",
+      body: JSON.stringify({
+        toStage: "on_hold",
+        onHoldSubtype: "request_information",
+        requestDetails: "Please explain your PKI work.",
+        note: "Internal review only",
+      }),
+    });
+    expect(response.status).toBe(200);
+    const [outbox] = await queryAll<{ payload_json: string }>(
+      env.DB,
+      "SELECT payload_json FROM email_outbox WHERE template_key = 'application-hold-information'",
+    );
+    expect(JSON.parse(outbox.payload_json)).toMatchObject({ requestDetails: "Please explain your PKI work." });
+    expect(outbox.payload_json).not.toContain("Internal review only");
+    expect(await queryAll(env.DB, "SELECT note FROM member_application_events WHERE application_id = ?", id)).toEqual([
+      { note: "Internal review only" },
+    ]);
+  });
+
   it("keeps documents out of detail and lists them through the bounded staff subresource", async () => {
     const { id } = await createApplication();
     await call(adminToken, `/api/v1/members/applications/${id}/stage`, {
@@ -326,6 +375,7 @@ describe("Application stage machine, communications, notes", () => {
       body: JSON.stringify({
         toStage: "on_hold",
         onHoldSubtype: "request_information",
+        requestDetails: "Please clarify your application.",
         note: "Please supply the document.",
       }),
     });
@@ -429,6 +479,10 @@ describe("Application stage machine, communications, notes", () => {
       method: "PATCH",
       body: JSON.stringify({ toStage: "processing" }),
     });
-    expect(response.status).toBe(401);
+    expect(response.status).toBe(403);
+    await expect(response.json()).resolves.toMatchObject({ error: { code: "PERMISSION_REQUIRED" } });
+    expect(
+      await queryAll(env.DB, "SELECT id FROM member_application_events WHERE application_id = ?", id),
+    ).toHaveLength(0);
   });
 });

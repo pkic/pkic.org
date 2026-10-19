@@ -24,6 +24,7 @@ import { uuid } from "../../utils/ids";
 import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import { commitAccessControlMutation, requireAccessControlRead } from "./authorization";
 import { buildAssignRepresentativeRoleStatements, isRepresentativeRoleId } from "../membership/representative-roles";
+import { prepareGroupLeadershipPublication } from "../groups/leadership-publication";
 import {
   prepareOrganizationIdentityManagementGuard,
   requireOrganizationIdentityManagement,
@@ -51,6 +52,14 @@ interface RoleAssignmentHolderRow {
   context_id: string | null;
   expires_at: string | null;
   created_at: string;
+}
+
+function isGroupLeadershipAssignment(row: UserRoleRow): row is UserRoleRow & { context_id: string } {
+  return (
+    row.context_type === "group" &&
+    row.context_id !== null &&
+    (row.role_id === SYSTEM_ROLE_IDS.groupLead || row.role_id === SYSTEM_ROLE_IDS.groupDeputyLead)
+  );
 }
 
 const USER_ROLE_ASSIGNMENT_SORT_EXPRESSIONS: Record<(typeof USER_ROLE_ASSIGNMENTS_SORT_COLUMNS)[number], string> = {
@@ -370,6 +379,17 @@ export async function revokeUserRoleAssignment(
     [{ permission: "access:revoke" }],
     [
       ...semanticGuards,
+      ...(isGroupLeadershipAssignment(row)
+        ? [
+            prepareGroupLeadershipPublication(db, {
+              groupId: row.context_id,
+              userRoleId: row.id,
+              at: now,
+              activeAfter: false,
+              condition: { sql: "ur.revoked_at IS NULL", bindings: [] },
+            }),
+          ]
+        : []),
       db.prepare("UPDATE user_roles SET revoked_at = ? WHERE id = ? AND revoked_at IS NULL").bind(now, row.id),
       prepareAuditLogAfterOneChange(
         db,
@@ -434,6 +454,20 @@ export async function updateUserRoleAssignmentExpiry(
     ],
     [
       ...semanticGuards,
+      ...(isGroupLeadershipAssignment(row)
+        ? [
+            prepareGroupLeadershipPublication(db, {
+              groupId: row.context_id,
+              userRoleId: row.id,
+              at: now,
+              activeAfter: input.expiresAt === null || input.expiresAt > now,
+              condition: {
+                sql: "ur.revoked_at IS NULL AND ur.expires_at IS ? AND ur.expires_at IS NOT ?",
+                bindings: [row.expires_at, input.expiresAt],
+              },
+            }),
+          ]
+        : []),
       db
         .prepare(
           `UPDATE user_roles SET expires_at = ?

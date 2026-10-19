@@ -8,12 +8,14 @@ import { EventRegistrationBadgeCreate, EventRegistrationBadgeGet, EventRegistrat
 import { EventRegistrationDetailGet, EventRegistrationPatch } from "./index";
 import { EventRegistrationNotificationsCreate } from "./notifications";
 import { PersonalEventCalendarGet } from "./calendar";
+import { EventRegistrationSessionsGet } from "./sessions";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
 openapi.get("/", EventRegistrationDetailGet);
 openapi.get("/calendar.ics", PersonalEventCalendarGet);
+openapi.get("/sessions", EventRegistrationSessionsGet);
 openapi.patch("/", EventRegistrationPatch);
 openapi.post("/access", EventRegistrationAccessCreate);
 openapi.post("/admissions", EventRegistrationAdmissionsCreate);

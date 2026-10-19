@@ -48,6 +48,15 @@ export const FRONTEND_BUNDLE_BUDGETS = Object.freeze({
 export const DESIGN_ENTRY_CSS_BUDGET = Object.freeze({ rawBytes: 25 * 1024, gzipBytes: 6 * 1024 });
 export const FRONTEND_CSS_BUDGET = DESIGN_ENTRY_CSS_BUDGET;
 
+/**
+ * Entries of the Worker's vendored email-domain lists (functions/_lib/email-domains)
+ * that no browser copy names: one free provider, one disposable provider and
+ * one Public Suffix List rule. Thousands of entries stay server-side; the
+ * browser asks the API about one domain instead. A chunk carrying any of them
+ * has pulled a list into the frontend.
+ */
+export const SERVER_ONLY_BUNDLE_SENTINELS = Object.freeze(["kpnmail.nl", "sharklasers.com", "city.kawasaki.jp"]);
+
 function kilobytes(bytes) {
   return `${(bytes / 1024).toFixed(2)} KiB`;
 }
@@ -73,6 +82,11 @@ export function inspectFrontendBundleChunks(chunks, budgets = FRONTEND_BUNDLE_BU
     }
     return exceeded.length === 0 ? [] : [`${measurement.fileName}: ${exceeded.join(", ")}`];
   });
+  for (const { fileName, code } of chunks) {
+    const carried = SERVER_ONLY_BUNDLE_SENTINELS.filter((sentinel) => code.includes(sentinel));
+    if (carried.length > 0)
+      violations.push(`${fileName}: carries server-only email-domain list data (${carried.join(", ")})`);
+  }
 
   return { measurements, violations };
 }

@@ -55,7 +55,8 @@ export async function signEventInvitePreviewToken(payload: {
 }
 
 export type EventInvitePreviewTokenValidation =
-  { ok: true; claims: EventInvitePreviewClaims } | { ok: false; reason: "invalid" | "expired" | "mismatch" };
+  | { ok: true; claims: EventInvitePreviewClaims }
+  | { ok: false; reason: "invalid" | "expired" | "mismatch" };
 
 export async function verifyEventInvitePreviewToken(payload: {
   secret: string;

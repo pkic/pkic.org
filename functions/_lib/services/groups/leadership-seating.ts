@@ -85,7 +85,7 @@ export async function resolveEligibleLeadershipCapacity(
  * lookup above and this batch is a race the roster already tolerates, and the
  * grant beside it is what the appointment is actually for.
  */
-export function buildLeadershipSeatStatement(
+export function prepareLeadershipSeat(
   db: DatabaseLike,
   actor: AuthAdmin,
   options: {
@@ -95,8 +95,9 @@ export function buildLeadershipSeatStatement(
     joinedAt: string;
     at: string;
   },
-): StatementLike {
-  return db
+): { membershipId: string; statement: StatementLike } {
+  const membershipId = uuid();
+  const statement = db
     .prepare(
       `INSERT OR IGNORE INTO group_memberships
          (id, group_id, user_id, identity_id, member_id, source, created_by_user_id,
@@ -104,7 +105,7 @@ export function buildLeadershipSeatStatement(
        VALUES (?, ?, ?, ?, ?, 'staff', ?, NULL, ?, NULL, ?, ?)`,
     )
     .bind(
-      uuid(),
+      membershipId,
       options.groupId,
       options.userId,
       options.seat.identity_id,
@@ -114,4 +115,5 @@ export function buildLeadershipSeatStatement(
       options.at,
       options.at,
     );
+  return { membershipId, statement };
 }

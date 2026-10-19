@@ -4,7 +4,7 @@ import { parse as parseYaml } from "yaml";
  * The shortcode syntax the content is authored in.
  *
  * Hugo's `{{< name … >}}` and the Markdown directive form `:::name` say the
- * same thing, so the directives are normalised into shortcodes first and only
+ * same thing, so the directives are normalized into shortcodes first and only
  * one grammar has to be parsed after that.
  */
 export interface ContentCall {

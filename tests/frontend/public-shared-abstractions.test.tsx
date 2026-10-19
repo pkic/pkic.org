@@ -4,7 +4,7 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { ConsentCard, ConsentList } from "../../assets/ts/components/ConsentCard";
 import { loadSpeakerPageData } from "../../assets/ts/event-flows/speaker-link-recovery";
-import { controlFor, labelNames } from "./helpers/labelled-control";
+import { controlFor, labelNames } from "./helpers/labeled-control";
 
 const mounted: HTMLElement[] = [];
 
@@ -114,7 +114,7 @@ describe("public shared frontend abstractions", () => {
     expect(labelNames(container)).toEqual(["Privacy", "Newsletter"]);
     expect(controlFor(container, "Privacy").required).toBe(true);
     expect(controlFor(container, "Newsletter").required).toBe(false);
-    // "Optional" is a word, not a colour, so a reader who cannot separate the
+    // "Optional" is a word, not a color, so a reader who cannot separate the
     // hues still knows which of the two they may skip.
     expect(container.textContent).toContain("Optional");
   });

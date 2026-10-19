@@ -11,6 +11,8 @@ import { resolveOrderBy } from "../db/sort";
 import { AppError } from "../errors";
 import type { AuthAdmin, DatabaseLike } from "../types";
 import { groupCanSeatUserPredicate } from "./groups/capacities";
+import { publicUserHeadshotPath } from "./user-headshot";
+import { affiliationJobTitleSql, affiliationOrganizationNameSql } from "./identities/affiliation-projection";
 import { prepareGroupManagementAuthorizationGuard, requireGroupManagement } from "./groups/governance";
 import { ALL_ACTIVE_USER_CAPACITIES_CTE } from "./membership/capacity-query";
 import { getGroup } from "./groups/read-model";
@@ -22,6 +24,8 @@ interface UserCatalogRow {
   first_name: string | null;
   last_name: string | null;
   organization_name: string | null;
+  job_title: string | null;
+  headshot_r2_key: string | null;
 }
 
 /**
@@ -60,7 +64,7 @@ export function buildUserCatalogPageQuery(
       // The shared CTE prefix, so the count statement carries it too — a page
       // whose filter the count cannot see reports a total nothing matches.
       withSql: seatableInGroupId ? ALL_ACTIVE_USER_CAPACITIES_CTE : undefined,
-      selectSql: "SELECT u.id, u.email, u.first_name, u.last_name, u.organization_name",
+      selectSql: `SELECT u.id, u.email, u.first_name, u.last_name, ${affiliationOrganizationNameSql("u.id")} AS organization_name, ${affiliationJobTitleSql("u.id")} AS job_title, u.headshot_r2_key`,
       fromSql: `FROM users u WHERE ${conditions.join(" AND ")}`,
       bindings,
     },
@@ -72,7 +76,10 @@ export function buildUserCatalogPageQuery(
 
 export function serializeUserCatalogPage(query: UserCatalogListQuery, rows: UserCatalogRow[], total: number) {
   return userCatalogListResponseSchema.parse({
-    users: rows,
+    users: rows.map(({ headshot_r2_key, ...row }) => ({
+      ...row,
+      headshotUrl: publicUserHeadshotPath(row.id, headshot_r2_key),
+    })),
     page: buildPageInfo(query.limit, query.offset, total, rows.length),
   });
 }

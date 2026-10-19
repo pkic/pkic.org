@@ -1,3 +1,8 @@
+import { PublishedMeetingAgenda } from "./PublishedMeetingAgenda";
+import { lazy, Suspense } from "preact/compat";
+const MeetingAgendaEditor = lazy(() =>
+  import("./MeetingAgendaEditor").then((module) => ({ default: module.MeetingAgendaEditor })),
+);
 /**
  * One meeting occurrence as a page of its own (#126).
  *
@@ -44,6 +49,7 @@ import { downloadMeetingCalendar } from "./meeting-calendar-actions";
 /** The record's facets, in the order a manager reads them. */
 const OCCURRENCE_TABS = [
   { key: "settings", label: "Settings" },
+  { key: "agenda", label: "Agenda" },
   { key: "invitations", label: "Invitations" },
   { key: "guests", label: "Guests" },
   { key: "attendance", label: "Attendance" },
@@ -77,12 +83,17 @@ export function MeetingOccurrenceRecord({
   const [cancelling, setCancelling] = useState(false);
 
   const tabs = OCCURRENCE_TABS.filter(({ key }) =>
-    key === "attendance"
-      ? canManageAttendance
-      : key === "guests"
-        ? canManage && series.guestPolicy !== "none"
-        : canManage,
+    key === "agenda"
+      ? true
+      : key === "attendance"
+        ? canManageAttendance
+        : key === "guests"
+          ? canManage && series.guestPolicy !== "none"
+          : canManage,
   );
+  if (!canManage && canManageAttendance) {
+    tabs.sort((a, b) => Number(b.key === "attendance") - Number(a.key === "attendance"));
+  }
   const tab: OccurrenceTab | undefined = tabs.some((item) => item.key === requestedTab)
     ? (requestedTab as OccurrenceTab)
     : tabs[0]?.key;
@@ -289,15 +300,21 @@ export function MeetingOccurrenceRecord({
                 hrefFor={tabPath}
               />
             )}
+            {tab === "agenda" && !canManage && (
+              <PublishedMeetingAgenda groupId={groupId} seriesId={series.id} occurrenceId={occurrenceId} />
+            )}
+            {tab === "agenda" && canManage && (
+              <Suspense fallback={<Spinner />}>
+                <MeetingAgendaEditor groupId={groupId} seriesId={series.id} occurrenceId={occurrenceId} />
+              </Suspense>
+            )}
             {tab === "settings" && (
-              <section aria-label="Occurrence settings">
-                <MeetingOccurrenceSettings
-                  endpoint={endpoint}
-                  occurrence={occurrence}
-                  timeZone={series.timezone}
-                  onChanged={changed}
-                />
-              </section>
+              <MeetingOccurrenceSettings
+                endpoint={endpoint}
+                occurrence={occurrence}
+                timeZone={series.timezone}
+                onChanged={changed}
+              />
             )}
             {tab === "invitations" && (
               <section aria-label="Occurrence invitations">

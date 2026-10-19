@@ -1,7 +1,6 @@
 import { Field } from "../ui/Field";
-import { TextInput, Textarea } from "../ui/TextControl";
+import { Textarea } from "../ui/TextControl";
 import { Button, ButtonLink } from "../ui/Button";
-import { EventPersonalFields } from "./EventPersonalFields";
 import { HeadshotDialogTemplates } from "./HeadshotDialogTemplates";
 import { SpeakerLinkRecovery } from "./SpeakerLinkRecovery";
 
@@ -18,7 +17,7 @@ export function EventSpeakerManagement() {
       <p data-speaker-loading class="pk-muted pk-small">
         Loading your speaker details…
       </p>
-      <div data-speaker-content class="pk-stack pk-stack--loose" hidden>
+      <div data-speaker-content class="pk-container pk-container--start pk-stack pk-stack--loose" hidden>
         <div class="pk-stack pk-stack--tight" data-proposal-summary>
           <h3 data-proposal-title />
           <p class="pk-muted">
@@ -36,7 +35,7 @@ export function EventSpeakerManagement() {
               Please confirm whether you would like to participate in this session. Once the program committee accepts
               the proposal, you'll be asked to upload a bio, headshot, and your presentation.
             </p>
-            <form data-confirm-form class="pk-grid" noValidate>
+            <form id="speaker-participation-confirm" data-confirm-form class="pk-form" noValidate>
               <Field group label="Speaker terms and conditions" errorSlot="consents">
                 {() => (
                   <div data-speaker-consents>
@@ -44,13 +43,65 @@ export function EventSpeakerManagement() {
                   </div>
                 )}
               </Field>
+            </form>
+          </div>
+          <p class="pk-alert pk-alert--ok" data-confirmed-msg hidden>
+            You have confirmed your participation. Thank you!
+          </p>
+          <p class="pk-alert pk-alert--danger" data-declined-msg hidden>
+            You have declined participation in this session.
+          </p>
+        </div>
+        <div class="pk-stack pk-stack--snug" data-profile-section hidden>
+          <h4>Your speaker profile</h4>
+          <div class="pk-alert pk-alert--ok" data-profile-saved-state hidden>
+            <div class="pk-cluster pk-cluster--between">
+              <p>Speaker identity saved.</p>
+              <Button type="button" variant="secondary" data-profile-edit>
+                Change speaker identity
+              </Button>
+            </div>
+          </div>
+          <div data-profile-form-wrap>
+            <form data-profile-form class="pk-form pk-stack--loose" noValidate>
+              <div data-speaker-identity />
               <div class="pk-cluster">
-                <Button type="submit">Confirm participation</Button>
-                <Button type="button" variant="secondary" data-decline-open>
-                  Decline
-                </Button>
+                <Button type="submit">Save speaker identity</Button>
               </div>
             </form>
+          </div>
+          {/* The profile of the identity chosen above, edited on the identity itself. */}
+          <div class="pk-stack pk-stack--snug" data-identity-profile hidden>
+            <h5>Your profile as this identity</h5>
+            <p class="pk-muted">
+              Shown with your session on the event program, and wherever else you appear as this identity.
+            </p>
+            <div data-identity-profile-form />
+          </div>
+        </div>
+        <div class="pk-stack pk-stack--snug" data-headshot-section hidden>
+          <h4>Your photo</h4>
+          <p class="pk-muted">
+            Add a professional headshot photo. It will appear on the event website alongside your session.
+          </p>
+          {/* The photo tile is rendered here by the page module. */}
+          <div data-headshot-tile />
+          <p data-headshot-status class="pk-muted pk-small" role="status" />
+        </div>
+        <div class="pk-stack pk-stack--snug" data-participation-actions hidden>
+          <div class="pk-cluster">
+            <Button type="submit" variant="primary" form="speaker-participation-confirm" data-confirm-participation>
+              Confirm participation
+            </Button>
+          </div>
+          {/* Declining is a separate decision, kept apart from the main action. */}
+          <div class="pk-stack pk-stack--tight">
+            <p class="pk-muted pk-small">Unable to take part in this session?</p>
+            <div class="pk-cluster">
+              <Button type="button" variant="danger-quiet" data-decline-open>
+                Decline participation…
+              </Button>
+            </div>
           </div>
           <div class="pk-stack pk-stack--snug" data-decline-panel hidden>
             <Field id="decline-reason" label="Reason (optional)">
@@ -64,73 +115,13 @@ export function EventSpeakerManagement() {
               )}
             </Field>
             <div class="pk-cluster">
-              <Button type="button" variant="danger" size="sm" data-decline-confirm>
-                Confirm — I cannot participate
+              <Button type="button" variant="danger" data-decline-confirm>
+                Decline participation
               </Button>
-              <Button type="button" variant="secondary" size="sm" data-decline-cancel>
-                Go back
-              </Button>
-            </div>
-          </div>
-          <p class="pk-alert pk-alert--ok" data-confirmed-msg hidden>
-            You have confirmed your participation. Thank you!
-          </p>
-          <p class="pk-alert pk-alert--danger" data-declined-msg hidden>
-            You have declined participation in this session.
-          </p>
-        </div>
-        <div class="pk-stack pk-stack--snug" data-headshot-section hidden>
-          <h4>Your photo</h4>
-          <p class="pk-muted">
-            Upload a professional headshot photo. It will appear on the event website alongside your session.
-          </p>
-          <div data-headshot-preview class="pkic-speaker-headshot-preview" />
-          <p data-headshot-status class="pk-muted pk-small" />
-          <Field id="speaker-headshot-file" label="Upload photo">
-            {(control) => (
-              <TextInput {...control} type="file" accept="image/jpeg,image/png,image/webp" data-headshot-file />
-            )}
-          </Field>
-          <Button type="button" size="sm" variant="secondary" data-headshot-delete hidden>
-            Remove photo
-          </Button>
-        </div>
-        <div class="pk-stack pk-stack--snug" data-profile-section hidden>
-          <h4>Bio &amp; links</h4>
-          <div class="pk-alert pk-alert--ok" data-profile-saved-state hidden>
-            <div class="pk-cluster pk-cluster--between">
-              <p>Profile saved.</p>
-              <Button type="button" size="sm" variant="secondary" data-profile-edit>
-                Edit profile
+              <Button type="button" variant="secondary" data-decline-cancel>
+                Keep participating
               </Button>
             </div>
-          </div>
-          <div data-profile-form-wrap>
-            <form data-profile-form class="pk-grid" noValidate>
-              <EventPersonalFields prefix="speaker" />
-              <Field
-                id="speaker-bio"
-                label="Biography"
-                help="Visible to attendees on the event program."
-                errorSlot="biography"
-              >
-                {(control) => (
-                  <Textarea
-                    {...control}
-                    name="biography"
-                    rows={5}
-                    maxLength={10000}
-                    placeholder="A short professional bio for the program and website…"
-                  />
-                )}
-              </Field>
-              <div data-profile-links-container />
-              <div class="pk-cluster">
-                <Button type="submit" size="sm">
-                  Save profile
-                </Button>
-              </div>
-            </form>
           </div>
         </div>
         <div class="pk-stack pk-stack--snug" data-presentation-link hidden>

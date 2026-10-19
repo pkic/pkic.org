@@ -7,7 +7,7 @@ import {
   type MailingListSubscribersResponse,
 } from "../../../../../shared/schemas/mailing-lists";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { Badge } from "../../../../ui/Badge";
 import { PersonCell } from "../../../../ui/PersonCell";
 
@@ -57,6 +57,7 @@ export function GroupMailingListSubscribers({
   );
   return (
     <ApiDataTable
+      urlState="mailing-subscribers"
       load={load}
       onData={onData}
       caption="Mailing-list subscribers"
@@ -71,12 +72,7 @@ export function GroupMailingListSubscribers({
         {
           header: "Person",
           cell: (subscriber) => (
-            <PersonCell
-              name={personName(subscriber)}
-              avatarSrc={subscriber.user.headshotUrl ?? undefined}
-              email={personName(subscriber) === subscriber.user.email ? undefined : subscriber.user.email}
-              size="sm"
-            />
+            <PersonCell name={personName(subscriber)} avatarSrc={subscriber.user.headshotUrl ?? undefined} size="sm" />
           ),
           width: "primary",
           sort: { asc: "last_name", desc: "-last_name" },

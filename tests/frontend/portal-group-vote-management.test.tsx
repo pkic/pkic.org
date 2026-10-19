@@ -23,7 +23,7 @@ import {
 // The `for`/`id` pair and a button's visible text are resolved by the
 // shared helpers rather than re-derived here: one definition of "the
 // control this label names" is what keeps every form test honest.
-import { buttonNamed, controlFor as labeledControl, markdownControl, optionValues } from "./helpers/labelled-control";
+import { buttonNamed, controlFor as labeledControl, markdownControl, optionValues } from "./helpers/labeled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const VOTE_ID = "b0000000-0000-4000-8000-000000000001";

@@ -8,7 +8,8 @@
  * content began, and the Users list opened with a search box because nothing
  * else claimed the top of the page.
  *
- * The heading is the page's `<h2>` (the shell owns `<h1>`), and the header
+ * The heading is the screen's title: authored at level 2, it is the
+ * document's one `<h1>` inside the portal (see `HeadingOutline`). The header
  * labels itself with it, so a screen-reader user landing on the region hears
  * the subject. Context takes Badges; `actions` takes Buttons. Neither slot is
  * for prose.
@@ -18,6 +19,7 @@ import type { ComponentChildren } from "preact";
 import { useId } from "preact/hooks";
 
 import { Breadcrumb, type BreadcrumbItem } from "./Breadcrumb";
+import { useTitleHeading } from "./HeadingOutline";
 
 import "./PageHeader.css";
 
@@ -35,20 +37,23 @@ export interface PageHeaderProps {
   actions?: ComponentChildren;
   /** One quiet sentence under the title, when the subject needs one. */
   description?: ComponentChildren;
+  /** Mobile navigation already names this root section; keep its heading accessible. */
+  hideOnMobile?: boolean;
 }
 
-export function PageHeader({ trail, title, eyebrow, context, actions, description }: PageHeaderProps) {
+export function PageHeader({ trail, title, eyebrow, context, actions, description, hideOnMobile }: PageHeaderProps) {
   const headingId = useId();
+  const Heading = useTitleHeading();
 
   return (
-    <header class="pk-page-header" aria-labelledby={headingId}>
+    <header class={`pk-page-header${hideOnMobile ? " pk-page-header--mobile-hidden" : ""}`} aria-labelledby={headingId}>
       {trail && trail.length > 0 && <Breadcrumb items={trail} />}
       {eyebrow && <p class="pk-small pk-muted">{eyebrow}</p>}
       <div class="pk-page-header__row">
         <div class="pk-page-header__subject">
-          <h2 class="pk-page-header__title" id={headingId}>
+          <Heading class="pk-page-header__title" id={headingId}>
             {title}
-          </h2>
+          </Heading>
           {context && <span class="pk-page-header__context">{context}</span>}
         </div>
         {actions && <div class="pk-page-header__actions">{actions}</div>}

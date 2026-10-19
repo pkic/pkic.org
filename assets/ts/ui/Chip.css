@@ -79,7 +79,7 @@
   /*
    * Weight, in five steps.
    *
-   * Colour alone does not carry this — the count beside the label is the
+   * Color alone does not carry this — the count beside the label is the
    * accessible statement of the same fact, and the tint is the glance version
    * of it. Steps rather than a continuous ramp so no chip needs an inline
    * style; see `strength` in Chip.tsx.

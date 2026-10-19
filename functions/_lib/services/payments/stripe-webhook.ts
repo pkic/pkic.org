@@ -8,6 +8,7 @@ import type { DatabaseLike, Env } from "../../types";
 import { handleDonationStripeEvent } from "../donations/stripe-webhook";
 import { handleMembershipPaymentEvent } from "../membership/workflows/fee-events";
 import { handleSponsorshipStripeEvent } from "../sponsorship/stripe-webhook";
+import { applySponsorshipPaymentAdjustment } from "../sponsorship/payment-adjustments";
 import { recordStripePaymentEvent } from "./ledger";
 
 type StripeEvent = z.infer<typeof stripeEventEnvelopeSchema>;
@@ -111,6 +112,9 @@ export async function dispatchStripePaymentEvent(
       "outcome" in result && typeof result.outcome === "string" ? result.outcome : null,
     );
     return result;
+  }
+  if (event.type === "charge.refunded" || event.type === "charge.dispute.created") {
+    return applySponsorshipPaymentAdjustment(db, event);
   }
   const parsed = sponsorshipCheckoutWebhookEnvelopeSchema.safeParse(event);
   if (!parsed.success)

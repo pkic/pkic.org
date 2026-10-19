@@ -1,0 +1,196 @@
+/*
+ * Rows without room show a speaker's affiliations one at a time. Every unit shares one grid cell,
+ * so the row keeps a fixed height and the widest unit's width (its text truncated by the row), and
+ * CSS keyframes crossfade the units in turn (each fades in as the one before fades out), one every --pk-dur-affiliation (four seconds), without any script. The
+ * keyframes and delays below exist for two to five affiliations, the most an appearance carries.
+ * Hovering or focusing the speaker pauses the change; reduced motion shows the first affiliation
+ * and how many more there are. Generated rules: edit the counts and timing together.
+ */
+@layer components {
+  .pk-affiliation-rotation {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-1);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+    vertical-align: middle;
+  }
+  .pk-affiliation-rotation__units {
+    display: inline-grid;
+    grid-auto-flow: column;
+    align-items: center;
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+  .pk-affiliation-rotation__unit {
+    display: inline-flex;
+    grid-area: 1 / 1;
+    align-items: center;
+    gap: var(--pk-2);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+  .pk-affiliation-rotation__unit > * {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-2);
+    min-inline-size: 0;
+    max-inline-size: 100%;
+  }
+  .pk-affiliation-rotation__unit .pk-agenda-speaker-affiliations__text {
+    display: block;
+    min-inline-size: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+  /* The count is only for the still view with reduced motion. */
+  .pk-affiliation-rotation__more {
+    display: none;
+    grid-area: 1 / 2;
+    margin-inline-start: var(--pk-1);
+    font-weight: 600;
+  }
+
+  @keyframes pk-affiliation-rotate-2 {
+    0% {
+      opacity: 0;
+      visibility: visible;
+    }
+    7.5%,
+    50% {
+      opacity: 1;
+      visibility: visible;
+    }
+    57.5%,
+    100% {
+      opacity: 0;
+      visibility: hidden;
+    }
+  }
+  .pk-affiliation-rotation--rotate-2 .pk-affiliation-rotation__unit {
+    animation: pk-affiliation-rotate-2 calc(var(--pk-dur-affiliation) * 2) linear infinite both;
+  }
+
+  .pk-affiliation-rotation--rotate-2 .pk-affiliation-rotation__unit:nth-child(2) {
+    animation-delay: calc(var(--pk-dur-affiliation) * 1);
+  }
+
+  @keyframes pk-affiliation-rotate-3 {
+    0% {
+      opacity: 0;
+      visibility: visible;
+    }
+    5%,
+    33.333% {
+      opacity: 1;
+      visibility: visible;
+    }
+    38.333%,
+    100% {
+      opacity: 0;
+      visibility: hidden;
+    }
+  }
+  .pk-affiliation-rotation--rotate-3 .pk-affiliation-rotation__unit {
+    animation: pk-affiliation-rotate-3 calc(var(--pk-dur-affiliation) * 3) linear infinite both;
+  }
+
+  .pk-affiliation-rotation--rotate-3 .pk-affiliation-rotation__unit:nth-child(2) {
+    animation-delay: calc(var(--pk-dur-affiliation) * 1);
+  }
+
+  .pk-affiliation-rotation--rotate-3 .pk-affiliation-rotation__unit:nth-child(3) {
+    animation-delay: calc(var(--pk-dur-affiliation) * 2);
+  }
+
+  @keyframes pk-affiliation-rotate-4 {
+    0% {
+      opacity: 0;
+      visibility: visible;
+    }
+    3.75%,
+    25% {
+      opacity: 1;
+      visibility: visible;
+    }
+    28.75%,
+    100% {
+      opacity: 0;
+      visibility: hidden;
+    }
+  }
+  .pk-affiliation-rotation--rotate-4 .pk-affiliation-rotation__unit {
+    animation: pk-affiliation-rotate-4 calc(var(--pk-dur-affiliation) * 4) linear infinite both;
+  }
+
+  .pk-affiliation-rotation--rotate-4 .pk-affiliation-rotation__unit:nth-child(2) {
+    animation-delay: calc(var(--pk-dur-affiliation) * 1);
+  }
+
+  .pk-affiliation-rotation--rotate-4 .pk-affiliation-rotation__unit:nth-child(3) {
+    animation-delay: calc(var(--pk-dur-affiliation) * 2);
+  }
+
+  .pk-affiliation-rotation--rotate-4 .pk-affiliation-rotation__unit:nth-child(4) {
+    animation-delay: calc(var(--pk-dur-affiliation) * 3);
+  }
+
+  @keyframes pk-affiliation-rotate-5 {
+    0% {
+      opacity: 0;
+      visibility: visible;
+    }
+    3%,
+    20% {
+      opacity: 1;
+      visibility: visible;
+    }
+    23%,
+    100% {
+      opacity: 0;
+      visibility: hidden;
+    }
+  }
+  .pk-affiliation-rotation--rotate-5 .pk-affiliation-rotation__unit {
+    animation: pk-affiliation-rotate-5 calc(var(--pk-dur-affiliation) * 5) linear infinite both;
+  }
+
+  .pk-affiliation-rotation--rotate-5 .pk-affiliation-rotation__unit:nth-child(2) {
+    animation-delay: calc(var(--pk-dur-affiliation) * 1);
+  }
+
+  .pk-affiliation-rotation--rotate-5 .pk-affiliation-rotation__unit:nth-child(3) {
+    animation-delay: calc(var(--pk-dur-affiliation) * 2);
+  }
+
+  .pk-affiliation-rotation--rotate-5 .pk-affiliation-rotation__unit:nth-child(4) {
+    animation-delay: calc(var(--pk-dur-affiliation) * 3);
+  }
+
+  .pk-affiliation-rotation--rotate-5 .pk-affiliation-rotation__unit:nth-child(5) {
+    animation-delay: calc(var(--pk-dur-affiliation) * 4);
+  }
+
+  /* Hovering or focusing the speaker holds the affiliation being read. */
+  :is(
+      .pk-affiliation-rotation,
+      .pk-content-agenda__speaker,
+      .pk-agenda-speaker-directory__card,
+      .pk-agenda-speaker__open
+    ):is(:hover, :focus-within)
+    .pk-affiliation-rotation__unit {
+    animation-play-state: paused;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pk-affiliation-rotation__unit {
+      animation: none;
+    }
+    .pk-affiliation-rotation__unit:not(:first-child) {
+      display: none;
+    }
+    .pk-affiliation-rotation__more {
+      display: inline;
+    }
+  }
+}

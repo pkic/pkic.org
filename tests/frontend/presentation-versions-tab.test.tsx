@@ -5,7 +5,8 @@ import { act } from "preact/test-utils";
 import { PresentationVersionsTab } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/PresentationVersionsTab";
 import type { PresentationVersion } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/model";
 import { presentationVersionReviewRequestSchema } from "../../assets/shared/schemas/presentation-versions";
-import { markdownControl, typeMarkdown, controlFor } from "./helpers/labelled-control";
+import { runRowAction, rowMenuTrigger } from "./helpers/row-actions";
+import { markdownControl, typeMarkdown, controlFor } from "./helpers/labeled-control";
 
 // Identifiers are the shape `databaseIdSchema` accepts, because the saved
 // review is parsed back through the shared response schema.
@@ -46,12 +47,12 @@ async function mount(props: Partial<Parameters<typeof PresentationVersionsTab>[0
 
 function buttonNamed(root: HTMLElement, label: string): HTMLButtonElement {
   const found = [...root.querySelectorAll("button")].find((button) => button.textContent?.trim() === label);
-  if (!found) throw new Error(`no button labelled ${label}`);
+  if (!found) throw new Error(`no button labeled ${label}`);
   return found as HTMLButtonElement;
 }
 
 async function openReviewForm(root: HTMLElement) {
-  await act(() => buttonNamed(root, "Review").click());
+  await runRowAction(root, "Version 1, pqc-migration-talk.pdf", "Review");
 }
 
 function jsonResponse(body: unknown, status = 200): Response {
@@ -119,19 +120,19 @@ describe("presentation versions tab", () => {
     expect(table.querySelector(".pk-table__detail")?.textContent).toContain("Please add speaker notes");
 
     // The end-to-end spec reads the review outcome through this hook, and it
-    // has to stay a word rather than a colour.
+    // has to stay a word rather than a color.
     expect(root.querySelector("[data-presentation-review-status]")?.textContent).toBe("Needs revision");
 
-    // The download is a destination drawn as a button: the design system's
-    // link, with the same classes a Button beside it carries.
-    const download = [...row.querySelectorAll("a")].find((link) => link.textContent === "Download");
+    // The download is a destination drawn as the shared download icon control:
+    // a link with the same classes a Button beside it carries.
+    const download = row.querySelector<HTMLAnchorElement>('a[aria-label="Download version 1, pqc-migration-talk.pdf"]');
     expect(download?.classList.contains("pk-btn")).toBe(true);
     expect(download?.hasAttribute("download")).toBe(true);
+    expect(download?.querySelector("svg")).not.toBeNull();
 
-    // The disclosure says, in markup, what it controls and whether it is open.
-    const reviewButton = buttonNamed(root, "Review");
-    expect(reviewButton.getAttribute("aria-expanded")).toBe("false");
-    expect(reviewButton.getAttribute("aria-controls")).toBe(REVIEW_FORM_ID);
+    expect(rowMenuTrigger(root, "Version 1, pqc-migration-talk.pdf")).not.toBeNull();
+    expect([...row.querySelectorAll("button")].some((button) => button.textContent?.trim() === "Review")).toBe(false);
+    expect(root.querySelector("form")).toBeNull();
   });
 
   it("labels every review control and points each label at its own field", async () => {
@@ -139,7 +140,8 @@ describe("presentation versions tab", () => {
     await openReviewForm(root);
 
     expect(root.querySelector(`#${REVIEW_FORM_ID}`)).not.toBeNull();
-    expect(buttonNamed(root, "Review").getAttribute("aria-expanded")).toBe("true");
+    expect(root.querySelector("table")).toBeNull();
+    expect(buttonNamed(root, "Back to presentation versions")).toBeTruthy();
 
     // The note is the shared Markdown editor, a lazy chunk; its label points
     // at nothing until it is on the page.
@@ -258,13 +260,45 @@ describe("presentation versions tab", () => {
     expect(alert.textContent).toContain("You cannot review this version.");
   });
 
-  it("states an upload failure in a live region above the list", async () => {
+  it("uploads on behalf of a speaker as the file itself, naming and sizing it in headers", async () => {
+    const uploads: Array<{ headers: Headers; body: unknown }> = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "POST") {
+          uploads.push({ headers: new Headers(init.headers), body: init.body });
+          return jsonResponse({ success: true });
+        }
+        return jsonResponse({ versions: [version], page: { limit: 25, offset: 0, total: 1, hasMore: false } });
+      }),
+    );
+    const root = await mount();
+
+    await act(() => buttonNamed(root, "Upload on behalf of speaker").click());
+    const fileInput = root.querySelector('input[type="file"]') as HTMLInputElement;
+    const file = new File(["%PDF-1.7 admin upload"], "admin-upload.pdf", { type: "application/pdf" });
+    Object.defineProperty(fileInput, "files", { value: [file], configurable: true });
+    await act(() => {
+      fileInput.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    await settle();
+
+    expect(uploads).toHaveLength(1);
+    expect(uploads[0]!.headers.get("content-type")).toBe("application/pdf");
+    expect(uploads[0]!.headers.get("x-presentation-file-name")).toBe("admin-upload.pdf");
+    expect(uploads[0]!.headers.get("x-presentation-file-size")).toBe(String(file.size));
+    expect(uploads[0]!.body).toBe(file);
+  });
+
+  it("states an upload failure in its dedicated upload view", async () => {
     stubFetch(() => jsonResponse({ error: { code: "TOO_LARGE", message: "That file is too large." } }, 413));
     const root = await mount();
 
+    await act(() => buttonNamed(root, "Upload on behalf of speaker").click());
+    expect(root.querySelector("table")).toBeNull();
     const fileInput = root.querySelector('input[type="file"]') as HTMLInputElement;
     // The input is taken out of the page with the platform's own attribute,
-    // not a utility class a stylesheet has to be present to honour.
+    // not a utility class a stylesheet has to be present to honor.
     expect(fileInput.hidden).toBe(true);
 
     const file = new File(["slides"], "deck.pdf", { type: "application/pdf" });

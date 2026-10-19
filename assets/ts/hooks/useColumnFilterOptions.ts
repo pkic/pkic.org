@@ -8,13 +8,18 @@ const loadOptions: CollectionLoader = (url, signal, schema) => getJson(url, sche
 
 /** Option values are paged by the server, independently of the table's row page. */
 export function useColumnFilterOptions(endpoint: string, param: string, allLabel: string): ColumnFilter {
-  const [offset, setOffset] = useState(0);
+  const scope = JSON.stringify([endpoint, param]);
+  const [position, setPosition] = useState({ scope, offset: 0 });
+  const offset = position.scope === scope ? position.offset : 0;
+  const setOffset = (next: number) => setPosition({ scope, offset: next });
   const limit = 50;
   const collection = useServerCollection({
     endpoint,
     params: { field: param, limit: String(limit), offset: String(offset), sort: "value" },
     responseSchema: listFilterOptionsResponseSchema,
     load: loadOptions,
+    clearDataOnReload: true,
+    retainDataOnError: false,
   });
   const page = collection.data?.page;
   return {

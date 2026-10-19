@@ -3,6 +3,7 @@ import { json } from "../../../../../_lib/http";
 import { verifyDatabaseCapability } from "../../../../../_lib/services/capability-links";
 import { requireInternalSecret } from "../../../../../_lib/request";
 import { getRegistrationConfirmationInfo } from "../../../../../_lib/services/registrations/confirmation-info";
+import { registrationAsksOrganization } from "../../../../../_lib/services/registrations/confirmation-organization";
 import { requestDb } from "../../../../../_lib/db/context";
 
 import {
@@ -37,6 +38,7 @@ async function handleConfirmInfo(
     lastName: null,
     email: null,
     organizationName: null,
+    asksOrganization: false,
     eventName: null,
     expired: false,
     recoverable: false,
@@ -72,6 +74,13 @@ async function handleConfirmInfo(
       lastName: tokenMatches ? (row.last_name ?? null) : null,
       email: tokenMatches ? (row.email ?? null) : null,
       organizationName: tokenMatches ? (row.organization_name ?? null) : null,
+      // Only the mailbox holder learns whether their domain names an organization.
+      asksOrganization: tokenMatches
+        ? await registrationAsksOrganization(requestDb(c), {
+            userId: row.user_id,
+            normalizedEmail: row.normalized_email,
+          })
+        : false,
       eventName: row.event_name,
       expired: !tokenMatches,
       recoverable: !tokenMatches,

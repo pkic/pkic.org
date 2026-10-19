@@ -1,3 +1,4 @@
+import { userSelectionProfileSchema } from "./user-selection-profile";
 /** Canonical contracts for every configured group type. */
 import { z } from "zod";
 import { booleanQueryFlagSchema, slugPattern, trimmedString, utcInstantSchema } from "./api-common";
@@ -72,7 +73,7 @@ export const groupLabelSchema = z.object({
 });
 export type GroupLabel = z.infer<typeof groupLabelSchema>;
 
-/** Canonical compact group identity for cross-resource catalogues. */
+/** Canonical compact group identity for cross-resource catalogs. */
 export const groupSummarySchema = groupLabelSchema.pick({ id: true, slug: true, name: true });
 export type GroupSummary = z.infer<typeof groupSummarySchema>;
 
@@ -234,8 +235,9 @@ export const groupMembershipSchema = z.object({
   userName: z.string(),
   email: z.email(),
   /** The person's portrait, so a roster row shows the person (#90). */
-  headshotUrl: httpOrSameOriginUrlSchema.nullable(),
-  organizationName: z.string().nullable(),
+  headshotUrl: userSelectionProfileSchema.shape.headshotUrl,
+  organizationName: userSelectionProfileSchema.shape.organization_name,
+  jobTitle: userSelectionProfileSchema.shape.job_title,
   membershipCategory: membershipCategorySchema.nullable(),
   source: groupMembershipSourceSchema,
   createdByUserId: databaseIdSchema.nullable(),
@@ -255,8 +257,9 @@ export type GroupMembership = z.infer<typeof groupMembershipSchema>;
 export const groupParticipantSchema = z.object({
   userId: databaseIdSchema,
   name: z.string(),
-  headshotUrl: httpOrSameOriginUrlSchema.nullable(),
-  organizationName: z.string().nullable(),
+  headshotUrl: userSelectionProfileSchema.shape.headshotUrl,
+  organizationName: userSelectionProfileSchema.shape.organization_name,
+  jobTitle: userSelectionProfileSchema.shape.job_title,
 });
 export type GroupParticipant = z.infer<typeof groupParticipantSchema>;
 

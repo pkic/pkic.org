@@ -16,6 +16,8 @@ export async function requireIdentityManagerActor(
     return {
       userId: admin.id,
       databaseUserId: admin.identityType === "user" ? admin.id : null,
+      sessionId: admin.identityType === "user" ? admin.sessionId : undefined,
+      sessionExpiresAt: admin.identityType === "user" ? admin.expiresAt : undefined,
       actorType: "admin",
       staffAuthorized: true,
       immediateActivationAuthorized: admin.identityType === "user" && hasPermission(admin, "identities:activate"),
@@ -30,6 +32,8 @@ export async function requireIdentityManagerActor(
   return {
     userId: member.userId,
     databaseUserId: member.userId,
+    sessionId: member.sessionId,
+    sessionExpiresAt: member.expiresAt,
     actorType: "member",
     staffAuthorized: false,
     immediateActivationAuthorized: false,

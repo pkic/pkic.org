@@ -204,13 +204,31 @@ function capabilitySecretQuery(purpose: CapabilityPurpose, allowInactiveInvite =
                  AND guest.revoked_at IS NULL
                  AND ${activeEffectiveInviteExpirySql(effectiveExpiry, "strftime('%Y-%m-%dT%H:%M:%fZ', 'now')")}`;
     }
+    case "attendance_point":
+      // The event's check-in key is resolved by the attendance point service, which parses the event first.
+      throw new Error("Attendance point capabilities resolve their key in the attendance point service");
     case "member_join_verify":
     case "member_join_apply":
+    case "event_proposal_verify":
+    case "event_proposal_continue":
+    case "registration_email_verify":
     case "user_sign_in":
     case "sponsor_sign_in":
     case "identity_invitation":
+    case "identity_reinstatement":
+    case "email_address_verification":
       throw new Error("Stateless capabilities do not have a database secret query");
   }
+}
+
+/** Pending speaker mail proves receipt of the invitation, not login eligibility.
+ * Bind delivery to the exact address still reserved by this speaker's canonical account.
+ */
+function speakerRecipientMailboxPredicate(userAlias: string): string {
+  return `(${userAlias}.normalized_email = ? OR EXISTS (
+    SELECT 1 FROM user_emails recipient_address
+     WHERE recipient_address.user_id = ${userAlias}.id AND recipient_address.normalized_email = ?
+  ))`;
 }
 
 async function loadCapabilityLinkSecret(
@@ -230,7 +248,7 @@ async function loadCapabilityLinkSecret(
            JOIN users u ON u.id = ps.user_id
            JOIN session_proposals sp ON sp.id = ps.proposal_id
            JOIN events e ON e.id = sp.event_id
-          WHERE ps.id = ? AND u.normalized_email = ?
+          WHERE ps.id = ? AND ${speakerRecipientMailboxPredicate("u")}
             AND (
               ps.status = 'confirmed'
               OR (ps.status = 'invited' AND
@@ -241,7 +259,9 @@ async function loadCapabilityLinkSecret(
               )
             )`
       : capabilitySecretQuery(purpose, allowInactiveInvite),
-    recipientBoundSpeaker ? [resourceId, expectedRecipientNormalizedEmail] : [resourceId],
+    recipientBoundSpeaker
+      ? [resourceId, expectedRecipientNormalizedEmail, expectedRecipientNormalizedEmail]
+      : [resourceId],
   );
   return row?.link_secret ?? null;
 }
@@ -267,12 +287,13 @@ async function loadOrCreateCapabilityLinkSecret(
         AND (
           ? IS NULL OR EXISTS (
             SELECT 1 FROM users u
-             WHERE u.id = proposal_speakers.user_id AND u.normalized_email = ?
+             WHERE u.id = proposal_speakers.user_id AND ${speakerRecipientMailboxPredicate("u")}
           )
         )`,
     [
       newCapabilityLinkSecret(),
       resourceId,
+      expectedRecipientNormalizedEmail ?? null,
       expectedRecipientNormalizedEmail ?? null,
       expectedRecipientNormalizedEmail ?? null,
     ],

@@ -1,3 +1,8 @@
+import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import {
+  prepareOrganizationContentReviewDigestDeliveryGuard,
+  prepareRefreshOrganizationContentReviewDigests,
+} from "./notifications";
 import { first } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
@@ -8,6 +13,7 @@ import { nowIso } from "../../utils/time";
 import { parseJsonSafe } from "../../utils/json";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
 import { prepareAuditLog } from "../audit";
+import { prepareSitePublicationRequest } from "../site-publication-requests";
 import {
   CONTENT_REVIEW_FIELDS,
   isStaleContentReviewTransition,
@@ -18,7 +24,11 @@ import {
 import type { DatabaseLike, UserBackedAuthAdmin } from "../../types";
 import { prepareStorageDeletion } from "../storage-deletion-outbox";
 import { serializeOrganizationContentValue } from "./fields";
-import type { OrganizationContentReviewsListQuery } from "../../../../assets/shared/schemas/organization-content-reviews";
+import { organizationBrandingPublicationCondition } from "./branding-publication";
+import {
+  organizationContentReviewDefaultSort,
+  type OrganizationContentReviewsListQuery,
+} from "../../../../assets/shared/schemas/organization-content-reviews";
 
 interface ContentReviewRow extends ReviewRow {
   organization_name: string;
@@ -69,7 +79,7 @@ export async function listContentReviews(db: DatabaseLike, params: OrganizationC
   }
   const where = `WHERE ${conditions.join(" AND ")}`;
   const orderBy = resolveMappedOrderBy(
-    params.sort,
+    params.sort ?? organizationContentReviewDefaultSort(status),
     {
       organizationName: "o.name COLLATE NOCASE",
       submitterName:
@@ -148,11 +158,16 @@ export async function approveContentReview(
   const proposed = parseJsonSafe<Record<string, unknown>>(row.proposed_changes_json, {});
   const setClauses: string[] = [];
   const values: unknown[] = [];
+  const changedClauses: string[] = [];
+  const changedValues: unknown[] = [];
   for (const [field, value] of Object.entries(proposed)) {
     const column = CONTENT_REVIEW_FIELDS[field];
     if (!column) continue;
     setClauses.push(`${column} = ?`);
-    values.push(serializeOrganizationContentValue(field, value));
+    const stored = serializeOrganizationContentValue(field, value);
+    values.push(stored);
+    changedClauses.push(`${column} IS NOT ?`);
+    changedValues.push(stored);
   }
 
   const now = nowIso();
@@ -160,7 +175,13 @@ export async function approveContentReview(
   if (row.logo_staging_r2_key) {
     setClauses.push("logo_r2_key = ?");
     values.push(row.logo_staging_r2_key);
+    changedClauses.push("logo_r2_key IS NOT ?");
+    changedValues.push(row.logo_staging_r2_key);
   }
+  const branding = organizationBrandingPublicationCondition(row.organization_id, {
+    website: proposed.website,
+    logoR2Key: row.logo_staging_r2_key || undefined,
+  });
   setClauses.push("logo_staging_r2_key = NULL", "updated_at = ?");
   values.push(now, row.organization_id);
   const queued = prepareQueueEmailStatement(
@@ -177,7 +198,24 @@ export async function approveContentReview(
 
   try {
     const statements = [
+      prepareOrganizationContentReviewDigestDeliveryGuard(db),
       prepareReviewTransitionGuard(db, row),
+      // Compare before replacing the live row, in the same guarded transaction.
+      prepareSitePublicationRequest(
+        db,
+        {
+          resourceType: "organization_content",
+          resourceId: row.organization_id,
+          revision: row.transition_revision + 1,
+          reasonCode: "organization_content_approved",
+          deduplicationKey: `organization-content:${reviewId}`,
+        },
+        {
+          sql: `EXISTS(SELECT 1 FROM organizations WHERE id=? AND (${changedClauses.join(" OR ") || "0"})
+            AND EXISTS(SELECT 1 FROM members WHERE organization_id=organizations.id AND status='active')) OR ${branding.sql}`,
+          bindings: [row.organization_id, ...changedValues, ...branding.bindings],
+        },
+      ),
       db.prepare(`UPDATE organizations SET ${setClauses.join(", ")} WHERE id = ?`).bind(...values),
       db
         .prepare(
@@ -186,6 +224,7 @@ export async function approveContentReview(
            WHERE id = ? AND status = 'pending'`,
         )
         .bind(reviewerUserId, now, reviewId),
+      prepareRefreshOrganizationContentReviewDigests(db, now),
       queued.statement,
       prepareAuditLog(
         db,
@@ -207,6 +246,8 @@ export async function approveContentReview(
     if (deletion) statements.push(deletion);
     await db.batch(statements);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error))
+      throw new AppError(409, "REVIEW_DELIVERY_IN_PROGRESS", "A review digest is being delivered; please retry");
     if (!isStaleContentReviewTransition(error)) throw error;
     throw new AppError(409, "NOT_PENDING", "This review changed before it could be approved");
   }
@@ -257,6 +298,7 @@ export async function rejectContentReview(
   );
   try {
     const statements = [
+      prepareOrganizationContentReviewDigestDeliveryGuard(db),
       prepareReviewTransitionGuard(db, row),
       db
         .prepare(
@@ -268,6 +310,7 @@ export async function rejectContentReview(
       db
         .prepare("UPDATE organizations SET logo_staging_r2_key = NULL WHERE id = ? AND logo_staging_r2_key = ?")
         .bind(row.organization_id, row.logo_staging_r2_key),
+      prepareRefreshOrganizationContentReviewDigests(db, now),
       queued.statement,
       prepareAuditLog(
         db,
@@ -284,6 +327,8 @@ export async function rejectContentReview(
     if (deletion) statements.push(deletion);
     await db.batch(statements);
   } catch (error) {
+    if (isAuthorizationGuardFailure(error))
+      throw new AppError(409, "REVIEW_DELIVERY_IN_PROGRESS", "A review digest is being delivered; please retry");
     if (!isStaleContentReviewTransition(error)) throw error;
     throw new AppError(409, "NOT_PENDING", "This review changed before it could be rejected");
   }

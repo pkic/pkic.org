@@ -28,6 +28,7 @@ import {
 } from "./member-profile";
 import { UserGet } from "./index";
 import { UserParticipationGet } from "./participation";
+import { UserProfileGet } from "./profile";
 import participationHistoryRouter from "./participation/router";
 
 const app = new Hono<RequestDbContext>();
@@ -39,6 +40,7 @@ openapi.delete("/skills/:skillId/vouches", MemberSkillVouchDelete);
 openapi.get("/standing", MemberStandingGet);
 openapi.get("/availability", MemberAvailabilityGet);
 openapi.get("/participation", UserParticipationGet);
+openapi.get("/profile", UserProfileGet);
 openapi.route("/participation", participationHistoryRouter);
 // Registered last so the named sub-paths above are matched first.
 openapi.get("/", UserGet);

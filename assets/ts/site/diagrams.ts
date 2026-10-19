@@ -1,3 +1,8 @@
+import { h, render } from "preact";
+import { closeButtonClasses } from "../ui/button-classes";
+import { IconRemove } from "../ui/MediaIcons";
+import "../ui/CloseButton.css";
+
 /** Pre-generated diagrams need only the browser's native accessible zoom dialog. */
 for (const wrapper of document.querySelectorAll<HTMLElement>(".mermaid-wrap")) {
   const diagram = wrapper.querySelector<HTMLElement>("[data-rendered-diagram]");
@@ -9,11 +14,8 @@ for (const wrapper of document.querySelectorAll<HTMLElement>(".mermaid-wrap")) {
   const dialog = document.createElement("dialog");
   dialog.className = "diagram-dialog";
   dialog.setAttribute("aria-label", "Expanded diagram");
-  const close = document.createElement("button");
-  close.type = "button";
-  close.className = "diagram-toggle";
-  close.textContent = "Close diagram";
-  close.addEventListener("click", () => dialog.close());
+  const head = document.createElement("div");
+  head.className = "diagram-dialog__head";
   const hint = document.createElement("p");
   hint.className = "diagram-hint";
   hint.textContent = "Scroll to explore the diagram. Use arrow keys when the diagram is focused.";
@@ -25,7 +27,18 @@ for (const wrapper of document.querySelectorAll<HTMLElement>(".mermaid-wrap")) {
   const svg = diagram.querySelector("svg");
   const width = svg?.getAttribute("width");
   const height = svg?.getAttribute("height");
-  dialog.append(close, hint, viewport);
+  // The shared close control's look, built without the Button component so this public-site
+  // script does not pull the component (and its stylesheet) into a chunk shared with the portal.
+  const close = document.createElement("button");
+  close.type = "button";
+  close.className = closeButtonClasses(false);
+  close.setAttribute("aria-label", "Close diagram");
+  close.title = "Close diagram";
+  close.addEventListener("click", () => dialog.close());
+  render(h(IconRemove, {}), close);
+  head.append(close);
+  head.prepend(hint);
+  dialog.append(head, viewport);
   document.body.append(dialog);
   dialog.addEventListener("close", () => {
     if (svg) {

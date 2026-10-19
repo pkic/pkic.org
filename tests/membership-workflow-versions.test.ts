@@ -1,3 +1,5 @@
+// Compile the real lazy HTTP graph before timed endpoint journeys.
+import "../functions/http-router";
 import { prepareMembershipWorkflowPin } from "../functions/_lib/services/membership/workflows/pinning";
 import { requireMembershipCategory } from "../functions/_lib/services/membership/categories";
 import { pinReviewedStaffWorkflow } from "./helpers/membership-workflows";
@@ -6,7 +8,7 @@ import { seedMemberApplication } from "./helpers/member-applications";
 import { getMembershipExecution } from "../functions/_lib/services/membership/workflows/execution";
 import { expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";

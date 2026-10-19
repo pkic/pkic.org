@@ -1,5 +1,45 @@
 # pkic.org website
 
+## Test the portal locally
+
+One command gives you a complete local copy of the website and portal with synthetic data. You need Git, Node.js 24 or newer, and pnpm (`corepack enable` provides the version this repository pins).
+
+1. Clone the repository and install its dependencies:
+
+   ```sh
+   git clone https://github.com/pkic/pkic.org.git
+   cd pkic.org
+   pnpm install
+   ```
+
+2. Start the local test environment:
+
+   ```sh
+   pnpm dev:test
+   ```
+
+3. When it prints "Local test environment is ready", open the URLs it shows:
+   - the portal at `http://localhost:8788/portal/`
+   - the captured email inbox at `http://127.0.0.1:8799/`
+4. To sign in, request a sign-in link in the portal for `admin@pkic.org`, the seeded administrator, or for any other address to see what a new visitor sees. Open the captured email inbox and follow the link in the newest message.
+
+The first run takes a few minutes. It creates `.local-test/` (ignored by Git), applies every database migration to a new local database, seeds synthetic data only (the administrator, the sample PQC conference, its forms, and the default email templates), generates local secrets, and publishes the site from that database once. Later runs take under two minutes. You do not need a `.dev.vars` file. All outgoing email goes to the captured inbox; nothing is delivered, and no production data is used. `pnpm dev` runs the same environment.
+
+The server hot-reloads: a change to the Worker applies on the next request, and a change to the portal rebuilds in about a second, so reload the page to see it. Public pages are prerendered once at startup, so restart to see a change to them or to their data.
+
+Press Ctrl+C to stop. Run `pnpm dev:test` again to resume with the same data; new migrations from a pulled branch are applied on start. Options:
+
+- `--build` serves the bundled Worker and the fully built site instead, as they are deployed. Use it to check prerendered pages, bundle size, or a release before a push, not for everyday changes; it rebuilds everything on every start and does not reload.
+- `--fast` (with `--build`) builds only what you need to test the portal and the event pages. Pages show original images instead of optimized variants, and social sharing images are omitted. Diagrams render in every mode through the cached build-time renderer; an uncached diagram starts its headless browser.
+- `--reset` deletes `.local-test/` and starts over with fresh data.
+- `--port <port>` and `--inbox-port <port>` change the app port (8788) and inbox port (8799) when they are in use.
+- `--state <directory>` keeps the environment in another directory.
+- `--host 0.0.0.0 --base-url http://<machine-ip>:8788` makes the portal and captured inbox reachable from another device on your network. Email links use that base URL.
+
+By default, the environment listens on this computer only. If you already have a `.dev.vars` file, it is loaded too, but the email, sign-in origin, and secret settings above always override it.
+
+`pnpm dev:test` is the local environment for everyone. Operators who are authorized to hold a production database backup can instead rehearse migrations against it with `pnpm dev:rehearsal`; see [CONTRIBUTING.md](CONTRIBUTING.md#rehearse-against-a-database-backup).
+
 ## Make and preview changes
 
 You can make simple changes in the GitHub editor. For more advanced changes you might want to run a local copy of the website.
@@ -8,18 +48,14 @@ Some basic git knowledge is required, please check https://guides.github.com/ to
 
 1. Install Node.js 24 or newer and pnpm.
 2. [Create a fork](https://guides.github.com/activities/forking/#fork) of this repository
-3. [Clone your fork](https://guides.github.com/activities/forking/#clone)
-4. Create local worker secrets for Wrangler by copying `.dev.vars.example` to `.dev.vars` and setting at least `INTERNAL_SIGNING_SECRET`. The local rehearsal also loads this file, then overrides its email transport and local identity settings so messages are captured locally instead of delivered.
-5. Apply the local database migrations with `pnpm run migrate:local`, then run `pnpm run dev`. Astro publishes member pages from local D1/R2; Vite runs the Cloudflare Worker and the remaining public routes.
-6. Open `http://localhost:8788/` in your browser to preview your local version
-7. Make changes until you are satisfied; the preview will update automatically
-8. [Commit and push your changes](https://guides.github.com/activities/forking/#making-changes)
-9. [Create a pull request](https://guides.github.com/activities/forking/#making-a-pull-request)
+3. [Clone your fork](https://guides.github.com/activities/forking/#clone) and run `pnpm install`
+4. Run `pnpm dev` (the [local test environment](#test-the-portal-locally)) and open `http://localhost:8788/` in your browser to preview your local version
+5. Make changes until you are satisfied; the Worker and portal reload automatically, public pages after a restart
+6. [Commit and push your changes](https://guides.github.com/activities/forking/#making-changes)
+7. [Create a pull request](https://guides.github.com/activities/forking/#making-a-pull-request)
 
 Backend development, validation, database behavior, and deployment are covered
 in [CONTRIBUTING.md](CONTRIBUTING.md).
-
-For an initialized local migration rehearsal, run `pnpm dev:rehearsal start --state ../pkic-rehearsal/`. Startup builds the Astro publication from that directory's local D1/R2 state and serves the Vite-built Worker with rehearsal bindings and captured email. Hugo is not required. Startup does not apply migrations or seed data; apply any required rehearsal migrations explicitly before starting.
 
 ## Static publication
 
@@ -58,32 +94,18 @@ Do not create a new `data/members/*.yaml` file or commit a logo to `assets/image
 
 ## Formatting content
 
-The content lives in `content/` and is written as markdown because of it's simple content format. We do not allow the usage of HTML, this to enforce uniform and structured content, but there are times when Markdown falls short. For some of these reusable cases you can use built-in [shortcodes](https://gohugo.io/content-management/shortcodes/) or use/create a custom [shortcode](https://gohugo.io/templates/shortcode-templates/).
+The content lives in `content/` and is written in Markdown because it is a simple content format. We do not allow HTML, to keep content uniform and structured. The Astro publication renders it with the site Markdown processor (`site/markdown-processor.ts`); see the [basic Markdown syntax](https://www.markdownguide.org/basic-syntax/).
 
-- [Basic Markdown Syntax](https://www.markdownguide.org/basic-syntax/)
-- [Diagrams](https://gohugo.io/content-management/diagrams/)
-  - [GoAT](https://github.com/bep/goat) (rendered on server)
-  - [Mermaid](https://mermaid-js.github.io/) (rendered using JavaScript on client)
+Where Markdown falls short, use a content component. Components keep the shortcode syntax the pages were written in, `{{< name key="value" >}}` (or `{{< name >}}…{{< /name >}}` around content), or the equivalent directive form `:::name{key="value"}`. They are not Hugo shortcodes: each name maps to a renderer registered in `functions/_lib/services/site-components.tsx`, and the build fails on a name that has no renderer. Reuse an existing component, such as `figure`, `button`, `alert`, `cards`, or `youtube`, or add a renderer there.
 
-You can add attributes (e.g. CSS classes) to Markdown blocks, e.g. tables, lists, paragraphs etc.
+A fenced code block marked `mermaid` is rendered as an SVG [Mermaid](https://mermaid.js.org/) diagram during publication, including hot reload and `--fast`. Readers do not need a Mermaid download or JavaScript to see it.
 
-A blockquote with a CSS class:
+A paragraph or blockquote ending in `{.callout-info}` or `{.callout-warning}` is shown as a callout:
 
 ```md
 > **Warning**
 > This is an important message
 > {.callout-warning}
-```
-
-All [Bootstrap](https://getbootstrap.com/docs/) styles are available, to change the default table style you can use for example the following attributes:
-
-```md
-| table header | column |
-| ------------ | ------ |
-| first row    |        |
-| second row   |        |
-
-{.table .table-bordered .table-striped .table-hover}
 ```
 
 ## Update content from other repositories

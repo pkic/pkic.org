@@ -1,6 +1,7 @@
 import { Hono } from "hono";
 import { fromHono } from "chanfana";
 import {
+  proposalSpeakerDisclosureReviewRouteSchema,
   proposalSpeakerDeleteRouteSchema,
   proposalSpeakerPatchRouteSchema,
   proposalSpeakerReminderRouteSchema,
@@ -9,12 +10,7 @@ import { handleError } from "../../../../../_lib/http";
 import { openApiRoute } from "../../../../../_lib/openapi/route";
 import { sendProposalReminder } from "../../../../../_lib/routes/proposal-reminders";
 import { onRequestDelete as deleteProposalSpeaker, onRequestPatch as patchProposalSpeaker } from "./[userId]";
-import {
-  ProposalSpeakerHeadshotDelete,
-  ProposalSpeakerHeadshotGet,
-  ProposalSpeakerHeadshotPut,
-} from "./[userId]/headshot";
-import { ProposalSpeakerGravatarPost } from "./[userId]/gravatar";
+import { onRequestPut as reviewSpeakerDisclosure } from "./[userId]/disclosure";
 import type { AdminContext, RequestDbContext } from "../../../../../_lib/db/context";
 
 const app = new Hono<RequestDbContext>();
@@ -29,9 +25,9 @@ openapi.post(
     sendProposalReminder(c, data.body.kind, data.params.userId, data.params.proposalId),
   ),
 );
-openapi.get("/:userId/headshot", ProposalSpeakerHeadshotGet);
-openapi.put("/:userId/headshot", ProposalSpeakerHeadshotPut);
-openapi.delete("/:userId/headshot", ProposalSpeakerHeadshotDelete);
-openapi.post("/:userId/headshot", ProposalSpeakerGravatarPost);
+openapi.put(
+  "/:userId/disclosure/review",
+  openApiRoute(proposalSpeakerDisclosureReviewRouteSchema, reviewSpeakerDisclosure),
+);
 
 export default openapi;

@@ -21,6 +21,8 @@ import { findActiveSponsorCapacityForUser, sponsorAttendeeAuthorizationEvidence 
 import { eventSponsorTierHasAttendeeAccess } from "./event-tiers";
 import { writeAuditLog } from "../audit";
 import type { SponsorAttendeesListQuery } from "../../../../assets/shared/schemas/sponsor-access";
+import { sponsorConsentSql } from "../event-participation/sponsor-consent";
+import { contactAffiliation } from "../../email-domains/contact-kind";
 
 export async function requireSponsorAttendeeAccess(
   db: DatabaseLike,
@@ -59,6 +61,7 @@ export interface SponsorAttendeeRow {
   lastName: string | null;
   email: string | null;
   organizationName: string | null;
+  personalEmail: boolean;
   jobTitle: string | null;
   attendanceType: string | null;
 }
@@ -67,10 +70,7 @@ const SPONSOR_ATTENDEES_FROM = `
   FROM registrations r
   JOIN users u ON u.id = r.user_id
   WHERE r.event_id = ? AND r.status = 'registered'
-    AND EXISTS (
-      SELECT 1 FROM consent_acceptances ca
-       WHERE ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing'
-    )
+    AND ${sponsorConsentSql("r")}
 `;
 
 function toAttendeeRow(r: {
@@ -82,12 +82,14 @@ function toAttendeeRow(r: {
   job_title: string | null;
   attendance_type: string | null;
 }): SponsorAttendeeRow {
+  const affiliation = contactAffiliation(r.email, r.organization_name);
   return {
     registrationId: r.registration_id,
     firstName: r.first_name,
     lastName: r.last_name,
     email: r.email,
-    organizationName: r.organization_name,
+    organizationName: affiliation.organization,
+    personalEmail: affiliation.personalEmail,
     jobTitle: r.job_title,
     attendanceType: r.attendance_type,
   };

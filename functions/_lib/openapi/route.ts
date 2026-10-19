@@ -11,6 +11,7 @@ import {
 } from "chanfana";
 import type { z } from "zod";
 import { AppError } from "../errors";
+import { refuseIneligibleWorkEmail } from "../email-domains/work-email-screen";
 import type { apiValidationErrorDetailsSchema } from "../../../assets/shared/schemas/api-common";
 import { JSON_REQUEST_MAX_BYTES, readBoundedJsonBody } from "../http-body";
 
@@ -160,9 +161,13 @@ export function openApiRoute<Schema extends OpenAPIRouteSchema, Context = any>(
         }
         throw error;
       }
-      const policy = (schema as OpenAPIRouteSchema & { "x-pkic-abuse-protection"?: PublicActionPolicy })[
-        "x-pkic-abuse-protection"
-      ];
+      const extensions = schema as OpenAPIRouteSchema & {
+        "x-pkic-abuse-protection"?: PublicActionPolicy;
+        "x-pkic-work-email-domain"?: true;
+      };
+      if (extensions["x-pkic-work-email-domain"])
+        refuseIneligibleWorkEmail((data as { body: { email: string; unaffiliatedAttestation: boolean } }).body);
+      const policy = extensions["x-pkic-abuse-protection"];
       if (policy) await enforcePublicAction(context as AdminContext, policy);
       return handle(context, data);
     }

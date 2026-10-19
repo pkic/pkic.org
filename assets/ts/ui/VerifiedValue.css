@@ -1,0 +1,24 @@
+/*
+ * VerifiedValue.
+ *
+ * A value with a trailing confirmation tick, or a muted pending note.
+ */
+
+@layer components {
+  .pk-verified-value {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-1) var(--pk-2);
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+  .pk-verified-value__mark {
+    display: inline-flex;
+    flex: none;
+    color: var(--pk-ok);
+  }
+  .pk-verified-value__pending {
+    color: var(--pk-ink-muted);
+  }
+}

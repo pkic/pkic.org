@@ -1,4 +1,5 @@
 import { SiteImage } from "../site/SiteImage";
+import { headshotVariantSources } from "../../shared/headshot-variants";
 import type { ComponentChildren, JSX } from "preact";
 import { useState } from "preact/hooks";
 
@@ -34,6 +35,14 @@ export interface AvatarProps extends Omit<JSX.ImgHTMLAttributes<HTMLImageElement
    * follow the subject too: a person's initials, an organization's monogram.
    */
   shape?: "round" | "square";
+  /**
+   * Draw the stored portrait itself rather than its bounded renditions. Only
+   * a surface that shows the portrait as a picture — a profile dialog — wants
+   * this; every avatar-sized use asks the headshot route for a small square.
+   */
+  original?: boolean;
+  /** A class on the avatar itself, for a surface that sizes it through `--pk-avatar-size` or frames it. */
+  class?: string;
 }
 
 export interface AvatarStatus {
@@ -42,11 +51,21 @@ export interface AvatarStatus {
   tone?: "accent" | "neutral";
 }
 
-export function Avatar({ name, src, size = "md", status, shape = "round", ...rest }: AvatarProps) {
+export function Avatar({
+  name,
+  src,
+  size = "md",
+  status,
+  shape = "round",
+  original = false,
+  class: className,
+  ...rest
+}: AvatarProps) {
   const classes = [
     "pk-avatar",
     size === "md" ? null : `pk-avatar--${size}`,
     shape === "square" ? "pk-avatar--square" : null,
+    className,
   ]
     .filter(Boolean)
     .join(" ");
@@ -61,12 +80,16 @@ export function Avatar({ name, src, size = "md", status, shape = "round", ...res
   const [broken, setBroken] = useState(false);
 
   const portrait = (
-    <div class={classes} aria-hidden="true">
+    <div
+      class={classes}
+      aria-hidden="true"
+      data-avatar-fallback={shape === "square" ? monogramFrom(name) : initialsFrom(name)}
+    >
       {src && !broken ? (
         <SiteImage
           portrait
           {...rest}
-          src={src}
+          {...portraitSources(src, original, size, rest.sizes)}
           alt=""
           loading="lazy"
           class="pk-avatar__img"
@@ -81,6 +104,23 @@ export function Avatar({ name, src, size = "md", status, shape = "round", ...res
   if (!status) return portrait;
 
   return <AvatarStanding status={status}>{portrait}</AvatarStanding>;
+}
+
+/**
+ * A live headshot address becomes a small square rendition with a width
+ * `srcset`; any other source (a published asset, a logo) passes through for
+ * the site image pipeline to size.
+ */
+/**
+ * The rendered width of each avatar size (Avatar.css). Lazy images pick their
+ * rendition before every stylesheet has loaded, when "auto" can still measure
+ * an unstyled, full-width image, so a known avatar states its own slot.
+ */
+const AVATAR_SLOT: Record<AvatarSize, string> = { sm: "2rem", md: "2.5rem", lg: "3rem", xl: "5.75rem" };
+
+function portraitSources(src: string, original: boolean, size: AvatarSize, sizes: AvatarProps["sizes"]) {
+  const variants = original ? null : headshotVariantSources(src);
+  return variants ? { ...variants, sizes: sizes ?? AVATAR_SLOT[size] } : { src };
 }
 
 /**

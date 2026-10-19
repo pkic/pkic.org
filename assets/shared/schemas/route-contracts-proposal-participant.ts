@@ -3,9 +3,6 @@ import { databaseIdSchema } from "./identifiers";
 import { requiresSession } from "./route-contract";
 import * as publicRoutes from "./route-contracts-public-proposals";
 import {
-  proposalAccessSpeakerHeadshotDeleteRouteSchema,
-  proposalAccessSpeakerHeadshotGetRouteSchema,
-  proposalAccessSpeakerHeadshotPutRouteSchema,
   proposalSpeakerHeadshotDeleteRouteSchema,
   proposalSpeakerHeadshotGetRouteSchema,
   proposalSpeakerHeadshotPutRouteSchema,
@@ -37,13 +34,8 @@ export const participantSpeakerRemind = sessionRoute(
   publicRoutes.proposalAccessSpeakerReminderCreateRouteSchema,
   speakerParams,
 );
-export const participantSpeakerPhotoRead = sessionRoute(proposalAccessSpeakerHeadshotGetRouteSchema, speakerParams);
-export const participantSpeakerPhotoUpdate = sessionRoute(proposalAccessSpeakerHeadshotPutRouteSchema, speakerParams);
-export const participantSpeakerPhotoDelete = sessionRoute(
-  proposalAccessSpeakerHeadshotDeleteRouteSchema,
-  speakerParams,
-);
 export const participantRead = sessionRoute(publicRoutes.proposalSpeakerSelfServiceReadRouteSchema, proposalParams);
+export const participantIdentities = sessionRoute(publicRoutes.proposalSpeakerIdentitiesRouteSchema, proposalParams);
 export const participantRespond = sessionRoute(publicRoutes.proposalSpeakerParticipationRouteSchema, proposalParams);
 export const participantProfileUpdate = sessionRoute(
   publicRoutes.proposalSpeakerProfileUpdateRouteSchema,

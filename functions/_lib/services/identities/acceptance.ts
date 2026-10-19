@@ -1,3 +1,4 @@
+import { prepareOrganizationIdentityPublication } from "./lifecycle-publication";
 import { isAuthorizationGuardFailure, prepareAuthorizationGuard } from "../../db/authorization-guard";
 import { first } from "../../db/queries";
 import {
@@ -16,9 +17,11 @@ import {
   type IdentityNotificationContext,
 } from "./notifications";
 
+import { organizationIdentityAuditScope } from "./authorization";
+
 interface PendingIdentityRow {
   id: string;
-  member_id: string;
+  member_id: string | null;
   user_id: string;
   organization_id: string;
   updated_at: string;
@@ -30,7 +33,7 @@ async function loadPendingIdentity(db: DatabaseLike, identityId: string, userId?
     `SELECT identity.id, capacity.member_id, identity.user_id,
             identity.organization_id, identity.updated_at
        FROM identities identity
-       JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+       LEFT JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
       WHERE identity.id = ?
         AND (? IS NULL OR identity.user_id = ?)
         AND identity.organization_id IS NOT NULL
@@ -66,7 +69,7 @@ function prepareAcceptanceStatements(
       ? [
           prepareScopedAuditLogAfterOneChange(
             db,
-            { type: "organization", id: identity.member_id },
+            organizationIdentityAuditScope(identity.member_id, identity.user_id),
             "user",
             identity.user_id,
             "organization_identity_invitation_accepted",
@@ -77,6 +80,7 @@ function prepareAcceptanceStatements(
           ),
         ]
       : []),
+    prepareOrganizationIdentityPublication(db, identity.id, at),
     prepareIdentityNotification(db, {
       identityId: identity.id,
       userId: identity.user_id,
@@ -100,7 +104,7 @@ export async function acceptPendingIdentity(
   const identity = await loadPendingIdentity(db, input.identityId, input.userId);
 
   const at = nowIso();
-  const context = await loadIdentityNotificationContext(db, identity.member_id, identity.user_id, true);
+  const context = await loadIdentityNotificationContext(db, identity.organization_id, identity.user_id, true);
   try {
     await db.batch([
       prepareAuthorizationGuard(db, {
@@ -143,7 +147,7 @@ async function resolveInvitationLink(db: DatabaseLike, input: { token: string; s
     purpose: "identity_invitation",
   });
   const identity = await loadPendingIdentity(db, capability.subjectId);
-  const context = await loadIdentityNotificationContext(db, identity.member_id, identity.user_id, true);
+  const context = await loadIdentityNotificationContext(db, identity.organization_id, identity.user_id, true);
   await assertEmailAuthCapabilityEmail({
     signingSecret: input.signingSecret,
     capability,
@@ -176,13 +180,13 @@ export async function acceptIdentityInvitationLink(
     action: "organization_identity_invitation_accepted",
     entityType: "identity",
     entityId: identity.id,
-    scope: { type: "organization", id: identity.member_id },
+    scope: organizationIdentityAuditScope(identity.member_id, identity.user_id),
     details: { organizationId: identity.organization_id },
     createdAt: at,
     authorizationEvidence: {
       sql: `SELECT 1
               FROM identities identity
-              JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+              LEFT JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
               JOIN users user ON user.id = identity.user_id AND user.active = 1
              WHERE identity.id = ? AND identity.user_id = ?
                AND identity.updated_at = ?

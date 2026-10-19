@@ -5,7 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { IdentityRoster } from "../../assets/ts/member-flows/portal/sections/system-organizations/IdentityRoster";
 import type { OrganizationDetail } from "../../assets/shared/schemas/organization-management";
 import { identityCreateSchema } from "../../assets/shared/schemas/identity";
-import { buttonNamed, controlFor, groupNames, namedGroup } from "./helpers/labelled-control";
+import { buttonNamed, controlFor, groupNames, namedGroup } from "./helpers/labeled-control";
 
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["/organizations", vi.fn()],
@@ -84,6 +84,14 @@ function runRosterCommand(label: string): void {
   void act(() => item.click());
 }
 
+async function typeJobTitle(value: string): Promise<void> {
+  await act(async () => {
+    const input = container.querySelector<HTMLInputElement>('input[name="jobTitle"]')!;
+    input.value = value;
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+}
+
 describe("linking existing users as acting identities", () => {
   it("invites a picked existing user through the canonical identity command", async () => {
     const requests: Array<{ url: URL; method: string; body?: unknown }> = [];
@@ -139,11 +147,18 @@ describe("linking existing users as acting identities", () => {
     await searchForUser(search, "alex");
 
     const option = [...container.querySelectorAll("button")].find((candidate) =>
-      candidate.textContent?.includes("alex@example.test"),
+      candidate.textContent?.includes("Alex Chair"),
     )!;
     void act(() => option.click());
     await settle();
 
+    // An organization identity is never created without a job title: the contract refuses on the field first.
+    clickButton("Link");
+    await settle();
+    expect(requests.some(({ method }) => method === "POST")).toBe(false);
+    const jobTitle = container.querySelector<HTMLInputElement>('input[name="jobTitle"]')!;
+    expect(jobTitle.getAttribute("aria-invalid")).toBe("true");
+    await typeJobTitle("Program chair");
     clickButton("Link");
     await settle();
 
@@ -153,6 +168,7 @@ describe("linking existing users as acting identities", () => {
     expect(parsed).toEqual({
       userReference: "existing_user",
       userId: USER_ID,
+      jobTitle: "Program chair",
       activation: { mode: "invitation" },
       showOnOrganizationProfile: true,
     });
@@ -208,10 +224,11 @@ describe("linking existing users as acting identities", () => {
     const search = container.querySelector<HTMLInputElement>('input[aria-label="Search for a user"]')!;
     await searchForUser(search, "alex");
     const option = [...container.querySelectorAll("button")].find((candidate) =>
-      candidate.textContent?.includes("alex@example.test"),
+      candidate.textContent?.includes("Alex Chair"),
     )!;
     void act(() => option.click());
     await settle();
+    await typeJobTitle("Program chair");
     clickButton("Link");
     await settle();
 
@@ -262,6 +279,6 @@ describe("linking existing users as acting identities", () => {
     const addForm = namedGroup(container, "New person");
     expect(controlFor(addForm, "Name").required).toBe(true);
     expect(controlFor(addForm, "Email").type).toBe("email");
-    expect(controlFor(addForm, "Job title").required).toBe(false);
+    expect(controlFor(addForm, "Job title").required).toBe(true);
   });
 });

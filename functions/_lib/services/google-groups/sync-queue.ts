@@ -166,16 +166,16 @@ export async function claimPendingGoogleGroupsSyncRows(
   });
 }
 
-export async function loadActionableGoogleGroupsSyncClaims(
+export async function loadActionableGoogleGroupsSyncRows(
   db: DatabaseLike,
-  claims: ClaimedGoogleGroupsSyncRow[],
+  claims: GoogleGroupsSyncQueueRow[],
 ): Promise<Map<string, string | null>> {
   if (claims.length === 0) return new Map();
 
   const placeholders = claims.map(() => "?").join(", ");
-  const rows = await all<{ id: string; processing_token: string; member_email: string | null }>(
+  const rows = await all<{ id: string; status: string; processing_token: string | null; member_email: string | null }>(
     db,
-    `SELECT queue.id, queue.processing_token, users.email AS member_email
+    `SELECT queue.id, queue.status, queue.processing_token, users.email AS member_email
        FROM google_groups_sync_queue queue
        JOIN google_groups_membership_desired_state desired
          ON desired.user_id = queue.user_id
@@ -183,13 +183,17 @@ export async function loadActionableGoogleGroupsSyncClaims(
         AND desired.generation = queue.generation
         AND desired.desired_action = queue.action
        LEFT JOIN users ON users.id = queue.user_id
-      WHERE queue.id IN (${placeholders}) AND queue.status = 'processing'`,
+      WHERE queue.id IN (${placeholders}) AND queue.status IN ('pending', 'processing')`,
     claims.map((claim) => claim.id),
   );
-  const claimTokens = new Map(claims.map((claim) => [claim.id, claim.processing_token]));
+  const candidates = new Map(claims.map((claim) => [claim.id, claim]));
   return new Map(
     rows
-      .filter((row) => claimTokens.get(row.id) === row.processing_token)
+      .filter(
+        (row) =>
+          candidates.get(row.id)?.status === row.status &&
+          candidates.get(row.id)?.processing_token === row.processing_token,
+      )
       .map((row) => [row.id, row.member_email] as const),
   );
 }

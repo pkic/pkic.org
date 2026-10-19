@@ -6,7 +6,7 @@ import { getClientIp, getUserAgent, requireInternalSecret } from "../_lib/reques
 import { registrationPageUrl } from "../_lib/services/frontend-links";
 import { resolveOgImageType } from "../_lib/utils/og-image-type";
 import type { DatabaseLike } from "../_lib/types";
-import { proposalSpeakerEffectiveProfileColumns } from "../_lib/services/proposal-speakers";
+import { proposalSpeakerProfileColumns } from "../_lib/services/proposal-speakers";
 // ─── Social-scraper detection ─────────────────────────────────────────────────
 
 /**
@@ -75,7 +75,7 @@ export async function lookupOgPerson(db: DatabaseLike, code: string): Promise<Og
   // proposal/speaker owners
   return first<OgPersonRow>(
     db,
-    `SELECT ${proposalSpeakerEffectiveProfileColumns("u", "ps", "", ["firstName", "lastName"])},
+    `SELECT ${proposalSpeakerProfileColumns("u", "ps", "", ["firstName", "lastName"])},
             COALESCE(ps.role, 'speaker') AS role,
             e.name AS event_name
      FROM   referral_codes rc
@@ -292,17 +292,19 @@ export async function onRequestGet(c: any): Promise<Response> {
     return json({ error: { code: "REFERRAL_NOT_FOUND", message: "Unknown referral code" } }, 404);
   }
 
-  // ── For real browsers, record the click (fire-and-forget) ─────────────────
+  // Keep the click write alive after the redirect response has been returned.
   // Scrapers are excluded so they don't inflate click counts.
   if (!isSocialScraper(userAgent)) {
-    void recordReferralClick(c.env.DB, {
-      code,
-      ip: getClientIp(c.req.raw),
-      userAgent,
-      secret: signingSecret,
-    }).catch(() => {
-      /* ignore */
-    });
+    c.executionCtx.waitUntil(
+      recordReferralClick(c.env.DB, {
+        code,
+        ip: getClientIp(c.req.raw),
+        userAgent,
+        secret: signingSecret,
+      }).catch(() => {
+        /* A tracking failure must not prevent registration. */
+      }),
+    );
   }
 
   // ── Resolve redirect URL and person data in parallel ──────────────────────

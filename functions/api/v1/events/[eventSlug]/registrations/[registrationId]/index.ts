@@ -98,8 +98,6 @@ async function handleEventRegistrationPatch(
         ? {
             firstName: body.firstName,
             lastName: body.lastName,
-            organizationName: body.organizationName,
-            jobTitle: body.jobTitle,
           }
         : undefined,
     auditActor: { type: "admin" as const, id: actor.id, action: "event_registration_updated" },

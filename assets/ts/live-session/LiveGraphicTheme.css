@@ -1,0 +1,42 @@
+/*
+ * A broadcast graphic's theme: white or black type on a transparent, black or
+ * white ground. Each themed graphic reads these four properties and nothing
+ * else for its colors, so every graphic agrees on what a theme means. The
+ * values are the fixed broadcast tokens, never the portal's light or dark
+ * surfaces: an output looks the same in any operator's theme.
+ *
+ * - `--graphic-ink`: type and rules;
+ * - `--graphic-ink-muted`: secondary type, still above 4.5:1 on its ground;
+ * - `--graphic-ground`: the plate behind the graphic, or none;
+ * - `--graphic-halo`: a soft shadow that keeps type legible over a moving
+ *   picture, only on a transparent ground.
+ */
+@layer components {
+  [data-graphic-theme] {
+    --graphic-ink: var(--pk-on-solid);
+    --graphic-contrast: var(--pk-chrome-deep);
+    --graphic-ground: var(--pk-chrome-deep);
+    --graphic-ink-muted: color-mix(in srgb, var(--graphic-ink) 74%, var(--graphic-contrast));
+    --graphic-rule: color-mix(in srgb, var(--graphic-ink) 22%, transparent);
+    --graphic-tint: color-mix(in srgb, var(--graphic-ink) 9%, transparent);
+    --graphic-halo: none;
+  }
+  [data-graphic-theme="white-on-transparent"] {
+    --graphic-ground: transparent;
+    --graphic-ink-muted: color-mix(in srgb, var(--graphic-ink) 88%, var(--graphic-contrast));
+    --graphic-halo: 0 2px 3px color-mix(in srgb, var(--graphic-contrast) 85%, transparent),
+      0 0 18px color-mix(in srgb, var(--graphic-contrast) 70%, transparent);
+  }
+  [data-graphic-theme="black-on-transparent"],
+  [data-graphic-theme="black-on-white"] {
+    --graphic-ink: var(--pk-pqc-ink);
+    --graphic-contrast: var(--pk-pqc-paper);
+    --graphic-ground: var(--pk-pqc-paper);
+  }
+  [data-graphic-theme="black-on-transparent"] {
+    --graphic-ground: transparent;
+    --graphic-ink-muted: color-mix(in srgb, var(--graphic-ink) 88%, var(--graphic-contrast));
+    --graphic-halo: 0 1px 3px color-mix(in srgb, var(--graphic-contrast) 90%, transparent),
+      0 0 18px color-mix(in srgb, var(--graphic-contrast) 75%, transparent);
+  }
+}

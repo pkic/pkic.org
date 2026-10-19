@@ -121,6 +121,46 @@ export function requirePresentationBucket(env: Pick<Env, "SPEAKER_UPLOADS_BUCKET
   return bucket;
 }
 
+export async function streamPresentationUpload(bucket: R2Bucket, r2Key: string, parsed: PresentationUpload) {
+  // FixedLengthStream keeps the R2 object uncommitted until exactly the
+  // declared number of bytes has arrived. The counting transform rejects
+  // oversized or dishonest streams before they reach R2 and preserves a
+  // route-specific error contract for the API response.
+  let total = 0;
+  const counted = new TransformStream<Uint8Array, Uint8Array>({
+    transform(chunk, controller) {
+      total += chunk.byteLength;
+      if (total > MAX_PRESENTATION_BYTES) {
+        throw new AppError(413, "FILE_TOO_LARGE", "Presentation must be 100 MB or smaller.");
+      }
+      if (total > parsed.size) {
+        throw new AppError(400, "FILE_SIZE_MISMATCH", "Presentation file size does not match the request.");
+      }
+      controller.enqueue(chunk);
+    },
+    flush() {
+      if (total !== parsed.size) {
+        throw new AppError(400, "FILE_SIZE_MISMATCH", "Presentation file size does not match the request.");
+      }
+    },
+  });
+  const fixed = new FixedLengthStream(parsed.size);
+  const putPromise = bucket
+    .put(r2Key, fixed.readable, { httpMetadata: { contentType: parsed.type } })
+    .then((stored) => {
+      if (stored.size !== parsed.size)
+        throw new AppError(400, "FILE_SIZE_MISMATCH", "Presentation file size does not match the request.");
+      return r2Key;
+    });
+  try {
+    await parsed.body.pipeThrough(counted).pipeTo(fixed.writable);
+  } catch (error) {
+    await putPromise.catch(() => undefined);
+    throw error;
+  }
+  return await putPromise;
+}
+
 export async function uploadProposalPresentation(
   db: DatabaseLike,
   bucket: R2Bucket,
@@ -190,44 +230,7 @@ export async function uploadProposalPresentation(
       bucket,
       bucketName: "speaker_uploads",
       objectKey: r2Key,
-      upload: async () => {
-        // FixedLengthStream keeps the R2 object uncommitted until exactly the
-        // declared number of bytes has arrived. The counting transform rejects
-        // oversized or dishonest streams before they reach R2 and preserves a
-        // route-specific error contract for the API response.
-        let total = 0;
-        const counted = new TransformStream<Uint8Array, Uint8Array>({
-          transform(chunk, controller) {
-            total += chunk.byteLength;
-            if (total > MAX_PRESENTATION_BYTES) {
-              throw new AppError(413, "FILE_TOO_LARGE", "Presentation must be 100 MB or smaller.");
-            }
-            if (total > parsed.size) {
-              throw new AppError(400, "FILE_SIZE_MISMATCH", "Presentation file size does not match the request.");
-            }
-            controller.enqueue(chunk);
-          },
-          flush() {
-            if (total !== parsed.size) {
-              throw new AppError(400, "FILE_SIZE_MISMATCH", "Presentation file size does not match the request.");
-            }
-          },
-        });
-        const fixed = new FixedLengthStream(parsed.size);
-        const putPromise = storePresentationFile(
-          bucket,
-          { eventSlug: context.event_slug, proposalId: context.id, proposalTitle: context.title },
-          { ...parsed, body: fixed.readable },
-          r2Key,
-        );
-        try {
-          await parsed.body.pipeThrough(counted).pipeTo(fixed.writable);
-        } catch (error) {
-          await putPromise.catch(() => undefined);
-          throw error;
-        }
-        return await putPromise;
-      },
+      upload: () => streamPresentationUpload(bucket, r2Key, parsed),
       // Build the D1 statements only after R2 has accepted the stream. Besides
       // reducing the lifetime of the prepared batch, this makes the authority
       // guard's timestamp the commit timestamp, so a deadline that expires

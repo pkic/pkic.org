@@ -5,23 +5,29 @@ import type { DatabaseLike } from "../types";
 import { verifyDatabaseCapability } from "./capability-links";
 import type { ProposalRecord, ProposalSpeakerRecord } from "./proposals";
 import {
-  proposalSpeakerEffectiveHeadshotColumns,
-  proposalSpeakerEffectiveProfileColumns,
+  proposalSpeakerHeadshotColumns,
+  proposalSpeakerProfileColumns,
   type ProposalSpeakerUserProfile,
 } from "./proposal-speakers";
 import { effectiveProposalSpeakerInviteExpirySql, inactiveEffectiveInviteExpirySql } from "../invite-validity";
+import { ownedIdentityLifecycleSql } from "./identities/selection";
+import { nowIso, persistedUtcInstant } from "../utils/time";
+import { parseLinksJson } from "../../../assets/shared/schemas/links";
+import { identityJobTitleSql } from "./identities/affiliation-projection";
+import { proposalSpeakerIdentityIdSql } from "./proposal-speaker-profile-projection";
+import { proposalActingIdentityReadModel } from "./proposal-speaker-identity";
+import {
+  speakerCurrentRepresentationSchema,
+  speakerSelfServiceProfileSchema,
+  type SpeakerCurrentRepresentation,
+} from "../../../assets/shared/schemas/speaker-self-service";
 
 export interface SpeakerWithContext {
   speaker: ProposalSpeakerRecord;
   proposal: ProposalRecord;
+  currentRepresentation: SpeakerCurrentRepresentation | null;
   user: ProposalSpeakerUserProfile & {
     id: string;
-    proposalProfileOverridesJson: string;
-    proposalHeadshotOverrideSet: number;
-    proposalHeadshotOverrideKey: string | null;
-    proposalHeadshotOverrideUpdatedAt: string | null;
-    accountHeadshotR2Key: string | null;
-    accountHeadshotUpdatedAt: string | null;
   };
 }
 
@@ -93,12 +99,8 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
     u_links_json: string | null;
     u_headshot_r2_key: string | null;
     u_headshot_updated_at: string | null;
-    u_base_headshot_r2_key: string | null;
-    u_base_headshot_updated_at: string | null;
-    ps_headshot_override_set: number;
-    ps_headshot_override_r2_key: string | null;
-    ps_headshot_override_updated_at: string | null;
-    ps_profile_overrides_json: string;
+    ps_acting_identity_id: string | null;
+    ps_acting_identity_selected_at: string | null;
   }>(
     db,
     `SELECT
@@ -141,14 +143,10 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
        sp.presentation_deadline      AS sp_presentation_deadline,
        u.id               AS u_id,
        u.email            AS u_email,
-       ${proposalSpeakerEffectiveProfileColumns("u", "ps", "u_")},
-       ${proposalSpeakerEffectiveHeadshotColumns("u", "ps", "u_")},
-       u.headshot_r2_key AS u_base_headshot_r2_key,
-       u.headshot_updated_at AS u_base_headshot_updated_at,
-       ps.headshot_override_set AS ps_headshot_override_set,
-       ps.headshot_r2_key AS ps_headshot_override_r2_key,
-       ps.headshot_updated_at AS ps_headshot_override_updated_at,
-       ps.profile_overrides_json AS ps_profile_overrides_json
+       ${proposalSpeakerProfileColumns("u", "ps", "u_")},
+       ${proposalSpeakerHeadshotColumns("u", "u_")},
+       ps.acting_identity_id AS ps_acting_identity_id
+       , ps.acting_identity_selected_at AS ps_acting_identity_selected_at
      FROM proposal_speakers ps
      JOIN session_proposals sp ON sp.id = ps.proposal_id AND sp.deleted_at IS NULL
      JOIN events e                ON e.id  = sp.event_id
@@ -164,7 +162,8 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
     throw new AppError(410, "SPEAKER_INVITATION_EXPIRED", "Speaker invitation has expired");
   }
 
-  return {
+  const context: SpeakerWithContext = {
+    currentRepresentation: null,
     speaker: {
       id: row.ps_id,
       proposal_id: row.ps_proposal_id,
@@ -179,6 +178,8 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
       created_at: row.ps_created_at,
       invite_generation: row.ps_invite_generation,
       invite_expires_at: row.ps_invite_expires_at,
+      acting_identity_id: row.ps_acting_identity_id,
+      acting_identity_selected_at: row.ps_acting_identity_selected_at,
     },
     proposal: {
       id: row.sp_id,
@@ -200,7 +201,6 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
     },
     user: {
       id: row.u_id,
-      proposalProfileOverridesJson: row.ps_profile_overrides_json,
       email: row.u_email,
       first_name: row.u_first_name,
       last_name: row.u_last_name,
@@ -210,11 +210,81 @@ async function getSpeakerById(db: DatabaseLike, speakerId: string, userId?: stri
       links_json: row.u_links_json,
       headshot_r2_key: row.u_headshot_r2_key,
       headshot_updated_at: row.u_headshot_updated_at,
-      accountHeadshotR2Key: row.u_base_headshot_r2_key,
-      accountHeadshotUpdatedAt: row.u_base_headshot_updated_at,
-      proposalHeadshotOverrideSet: row.ps_headshot_override_set,
-      proposalHeadshotOverrideKey: row.ps_headshot_override_r2_key,
-      proposalHeadshotOverrideUpdatedAt: row.ps_headshot_override_updated_at,
     },
   };
+  context.currentRepresentation = await currentSpeakerRepresentation(db, context.speaker);
+  return context;
+}
+
+/**
+ * The identity the speaker speaks as, read from the identity itself once they
+ * have chosen: the organization identity they chose, or their individual
+ * identity when they take part as an individual. Null until they choose, or
+ * when that identity is no longer theirs or its address is unverified.
+ */
+async function currentSpeakerRepresentation(
+  db: DatabaseLike,
+  speaker: ProposalSpeakerRecord,
+): Promise<SpeakerCurrentRepresentation | null> {
+  if (!speaker.acting_identity_selected_at) return null;
+  const at = nowIso();
+  const identity = await first<{
+    id: string;
+    email_id: string | null;
+    email: string;
+    organization_id: string | null;
+    organization_name: string | null;
+    job_title: string | null;
+    biography: string | null;
+    links_json: string | null;
+    updated_at: string;
+  }>(
+    db,
+    `SELECT identity.id, identity.email_id,
+      CASE WHEN identity.email_id IS NULL THEN user.normalized_email ELSE selected_email.normalized_email END AS email,
+      identity.organization_id, organization.name AS organization_name,
+      ${identityJobTitleSql("identity.id")} AS job_title, identity.biography, identity.links_json, identity.updated_at
+    FROM proposal_speakers ps
+    JOIN identities identity ON identity.id=(${proposalSpeakerIdentityIdSql("ps")}) AND identity.user_id=ps.user_id
+    JOIN users user ON user.id=identity.user_id AND user.active=1
+    LEFT JOIN organizations organization ON organization.id=identity.organization_id
+    LEFT JOIN user_emails selected_email ON selected_email.id=identity.email_id
+      AND selected_email.user_id=identity.user_id AND selected_email.verified_at IS NOT NULL
+    WHERE ps.id=? AND ${ownedIdentityLifecycleSql("identity", "?")}
+      AND ((identity.email_id IS NULL AND user.email_verified_at IS NOT NULL) OR selected_email.id IS NOT NULL)`,
+    [speaker.id, at, at, at],
+  );
+  if (!identity) return null;
+  const individual = speaker.acting_identity_id === null;
+  if (individual !== (identity.organization_id === null)) return null;
+  return speakerCurrentRepresentationSchema.parse({
+    ...proposalActingIdentityReadModel(speaker),
+    identityId: identity.id,
+    emailId: individual ? null : identity.email_id,
+    email: identity.email,
+    organizationId: identity.organization_id,
+    organizationName: identity.organization_name,
+    jobTitle: identity.job_title,
+    biography: identity.biography,
+    links: parseLinksJson(identity.links_json),
+    updatedAt: persistedUtcInstant(identity.updated_at),
+  });
+}
+
+/** How the speaker appears: the person's name and photo, and the profile of the identity they speak as. */
+export function speakerSelfServiceProfileReadModel(context: SpeakerWithContext, headshotUrl: string | null) {
+  const { speaker, user } = context;
+  return speakerSelfServiceProfileSchema.parse({
+    ...proposalActingIdentityReadModel(speaker),
+    firstName: user.first_name,
+    lastName: user.last_name,
+    email: user.email,
+    organizationName: user.organization_name,
+    jobTitle: user.job_title,
+    biography: user.biography,
+    links: parseLinksJson(user.links_json),
+    headshotUploaded: Boolean(user.headshot_r2_key),
+    headshotUpdatedAt: user.headshot_updated_at,
+    headshotUrl,
+  });
 }

@@ -1,7 +1,9 @@
 import { Field } from "../ui/Field";
 import { TextInput } from "../ui/TextControl";
-import { Radio, Checkbox } from "../ui/Checkbox";
+import { Checkbox } from "../ui/Checkbox";
 import { Button, ButtonLink } from "../ui/Button";
+import { FieldStatus } from "../ui/FieldStatus";
+import { ExternalLink } from "../ui/ExternalLink";
 
 export interface MembershipDocument {
   key: string;
@@ -16,26 +18,36 @@ function LegalAgreement({ document }: { document: MembershipDocument }) {
       <header class="membership-legal-card-header">
         <p>
           Review the{" "}
-          <a href={document.href} target="_blank" rel="noopener noreferrer">
+          <ExternalLink href={document.href} external>
             {document.title}
-          </a>
-          , then confirm your agreement below.
+          </ExternalLink>
+          , scroll to the bottom, and confirm your agreement.
         </p>
+        <div data-membership-legal-status>
+          <FieldStatus id={`membership-legal-status-${document.key}`}>Agreement required</FieldStatus>
+        </div>
       </header>
-      <div class="membership-legal-card-scroll" tabIndex={0} aria-label={`${document.title} document`}>
+      <div
+        class="membership-legal-card-scroll"
+        tabIndex={0}
+        role="region"
+        aria-label={`${document.title} document and agreement`}
+      >
         <article class="membership-legal-document" dangerouslySetInnerHTML={{ __html: document.html }} />
-      </div>
-      <div class="membership-legal-acceptance">
-        <Field group label="Agreement" errorSlot={document.key}>
-          {() => (
-            <Checkbox
-              name={`custom.${document.key}`}
-              data-membership-legal-input
-              required
-              label={<span data-membership-legal-label>I agree to the membership terms in this document</span>}
-            />
-          )}
-        </Field>
+        <div class="membership-legal-acceptance">
+          <Field group label="Agreement" errorSlot={document.key}>
+            {(control) => (
+              <Checkbox
+                {...control}
+                aria-describedby={`membership-legal-status-${document.key} ${control["aria-describedby"] ?? ""}`.trim()}
+                name={`custom.${document.key}`}
+                data-membership-legal-input
+                required
+                label={<span data-membership-legal-label>I agree to the membership terms in this document</span>}
+              />
+            )}
+          </Field>
+        </div>
       </div>
     </section>
   );
@@ -46,81 +58,19 @@ export function JoinFlow({ documents }: { documents: MembershipDocument[] }) {
   return (
     <div data-member-application data-module="member-flows/join-form" class="pk pk-stack join-flow">
       <div data-flow-status class="pk-alert pk-sr-only" role="alert" aria-live="polite" />
-      <div data-join-start>
-        <p class="pk-lede">First, tell us whether an organization is connected to your participation.</p>
-        <form data-join-start-form class="pk-form needs-validation" noValidate>
-          <Field
-            group
-            label="Are you employed by, or do you own, an organization?"
-            errorSlot="applicantKind"
-            help="If an organization has separately authorized you to act on its behalf, choose Yes even if you are not its employee or owner."
-          >
-            {(control) => (
-              <div class="pk-stack pk-stack--snug">
-                <Radio
-                  name="applicantKind"
-                  value="organization"
-                  required
-                  aria-describedby={control["aria-describedby"]}
-                  label="Yes — I am employed by or own an organization"
-                />
-                <Radio
-                  name="applicantKind"
-                  value="individual"
-                  required
-                  aria-describedby={control["aria-describedby"]}
-                  label="No — I am not employed by and do not own an organization"
-                />
-              </div>
-            )}
-          </Field>
-          <div data-join-path-details hidden>
-            <div data-join-organization-policy class="pk-alert pk-alert--info" hidden>
-              You must participate on behalf of that organization. Use an email address belonging to it so we can verify
-              the relationship and keep organizational and IPR attribution clear.
-            </div>
-            <div data-join-individual-policy class="pk-alert pk-alert--warn" hidden>
-              Individual participation is limited to eligible categories for people who are not employed by, do not own,
-              and are not acting for an organization.
-            </div>
-            <div data-join-individual-categories hidden>
-              <p class="pk-strong">Eligible individual categories</p>
-              <div data-join-individual-category-list class="pk-muted pk-small" aria-live="polite">
-                Loading eligible categories…
-              </div>
-            </div>
-            <Field
-              id="joinEmail"
-              label="Your official work or organization email address"
-              errorSlot="email"
-              help="We will send a short-lived verification link before showing the appropriate next step."
-            >
-              {(control) => (
-                <TextInput
-                  {...control}
-                  name="email"
-                  type="email"
-                  autoComplete="email"
-                  placeholder="you@organization.example"
-                  required
-                  disabled
-                />
-              )}
-            </Field>
-            <Button type="submit" variant="primary">
-              Continue
-            </Button>
-          </div>
-        </form>
-      </div>
-      <section data-join-verification-pending hidden tabIndex={-1}>
-        <h2>Check your email</h2>
-        <p>
-          We sent an email to <strong data-join-pending-email /> with your next step. Follow the instructions to
-          continue.
+      <div data-join-start class="pk-stack">
+        <p class="pk-lede">
+          Start with your official work or organization email address, so we can verify the relationship and keep
+          organizational and IPR attribution clear.
         </p>
-        <Button data-edit-join-email>Use a different email address</Button>
-      </section>
+        <div data-join-email-step />
+        <div data-join-individual-categories hidden>
+          <p class="pk-strong">Eligible individual categories</p>
+          <div data-join-individual-category-list class="pk-muted pk-small" aria-live="polite">
+            Loading eligible categories…
+          </div>
+        </div>
+      </div>
       <section data-join-organization-access hidden tabIndex={-1}>
         <h2>Organization access is ready</h2>
         <p>
@@ -196,7 +146,7 @@ export function JoinFlow({ documents }: { documents: MembershipDocument[] }) {
           <div>
             <h3>Review and accept the membership terms</h3>
             <p class="pk-muted pk-small">
-              Read each document in the scrollable panel, then confirm your agreement in its attached footer.
+              Read each document in its scrollable box, then select the agreement checkbox at the bottom.
             </p>
           </div>
           {documents.map((document) => (

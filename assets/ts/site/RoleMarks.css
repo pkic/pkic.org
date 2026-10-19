@@ -1,0 +1,51 @@
+@layer components {
+  /* Role marks: an icon in the role's color; no pill, no fill. Only the person card spells them out. */
+  .pk-live-roles {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--pk-2);
+  }
+  .pk-live-roles--full {
+    display: flex;
+    flex-wrap: wrap;
+    margin-block-start: var(--pk-3);
+  }
+  .pk-live-role {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.2em;
+    color: var(--live-role, var(--pk-ink-muted));
+    font-size: var(--pk-text-xs);
+    font-weight: 600;
+    white-space: nowrap;
+  }
+  .pk-live-role__icon {
+    inline-size: 0.95em;
+    block-size: 0.95em;
+    flex: none;
+  }
+  /* Beside a name a mark is its icon alone, so it is drawn at the name's size. */
+  .pk-live-author .pk-live-role {
+    font-size: inherit;
+  }
+  .pk-live-author .pk-live-role__icon {
+    inline-size: 1em;
+    block-size: 1em;
+  }
+  .pk-live-role[data-role="event_team"] {
+    --live-role: var(--pk-accent-ink);
+  }
+  .pk-live-role[data-role="speaker"],
+  .pk-live-role[data-role="moderator"],
+  .pk-live-role[data-role="host"] {
+    --live-role: var(--pk-info-ink);
+  }
+  .pk-live-role[data-role="chair"],
+  .pk-live-role[data-role="vice_chair"] {
+    --live-role: var(--pk-warn-ink);
+  }
+  .pk-live-role[data-role="member"] {
+    --live-role: var(--pk-ink-muted);
+  }
+}

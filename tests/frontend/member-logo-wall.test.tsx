@@ -8,7 +8,7 @@
  * whoever was in a YAML file, with whatever logo the repository happened to
  * carry (#8). What is asserted here is what a screenshot cannot show: that
  * the wall asks the canonical roll, narrows to a working group when there is
- * one, leaves out a member with no logo rather than drawing a gap, and puts
+ * one, shows the shared monogram for a member without a logo, and puts
  * the same card in the same order every time it is captured.
  */
 import { render } from "preact";
@@ -108,11 +108,12 @@ describe("the social card's member logo wall", () => {
     expect(new URL(REQUESTS[0], "https://example.test").searchParams.get("workingGroup")).toBe("pqc");
   });
 
-  it("leaves out a member with no logo rather than drawing a gap", async () => {
+  it("shows the shared monogram for a member without a logo", async () => {
     await mount();
     expect(logos()).toHaveLength(3);
     expect(logos()).not.toContain("");
-    expect(host.querySelectorAll(".og-member-logo")).toHaveLength(3);
+    expect(host.querySelectorAll(".og-member-logo")).toHaveLength(4);
+    expect(host.querySelectorAll(".pk-avatar__initials")).toHaveLength(1);
   });
 
   it("arranges the same card the same way every capture", async () => {

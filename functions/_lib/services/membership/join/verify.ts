@@ -1,4 +1,4 @@
-import { emailDomainOf } from "../../../../../assets/shared/constants/email-domains";
+import { emailDomainOf } from "../../../../../assets/shared/schemas/email-domains";
 import type { MemberJoinVerifyResponse } from "./types";
 import { first } from "../../../db/queries";
 import type { DatabaseLike } from "../../../types";
@@ -8,6 +8,7 @@ import { findUserEmailOwner, isEmailReservationConflict } from "../../user-email
 import { prepareVerifyOwnedEmailStatements } from "../../email-verification";
 import { prepareExplicitVerifiedDomainIdentityStatements } from "../../identities";
 import { prepareAuditLog } from "../../audit";
+import { organizationLinkDomain } from "../organization-domain-claims";
 import { prepareOneTimeAuditLog } from "../../audit";
 import { prepareUserSession } from "../../../auth/user-session";
 import { AppError } from "../../../errors";
@@ -59,7 +60,9 @@ export async function verifyMemberJoin(
   ) {
     throw new AppError(409, "MEMBER_JOIN_LINK_USED", "Membership verification link already used");
   }
-  const domain = emailDomainOf(capability.email);
+  // The domain the address links through; free mail links through none.
+  const linkDomain = await organizationLinkDomain(db, capability.email);
+  const domain = linkDomain ?? emailDomainOf(capability.email);
   const owner = await findUserEmailOwner(db, capability.email);
   // A previously verified alias is an authentication identity for the same
   // canonical user. An unverified admin-added alias is only a reservation:
@@ -68,17 +71,19 @@ export async function verifyMemberJoin(
   if (owner?.kind === "pending" || (owner?.kind === "secondary" && owner.verified !== 1)) {
     return { status: "support_required" };
   }
-  const claimedMember = await first<ClaimedMemberRow>(
-    db,
-    `SELECT member.id AS member_id, member.organization_id
-       FROM organization_domain_claims claim
-       JOIN members member
-         ON member.organization_id = claim.organization_id
-        AND member.status = 'active'
-      WHERE claim.domain = ? AND claim.organization_id IS NOT NULL
-      LIMIT 1`,
-    [domain],
-  );
+  const claimedMember = linkDomain
+    ? await first<ClaimedMemberRow>(
+        db,
+        `SELECT member.id AS member_id, member.organization_id
+           FROM organization_domain_claims claim
+           JOIN members member
+             ON member.organization_id = claim.organization_id
+            AND member.status = 'active'
+          WHERE claim.domain = ? AND claim.organization_id IS NOT NULL
+          LIMIT 1`,
+        [linkDomain],
+      )
+    : null;
   if (!claimedMember) {
     if (capability.applicantKind === "individual") {
       if (owner) {
@@ -117,7 +122,7 @@ export async function verifyMemberJoin(
   const verifiedAt = nowIso();
   try {
     await db.batch([
-      ...(preparedUser.statement ? [preparedUser.statement] : []),
+      ...preparedUser.statements,
       ...prepareVerifyOwnedEmailStatements(db, {
         userId: preparedUser.user.id,
         normalizedEmail: capability.email,
@@ -172,7 +177,7 @@ export async function verifyMemberJoin(
         `membership_join_link_consumed:${capability.capabilityId}`,
         { type: "organization", id: claimedMember.member_id },
       ),
-      session.statement,
+      ...session.statements,
     ]);
   } catch (error) {
     if (

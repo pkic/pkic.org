@@ -1,3 +1,4 @@
+import { storedImageVersionQuerySchema } from "./images";
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, pageInfoSchema, paginatedResponseSchema } from "./pagination";
@@ -75,10 +76,12 @@ export const sponsorLogoRouteSchema = {
   tags: ["Sponsors"],
   summary: "Public non-member sponsor logo",
   description:
-    "Logo for a non-member sponsor (sponsorships.non_member_logo_r2_key). Org-tied sponsors use GET /api/v1/members/:id/logo instead.",
-  request: { params: z.object({ id: databaseIdSchema }) },
+    "Logo for a non-member sponsor (sponsorships.non_member_logo_r2_key). Org-tied sponsors use GET /api/v1/members/:id/logo instead. " +
+    "Public, and cached for a year at a versioned address (`v`), only while the sponsorship is listed publicly; staff with sponsorship access see any other one uncached.",
+  request: { params: z.object({ id: databaseIdSchema }), query: storedImageVersionQuerySchema },
   responses: {
     "200": { description: "Logo image bytes." },
-    "404": { description: "No logo on file." },
+    "304": { description: "The cached image is still current." },
+    "404": { description: "No logo on file, or not at this version." },
   },
 };

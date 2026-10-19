@@ -25,6 +25,7 @@ export async function prepareValidatedAttendeeRegistration(
     confirmationTtlHours: number;
     referralCodeLength: number;
     verifiedIdentity?: VerifiedRegistrationIdentityContext;
+    mailboxVerified?: boolean;
     authorizationGuards?: readonly StatementLike[];
     /** Every registration flow supplies the loaded event so portal isolation cannot be skipped. */
     event: Pick<EventFormResolutionEvent, "id"> & { source_mode: string | null | undefined };
@@ -34,26 +35,6 @@ export async function prepareValidatedAttendeeRegistration(
   const attendanceType = input.attendanceType ?? deriveEventAttendanceType(input.dayAttendance);
   if (!attendanceType) {
     throw new AppError(400, "ATTENDANCE_REQUIRED", "attendanceType or dayAttendance is required");
-  }
-
-  const selected = options.verifiedIdentity?.selectedIdentity;
-  if (selected) {
-    for (const [key, value] of Object.entries({
-      organization_name: selected.organizationName,
-      job_title: selected.jobTitle,
-    })) {
-      const answer = input.customAnswers?.[key];
-      if (value && answer !== undefined && answer !== value) {
-        throw new AppError(
-          422,
-          "REGISTRATION_IDENTITY_DETAILS_CHANGED",
-          "Use the details from your selected identity.",
-          {
-            fieldErrors: { [key]: ["Use the details from your selected identity."] },
-          },
-        );
-      }
-    }
   }
 
   const requiredTerms = await getRequiredTerms(db, event.id, "attendee");
@@ -66,17 +47,12 @@ export async function prepareValidatedAttendeeRegistration(
   });
   const customAnswers = validatedForm.answers;
 
-  const customOrganization =
-    typeof input.customAnswers?.organization_name === "string" ? input.customAnswers.organization_name.trim() : "";
-  const customJobTitle = typeof input.customAnswers?.job_title === "string" ? input.customAnswers.job_title.trim() : "";
   const prepared = await prepareRegistrationSubmission(db, {
     eventId: event.id,
     user: {
       email: input.email,
       firstName: input.firstName,
       lastName: input.lastName,
-      organizationName: input.organizationName ?? (customOrganization || undefined),
-      jobTitle: input.jobTitle ?? (customJobTitle || undefined),
     },
     attendanceType,
     dayAttendance: input.dayAttendance,
@@ -98,6 +74,7 @@ export async function prepareValidatedAttendeeRegistration(
     authorizationGuards: options.authorizationGuards,
     termsSnapshotGuard: prepareActiveTermsSnapshotGuard(db, event.id, requiredTerms),
     verifiedIdentity: options.verifiedIdentity,
+    mailboxVerified: options.mailboxVerified,
   });
   return { prepared, requiredTerms };
 }

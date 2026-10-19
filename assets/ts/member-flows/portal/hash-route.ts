@@ -9,6 +9,7 @@
  * portal.
  */
 import { portalReturnPathSchema } from "../../../shared/schemas/user-auth";
+import { parseEventFlowPath } from "../../../shared/event-flow-paths";
 
 /** The route part of a hash location: `#/groups/cm?tab=x` → `/groups/cm`. */
 export function portalHashPath(hash: string): string {
@@ -17,6 +18,11 @@ export function portalHashPath(hash: string): string {
 
 function hashQuery(hash: string): URLSearchParams {
   return new URLSearchParams(hash.includes("?") ? hash.slice(hash.indexOf("?") + 1) : "");
+}
+
+/** One named query parameter of a hash location: `#/a?day=2026-12-01` → `2026-12-01`. */
+export function portalHashParam(hash: string, name: string): string | null {
+  return hashQuery(hash).get(name);
 }
 
 /** The sign-in token a verify link carries, when the location is one. */
@@ -31,11 +37,28 @@ export function portalIdentityInvitationToken(hash: string): string | null {
   return hashQuery(hash).get("token");
 }
 
+/** Emailed address verification links use a public confirmation screen, not login. */
+export function portalEmailVerificationToken(hash: string): string | null {
+  if (portalHashPath(hash) !== "/email-verifications") return null;
+  return hashQuery(hash).get("token");
+}
+
 /** The route a verify link asks to return to, when it names a valid one. */
 export function portalMagicLinkReturnPath(hash: string): string | null {
   if (portalHashPath(hash) !== "/verify") return null;
   const next = hashQuery(hash).get("next");
   return next && portalReturnPathSchema.safeParse(next).success ? next : null;
+}
+
+/**
+ * A sign-in link requested from a public event form (registering, proposing)
+ * returns to that form on this site rather than to a portal route. Only the
+ * platform's own event-flow paths qualify, so the link still cannot leave the
+ * site.
+ */
+export function eventFlowReturnPath(next: string | null): string | null {
+  if (!next) return null;
+  return parseEventFlowPath(next.split("?", 1)[0]) ? next : null;
 }
 
 /**
@@ -50,7 +73,8 @@ export function portalReturnPath(hash: string): string | undefined {
     route === "/login" ||
     route === "/verify" ||
     route === "/auth/oauth" ||
-    route === "/identity-invitations"
+    route === "/identity-invitations" ||
+    route === "/email-verifications"
   )
     return undefined;
   const path = hash.replace(/^#/, "");

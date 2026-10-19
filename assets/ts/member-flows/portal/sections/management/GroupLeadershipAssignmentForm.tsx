@@ -199,14 +199,13 @@ export function GroupLeadershipAssignmentForm({
           <div class="pk-cluster">
             <Button
               type="submit"
-              size="sm"
               variant="primary"
               loading={saving}
               disabled={!candidate || !title.trim() || !startsOn}
             >
               {saving ? "Adding…" : "Assign leadership"}
             </Button>
-            <Button size="sm" disabled={saving} onClick={onCancel}>
+            <Button disabled={saving} onClick={onCancel}>
               Cancel
             </Button>
           </div>

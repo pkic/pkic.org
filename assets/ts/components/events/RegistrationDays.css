@@ -1,0 +1,21 @@
+/* The registration's days section: the shared day summary and its commands. */
+@layer components {
+  .pk-reg-days {
+    display: grid;
+    gap: var(--pk-3);
+  }
+
+  .pk-reg-days__title {
+    margin: 0;
+    font-size: var(--pk-text-md);
+  }
+
+  .pk-reg-days__form {
+    display: grid;
+    gap: var(--pk-3);
+  }
+
+  .pk-reg-days__form > p {
+    margin: 0;
+  }
+}

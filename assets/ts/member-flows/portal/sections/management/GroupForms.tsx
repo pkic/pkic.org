@@ -5,7 +5,7 @@ import { FORM_PLACEMENT_CONTEXT_TYPES, FORM_PURPOSES, type FormPlacement } from 
 import { groupFormsListResponseSchema } from "../../../../../shared/schemas/group-forms";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
 import { Badge } from "../../../../components/Badge";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
 import { GroupFormDetail } from "./GroupFormDetail";
 import { GroupFormEditor } from "./GroupFormEditor";
@@ -89,6 +89,7 @@ export function GroupForms({
   return (
     <div class="pk">
       <ApiDataTable
+        urlState="group-forms"
         caption="Group forms"
         endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/forms`}
         responseSchema={groupFormsListResponseSchema}

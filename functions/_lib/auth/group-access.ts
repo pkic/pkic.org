@@ -2,6 +2,7 @@ import { AppError } from "../errors";
 import type { AuthMember, DatabaseLike, Env, UserBackedAuthAdmin } from "../types";
 import { hasPermission } from "./permissions";
 import { resolveUserSessionFromRequest } from "./user-session";
+import { sessionHoldsCapacity } from "./user-session-result";
 
 export type GroupViewer =
   | { kind: "public"; userId?: undefined; staff?: undefined; member?: undefined; canReadAll: false }
@@ -23,6 +24,8 @@ export async function resolveOptionalGroupViewer(
     const session = await resolveUserSessionFromRequest(db, request, {
       INTERNAL_SIGNING_SECRET: env?.INTERNAL_SIGNING_SECRET,
     });
+    // A user with no capacity reads the groups the public reads; `authenticated` visibility is for people who hold one.
+    if (!sessionHoldsCapacity(session)) return { kind: "public", canReadAll: false };
     return {
       kind: "user",
       userId: session.identity.id,

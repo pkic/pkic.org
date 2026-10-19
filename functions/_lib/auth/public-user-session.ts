@@ -1,10 +1,12 @@
 import type { PublicStaffCapacity } from "../../../assets/shared/schemas/staff-capacity";
 import type { SponsorCapacity } from "../../../assets/shared/schemas/sponsor-access";
 import type { AuthMember } from "../types";
+import type { SessionActingIdentity } from "../../../assets/shared/session-acting-identity";
 import type { UserSessionResult } from "./user-session";
 import { publicStaffCapacity } from "./admin-identity";
 
 export function publicUserSession(result: UserSessionResult): {
+  sessionId: string;
   expiresAt: string;
   idleExpiresAt: string;
   identity: { id: string; email: string };
@@ -13,8 +15,12 @@ export function publicUserSession(result: UserSessionResult): {
   sponsors: SponsorCapacity[];
   pendingIdentityCount: number;
   eventParticipation?: boolean;
+  hasActiveIdentity: boolean;
+  actingIdentities: SessionActingIdentity[];
+  actingIdentityId: string | null;
 } {
   return {
+    sessionId: result.sessionId,
     expiresAt: result.expiresAt,
     idleExpiresAt: result.idleExpiresAt,
     identity: result.identity,
@@ -30,5 +36,8 @@ export function publicUserSession(result: UserSessionResult): {
     sponsors: result.sponsors,
     pendingIdentityCount: result.pendingIdentityCount,
     eventParticipation: result.eventParticipation ?? false,
+    hasActiveIdentity: result.hasActiveIdentity,
+    actingIdentities: result.actingIdentities,
+    actingIdentityId: result.actingIdentityId,
   };
 }

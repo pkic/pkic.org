@@ -1,5 +1,0 @@
-{{- range $index, $author := partial "blog/author-data.html" . -}}
-  {{- if $index }}, {{ end -}}
-  <span data-pagefind-filter="author">{{ $author.name }}</span>
-  {{- with $author.organization }} ({{ if $author.website }}<a href="{{ $author.website }}" target="_blank" rel="noopener noreferrer">{{ end }}{{ . }}{{ if $author.website }}</a>{{ end }}){{ end -}}
-{{- end -}}

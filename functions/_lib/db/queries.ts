@@ -1,4 +1,4 @@
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike } from "./types";
 
 export async function first<T>(db: DatabaseLike, query: string, values: unknown[] = []): Promise<T | null> {
   return db

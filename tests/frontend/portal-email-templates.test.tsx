@@ -17,7 +17,7 @@ import { emailTemplateCreateSchema, emailTemplateVersionSchema } from "../../ass
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { menuItemNamed, openRowMenu, rowMenuTrigger } from "./helpers/row-actions";
 import { EmailTemplates } from "../../assets/ts/member-flows/portal/sections/email-templates/EmailTemplates";
-import { optionValues, submitForm, markdownControl, markdownValue, typeMarkdown } from "./helpers/labelled-control";
+import { optionValues, submitForm, markdownControl, markdownValue, typeMarkdown } from "./helpers/labeled-control";
 
 let container: HTMLDivElement | null = null;
 let toastArea: HTMLDivElement | null = null;
@@ -54,9 +54,9 @@ function fieldLabels(root: HTMLElement): HTMLLabelElement[] {
 }
 
 /** The control a Field's label points at — the only binding the reader has. */
-function labelled<T extends HTMLElement>(root: HTMLElement, text: string): T {
+function labeled<T extends HTMLElement>(root: HTMLElement, text: string): T {
   const label = fieldLabels(root).find((candidate) => (candidate.textContent ?? "").startsWith(text));
-  expect(label, `no field labelled "${text}"`).toBeDefined();
+  expect(label, `no field labeled "${text}"`).toBeDefined();
   const control = byId(root, label!.htmlFor);
   expect(control, `label "${text}" points at nothing`).not.toBeNull();
   return control as T;
@@ -75,11 +75,12 @@ async function typeInto(control: HTMLInputElement | HTMLTextAreaElement, value: 
 
 function button(root: HTMLElement, label: string): HTMLButtonElement {
   const found = [...root.querySelectorAll("button")].find((candidate) => (candidate.textContent ?? "") === label);
-  expect(found, `no button labelled "${label}"`).toBeDefined();
+  expect(found, `no button labeled "${label}"`).toBeDefined();
   return found!;
 }
 
 afterEach(() => {
+  history.replaceState(null, "", location.pathname);
   if (container) {
     void act(() => render(null, container!));
     container.remove();
@@ -92,6 +93,26 @@ afterEach(() => {
 });
 
 describe("portal email templates", () => {
+  it("opens a bookmarked create workspace without leaking the unsaved template into its URL", async () => {
+    history.replaceState(null, "", "/portal/#/settings/email-templates?templateView=create&templates.q=kept");
+    const fetcher = vi.fn(async () => {
+      throw new Error("No catalog read is needed for a bookmarked create workspace");
+    });
+    vi.stubGlobal("fetch", fetcher);
+    mount(<EmailTemplates canWrite />);
+    await settle();
+    expect(container!.textContent).toContain("Create New Template");
+    await typeInto(labeled<HTMLInputElement>(container!, "Subject template"), "Private unsaved subject");
+    expect(location.hash).toBe("#/settings/email-templates?templateView=create&templates.q=kept");
+    expect(fetcher).not.toHaveBeenCalled();
+    await act(() => render(null, container!));
+    await act(() => render(<EmailTemplates canWrite />, container!));
+    await settle();
+    expect(container!.textContent).toContain("Create New Template");
+    expect(labeled<HTMLInputElement>(container!, "Subject template").value).toBe("");
+    expect(location.hash).not.toContain("Private");
+  });
+
   it("lets a writer create a template without loading catalog or version history", async () => {
     const templateKey = "write_only_template";
     const requests: Array<{ url: URL; method: string; body?: string }> = [];
@@ -144,8 +165,8 @@ describe("portal email templates", () => {
       expect(byId(container!, label.htmlFor), `label "${label.textContent ?? ""}" points at nothing`).not.toBeNull();
     }
 
-    const keyInput = labelled<HTMLInputElement>(container!, "Template key");
-    const bodyInput = labelled<HTMLTextAreaElement>(container!, "Body");
+    const keyInput = labeled<HTMLInputElement>(container!, "Template key");
+    const bodyInput = labeled<HTMLTextAreaElement>(container!, "Body");
     // The asterisk is decorative; the word behind it is what is announced.
     expect(labels.find((label) => (label.textContent ?? "").startsWith("Body"))?.textContent).toContain("(required)");
     expect(keyInput.required).toBe(true);
@@ -180,10 +201,10 @@ describe("portal email templates", () => {
 
     // Read from the contract instead of a list repeated here, so a type added
     // to `api-common` has to appear in the form for this to keep passing.
-    expect(optionValues(labelled<HTMLSelectElement>(container!, "Content type"))).toEqual(
+    expect(optionValues(labeled<HTMLSelectElement>(container!, "Content type"))).toEqual(
       emailContentTypeSchema.options,
     );
-    expect(optionValues(labelled<HTMLSelectElement>(container!, "Default message type"))).toEqual(
+    expect(optionValues(labeled<HTMLSelectElement>(container!, "Default message type"))).toEqual(
       emailMessageTypeSchema.options,
     );
   });
@@ -234,19 +255,19 @@ describe("portal email templates", () => {
     const newTemplateButton = container!.querySelector<HTMLButtonElement>('button[aria-label="New template"]');
     await act(() => newTemplateButton!.click());
 
-    await typeInto(labelled<HTMLInputElement>(container!, "Template key"), templateKey);
+    await typeInto(labeled<HTMLInputElement>(container!, "Template key"), templateKey);
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 450));
     });
     // A free key is stated, not left to a green border nobody can rely on.
-    const keyInput = labelled<HTMLInputElement>(container!, "Template key");
+    const keyInput = labeled<HTMLInputElement>(container!, "Template key");
     expect(keyInput.getAttribute("aria-invalid")).toBeNull();
     expect(byId(container!, keyInput.getAttribute("aria-describedby") ?? "")?.textContent).toContain(
       "Key is available",
     );
 
-    await typeInto(labelled<HTMLInputElement>(container!, "Subject template"), version.subject_template);
-    await typeInto(labelled<HTMLTextAreaElement>(container!, "Body"), version.body);
+    await typeInto(labeled<HTMLInputElement>(container!, "Subject template"), version.subject_template);
+    await typeInto(labeled<HTMLTextAreaElement>(container!, "Body"), version.body);
 
     await act(async () => {
       button(container!, "Create Template").click();
@@ -284,13 +305,13 @@ describe("portal email templates", () => {
       container!.querySelector<HTMLButtonElement>('button[aria-label="New template"]')!.click();
     });
 
-    await typeInto(labelled<HTMLInputElement>(container!, "Template key"), templateKey);
+    await typeInto(labeled<HTMLInputElement>(container!, "Template key"), templateKey);
     await act(async () => {
       await new Promise((resolve) => setTimeout(resolve, 450));
     });
     await settle();
 
-    const keyInput = labelled<HTMLInputElement>(container!, "Template key");
+    const keyInput = labeled<HTMLInputElement>(container!, "Template key");
     expect(keyInput.getAttribute("aria-invalid")).toBe("true");
     const message = byId(container!, keyInput.getAttribute("aria-describedby") ?? "");
     expect(message?.getAttribute("role")).toBe("alert");
@@ -314,8 +335,8 @@ describe("portal email templates", () => {
     mount(<EmailTemplates canRead={false} canWrite />);
     await settle();
 
-    await typeInto(labelled<HTMLInputElement>(container!, "Template key"), "conflicting_template");
-    await typeInto(labelled<HTMLTextAreaElement>(container!, "Body"), "Body copy");
+    await typeInto(labeled<HTMLInputElement>(container!, "Template key"), "conflicting_template");
+    await typeInto(labeled<HTMLTextAreaElement>(container!, "Body"), "Body copy");
     await act(async () => {
       button(container!, "Create Template").click();
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -324,7 +345,7 @@ describe("portal email templates", () => {
 
     expect(toastArea.textContent).toContain("A template with this key already exists.");
     // The rejection is recoverable: the form is still there and still usable.
-    expect(labelled<HTMLInputElement>(container!, "Template key").value).toBe("conflicting_template");
+    expect(labeled<HTMLInputElement>(container!, "Template key").value).toBe("conflicting_template");
     expect(button(container!, "Create Template").disabled).toBe(false);
     expect(container!.textContent).not.toContain("Template created");
   });
@@ -343,13 +364,13 @@ describe("portal email templates", () => {
     await submitForm(container!);
 
     // Refused by the create contract on each field it names, in its words.
-    const bodyInput = labelled<HTMLTextAreaElement>(container!, "Body");
+    const bodyInput = labeled<HTMLTextAreaElement>(container!, "Body");
     expect(bodyInput.closest(".pk-field")?.classList.contains("pk-field--invalid")).toBe(true);
     expect(bodyInput.getAttribute("aria-invalid")).toBe("true");
     const bodyMessage = byId(container!, bodyInput.getAttribute("aria-describedby") ?? "");
     expect(bodyMessage?.getAttribute("role")).toBe("alert");
     expect(bodyMessage?.textContent).toContain("Body cannot be empty");
-    const keyInput = labelled<HTMLInputElement>(container!, "Template key");
+    const keyInput = labeled<HTMLInputElement>(container!, "Template key");
     expect(keyInput.closest(".pk-field")?.classList.contains("pk-field--invalid")).toBe(true);
     expect(fetchMock).not.toHaveBeenCalled();
     // The first refused field takes focus.
@@ -378,8 +399,8 @@ describe("portal email templates", () => {
     mount(<EmailTemplates canRead={false} canWrite />);
     await settle();
 
-    await typeInto(labelled<HTMLInputElement>(container!, "Template key"), "refused_template");
-    await typeInto(labelled<HTMLTextAreaElement>(container!, "Body"), "Body copy");
+    await typeInto(labeled<HTMLInputElement>(container!, "Template key"), "refused_template");
+    await typeInto(labeled<HTMLTextAreaElement>(container!, "Body"), "Body copy");
     await act(async () => {
       button(container!, "Create Template").click();
       await new Promise((resolve) => setTimeout(resolve, 0));
@@ -387,7 +408,7 @@ describe("portal email templates", () => {
     await settle();
 
     expect(posted).toBe(1);
-    const bodyInput = labelled<HTMLTextAreaElement>(container!, "Body");
+    const bodyInput = labeled<HTMLTextAreaElement>(container!, "Body");
     expect(bodyInput.closest(".pk-field")?.classList.contains("pk-field--invalid")).toBe(true);
     expect(byId(container!, bodyInput.getAttribute("aria-describedby") ?? "")?.textContent).toContain(
       "Body is too long.",
@@ -470,7 +491,7 @@ describe("portal email templates", () => {
     await settle();
 
     expect(requests.every((url) => url.pathname.startsWith("/api/v1/email/templates"))).toBe(true);
-    expect(labelled<HTMLElement>(container!, "Body").getAttribute("aria-disabled")).toBe("true");
+    expect(labeled<HTMLElement>(container!, "Body").getAttribute("aria-disabled")).toBe("true");
     expect(fieldLabels(container!).some((label) => label.textContent?.startsWith("Preview data"))).toBe(false);
     expect(container!.textContent).not.toContain("Render Preview");
     expect(container!.textContent).not.toContain("Save as Draft");

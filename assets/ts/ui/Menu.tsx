@@ -46,7 +46,7 @@ interface MenuItemBase {
   keepOpen?: boolean;
   /** Choices opened as a submenu, with keyboard return to their parent. */
   children?: readonly MenuItem[];
-  /** Renders in the destructive tone. Does not change behaviour. */
+  /** Renders in the destructive tone. Does not change behavior. */
   danger?: boolean;
   disabled?: boolean;
   /**
@@ -55,6 +55,12 @@ interface MenuItemBase {
    * when it is the one in force. Leave undefined for a plain command.
    */
   checked?: boolean;
+  /**
+   * The item is one of several independent on/off choices — the outputs a
+   * graphic goes to — rather than one choice among alternatives, so it is
+   * announced as a checkbox item. Pair with `keepOpen` to toggle several.
+   */
+  multiple?: boolean;
   /** Draws a rule above the item: the start of a new group of choices. */
   separatorBefore?: boolean;
 }
@@ -81,9 +87,22 @@ export interface MenuProps {
   variant?: "icon" | "plain";
   /** Trigger content. Defaults to a horizontal ellipsis. */
   children?: ComponentChildren;
+  /** Extra classes for a `plain` trigger that wears another control's look, such as a button segment. */
+  triggerClass?: string;
+  /** A tooltip for the trigger. */
+  title?: string;
 }
 
-export function Menu({ label, items, heading, align = "start", variant = "icon", children }: MenuProps) {
+export function Menu({
+  label,
+  items,
+  heading,
+  align = "start",
+  variant = "icon",
+  children,
+  triggerClass,
+  title,
+}: MenuProps) {
   const menuId = useId();
   const [open, setOpen] = useState(false);
   const [initialLast, setInitialLast] = useState(false);
@@ -106,8 +125,11 @@ export function Menu({ label, items, heading, align = "start", variant = "icon",
       <button
         ref={triggerRef}
         type="button"
-        class={["pk-menu__trigger", variant === "plain" ? "pk-menu__trigger--plain" : null].filter(Boolean).join(" ")}
+        class={["pk-menu__trigger", variant === "plain" ? "pk-menu__trigger--plain" : null, triggerClass]
+          .filter(Boolean)
+          .join(" ")}
         aria-label={label}
+        title={title}
         aria-haspopup="menu"
         aria-expanded={open ? "true" : "false"}
         aria-controls={open ? menuId : undefined}

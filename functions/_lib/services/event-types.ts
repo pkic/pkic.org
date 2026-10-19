@@ -1,4 +1,5 @@
 import type { EventSourceMode } from "../../../assets/shared/schemas/event-series";
+import type { CountryCode } from "../../../assets/shared/countries";
 
 export interface EventRecord {
   id: string;
@@ -17,6 +18,9 @@ export interface EventRecord {
   invite_limit_attendee: number;
   invite_limit_speaker_nomination: number;
   settings_json: string;
+  /** Where the event takes place: a city and an ISO 3166-1 alpha-2 country code. */
+  city: string | null;
+  country: CountryCode | null;
   /** Ownership and source metadata introduced by the group-centered event model. */
   owner_group_id?: string | null;
   profile_key?: string | null;
@@ -40,6 +44,8 @@ export const EVENT_COLUMN_NAMES = [
   "invite_limit_attendee",
   "invite_limit_speaker_nomination",
   "settings_json",
+  "city",
+  "country",
   "owner_group_id",
   "profile_key",
   "source_mode",

@@ -21,10 +21,10 @@ export function EditActions({
 }) {
   return editing ? (
     <>
-      <Button type="button" size="sm" disabled={saving} onClick={onCancel}>
+      <Button type="button" disabled={saving} onClick={onCancel}>
         Cancel
       </Button>
-      <Button type="submit" size="sm" variant="primary" loading={saving} disabled={saving}>
+      <Button type="submit" variant="primary" loading={saving} disabled={saving}>
         {saveLabel}
       </Button>
     </>

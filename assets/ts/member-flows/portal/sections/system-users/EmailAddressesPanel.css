@@ -1,0 +1,16 @@
+/* An email address with the quiet mark of its being verified. */
+
+@layer components {
+  .pk-email-address {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-1);
+  }
+
+  .pk-email-address__verified {
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+    color: var(--pk-ok);
+  }
+}

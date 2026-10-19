@@ -51,9 +51,9 @@ export const ACCOUNT_FLOW = {
     },
     {
       id: "7.8",
-      title: "A passkey is offered without prompting after a sign-in that used a link",
+      title: "A passkey is offered after a sign-in that used a link",
       status: "unit",
-      note: "Conditional create asks the platform to make a passkey only if it judges the moment right, and it shows the reader nothing either way — there is no browser-visible step to walk. Covered by passkey-automatic-upgrade: the capability check, the useAutoRegister call, and silence on every refusal the platform is expected to give.",
+      note: 'Covered by passkey-offer: the offer appears only after an emailed sign-in on a device that supports passkeys, and "Don\'t ask again on this device" keeps it away on that device.',
     },
     {
       id: "7.9",
@@ -64,7 +64,8 @@ export const ACCOUNT_FLOW = {
     {
       id: "7.10",
       title: "Notification preferences persist, and the access summary names what the identity holds",
-      status: "covered",
+      status: "unit",
+      note: "Covered in portal-notification-preferences and portal-user-record-account: each choice is a checkbox that saves on change with a body the shared update contract accepts and returns to the stored value when refused; the Access panel on the user record names the identity's organizations and categories, discloses the permission list, and is shown only to the subject or a reader of the record. Persistence is covered in me-endpoints.",
     },
   ],
 };

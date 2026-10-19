@@ -1,0 +1,9 @@
+@layer components {
+  /* On phones the event app's bottom bar (AppTabBar) carries this navigation;
+     the destinations without a bottom tab are listed under its "More". */
+  @media (max-width: 48rem) {
+    .pk-participant-event__navigation {
+      display: none;
+    }
+  }
+}

@@ -51,6 +51,18 @@ describe("initial admin seed SQL", () => {
         ]),
       );
       expect(result[0].results).toEqual([{ assignments: 2, live: 1 }]);
+      const identities = JSON.parse(
+        run([
+          "execute",
+          "DB",
+          ...local,
+          "--json",
+          "--command",
+          "SELECT organization_id, source, started_at IS NOT NULL AS active FROM identities",
+        ]),
+      );
+      // Every person holds an identity, created once however often the seed runs.
+      expect(identities[0].results).toEqual([{ organization_id: null, source: "staff", active: 1 }]);
     } finally {
       rmSync(root, { recursive: true, force: true });
     }

@@ -1,9 +1,9 @@
 /**
  * Load/create the `members` aggregate row plus its category assignment.
  *
- * `members` (migration 0000) is never rebuilt or altered by this PR — it
- * already models one row per organization or per individual, with
- * user_id/organization_id mutual exclusivity DB-enforced. Category lives in
+ * `members` (migration 0000) models one row per organization or per
+ * individual; an individual row names the personal identity that holds it
+ * through `identity_id` (migration 0038). Category lives in
  * `member_category_assignments` (consolidated migration 0035), one row per aggregate,
  * for both org-tied and org-less members alike.
  */
@@ -127,38 +127,28 @@ export async function getOrCreateOrganizationMemberAggregate(
 }
 
 /**
- * Org-less individual aggregates (H5/H6/H7): `members.user_id` is UNIQUE,
- * so — unlike the organization case — a plain insert is already the race
- * boundary (a losing concurrent caller gets a UNIQUE constraint failure,
- * which the caller's find-or-create-user flow already serializes against
- * by resolving the user first). No get-or-create needed; this is a
- * statement builder for the caller's own batch.
+ * Org-less individual aggregates (H5/H6/H7). The membership is held by the
+ * person's personal identity, which the caller creates earlier in the same
+ * batch: `members.identity_id` is UNIQUE and names that identity, and a
+ * person holds at most one live personal identity, so a plain insert is the
+ * race boundary. No get-or-create needed; this is a statement builder for the
+ * caller's own batch.
  */
 export function buildCreateIndividualMemberStatements(
   db: DatabaseLike,
-  userId: string,
+  identityId: string,
   categoryCode: string,
   now: string,
-  targetEligibility?: { sql: string; bindings: readonly unknown[] },
 ): { memberId: string; statements: StatementLike[] } {
   const memberId = uuid();
-  const memberInsert = targetEligibility
-    ? db
-        .prepare(
-          `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
-           SELECT ?, 'individual', ?, 'active', ?, ?
-            WHERE EXISTS (${targetEligibility.sql})`,
-        )
-        .bind(memberId, userId, now, now, ...targetEligibility.bindings)
-    : db
-        .prepare(
-          `INSERT INTO members (id, member_type, user_id, status, created_at, updated_at)
-           VALUES (?, 'individual', ?, 'active', ?, ?)`,
-        )
-        .bind(memberId, userId, now, now);
   const statements: StatementLike[] = [
     prepareMembershipCategoryGuard(db, categoryCode, true),
-    memberInsert,
+    db
+      .prepare(
+        `INSERT INTO members (id, member_type, identity_id, status, created_at, updated_at)
+         VALUES (?, 'individual', ?, 'active', ?, ?)`,
+      )
+      .bind(memberId, identityId, now, now),
     db
       .prepare(
         `INSERT INTO member_category_assignments (member_id, category_code, created_at, updated_at)
@@ -168,6 +158,13 @@ export function buildCreateIndividualMemberStatements(
   ];
   return { memberId, statements };
 }
+
+/** The individual membership held by one of the user's personal identities, past or present. */
+export const INDIVIDUAL_MEMBERSHIP_OF_USER_SQL = `SELECT member.id
+   FROM identities personal
+   JOIN members member ON member.identity_id = personal.id
+  WHERE personal.user_id = ? AND personal.organization_id IS NULL
+  LIMIT 1`;
 
 export async function getMemberCategory(db: DatabaseLike, memberId: string): Promise<string | null> {
   const row = await first<{ category_code: string }>(

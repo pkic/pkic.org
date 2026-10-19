@@ -37,12 +37,12 @@ interface WindowDraft {
   closesAt: string;
 }
 
-function draftFrom(placement: FormPlacement): WindowDraft {
+function draftFrom(placement: FormPlacement, timeZone: string): WindowDraft {
   return {
     audience: placement.audience,
     active: placement.active,
-    opensAt: localFromInstant(placement.opensAt),
-    closesAt: localFromInstant(placement.closesAt),
+    opensAt: localFromInstant(placement.opensAt, timeZone),
+    closesAt: localFromInstant(placement.closesAt, timeZone),
   };
 }
 
@@ -65,18 +65,18 @@ export function GroupFormPlacementEditor({
   onSaved: () => void | Promise<void>;
 }) {
   const [timeZone] = useState(browserTimeZone);
-  const [draft, setDraft] = useState<WindowDraft>(() => draftFrom(placement));
+  const [draft, setDraft] = useState<WindowDraft>(() => draftFrom(placement, timeZone));
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const form = useContractForm(groupFormPlacementUpdateSchema, payloadFrom(draft, timeZone));
   const activeId = `form-placement-active-${placement.id}`;
   useEffect(() => {
-    setDraft(draftFrom(placement));
+    setDraft(draftFrom(placement, timeZone));
     setEditing(false);
   }, [placement.id, placement.updatedAt]);
   function reset() {
-    setDraft(draftFrom(placement));
+    setDraft(draftFrom(placement, timeZone));
     form.reset();
     setError("");
   }
@@ -189,7 +189,7 @@ export function GroupFormPlacementEditor({
           ]}
         />
       )}
-      {/* The failure is a block with role="alert", not a coloured span: the
+      {/* The failure is a block with role="alert", not a colored span: the
           words have to reach a reader who cannot separate the red. */}
       {error && <Alert tone="danger">{error}</Alert>}
     </form>

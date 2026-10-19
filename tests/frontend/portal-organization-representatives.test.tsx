@@ -37,6 +37,7 @@ let container: HTMLDivElement;
 function currentProfile(isOrgContact: boolean) {
   return myProfileSchema.parse({
     userId: contactUserId,
+    identityId: "00000000-0000-4000-8000-000000000031",
     emailId: null,
     email: "contact@example.test",
     emailAddresses: [
@@ -46,6 +47,7 @@ function currentProfile(isOrgContact: boolean) {
         primary: true,
         verifiedAt: "2026-01-01T00:00:00.000Z",
         verificationMethod: "magic_link",
+        identityId: null,
       },
       {
         id: alternateEmailId,
@@ -53,6 +55,7 @@ function currentProfile(isOrgContact: boolean) {
         primary: false,
         verifiedAt: "2026-01-02T00:00:00.000Z",
         verificationMethod: "magic_link",
+        identityId: null,
       },
     ],
     firstName: "Contact",
@@ -344,8 +347,8 @@ describe("an organization's representatives", () => {
     );
 
     await openMenu("Coworker Person");
-    await clickMenuItem("End identity");
-    await acceptConfirmDialog("End identity");
+    await clickMenuItem("End representation…");
+    await acceptConfirmDialog("End representation");
     await waitForCondition(
       () => requests.filter((request) => request.url.pathname === "/api/v1/users/current").length === 2,
     );

@@ -13,6 +13,8 @@ import {
   eventsListResponseSchema,
 } from "./event-management";
 import {
+  eventTeamRosterQuerySchema,
+  eventTeamRosterResponseSchema,
   eventTeamListQuerySchema,
   eventTeamRoleCreateResponseSchema,
   eventTeamRoleCreateSchema,
@@ -288,4 +290,18 @@ export const eventSpeakersListRouteSchema = {
     "404": jsonErrorResponse("Event not found."),
   },
   "x-pkic-auth": { required: true, scopes: ["proposals:read"] },
+};
+
+export const eventTeamRosterRouteSchema = {
+  tags: ["Events"],
+  summary: "List event team people",
+  request: { params: eventSlugParamsSchema, query: eventTeamRosterQuerySchema },
+  responses: {
+    "200": {
+      description: "Team people and separately authorized access roles and scheduling duties.",
+      content: { "application/json": { schema: eventTeamRosterResponseSchema } },
+    },
+    "403": jsonErrorResponse("Event management or agenda read permission is required."),
+  },
+  "x-pkic-auth": { required: true },
 };

@@ -1,6 +1,11 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
-import { formDefinitionUpdateSchema, formFieldDefinitionSchema, formStatusSchema } from "./forms";
+import {
+  addDuplicateFormFieldIssues,
+  formDefinitionUpdateBaseSchema,
+  formFieldDefinitionSchema,
+  formStatusSchema,
+} from "./forms";
 import type { FormFieldDefinition } from "./forms";
 
 /** Stable key for the singleton, globally placed membership application form. */
@@ -22,21 +27,51 @@ export function isMembershipApplicationPolicyFieldKey(key: string): key is Membe
   return membershipApplicationPolicyFieldKeys.has(key);
 }
 
-/** Questions that describe an organization and do not apply to an individual applicant. */
-export const MEMBERSHIP_ORGANIZATION_FIELD_KEYS = ["organization_website", "about_organization"] as const;
+/**
+ * Asked only of someone applying on behalf of an organization, and always
+ * required of them: reviewers need organization background, and approval
+ * creates their organization identity, which always includes a job title.
+ */
+export const MEMBERSHIP_ORGANIZATION_REQUIRED_FIELD_KEYS = ["job_title", "about_organization"] as const;
+const membershipOrganizationRequiredFieldKeys = new Set<string>(MEMBERSHIP_ORGANIZATION_REQUIRED_FIELD_KEYS);
+
+/** Questions that describe an organization or the applicant's role there, and do not apply to an individual applicant. */
+export const MEMBERSHIP_ORGANIZATION_FIELD_KEYS = [
+  "organization_website",
+  ...MEMBERSHIP_ORGANIZATION_REQUIRED_FIELD_KEYS,
+] as const;
 const membershipOrganizationFieldKeys = new Set<string>(MEMBERSHIP_ORGANIZATION_FIELD_KEYS);
 
 export function isMembershipOrganizationFieldKey(key: string): boolean {
   return membershipOrganizationFieldKeys.has(key);
 }
 
-export function filterApplicationFieldsForApplicantKind<T extends { key: string }>(
+/**
+ * The rules an application's questions carry for one applicant kind: the
+ * organization-only required questions are required exactly when applying on
+ * behalf of an organization, whatever the stored form says.
+ */
+export function applicationFieldRulesForApplicantKind<T extends { key: string; required: boolean }>(
   fields: T[],
   applicantKind: "organization" | "individual",
 ): T[] {
-  return applicantKind === "individual"
-    ? fields.filter((field) => !isMembershipOrganizationFieldKey(field.key))
-    : fields;
+  return fields.map((field) =>
+    field.key === "about_yourself"
+      ? { ...field, required: true }
+      : membershipOrganizationRequiredFieldKeys.has(field.key)
+        ? { ...field, required: applicantKind === "organization" }
+        : field,
+  );
+}
+
+export function filterApplicationFieldsForApplicantKind<T extends { key: string; required: boolean }>(
+  fields: T[],
+  applicantKind: "organization" | "individual",
+): T[] {
+  return applicationFieldRulesForApplicantKind(
+    applicantKind === "individual" ? fields.filter((field) => !isMembershipOrganizationFieldKey(field.key)) : fields,
+    applicantKind,
+  );
 }
 
 /** Project the canonical form for the selected application category. */
@@ -95,9 +130,10 @@ export type MembershipApplicationFormDefinitionResponse = z.infer<
 >;
 
 /** Uses the form definition's updated timestamp as its compare-and-set revision. */
-export const membershipApplicationFormDefinitionUpdateSchema = formDefinitionUpdateSchema
+export const membershipApplicationFormDefinitionUpdateSchema = formDefinitionUpdateBaseSchema
   .extend({ expectedUpdatedAt: z.string().min(1) })
   .superRefine(({ expectedUpdatedAt: _expectedUpdatedAt, fields, ...changes }, context) => {
+    addDuplicateFormFieldIssues({ fields }, context);
     if (fields) {
       fields.forEach((field, index) => {
         if (!isMembershipApplicationPolicyFieldKey(field.key)) return;

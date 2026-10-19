@@ -1,5 +1,6 @@
 // @vitest-environment jsdom
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { NEW_TAB_HINT } from "../../assets/ts/ui/new-tab";
 import { exampleMembershipCategories } from "./helpers/membership-category-catalog";
 vi.mock("../../assets/ts/hooks/useMembershipCategoryCatalog", () => ({
   useMembershipCategoryCatalog: () => exampleMembershipCategories,
@@ -28,7 +29,7 @@ import {
   namedGroup,
   submitForm,
   typeInto,
-} from "./helpers/labelled-control";
+} from "./helpers/labeled-control";
 import { OrganizationCreateForm } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationCreateForm";
 import {
   OrganizationAbout,
@@ -36,7 +37,8 @@ import {
   OrganizationMembershipCard,
 } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationProfile";
 import { OrganizationDetail } from "../../assets/ts/member-flows/portal/sections/system-organizations/OrganizationDetail";
-import { markdownControl } from "./helpers/labelled-control";
+import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
+import { markdownControl } from "./helpers/labeled-control";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/organizations", vi.fn()] }));
 
@@ -54,7 +56,15 @@ function mount(node: ComponentChildren): HTMLElement {
   return container;
 }
 
-function detail() {
+function dialogButton(label: string): HTMLButtonElement {
+  const dialog = document.querySelector('[role="alertdialog"]');
+  if (!dialog) throw new Error("no confirm dialog is open");
+  const button = [...dialog.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
+  if (!button) throw new Error(`missing dialog button: ${label}`);
+  return button;
+}
+
+function detail(overrides: Record<string, unknown> = {}) {
   return organizationDetailResponseSchema.parse({
     organization: {
       id: organizationId,
@@ -80,6 +90,10 @@ function detail() {
       links: [],
       primaryContactUserId: userId,
       secondaryContactUserId: null,
+      emailDomains: [],
+      claimedDomains: [],
+      mergedInto: null,
+      ...overrides,
       identities: [
         {
           identityId,
@@ -163,7 +177,7 @@ describe("portal organization create form", () => {
     // organization's web presence rather than scattered through the form.
     const webPresence = namedGroup(container, "Web presence");
     await typeInto(controlFor(webPresence, "Website"), "https://example.test");
-    const linkInput = webPresence.querySelector<HTMLInputElement>('[aria-label="Additional organization URL"]');
+    const linkInput = webPresence.querySelector<HTMLInputElement>('[aria-label="Additional organization link"]');
     if (!linkInput) throw new Error("missing organization link input");
     await typeInto(linkInput, "https://www.linkedin.com/company/example");
     const addLink = webPresence.querySelector<HTMLButtonElement>('[aria-label="Add profile link"]');
@@ -261,7 +275,7 @@ describe("portal organization create form", () => {
      * act for a member, and an organization is not one until it is said to be
      * (#53). "Other links" is a named group of its own — the links widget is
      * several inputs answering one question, so it carries the design system's
-     * group field rather than a paragraph of help above an unlabelled box.
+     * group field rather than a paragraph of help above an unlabeled box.
      */
     expect(groupNames(container)).toEqual(["Details", "Membership", "Web presence", "Other links"]);
     await makeMember(container);
@@ -343,7 +357,7 @@ describe("portal organization profile", () => {
     expect(links[0]?.href).toBe("https://example.test/");
     // The scheme is not read out: it is the same on every row and the address
     // is what a reader is scanning for.
-    expect(links[0]?.textContent).toBe("example.test");
+    expect(links[0]?.textContent).toBe(`example.test ${NEW_TAB_HINT}`);
   });
 
   it("shows the address the public sees for this member, as a link", () => {
@@ -355,7 +369,7 @@ describe("portal organization profile", () => {
     expect(terms).toContain("Member page");
     const link = container.querySelector<HTMLAnchorElement>('a[href^="/members/"]');
     expect(link?.getAttribute("href")).toBe("/members/profile/?id=org-1");
-    expect(link?.textContent).toBe("/members/profile/?id=org-1");
+    expect(link?.textContent).toBe(`/members/profile/?id=org-1 ${NEW_TAB_HINT}`);
   });
 
   /**
@@ -366,7 +380,7 @@ describe("portal organization profile", () => {
    * record keeps its own.
    */
   async function openEditMode(container: HTMLElement): Promise<void> {
-    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="About actions"]');
+    const trigger = container.querySelector<HTMLButtonElement>('button[aria-label="Record actions"]');
     if (!trigger) throw new Error("the record offers no actions menu");
     await act(async () => trigger.click());
     const item = [...document.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
@@ -376,7 +390,7 @@ describe("portal organization profile", () => {
     await act(async () => item.click());
   }
 
-  function stubAccount(onPatch: (body: unknown) => Response) {
+  function stubAccount(onPatch: (body: unknown) => Response, organization = detail()) {
     const requests: Array<{ method: string; path: string; body: unknown }> = [];
     vi.stubGlobal(
       "fetch",
@@ -393,7 +407,7 @@ describe("portal organization profile", () => {
         if (url.pathname.endsWith("/groups")) {
           return json({ groups: [], page: { limit: 25, offset: 0, total: 0, hasMore: false } });
         }
-        return json(detail());
+        return json(organization);
       }),
     );
     return requests;
@@ -407,13 +421,16 @@ describe("portal organization profile", () => {
 
   async function openEditing(): Promise<HTMLElement> {
     const container = mount(
-      <OrganizationDetail
-        organizationId={organizationId}
-        canRead
-        canWrite
-        canManageIdentities
-        canReadSponsorships={false}
-      />,
+      <>
+        <ConfirmDialogHost />
+        <OrganizationDetail
+          organizationId={organizationId}
+          canRead
+          canWrite
+          canManageIdentities
+          canReadSponsorships={false}
+        />
+      </>,
     );
     await settle();
     await openEditMode(container);
@@ -432,7 +449,7 @@ describe("portal organization profile", () => {
     return field;
   }
 
-  it("edits the whole account in place through labelled fields and patches the shared update contract once", async () => {
+  it("edits the whole account in place through labeled fields and patches the shared update contract once", async () => {
     const requests = stubAccount(() => json(detail()));
     const container = await openEditing();
 
@@ -446,6 +463,10 @@ describe("portal organization profile", () => {
     expect(controlFor<HTMLSelectElement>(container, "Primary contact").tagName).toBe("SELECT");
     expect((await markdownControl(container, "Description")).closest(".pk-markdown-editor")).not.toBeNull();
 
+    // A stored date goes back into the date input in its normalized form,
+    // whatever locale formats it for display.
+    expect(controlFor(container, "Member since").value).toBe("2026-01-01");
+
     await typeInto(controlFor(container, "Slogan"), "Trust, verified");
     await typeInto(controlFor(container, "Blog"), "https://example.test/blog");
     // The title follows the name as it is typed.
@@ -453,6 +474,7 @@ describe("portal organization profile", () => {
     expect(container.querySelector("header h2")?.textContent).toBe("Example Org");
 
     await act(async () => buttonNamed(container, "Save").click());
+    await act(async () => dialogButton("Rename").click());
     await settle();
 
     const patched = requests.filter((request) => request.method === "PATCH");
@@ -467,6 +489,40 @@ describe("portal organization profile", () => {
     expect(parsed.revision).toBe("2026-01-01T00:00:00.000Z");
     // Saved: the page reads again, with no fields left standing.
     expect([...container.querySelectorAll("label")].some((label) => label.textContent === "Slogan")).toBe(false);
+  });
+
+  it("warns before a rename how many people on which email domains will see the new name", async () => {
+    const requests = stubAccount(
+      () => json(detail()),
+      detail({
+        activeIdentityCount: 3,
+        emailDomains: [
+          { domain: "example.test", people: 2 },
+          { domain: "example.org", people: 1 },
+        ],
+      }),
+    );
+    const container = await openEditing();
+    await typeInto(controlFor(container, "Name"), "Renamed Organization");
+    await act(async () => buttonNamed(container, "Save").click());
+
+    expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain(
+      "This changes the organization shown for 3 people with @example.test and @example.org addresses.",
+    );
+    await act(async () => dialogButton("Keep editing").click());
+    await settle();
+    expect(requests.filter((request) => request.method === "PATCH")).toHaveLength(0);
+    expect(controlFor(container, "Name").value).toBe("Renamed Organization");
+  });
+
+  it("saves without a rename warning when the name is unchanged", async () => {
+    const requests = stubAccount(() => json(detail()));
+    const container = await openEditing();
+    await typeInto(controlFor(container, "Slogan"), "Unchanged name");
+    await act(async () => buttonNamed(container, "Save").click());
+    await settle();
+    expect(document.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(requests.filter((request) => request.method === "PATCH")).toHaveLength(1);
   });
 
   it("checks a field live, the way the join form does, and refuses the save at the field", async () => {

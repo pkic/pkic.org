@@ -12,27 +12,21 @@ import { useMembershipCategoryLabels } from "../../../../hooks/useMembershipCate
  * from states ties, and keeping the two apart is what stops that panel being
  * both a record and a form in one file.
  */
-import { useState } from "preact/hooks";
-import type { z } from "zod";
+import { useEffect, useState } from "preact/hooks";
 import {
   individualMembershipGrantSchema,
   memberCapacityMutationResponseSchema,
 } from "../../../../../shared/schemas/membership-management";
-import {
-  organizationsListResponseSchema,
-  type OrganizationSummary,
-} from "../../../../../shared/schemas/organization-management";
-import type { ServerCatalog } from "../../../../shared/server-catalog";
+import type { OrganizationSummary } from "../../../../../shared/schemas/organization-management";
+import { adminOrganizationCatalog } from "../../../../shared/management-catalogs";
 import { ServerSearchSelect } from "../../../../components/ServerSearchSelect";
 import { identityMutationResponseSchema } from "../../../../../shared/schemas/identity";
 import { organizationIdentityCreateRequestSchema } from "../../../../../shared/schemas/route-contracts-identities";
 import { useContractForm } from "../../../../hooks/useContractForm";
+import { ORGANIZATION_JOB_TITLE_COPY } from "../../../../../shared/email-first-copy";
 import { postJson } from "../../../../shared/api-client";
 import { toast } from "../../ui";
 import { Alert } from "../../../../ui/Alert";
-import { Button, ButtonLink } from "../../../../ui/Button";
-import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
-import { usePortalHashLocation } from "../../hash-location";
 import { Checkbox } from "../../../../ui/Checkbox";
 import { Field } from "../../../../ui/Field";
 import { Select, TextInput } from "../../../../ui/TextControl";
@@ -41,44 +35,30 @@ import type { UserDetail } from "./model";
 const GRANT_MODE_ORG_TIED = "__org_tied__";
 
 /**
- * The organizations a person can be tied to, searched and paged on the
- * server. The list summary already carries the membership category, so
- * picking one needs no second request for the record (#96).
- */
-const organizationCatalog: ServerCatalog<OrganizationSummary, z.infer<typeof organizationsListResponseSchema>> = {
-  endpoint: "/api/v1/organizations",
-  responseSchema: organizationsListResponseSchema,
-  resolveItems: (response) => response.organizations,
-  resolvePage: (response) => response.page,
-  itemKey: (organization) => organization.id,
-  itemLabel: (organization) => organization.name,
-  sort: "name",
-};
-
-/**
- * Adding an identity to a person: a page of its own under the record, never a
- * form unfolding inside the Affiliations panel (#107). The way back is the
- * record's own address.
+ * Staff adding an identity to a person: the form is the body of the dialog the
+ * Affiliations panel's Add identity button opens; the dialog owns Grant and Cancel.
  */
 export function UserIdentityGrantForm({
   user,
   canActivate,
   onGranted,
-  cancelHref,
+  onBusy,
 }: {
   user: UserDetail;
   canActivate: boolean;
   onGranted: () => void;
-  /** The record this page sits under. */
-  cancelHref: string;
+  /** Reports a save in flight so the dialog's confirm cannot double-submit. */
+  onBusy?: (busy: boolean) => void;
 }) {
   const categories = useMembershipCategoryLabels();
   const catalog = useMembershipCategoryCatalog();
   const [mode, setMode] = useState<string>(GRANT_MODE_ORG_TIED);
   const [selectedOrg, setSelectedOrg] = useState<OrganizationSummary | null>(null);
   const [activationReason, setActivationReason] = useState("");
+  const [jobTitle, setJobTitle] = useState("");
   const [activateImmediately, setActivateImmediately] = useState(false);
   const [saving, setSaving] = useState(false);
+  useEffect(() => onBusy?.(saving), [saving]);
   const selectedOrgId = selectedOrg?.id ?? "";
   // A whole-form failure — an API refusal that names no field — reaches the
   // reader as an Alert; a refusal that names a field is shown on that field.
@@ -101,6 +81,7 @@ export function UserIdentityGrantForm({
     organizationId: selectedOrgId,
     userReference: "existing_user",
     userId: user.id,
+    jobTitle,
     showOnOrganizationProfile: true,
     activation: activateImmediately ? { mode: "immediate", reason: activationReason } : { mode: "invitation" },
   });
@@ -157,9 +138,8 @@ export function UserIdentityGrantForm({
     : "Search by name; the membership category follows the organization.";
 
   return (
-    <Panel aria-label="Add identity">
-      <PanelHeader title="Add identity" breadcrumb />
-      <PanelBody>
+    <section aria-label="Add identity">
+      <div>
         <form
           noValidate
           class="pk-stack pk-stack--snug"
@@ -198,13 +178,31 @@ export function UserIdentityGrantForm({
                 {(control) => (
                   <ServerSearchSelect
                     {...control}
-                    catalog={organizationCatalog}
+                    catalog={adminOrganizationCatalog}
                     searchLabel="Organization"
                     value={selectedOrgId || null}
                     selectedLabel={selectedOrg?.name}
                     placeholder="Search organizations…"
                     allowEmpty
                     onChange={setSelectedOrg}
+                  />
+                )}
+              </Field>
+            )}
+
+            {!isIndividual && (
+              <Field
+                label={ORGANIZATION_JOB_TITLE_COPY.label}
+                help="Their role at this organization, shown with their name."
+                required
+                {...form.of("jobTitle")}
+              >
+                {(control) => (
+                  <TextInput
+                    {...control}
+                    name="jobTitle"
+                    value={jobTitle}
+                    onInput={(event) => setJobTitle(event.currentTarget.value)}
                   />
                 )}
               </Field>
@@ -235,17 +233,8 @@ export function UserIdentityGrantForm({
           </div>
 
           {error && <Alert tone="danger">{error}</Alert>}
-
-          <div class="pk-cluster">
-            <Button type="submit" variant="primary" size="sm" loading={saving}>
-              Grant
-            </Button>
-            <ButtonLink variant="ghost" size="sm" href={usePortalHashLocation.hrefs(cancelHref)}>
-              Cancel
-            </ButtonLink>
-          </div>
         </form>
-      </PanelBody>
-    </Panel>
+      </div>
+    </section>
   );
 }

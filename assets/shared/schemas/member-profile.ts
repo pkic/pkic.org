@@ -78,7 +78,13 @@ export const memberRecognitionSchema = z.object({
   awardedAt: utcInstantSchema,
 });
 
+export const standingSettingsSchema = z.object({
+  windowMonths: z.number().int().positive(),
+  activityStartedAt: utcInstantSchema,
+});
+
 export const memberStandingSchema = z.object({
+  lastActiveAt: utcInstantSchema.nullable(),
   points: z.number().int(),
   /**
    * 0 when the ladder is empty — every band deactivated. A misconfigured

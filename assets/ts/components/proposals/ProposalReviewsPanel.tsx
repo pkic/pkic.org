@@ -6,7 +6,7 @@ import {
   type ProposalReview,
   type ProposalReviewSummary,
 } from "../../../shared/schemas/proposal-reviews";
-import { EmptyState } from "../../ui/RecordEmptyState";
+import { EmptyState } from "../../ui/EmptyState";
 import { ErrorAlert } from "../ErrorAlert";
 import { Spinner } from "../Spinner";
 import { Alert } from "../../ui/Alert";
@@ -134,7 +134,7 @@ export function ProposalReviewsPanel({
 
       {page?.hasMore && (
         <div class="pk-cluster">
-          <Button size="sm" loading={loadingMore} onClick={() => void onLoadMore()}>
+          <Button loading={loadingMore} onClick={() => void onLoadMore()}>
             {loadingMore ? "Loading…" : "Load more reviews"}
           </Button>
         </div>

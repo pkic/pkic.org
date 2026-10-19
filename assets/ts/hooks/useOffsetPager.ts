@@ -25,6 +25,14 @@ export function useOffsetPager(initialPageSize = ADMIN_LIST_PAGE_SIZE_DEFAULT, i
     setPageSize(normalizedInitialPageSize);
   }, [normalizedInitialPageSize]);
 
+  const restore = useCallback(
+    (nextPageSize: number, nextOffset: number) => {
+      setPageSize(Number.isInteger(nextPageSize) && nextPageSize > 0 ? nextPageSize : normalizedInitialPageSize);
+      setOffset(Number.isInteger(nextOffset) && nextOffset >= 0 ? nextOffset : 0);
+    },
+    [normalizedInitialPageSize],
+  );
+
   function pagerProps({ hasMore, rowCount, total, serverOffset = offset }: OffsetPageInfo): PagerProps {
     const responsePage = pageSize > 0 ? Math.floor(serverOffset / pageSize) + 1 : 1;
     const maxPage = total > 0 ? Math.max(1, Math.ceil(total / pageSize)) : responsePage + (hasMore ? 1 : 0);
@@ -52,5 +60,5 @@ export function useOffsetPager(initialPageSize = ADMIN_LIST_PAGE_SIZE_DEFAULT, i
     };
   }
 
-  return { offset, pageSize, page, resetPage, resetAll, pagerProps };
+  return { offset, pageSize, page, resetPage, resetAll, restore, pagerProps };
 }

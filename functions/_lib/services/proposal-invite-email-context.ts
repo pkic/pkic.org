@@ -4,7 +4,17 @@ import { AppError } from "../errors";
 import type { DatabaseLike } from "../types";
 import { stringifyJson } from "../utils/json";
 import { formatProposalInvitePerson, type ProposalInvitePerson } from "./proposal-invite-person";
-import { proposalSpeakerEffectiveProfileColumns } from "./proposal-speakers";
+import { proposalSpeakerProfileColumns } from "./proposal-speakers";
+import { selectedOrAffiliationOrganizationNameSql } from "./identities/affiliation-projection";
+
+/** The inviter appears with the identity they act as on this proposal, else their affiliation. */
+function inviterOrganizationNameSql(proposalIdSql: string, userIdSql: string): string {
+  return selectedOrAffiliationOrganizationNameSql(
+    `(SELECT inviter_speaker.acting_identity_id FROM proposal_speakers inviter_speaker
+       WHERE inviter_speaker.proposal_id = ${proposalIdSql} AND inviter_speaker.user_id = ${userIdSql})`,
+    userIdSql,
+  );
+}
 
 export interface ProposalInviteEmailContext {
   invitedByDisplay: string;
@@ -63,7 +73,7 @@ export async function buildProposalInviteEmailContext(
             u.email AS inviter_email,
             u.first_name AS inviter_first_name,
             u.last_name AS inviter_last_name,
-            u.organization_name AS inviter_organization_name
+            ${inviterOrganizationNameSql("sp.id", "u.id")} AS inviter_organization_name
        FROM session_proposals sp
        LEFT JOIN users u ON u.id = COALESCE(?, sp.proposer_user_id)
       WHERE sp.id = ?`,
@@ -73,7 +83,7 @@ export async function buildProposalInviteEmailContext(
 
   const speakers = await all<ProposalInvitePerson>(
     db,
-    `SELECT u.email, ${proposalSpeakerEffectiveProfileColumns("u", "ps", "", ["firstName", "lastName", "organizationName"])}
+    `SELECT u.email, ${proposalSpeakerProfileColumns("u", "ps", "", ["firstName", "lastName", "organizationName"])}
        FROM proposal_speakers ps
        JOIN users u ON u.id = ps.user_id
       WHERE ps.proposal_id = ?
@@ -106,22 +116,21 @@ export async function buildProposalInviteEmailContextMap(
       WHERE id IN (SELECT value FROM json_each(?))`,
     [proposalIdsJson],
   );
-  const proposerIdsJson = stringifyJson([...new Set(proposals.map((proposal) => proposal.proposer_user_id))]);
-
-  type IdentifiedPerson = ProposalInvitePerson & { id: string };
   type ProposalSpeaker = ProposalInvitePerson & { proposal_id: string };
   const [proposers, speakers] = await Promise.all([
-    all<IdentifiedPerson>(
+    all<ProposalSpeaker>(
       db,
-      `SELECT id, email, first_name, last_name, organization_name
-         FROM users
-        WHERE id IN (SELECT value FROM json_each(?))`,
-      [proposerIdsJson],
+      `SELECT sp.id AS proposal_id, u.email, u.first_name, u.last_name,
+              ${inviterOrganizationNameSql("sp.id", "u.id")} AS organization_name
+         FROM session_proposals sp
+         JOIN users u ON u.id = sp.proposer_user_id
+        WHERE sp.id IN (SELECT value FROM json_each(?))`,
+      [proposalIdsJson],
     ),
     all<ProposalSpeaker>(
       db,
       `SELECT ps.proposal_id, u.email,
-              ${proposalSpeakerEffectiveProfileColumns("u", "ps", "", ["firstName", "lastName", "organizationName"])}
+              ${proposalSpeakerProfileColumns("u", "ps", "", ["firstName", "lastName", "organizationName"])}
          FROM proposal_speakers ps
          JOIN users u ON u.id = ps.user_id
         WHERE ps.proposal_id IN (SELECT value FROM json_each(?))
@@ -130,7 +139,7 @@ export async function buildProposalInviteEmailContextMap(
     ),
   ]);
 
-  const proposerById = new Map(proposers.map((proposer) => [proposer.id, proposer]));
+  const proposerByProposal = new Map(proposers.map((proposer) => [proposer.proposal_id, proposer]));
   const speakersByProposal = new Map<string, ProposalInvitePerson[]>();
   for (const speaker of speakers) {
     const lineup = speakersByProposal.get(speaker.proposal_id) ?? [];
@@ -143,7 +152,7 @@ export async function buildProposalInviteEmailContextMap(
       proposal.id,
       composeProposalInviteEmailContext(
         proposal,
-        proposerById.get(proposal.proposer_user_id) ?? null,
+        proposerByProposal.get(proposal.id) ?? null,
         speakersByProposal.get(proposal.id) ?? [],
       ),
     ]),

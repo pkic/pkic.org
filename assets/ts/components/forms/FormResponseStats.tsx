@@ -6,28 +6,21 @@
  * say". They share only the option-label resolution, which lives in
  * `form-answers`.
  *
- * The bars, the cards, the picker, the expand control and the empty states are
- * the design system's. The pie, the word cloud and the expand overlay still
- * carry their pre-system class names and are still styled by
- * `assets/scss/_management-workspace.scss`. That is deliberate rather than
- * forgotten: neither a donut nor a weighted tag cloud has a primitive in the
- * design system, `ui/chart.ts` builds HTML strings while this renders Preact,
- * and giving them one means new component CSS — chart work, not Bootstrap
- * removal.
- *
- * The root still takes `.pk` safely: every element the base layer has an
- * opinion about — the controls, the ordered list, the links — is a
- * design-system component now, and base says nothing about the `<circle>`s
- * and `<span>`s the two legacy shapes are made of.
+ * Every chart variant imports the canonical shared Chart.css here, including
+ * pie, donut and word cloud, so standalone broadcasts never depend on portal styles.
  */
 
 import { useMemo, useEffect, useState } from "preact/hooks";
 import type { FormFieldDefinition } from "../../../shared/schemas/forms";
+import type { FormSubmissionStat } from "../../../shared/schemas/form-management";
 import { VISUALIZATIONS, visualizationSchema, type Visualization } from "../../../shared/schemas/form-field-rules";
 import { FilterSelect } from "../FilterSelect";
 import { Button } from "../../ui/Button";
+import { CloseButton } from "../../ui/CloseButton";
 import { EmptyState } from "../../ui/EmptyState";
+import { Meter } from "../../ui/Meter";
 import { Panel, PanelBody } from "../../ui/Panel";
+import { formatNumber } from "../../../shared/format-number";
 import { isRecord } from "./form-answers";
 // `pk-answer-list` and the `pk-chart__*` rows are written here as class names
 // rather than reached through a component — `ui/chart.ts` emits HTML strings
@@ -39,22 +32,23 @@ import "../../ui/Chart.css";
 // A reader may choose any presentation the field rules accept; "auto" is the
 // choice to let the field decide, so a rendered chart is one of the others.
 type VisualizationChoice = Visualization;
-type VisualizationKind = Exclude<VisualizationChoice, "auto">;
+export type VisualizationKind = Exclude<VisualizationChoice, "auto">;
+
+/** What a chart reads from a field definition; a live poll's field carries no stored identity. */
+export type StatField = Pick<FormFieldDefinition, "key" | "label" | "fieldType"> & {
+  options?: FormFieldDefinition["options"];
+  validation?: FormFieldDefinition["validation"];
+};
 
 interface FieldStat {
-  field: FormFieldDefinition;
+  field: StatField;
   totalAnswers: number;
   uniqueAnswers: number;
   visualization: VisualizationKind;
   entries: Array<{ label: string; count: number; percent: number; weight: number }>;
 }
 
-export interface ServerFieldStat {
-  fieldKey: string;
-  totalAnswers: number;
-  uniqueAnswers: number;
-  entries: Array<{ label: string; count: number; percent: number; weight: number }>;
-}
+export type ServerFieldStat = FormSubmissionStat;
 
 const CHART_SEGMENT_COUNT = 7;
 
@@ -67,11 +61,12 @@ const PRESENTATION_LABELS: Record<VisualizationChoice, string> = {
   auto: "Auto",
   bar: "Bar",
   pie: "Pie",
+  donut: "Donut",
   wordcloud: "Word cloud",
   list: "List",
 };
 
-function configuredVisualization(field: FormFieldDefinition): VisualizationKind | null {
+function configuredVisualization(field: StatField): VisualizationKind | null {
   const validation = isRecord(field.validation) ? field.validation : null;
   const value = validation?.adminVisualization ?? validation?.visualization;
   const configured = visualizationSchema.safeParse(value);
@@ -80,7 +75,7 @@ function configuredVisualization(field: FormFieldDefinition): VisualizationKind 
   return configured.success && configured.data !== "auto" ? configured.data : null;
 }
 
-function autoVisualization(field: FormFieldDefinition, uniqueAnswers: number): VisualizationKind {
+function autoVisualization(field: StatField, uniqueAnswers: number): VisualizationKind {
   const optionCount = Array.isArray(field.options) ? field.options.length : 0;
   if (field.fieldType === "boolean") return "pie";
   if (field.fieldType === "select") return optionCount > 5 ? "bar" : "pie";
@@ -90,7 +85,7 @@ function autoVisualization(field: FormFieldDefinition, uniqueAnswers: number): V
   return "list";
 }
 
-function mapServerStats(fields: FormFieldDefinition[], stats: ServerFieldStat[]): FieldStat[] {
+function mapServerStats(fields: readonly StatField[], stats: ServerFieldStat[]): FieldStat[] {
   const fieldMap = new Map(fields.map((field) => [field.key, field]));
   return stats
     .map((stat) => {
@@ -108,51 +103,68 @@ function mapServerStats(fields: FormFieldDefinition[], stats: ServerFieldStat[])
 }
 
 /**
- * The labelled bar breakdown, on the design system's chart rows.
+ * The labeled bar breakdown, on the design system's chart rows.
  *
- * `bar-row`, `bar-lbl` and `bar-cnt` were never defined in any stylesheet, so
- * the layout the `<meter>`'s `flex: 1` assumed did not exist and the rows fell
- * back to plain block flow. `pk-chart__bar-row` and its parts are the same
- * three slots, defined, on tokens, in both themes.
- *
- * `<progress>` rather than `<meter>` because that is what the stylesheet
- * paints — and because this is a share of a whole, which is what a progress
- * element means. Each bar names itself, so the value is not carried by length
- * alone; the label used to be truncated with the full text only in a `title`,
- * which is unreachable by keyboard and on touch, so it wraps instead.
+ * Each bar is the shared `Meter`, so a share of the whole is announced as a
+ * meter with its own name and the value is never carried by length alone.
+ * Its fill eases to a new width, which is what lets a chart fed by live
+ * tallies grow as answers arrive and a refreshed report settle rather than
+ * jump. Each row says its count and share in words beside the bar.
  */
 function BarStat({ stat }: { stat: FieldStat }) {
   return (
     <div class="pk-chart__bars">
       {stat.entries.slice(0, 12).map((entry) => (
         <div class="pk-chart__bar-row" key={entry.label}>
-          <span class="pk-chart__bar-label pk-break">{entry.label}</span>
-          <progress
-            class="pk-chart__bar"
-            max={100}
-            value={Math.max(4, entry.percent)}
-            aria-label={`${entry.label}: ${String(entry.percent)}%`}
-          >
-            {entry.percent}%
-          </progress>
-          <span class="pk-chart__bar-count">{entry.count}</span>
+          <span class="pk-chart__bar-label pk-break" title={entry.label}>
+            {entry.label}
+          </span>
+          <Meter
+            class="pk-chart__meter"
+            value={entry.percent}
+            label={`${entry.label}: ${formatNumber(entry.percent)}%`}
+          />
+          <span class="pk-chart__bar-count">
+            {formatNumber(entry.count)} · {formatNumber(entry.percent)}%
+          </span>
         </div>
       ))}
     </div>
   );
 }
 
-function PieStat({ stat }: { stat: FieldStat }) {
+function PieStat({ stat, donut = false }: { stat: FieldStat; donut?: boolean }) {
   let offset = 25;
-  const entries = stat.entries.slice(0, CHART_SEGMENT_COUNT);
+  const entries = stat.entries;
 
   return (
     <div class="adm-form-pie-wrap">
-      <svg class="adm-form-pie" viewBox="0 0 42 42" role="img" aria-label={`${stat.field.label} responses`}>
+      <svg
+        class={`adm-form-pie ${donut ? "adm-form-pie--donut" : "adm-form-pie--solid"}`}
+        viewBox="0 0 42 42"
+        role="img"
+        aria-label={`${stat.field.label} responses`}
+      >
         <circle class="adm-form-pie-bg" cx="21" cy="21" r="15.915" />
         {entries.map((entry, index) => {
           const segmentOffset = offset;
           offset -= entry.percent;
+          if (!donut) {
+            const start = ((25 - segmentOffset) * Math.PI) / 50,
+              end = start + (entry.percent * Math.PI) / 50;
+            const x = (angle: number) => 21 + 20 * Math.cos(angle),
+              y = (angle: number) => 21 + 20 * Math.sin(angle);
+            const className = `adm-form-pie-sector adm-form-pie-sector-${index % CHART_SEGMENT_COUNT}`;
+            if (entry.percent >= 100) return <circle key={entry.label} class={className} cx="21" cy="21" r="20" />;
+            if (entry.percent <= 0) return null;
+            return (
+              <path
+                key={entry.label}
+                class={className}
+                d={`M21,21 L${x(start)},${y(start)} A20,20 0 ${entry.percent > 50 ? 1 : 0},1 ${x(end)},${y(end)} Z`}
+              />
+            );
+          }
           return (
             <circle
               key={entry.label}
@@ -170,7 +182,10 @@ function PieStat({ stat }: { stat: FieldStat }) {
         {entries.map((entry, index) => (
           <span class="adm-form-pie-legend-item" key={entry.label}>
             <span class={`adm-form-pie-dot adm-form-pie-dot-${index % CHART_SEGMENT_COUNT}`} />
-            {entry.label} ({entry.count})
+            <span class="adm-form-pie-label" title={entry.label}>
+              {entry.label}
+            </span>
+            <span class="adm-form-pie-count">({entry.count})</span>
           </span>
         ))}
       </div>
@@ -211,8 +226,36 @@ function ListStat({ stat }: { stat: FieldStat }) {
 function StatChartContent({ stat }: { stat: FieldStat }) {
   if (stat.visualization === "bar") return <BarStat stat={stat} />;
   if (stat.visualization === "pie") return <PieStat stat={stat} />;
+  if (stat.visualization === "donut") return <PieStat stat={stat} donut />;
   if (stat.visualization === "wordcloud") return <WordCloudStat stat={stat} />;
   return <ListStat stat={stat} />;
+}
+
+/**
+ * One field's results without the report card around them: the chart a live
+ * poll's operator desk, its attendees and its broadcast overlay draw from
+ * running tallies, and the one a report draws from stored answers.
+ * `presentation` sizes the chart for a projector or broadcast frame: it takes
+ * its type size from the surface around it.
+ */
+export function FormFieldStatChart({
+  field,
+  stat,
+  visualization,
+  presentation = false,
+}: {
+  field: StatField;
+  stat: ServerFieldStat;
+  visualization?: VisualizationKind;
+  presentation?: boolean;
+}) {
+  const [mapped] = mapServerStats([field], [stat]);
+  if (!mapped) return null;
+  return (
+    <div class={presentation ? "pk-chart pk-chart--presentation" : "pk-chart"}>
+      <StatChartContent stat={visualization ? { ...mapped, visualization } : mapped} />
+    </div>
+  );
 }
 
 function StatCardHeader({
@@ -263,7 +306,6 @@ function StatCardHeader({
           // The name says which chart it expands: a grid of these otherwise
           // offers a column of controls all called "Expand chart".
           <Button
-            size="sm"
             variant="ghost"
             icon
             aria-label={`Expand ${stat.field.label} chart`}
@@ -310,7 +352,7 @@ export function FormResponseStats({
   stats,
   total,
 }: {
-  fields: FormFieldDefinition[];
+  fields: readonly StatField[];
   stats: ServerFieldStat[];
   total: number;
 }) {
@@ -387,18 +429,11 @@ export function FormResponseStats({
           onClick={() => setExpandedFieldKey(null)}
         >
           <div class="adm-stat-modal pk-stack" onClick={(event) => event.stopPropagation()}>
-            {/* The close control names what it closes and carries a visible
-                glyph, rather than being an empty Bootstrap `btn-close` whose
-                only content was a background image. */}
-            <Button
+            <CloseButton
               class="adm-stat-modal-close"
-              variant="ghost"
-              icon
-              aria-label={`Close ${expandedStat.field.label} chart`}
+              label={`Close ${expandedStat.field.label} chart`}
               onClick={() => setExpandedFieldKey(null)}
-            >
-              <span aria-hidden="true">×</span>
-            </Button>
+            />
             <StatCardHeader
               stat={expandedStat}
               choice={presentationByField[expandedStat.field.key] ?? "auto"}

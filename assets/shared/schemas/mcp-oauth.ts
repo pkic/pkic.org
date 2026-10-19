@@ -1,8 +1,9 @@
 import { z } from "zod";
 import { normalizedEmailSchema, successResponseSchema } from "./api-common";
-import { publicStaffGrantSchema } from "./staff-capacity";
+import { oauthSelectedScopesSchema } from "./oauth-authorizations";
+import { PERMISSION_DOMAINS } from "../permission-metadata";
+import { databaseIdSchema } from "./identifiers";
 import { permissionSchema } from "./permissions";
-import { oauthApprovedScopesSchema } from "./oauth-consent";
 
 export const mcpOauthContextSchema = z.object({
   authenticated: z.boolean(),
@@ -12,9 +13,25 @@ export const mcpOauthContextSchema = z.object({
   clientName: z.string(),
   requestedScopes: z.array(permissionSchema),
   grantedScopes: z.array(permissionSchema),
-  grantableGrants: z.array(publicStaffGrantSchema).default([]),
   userEmail: normalizedEmailSchema.nullable(),
   staffEmail: normalizedEmailSchema.nullable(),
+  actingIdentityId: databaseIdSchema.nullable(),
+  redirectHost: z.string(),
+  areas: z.array(
+    z.object({
+      key: z.enum(Object.keys(PERMISSION_DOMAINS) as (keyof typeof PERMISSION_DOMAINS)[]),
+      label: z.string(),
+      permissions: z.array(
+        z.object({
+          permission: permissionSchema,
+          label: z.string(),
+          access: z.enum(["read", "write"]),
+          allResources: z.boolean(),
+          resourceCount: z.number().int().min(0),
+        }),
+      ),
+    }),
+  ),
 });
 export const mcpOauthMagicLinkResponseSchema = successResponseSchema.extend({
   sentTo: normalizedEmailSchema.nullable(),
@@ -28,6 +45,11 @@ export const mcpOauthAuthorizeActionSchema = z.discriminatedUnion("action", [
     email: normalizedEmailSchema,
     return_to: mcpOauthReturnToSchema,
   }),
-  z.object({ action: z.literal("approve"), return_to: mcpOauthReturnToSchema, scopes: oauthApprovedScopesSchema }),
+  z.object({
+    action: z.literal("approve"),
+    return_to: mcpOauthReturnToSchema,
+    scopes: oauthSelectedScopesSchema,
+    actingIdentityId: databaseIdSchema.nullable(),
+  }),
   z.object({ action: z.literal("deny"), return_to: mcpOauthReturnToSchema }),
 ]);

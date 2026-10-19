@@ -6,7 +6,7 @@
  *   - one co-located `.css` file, imported here, so its styles ride the lazy
  *     chunk that first reaches the component;
  *   - class names under a single `pk-` block, variants as `--modifier`;
- *   - no colour, spacing, radius or duration literals — tokens only;
+ *   - no color, spacing, radius or duration literals — tokens only;
  *   - props typed from a union, not `string`, so an invalid variant is a
  *     compile error rather than a silently unstyled button.
  */
@@ -15,15 +15,16 @@ import type { ComponentChildren, JSX } from "preact";
 
 import "./Button.css";
 
-export type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "danger-quiet" | "link";
-export type ButtonSize = "sm" | "md" | "lg";
+import { buttonClasses, type ButtonLook, type ButtonSize, type ButtonVariant } from "./button-classes";
+import { NEW_TAB_ATTRIBUTES, NEW_TAB_HINT, isExternalHref } from "./new-tab";
+
+export type { ButtonSize, ButtonVariant } from "./button-classes";
 
 export interface ButtonProps extends Omit<JSX.ButtonHTMLAttributes<HTMLButtonElement>, "size" | "loading"> {
   variant?: ButtonVariant;
   size?: ButtonSize;
   /** Renders square, for an icon-only control. Requires `aria-label`. */
   icon?: boolean;
-  block?: boolean;
   /**
    * Shows a spinner and blocks activation while keeping the button focusable.
    * A disabled control loses focus, which throws a screen-reader user out of
@@ -33,36 +34,10 @@ export interface ButtonProps extends Omit<JSX.ButtonHTMLAttributes<HTMLButtonEle
   children?: ComponentChildren;
 }
 
-interface ButtonLook {
-  variant?: ButtonVariant;
-  size?: ButtonSize;
-  /** Renders square, for an icon-only control. Requires `aria-label`. */
-  icon?: boolean;
-  block?: boolean;
-}
-
-/** The classes for a look; `extra` is whatever `class` the caller passed. */
-function buttonClasses(
-  { variant = "secondary", size = "md", icon = false, block = false }: ButtonLook,
-  extra: unknown,
-) {
-  return [
-    "pk-btn",
-    `pk-btn--${variant}`,
-    size === "md" ? null : `pk-btn--${size}`,
-    icon ? "pk-btn--icon" : null,
-    block ? "pk-btn--block" : null,
-    typeof extra === "string" ? extra : null,
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
-
 export function Button({
-  variant = "secondary",
-  size = "md",
+  variant,
+  size,
   icon = false,
-  block = false,
   loading = false,
   disabled = false,
   type = "button",
@@ -70,7 +45,9 @@ export function Button({
   children,
   ...rest
 }: ButtonProps) {
-  const classes = buttonClasses({ variant, size, icon, block }, className);
+  // A form's submit is its affirmative action, so it is primary unless the caller chose otherwise.
+  const look = variant ?? (type === "submit" ? "primary" : "secondary");
+  const classes = buttonClasses({ variant: look, size, icon }, className);
 
   const inert = Boolean(disabled) || loading;
 
@@ -93,6 +70,8 @@ export function Button({
 export interface ButtonLinkProps
   extends Omit<JSX.AnchorHTMLAttributes<HTMLAnchorElement>, "size" | "icon">, ButtonLook {
   href: string;
+  /** Opens the destination in a new tab and says so to screen readers. Defaults to whether the href leaves the portal. */
+  external?: boolean;
   children?: ComponentChildren;
 }
 
@@ -100,10 +79,20 @@ export interface ButtonLinkProps
  * A link drawn as a button: for a destination, where `Button` is for an
  * action. Same looks, same classes, so a row of the two lines up.
  */
-export function ButtonLink({ variant, size, icon, block, class: className, children, ...rest }: ButtonLinkProps) {
+export function ButtonLink({
+  variant,
+  size,
+  icon,
+  external: explicit,
+  class: className,
+  children,
+  ...rest
+}: ButtonLinkProps) {
+  const external = explicit ?? isExternalHref(rest.href);
   return (
-    <a {...rest} class={buttonClasses({ variant, size, icon, block }, className)}>
+    <a {...rest} {...(external ? NEW_TAB_ATTRIBUTES : {})} class={buttonClasses({ variant, size, icon }, className)}>
       {children}
+      {external && <span class="pk-sr-only"> {NEW_TAB_HINT}</span>}
     </a>
   );
 }

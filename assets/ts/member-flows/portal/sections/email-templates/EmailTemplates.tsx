@@ -1,3 +1,4 @@
+import { useHashQueryParam } from "../../../../hooks/useHashQueryParam";
 import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
 import { useState, useEffect, useRef } from "preact/hooks";
 import { Badge } from "../../../../components/Badge";
@@ -143,11 +144,7 @@ function CreateTemplate({
     <div class="pk pk-container pk-container--narrow">
       <Panel>
         <PanelHeader title="Create New Template">
-          {showCancel && (
-            <Button size="sm" onClick={onCancel}>
-              ← Back to list
-            </Button>
-          )}
+          {showCancel && <Button onClick={onCancel}>← Back to list</Button>}
         </PanelHeader>
         <PanelBody>
           <form noValidate class="pk-stack" {...form.handlers} onSubmit={(event) => void doCreate(event)}>
@@ -276,26 +273,28 @@ function EmailTemplateCreateOnly() {
 
   if (createdKey) {
     return (
-      <section class="pk pk-stack pk-stack--snug" aria-labelledby="email-template-created-heading">
-        <h3 id="email-template-created-heading">Template created</h3>
-        <p class="pk-small">
-          {createdKey} was created. You do not have permission to view template history or activate versions.
-        </p>
+      <div class="pk pk-stack pk-stack--snug">
+        <PageHeader
+          title="Template created"
+          description={`${createdKey} was created. You do not have permission to view template history or activate versions.`}
+        />
         <div class="pk-cluster">
-          <Button variant="primary" size="sm" onClick={() => setCreatedKey(null)}>
+          <Button variant="primary" onClick={() => setCreatedKey(null)}>
             Create another template
           </Button>
         </div>
-      </section>
+      </div>
     );
   }
 
   return (
-    <section class="pk pk-stack pk-stack--snug" aria-labelledby="email-template-create-heading">
-      <h3 id="email-template-create-heading">Create email template</h3>
-      <p class="pk-small">You can create a draft template without access to the template catalog.</p>
+    <div class="pk pk-stack pk-stack--snug">
+      <PageHeader
+        title="Create email template"
+        description="You can create a draft template without access to the template catalog."
+      />
       <CreateTemplate canRead={false} onCreated={setCreatedKey} onCancel={() => undefined} showCancel={false} />
-    </section>
+    </div>
   );
 }
 
@@ -339,7 +338,7 @@ export function EmailTemplates({
   canManage?: boolean;
   templateKey?: string;
 }) {
-  const [view, setView] = useState<TemplatesView>("list");
+  const [view, setView] = useHashQueryParam<TemplatesView>("templateView", "list", ["list", "create"]);
   const tableActions = useRef<ApiTableActions | null>(null);
 
   async function archiveTemplate(templateKey: string) {
@@ -417,7 +416,6 @@ export function EmailTemplates({
       <CreateTemplate
         canRead={canRead}
         onCreated={(key) => {
-          setView("list");
           window.location.hash = `#/settings/email-templates/${encodeURIComponent(key)}`;
         }}
         onCancel={() => setView("list")}

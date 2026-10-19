@@ -1,20 +1,21 @@
+import { useHashQueryParam } from "../../../../../hooks/useHashQueryParam";
 import { StackedBarChart } from "../../../../../ui/StackedBarChart";
 import { statusBars } from "../../../../../ui/chart";
 import { EmptyState } from "../../../../../ui/EmptyState";
 import { Panel, PanelBody, PanelHeader } from "../../../../../ui/Panel";
 import { StatCard } from "../../../../../ui/StatCard";
 import { attendanceTypeLabel } from "../../../../../shared/attendance";
-import { useState } from "preact/hooks";
 import { TabList } from "../../../../../ui/TabList";
 import { RegistrationsList } from "./Registrations";
 import type { EventStatsResponse } from "../types";
 import "../../../../../ui/Content.css";
 import "./AttendanceChangeDashboard.css";
+import { SectionHeading } from "../../../../../ui/SectionHeading";
 
 type AttendanceChanges = EventStatsResponse["attendanceChanges"];
 /** Both directions are displayed separately: a net total would hide movement. */
 export function AttendanceChangeDashboard({ slug, changes }: { slug: string; changes: AttendanceChanges }) {
-  const [view, setView] = useState("summary");
+  const [view, setView] = useHashQueryParam("attendanceMovement", "summary");
   const views = [
     { id: "summary", label: "Summary", panelId: "attendance-movement-view" },
     { id: "changed", label: "Changed attendees", panelId: "attendance-movement-view" },
@@ -29,11 +30,11 @@ export function AttendanceChangeDashboard({ slug, changes }: { slug: string; cha
    * design — a tint is invisible to a reader who cannot separate the hues — so
    * the direction stays where it already was in words, in each card's label,
    * and the drill-down links below name their subset instead of relying on the
-   * reader having decoded a colour.
+   * reader having decoded a color.
    */
   return (
     <Panel class="pk pk-attendance-movement">
-      <PanelHeader title="Attendance movement" headingLevel={2} />
+      <PanelHeader title="Attendance movement" />
       <TabList
         label="Attendance movement views"
         idPrefix="attendance-movement-tab"
@@ -84,7 +85,9 @@ export function AttendanceChangeDashboard({ slug, changes }: { slug: string; cha
                   ]}
                 />
                 <section aria-label="How attendance changed" class="pk-stack pk-stack--snug">
-                  <h3 class="pk-panel__title">How attendance changed</h3>
+                  <SectionHeading level={4} class="pk-panel__title">
+                    How attendance changed
+                  </SectionHeading>
                   <div
                     dangerouslySetInnerHTML={{
                       __html: statusBars(

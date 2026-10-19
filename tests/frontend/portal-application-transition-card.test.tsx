@@ -14,9 +14,12 @@ import { render, type ComponentChild } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import type { MembershipApplicationDetail } from "../../assets/shared/schemas/membership-application-management";
+import {
+  applicationStageTransitionSchema,
+  type MembershipApplicationDetail,
+} from "../../assets/shared/schemas/membership-application-management";
 import { ApplicationTransitionCard } from "../../assets/ts/member-flows/portal/sections/membership-applications/ApplicationTransitionCard";
-import { buttonNamed, buttonNames, chooseOption, controlFor, labelNames, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, buttonNames, chooseOption, controlFor, labelNames, typeInto } from "./helpers/labeled-control";
 
 const NOW = "2026-08-31T09:00:00.000Z";
 
@@ -88,17 +91,17 @@ describe("membership application transition card", () => {
 
     // The two labels the card starts with are its own; "Reason" only joins
     // them once on_hold is chosen.
-    expect(labelNames(page)).toEqual(["Move to", "Note"]);
+    expect(labelNames(page)).toEqual(["Move to", "Internal note"]);
 
     // Resolved through the pair itself, so the lookup fails exactly when the
-    // labelling is broken — which is what it used to be: three bare <label>s
+    // labeling is broken — which is what it used to be: three bare <label>s
     // with no `for` at all.
     expect(controlFor<HTMLSelectElement>(page, "Move to").tagName).toBe("SELECT");
-    expect(controlFor(page, "Note").tagName).toBe("INPUT");
+    expect(controlFor(page, "Internal note").tagName).toBe("INPUT");
 
     // "(optional)" used to be part of the announced name. It is help text tied
     // to the control now, which is what aria-describedby is for.
-    const note = controlFor(page, "Note");
+    const note = controlFor(page, "Internal note");
     const describedBy = note.getAttribute("aria-describedby");
     expect(describedBy).toBeTruthy();
     expect(page.querySelector(`#${describedBy!}`)?.textContent).toContain("Optional.");
@@ -126,23 +129,22 @@ describe("membership application transition card", () => {
   });
 
   it("sends the chosen stage, reason and note, then clears the form", async () => {
-    const onTransition = vi.fn(async () => undefined);
+    const onTransition = vi.fn(async (_params: unknown) => undefined);
     const page = mountCard({ onTransition });
 
     await chooseOption(controlFor(page, "Move to"), "on_hold");
     await chooseOption(controlFor(page, "Reason"), "request_information");
-    await typeInto(controlFor(page, "Note"), "Waiting on the signed authority letter");
+    await typeInto(controlFor(page, "Internal note"), "Waiting on the signed authority letter");
+    await typeInto(controlFor(page, "Information requested"), "Please provide the signed authority letter.");
     await submit(page);
     await settle();
 
-    expect(onTransition).toHaveBeenCalledWith({
-      toStage: "on_hold",
-      onHoldSubtype: "request_information",
-      note: "Waiting on the signed authority letter",
-    });
+    const sent = applicationStageTransitionSchema.parse(onTransition.mock.calls[0]?.[0]);
+    expect(sent.requestDetails).toBe("Please provide the signed authority letter.");
+    expect(sent.note).toBe("Waiting on the signed authority letter");
     // A completed transition starts from a clean slate.
     expect(controlFor<HTMLSelectElement>(page, "Move to").value).toBe("");
-    expect(controlFor(page, "Note").value).toBe("");
+    expect(controlFor(page, "Internal note").value).toBe("");
   });
 
   it("keeps the reader's work when the transition is refused", async () => {
@@ -156,7 +158,7 @@ describe("membership application transition card", () => {
     const page = mountCard({ onTransition });
 
     await chooseOption(controlFor(page, "Move to"), "declined");
-    await typeInto(controlFor(page, "Note"), "Declined at the applicant's request");
+    await typeInto(controlFor(page, "Internal note"), "Declined at the applicant's request");
     await submit(page);
     await settle();
     process.off("unhandledRejection", rejection);
@@ -164,14 +166,35 @@ describe("membership application transition card", () => {
     expect(onTransition).toHaveBeenCalledOnce();
     // A failed transition is a retry, not a restart.
     expect(controlFor<HTMLSelectElement>(page, "Move to").value).toBe("declined");
-    expect(controlFor(page, "Note").value).toBe("Declined at the applicant's request");
+    expect(controlFor(page, "Internal note").value).toBe("Declined at the applicant's request");
     // And the control is usable again rather than stuck mid-flight.
     expect(buttonNamed(page, "Transition").getAttribute("aria-busy")).toBeNull();
     expect(rejection).not.toHaveBeenCalled();
   });
 
+  it("requires applicant-facing details independently of an internal note and retains the draft on refusal", async () => {
+    const onTransition = vi.fn(async (_params: unknown) => {
+      throw new Error("HTTP 409");
+    });
+    const page = mountCard({ onTransition });
+    await chooseOption(controlFor(page, "Move to"), "on_hold");
+    await chooseOption(controlFor(page, "Reason"), "request_information");
+    await typeInto(controlFor(page, "Internal note"), "Staff-only review context");
+    await typeInto(controlFor(page, "Information requested"), "   ");
+    await submit(page);
+    await settle();
+    expect(onTransition).not.toHaveBeenCalled();
+    expect(controlFor(page, "Information requested").getAttribute("aria-invalid")).toBe("true");
+    await typeInto(controlFor(page, "Information requested"), "Please provide your organization description.");
+    await submit(page);
+    await settle();
+    expect(onTransition).toHaveBeenCalledOnce();
+    expect(controlFor(page, "Information requested").value).toBe("Please provide your organization description.");
+    expect(controlFor(page, "Internal note").value).toBe("Staff-only review context");
+  });
+
   it("will not submit before a stage is chosen", async () => {
-    const onTransition = vi.fn(async () => undefined);
+    const onTransition = vi.fn(async (_params: unknown) => undefined);
     const page = mountCard({ onTransition });
 
     expect(buttonNamed(page, "Transition").disabled).toBe(false);

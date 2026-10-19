@@ -31,7 +31,7 @@ const RESERVED_TEST_TLDS = new Set(["test", "example", "invalid", "localhost", "
 
 /**
  * Extracts the domain from an email address string.
- * Expects a pre-validated, normalised email (lower-cased, trimmed).
+ * Expects a pre-validated, normalized email (lower-cased, trimmed).
  */
 function domainFromEmail(email: string): string | null {
   const atIndex = email.lastIndexOf("@");

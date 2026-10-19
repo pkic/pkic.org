@@ -276,7 +276,7 @@
     if (sInputMobile) {
       sInputMobile.value = "";
       // Only focus the mobile input on small screens (desktop uses the navbar input)
-      if (window.innerWidth < 992) {
+      if (navToggle && window.getComputedStyle(navToggle).display !== "none") {
         sInputMobile.focus();
       }
     }

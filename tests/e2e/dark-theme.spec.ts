@@ -21,7 +21,7 @@ import { signInToPortal } from "./helpers/portal-auth";
 
 const PAGES = ["/", "/about/", "/members/", "/blog/", "/sponsors/", "/events/"];
 
-/** Relative luminance, or null when the colour is transparent. */
+/** Relative luminance, or null when the color is transparent. */
 const LUMINANCE = `(value) => {
   const parts = value.match(/[\\d.]+/g);
   if (!parts) return null;
@@ -66,7 +66,7 @@ test.describe("the dark theme", () => {
         try {
           localStorage.setItem("pk-theme", "dark");
         } catch {
-          // A browser that refuses storage still honours the OS preference.
+          // A browser that refuses storage still honors the OS preference.
         }
       });
       await page.goto(path);
@@ -190,12 +190,12 @@ test.describe("the dark theme", () => {
       try {
         localStorage.setItem("pk-theme", "dark");
       } catch {
-        // A browser that refuses storage still honours the OS preference.
+        // A browser that refuses storage still honors the OS preference.
       }
     });
     await signInToPortal(page, e2eAdminEmail("portal-dark-theme"));
 
-    // The sidebar and the page around it were three fixed colours, so the
+    // The sidebar and the page around it were three fixed colors, so the
     // portal stayed light while the tables and inputs inside it went dark.
     await expect(page.locator("#portal-root")).toBeVisible();
     expect(await unreadableSurfaces(page)).toEqual([]);
@@ -219,16 +219,19 @@ test.describe("the dark theme", () => {
     await expect(page.locator("html")).not.toHaveAttribute("data-theme", /.*/);
 
     await toggle.click();
+    await page.getByRole("menuitemradio", { name: "Light", exact: true }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
     await page.reload();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
 
     await toggle.click();
+    await page.getByRole("menuitemradio", { name: "Dark", exact: true }).click();
     await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 
     // Back to following the system, which is the state the attribute cannot
     // express and a two-way switch would have taken away.
     await toggle.click();
+    await page.getByRole("menuitemradio", { name: "Auto", exact: true }).click();
     await expect(page.locator("html")).not.toHaveAttribute("data-theme", /.*/);
     await page.reload();
     await expect(page.locator("html")).not.toHaveAttribute("data-theme", /.*/);

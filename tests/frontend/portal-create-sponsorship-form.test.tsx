@@ -38,7 +38,7 @@ import {
   openCombobox,
   submitForm,
   typeInto,
-} from "./helpers/labelled-control";
+} from "./helpers/labeled-control";
 
 afterEach(cleanupForm);
 
@@ -52,12 +52,12 @@ describe("create sponsorship form", () => {
     expect(labelNames(page)).toEqual(["Type", "Member organization", "Tier", "Contact name", "Contact email"]);
 
     // Resolved through the `for`/`id` pair itself, so each lookup fails
-    // exactly when the labelling contract is broken.
+    // exactly when the labeling contract is broken.
     expect(controlFor<HTMLSelectElement>(page, "Type").tagName).toBe("SELECT");
     expect(controlFor(page, "Contact email").type).toBe("email");
 
     // The organization is chosen from the canonical directory list, not
-    // typed as a UUID: the labelled control is a real combobox.
+    // typed as a UUID: the labeled control is a real combobox.
     const organization = controlFor(page, "Member organization");
     expect(organization.getAttribute("role")).toBe("combobox");
     expect(organization.getAttribute("aria-haspopup")).toBe("listbox");

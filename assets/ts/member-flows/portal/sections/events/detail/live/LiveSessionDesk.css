@@ -1,0 +1,93 @@
+/* The live control room: a header bar with the Take, then the operator's grid of panels. */
+@layer components {
+  .pk-live-control-wall {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-3);
+    min-inline-size: 0;
+  }
+  .pk-studio {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-3);
+    min-inline-size: 0;
+  }
+  /* Full screen covers the portal's navigation, whether or not the browser granted its own full screen. */
+  html.pk-studio-open {
+    overflow: hidden;
+  }
+  /* Above the site's sticky navigation (1040), so the control room is the whole window. */
+  .pk-studio[data-expanded] {
+    position: fixed;
+    /* The visible area, even when the browser leaves it offset in the layout viewport (see visual-viewport-shift.ts). */
+    inset: var(--pk-viewport-shift-top, 0px) 0 var(--pk-viewport-shift-bottom, 0px);
+    z-index: 1050;
+    overflow: auto;
+    padding: var(--pk-3);
+    background: var(--pk-canvas);
+    color: var(--pk-ink);
+  }
+  /* A phone has no room to spare: the studio runs edge to edge. */
+  .pk-studio[data-expanded][data-phone] {
+    padding: 0;
+  }
+  .pk-studio__bar {
+    overflow: visible;
+  }
+  .pk-studio-panel__meta {
+    color: var(--pk-ink-muted);
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-xs);
+    white-space: nowrap;
+  }
+  .pk-studio-room {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-1);
+  }
+  .pk-studio-room__name {
+    max-inline-size: 12rem;
+    overflow: hidden;
+    font-weight: 700;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .pk-live-desk__chat-panel {
+    display: flex;
+    flex-direction: column;
+    block-size: 100%;
+    min-block-size: 0;
+  }
+  .pk-live-desk__chat-tabpanel {
+    display: flex;
+    flex: 1;
+    min-block-size: 0;
+    padding: var(--pk-2);
+  }
+  .pk-live-desk__chat-tabpanel[hidden] {
+    display: none;
+  }
+  .pk-live-desk__chat-panel .pk-panel__body {
+    display: flex;
+    flex: 1;
+    min-block-size: 0;
+    padding: var(--pk-2);
+  }
+  .pk-live-desk__chat-panel .pk-panel__header {
+    padding: var(--pk-2);
+  }
+  .pk-live-desk__poll {
+    display: grid;
+    gap: var(--pk-2);
+    padding-block: var(--pk-3);
+    border-block-end: 1px solid var(--pk-line-soft);
+  }
+  .pk-live-desk__poll:last-child {
+    border-block-end: 0;
+  }
+  .pk-live-desk__poll-question {
+    margin: 0;
+    font-weight: 600;
+    overflow-wrap: anywhere;
+  }
+}

@@ -1,11 +1,15 @@
 import type { z } from "zod";
 import { formsListResponseSchema, type FormSummary } from "../../shared/schemas/form-management";
 import { groupsListResponseSchema, type Group } from "../../shared/schemas/groups";
+import {
+  organizationsListResponseSchema,
+  type OrganizationSummary,
+} from "../../shared/schemas/organization-management";
 import type { EventFormsPurpose, FormStatus } from "../../shared/schemas/forms";
 import type { ServerCatalog } from "./server-catalog";
 
 /**
- * Runtime-validated metadata for one server-backed selector. Every catalogue
+ * Runtime-validated metadata for one server-backed selector. Every catalog
  * uses the same q/sort/limit/offset transport instead of loading an arbitrary
  * first 200 rows and treating that page as a complete data set.
  */
@@ -18,6 +22,20 @@ export const adminGroupCatalog: AdminCatalog<Group, z.infer<typeof groupsListRes
   resolvePage: (response) => response.page,
   itemKey: (item) => item.id,
   itemLabel: (item) => `${item.name} (${item.type.singularLabel})${item.active ? "" : " — inactive"}`,
+  sort: "name",
+};
+
+/** Organizations, searched and paged on the canonical directory list. */
+export const adminOrganizationCatalog: AdminCatalog<
+  OrganizationSummary,
+  z.infer<typeof organizationsListResponseSchema>
+> = {
+  endpoint: "/api/v1/organizations",
+  responseSchema: organizationsListResponseSchema,
+  resolveItems: (response) => response.organizations,
+  resolvePage: (response) => response.page,
+  itemKey: (organization) => organization.id,
+  itemLabel: (organization) => organization.name,
   sort: "name",
 };
 

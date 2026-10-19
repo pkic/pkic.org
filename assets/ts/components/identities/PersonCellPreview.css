@@ -1,0 +1,17 @@
+@layer components {
+  .pk-person-cell-preview {
+    display: block;
+    max-inline-size: 100%;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: inherit;
+    font: inherit;
+    text-align: start;
+    cursor: pointer;
+  }
+
+  .pk-person-cell-preview .pk-person-cell__text {
+    text-align: start;
+  }
+}

@@ -1,3 +1,7 @@
+import { readActiveOauthAuthorization } from "./oauth/authorization-ceiling";
+import { effectiveMcpPermissionContexts } from "./oauth/grantable-permissions";
+import { permissionSchema } from "../../../assets/shared/schemas/permissions";
+import { activeUserCapacityDefinitions } from "../services/membership/capacity-query";
 import { AppError } from "../errors";
 import { first } from "../db/queries";
 import { constantTimeEqual } from "../utils/crypto";
@@ -85,11 +89,36 @@ export async function requireAdminFromRequest(
         mcpVerified.reason === "expired" ? "MCP session expired" : "Invalid MCP session token",
       );
     }
-    const liveAdmin = await getCurrentUserBackedAdmin(db, mcpVerified.claims.sub, mcpVerified.claims.sid);
+    const authorization = mcpVerified.claims.authorizationId
+      ? await readActiveOauthAuthorization(db, {
+          id: mcpVerified.claims.authorizationId,
+          userId: mcpVerified.claims.sub,
+          sessionId: mcpVerified.claims.sid,
+        })
+      : null;
+    const liveAdmin = await getCurrentUserBackedAdmin(
+      db,
+      mcpVerified.claims.sub,
+      mcpVerified.claims.sid,
+      authorization?.memberId,
+    );
     if (!liveAdmin) throw new AppError(401, "AUTH_INVALID", "MCP session is no longer active");
     const admin = createUserBackedAuthAdmin({
       ...liveAdmin,
       scopes: mcpVerified.claims.scopes,
+      ...(authorization
+        ? {
+            oauthAuthorizationId: authorization.id,
+            grants: effectiveMcpPermissionContexts(
+              liveAdmin,
+              authorization.scopes,
+              mcpVerified.claims.scopes.flatMap((scope) => {
+                const parsed = permissionSchema.safeParse(scope);
+                return parsed.success ? [parsed.data] : [];
+              }),
+            ),
+          }
+        : {}),
       scopeRestricted: true,
       state: mcpVerified.claims.state ?? null,
     });
@@ -129,14 +158,21 @@ export async function getCurrentUserBackedAdmin(
   db: DatabaseLike,
   userId: string,
   sessionId: string,
+  memberId: string | null = null,
 ): Promise<UserBackedAuthAdmin | null> {
   const session = await first<AdminSessionRow>(
     db,
     `SELECT s.id, s.user_id, s.expires_at, s.revoked_at, u.email
        FROM sessions s
        JOIN users u ON u.id = s.user_id
-      WHERE s.id = ? AND s.user_id = ? AND u.active = 1 AND ${STAFF_ACCESS_CONDITION}`,
-    [sessionId, userId],
+      WHERE s.id = ? AND s.user_id = ? AND u.active = 1 AND ${STAFF_ACCESS_CONDITION}
+        ${
+          memberId
+            ? `AND EXISTS(WITH ${activeUserCapacityDefinitions("SELECT u.id")}
+          SELECT 1 FROM active_user_capacities WHERE member_id=?)`
+            : ""
+        }`,
+    [sessionId, userId, ...(memberId ? [memberId] : [])],
   );
   try {
     assertSessionActive(session ? { revokedAt: session.revoked_at, expiresAt: session.expires_at } : null, "admin");
@@ -148,7 +184,8 @@ export async function getCurrentUserBackedAdmin(
     id: session!.user_id,
     email: session!.email,
     scopes: [],
-    grants: await computeGrantsForUser(db, session!.user_id),
+    grants: await computeGrantsForUser(db, session!.user_id, memberId),
+    memberId,
     sessionId: session!.id,
     expiresAt: session!.expires_at,
   });

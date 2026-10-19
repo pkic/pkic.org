@@ -1,4 +1,3 @@
-import { SiteImage } from "./SiteImage";
 import { Fragment } from "preact";
 import { memberProfileLinks } from "../../shared/member-profile-links";
 import { formatMonthYear } from "../../shared/format-date";
@@ -9,6 +8,7 @@ import { LinkList } from "../ui/LinkList";
 import { Avatar } from "../ui/Avatar";
 import "../ui/Content.css";
 import "./member-directory.css";
+import { ExternalLink } from "../ui/ExternalLink";
 type PublicIdentity = MemberDetail["identities"][number];
 
 function IdentityCard({ identity }: { identity: PublicIdentity }) {
@@ -54,11 +54,12 @@ export function MemberDetailView({
     <div class="pk pk-stack pk-stack--loose pk-section">
       <header class="pk-container member-profile-header">
         <div class="member-profile-logo-wrap pk-cluster pk-cluster--center">
-          {member.logoUrl ? (
-            <SiteImage class="member-profile-logo" alt={member.name} src={member.logoUrl} />
-          ) : (
-            <Avatar name={member.name} shape="square" size="xl" />
-          )}
+          <Avatar
+            name={member.name}
+            src={member.logoUrl ?? undefined}
+            shape="square"
+            class="pk-member-profile-avatar"
+          />
         </div>
         <div class="member-profile-introduction">
           <p class="member-profile-membership">Member of the PKI Consortium</p>
@@ -96,9 +97,9 @@ export function MemberDetailView({
                   <Fragment key={label}>
                     <dt>{label}</dt>
                     <dd class="pk-break">
-                      <a href={url} target="_blank" rel="noopener">
+                      <ExternalLink href={url} external>
                         {url.replace(/^https?:\/\//, "")}
-                      </a>
+                      </ExternalLink>
                     </dd>
                   </Fragment>
                 ) : null,

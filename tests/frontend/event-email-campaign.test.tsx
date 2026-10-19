@@ -13,8 +13,10 @@ import {
   eventEmailCampaignSendModeSchema,
   eventEmailCampaignSpeakerStatusFilterSchema,
 } from "../../assets/shared/schemas/event-email-campaigns";
+import { availableHelperLabelsForAudience } from "../../assets/ts/components/events/event-email-campaign-support";
+import { PREVIEW_DEFAULTS, TEMPLATE_HELPERS } from "../../assets/ts/shared/email-template-helpers";
 import { EventEmailCampaign } from "../../assets/ts/components/events/EventEmailCampaign";
-import { controlFor, labelNames, optionValues, typeMarkdown } from "./helpers/labelled-control";
+import { controlFor, labelNames, optionValues, typeMarkdown } from "./helpers/labeled-control";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
 
 vi.mock("wouter/use-hash-location", () => ({
@@ -77,7 +79,7 @@ function confirmationBox(container: HTMLElement): HTMLInputElement | null {
 
 function clickButton(container: HTMLElement, label: string): Promise<void> {
   const button = [...container.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
-  if (!button) throw new Error(`No button labelled "${label}"`);
+  if (!button) throw new Error(`No button labeled "${label}"`);
   return act(async () => {
     button.click();
   });
@@ -154,6 +156,41 @@ afterEach(() => {
 });
 
 describe("event email campaign UI", () => {
+  it("prefills a planning message without sending or overwriting an authored draft", async () => {
+    const requests = stubCampaignFetch({ previews: () => json(PREVIEW_BODY) });
+    const container = mount(
+      <EventEmailCampaign
+        campaignsPath={CAMPAIGN_PATH}
+        daysPath={`${EVENT_PATH}/days`}
+        initialSubject="Plan your sessions"
+        initialBody="Save favorites to show interest, then register where required."
+      />,
+    );
+    await settle();
+    expect(controlFor<HTMLInputElement>(container, "Subject").value).toBe("Plan your sessions");
+    await inputText(controlFor(container, "Subject"), "My authored message");
+    await typeMarkdown(container, "Message", "My authored body");
+    await act(async () => {
+      render(
+        <EventEmailCampaign
+          campaignsPath={CAMPAIGN_PATH}
+          daysPath={`${EVENT_PATH}/days`}
+          initialSubject="Changed preset"
+          initialBody="Changed preset body"
+        />,
+        container,
+      );
+    });
+    await clickButton(container, "Preview Email");
+    await settle();
+    const preview = eventEmailCampaignPreviewInputSchema.parse(
+      requests.find(({ path }) => path === `${CAMPAIGN_PATH}/previews`)?.body,
+    );
+    expect(preview.subjectOverride).toBe("My authored message");
+    expect(preview.filter).toMatchObject({ audience: "attendees", attendeeStatus: "registered" });
+    expect(requests.some(({ method, path }) => method === "POST" && path === CAMPAIGN_PATH)).toBe(false);
+  });
+
   it("previews and creates a campaign through one canonical nested resource", async () => {
     const requests = stubCampaignFetch({
       previews: () => json(PREVIEW_BODY),
@@ -376,7 +413,9 @@ describe("event email campaign UI", () => {
       registrationPolicy: "no_registration",
       visibility: "group_members",
       inviteLimitAttendee: 5,
-      location: null,
+      city: null,
+      country: null,
+      meetingLocation: null,
       links: [],
       nextOccurrenceAt: null,
       updatedAt: "2026-08-29T08:00:00.000Z",
@@ -385,5 +424,15 @@ describe("event email campaign UI", () => {
     };
     const container = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="communications" />);
     expect(container.textContent).not.toContain("Email campaigns");
+  });
+});
+
+describe("generated virtual room template variable", () => {
+  it("can be discovered for every event campaign audience with a usable preview", () => {
+    for (const audience of eventEmailCampaignAudienceSchema.options) {
+      expect(availableHelperLabelsForAudience(audience).has("virtualRoomUrl")).toBe(true);
+    }
+    expect(TEMPLATE_HELPERS.find((helper) => helper.label === "virtualRoomUrl")?.snippet).toBe("{{virtualRoomUrl}}");
+    expect(PREVIEW_DEFAULTS.virtualRoomUrl).toBe("https://pkic.org/portal/#/events/conference/virtual");
   });
 });

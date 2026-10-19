@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { OPENAPI_TAG_GROUPS, OPENAPI_TAGS } from "../functions/_lib/openapi/document";
-import { openapi } from "../functions/router";
+import { openapi } from "../functions/http-router";
 
 /**
  * The published spec is the reference developers actually read. It used to

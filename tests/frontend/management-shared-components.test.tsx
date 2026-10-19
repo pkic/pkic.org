@@ -20,7 +20,7 @@ import { SettingsEditor } from "../../assets/ts/member-flows/portal/sections/eve
 import { Tabs } from "../../assets/ts/components/Tabs";
 import { promoterRankCardClass, promoterRankTier } from "../../assets/ts/shared/donation/promoter-ranking";
 import { useOffsetPager } from "../../assets/ts/hooks/useOffsetPager";
-import { buttonNamed, controlFor, namedGroup } from "./helpers/labelled-control";
+import { buttonNamed, controlFor, namedGroup } from "./helpers/labeled-control";
 import { tabs } from "./helpers/tabs";
 
 const mounted: HTMLElement[] = [];
@@ -156,7 +156,7 @@ describe("shared management presentation components", () => {
     expect(idleSubmit.disabled).toBe(false);
   });
 
-  it("announces a failed save as an alert rather than colouring the same sentence red", () => {
+  it("announces a failed save as an alert rather than coloring the same sentence red", () => {
     const failed = mount(
       <FormActions
         submitLabel="Save"
@@ -292,6 +292,8 @@ describe("shared management presentation components", () => {
                   actor_type: "system",
                   actor_id: null,
                   actor_display: null,
+                  actor_identity_id: null,
+                  actor_organization_name: null,
                   action: "updated",
                   entity_type: "proposal",
                   entity_id: "proposal-1",
@@ -374,7 +376,7 @@ describe("shared management presentation components", () => {
     expect(select.required).toBe(true);
 
     // The asterisk is decorative; the word behind it is what gets announced,
-    // so "required" survives even with images and colour off.
+    // so "required" survives even with images and color off.
     const label = container.querySelector("label")!;
     expect(label.textContent).toContain("(required)");
     expect(label.querySelector('[aria-hidden="true"]')?.textContent).toBe("*");
@@ -409,7 +411,7 @@ describe("shared management presentation components", () => {
     );
 
     // Resolved through the label's own for/id pair, so the lookup fails
-    // exactly when the labelling contract does.
+    // exactly when the labeling contract does.
     const input = controlFor(container, "Time zone");
     expect(input.hasAttribute("required")).toBe(true);
     // The asterisk is decorative; the word behind it is what is announced.

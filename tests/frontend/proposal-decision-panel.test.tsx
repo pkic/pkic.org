@@ -12,7 +12,7 @@ import {
   markdownValue,
   submitForm,
   typeMarkdown,
-} from "./helpers/labelled-control";
+} from "./helpers/labeled-control";
 
 const proposal: ProposalDetailRecord = {
   id: "proposal-1",
@@ -27,6 +27,7 @@ const proposal: ProposalDetailRecord = {
   updated_at: "2026-08-02T00:00:00.000Z",
   canceled_at: null,
   cancellation_comment: null,
+  committee_notes: null,
   proposer_email: "proposer@example.test",
   proposer_first_name: "Proposal",
   proposer_last_name: "Owner",
@@ -86,7 +87,7 @@ function json(body: unknown, status = 200): Response {
 }
 
 /** Stubs fetch: previews always succeed; `decide` answers the decision itself. */
-function stubApi(decide: () => Response): Captured[] {
+function stubApi(decide: () => Response, preview: unknown = previewResponse): Captured[] {
   const requests: Captured[] = [];
   vi.stubGlobal(
     "fetch",
@@ -94,7 +95,7 @@ function stubApi(decide: () => Response): Captured[] {
       const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
       const rawBody = init?.body?.toString() ?? null;
       requests.push({ url, method: init?.method ?? "GET", body: rawBody ? JSON.parse(rawBody) : null });
-      if (url.endsWith("/decisions/previews")) return json(previewResponse);
+      if (url.endsWith("/decisions/previews")) return json(preview);
       return decide();
     }),
   );
@@ -243,8 +244,14 @@ describe("proposal decision panel", () => {
     expect(requests).toHaveLength(1);
     expect(requests[0]).toMatchObject({ url: "/api/v1/proposals/proposal-1/decisions/previews", method: "POST" });
     expect(root.textContent).toContain("Email preview");
-    const selectedMessage = root.querySelector('[role="group"][aria-label="Outgoing emails"] button')!;
-    expect(selectedMessage.getAttribute("aria-pressed")).toBe("true");
+    const outgoing = [...root.querySelectorAll("fieldset")].find(
+      (fieldset) => fieldset.querySelector("legend")?.textContent === "Outgoing emails",
+    )!;
+    const choices = outgoing.querySelectorAll<HTMLInputElement>('input[type="radio"]');
+    expect(choices.length).toBeGreaterThan(0);
+    expect(choices[0]!.checked).toBe(true);
+    expect([...choices].filter((choice) => choice.checked)).toHaveLength(1);
+    expect(choices[0]!.closest("label")?.textContent).toBe("Decision emailProposal Owner <proposer@example.test>");
     expect(root.querySelector('iframe[title="Decision email preview"]')?.getAttribute("src")).toBe("/email/preview/");
     const recordButton = root.querySelector('button[type="submit"]') as HTMLButtonElement;
     expect(recordButton.disabled).toBe(true);
@@ -270,6 +277,45 @@ describe("proposal decision panel", () => {
     }
     expect(requests.every(({ url }) => !url.includes("/api/v1/admin/"))).toBe(true);
     expect(onSaved).toHaveBeenCalledTimes(1);
+  });
+
+  it("previews each outgoing email on its own, one choice selected at a time", async () => {
+    const recipients = ["Alex", "Jordan", "Taylor"];
+    stubApi(() => json(decisionResponse), {
+      ...previewResponse,
+      recipientCount: 3,
+      emailCount: 3,
+      messages: recipients.map((name) => ({
+        ...previewResponse.messages[0]!,
+        id: `proposal-decision:${name.toLowerCase()}`,
+        recipientEmail: `${name.toLowerCase()}@example.test`,
+        recipientLabel: `${name} Example`,
+        text: `${name}, your session has been rejected.`,
+      })),
+    });
+    const root = mount(editableProposal);
+    await chooseOption(controlFor<HTMLSelectElement>(root, "Decision"), "rejected");
+    await act(() => buttonNamed(root, "Preview emails").click());
+    await settle();
+
+    const outgoing = [...root.querySelectorAll("fieldset")].find(
+      (fieldset) => fieldset.querySelector("legend")?.textContent === "Outgoing emails",
+    )!;
+    const choices = () => [...outgoing.querySelectorAll<HTMLInputElement>('input[type="radio"]')];
+    expect(choices()).toHaveLength(3);
+    for (const [index, name] of recipients.entries()) {
+      await act(() => {
+        const choice = choices()[index]!;
+        choice.checked = true;
+        choice.dispatchEvent(new Event("input", { bubbles: true }));
+        choice.dispatchEvent(new Event("change", { bubbles: true }));
+      });
+      // Exactly one email is chosen, and the preview beside it is that one's.
+      expect(choices().filter((choice) => choice.checked)).toHaveLength(1);
+      expect(choices()[index]!.checked).toBe(true);
+      const to = [...root.querySelectorAll("div")].find((candidate) => candidate.textContent === "To");
+      expect(to?.nextElementSibling?.textContent).toBe(`${name} Example <${name.toLowerCase()}@example.test>`);
+    }
   });
 
   it("keeps a browser selection when input fires before change", async () => {

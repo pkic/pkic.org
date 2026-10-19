@@ -1,3 +1,4 @@
+import { randomUuid } from "../../../shared/random-uuid";
 /**
  * Donation form logic — initializes the donation widget rendered by the
  * `donation-form.html` Hugo shortcode.
@@ -52,7 +53,7 @@ interface DonationConfig {
  */
 export function initDonationForms(): void {
   document.querySelectorAll<HTMLElement>("[data-donation-form]").forEach((root) => {
-    void initForm(root);
+    initDonationForm(root);
   });
 }
 
@@ -61,8 +62,19 @@ export function initDonationForms(): void {
  * Safe to call on dynamically injected elements (e.g. in the registration
  * success panel) after the DOM is already loaded.
  */
-export function initDonationForm(root: HTMLElement): void {
-  void initForm(root);
+const initializedForms = new WeakMap<HTMLElement, () => void>();
+
+export function initDonationForm(root: HTMLElement): (() => void) | undefined {
+  const existing = initializedForms.get(root);
+  if (existing) return existing;
+  const dispose = initForm(root);
+  if (!dispose) return;
+  const cleanup = () => {
+    dispose();
+    initializedForms.delete(root);
+  };
+  initializedForms.set(root, cleanup);
+  return cleanup;
 }
 
 function readConfig(root: HTMLElement): DonationConfig {
@@ -73,18 +85,25 @@ function readConfig(root: HTMLElement): DonationConfig {
     name: root.dataset.donationName || params.get("name") || undefined,
     email: root.dataset.donationEmail || params.get("email") || undefined,
     organizationName: root.dataset.donationOrganization || params.get("org") || undefined,
-    source: params.get("ref") || params.get("source") || window.location.pathname,
+    source: params.get("ref") || root.dataset.donationSource || params.get("source") || window.location.pathname,
     successPath: root.dataset.donationSuccessPath || undefined,
     cancelPath: root.dataset.donationCancelPath || undefined,
   };
 }
 
-async function initForm(root: HTMLElement): Promise<void> {
+function initForm(root: HTMLElement): (() => void) | undefined {
+  let disposed = false;
   const config = readConfig(root);
 
   // Currency selection is local; opening the form does not contact the API.
-  const region = new Intl.Locale(navigator.language).region;
-  const defaultCurrency = region ? currencyForCountry(region) : "usd";
+  let defaultCurrency = "usd";
+  try {
+    const region = new Intl.Locale(navigator.language).region;
+    if (region) defaultCurrency = currencyForCountry(region);
+  } catch {
+    // An unavailable browser locale keeps the explicit USD default; the donor
+    // can still choose any supported currency before entering an amount.
+  }
 
   // ── State ──────────────────────────────────────────────────────────────
   let selectedCurrency = defaultCurrency;
@@ -107,10 +126,10 @@ async function initForm(root: HTMLElement): Promise<void> {
   const checkoutContainer = widget?.querySelector<HTMLElement>("[data-donation-checkout]") ?? null;
   const checkoutMount = widget?.querySelector<HTMLElement>("[data-donation-checkout-mount]") ?? null;
   const backBtn = widget?.querySelector<HTMLButtonElement>("[data-donation-back]") ?? null;
-  let checkoutAttemptId = crypto.randomUUID();
+  let checkoutAttemptId = randomUuid();
 
   root.addEventListener("input", () => {
-    checkoutAttemptId = crypto.randomUUID();
+    checkoutAttemptId = randomUuid();
   });
 
   if (!currencySelect || !presetContainer || !customInput || !donateBtn) return;
@@ -219,7 +238,7 @@ async function initForm(root: HTMLElement): Promise<void> {
         embedded: true,
       });
       const res = await postJson(`${API_BASE}/donations/checkout`, payload, donationCheckoutEmbeddedResponseSchema);
-      await mountEmbeddedCheckout(res.clientSecret, res.publishableKey);
+      if (!disposed) await mountEmbeddedCheckout(res.clientSecret, res.publishableKey);
     } catch (err: unknown) {
       const message = err instanceof Error ? err.message : "Something went wrong. Please try again.";
       showStatus(message, true);
@@ -265,9 +284,14 @@ async function initForm(root: HTMLElement): Promise<void> {
       throw new Error("Embedded checkout container not found");
     }
     const stripe = await loadStripe(publishableKey);
+    if (disposed) return;
     const checkout = await stripe.initEmbeddedCheckout({
       fetchClientSecret: () => Promise.resolve(clientSecret),
     });
+    if (disposed) {
+      checkout.destroy();
+      return;
+    }
     embeddedCheckout = checkout;
     showCheckout();
     checkout.mount(checkoutMount);
@@ -305,6 +329,10 @@ async function initForm(root: HTMLElement): Promise<void> {
     statusEl.textContent = "";
     statusEl.hidden = true;
   }
+  return () => {
+    disposed = true;
+    destroyEmbeddedCheckout();
+  };
 }
 
 // ── Pure rendering helpers ──────────────────────────────────────────────────

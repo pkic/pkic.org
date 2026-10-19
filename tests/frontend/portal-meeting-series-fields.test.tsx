@@ -19,7 +19,7 @@ import {
   MeetingSeriesFields,
   type MeetingSeriesDraft,
 } from "../../assets/ts/member-flows/portal/sections/management/MeetingSeriesFields";
-import { chooseOption, controlFor, labelNames, typeInto } from "./helpers/labelled-control";
+import { chooseOption, controlFor, labelNames, typeInto } from "./helpers/labeled-control";
 
 function draft(overrides: Partial<MeetingSeriesDraft> = {}): MeetingSeriesDraft {
   return {
@@ -83,7 +83,7 @@ describe("meeting series fields", () => {
 
     for (const label of OWN_LABELS) {
       // Resolved through the `for`/`id` pair itself, so the lookup fails
-      // exactly when the labelling contract is broken.
+      // exactly when the labeling contract is broken.
       expect(controlFor(page, label).id).toBeTruthy();
     }
     // The child components still bring their own named controls.
@@ -136,7 +136,7 @@ describe("meeting series fields", () => {
     expect(onChange).toHaveBeenCalledTimes(1);
     expect(onChange.mock.calls[0]?.[0]).toMatchObject({ durationMinutes: 90 });
     // A text input hands back a string; the draft must not carry one.
-    expect(typeof (onChange.mock.calls[0]?.[0] as MeetingSeriesDraft).durationMinutes).toBe("number");
+    expect(typeof (onChange.mock.calls[0]![0] as MeetingSeriesDraft).durationMinutes).toBe("number");
   });
 
   it("reports a policy change under the key it belongs to", async () => {

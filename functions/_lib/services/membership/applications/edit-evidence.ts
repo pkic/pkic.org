@@ -1,3 +1,6 @@
+import type { MembershipCategoryCatalogEntry } from "../../../../../assets/shared/schemas/membership-categories";
+import { prepareMembershipWorkflowPin, requireCategoryWorkflow } from "../workflows/pinning";
+import { prepareMembershipWorkflowRestart } from "../workflows/restart";
 import { isApplicationTerminalStage } from "../../../../../assets/shared/schemas/member-applications";
 import { prepareAuthorizationGuard } from "../../../db/authorization-guard";
 import { first } from "../../../db/queries";
@@ -9,18 +12,24 @@ import type { MemberApplicationRow } from "./queries";
 export async function prepareApplicationEditEvidenceGuard(
   db: DatabaseLike,
   application: MemberApplicationRow,
-  categoryChanged: boolean,
+  nextCategory: MembershipCategoryCatalogEntry,
+  now: string,
 ): Promise<StatementLike[]> {
+  const categoryChanged = nextCategory.code !== application.membership_category;
+  if (categoryChanged && isApplicationTerminalStage(application.stage))
+    throw new AppError(409, "MEMBERSHIP_APPLICATION_CLOSED", "Closed applications cannot change category.");
   const workflow = await first<{ generation: number; revision: number }>(
     db,
     "SELECT generation, revision FROM membership_application_workflows WHERE application_id = ? AND superseded_at IS NULL",
     [application.id],
   );
+  if (categoryChanged) {
+    const target = await requireCategoryWorkflow(db, nextCategory);
+    return workflow
+      ? prepareMembershipWorkflowRestart(db, application.id, workflow, nextCategory, target, now)
+      : prepareMembershipWorkflowPin(db, application.id, nextCategory, target, 1, now);
+  }
   if (!workflow) return [];
-  if (categoryChanged)
-    throw new AppError(422, "VALIDATION_ERROR", "An application's category is fixed at submission.", {
-      fieldErrors: { membershipCategory: ["Use a new application for a different membership category."] },
-    });
   if (isApplicationTerminalStage(application.stage)) return [];
   const evidence = {
     sql: `SELECT 1 FROM membership_application_workflows workflow

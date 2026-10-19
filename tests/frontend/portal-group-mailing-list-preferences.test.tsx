@@ -7,7 +7,7 @@ import {
   mailingListPreferenceMutationSchema,
 } from "../../assets/shared/schemas/mailing-lists";
 import { GroupMailingLists } from "../../assets/ts/member-flows/portal/sections/management/GroupMailingLists";
-import { optionValues } from "./helpers/labelled-control";
+import { optionValues } from "./helpers/labeled-control";
 
 const navigate = vi.fn();
 

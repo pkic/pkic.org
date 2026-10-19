@@ -1,10 +1,10 @@
 import { first } from "../db/queries";
 import { AppError } from "../errors";
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, StatementLike } from "../types";
 import { uuid } from "../utils/ids";
 import { imageExtension, putUploadedImage } from "../utils/image-upload";
 import { nowIso } from "../utils/time";
-import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange, prepareAuditLogWhen } from "./audit";
+import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "./audit";
 import {
   prepareStorageDeletion,
   processStorageDeletionForKey,
@@ -27,6 +27,13 @@ export interface StoredImagePointerDefinition {
   notFoundCode: string;
   notFoundMessage: string;
 }
+
+/** Related durable intents join the pointer's guarded transaction; callers retain domain ownership. */
+type PrepareRelatedImageStatements = (
+  row: StoredImagePointerRow,
+  nextKey: string | null,
+  at: string,
+) => StatementLike[];
 
 interface StoredImageAudit {
   actorType: string;
@@ -67,6 +74,7 @@ export async function replaceStoredImagePointer(input: {
   image: { buffer: ArrayBuffer; contentType: string };
   audit: StoredImageAudit;
   validateRow?: (row: StoredImagePointerRow) => void;
+  prepareRelatedStatements?: PrepareRelatedImageStatements;
 }): Promise<{ r2Key: string; previousKey: string | null }> {
   const row = await loadPointerRow(input.db, input.definition, input.id);
   input.validateRow?.(row);
@@ -99,6 +107,7 @@ export async function replaceStoredImagePointer(input: {
             at,
           ),
         ];
+        statements.push(...(input.prepareRelatedStatements?.(row, r2Key, at) ?? []));
         const deletion = prepareStorageDeletion(input.db, row.object_key, at, input.bucketName);
         if (deletion) statements.push(deletion);
         return statements;
@@ -120,6 +129,7 @@ export async function removeStoredImagePointer(input: {
   id: string;
   audit: StoredImageAudit;
   validateRow?: (row: StoredImagePointerRow) => void;
+  prepareRelatedStatements?: PrepareRelatedImageStatements;
 }): Promise<{ previousKey: string | null }> {
   const row = await loadPointerRow(input.db, input.definition, input.id);
   input.validateRow?.(row);
@@ -132,23 +142,26 @@ export async function removeStoredImagePointer(input: {
           WHERE id = ? AND ${input.definition.pointerColumn} IS ?`,
       )
       .bind(at, row.id, row.object_key),
-    prepareAuditLogWhen(input.db, {
-      actorType: input.audit.actorType,
-      actorId: input.audit.actorId,
-      action: input.audit.action,
-      entityType: input.definition.entityType,
-      entityId: row.id,
-      details: { ...input.audit.details, previousKey: row.object_key },
-      createdAt: at,
-      conditionSql: `SELECT 1 FROM ${input.definition.table} WHERE id = ? AND ${input.definition.pointerColumn} IS NULL AND updated_at = ?`,
-      conditionBindings: [row.id, at],
-    }),
+    prepareAuditLogAfterOneChange(
+      input.db,
+      input.audit.actorType,
+      input.audit.actorId,
+      input.audit.action,
+      input.definition.entityType,
+      row.id,
+      { ...input.audit.details, previousKey: row.object_key },
+      at,
+    ),
   ];
+  statements.push(...(input.prepareRelatedStatements?.(row, null, at) ?? []));
   const deletion = prepareStorageDeletion(input.db, row.object_key, at, input.bucketName);
   if (deletion) statements.push(deletion);
-  const [updated] = await input.db.batch(statements);
-  if ((updated.meta?.changes ?? 0) !== 1) {
-    throw new AppError(409, "IMAGE_CHANGED", "The stored image changed while this request was processed");
+  try {
+    await input.db.batch(statements);
+  } catch (error) {
+    if (isAuditChangeGuardFailure(error))
+      throw new AppError(409, "IMAGE_CHANGED", "The stored image changed while this request was processed");
+    throw error;
   }
   return { previousKey: row.object_key };
 }

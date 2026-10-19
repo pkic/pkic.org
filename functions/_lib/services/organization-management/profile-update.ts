@@ -21,6 +21,8 @@ import {
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { getOrgAggregate, fetchOrgDetailRow, getOrganization } from "./read-model";
 import { prepareAuditLog } from "../audit";
+import { prepareSitePublicationRequest } from "../site-publication-requests";
+import { organizationBrandingPublicationCondition } from "../organization-content/branding-publication";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import {
   ORGANIZATION_SCALAR_CONTENT_COLUMN_BY_FIELD,
@@ -114,12 +116,16 @@ export async function updateOrganization(
 
   const setClauses: string[] = [];
   const values: unknown[] = [];
+  const publicChanges: string[] = [];
+  const publicValues: unknown[] = [];
 
   for (const [key, column] of Object.entries(UPDATABLE_COLUMNS)) {
     const value = (input as unknown as Record<string, unknown>)[key];
     if (value === undefined) continue;
     setClauses.push(`${column} = ?`);
     values.push(value);
+    publicChanges.push(`organization.${column} IS NOT ?`);
+    publicValues.push(value);
   }
   if (input.name !== undefined) {
     setClauses.push("normalized_name = ?");
@@ -127,7 +133,48 @@ export async function updateOrganization(
   }
   if (input.links !== undefined) {
     setClauses.push("links_json = ?");
-    values.push(serializeOrganizationContentValue("links", input.links));
+    const links = serializeOrganizationContentValue("links", input.links);
+    values.push(links);
+    publicChanges.push("organization.links_json IS NOT ?");
+    publicValues.push(links);
+  }
+
+  if (input.memberSince !== undefined) {
+    publicChanges.push("EXISTS(SELECT 1 FROM members WHERE organization_id=organization.id AND member_since IS NOT ?)");
+    publicValues.push(input.memberSince);
+  }
+  if (input.membershipCategory !== undefined) {
+    publicChanges.push(`NOT EXISTS(SELECT 1 FROM members member JOIN member_category_assignments assignment
+      ON assignment.member_id=member.id WHERE member.organization_id=organization.id AND assignment.category_code=?)`);
+    publicValues.push(input.membershipCategory);
+  }
+  if (publicChanges.length) {
+    const branding = organizationBrandingPublicationCondition(id, input);
+    // Inspect the old public basis before any category/profile mutation in this batch.
+    statements.splice(
+      1,
+      0,
+      prepareSitePublicationRequest(
+        authorizedDb,
+        {
+          resourceType: "organization_content",
+          resourceId: id,
+          revision: Date.parse(now),
+          reasonCode: "organization_content_changed",
+          deduplicationKey: `organization-profile:${id}:${crypto.randomUUID()}`,
+        },
+        {
+          sql: `EXISTS(SELECT 1 FROM organizations organization WHERE organization.id=? AND (${publicChanges.join(" OR ")})
+        AND (EXISTS(SELECT 1 FROM members WHERE organization_id=organization.id AND status='active') OR ?)) OR ${branding.sql}`,
+          bindings: [
+            id,
+            ...publicValues,
+            !existingAggregate && input.membershipCategory !== undefined ? 1 : 0,
+            ...branding.bindings,
+          ],
+        },
+      ),
+    );
   }
 
   const hasMutation = Object.keys(input).some((key) => key !== "revision");
@@ -224,7 +271,14 @@ export async function updateOrganization(
     }
   }
 
-  statements.push(prepareAuditLog(authorizedDb, "admin", actor.id, "organization_updated", "organization", id, input));
+  // A rename changes what every identity at the organization shows, so it records the name it replaced.
+  const renamed = input.name !== undefined && input.name !== existing.name;
+  statements.push(
+    prepareAuditLog(authorizedDb, "admin", actor.id, "organization_updated", "organization", id, {
+      ...input,
+      ...(renamed ? { name: { from: existing.name, to: input.name } } : {}),
+    }),
+  );
 
   await authorizedDb.batch(statements);
 

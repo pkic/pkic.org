@@ -122,7 +122,7 @@ describe("portal Event Analytics", () => {
 
     const overview = mount();
     await settle();
-    expect(overview.textContent).toContain("Total Registrations");
+    expect(overview.textContent).toContain("Total registrations");
     const tabLabels = Array.from(overview.querySelectorAll('nav[aria-label="Event analytics"] a')).map(
       (a) => a.textContent,
     );
@@ -144,7 +144,7 @@ describe("portal Event Analytics", () => {
     void act(() => render(null, registrations));
     const staleDonationsTab = mount("donations");
     await settle();
-    expect(staleDonationsTab.textContent).toContain("Total Registrations");
+    expect(staleDonationsTab.textContent).toContain("Total registrations");
     expect(paths.at(-1)).toBe("/api/v1/analytics/summary");
   });
 
@@ -183,7 +183,7 @@ describe("Event Analytics Overview on the design system", () => {
 
     // Each card is a Panel, so its title is a real heading instead of a `h6`
     // carrying its own type scale.
-    expect(headings(container)).toEqual(["Registrations by Status", "Top Events", "Activity — last 30 days"]);
+    expect(headings(container)).toEqual(["Registrations by status", "Top events", "Activity — last 30 days"]);
     expect(container.querySelector(".pk-chart__bars")?.textContent).toContain("registered");
     expect(container.querySelector(".pk-table--data")).toBeNull();
 

@@ -1,3 +1,4 @@
+import { storedImageVersionQuerySchema } from "./images";
 import { z } from "zod";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import {
@@ -280,10 +281,13 @@ export type PublicMemberDetail = z.infer<typeof publicMemberDetailSchema>;
 export const memberLogoRouteSchema = {
   tags: ["Members"],
   summary: "Public organization logo",
-  request: { params: z.object({ id: z.string() }) },
+  description:
+    "With `v`, the version the address names: cached for a year, and no longer resolving once the image changes. A person's photo is rechecked by shared caches every five minutes.",
+  request: { params: z.object({ id: z.string() }), query: storedImageVersionQuerySchema },
   responses: {
     "200": { description: "Logo image bytes." },
-    "404": { description: "No logo on file." },
+    "304": { description: "The cached image is still current." },
+    "404": { description: "No logo on file, or not at this version." },
     "503": { description: "Asset storage is not configured." },
   },
 };

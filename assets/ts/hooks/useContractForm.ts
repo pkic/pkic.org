@@ -40,6 +40,11 @@ type ControlEvent = { target: EventTarget | null; type?: string };
 export interface ContractForm<Output> {
   /** The presentation for the field named `name`. */
   of: (name: string) => FieldPresentation;
+  /**
+   * The presentation for a field and everything inside it: a set of choices,
+   * say, whose own entries may be what the contract refused.
+   */
+  ofGroup: (name: string) => FieldPresentation;
   /** Visible contract or server errors within an object or collection item. */
   errorsWithin: (name: string) => string[];
   /** Spread on the form (or any ancestor of its controls). */
@@ -74,10 +79,28 @@ function hasValue(control: HTMLInputElement | HTMLSelectElement | HTMLTextAreaEl
   return control.value.trim().length > 0;
 }
 
+export interface ContractFormOptions {
+  /**
+   * A composer that sends on content (a chat message, a question): a field
+   * the reader left empty says nothing, because empty is the resting state,
+   * not a mistake. The contract still refuses the empty body — the submit
+   * control reads `valid` and stays disabled — and anything else it refuses,
+   * such as a message that is too long, shows as usual.
+   */
+  quietWhenEmpty?: boolean;
+  /**
+   * The contract field a control answers, when its `name` is not that field
+   * itself — a respondent control is `custom.<key>` or `custom.<key>[]`.
+   */
+  fieldOf?: (name: string) => string;
+}
+
 export function useContractForm<Schema extends z.ZodType>(
   schema: Schema,
   body: unknown,
+  options: ContractFormOptions = {},
 ): ContractForm<z.output<Schema>> {
+  const { fieldOf, quietWhenEmpty = false } = options;
   const [touched, setTouched] = useState<Record<string, Touch>>({});
   const [refused, setRefused] = useState<Record<string, string>>({});
   const [showAll, setShowAll] = useState(false);
@@ -93,33 +116,37 @@ export function useContractForm<Schema extends z.ZodType>(
     document.querySelector<HTMLElement>('[aria-invalid="true"]')?.focus();
   }, [focusAt]);
 
-  const touch = useCallback((event: ControlEvent) => {
-    const control = event.target;
-    if (!isControl(control) || !control.name) return;
-    // Selects and checkboxes commit in change handlers. An input event comes
-    // first; rerendering there restores the old controlled value before the
-    // change handler can read the user's selection.
-    if (
-      event.type === "input" &&
-      (control instanceof HTMLSelectElement ||
-        (control instanceof HTMLInputElement && (control.type === "checkbox" || control.type === "radio")))
-    )
-      return;
-    const name = control.name;
-    setTouched((current) => ({ ...current, [name]: { hasValue: hasValue(control) } }));
-    // A field being retyped is no longer the field the server refused.
-    setRefused((current) => {
-      if (!(name in current)) return current;
-      const next = { ...current };
-      delete next[name];
-      return next;
-    });
-  }, []);
+  const touch = useCallback(
+    (event: ControlEvent) => {
+      const control = event.target;
+      if (!isControl(control) || !control.name) return;
+      // Selects and checkboxes commit in change handlers. An input event comes
+      // first; rerendering there restores the old controlled value before the
+      // change handler can read the user's selection.
+      if (
+        event.type === "input" &&
+        (control instanceof HTMLSelectElement ||
+          (control instanceof HTMLInputElement && (control.type === "checkbox" || control.type === "radio")))
+      )
+        return;
+      const name = fieldOf ? fieldOf(control.name) : control.name;
+      setTouched((current) => ({ ...current, [name]: { hasValue: hasValue(control) } }));
+      // A field being retyped is no longer the field the server refused.
+      setRefused((current) => {
+        if (!(name in current)) return current;
+        const next = { ...current };
+        delete next[name];
+        return next;
+      });
+    },
+    [fieldOf],
+  );
 
   const of = (name: string): FieldPresentation => {
     // A server refusal shows whether or not the reader touched the field;
     // the contract's own verdict waits until they have.
-    const seen = showAll || name in touched;
+    const quiet = quietWhenEmpty && !showAll && touched[name]?.hasValue !== true;
+    const seen = !quiet && (showAll || name in touched);
     const message = refused[name] ?? (seen ? issues[name] : undefined);
     if (message) return { state: "invalid", message };
     return seen && touched[name]?.hasValue ? { state: "ok" } : {};
@@ -147,15 +174,23 @@ export function useContractForm<Schema extends z.ZodType>(
     setShowAll(false);
   }, []);
 
+  const errorsWithin = (name: string) =>
+    Object.keys({ ...issues, ...refused })
+      .filter((key) => key === name || key.startsWith(`${name}.`))
+      .flatMap((key) => {
+        const presentation = of(key);
+        return presentation.message ? [presentation.message] : [];
+      });
+
+  const ofGroup = (name: string): FieldPresentation => {
+    const [message] = errorsWithin(name);
+    return message ? { state: "invalid", message } : of(name);
+  };
+
   return {
     of,
-    errorsWithin: (name) =>
-      Object.keys({ ...issues, ...refused })
-        .filter((key) => key === name || key.startsWith(`${name}.`))
-        .flatMap((key) => {
-          const presentation = of(key);
-          return presentation.message ? [presentation.message] : [];
-        }),
+    ofGroup,
+    errorsWithin,
     handlers: { onInput: touch, onChange: touch, onFocusOut: touch },
     valid: result.success,
     submit,

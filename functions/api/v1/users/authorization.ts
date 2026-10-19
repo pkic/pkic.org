@@ -1,7 +1,7 @@
 import type { Permission } from "../../../../assets/shared/schemas/permissions";
 import { requireUserBackedAdminFromRequest } from "../../../_lib/auth/admin";
-import { requireMemberFromRequest } from "../../../_lib/auth/member";
 import { requirePermission } from "../../../_lib/auth/permissions";
+import { requireIdentityFromRequest } from "../../../_lib/auth/user-session";
 import { requestDb, type AdminContext } from "../../../_lib/db/context";
 import type { DatabaseLike } from "../../../_lib/types";
 
@@ -17,7 +17,7 @@ export async function requireUserStaffPermission(c: AdminContext, permission: Pe
  * Who may read one user record.
  *
  * Two answers, and the first one is the reason this exists: the person the
- * record is about. A member holds no `users:read` — that permission is what
+ * record is about. A human session needs no `users:read` — that permission is what
  * lets staff administer everybody — yet their own record is the page they
  * reach from "My profile", and refusing them their own name would be absurd.
  *
@@ -32,10 +32,10 @@ export async function requireUserRecordReader(
   const db = requestDb(c);
 
   try {
-    const member = await requireMemberFromRequest(db, c.req.raw, c.env);
-    if (member.userId === userId) return { db, isSelf: true };
+    const identity = await requireIdentityFromRequest(db, c.req.raw, c.env);
+    if (identity.userId === userId) return { db, isSelf: true };
   } catch {
-    // Not a member session. The staff attempt below produces the refusal a
+    // Not a live human session. The staff attempt below produces the refusal a
     // caller sees, so an unauthenticated request still fails as it always did.
   }
 

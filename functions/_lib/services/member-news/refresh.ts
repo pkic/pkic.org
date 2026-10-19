@@ -1,6 +1,7 @@
 import type { DatabaseLike } from "../../types";
 import { hasD1QueryCapacity, type D1QueryBudget } from "../../db/query-budget";
 import { nowIso } from "../../utils/time";
+import { prepareSitePublicationRequest } from "../site-publication-requests";
 import { fetchMemberFeed } from "./feed-parser";
 
 interface FeedSource {
@@ -14,7 +15,7 @@ const CURRENT_SOURCE = `EXISTS (SELECT 1 FROM organizations organization
 /** Scheduled refresh owns retries; public requests read only the last successful cache. */
 export async function refreshMemberNews(db: DatabaseLike, budget?: D1QueryBudget) {
   const summary = { refreshed: 0, failed: 0 };
-  if (!hasD1QueryCapacity(budget, 4)) return { summary };
+  if (!hasD1QueryCapacity(budget, 5)) return { summary };
   const now = nowIso();
   const sources = await db
     .prepare(
@@ -29,7 +30,7 @@ export async function refreshMemberNews(db: DatabaseLike, budget?: D1QueryBudget
     .bind(now)
     .all<FeedSource>();
   for (const source of sources.results) {
-    if (!hasD1QueryCapacity(budget, 3)) break;
+    if (!hasD1QueryCapacity(budget, 4)) break;
     let articles;
     let error: string | null = null;
     try {
@@ -58,7 +59,35 @@ export async function refreshMemberNews(db: DatabaseLike, budget?: D1QueryBudget
         source.feed_url,
       );
     if (articles) {
+      const articleJson = JSON.stringify(articles);
       await db.batch([
+        // Compare the visible article sets before replacement, under the same current-source guard.
+        prepareSitePublicationRequest(
+          db,
+          {
+            resourceType: "member_news",
+            resourceId: source.organization_id,
+            revision: Date.parse(now),
+            reasonCode: "member_news_refreshed",
+            deduplicationKey: `member-news:${source.organization_id}:${crypto.randomUUID()}`,
+          },
+          {
+            sql: `${CURRENT_SOURCE} AND EXISTS (
+              WITH incoming AS (
+                SELECT json_extract(value,'$.url') AS url,json_extract(value,'$.title') AS title,
+                  json_extract(value,'$.summary') AS summary,json_extract(value,'$.publishedAt') AS published_at
+                FROM json_each(?)
+              ), cached AS (
+                SELECT url,title,summary,published_at FROM member_news_articles WHERE organization_id=? AND feed_url=?
+              ), added AS (
+                SELECT url,title,summary,published_at FROM incoming EXCEPT SELECT url,title,summary,published_at FROM cached
+              ), removed AS (
+                SELECT url,title,summary,published_at FROM cached EXCEPT SELECT url,title,summary,published_at FROM incoming
+              ) SELECT 1 FROM added UNION ALL SELECT 1 FROM removed
+            )`,
+            bindings: [source.organization_id, source.feed_url, articleJson, source.organization_id, source.feed_url],
+          },
+        ),
         db
           .prepare(`DELETE FROM member_news_articles WHERE organization_id = ? AND ${CURRENT_SOURCE}`)
           .bind(source.organization_id, source.organization_id, source.feed_url),
@@ -68,13 +97,7 @@ export async function refreshMemberNews(db: DatabaseLike, budget?: D1QueryBudget
           SELECT ?, ?, json_extract(value, '$.url'), json_extract(value, '$.title'), json_extract(value, '$.summary'), json_extract(value, '$.publishedAt')
           FROM json_each(?) WHERE ${CURRENT_SOURCE}`,
           )
-          .bind(
-            source.organization_id,
-            source.feed_url,
-            JSON.stringify(articles),
-            source.organization_id,
-            source.feed_url,
-          ),
+          .bind(source.organization_id, source.feed_url, articleJson, source.organization_id, source.feed_url),
         state,
       ]);
       summary.refreshed += 1;

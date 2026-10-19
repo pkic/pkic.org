@@ -19,8 +19,8 @@
   .pk-kicker::before {
     content: "";
     flex: none;
-    width: 6px;
-    height: 6px;
+    width: 0.375rem;
+    height: 0.375rem;
     background: var(--pk-accent);
     border-radius: 50%;
     box-shadow: 0 0 8px var(--pk-accent);

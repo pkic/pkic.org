@@ -134,7 +134,7 @@ describe("the shared proposal catalog", () => {
         card.querySelector(".pk-stat-card__value")?.textContent?.trim(),
       ]),
     );
-    expect(figures).toMatchObject({ submitted: "1", "no reviews": "1" });
+    expect(figures).toMatchObject({ Submitted: "1", "No reviews": "1" });
     expect(summary.querySelector(".text-success, .text-warning")).toBeNull();
 
     // No titled panel restating what the breadcrumb, header and tab already
@@ -163,17 +163,20 @@ describe("the shared proposal catalog", () => {
     expect(row?.getAttribute("href")).toBe(`#/groups/${GROUP_ID}/events/${EVENT_ID}/proposals/${PROPOSAL_ID}`);
   });
 
-  it("shows the current status as an icon, keeps decision history out of the overview, and hides Reviews", async () => {
+  it("states the status and type in words, keeps decision history out of the overview, and hides Reviews", async () => {
     stubCatalog();
     const page = await mountCatalog(EVENT_SLUG);
     const heads = [...page.querySelectorAll("thead th")].map((head) => head.textContent);
     expect(heads.some((text) => text?.includes("Decision"))).toBe(false);
     expect(heads.some((text) => text?.includes("Reviews"))).toBe(false);
-    expect(
-      page.querySelector('tbody [role="img"][aria-label="Submitted"]')?.classList.contains("pk-badge--neutral"),
-    ).toBe(true);
-    expect(page.querySelector('tbody [role="img"][aria-label="Accepted"]')).toBeNull();
-    expect(page.querySelector('tbody [role="img"][aria-label="talk"]')).not.toBeNull();
+    // Words with a tone, never a lone glyph: a check meant "accepted" in
+    // Status and "recommends accepting" in Recommendations.
+    const badges = [...page.querySelectorAll("tbody .pk-badge")];
+    expect(badges.find((badge) => badge.textContent === "Submitted")?.classList.contains("pk-badge--neutral")).toBe(
+      true,
+    );
+    expect(page.querySelector('tbody [role="img"]')).toBeNull();
+    expect(page.querySelector("tbody")?.textContent).toContain("Talk");
     const headers = [...page.querySelectorAll("thead th")];
     const index = headers.findIndex((head) => head.textContent?.includes("Proposer"));
     expect(index).toBeGreaterThan(-1);

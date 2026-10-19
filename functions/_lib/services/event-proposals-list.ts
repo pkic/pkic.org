@@ -1,17 +1,20 @@
 import { batchFirst, buildOffsetPageStatements, decodeOffsetPageResults, type OffsetPageQuery } from "../db/pagination";
 import { buildD1TextSearchFilter } from "../db/search";
 import type { DatabaseLike } from "../types";
+import { proposalSpeakerProfileValueSql, proposalSpeakerOrganizationNameSql } from "./proposal-speakers";
+import { z } from "zod";
 import { buildPageInfo } from "../../../assets/shared/schemas/pagination";
-import type {
-  EventProposalSummary,
-  EventProposalsListQuery,
-  ProposalStats,
+import {
+  proposalAgendaPlacementSchema,
+  type EventProposalSummary,
+  type EventProposalsListQuery,
+  type ProposalStats,
 } from "../../../assets/shared/schemas/event-proposals";
 import { PROPOSAL_INACTIVE_STATUSES } from "../../../assets/shared/schemas/proposal-status";
 
 type ProposalSort = EventProposalsListQuery["sort"];
 
-/** Transport-neutral event proposal catalogue query. */
+/** Transport-neutral event proposal catalog query. */
 export type EventProposalsServiceQuery = EventProposalsListQuery & {
   eventId: string;
   /** Allow search across private review and decision text for authorized scorers. */
@@ -30,8 +33,49 @@ const SORT_EXPRESSIONS: Readonly<Record<string, string>> = {
   recommendations: "(COALESCE(rv.accept_count, 0) - COALESCE(rv.reject_count, 0))",
 };
 
+/** On the agenda: a session content linked to this proposal (see `proposal-agenda-link`). */
+const AGENDA_IMPORTED_SQL =
+  "EXISTS(SELECT 1 FROM event_agenda_contents content WHERE content.proposal_id=sp.id AND content.event_id=sp.event_id)";
+
+/** Where the proposal first runs on the agenda, so a placed proposal can say "Thu 14:00 · Room B". */
+const AGENDA_PLACEMENT_SQL = `(SELECT json_object('startAt',occurrence.start_at,'roomName',room.name)
+  FROM event_agenda_occurrences occurrence
+  JOIN event_agenda_contents content ON content.id=occurrence.content_id AND content.event_id=occurrence.event_id
+  LEFT JOIN event_agenda_rooms room ON room.id=occurrence.room_id
+  WHERE occurrence.event_id=sp.event_id AND occurrence.start_at IS NOT NULL AND content.proposal_id=sp.id
+  ORDER BY occurrence.start_at, occurrence.id LIMIT 1)`;
+
+/** Speakers who have not accepted yet: they stay off the agenda until they do. */
+const PENDING_SPEAKERS_SQL =
+  "(SELECT COUNT(*) FROM proposal_speakers pending WHERE pending.proposal_id = sp.id AND pending.status = 'invited')";
 const PRESENTATION_EXISTS_SQL =
   "EXISTS (SELECT 1 FROM presentation_versions pv WHERE pv.proposal_id = sp.id AND pv.deleted_at IS NULL)";
+
+/**
+ * People on the proposal's roster who still speak: everyone but those who
+ * declined, and never an account that was redacted or merged into another.
+ */
+const ROSTER_SPEAKER_SCOPE_SQL =
+  "roster.proposal_id = sp.id AND roster.status <> 'declined' AND roster_user.pii_redacted_at IS NULL AND roster_user.merged_into_user_id IS NULL";
+const ROSTER_FIRST_NAME = proposalSpeakerProfileValueSql("roster_user", "roster", "firstName");
+const ROSTER_LAST_NAME = proposalSpeakerProfileValueSql("roster_user", "roster", "lastName");
+const ROSTER_FULL_NAME = `TRIM(COALESCE(${ROSTER_FIRST_NAME}, '') || ' ' || COALESCE(${ROSTER_LAST_NAME}, ''))`;
+
+/** Every speaker's name, email and organization, so a search finds co-speakers as well as the proposer. */
+const ROSTER_SEARCH_EXPRESSIONS = [
+  ROSTER_FULL_NAME,
+  "roster_user.email",
+  proposalSpeakerOrganizationNameSql("roster"),
+] as const;
+
+/** The other speakers' names, in the order they joined, for the row's second line. */
+const CO_SPEAKER_NAMES_SQL = `(SELECT json_group_array(speaker_name) FROM (
+  SELECT ${ROSTER_FULL_NAME} AS speaker_name
+  FROM proposal_speakers roster
+  JOIN users roster_user ON roster_user.id = roster.user_id
+  WHERE ${ROSTER_SPEAKER_SCOPE_SQL} AND roster.user_id <> sp.proposer_user_id
+  ORDER BY roster.created_at, roster.id
+) WHERE speaker_name <> '')`;
 
 function proposalOrderBy(sort: ProposalSort): string {
   const descending = sort.startsWith("-");
@@ -83,6 +127,7 @@ export function buildEventProposalsPageQuery(query: EventProposalsServiceQuery):
     );
     predicateBindings.push(query.recommendation);
   }
+  if (query.agenda) conditions.push(`${query.agenda === "unimported" ? "NOT " : ""}${AGENDA_IMPORTED_SQL}`);
   if (query.presentation) {
     conditions.push(`${query.presentation === "missing" ? "NOT " : ""}${PRESENTATION_EXISTS_SQL}`);
   }
@@ -96,6 +141,14 @@ export function buildEventProposalsPageQuery(query: EventProposalsServiceQuery):
       "u.last_name",
       "u.first_name || ' ' || u.last_name",
     ]);
+    const speakers = buildD1TextSearchFilter(query.q, ROSTER_SEARCH_EXPRESSIONS);
+    const proposalOrSpeaker = `(${proposal.sql}
+        OR EXISTS (
+          SELECT 1 FROM proposal_speakers roster
+          JOIN users roster_user ON roster_user.id = roster.user_id
+          WHERE ${ROSTER_SPEAKER_SCOPE_SQL} AND ${speakers.sql}
+        ))`;
+    const proposalBindings = [...proposal.bindings, ...speakers.bindings];
     if (query.searchPrivateFields) {
       const review = buildD1TextSearchFilter(query.q, [
         "pr_search.reviewer_comment",
@@ -107,7 +160,7 @@ export function buildEventProposalsPageQuery(query: EventProposalsServiceQuery):
         "ru.first_name || ' ' || ru.last_name",
       ]);
       const decision = buildD1TextSearchFilter(query.q, ["pd_search.decision_note", "pd_search.final_status"]);
-      conditions.push(`(${proposal.sql}
+      conditions.push(`(${proposalOrSpeaker}
         OR EXISTS (
           SELECT 1 FROM proposal_reviews pr_search
           LEFT JOIN users ru ON ru.id = pr_search.reviewer_user_id
@@ -117,10 +170,10 @@ export function buildEventProposalsPageQuery(query: EventProposalsServiceQuery):
           SELECT 1 FROM proposal_decisions pd_search
           WHERE pd_search.proposal_id = sp.id AND ${decision.sql}
         ))`);
-      predicateBindings.push(...proposal.bindings, ...review.bindings, ...decision.bindings);
+      predicateBindings.push(...proposalBindings, ...review.bindings, ...decision.bindings);
     } else {
-      conditions.push(proposal.sql);
-      predicateBindings.push(...proposal.bindings);
+      conditions.push(proposalOrSpeaker);
+      predicateBindings.push(...proposalBindings);
     }
   }
 
@@ -155,6 +208,10 @@ export function buildEventProposalsPageQuery(query: EventProposalsServiceQuery):
                 COALESCE(rv.needs_work_count, 0) AS recommendation_needs_work_count,
                 COALESCE(rv.reject_count, 0) AS recommendation_reject_count,
                 ${PRESENTATION_EXISTS_SQL} AS has_presentation,
+                ${AGENDA_IMPORTED_SQL} AS agendaImported,
+                ${AGENDA_PLACEMENT_SQL} AS agenda_placement_json,
+                ${PENDING_SPEAKERS_SQL} AS pending_speaker_count,
+                ${CO_SPEAKER_NAMES_SQL} AS co_speaker_names_json,
                 pd.final_status AS decision_status, pd.decision_note, pd.decided_at AS decision_decided_at
       `,
       fromSql: pageFromSql,
@@ -210,11 +267,19 @@ export async function listEventProposals(
   ]);
 
   const { rows, total } = decodeOffsetPageResults<
-    Omit<EventProposalSummary, "has_presentation"> & { has_presentation: number }
+    Omit<EventProposalSummary, "has_presentation" | "agendaImported" | "agendaPlacement" | "co_speaker_names"> & {
+      has_presentation: number;
+      agendaImported: number;
+      agenda_placement_json: string | null;
+      co_speaker_names_json: string | null;
+    }
   >(rowsResult, totalResult);
-  const proposals = rows.map((row) => ({
+  const proposals = rows.map(({ agenda_placement_json: placement, co_speaker_names_json: coSpeakers, ...row }) => ({
     ...row,
+    co_speaker_names: coSpeakers ? z.array(z.string()).parse(JSON.parse(coSpeakers)) : [],
     has_presentation: row.has_presentation === 1,
+    agendaImported: row.agendaImported === 1,
+    agendaPlacement: placement ? proposalAgendaPlacementSchema.parse(JSON.parse(placement)) : null,
   }));
   const statsRow = batchFirst<ProposalStatsRow>(statsResult);
   const byStatus = parseCountRecord(statsRow?.by_status_json ?? "{}");

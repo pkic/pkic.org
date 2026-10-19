@@ -1,12 +1,14 @@
 import { useState } from "preact/hooks";
 
-import { useContractForm } from "../../hooks/useContractForm";
+import { useContractForm, type FieldPresentation } from "../../hooks/useContractForm";
+import { FormChoicesEditor } from "./FormChoicesEditor";
 import { Button } from "../../ui/Button";
 import { Checkbox } from "../../ui/Checkbox";
 import { Field } from "../../ui/Field";
 import { FormFold } from "./FormFold";
 import { Select, TextInput, Textarea } from "../../ui/TextControl";
 import {
+  FORM_FIELD_WIDGETS,
   formFieldRulesSchema,
   formFieldRulesTextSchema,
   VISUALIZATIONS,
@@ -34,6 +36,7 @@ const VIZ_LABELS: Record<Visualization, string> = {
   auto: "Auto",
   bar: "Bar chart",
   pie: "Pie chart",
+  donut: "Donut chart",
   wordcloud: "Word cloud",
   list: "Top list",
 };
@@ -43,7 +46,7 @@ const VIZ_OPTIONS: Array<{ value: VisualizationConfig; label: string }> = VISUAL
   label: VIZ_LABELS[visualization],
 }));
 
-const UI_WIDGETS = ["", "tags", "checkboxes", "rating_stars", "nps"];
+const UI_WIDGETS = ["", ...FORM_FIELD_WIDGETS];
 
 /**
  * What the closed "Accepted values" fold says about the rules inside it.
@@ -67,16 +70,38 @@ function ruleSummary(field: FieldDraft, c: ReturnType<typeof caps>): string {
 }
 const FIELD_FORMATS = ["", "iso_country", "phone", "professional_profile", "date_range"];
 
+/** The rules behind the "Accepted values" fold. */
+const RULE_NAMES = [
+  "pattern",
+  "patternMessage",
+  "format",
+  "minLength",
+  "maxLength",
+  "min",
+  "max",
+  "step",
+  "minItems",
+  "maxItems",
+  "allowedDomains",
+] as const;
+
 // ── component ─────────────────────────────────────────────────────────────────
 
 export function FieldConfigEditor({
   field,
   index,
   updateField,
+  presentationOf,
 }: {
   field: FieldDraft;
   index: number;
   updateField: (index: number, patch: Partial<FieldDraft>) => void;
+  /**
+   * The state of a part of this question in the contract of the form that
+   * holds it — `options`, `key`, `validation.max` — so a refusal of the whole
+   * form or poll shows on the control it is about.
+   */
+  presentationOf?: (path: string) => FieldPresentation;
 }) {
   const c = caps(field.fieldType);
   const [rulesOpen, setRulesOpen] = useState(false);
@@ -87,6 +112,15 @@ export function FieldConfigEditor({
   // parses is what refuses a value, live, on the control it is about.
   const visual = useContractForm(formFieldRulesSchema, visualRules(field));
   const raw = useContractForm(formFieldRulesTextSchema, { validation: field.rawValidationText });
+  // A rule refused by the enclosing contract speaks first; otherwise the rules contract's own verdict.
+  const rule = (name: string): FieldPresentation => {
+    const outer = presentationOf?.(`validation.${name}`);
+    return outer?.message ? outer : visual.of(name);
+  };
+  const refused = (paths: readonly string[]) => paths.some((path) => Boolean(presentationOf?.(path)?.message));
+  // A fold holding a refused control opens, so the refusal is never hidden behind it.
+  const rulesShown = rulesOpen || refused(RULE_NAMES.map((name) => `validation.${name}`));
+  const metaShown = metaOpen || refused(["key", "validation.uiWidget", "validation.adminVisualization"]);
 
   function toggleMode() {
     if (!field.rawMode) {
@@ -114,7 +148,6 @@ export function FieldConfigEditor({
       <span class="pk-small">Field configuration</span>
       <div class="pk-cluster" role="group" aria-label="Edit mode">
         <Button
-          size="sm"
           variant={field.rawMode ? "secondary" : "primary"}
           aria-pressed={field.rawMode ? "false" : "true"}
           onClick={() => {
@@ -124,7 +157,6 @@ export function FieldConfigEditor({
           Visual
         </Button>
         <Button
-          size="sm"
           variant={field.rawMode ? "primary" : "secondary"}
           aria-pressed={field.rawMode ? "true" : "false"}
           onClick={() => {
@@ -151,7 +183,7 @@ export function FieldConfigEditor({
         <Field
           label="Validation JSON"
           help="The full validation and display config. Switch to Visual to parse these settings back into structured fields."
-          {...raw.of("validation")}
+          {...(presentationOf?.("validation")?.message ? presentationOf("validation") : raw.of("validation"))}
         >
           {(control) => (
             <Textarea
@@ -170,12 +202,6 @@ export function FieldConfigEditor({
   }
 
   // ── Visual mode ──────────────────────────────────────────────────────────────
-  const options = field.optionsText.split(/\n/);
-
-  function setOption(at: number, next: string) {
-    updateField(index, { optionsText: options.map((entry, i) => (i === at ? next : entry)).join("\n") });
-  }
-
   /*
    * A fold stays closed until an author opens it, so its summary has to say
    * what is set inside. A fold that reads "Not restricted" is one they can
@@ -186,7 +212,7 @@ export function FieldConfigEditor({
 
   return (
     <div class="pk pk-stack pk-stack--snug" {...visual.handlers}>
-      <Field label="Description" help="Respondents read this directly under the question." {...visual.of("helpText")}>
+      <Field label="Description" help="Respondents read this directly under the question." {...rule("helpText")}>
         {(control) => (
           <TextInput
             {...control}
@@ -202,7 +228,7 @@ export function FieldConfigEditor({
         <Field
           label="Placeholder"
           help="Example text inside the empty box — it clears as soon as they type."
-          {...visual.of("placeholder")}
+          {...rule("placeholder")}
         >
           {(control) => (
             <TextInput
@@ -215,43 +241,12 @@ export function FieldConfigEditor({
         </Field>
       )}
 
-      {/*
-       * One box per choice rather than a newline-separated textarea. The draft
-       * still stores the lines; only the way an author edits them changes, so
-       * adding and removing a choice no longer means editing whitespace.
-       */}
       {c.options && (
-        <fieldset class="pk-choices pk-stack pk-stack--tight">
-          <legend class="pk-choices__legend">Choices</legend>
-          {options.map((option, at) => (
-            <div class="pk-formq__option" key={at}>
-              <span
-                aria-hidden="true"
-                class={`pk-formq__option-mark ${
-                  field.fieldType === "multi_select" ? "pk-formq__option-mark--many" : "pk-formq__option-mark--one"
-                }`}
-              />
-              <TextInput
-                aria-label={`Choice ${String(at + 1)}`}
-                value={option}
-                onInput={(e) => setOption(at, (e.target as HTMLInputElement).value)}
-              />
-              <button
-                type="button"
-                class="pk-formq__option-remove"
-                aria-label={`Remove choice ${String(at + 1)}`}
-                onClick={() => updateField(index, { optionsText: options.filter((_, i) => i !== at).join("\n") })}
-              >
-                <span aria-hidden="true">✕</span>
-              </button>
-            </div>
-          ))}
-          <div>
-            <Button size="sm" onClick={() => updateField(index, { optionsText: `${field.optionsText}\n` })}>
-              Add choice
-            </Button>
-          </div>
-        </fieldset>
+        <FormChoicesEditor
+          field={field}
+          update={(patch) => updateField(index, patch)}
+          presentation={presentationOf?.("options")}
+        />
       )}
 
       {c.allowCustom && (
@@ -266,13 +261,13 @@ export function FieldConfigEditor({
       <FormFold
         title="Accepted values"
         summary={rulesSummary}
-        open={rulesOpen}
+        open={rulesShown}
         onToggle={() => setRulesOpen((open) => !open)}
       >
         <div class="pk-grid pk-grid--tight">
           {c.pattern && (
             <>
-              <Field label="Pattern" help="A regular expression." {...visual.of("pattern")}>
+              <Field label="Pattern" help="A regular expression." {...rule("pattern")}>
                 {(control) => (
                   <TextInput
                     {...control}
@@ -283,7 +278,7 @@ export function FieldConfigEditor({
                   />
                 )}
               </Field>
-              <Field label="Message when it does not match" {...visual.of("patternMessage")}>
+              <Field label="Message when it does not match" {...rule("patternMessage")}>
                 {(control) => (
                   <TextInput
                     {...control}
@@ -297,7 +292,7 @@ export function FieldConfigEditor({
           )}
 
           {c.format && (
-            <Field label="Format" {...visual.of("format")}>
+            <Field label="Format" {...rule("format")}>
               {(control) => (
                 <Select
                   {...control}
@@ -317,7 +312,7 @@ export function FieldConfigEditor({
 
           {c.lengthLimits && (
             <>
-              <Field label="Min length" {...visual.of("minLength")}>
+              <Field label="Min length" {...rule("minLength")}>
                 {(control) => (
                   <TextInput
                     {...control}
@@ -329,7 +324,7 @@ export function FieldConfigEditor({
                   />
                 )}
               </Field>
-              <Field label="Max length" {...visual.of("maxLength")}>
+              <Field label="Max length" {...rule("maxLength")}>
                 {(control) => (
                   <TextInput
                     {...control}
@@ -346,7 +341,7 @@ export function FieldConfigEditor({
 
           {c.numericRange && (
             <>
-              <Field label="Min" {...visual.of("min")}>
+              <Field label="Min" {...rule("min")}>
                 {(control) => (
                   <TextInput
                     {...control}
@@ -357,7 +352,7 @@ export function FieldConfigEditor({
                   />
                 )}
               </Field>
-              <Field label="Max" {...visual.of("max")}>
+              <Field label="Max" {...rule("max")}>
                 {(control) => (
                   <TextInput
                     {...control}
@@ -372,7 +367,7 @@ export function FieldConfigEditor({
           )}
 
           {c.step && (
-            <Field label="Step" {...visual.of("step")}>
+            <Field label="Step" {...rule("step")}>
               {(control) => (
                 <TextInput
                   {...control}
@@ -387,7 +382,7 @@ export function FieldConfigEditor({
 
           {c.selectionLimits && (
             <>
-              <Field label="Min selections" {...visual.of("minItems")}>
+              <Field label="Min selections" {...rule("minItems")}>
                 {(control) => (
                   <TextInput
                     {...control}
@@ -399,7 +394,7 @@ export function FieldConfigEditor({
                   />
                 )}
               </Field>
-              <Field label="Max selections" {...visual.of("maxItems")}>
+              <Field label="Max selections" {...rule("maxItems")}>
                 {(control) => (
                   <TextInput
                     {...control}
@@ -416,7 +411,7 @@ export function FieldConfigEditor({
         </div>
 
         {c.allowedDomains && (
-          <Field label="Allowed domains" help="One per line." {...visual.of("allowedDomains")}>
+          <Field label="Allowed domains" help="One per line." {...rule("allowedDomains")}>
             {(control) => (
               <Textarea
                 {...control}
@@ -439,11 +434,15 @@ export function FieldConfigEditor({
       <FormFold
         title="Key and reporting"
         summary={metaSummary}
-        open={metaOpen}
+        open={metaShown}
         onToggle={() => setMetaOpen((open) => !open)}
       >
         <div class="pk-grid pk-grid--tight">
-          <Field label="Field key" help="The name this answer carries in exports and the API.">
+          <Field
+            label="Field key"
+            help="The name this answer carries in exports and the API."
+            {...presentationOf?.("key")}
+          >
             {(control) => (
               <TextInput
                 {...control}
@@ -457,7 +456,7 @@ export function FieldConfigEditor({
             )}
           </Field>
 
-          <Field label="Widget" {...visual.of("uiWidget")}>
+          <Field label="Widget" {...rule("uiWidget")}>
             {(control) => (
               <Select
                 {...control}
@@ -474,7 +473,7 @@ export function FieldConfigEditor({
             )}
           </Field>
 
-          <Field label="In the results summary" {...visual.of("adminVisualization")}>
+          <Field label="In the results summary" {...rule("adminVisualization")}>
             {(control) => (
               <Select
                 {...control}

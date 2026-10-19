@@ -12,7 +12,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { groupEventSeriesFixture } from "./helpers/meeting-series-fixture";
 import { GroupMeetings } from "../../assets/ts/member-flows/portal/sections/management/GroupMeetings";
-import { buttonNamed, controlFor, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, controlFor, typeInto } from "./helpers/labeled-control";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["", vi.fn()] }));
 
@@ -119,7 +119,9 @@ describe("scheduling a group meeting series", () => {
             registrationPolicy: "no_registration",
             visibility: "group_members",
             inviteLimitAttendee: 0,
-            location: null,
+            city: null,
+            country: null,
+            meetingLocation: null,
             links: [],
             nextOccurrenceAt: null,
             updatedAt: "2026-01-01T00:00:00.000Z",

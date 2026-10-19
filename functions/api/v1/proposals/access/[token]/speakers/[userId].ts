@@ -4,7 +4,7 @@ import type { AdminContext } from "../../../../../../_lib/db/context";
 import { openApiRoute } from "../../../../../../_lib/openapi/route";
 import {
   getProposerManagedSpeakerContext,
-  updateProposalSpeakerByProposer,
+  updateProposalSpeakerRoleByProposer,
 } from "../../../../../../_lib/services/proposer-speaker-profile";
 import { successResponseSchema } from "../../../../../../../assets/shared/schemas/api-common";
 import { requireInternalSecret } from "../../../../../../_lib/request";
@@ -28,19 +28,7 @@ export async function handleProposalSpeakerPatch(
     requireInternalSecret(c.env),
   );
 
-  await updateProposalSpeakerByProposer(c.env.DB, {
-    proposal,
-    speaker,
-    patch: {
-      role: data.body.role,
-      firstName: data.body.firstName === undefined ? undefined : data.body.firstName || null,
-      lastName: data.body.lastName === undefined ? undefined : data.body.lastName || null,
-      organizationName: data.body.organizationName === undefined ? undefined : data.body.organizationName || null,
-      jobTitle: data.body.jobTitle === undefined ? undefined : data.body.jobTitle || null,
-      biography: data.body.biography === undefined ? undefined : data.body.biography || null,
-      links: data.body.links,
-    },
-  });
+  await updateProposalSpeakerRoleByProposer(c.env.DB, { proposal, speaker, role: data.body.role });
 
   return json(successResponseSchema.parse({ success: true }));
 }

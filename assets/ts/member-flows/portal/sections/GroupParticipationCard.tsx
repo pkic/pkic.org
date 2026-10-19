@@ -15,6 +15,7 @@ import { useState } from "preact/hooks";
 import type { SelfGroup } from "../../../../shared/schemas/group-participation";
 import { Badge } from "../../../ui/Badge";
 import { Button, ButtonLink } from "../../../ui/Button";
+import { Menu } from "../../../ui/Menu";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { RowActions } from "../../../ui/RowActions";
 import { fmtDate } from "../ui";
@@ -39,9 +40,30 @@ export function GroupParticipationCard({ group, onChanged }: { group: SelfGroup;
     }
   }
 
+  // Leaving through every affiliation is a whole-record command, so it sits in
+  // the card's menu under the catalog's own label rather than beside the join action.
   return (
     <Panel class="pk">
-      <PanelHeader title="Your participation">
+      <PanelHeader
+        title="Your participation"
+        menu={
+          group.memberships.length > 1 ? (
+            <Menu
+              label={`Actions for ${group.name}`}
+              align="end"
+              items={[
+                {
+                  id: "leave-all",
+                  label: "Leave for every affiliation…",
+                  danger: true,
+                  disabled: busy,
+                  onSelect: () => void run(() => leaveGroupEntirely(group)),
+                },
+              ]}
+            />
+          ) : undefined
+        }
+      >
         {group.memberships.length > 0 && <Badge tone="ok">Joined</Badge>}
       </PanelHeader>
       <PanelBody class="pk-stack">
@@ -88,23 +110,11 @@ export function GroupParticipationCard({ group, onChanged }: { group: SelfGroup;
           {group.memberships.length > 0 && (
             // A destination, not an action, so it stays an anchor and merely
             // borrows the button's appearance.
-            <ButtonLink href={`#/groups/${encodeURIComponent(group.id)}/meetings`} size="sm">
-              Meetings and calendar
-            </ButtonLink>
+            <ButtonLink href={`#/groups/${encodeURIComponent(group.id)}/meetings`}>Meetings and calendar</ButtonLink>
           )}
           {available.length > 0 && (
-            <Button variant="primary" size="sm" loading={busy} onClick={() => void run(() => joinGroupOnBehalf(group))}>
+            <Button variant="primary" loading={busy} onClick={() => void run(() => joinGroupOnBehalf(group))}>
               {group.memberships.length > 0 ? "Join on behalf of…" : "Join group…"}
-            </Button>
-          )}
-          {group.memberships.length > 1 && (
-            <Button
-              variant="danger-quiet"
-              size="sm"
-              loading={busy}
-              onClick={() => void run(() => leaveGroupEntirely(group))}
-            >
-              Leave all
             </Button>
           )}
         </div>

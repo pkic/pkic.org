@@ -1,10 +1,11 @@
-import { useState } from "preact/hooks";
+import { useRef, useState } from "preact/hooks";
 import { patchJson } from "../../../../shared/api-client";
 import { userUpdateResponseSchema, userUpdateSchema } from "../../../../../shared/schemas/user-management";
-import { FormActions } from "../../../../components/FormActions";
 import { useContractForm } from "../../../../hooks/useContractForm";
 import { useEditorDraft } from "../../../../hooks/useEditorDraft";
+import { Alert } from "../../../../ui/Alert";
 import { Checkbox } from "../../../../ui/Checkbox";
+import { Dialog } from "../../../../ui/Dialog";
 import { Field } from "../../../../ui/Field";
 import { TextInput } from "../../../../ui/TextControl";
 import { toast } from "../../ui";
@@ -54,14 +55,11 @@ function payloadFromDraft(draft: EditableUser, canGrantAccess: boolean) {
 }
 
 /**
- * Editing a person's account fields.
+ * Editing a person's account fields (names, sign-in email, standing) in a dialog.
  *
  * Whether it is open is the record's decision, not this component's: the
- * record already carries a "…" menu of the commands that apply to it, and
- * editing is one of those. It used to answer "not editing" by rendering a
- * section of the page whose entire content was one button — a whole band
- * across the record to say "you may edit this", which is what #46 called
- * fundamentally wrong. Closed, it renders nothing at all.
+ * Account panel's menu and the record's actions menu both open it. Closed, it
+ * renders nothing at all.
  */
 export function UserProfileEditor({
   user,
@@ -112,78 +110,83 @@ export function UserProfileEditor({
     }
   }
 
+  const root = useRef<HTMLDivElement>(null);
+
   if (!editing) return null;
 
   return (
-    <div class="pk">
-      <form
-        noValidate
-        class="pk-stack pk-stack--snug"
-        {...form.handlers}
-        onSubmit={(event) => {
-          event.preventDefault();
-          void save();
-        }}
-      >
-        {/* One `disabled` fieldset takes the whole form out of play while the
+    <Dialog
+      open
+      title="Edit account"
+      closeLabel="Close account editor"
+      confirmLabel={saving ? "Saving…" : "Save"}
+      confirmDisabled={saving}
+      onConfirm={() => root.current?.querySelector("form")?.requestSubmit()}
+      onCancel={() => {
+        if (!saving) onClose();
+      }}
+    >
+      <div class="pk" ref={root}>
+        <form
+          noValidate
+          class="pk-stack pk-stack--snug"
+          {...form.handlers}
+          onSubmit={(event) => {
+            event.preventDefault();
+            void save();
+          }}
+        >
+          {/* One `disabled` fieldset takes the whole form out of play while the
             save is in flight, in place of the same prop on every control. */}
-        <fieldset class="pk-fieldset pk-stack pk-stack--snug" disabled={saving}>
-          <div class="pk-grid pk-grid--tight">
-            {NAME_FIELDS.map(([label, field]) => (
-              <Field label={label} key={field} {...form.of(field)}>
-                {(control) => (
-                  <TextInput
-                    {...control}
-                    name={field}
-                    value={draft[field]}
-                    onInput={(event) => update({ [field]: event.currentTarget.value })}
-                  />
-                )}
-              </Field>
-            ))}
-            {canGrantAccess && (
-              <Field
-                label="Email"
-                help="Used to sign in. Leave unchanged to keep the current address."
-                {...form.of("email")}
-              >
-                {(control) => (
-                  <TextInput
-                    {...control}
-                    name="email"
-                    type="email"
-                    value={draft.email}
-                    onInput={(event) => update({ email: event.currentTarget.value })}
-                  />
-                )}
-              </Field>
-            )}
-          </div>
-
-          <fieldset class="pk-fieldset pk-field">
-            <legend class="pk-field__label">Standing</legend>
-            <div class="pk-stack pk-stack--tight">
-              <Checkbox
-                name="active"
-                checked={draft.active}
-                onChange={(event) => update({ active: event.currentTarget.checked })}
-                label="Active"
-              />
+          <fieldset class="pk-fieldset pk-stack pk-stack--snug" disabled={saving}>
+            <div class="pk-grid pk-grid--tight">
+              {NAME_FIELDS.map(([label, field]) => (
+                <Field label={label} key={field} {...form.of(field)}>
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      name={field}
+                      value={draft[field]}
+                      onInput={(event) => update({ [field]: event.currentTarget.value })}
+                    />
+                  )}
+                </Field>
+              ))}
+              {canGrantAccess && (
+                <Field
+                  label="Email"
+                  help="Used to sign in. Leave unchanged to keep the current address."
+                  {...form.of("email")}
+                >
+                  {(control) => (
+                    <TextInput
+                      {...control}
+                      name="email"
+                      type="email"
+                      value={draft.email}
+                      onInput={(event) => update({ email: event.currentTarget.value })}
+                    />
+                  )}
+                </Field>
+              )}
             </div>
-          </fieldset>
-        </fieldset>
 
-        {/* The save/cancel pair, its busy state, and a failed save announced as
-            an alert rather than as red text, all from the shared component. */}
-        <FormActions
-          submitLabel="Save"
-          busyLabel="Saving…"
-          busy={saving}
-          onCancel={onClose}
-          status={error || undefined}
-          statusVariant="danger"
-        />
-      </form>
-    </div>
+            <fieldset class="pk-fieldset pk-field">
+              <legend class="pk-field__label">Standing</legend>
+              <div class="pk-stack pk-stack--tight">
+                <Checkbox
+                  name="active"
+                  checked={draft.active}
+                  onChange={(event) => update({ active: event.currentTarget.checked })}
+                  label="Active"
+                />
+              </div>
+            </fieldset>
+          </fieldset>
+
+          {error && <Alert tone="danger">{error}</Alert>}
+        </form>
+      </div>
+    </Dialog>
   );
 }

@@ -57,19 +57,38 @@ test("staff hold and resume an application, then complete its required review", 
   expect(sizing.widths[0]).toBeGreaterThanOrEqual(Math.min(560, sizing.parentWidth));
   expect(sizing.widths[1]).toBeGreaterThanOrEqual(Math.min(288, sizing.parentWidth));
   await page.screenshot({ path: test.info().outputPath("pkic-application-layout.png") });
-  await expect(stageBadge(page, name).filter({ hasText: "Submitted" })).toBeVisible();
+  await expect(stageBadge(page, name).filter({ hasText: "Staff review" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Application actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Edit application…", exact: true }).click();
+  await page.getByLabel("Category").selectOption("A");
+  const corrected = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === `/api/v1/members/applications/${application.applicationId}` &&
+      response.request().method() === "PATCH",
+  );
+  await page.getByRole("button", { name: "Save", exact: true }).click();
+  expect((await corrected).status()).toBe(200);
+  await page.goto(`/portal/#/membership/applications/${application.applicationId}`);
+  const hold = transitionCard(page);
+  await hold.getByLabel("Move to").selectOption("on_hold");
+  await hold.getByLabel("Reason").selectOption("request_information");
+  await hold.getByLabel("Internal note").fill("Internal staff context");
+  await hold.getByRole("button", { name: "Transition", exact: true }).click();
+  await expect(hold.getByLabel("Information requested")).toHaveAttribute("aria-invalid", "true");
 
   // The workflow is not a straight line: an application can be parked while
   // information is missing and then resumed. Walking through `on_hold` and
   // back proves the return transition exists, which a one-way path would not.
   await transitionStageInUi(page, "on_hold", {
     onHoldSubtype: "request_information",
+    requestDetails: "Please clarify your application.",
     note: "Awaiting a signed policy.",
   });
-  await expect(stageBadge(page, name).filter({ hasText: "On Hold" })).toBeVisible();
+  await expect(stageBadge(page, name).filter({ hasText: /On hold/ })).toBeVisible();
 
   await transitionStageInUi(page, "processing", { note: "Applicant responded." });
-  await expect(stageBadge(page, name).filter({ hasText: "Processing" })).toBeVisible();
+  await expect(stageBadge(page, name).filter({ hasText: "Staff review" })).toBeVisible();
   await prepareSyntheticMembershipReview(page.request, application.applicationId);
   const sinceApproval = await capturedEmailCount();
   await page.goto(`/portal/#/membership/applications/${application.applicationId}/review`);
@@ -176,7 +195,7 @@ test("staff email the applicant and record an internal note through the Communic
   const delivered = await waitForCapturedEmail(email, subject, { since, timeoutMs: 20_000 });
   expect(delivered.subject).toBe(subject);
 
-  // The note form is a distinct control with its own native `required` guard,
+  // The note form is a distinct control checked by its own request contract,
   // and it never emails anyone.
   const noteBody = `Internal-only reminder ${suffix}.`;
   await card.getByRole("button", { name: "Add note" }).click();
@@ -191,7 +210,8 @@ test("staff email the applicant and record an internal note through the Communic
   );
   await card.getByRole("button", { name: "Add note" }).click();
   expect((await noteResponse).status()).toBe(201);
-  await expect(card.getByRole("cell", { name: "Internal note" })).toBeVisible();
+  const noteRow = card.getByRole("row").filter({ has: page.getByRole("cell", { name: "Internal note" }) });
+  await noteRow.getByRole("button", { name: "Read message" }).click();
   await expect(card.getByText(noteBody, { exact: true })).toBeVisible();
   expect(await capturedEmailCount()).toBe(notesSince);
   await expect

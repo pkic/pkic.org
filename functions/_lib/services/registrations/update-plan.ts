@@ -1,5 +1,11 @@
+import { prepareParticipationReconciliation } from "../event-participation/reconciliation";
 import { assertRegistrationRestorationAllowed } from "./restoration";
 import { AppError } from "../../errors";
+import {
+  dayAttendanceRequiredError,
+  dayCapacityUnlimitedError,
+  waitlistRequiresInPersonError,
+} from "../event-day-refusals";
 import type { DatabaseLike, StatementLike } from "../../types";
 import { parseJsonSafe } from "../../utils/json";
 import { nowIso } from "../../utils/time";
@@ -11,7 +17,7 @@ import {
   prepareReplaceRegistrationDayAttendanceStatements,
   type DayAttendanceSelection,
 } from "../event-days";
-import { prepareUserProfileStatement, userProfilePatchWouldChange, type UserProfilePatch } from "../users";
+import { prepareUserProfileStatements, userProfilePatchWouldChange, type UserProfilePatch } from "../users";
 import {
   buildRegistrationDayWaitlistSync,
   dayWaitlistOfferUnavailableError,
@@ -131,6 +137,7 @@ export async function buildRegistrationUpdate(
       }),
       prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now),
     ];
+    statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
     const audit = prepareRegistrationUpdateAudit(db, registration, cancelled, payload);
     if (audit) statements.push(audit);
     return {
@@ -169,7 +176,7 @@ export async function buildRegistrationUpdate(
         .prepare(
           `UPDATE registrations
            SET status = 'cancelled', cancellation_reason_code = 'unauthorized_registration',
-               cancelled_at = ?, custom_answers_json = NULL, registration_organization_name = NULL, registration_job_title = NULL, manage_link_secret = ?,
+               cancelled_at = ?, custom_answers_json = NULL, manage_link_secret = ?,
                confirmation_link_secret = NULL, pending_confirmation_deadline_at = NULL,
                confirmation_reminder_sent_at = NULL, created_identity_user_id = NULL,
                updated_at = ?
@@ -182,6 +189,8 @@ export async function buildRegistrationUpdate(
       }),
       prepareClearRegistrationEmailChangeStatement(db, registration.id, registration.user_id, now),
     ];
+    statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
+    statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
     const audit = prepareRegistrationUpdateAudit(db, registration, updated, payload);
     if (audit) statements.push(audit);
     return {
@@ -218,16 +227,12 @@ export async function buildRegistrationUpdate(
     payload.dayAttendance === undefined &&
     (configuredEventDays.length > 0 || previousInPersonDayIds.length > 0)
   ) {
-    throw new AppError(
-      400,
-      "DAY_ATTENDANCE_REQUIRED",
-      "dayAttendance is required when updating attendance for an event with day-level attendance",
-    );
+    throw dayAttendanceRequiredError();
   }
   const effectiveAttendanceType =
     payload.attendanceType ?? deriveEventAttendanceType(payload.dayAttendance) ?? registration.attendance_type;
   if (!effectiveAttendanceType) {
-    throw new AppError(400, "ATTENDANCE_TYPE_REQUIRED", "attendanceType is required for update action");
+    throw new AppError(400, "ATTENDANCE_TYPE_REQUIRED", "Choose how you will attend this event.");
   }
   const capacityExemptReason = await resolveCapacityExemptReason(db, {
     eventId: registration.event_id,
@@ -239,12 +244,9 @@ export async function buildRegistrationUpdate(
     const dayByDate = new Map(configuredEventDays.map((day) => [day.day_date, day]));
     for (const dayDate of forceWaitlistDayDates) {
       const day = dayByDate.get(dayDate);
-      if (selectionByDate.get(dayDate) !== "in_person") {
-        throw new AppError(400, "WAITLIST_REQUIRES_IN_PERSON", `Day '${dayDate}' must be selected as in-person`);
-      }
-      if (!day?.in_person_capacity || day.in_person_capacity <= 0) {
-        throw new AppError(409, "DAY_CAPACITY_UNLIMITED", `Day '${dayDate}' does not have a finite capacity`);
-      }
+      const named = day ?? { day_date: dayDate, label: null };
+      if (selectionByDate.get(dayDate) !== "in_person") throw waitlistRequiresInPersonError(named);
+      if (!day?.in_person_capacity || day.in_person_capacity <= 0) throw dayCapacityUnlimitedError(named);
     }
   }
   const hasPerDayAttendanceInput = Boolean(payload.dayAttendance?.length);
@@ -377,9 +379,10 @@ export async function buildRegistrationUpdate(
     ? await userProfilePatchWouldChange(db, updated.user_id, payload.profilePatch)
     : false;
   if (payload.profilePatch && profileChanged) {
-    statements.push(prepareUserProfileStatement(db, updated.user_id, payload.profilePatch));
+    statements.push(...prepareUserProfileStatements(db, updated.user_id, payload.profilePatch));
   }
   const notificationChanged = scalarChanged || dayAttendanceChanged || waitlistChanged || profileChanged;
+  statements.push(...prepareParticipationReconciliation(db, registration.event_id, registration.user_id));
   const audit = prepareRegistrationUpdateAudit(db, registration, updated, payload);
   if (audit && notificationChanged) statements.push(audit);
   return {

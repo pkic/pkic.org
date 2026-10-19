@@ -1,0 +1,8 @@
+/* A check-in code shown full size. */
+@layer components {
+  .pk-check-in-code {
+    inline-size: min(100%, 32rem);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+  }
+}

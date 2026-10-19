@@ -7,7 +7,7 @@ import { attendanceTypeSchema, type AttendanceType } from "./registration";
  * results view both offer this choice, and neither may decide on its own
  * which presentations exist.
  */
-export const VISUALIZATIONS = ["auto", "bar", "pie", "wordcloud", "list"] as const;
+export const VISUALIZATIONS = ["auto", "bar", "donut", "pie", "wordcloud", "list"] as const;
 export const visualizationSchema = z.enum(VISUALIZATIONS);
 export type Visualization = z.infer<typeof visualizationSchema>;
 const formFieldFormatSchema = z.enum([
@@ -19,7 +19,13 @@ const formFieldFormatSchema = z.enum([
   "email",
   "date",
 ]);
-const formFieldWidgetSchema = z.enum(["tags", "checkboxes", "rating_stars", "nps"]);
+/**
+ * How a respondent meets a field: `radios` shows a single choice as one
+ * visible list, `checkboxes` a multiple choice; `tags` is a searchable picker;
+ * `rating_stars` and `nps` turn a number into a row of scores.
+ */
+export const FORM_FIELD_WIDGETS = ["tags", "checkboxes", "radios", "rating_stars", "nps"] as const;
+const formFieldWidgetSchema = z.enum(FORM_FIELD_WIDGETS);
 const boundedLengthSchema = z.number().int().min(0).max(100_000);
 const boundedItemCountSchema = z.number().int().min(0).max(200);
 const boundedNumberSchema = z.number().finite().min(-1_000_000_000_000).max(1_000_000_000_000);

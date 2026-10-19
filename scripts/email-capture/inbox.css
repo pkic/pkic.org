@@ -3,19 +3,19 @@
   font-family: system-ui, sans-serif;
 }
 body {
-  max-width: 960px;
+  max-width: 60rem;
   margin: 0 auto;
-  padding: 24px;
+  padding: 1.5rem;
 }
 header {
   border-bottom: 2px solid #228653;
-  margin-bottom: 24px;
+  margin-bottom: 1.5rem;
 }
 article {
   border: 1px solid #88958c;
   border-radius: 12px;
-  padding: 20px;
-  margin-top: 20px;
+  padding: 1.25rem;
+  margin-top: 1.25rem;
 }
 h2 {
   overflow-wrap: anywhere;
@@ -29,10 +29,17 @@ pre {
 }
 a {
   display: block;
-  margin-block: 12px;
+  margin-block: 0.75rem;
 }
 button,
 summary {
   cursor: pointer;
-  padding: 8px;
+  padding: 0.5rem;
+}
+
+iframe {
+  width: 100%;
+  min-height: 40rem;
+  border: 0;
+  background: white;
 }

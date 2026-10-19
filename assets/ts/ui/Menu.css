@@ -16,7 +16,7 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    padding: var(--pk-control-y);
+    padding: 0;
     aspect-ratio: 1;
     background: transparent;
     color: var(--pk-ink-muted);
@@ -24,6 +24,12 @@
     border-radius: var(--pk-radius-sm);
     cursor: pointer;
     line-height: 1;
+  }
+
+  /* The ellipsis trigger is as tall as a text button beside it (see `.pk-btn--icon`). */
+  .pk-menu__trigger:not(.pk-menu__trigger--plain) {
+    block-size: var(--pk-control-size);
+    font-size: var(--pk-control-text);
   }
 
   /*
@@ -60,6 +66,16 @@
     border: 1px solid var(--pk-line);
     border-radius: var(--pk-radius);
     box-shadow: var(--pk-shadow-3);
+  }
+
+  /*
+   * In the top layer the popup is a manual popover: drop the popover's centered inset and margin so the
+   * placement's viewport coordinates hold, and keep the page's ink rather than the system text color.
+   */
+  .pk-menu__popup[popover] {
+    inset: auto;
+    margin: 0;
+    color: var(--pk-ink);
   }
 
   /*
@@ -175,6 +191,23 @@
 
   .pk-menu__item--danger:hover:not(:disabled) {
     background: var(--pk-danger-soft);
+  }
+}
+
+/* Include devices with both touch and a mouse; fine-pointer-only menus keep
+   their compact geometry. The spacing scale combines to a 44px touch target. */
+@layer utilities {
+  @media (any-pointer: coarse) {
+    .pk-menu__trigger,
+    .pk-menu__item {
+      min-block-size: calc(var(--pk-6) + var(--pk-3));
+      min-inline-size: calc(var(--pk-6) + var(--pk-3));
+    }
+
+    .pk-menu__item {
+      white-space: normal;
+      overflow-wrap: anywhere;
+    }
   }
 }
 

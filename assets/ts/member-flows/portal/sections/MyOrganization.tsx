@@ -9,20 +9,22 @@
  * enforces in the organization-content and member-organization services.
  */
 import { Fragment } from "preact";
-import { useCallback, useEffect, useRef, useState } from "preact/hooks";
-import { getJson, ApiClientError } from "../../../shared/api-client";
+import { useId, useState } from "preact/hooks";
+import { useData } from "../../../hooks/useData";
+import { getJson } from "../../../shared/api-client";
 import { ErrorAlert } from "../../../components/ErrorAlert";
 import { statusLabel } from "../../../components/Badge";
 import { Badge, type BadgeTone } from "../../../ui/Badge";
 import { Breadcrumb } from "../../../ui/Breadcrumb";
-import { Button } from "../../../ui/Button";
 import { type Column } from "../../../components/Table";
 import { EmptyState } from "../../../ui/EmptyState";
 import { LinkList } from "../../../ui/LinkList";
 import { PageHeader } from "../../../ui/PageHeader";
+import { ProfileHeader } from "../../../ui/ProfileHeader";
 import { Panel, PanelBody, PanelHeader } from "../../../ui/Panel";
 import { Spinner } from "../../../ui/Spinner";
 import { ApiDataTable } from "../../../components/ApiDataTable";
+import { PictureTile } from "../../../components/PictureTile";
 import { usePortalHashLocation } from "../hash-location";
 import { profile as profileSignal } from "../state";
 import { toast, fmt } from "../ui";
@@ -40,14 +42,16 @@ import {
 } from "../../../../shared/schemas/organization-self-service";
 import { OrganizationGovernanceCard, OrganizationSponsorshipCard } from "./MyOrganizationGovernance";
 import { ContentEditorCard } from "./MyOrganizationContentEditor";
-import { OrganizationRepresentatives } from "./OrganizationRepresentatives";
+import { ADD_REPRESENTATIVE_SEGMENT, OrganizationRepresentatives } from "./OrganizationRepresentatives";
 import "../../../ui/Content.css";
-
-export { IdentitySelect } from "./MyOrganizationGovernance";
+import { ExternalLink } from "../../../ui/ExternalLink";
+import { OrganizationPrivateContactDetails } from "./OrganizationPrivateContactDetails";
+import { ProposedChanges, proposedChangeLabels } from "./OrganizationProposedChanges";
+import { Button } from "../../../ui/Button";
 
 /**
  * The review lifecycle as tones. Written out per status rather than derived
- * from a colour name, so adding a status is a compile error here instead of a
+ * from a color name, so adding a status is a compile error here instead of a
  * silent fall-through to grey.
  */
 const REVIEW_STATUS_TONE: Record<MyOrganizationReview["status"], BadgeTone> = {
@@ -57,7 +61,13 @@ const REVIEW_STATUS_TONE: Record<MyOrganizationReview["status"], BadgeTone> = {
   withdrawn: "neutral",
 };
 
-function LogoUploader({
+/**
+ * The organization's logo, as the same tile staff see on the record. A
+ * contact's replacement enters review rather than going live, so the tile
+ * says so instead of "Logo uploaded", and there is no removal here: a
+ * representative proposes a logo, they do not take the public one down.
+ */
+function OrganizationProfileLogo({
   organizationId,
   org,
   reload,
@@ -66,126 +76,110 @@ function LogoUploader({
   org: MyOrganizationProfile;
   reload: () => Promise<void>;
 }) {
-  const fileRef = useRef<HTMLInputElement | null>(null);
-  const [busy, setBusy] = useState(false);
-
-  async function upload(file: File): Promise<void> {
-    setBusy(true);
-    try {
-      await uploadFile(
-        `${organizationPath(organizationId)}/logo`,
-        file,
-        organizationLogoReviewResponseSchema,
-        "Could not upload the organization logo.",
-      );
-      toast("Logo submitted for review", "success");
-      await reload();
-    } catch (err) {
-      toast(err instanceof Error ? err.message : "Upload failed", "error");
-    } finally {
-      setBusy(false);
-      if (fileRef.current) fileRef.current.value = "";
-    }
-  }
-
   return (
-    <div class="pk-stack pk-stack--tight">
-      {/* The button is the control and the file input is opened through it, so
-          there is one focusable thing carrying one accessible name — rather
-          than a label wrapping an input that a utility class has hidden. */}
-      <Button variant="secondary" size="sm" block loading={busy} onClick={() => fileRef.current?.click()}>
-        {busy ? "Uploading…" : "Change logo (SVG)"}
-      </Button>
-      <input
-        ref={fileRef}
-        type="file"
-        accept="image/svg+xml"
-        hidden
-        disabled={busy}
-        onChange={(e) => {
-          const file = (e.target as HTMLInputElement).files?.[0];
-          if (file) void upload(file);
-        }}
-      />
-      {org.pendingReview?.hasLogoChange && <p class="pk-small pk-warning-note">New logo pending review</p>}
-    </div>
+    <PictureTile
+      size="mark"
+      name={org.name}
+      canChange={org.isOrgContact}
+      imageUrl={org.logoUrl}
+      alt={`${org.name} logo`}
+      removeConfirmation="Remove this organization's logo?"
+      accept="image/svg+xml"
+      hint="SVG only. The new logo is reviewed before it replaces the public one."
+      uploadedMessage="Logo submitted for review"
+      onUpload={(file) =>
+        uploadFile(
+          `${organizationPath(organizationId)}/logo`,
+          file,
+          organizationLogoReviewResponseSchema,
+          "Could not upload the organization logo.",
+        )
+      }
+      onChanged={() => void reload()}
+      toast={toast}
+    />
   );
 }
 
-function OrganizationProfileCard({
-  organizationId,
-  org,
-  reload,
-}: {
-  organizationId: string;
-  org: MyOrganizationProfile;
-  reload: () => Promise<void>;
-}) {
+function OrganizationProfileCard({ org }: { org: MyOrganizationProfile }) {
   const addressRows = ORGANIZATION_URL_FIELD_ORDER.filter((key) => org[key]);
-  const hasWords = Boolean(org.slogan || org.description || addressRows.length > 0 || org.links.length > 0);
+  /* The logo and the slogan are the hero's; the panel carries the rest of the
+     public profile and is shown only when there is any. */
+  if (!org.description && addressRows.length === 0 && org.links.length === 0) return null;
 
   return (
     <Panel>
       <PanelHeader title="Public profile" />
-      {/* Two columns only when there are words to fill the second one — a
-          grid cell holding nothing beside the logo read as a half-empty
-          layout, which the anatomy forbids. */}
-      <PanelBody class={hasWords ? "pk-grid pk-grid--tight" : undefined}>
+      <PanelBody>
         <div class="pk-stack pk-stack--snug">
-          {org.logoUrl ? (
-            <img src={org.logoUrl} alt={`${org.name} logo`} class="portal-organization-logo" />
-          ) : (
-            <div class="pk-framed pk-cluster pk-cluster--center pk-muted pk-small portal-organization-logo-placeholder">
-              No logo
-            </div>
+          {org.description && <p>{org.description}</p>}
+          {addressRows.length > 0 && (
+            <dl class="pk-datalist pk-small">
+              {addressRows.map((key) => (
+                <Fragment key={key}>
+                  <dt>{ORGANIZATION_CONTENT_FIELD_LABELS[key]}</dt>
+                  <dd class="pk-break">
+                    <ExternalLink href={org[key] as string} external>
+                      {(org[key] as string).replace(/^https?:\/\//, "")}
+                    </ExternalLink>
+                  </dd>
+                </Fragment>
+              ))}
+            </dl>
           )}
-          {org.isOrgContact && <LogoUploader organizationId={organizationId} org={org} reload={reload} />}
-        </div>
-        {hasWords && (
-          <div class="pk-stack pk-stack--snug">
-            {org.slogan && <p class="pk-lede">{org.slogan}</p>}
-            {org.description && <p>{org.description}</p>}
-            {addressRows.length > 0 && (
-              <dl class="pk-datalist pk-small">
-                {addressRows.map((key) => (
-                  <Fragment key={key}>
-                    <dt>{ORGANIZATION_CONTENT_FIELD_LABELS[key]}</dt>
-                    <dd class="pk-break">
-                      <a href={org[key] as string} target="_blank" rel="noreferrer">
-                        {(org[key] as string).replace(/^https?:\/\//, "")}
-                      </a>
-                    </dd>
-                  </Fragment>
-                ))}
-              </dl>
-            )}
-            {/* The profile links were editable here and shown nowhere: a
+          {/* The profile links were editable here and shown nowhere: a
                 member could not see what their own public page carries, while
                 staff saw the same set as marked badges. Same list, same
                 marks. */}
-            <LinkList links={org.links} />
-          </div>
-        )}
+          <LinkList links={org.links} />
+        </div>
       </PanelBody>
     </Panel>
   );
 }
 
-const REVIEW_HISTORY_COLUMNS: Array<Column<MyOrganizationReview>> = [
-  {
-    header: "Status",
-    cell: (review) => <Badge tone={REVIEW_STATUS_TONE[review.status]}>{statusLabel(review.status)}</Badge>,
-  },
-  { header: "Submitted", cell: (review) => fmt(review.submittedAt) },
-  { header: "Reviewer note", cell: (review) => review.reviewerNote ?? "—" },
-];
-
 function ReviewHistoryCard({ organizationId }: { organizationId: string }) {
+  const [expanded, setExpanded] = useState<ReadonlySet<string>>(new Set());
+  const detailId = useId();
+  function toggle(id: string): void {
+    const next = new Set(expanded);
+    if (!next.delete(id)) next.add(id);
+    setExpanded(next);
+  }
+  const columns: Array<Column<MyOrganizationReview>> = [
+    {
+      header: "Changes",
+      width: "primary",
+      cell: (review) => (
+        <div class="pk-stack pk-stack--tight">
+          <span>{proposedChangeLabels(review).join(", ") || "No field changes"}</span>
+          <div>
+            <Button
+              variant="ghost"
+              aria-expanded={expanded.has(review.id)}
+              aria-controls={expanded.has(review.id) ? `${detailId}-${review.id}` : undefined}
+              onClick={() => toggle(review.id)}
+            >
+              {expanded.has(review.id) ? "Hide changes" : "Show changes"}
+            </Button>
+          </div>
+        </div>
+      ),
+    },
+    {
+      header: "Status",
+      width: "fit",
+      cell: (review) => <Badge tone={REVIEW_STATUS_TONE[review.status]}>{statusLabel(review.status)}</Badge>,
+    },
+    { header: "Submitted", width: "fit", cell: (review) => fmt(review.submittedAt) },
+    { header: "Reviewer note", cell: (review) => review.reviewerNote ?? "—" },
+  ];
   return (
     <Panel>
-      <PanelHeader title="Submission history" />
+      <PanelHeader title="Profile change history" />
       <ApiDataTable
-        caption="Organization content submissions"
+        urlState="organization-submissions"
+        caption="Changes submitted to the organization profile"
         endpoint={`${organizationPath(organizationId)}/content/reviews`}
         params={{ status: "history" }}
         responseSchema={organizationContentReviewsListResponseSchema}
@@ -193,9 +187,16 @@ function ReviewHistoryCard({ organizationId }: { organizationId: string }) {
         resolvePage={(data) => data.page}
         paginate
         initialSort="-submittedAt"
-        columns={REVIEW_HISTORY_COLUMNS}
+        columns={columns}
         rowKey={(review) => review.id}
-        empty={<EmptyState title="No submissions found" />}
+        detailRow={(review) =>
+          expanded.has(review.id) ? (
+            <PanelBody id={`${detailId}-${review.id}`}>
+              <ProposedChanges review={review} />
+            </PanelBody>
+          ) : null
+        }
+        empty={<EmptyState title="No profile changes submitted yet" />}
       />
     </Panel>
   );
@@ -208,38 +209,19 @@ export function MyOrganization({
   // Any organization the user actively represents may be requested; the
   // backend authorizes by representation and 404s everything else.
   const organizationId = requestedOrganizationId ?? profileSignal.value?.organizationId ?? null;
-  const [org, setOrg] = useState<MyOrganizationProfile | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [errorCode, setErrorCode] = useState<string | null>(null);
-
-  const reload = useCallback(async () => {
-    if (!organizationId) {
-      setOrg(null);
-      setError("Your active membership is not tied to an organization.");
-      setErrorCode("NO_ORGANIZATION");
-      setLoading(false);
-      return;
-    }
-    try {
-      const response = await getJson(
-        `${organizationPath(organizationId)}/profile`,
-        organizationMemberProfileResponseSchema,
-      );
-      setOrg(response.organization);
-      setError(null);
-      setErrorCode(null);
-    } catch (e) {
-      setError(e instanceof ApiClientError ? e.message : "Could not load your organization.");
-      setErrorCode(e instanceof ApiClientError ? e.code : null);
-    } finally {
-      setLoading(false);
-    }
-  }, [organizationId]);
-
-  useEffect(() => {
-    void reload();
-  }, [reload]);
+  const {
+    data: org,
+    loading,
+    error,
+    reload,
+  } = useData(async () => {
+    if (!organizationId) return null;
+    const response = await getJson(
+      `${organizationPath(organizationId)}/profile`,
+      organizationMemberProfileResponseSchema,
+    );
+    return response.organization;
+  }, [organizationId, profileSignal.value?.identityId]);
 
   if (loading) {
     return (
@@ -248,22 +230,28 @@ export function MyOrganization({
       </div>
     );
   }
-  if (error) {
+  if (error || !organizationId) {
     return (
       <div class="pk pk-stack">
         <PageHeader title="My organization" />
-        {errorCode === "NO_ORGANIZATION" ? (
+        {!organizationId ? (
           <EmptyState
             title="Your membership is individual."
             body="You participate in the consortium in your own name rather than for an organization, and everything works just the same. If your organization joins later, its page appears here."
           />
         ) : (
-          <ErrorAlert error={error} />
+          <ErrorAlert error={error ?? "Could not load your organization."} />
         )}
       </div>
     );
   }
   if (!org || !organizationId) return null;
+
+  const addingRepresentative =
+    representativeSegment === ADD_REPRESENTATIVE_SEGMENT &&
+    org.isOrgContact &&
+    profileSignal.value?.isOrgContact &&
+    profileSignal.value.organizationId === organizationId;
 
   return (
     <div class="pk pk-stack content-width-lg">
@@ -276,20 +264,46 @@ export function MyOrganization({
         (system-organizations/OrganizationDetail), pointing at the same list.
       */}
       <Breadcrumb
-        items={[{ label: "Organizations", href: usePortalHashLocation.hrefs("/organizations") }, { label: org.name }]}
+        items={[
+          { label: "Organizations", href: usePortalHashLocation.hrefs("/organizations") },
+          {
+            label: org.name,
+            ...(addingRepresentative
+              ? { href: usePortalHashLocation.hrefs(`/organizations/${encodeURIComponent(organizationId)}`) }
+              : {}),
+          },
+          ...(addingRepresentative ? [{ label: "Add a coworker" }] : []),
+        ]}
       />
-      <PageHeader title={org.name} />
-      <OrganizationProfileCard organizationId={organizationId} org={org} reload={reload} />
-      {org.isOrgContact && <ContentEditorCard organizationId={organizationId} org={org} reload={reload} />}
-      {org.isOrgContact && (
-        <ReviewHistoryCard organizationId={organizationId} key={org.pendingReview?.id ?? "no-pending-review"} />
-      )}
-      {/* Who acts for this organization, on the organization's own page: the
+      {/* The same hero as the staff record, so this page and every page under
+          it (a representative's record) say whose they are. */}
+      <ProfileHeader
+        media={<OrganizationProfileLogo organizationId={organizationId} org={org} reload={reload} />}
+        title={org.name}
+        lede={org.slogan ?? undefined}
+        facts={org.pendingReview?.hasLogoChange ? ["New logo pending review"] : undefined}
+      />
+      {addingRepresentative ? (
+        <OrganizationRepresentatives organizationId={organizationId} representativeSegment={representativeSegment} />
+      ) : (
+        <>
+          <OrganizationProfileCard org={org} />
+          {org.isOrgContact && <ContentEditorCard organizationId={organizationId} org={org} reload={reload} />}
+          {org.isOrgContact && (
+            <ReviewHistoryCard
+              organizationId={organizationId}
+              key={`${organizationId}:${org.pendingReview?.id ?? "no-pending-review"}`}
+            />
+          )}
+          {/* Who acts for this organization, on the organization's own page: the
           roster used to sit on the reader's profile, which is a page about a
           person. */}
-      <OrganizationRepresentatives organizationId={organizationId} representativeSegment={representativeSegment} />
-      <OrganizationGovernanceCard organizationId={organizationId} org={org} reload={reload} />
-      <OrganizationSponsorshipCard organizationId={organizationId} />
+          <OrganizationRepresentatives organizationId={organizationId} representativeSegment={representativeSegment} />
+          <OrganizationGovernanceCard key={organizationId} organizationId={organizationId} org={org} reload={reload} />
+          {org.isOrgContact && <OrganizationPrivateContactDetails organizationId={organizationId} canWrite />}
+          <OrganizationSponsorshipCard organizationId={organizationId} />
+        </>
+      )}
     </div>
   );
 }

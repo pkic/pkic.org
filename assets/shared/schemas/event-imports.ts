@@ -12,6 +12,7 @@ import {
   attendeeInviteLimitSchema,
   eventCustomSettingsSchema,
   eventManagementDetailResponseSchema,
+  eventSettingsSchema,
 } from "./event-management";
 import { eventVisibilitySchema, timeZoneSchema } from "./event-series";
 
@@ -45,6 +46,7 @@ const importedFrontendRoutesSchema = z.object({
 const importedEventSchema = z
   .object({
     slug: z.string().trim().regex(slugPattern),
+    basePath: z.string().trim().regex(frontendPathPattern).max(300).optional(),
     name: trimmedString(3, 180),
     timezone: timeZoneSchema,
     startsAt: utcInstantSchema.optional(),
@@ -55,6 +57,8 @@ const importedEventSchema = z
     visibility: eventVisibilitySchema,
     inviteLimitAttendee: attendeeInviteLimitSchema.optional(),
     frontend: z.object({ routes: importedFrontendRoutesSchema }).optional(),
+    city: eventSettingsSchema.shape.city,
+    country: eventSettingsSchema.shape.country,
     settings: eventCustomSettingsSchema.optional(),
   })
   .refine((event) => !event.startsAt || !event.endsAt || event.endsAt > event.startsAt, {

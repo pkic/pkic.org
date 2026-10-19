@@ -29,6 +29,7 @@ export const SponsorStageUpdate = openApiRoute(sponsorshipStageUpdateRouteSchema
     toStage: body.toStage,
     actor: staff,
     note: body.note ?? null,
+    endReason: body.endReason,
     notifications: {
       appBaseUrl: config.appBaseUrl,
       magicLinkTtlMinutes: config.magicLinkTtlMinutes,

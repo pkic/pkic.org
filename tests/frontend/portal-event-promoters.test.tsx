@@ -3,9 +3,9 @@
  * The event promoter leaderboard and its referral codes.
  *
  * What is asserted here is what a visual review cannot see. The leaderboard
- * used to be a column of cards whose figures were labelled "Sent", "Rate" and
+ * used to be a column of cards whose figures were labeled "Sent", "Rate" and
  * "lbl", and whose top three places were marked by a gold/silver/bronze tint
- * — a rank carried by colour alone. It is now a captioned table where every
+ * — a rank carried by color alone. It is now a captioned table where every
  * number has a column header and the rank is a number, and the tests cover
  * that naming, the two empty regions, and the failure path where a refused
  * request used to leave a blank panel.
@@ -132,7 +132,7 @@ describe("the event promoter leaderboard", () => {
       ),
     ).toEqual(["Promoter", "Invitations", "Referral links", "Impact"]);
     expect(container.querySelector("tbody tr")?.textContent).toContain("Ada Lovelace");
-    expect(container.textContent).toContain("Engineer · Analytical Engines");
+    expect(container.textContent).toContain("Engineer at Analytical Engines");
     expect(container.querySelector(".pk-avatar-standing__label")?.textContent).toBe("#1");
   });
 

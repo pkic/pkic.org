@@ -1,4 +1,5 @@
 import { ApiDataTable } from "../ApiDataTable";
+import { SpeakerParticipationBadge } from "./SpeakerParticipationBadge";
 import { Badge } from "../Badge";
 import {
   EVENT_SPEAKER_REGISTRATION_FILTER_LABELS,
@@ -7,9 +8,12 @@ import {
   type EventProposalSpeaker,
 } from "../../../shared/schemas/event-speakers";
 import { RegistrationDayStates } from "../event-registrations/RegistrationDayStates";
+import { IndependentCapacityBadge } from "./IndependentCapacityReview";
+import { PersonCell } from "../../ui/PersonCell";
 
+/** The speaker's name, or the address they were invited at while they have not given one. */
 function speakerName(speaker: EventProposalSpeaker): string {
-  return [speaker.firstName, speaker.lastName].filter(Boolean).join(" ") || "Unnamed speaker";
+  return [speaker.firstName, speaker.lastName].filter(Boolean).join(" ") || speaker.email;
 }
 
 function selectedDays(speaker: EventProposalSpeaker) {
@@ -38,19 +42,45 @@ export function EventProposalSpeakersTable({
       searchPlaceholder="Search speaker, organization or talk"
       columns={[
         {
+          // A person, drawn the way every roster draws one: face, then name.
           header: "Speaker",
-          cell: speakerName,
-          width: "fit",
+          // A capped name leaves the talk, the row's longest value, its width.
+          width: "compact",
+          cell: (speaker) => (
+            <PersonCell
+              name={speakerName(speaker)}
+              organization={speaker.organizationName}
+              avatarSrc={speaker.headshotUrl ?? undefined}
+              size="sm"
+            />
+          ),
           sort: { asc: "speaker", desc: "-speaker", defaultDirection: "asc" },
         },
         {
+          // The talk is the row's longest value, so it takes the slack.
           header: "Talk",
-          cell: (speaker) => <span title={speaker.proposalTitle}>{speaker.proposalTitle}</span>,
+          cell: (speaker) => (
+            <span class="pk-table__wrap" title={speaker.proposalTitle}>
+              {speaker.proposalTitle}
+            </span>
+          ),
           width: "primary",
           sort: { asc: "proposal", desc: "-proposal", defaultDirection: "asc" },
         },
-        { header: "Organization", cell: (speaker) => speaker.organizationName || "—" },
-        { header: "Participation", cell: (speaker) => <Badge status={speaker.status} />, width: "fit" },
+        {
+          header: "Organization",
+          cell: (speaker) =>
+            speaker.independentCapacityStatus ? (
+              <IndependentCapacityBadge status={speaker.independentCapacityStatus} />
+            ) : (
+              speaker.organizationName || "—"
+            ),
+        },
+        {
+          header: "Participation",
+          cell: (speaker) => <SpeakerParticipationBadge status={speaker.status} />,
+          width: "fit",
+        },
         {
           header: "Registration",
           cell: (speaker) =>

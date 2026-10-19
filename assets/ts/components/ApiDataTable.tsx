@@ -12,13 +12,16 @@ import {
   type CollectionLoader,
 } from "../hooks/useServerCollection";
 import { getJson } from "../shared/api-client";
+import type { MenuItem } from "../ui/Menu";
 import { Button } from "../ui/Button";
-import { Toolbar } from "../ui/Toolbar";
+import { TableList } from "./TableList";
+import { CollectionToolbar, type CollectionCreateAction } from "./CollectionToolbar";
 import { ErrorAlert } from "./ErrorAlert";
+import { Spinner } from "./Spinner";
 import { ADMIN_LIST_PAGE_SIZE_DEFAULT, Pager } from "./Pager";
 import { DataTable, type DataTableProps } from "./Table";
-import { IconPlus, IconRefresh } from "./icons";
-import { SplitButton, type SplitButtonProps } from "../ui/SplitButton";
+import { ColumnCardMenu, useColumnControls } from "./table-column-controls";
+import { IconRefresh } from "./icons";
 
 export interface ApiTableActions {
   reload: () => Promise<void>;
@@ -34,30 +37,34 @@ export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, 
   paginate?: boolean;
   searchPlaceholder?: string;
   initialPageSize?: number;
-  initialSort?: string;
-  toolbar?: (actions: ApiTableActions) => ComponentChildren;
+  /**
+   * The order the list opens in. A function derives it from the column
+   * filters in force, so a list whose meaning changes with a filter (a FIFO
+   * work queue beside a newest-first history) follows that filter until the
+   * reader picks an order of their own.
+   */
+  initialSort?: string | ((filters: Readonly<Record<string, string>>) => string);
+  /** Complete active server query; actions such as exports can preserve the displayed scope. */
+  toolbar?: (
+    actions: ApiTableActions,
+    query: Readonly<Record<string, string>>,
+    sorting?: { sort: string; onSort: (sort: string) => void },
+  ) => ComponentChildren;
   /**
    * The list's create affordance, rendered in the same bar as search and
    * refresh so every collection offers "New …" in one predictable place.
    * The form it reveals stays behind this action — never in the default view.
    */
-  createAction?:
-    | {
-        label: string;
-        onSelect: () => void;
-        disabled?: boolean;
-        /** For a create control that toggles a disclosure (an inline form above the list), the open state. */
-        expanded?: boolean;
-        items?: never;
-      }
-    | SplitButtonProps;
+  createAction?: CollectionCreateAction;
   /**
    * Namespace for URL-addressed list state: search, sort, and page mirror
    * into `<namespace>.q` etc. in the query string, so a filtered page can be
    * refreshed, shared, and restored by the back button. Use one namespace
    * per surface, on the page's primary list.
    */
-  urlState?: string;
+  urlState: string;
+  /** A mounted workspace owns namespace cleanup while this table switches out. */
+  retainUrlStateOnUnmount?: boolean;
   /** Column filters in force before the reader touches anything, unless the URL says otherwise. */
   initialFilters?: Record<string, string>;
   /** Told each time a column filter changes, for a page whose framing depends on it. */
@@ -69,15 +76,25 @@ export interface ApiDataTableProps<T, Response> extends Omit<DataTableProps<T>, 
    * state are the page's; the slot only fixes where the strip appears.
    */
   /**
-   * A form the list's own toolbar opened — link a person, add a new one —
-   * drawn inside the list panel between its head and its rows, so the
-   * command and its consequence share one surface.
+   * Supplemental list status or explanatory content. Editing forms belong
+   * in dedicated views and must not be inserted between the head and rows.
    */
   inset?: ComponentChildren;
   bulkBar?: ComponentChildren;
   actionsRef?: MutableRef<ApiTableActions | null>;
   onData?: (data: Response) => void;
+  /** Clear page-scoped selections before the active server query changes. */
+  onQueryChange?: (query: Readonly<Record<string, string>>) => void;
   load?: CollectionLoader;
+  clearDataOnReload?: boolean;
+  retainDataOnError?: boolean;
+  /** Alternative item presentation with the same bounded server collection controller. */
+  /** Discovery cards own their surfaces; comparison tables retain the collection frame. */
+  framed?: boolean;
+  toolbarClass?: string;
+  compactToolbarActions?: readonly MenuItem[];
+  compactToolbarLabel?: string;
+  renderItems?: (rows: readonly T[], sorting: { sort: string; onSort: (sort: string) => void }) => ComponentChildren;
 }
 
 const loadCollection: CollectionLoader = (url, signal, schema) => getJson(url, schema, { signal });
@@ -97,44 +114,91 @@ export function ApiDataTable<T, Response = unknown>({
   rowKey,
   rowAction,
   detailRow,
+  rowTone,
+  rowToneStyle,
   selection,
   caption,
   showCaption,
+  narrowLayout,
   initialSort = "",
   toolbar,
   createAction,
   urlState,
+  retainUrlStateOnUnmount = false,
   initialFilters,
   onFiltersChange,
   inset,
   bulkBar,
   actionsRef,
   onData,
+  onQueryChange,
   load = loadCollection,
+  clearDataOnReload = false,
+  retainDataOnError = true,
+  renderItems,
+  framed = true,
+  toolbarClass,
+  compactToolbarActions,
+  compactToolbarLabel,
 }: ApiDataTableProps<T, Response>) {
-  const url = useUrlTableState(urlState, {
-    q: "",
-    sort: initialSort,
-    offset: 0,
-    pageSize: initialPageSize ?? ADMIN_LIST_PAGE_SIZE_DEFAULT,
-    filters: initialFilters ?? {},
-  });
+  const defaultSortFor = (activeFilters: Readonly<Record<string, string>>) =>
+    typeof initialSort === "function" ? initialSort(activeFilters) : initialSort;
+  const openingSort = defaultSortFor(initialFilters ?? {});
+  const url = useUrlTableState(
+    urlState,
+    {
+      q: "",
+      sort: openingSort,
+      offset: 0,
+      pageSize: initialPageSize ?? ADMIN_LIST_PAGE_SIZE_DEFAULT,
+      filters: initialFilters ?? {},
+    },
+    retainUrlStateOnUnmount,
+  );
   const pager = useOffsetPager(url.initial.pageSize, url.initial.offset);
   const resetKey = buildCollectionResetKey(endpoint, params);
   const requestOffset = useCollectionOffset(resetKey, pager.offset, pager.resetPage);
-  const [sort, setSort] = useState(url.initial.sort);
+  // The order follows the filters' default until the reader (or the URL) picks one.
+  const sortFollowsFilters = useRef(url.initial.sort === openingSort);
+  const [sort, setSort] = useState(() =>
+    sortFollowsFilters.current ? defaultSortFor(url.initial.filters) : url.initial.sort,
+  );
   const [search, setSearch] = useState(url.initial.q);
   const [pendingSearch, setPendingSearch] = useState(url.initial.q);
   // Column filters are the table's own state: a column declares what it can
   // be narrowed by, the table keeps what it is narrowed to, and the query
   // carries it. A page no longer threads a useState per filter into `params`.
   const [filters, setFilters] = useState<Record<string, string>>(url.initial.filters);
+  const restoringUrl = useRef(false);
   useEffect(() => {
+    const next = url.initial;
+    if (
+      next.q === search &&
+      next.sort === sort &&
+      next.offset === pager.offset &&
+      next.pageSize === pager.pageSize &&
+      JSON.stringify(next.filters) === JSON.stringify(filters)
+    )
+      return;
+    restoringUrl.current = true;
+    sortFollowsFilters.current = next.sort === openingSort;
+    setSearch(next.q);
+    setPendingSearch(next.q);
+    setSort(next.sort);
+    setFilters(next.filters);
+    pager.restore(next.pageSize, next.offset);
+  }, [url.initial]);
+  useEffect(() => {
+    if (restoringUrl.current) {
+      restoringUrl.current = false;
+      return;
+    }
     url.mirror({ q: search, sort, offset: pager.offset, pageSize: pager.pageSize, filters });
     // url.mirror is stable per namespace; mirroring reacts to state only.
   }, [search, sort, pager.offset, pager.pageSize, filters]);
 
   function applySort(nextSort: string) {
+    sortFollowsFilters.current = false;
     setSort(nextSort);
     pager.resetPage();
   }
@@ -149,21 +213,46 @@ export function ApiDataTable<T, Response = unknown>({
     if (value) next[param] = value;
     else delete next[param];
     setFilters(next);
+    if (sortFollowsFilters.current) setSort(defaultSortFor(next));
     onFiltersChange?.(next);
     pager.resetPage();
   }
 
+  // The column menus and the record cards' toolbar menu share one state.
+  const columnControls = useColumnControls(columns, {
+    currentSort: sort,
+    onSort: applySort,
+    filters,
+    onFilterChange: applyFilter,
+  });
+  const cardMenu =
+    (renderItems || narrowLayout !== "columns") && columnControls.cardMenuLabel ? (
+      <ColumnCardMenu controls={columnControls} caption={caption} alwaysVisible={Boolean(renderItems)} />
+    ) : null;
+
+  const query = {
+    ...filters,
+    // Caller-owned scope (for example, the selected attendee) cannot be
+    // replaced by a column filter restored from the URL.
+    ...params,
+    ...(paginate ? { limit: String(pager.pageSize), offset: String(requestOffset) } : {}),
+    ...(search ? { q: search } : {}),
+    ...(sort ? { sort } : {}),
+  };
+  const queryKey = buildCollectionResetKey(endpoint, query);
+  const lastQueryKey = useRef<string | null>(null);
+  useEffect(() => {
+    if (lastQueryKey.current === queryKey) return;
+    lastQueryKey.current = queryKey;
+    onQueryChange?.(query);
+  }, [queryKey, onQueryChange]);
   const collection = useServerCollection({
     endpoint,
-    params: {
-      ...params,
-      ...filters,
-      ...(paginate ? { limit: String(pager.pageSize), offset: String(requestOffset) } : {}),
-      ...(search ? { q: search } : {}),
-      ...(sort ? { sort } : {}),
-    },
+    params: query,
     responseSchema,
     load,
+    clearDataOnReload,
+    retainDataOnError,
   });
 
   const actions: ApiTableActions = { reload: collection.reload, resetPage: pager.resetPage };
@@ -189,13 +278,29 @@ export function ApiDataTable<T, Response = unknown>({
     // The whole list is ONE panel — the component library's list specimen:
     // head (search, filters, actions) → table → pager, sharing the panel's
     // edges. Before this the toolbar floated over a borderless table and the
-    // count centred itself under the screen rather than under the rows.
-    <section class="pk pk-panel pk-table-list" aria-label={caption}>
-      {(searchPlaceholder || toolbar || createAction) && (
+    // count centered itself under the screen rather than under the rows.
+    <TableList caption={caption} framed={framed}>
+      {(searchPlaceholder || toolbar || createAction || cardMenu) && (
         // The toolbar is named after the list it controls, so a page with
         // several collections does not present several toolbars called
         // "Toolbar".
-        <Toolbar
+        <CollectionToolbar
+          class={toolbarClass}
+          compactActionsLabel={compactToolbarLabel}
+          compactActions={
+            compactToolbarActions
+              ? [
+                  ...compactToolbarActions,
+                  ...columnControls.cardMenuItems,
+                  {
+                    id: "refresh-collection",
+                    label: `Refresh ${caption.toLowerCase()}`,
+                    onSelect: () => void collection.reload(),
+                  },
+                ]
+              : undefined
+          }
+          createAction={createAction}
           label={`${caption} controls`}
           search={
             searchPlaceholder
@@ -209,33 +314,10 @@ export function ApiDataTable<T, Response = unknown>({
               : undefined
           }
         >
-          {toolbar?.(actions)}
-          {/* Default size, not `sm`: these sit on the same row as the search
-              field, which is a full-size control, and a button that is eight
-              pixels shorter than the input beside it reads as shrunken rather
-              than as quiet. `sm` belongs inside a dense row, not next to a
-              full-size control. Primary, because the list's create affordance
-              is the one thing the head offers beyond finding rows — the
-              design system's list head draws it the same way. */}
-          {createAction && "items" in createAction && createAction.items ? (
-            <SplitButton {...createAction} />
-          ) : (
-            createAction && (
-              <Button
-                variant="primary"
-                icon
-                aria-label={createAction.label}
-                title={createAction.label}
-                onClick={createAction.onSelect}
-                disabled={createAction.disabled}
-                aria-expanded={createAction.expanded}
-              >
-                <IconPlus />
-                <span class="pk-sr-only">{createAction.label}</span>
-              </Button>
-            )
-          )}
+          {toolbar?.(actions, query, { sort, onSort: applySort })}
+          <span class={compactToolbarActions ? "pk-toolbar-secondary" : undefined}>{cardMenu}</span>
           <Button
+            class={compactToolbarActions ? "pk-toolbar-secondary" : undefined}
             variant="secondary"
             icon
             title={`Refresh ${caption.toLowerCase()}`}
@@ -244,7 +326,7 @@ export function ApiDataTable<T, Response = unknown>({
             <IconRefresh />
             <span class="pk-sr-only">Refresh</span>
           </Button>
-        </Toolbar>
+        </CollectionToolbar>
       )}
 
       {inset && <div class="pk-table-list__inset">{inset}</div>}
@@ -263,25 +345,41 @@ export function ApiDataTable<T, Response = unknown>({
               rows under its real headers — the columns keep their widths and
               the toolbar keeps focus, instead of the whole list collapsing to
               a spinner between every page and search. */}
-          <DataTable
-            caption={caption}
-            showCaption={showCaption}
-            columns={columns}
-            data={rows}
-            loading={collection.loading && !collection.data}
-            empty={empty}
-            rowKey={rowKey}
-            rowAction={rowAction}
-            detailRow={detailRow}
-            selection={selection}
-            currentSort={sort}
-            onSort={applySort}
-            filters={filters}
-            onFilterChange={applyFilter}
-          />
+          {renderItems ? (
+            <div class="pk-table-list__inset">
+              {collection.loading && !collection.data ? (
+                <Spinner label={`Loading ${caption.toLowerCase()}…`} />
+              ) : rows.length ? (
+                renderItems(rows, { sort, onSort: applySort })
+              ) : (
+                <p>{empty}</p>
+              )}
+            </div>
+          ) : (
+            <DataTable
+              caption={caption}
+              showCaption={showCaption}
+              narrowLayout={narrowLayout}
+              columns={columns}
+              data={rows}
+              loading={collection.loading && !collection.data}
+              empty={empty}
+              rowKey={rowKey}
+              rowAction={rowAction}
+              detailRow={detailRow}
+              rowTone={rowTone}
+              rowToneStyle={rowToneStyle}
+              selection={selection}
+              currentSort={sort}
+              onSort={applySort}
+              filters={filters}
+              onFilterChange={applyFilter}
+              controls={columnControls}
+            />
+          )}
           {paginate && !collection.loading && <Pager {...pagerProps} />}
         </>
       )}
-    </section>
+    </TableList>
   );
 }

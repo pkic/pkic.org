@@ -17,6 +17,7 @@ import { listProposalSpeakersWithStatus } from "./proposal-speakers";
 import { getProposalByManageToken, type ProposalRecord, updateProposalForVerifiedOwner } from "./proposals";
 import { getEventById, requireConfiguredSessionType } from "./events";
 import { proposalAccessPath } from "../../../assets/shared/proposal-access-paths";
+import { proposalActingIdentityReadModel } from "./proposal-speaker-identity";
 
 type ProposalAccessInput = z.infer<typeof proposalAccessPatchSchema>;
 type ProposalAccessReadResponse = z.infer<typeof proposalAccessReadResponseSchema>;
@@ -31,6 +32,7 @@ function toAccessibleProposal(proposal: ProposalRecord): ProposalAccessPatchResp
     proposal_type: proposal.proposal_type,
     title: proposal.title,
     abstract: proposal.abstract,
+    committee_notes: proposal.committee_notes ?? null,
     details: parseJsonSafe<Record<string, unknown> | null>(proposal.details_json, null),
   };
 }
@@ -46,6 +48,7 @@ export async function loadProposalAccessView(
     success: true,
     proposal: toAccessibleProposal(proposal),
     speakers: speakers.map((speaker) => ({
+      ...proposalActingIdentityReadModel(speaker),
       userId: speaker.user_id,
       role: speaker.role,
       status: speaker.status,
@@ -104,6 +107,7 @@ export async function saveProposalAccessChanges(
     proposalType,
     title: input.body.title,
     abstract: input.body.abstract,
+    committeeNotes: input.body.committeeNotes,
     detailsJson: details === undefined ? undefined : Object.keys(details).length > 0 ? stringifyJson(details) : null,
     formSubmissionStatements: formSubmission?.statements,
     formPlacementId: validatedForm?.form?.placement?.id ?? null,

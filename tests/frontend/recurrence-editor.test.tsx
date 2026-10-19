@@ -3,7 +3,7 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { recurrenceRuleSchema } from "../../assets/shared/schemas/event-series";
-import { controlFor, labelNames } from "./helpers/labelled-control";
+import { controlFor, labelNames } from "./helpers/labeled-control";
 import {
   ADVANCED_RECURRENCE_MODE,
   MAX_RECURRENCE_INTERVAL,

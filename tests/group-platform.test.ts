@@ -1297,7 +1297,7 @@ describe("group route contracts", () => {
       await insertOrganization(env.DB, "Membership Shape Organization"),
       "A",
     );
-    await addRepresentative(env.DB, participantMemberId, participantUserId);
+    await addRepresentative(env.DB, participantMemberId, participantUserId, { jobTitle: "Chief analyst" });
     await joinGroup(env.DB, group.id, {
       actorUserId: participantUserId,
       targetUserId: participantUserId,
@@ -1329,11 +1329,17 @@ describe("group route contracts", () => {
       (row) => row.organizationName === "Membership Shape Organization",
     );
     expect(participantRow).toBeDefined();
-    expect(Object.keys(participantRow!).sort()).toEqual(["headshotUrl", "name", "organizationName", "userId"].sort());
+    expect(Object.keys(participantRow!).sort()).toEqual(
+      ["headshotUrl", "jobTitle", "name", "organizationName", "userId"].sort(),
+    );
     expect(JSON.stringify(participantRaw)).not.toContain(participantEmail);
     expect(
       participantPayload.memberships.find((row) => row.organizationName === "Membership Shape Organization"),
-    ).toMatchObject({ userId: participantUserId, organizationName: "Membership Shape Organization" });
+    ).toMatchObject({
+      userId: participantUserId,
+      organizationName: "Membership Shape Organization",
+      jobTitle: "Chief analyst",
+    });
 
     // (c) An effective group manager keeps the full capacity roster, email included.
     const managerResponse = await callApi(env as Env, `/api/v1/groups/${group.id}/memberships`, {
@@ -1391,7 +1397,9 @@ describe("group route contracts", () => {
       headers: { authorization: `Bearer ${nonAdminToken}`, "content-type": "application/json" },
       body: JSON.stringify({ typeKey: "working_group", name: "Should Not Be Created" }),
     });
-    expect(createDenied.status).toBe(401);
+    expect(createDenied.status).toBe(403);
+    await expect(createDenied.json()).resolves.toMatchObject({ error: { code: "PERMISSION_REQUIRED" } });
+    expect(await queryAll(env.DB, "SELECT id FROM groups WHERE name = ?", "Should Not Be Created")).toEqual([]);
 
     const update = await callApi(testEnv, `/api/v1/groups/${group.id}`, {
       method: "PATCH",

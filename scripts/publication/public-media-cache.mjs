@@ -6,6 +6,12 @@ const digest = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
 /** @typedef {Map<string, Pick<import("@cloudflare/workers-types").R2Object, "etag" | "size">>} PublicMediaManifest */
 
+function missingSource() {
+  const error = new Error("A published image source is missing from R2");
+  error.name = "MissingPublishedImageSource";
+  return error;
+}
+
 /**
  * Revalidate approved derivatives through R2 without transferring unchanged bodies.
  * @param {PublicMediaManifest} [manifest]
@@ -33,7 +39,7 @@ export async function publicMediaCache(directory, revision, getObject, manifest 
         if (error.code !== "ENOENT" && !(error instanceof SyntaxError)) throw error;
       }
       const listed = manifest?.get(key);
-      if (manifest && !listed) throw new Error("A published image source is missing from R2");
+      if (manifest && !listed) throw missingSource();
       if (cached && listed?.etag === cached.etag) {
         stats.reused++;
         return { cached };
@@ -44,7 +50,7 @@ export async function publicMediaCache(directory, revision, getObject, manifest 
           ? { onlyIf: { etagDoesNotMatch: cached.etag } }
           : undefined;
       const object = await getObject(key, condition);
-      if (!object) throw new Error("A published image source is missing from R2");
+      if (!object) throw missingSource();
       if (cached && typeof object.arrayBuffer !== "function" && object.etag === cached.etag) {
         stats.reused++;
         return { cached };

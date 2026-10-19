@@ -1,5 +1,5 @@
 import { formatDateTime } from "../../shared/format-date";
-import { StatusBadge } from "./StatusBadge";
+import { statusLabel, statusTone } from "../../shared/status-display";
 import { Badge } from "../ui/Badge";
 import type { PublicVoteGetResponse } from "../../shared/schemas/votes";
 import { Markdown } from "../ui/Markdown";
@@ -30,12 +30,12 @@ function MotionResult({ result }: { result: MotionResultData }) {
       {/*
        * The product's own status vocabulary rather than a hand-written pair of
        * words. The version this replaces read `outcome === "passed" ? "Passed"
-       * : "Failed"`, which labelled `not_quorate` — a vote that decided
+       * : "Failed"`, which labeled `not_quorate` — a vote that decided
        * nothing because too few people took part — as a defeat. `statusLabel`
        * calls it what it is, and the tone arrives with a dot, so the outcome
-       * never rests on colour alone.
+       * never rests on color alone.
        */}
-      {outcome && <StatusBadge status={outcome} />}
+      {outcome && <Badge tone={statusTone(outcome)}>{statusLabel(outcome)}</Badge>}
       {counts && (
         <span class="pk-muted">
           {counts.in_favor} in favor · {counts.opposed} opposed · {counts.abstain} abstained

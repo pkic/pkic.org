@@ -23,7 +23,7 @@ export function EventRegistrationConfirmation({ options = {} }: { options?: Reco
         <span class="pk-skeleton pk-skeleton--lg" />
       </div>
       <div data-confirm-content hidden>
-        <p class="pk-lede">
+        <p class="pk-lede" data-confirm-intro>
           Hi <span data-placeholder="firstName">there</span>, you're one click away! Click the button below to verify
           your email address and confirm your registration for the{" "}
           <strong>
@@ -32,8 +32,9 @@ export function EventRegistrationConfirmation({ options = {} }: { options?: Reco
           .
         </p>
         <form class="pk-stack needs-validation" noValidate>
+          <div data-confirm-organization hidden />
           <div class="pk-cluster">
-            <Button type="submit" variant="primary" size="lg">
+            <Button type="submit" variant="primary">
               Confirm my registration
             </Button>
           </div>

@@ -8,7 +8,7 @@ import {
   type MailingList,
 } from "../../../../../shared/schemas/mailing-lists";
 import { ApiDataTable, type ApiTableActions } from "../../../../components/ApiDataTable";
-import { EmptyState } from "../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../ui/EmptyState";
 import { ErrorAlert } from "../../../../components/ErrorAlert";
 import { Badge } from "../../../../ui/Badge";
 import { Button } from "../../../../ui/Button";
@@ -134,7 +134,7 @@ export function GroupMailingListManager({
        * input were half a screen apart — part of what #50 called messy. Held
        * to a reading measure, the section grid puts two fields on a line and
        * fills it. Start-aligned, so the form sits under the page's own
-       * heading rather than centred away from it.
+       * heading rather than centered away from it.
        */
       <div class="pk pk-stack pk-container pk-container--narrow pk-container--start">
         {/* The page's way back: creating has its own address, so leaving it
@@ -152,10 +152,10 @@ export function GroupMailingListManager({
                 idPrefix="group-mailing-list-create"
               />
               <div class="pk-cluster">
-                <Button type="submit" size="sm" variant="primary" disabled={saving}>
+                <Button type="submit" variant="primary" disabled={saving}>
                   {saving ? "Saving…" : "Create mailing list"}
                 </Button>
-                <Button size="sm" onClick={() => navigate(listsPath)} disabled={saving}>
+                <Button onClick={() => navigate(listsPath)} disabled={saving}>
                   Cancel
                 </Button>
               </div>
@@ -188,6 +188,7 @@ export function GroupMailingListManager({
       {error && <ErrorAlert error={error} />}
       {syncNotice && <p role="status">{syncNotice}</p>}
       <ApiDataTable
+        urlState="mailing-lists"
         caption="Managed mailing lists"
         actionsRef={actions}
         endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/mailing-lists/management`}

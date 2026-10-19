@@ -14,7 +14,7 @@ import {
   organizationDetailResponseSchema,
   organizationsListResponseSchema,
 } from "../../../assets/shared/schemas/organization-management";
-import { buttonNamed } from "./labelled-control";
+import { buttonNamed } from "./labeled-control";
 import { menuItemNamed } from "./row-actions";
 
 export const USER_ID = "00000000-0000-4000-8000-000000000001";
@@ -36,6 +36,7 @@ export function membership(overrides: Partial<UserMembership> = {}): UserMembers
     isDefault: false,
     organizationId: ORGANIZATION_ID,
     organizationName: "Organization A",
+    organizationEmailDomain: null,
     emailId: null,
     email: "role@organization-a.example",
     jobTitle: null,
@@ -195,6 +196,9 @@ export const organizationDetail = organizationDetailResponseSchema.parse({
     links: [],
     primaryContactUserId: null,
     secondaryContactUserId: null,
+    emailDomains: [],
+    claimedDomains: [],
+    mergedInto: null,
     identities: [],
     formerIdentities: [],
   },

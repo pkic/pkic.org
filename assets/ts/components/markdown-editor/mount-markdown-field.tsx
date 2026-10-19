@@ -3,6 +3,7 @@ import { useLayoutEffect, useState } from "preact/hooks";
 import { z } from "zod";
 import { useContractForm } from "../../hooks/useContractForm";
 import { Field } from "../../ui/Field";
+import { CONTRACT_VALIDATION_ATTRIBUTE } from "../../shared/form/validation";
 import type { MarkdownEditor as EditorComponent } from "./MarkdownEditor";
 
 interface MarkdownFieldValidation {
@@ -63,7 +64,8 @@ function MountedMarkdownField({
     controller.validate = () => contract.submit().data !== null;
   });
   return (
-    <div {...contract.handlers}>
+    // The contract owns this field's state; the page's DOM validator stays out of it.
+    <div {...contract.handlers} {...{ [CONTRACT_VALIDATION_ATTRIBUTE]: "" }}>
       <Field
         id={field.id}
         label={label}

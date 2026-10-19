@@ -4,13 +4,18 @@
  * These are the properties that make the system safe to build components
  * against: both themes define the same names, the accent derives rather than
  * being hand-listed per hue, state tones stay independent of the accent, and
- * no colour is defined only inside a theme-conditional block — the last one
+ * no color is defined only inside a theme-conditional block — the last one
  * being the bug that renders one theme's text on the other theme's ground.
  */
 
 import { describe, expect, it } from "vitest";
 
-import { emitPublicTokenCss, emitTemplateTokenCss, emitTokenCss } from "../../assets/design/emit-css.ts";
+import {
+  emitFeatureTokenCss,
+  emitPublicTokenCss,
+  emitTemplateTokenCss,
+  emitTokenCss,
+} from "../../assets/design/emit-css.ts";
 import { accentNeighbour, isAccentHue, markArcs, palette } from "../../assets/design/palette.ts";
 import { constants, cssVar, density, layers, themes, tokenNames } from "../../assets/design/tokens.ts";
 
@@ -55,7 +60,7 @@ describe("token module", () => {
     }
   });
 
-  it("builds the brand gradient from the mark's own arc colours, in order", () => {
+  it("builds the brand gradient from the mark's own arc colors, in order", () => {
     const expected = markArcs.map((hue) => palette[hue]);
     for (const value of expected) {
       expect(constants.stripe).toContain(value);
@@ -119,4 +124,15 @@ describe("emitted stylesheet", () => {
   it("is deterministic", () => {
     expect(emitTokenCss()).toBe(css);
   });
+});
+
+it("loads component-only colors with the owning feature and retains canonical values", () => {
+  const core = emitTokenCss();
+  const agenda = emitFeatureTokenCss("agenda");
+  const scanner = emitFeatureTokenCss("scanner");
+  expect(core).not.toContain("--pk-agenda-location-1:");
+  expect(core).not.toContain("--pk-grad-state-ok:");
+  expect(agenda).toContain("--pk-agenda-location-1: #5a9bd5;");
+  expect(scanner).toContain("--pk-grad-state-ok: linear-gradient(");
+  expect(agenda).not.toContain("--pk-grad-state-ok:");
 });

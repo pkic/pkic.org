@@ -86,6 +86,7 @@ export function GroupMailingListPreferences({ groupId }: { groupId: string }) {
         </PanelBody>
       )}
       <ApiDataTable
+        urlState="mailing-preferences"
         caption="My mailing-list preferences"
         actionsRef={actions}
         endpoint={`/api/v1/groups/${encodeURIComponent(groupId)}/mailing-lists`}

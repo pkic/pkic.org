@@ -113,7 +113,7 @@ export const ORGANIZATION_PROPOSALS_SORT_COLUMNS = ["submittedAt", "title", "sta
 export const organizationProposalsListQuerySchema = searchableListQuerySchema(
   sortColumnSchemaWithDefault(ORGANIZATION_PROPOSALS_SORT_COLUMNS, "-submittedAt"),
 ).extend({
-  // The canonical program-catalogue status vocabulary, including its `active`
+  // The canonical program-catalog status vocabulary, including its `active`
   // aggregate. Not redefined here: a proposal has one status vocabulary.
   status: proposalAdminStatusFilterSchema.optional(),
 });

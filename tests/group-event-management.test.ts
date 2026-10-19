@@ -139,7 +139,8 @@ async function createGroupEvent(fixture: Fixture): Promise<{ id: string; updated
       profileKey: "workshop",
       registrationPolicy: "no_registration",
       inviteLimitAttendee: 5,
-      location: "Online",
+      city: "Amsterdam",
+      country: "NL",
       links: ["https://example.test/register"],
     }),
   });
@@ -150,11 +151,18 @@ async function createGroupEvent(fixture: Fixture): Promise<{ id: string; updated
       updatedAt: string;
       sourceMode: string;
       inviteLimitAttendee: number;
-      location: string;
+      city: string | null;
+      country: string | null;
       capabilities: string[];
     };
   };
-  expect(body.event).toMatchObject({ sourceMode: "portal", inviteLimitAttendee: 5, location: "Online" });
+  expect(body.event).toMatchObject({
+    sourceMode: "portal",
+    inviteLimitAttendee: 5,
+    city: "Amsterdam",
+    country: "NL",
+    meetingLocation: null,
+  });
   expect(body.event.capabilities).not.toContain("register");
   return body.event;
 }
@@ -186,6 +194,42 @@ describe("group event management routes", () => {
     }
   });
 
+  it("splits upcoming and past at the requested instant, soonest and most recent first", async () => {
+    const fixture = await createFixture();
+    const now = "2026-06-01T12:00:00.000Z";
+    const schedules: Array<{ name: string; startsAt: string | null; endsAt: string | null }> = [
+      { name: "Long past", startsAt: "2025-01-10T08:00:00.000Z", endsAt: "2025-01-10T17:00:00.000Z" },
+      { name: "Unscheduled", startsAt: null, endsAt: null },
+      { name: "Later", startsAt: "2026-09-01T08:00:00.000Z", endsAt: "2026-09-01T17:00:00.000Z" },
+      { name: "Recent", startsAt: "2026-05-20T08:00:00.000Z", endsAt: "2026-05-20T17:00:00.000Z" },
+      { name: "In progress", startsAt: "2026-05-31T08:00:00.000Z", endsAt: "2026-06-02T17:00:00.000Z" },
+      { name: "Soon", startsAt: "2026-06-10T08:00:00.000Z", endsAt: "2026-06-10T17:00:00.000Z" },
+    ];
+    for (const schedule of schedules) {
+      const event = await createGroupEvent(fixture);
+      await env.DB.prepare("UPDATE events SET name = ?, starts_at = ?, ends_at = ? WHERE id = ?")
+        .bind(schedule.name, schedule.startsAt, schedule.endsAt, event.id)
+        .run();
+    }
+    async function names(query: string): Promise<string[]> {
+      const response = await request(
+        fixture.ownerLeaderToken,
+        `/api/v1/groups/${fixture.ownerGroupId}/events?collection=events&limit=20&${query}`,
+      );
+      expect(response.status, await response.clone().text()).toBe(200);
+      const body = (await response.json()) as { events: Array<{ name: string }> };
+      return body.events.map((event) => event.name);
+    }
+    const upcoming = ["In progress", "Soon", "Later", "Unscheduled"];
+    const past = ["In progress", "Recent", "Long past"];
+
+    // The server default follows the window; the explicit Next sort agrees.
+    expect(await names(`from=${now}`)).toEqual(upcoming);
+    expect(await names(`from=${now}&sort=next_occurrence_at`)).toEqual(upcoming);
+    expect(await names(`to=${now}`)).toEqual(past);
+    expect(await names(`to=${now}&sort=-next_occurrence_at`)).toEqual(past);
+  });
+
   it("uses indexed D1 joins for event-day attendance counts", async () => {
     const plan = await env.DB.prepare(`EXPLAIN QUERY PLAN ${CONFIGURED_EVENT_DAY_ATTENDANCE_COUNTS_SQL}`)
       .bind("event-id")
@@ -209,7 +253,7 @@ describe("group event management routes", () => {
         body: JSON.stringify({
           expectedUpdatedAt: created.updatedAt,
           inviteLimitAttendee: 0,
-          location: "Hybrid",
+          city: "Rotterdam",
           links: ["https://example.test/register", "https://example.test/agenda"],
         }),
       },
@@ -220,7 +264,8 @@ describe("group event management routes", () => {
         id: created.id,
         registrationPolicy: "no_registration",
         inviteLimitAttendee: 0,
-        location: "Hybrid",
+        city: "Rotterdam",
+        country: "NL",
         links: ["https://example.test/register", "https://example.test/agenda"],
       },
     });
@@ -660,6 +705,8 @@ describe("group event management routes", () => {
       id: created.id,
       capabilities: ["view", "attend"],
     });
+    // The managed event carries the server's verdict on its call for proposals; this one has no proposal form.
+    expect(detail.event.proposalCall).toEqual({ open: false, path: null, closesAt: null });
   });
 
   it("rejects meeting profiles from standalone event creation", async () => {
@@ -858,6 +905,42 @@ describe("group event management routes", () => {
       name: "Group workshop",
     });
   });
+
+  it.each(["registration-settings", "terms"] as const)(
+    "reads and updates legacy SQLite revisions through %s without accepting a stale revision",
+    async (resource) => {
+      const fixture = await createFixture();
+      const created = await createGroupEvent(fixture);
+      await env.DB.prepare("UPDATE events SET updated_at = '2026-09-09 12:00:00' WHERE id = ?").bind(created.id).run();
+      const path = `/api/v1/groups/${fixture.ownerGroupId}/events/${created.id}/${resource}`;
+      const read = await request(fixture.ownerLeaderToken, path);
+      expect(read.status, await read.clone().text()).toBe(200);
+      const revision = (await read.json()) as { eventUpdatedAt: string };
+      expect(revision.eventUpdatedAt).toBe("2026-09-09T12:00:00.000Z");
+      const body =
+        resource === "registration-settings"
+          ? { expectedUpdatedAt: revision.eventUpdatedAt, registrationPolicy: "no_registration" }
+          : {
+              expectedUpdatedAt: revision.eventUpdatedAt,
+              configuration: {
+                attendee: [{ termKey: "terms", version: "1", required: true, displayText: "I agree to the terms" }],
+                speaker: [],
+                presentation: [],
+              },
+            };
+      const saved = await request(fixture.ownerLeaderToken, path, { method: "PUT", body: JSON.stringify(body) });
+      expect(saved.status, await saved.clone().text()).toBe(200);
+      const savedBody = (await saved.json()) as { eventUpdatedAt: string };
+      expect(savedBody.eventUpdatedAt).not.toBe(revision.eventUpdatedAt);
+      const stale = await request(fixture.ownerLeaderToken, path, { method: "PUT", body: JSON.stringify(body) });
+      expect(stale.status, await stale.clone().text()).toBe(409);
+      const latest = await request(fixture.ownerLeaderToken, path);
+      expect(latest.status, await latest.clone().text()).toBe(200);
+      expect((await latest.json()) as { eventUpdatedAt: string }).toMatchObject({
+        eventUpdatedAt: savedBody.eventUpdatedAt,
+      });
+    },
+  );
 
   it("reads a migrated event's legacy registration mode as the policy the detail already shows", async () => {
     const fixture = await createFixture();

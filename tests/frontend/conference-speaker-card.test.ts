@@ -28,6 +28,6 @@ it("renders source metadata and speaker content safely while preserving hash and
   expect(document.querySelector("#speaker-photo img")!.getAttribute("src")).toBe("/headshot.webp");
   window.dispatchEvent(new KeyboardEvent("keydown", { key: "ArrowRight" }));
   await vi.waitFor(() => expect(document.getElementById("speaker-name")!.textContent).toBe("Second speaker"));
-  expect(document.querySelector("#speaker-photo .speaker-photo-placeholder")!.textContent).toBe("SS");
+  expect(document.querySelector("#speaker-photo .pk-avatar__initials")!.textContent).toBe("SS");
   expect(document.querySelector("#speaker-photo img")).toBeNull();
 });

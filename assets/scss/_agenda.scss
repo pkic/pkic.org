@@ -1,3 +1,5 @@
+@use "sass:color";
+
 // Agenda fullscreen functionality
 .agenda-fullscreen {
   position: fixed !important;
@@ -44,13 +46,8 @@
     left: 0 !important;
     box-sizing: border-box !important;
     &[data-locations] {
-      grid-template-columns: 100px repeat(
-          var(--location-count, 10),
-          minmax(320px, 1fr)
-        ) !important;
-      min-width: calc(
-        100px + var(--location-count, 10) * 320px + 2rem
-      ) !important;
+      grid-template-columns: 6.25rem repeat(var(--location-count, 10), minmax(20rem, 1fr)) !important;
+      min-width: calc(6.25rem + var(--location-count, 10) * 20rem + 2rem) !important;
       max-width: none !important;
     }
   }
@@ -59,13 +56,13 @@
   .agenda-time,
   .agenda-content {
     width: auto !important;
-    min-width: 320px !important;
+    min-width: 20rem !important;
     max-width: none !important;
   }
 
   .agenda-time {
-    max-width: 100px !important;
-    min-width: 100px !important;
+    max-width: 6.25rem !important;
+    min-width: 6.25rem !important;
   }
 
   .agenda-session {
@@ -120,8 +117,8 @@
   // Default grid template for larger screens
   @for $i from 1 through 10 {
     &[data-locations="#{$i}"] {
-      grid-template-columns: 100px repeat($i, minmax(320px, 1fr));
-      min-width: calc(100px + #{$i} * 320px + 2rem);
+      grid-template-columns: 6.25rem repeat($i, minmax(20rem, 1fr));
+      min-width: calc(6.25rem + #{$i} * 20rem + 2rem);
     }
   }
 }
@@ -140,8 +137,8 @@
   color: var(--pk-ink);
   border: 2px solid var(--pk-line);
   border-radius: 50%;
-  width: 44px;
-  height: 44px;
+  width: 2.75rem;
+  height: 2.75rem;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -165,16 +162,16 @@
   }
 
   &.scroll-left {
-    left: 105px; // Position just after the time column
+    left: 6.5625rem; // Position just after the time column
   }
 
   &.scroll-right {
-    right: 15px;
+    right: 0.9375rem;
   }
 
   svg {
-    width: 18px;
-    height: 18px;
+    width: 1.125rem;
+    height: 1.125rem;
   }
 }
 
@@ -185,7 +182,7 @@
   position: absolute;
   top: 0;
   bottom: 0;
-  width: 30px;
+  width: 1.875rem;
   pointer-events: none;
   z-index: 5;
   transition: opacity 0.3s ease;
@@ -193,7 +190,7 @@
 }
 
 .desktop-agenda::before {
-  left: 100px; // After time column
+  left: 6.25rem; // After time column
   background: linear-gradient(to right, var(--pk-page-surface), transparent);
 }
 
@@ -273,7 +270,7 @@
   height: 100%;
   display: flex;
   flex-direction: column;
-  min-width: 260px;
+  min-width: 16.25rem;
   max-width: 100%;
 
   &:hover {
@@ -304,7 +301,7 @@
   // card's true bottom either way, never on top of text.
   padding: 0 1rem 0.5rem;
   flex: 0 1 auto;
-  min-height: 60px;
+  min-height: 3.75rem;
   overflow: hidden;
   position: relative;
 }
@@ -324,11 +321,7 @@
   right: 0;
   bottom: 0;
   height: 2.5em;
-  background: linear-gradient(
-    to bottom,
-    transparent 0%,
-    var(--pk-surface) 80%
-  );
+  background: linear-gradient(to bottom, transparent 0%, var(--pk-surface) 80%);
   pointer-events: none;
   display: block;
 }
@@ -393,23 +386,13 @@
 }
 
 .speaker-avatar {
-  width: 32px;
-  height: 32px;
+  width: 2rem;
+  height: 2rem;
 }
 
 .mobile-speaker-avatar {
-  width: 28px;
-  height: 28px;
-}
-
-.speaker-initial {
-  background: var(--location-color, #{$primary});
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 0.8rem;
-  font-weight: 600;
+  width: 1.75rem;
+  height: 1.75rem;
 }
 
 .speaker-details,
@@ -505,7 +488,7 @@
   max-width: var(--agenda-break-width, 100%);
   pointer-events: auto;
   position: sticky;
-  left: calc(var(--agenda-time-width, 100px));
+  left: calc(var(--agenda-time-width, 6.25rem));
   z-index: 12;
   text-align: center;
   display: flex;
@@ -558,28 +541,23 @@
   .#{$location},
   .#{$location}-session {
     --location-color: #{$color};
-    --location-color-rgb: #{red($color)}, #{green($color)}, #{blue($color)};
+    --location-color-rgb:
+      #{color.channel($color, "red", $space: rgb)}, #{color.channel($color, "green", $space: rgb)},
+      #{color.channel($color, "blue", $space: rgb)};
     --location-bg: var(--pk-surface);
-    --location-border: #{rgba(
-        $color,
-        0.3
-      )}; // Border uses the base color with opacity
+    --location-border: #{rgba($color, 0.3)}; // Border uses the base color with opacity
     --location-text-color: var(--pk-ink);
     --location-text-color-secondary: var(--pk-ink-muted);
   }
 
   // The session-registration surface has moved onto the design system, so the
   // `.card`/`.btn` overrides that used to tint its headers and save button are
-  // gone with their markup. The location colour still reaches that surface
+  // gone with their markup. The location color still reaches that surface
   // through the custom properties above, which `.session-card` reads.
 
   // Modal header still gets a slight gradient for visual interest, using the base color
   .#{$location}-modal .session-modal__header {
-    background: linear-gradient(
-      135deg,
-      #{$color} 0%,
-      #{darken($color, 15%)} 100%
-    );
+    background: linear-gradient(135deg, #{$color} 0%, #{color.adjust($color, $lightness: -15%)} 100%);
     color: white;
     border-bottom: none;
     padding: 1.5rem;
@@ -589,9 +567,7 @@
   .location-filter-btn.#{$location} {
     background: #{rgba($color, 0.1)}; // Light background for button
     color: #{$color}; // Text color is the base color
-    border: 2px
-      solid
-      #{rgba($color, 0.3)}; // Border is a lighter shade of the base color
+    border: 2px solid #{rgba($color, 0.3)}; // Border is a lighter shade of the base color
   }
 
   .location-filter-btn.#{$location}:hover,
@@ -742,22 +718,12 @@
 }
 
 .speaker-photo {
-  width: 80px;
-  height: 80px;
+  width: 5rem;
+  height: 5rem;
   border-radius: 50%;
   flex-shrink: 0;
   align-self: flex-start;
   object-fit: cover;
-}
-
-.speaker-initial-large {
-  background: var(--location-color, #{$primary});
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 1.8rem;
-  font-weight: 600;
 }
 
 .speaker-info-card {
@@ -785,8 +751,8 @@
   .agenda-grid {
     @for $i from 1 through 10 {
       &[data-locations="#{$i}"] {
-        grid-template-columns: 100px repeat($i, minmax(280px, 1fr));
-        min-width: calc(100px + #{$i} * 280px + 2rem);
+        grid-template-columns: 6.25rem repeat($i, minmax(17.5rem, 1fr));
+        min-width: calc(6.25rem + #{$i} * 17.5rem + 2rem);
         max-width: none;
       }
     }
@@ -801,8 +767,8 @@
   }
 
   .speaker-avatar {
-    width: 28px;
-    height: 28px;
+    width: 1.75rem;
+    height: 1.75rem;
   }
 
   .speaker-name {
@@ -816,7 +782,7 @@
 
 @media (max-width: 767.98px) {
   .agenda-grid {
-    grid-template-columns: 80px 1fr;
+    grid-template-columns: 5rem 1fr;
     gap: 0.25rem;
   }
 
@@ -848,11 +814,11 @@
   // Reduce fade indicators
   .agenda-grid-container::before,
   .agenda-grid-container::after {
-    width: 20px;
+    width: 1.25rem;
   }
 
   .agenda-grid-container::before {
-    left: 80px; // After smaller time column
+    left: 5rem; // After smaller time column
   }
 }
 
@@ -862,7 +828,7 @@
 // The shortcode is off the framework, so the four things Bootstrap's JS
 // components supplied — the day tab strip, the responsive mobile/desktop
 // swap, the absolutely placed control cluster, and the session modal — are
-// declared here instead. Colour, type, space, radius and shadow read design
+// declared here instead. Color, type, space, radius and shadow read design
 // tokens; nothing in this block hard-codes a value that the system owns.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -964,28 +930,18 @@
 .agenda-break-sponsor__logo {
   width: auto;
   height: auto;
-  max-width: 150px;
-  max-height: 35px;
+  max-width: 9.375rem;
+  max-height: 2.1875rem;
 }
 
 // Speakers tab portraits, formerly `rounded-circle` plus an inline style.
 .agenda-speaker-portrait {
   display: block;
-  width: 80px;
-  height: 80px;
+  width: 5rem;
+  height: 5rem;
   margin-inline: auto;
   border-radius: 50%;
   object-fit: cover;
-}
-
-.agenda-speaker-portrait--initial {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--pk-accent-strong);
-  color: var(--pk-accent-on);
-  font-size: var(--pk-text-3xl);
-  font-weight: 600;
 }
 
 // A session card opens its dialog through a real button that covers the card,
@@ -1032,7 +988,7 @@
   // `width` capped by `max-width` rather than a CSS `min()`, which libsass
   // tries to evaluate as its own numeric function and rejects.
   width: calc(100vw - 2rem);
-  max-width: 1140px;
+  max-width: 71.25rem;
   max-height: calc(100vh - 3rem);
   padding: 0;
   border: 0;

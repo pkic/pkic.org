@@ -1,0 +1,19 @@
+/* One person's sessions in order, each with its times and time spent. */
+@layer components {
+  .pk-attendance-stays {
+    display: grid;
+    gap: var(--pk-1);
+    margin: 0;
+    padding-inline-start: var(--pk-4);
+  }
+
+  .pk-attendance-stays__stay {
+    display: flex;
+    flex-wrap: wrap;
+    column-gap: var(--pk-2);
+  }
+
+  .pk-attendance-stays__session {
+    font-weight: 600;
+  }
+}

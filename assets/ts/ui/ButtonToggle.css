@@ -1,0 +1,35 @@
+/* Shared pressed styling is loaded with toggle controls rather than signed-out entry screens. */
+@layer components {
+  .pk-btn--secondary[aria-pressed="true"],
+  .pk-btn--secondary[aria-pressed="true"]:hover:not(:disabled, [aria-disabled="true"]) {
+    background: var(--pk-accent-soft);
+    border-color: var(--pk-accent);
+    color: var(--pk-accent-ink);
+  }
+
+  /*
+   * A segmented choice: a few pressed-state buttons joined into one control,
+   * one of them chosen. The segments share a frame instead of a gap, so they
+   * read as one choice rather than as separate commands.
+   */
+  .pk-segmented {
+    display: inline-flex;
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+    overflow: hidden;
+  }
+  .pk-segmented > .pk-btn {
+    border: 0;
+    border-radius: 0;
+  }
+  .pk-segmented > .pk-btn + .pk-btn {
+    border-inline-start: 1px solid var(--pk-line);
+  }
+}
+
+@layer utilities {
+  .pk-segmented > .pk-btn[aria-pressed="true"] {
+    background: var(--pk-accent-soft);
+    color: var(--pk-accent-ink);
+  }
+}

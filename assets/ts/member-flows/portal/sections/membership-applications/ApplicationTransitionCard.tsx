@@ -7,12 +7,15 @@ import {
   allowedTransitions,
   type ApplicationStage,
 } from "../../../../../shared/schemas/member-applications";
-import type { MembershipApplicationDetail } from "../../../../../shared/schemas/membership-application-management";
+import type {
+  ApplicationStageTransition,
+  MembershipApplicationDetail,
+} from "../../../../../shared/schemas/membership-application-management";
 import { statusLabel } from "../../../../components/Badge";
 import { Button } from "../../../../ui/Button";
 import { Field } from "../../../../ui/Field";
 import { Panel, PanelBody, PanelHeader } from "../../../../ui/Panel";
-import { Select, TextInput } from "../../../../ui/TextControl";
+import { Select, TextInput, Textarea } from "../../../../ui/TextControl";
 
 /**
  * Where staff move a membership application next.
@@ -29,11 +32,12 @@ export function ApplicationTransitionCard({
 }: {
   detail: MembershipApplicationDetail;
   canWrite: boolean;
-  onTransition: (params: { toStage: string; onHoldSubtype?: string; note?: string }) => Promise<void>;
+  onTransition: (params: ApplicationStageTransition) => Promise<void>;
 }) {
   const [transitioning, setTransitioning] = useState(false);
   const [toStage, setToStage] = useState("");
   const [onHoldSubtype, setOnHoldSubtype] = useState<string>(ON_HOLD_SUBTYPES[0]);
+  const [requestDetails, setRequestDetails] = useState("");
   const [transitionNote, setTransitionNote] = useState("");
 
   const [error, setError] = useState("");
@@ -41,6 +45,10 @@ export function ApplicationTransitionCard({
     toStage,
     onHoldSubtype: toStage === "on_hold" ? onHoldSubtype : undefined,
     note: transitionNote,
+    requestDetails:
+      toStage === "declined" || (toStage === "on_hold" && onHoldSubtype === "request_information")
+        ? requestDetails
+        : undefined,
   });
   const availableTransitions = allowedTransitions(detail.stage as ApplicationStage) ?? [];
 
@@ -59,6 +67,7 @@ export function ApplicationTransitionCard({
       form.reset();
       setToStage("");
       setTransitionNote("");
+      setRequestDetails("");
     } catch (cause) {
       setError(form.refuse(cause));
     } finally {
@@ -124,13 +133,31 @@ export function ApplicationTransitionCard({
                   )}
                 </Field>
               )}
-              {/* "(optional)" was part of the visible label, which made the
-                  announced name of the control "Note (optional)". The word
-                  belongs in the help text the label points at instead. */}
+              {(toStage === "declined" || (toStage === "on_hold" && onHoldSubtype === "request_information")) && (
+                <Field
+                  {...form.of("requestDetails")}
+                  label={toStage === "declined" ? "Reason for declining" : "Information requested"}
+                  required={toStage === "on_hold"}
+                  help={
+                    toStage === "declined"
+                      ? "Optional. Included in the email to the applicant."
+                      : "Included in the email to the applicant. Describe what they need to provide."
+                  }
+                >
+                  {(control) => (
+                    <Textarea
+                      {...control}
+                      name="requestDetails"
+                      value={requestDetails}
+                      onInput={(event) => setRequestDetails(event.currentTarget.value)}
+                    />
+                  )}
+                </Field>
+              )}
               <Field
                 {...form.of("note")}
-                label="Note"
-                help="Optional. Recorded on the stage change for whoever reads it next."
+                label="Internal note"
+                help="Optional. Recorded in the application history for staff."
               >
                 {(control) => (
                   <TextInput
@@ -144,7 +171,7 @@ export function ApplicationTransitionCard({
             </fieldset>
             {error && <Alert tone="danger">{error}</Alert>}
             <div class="pk-cluster">
-              <Button type="submit" size="sm" variant="primary" loading={transitioning}>
+              <Button type="submit" variant="primary" loading={transitioning}>
                 Transition
               </Button>
             </div>

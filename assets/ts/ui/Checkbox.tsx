@@ -1,7 +1,7 @@
 /**
  * Checkbox and Radio — the design system's choice controls.
  *
- * The native element stays, so the semantics and keyboard behaviour stay;
+ * The native element stays, so the semantics and keyboard behavior stay;
  * the drawing is the system's (`pk-check` in Field.css), so the control
  * matches the accent instead of the operating system's. The label wraps the
  * control, so the whole line is the hit target and no `for` can go stale.

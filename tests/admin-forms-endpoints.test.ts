@@ -1,6 +1,6 @@
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -334,7 +334,7 @@ describe("canonical Forms resource endpoints", () => {
     const inactive = (await inactiveResponse.json()) as { forms: Array<{ key: string; status: string }> };
     expect(inactive.forms).toEqual([expect.objectContaining({ key: "inactive-feedback-form", status: "inactive" })]);
 
-    const catalogueQuery = buildFormsPageQuery({
+    const catalogQuery = buildFormsPageQuery({
       eventId,
       includeGlobal: true,
       q: "form",
@@ -342,7 +342,7 @@ describe("canonical Forms resource endpoints", () => {
       limit: 10,
       offset: 0,
     });
-    const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(catalogueQuery);
+    const { pageSql, countSql, bindings, countBindings } = buildOffsetPageSql(catalogQuery);
     const [pagePlan, countPlan] = await Promise.all([
       queryAll<{ detail: string }>(env.DB, `EXPLAIN QUERY PLAN ${pageSql}`, [...bindings, 10, 0]),
       queryAll<{ detail: string }>(env.DB, `EXPLAIN QUERY PLAN ${countSql}`, [...countBindings]),

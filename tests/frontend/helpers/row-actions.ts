@@ -19,18 +19,18 @@
 import { act } from "preact/test-utils";
 import { rowActionName, rowActionsMenuName } from "../../../assets/ts/ui/RowActions";
 
-function buttonLabelled(root: ParentNode, label: string): HTMLButtonElement | null {
+function buttonLabeled(root: ParentNode, label: string): HTMLButtonElement | null {
   return root.querySelector<HTMLButtonElement>(`button[aria-label="${label}"]`);
 }
 
 /** The inline button a row shows when `action` is the only thing it can do. */
 export function inlineRowAction(root: ParentNode, subject: string, action: string): HTMLButtonElement | null {
-  return buttonLabelled(root, rowActionName(action, subject));
+  return buttonLabeled(root, rowActionName(action, subject));
 }
 
 /** The `…` trigger a row shows once it has two or more actions. */
 export function rowMenuTrigger(root: ParentNode, subject: string): HTMLButtonElement | null {
-  return buttonLabelled(root, rowActionsMenuName(subject));
+  return buttonLabeled(root, rowActionsMenuName(subject));
 }
 
 /**

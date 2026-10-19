@@ -1,4 +1,4 @@
-import { openColumnFilterMenu } from "./helpers/column-menu";
+import { chooseColumnFilter, openColumnFilterMenu } from "./helpers/column-menu";
 // @vitest-environment jsdom
 import { render } from "preact";
 import type { ComponentChildren } from "preact";
@@ -13,6 +13,7 @@ import {
 import { Donations } from "../../assets/ts/member-flows/portal/sections/system-donations/Donations";
 import { DonationDetailPage } from "../../assets/ts/member-flows/portal/sections/system-donations/DonationDetailPage";
 import { portalSession } from "../../assets/ts/member-flows/portal/state";
+import { NEW_TAB_HINT } from "../../assets/ts/ui/new-tab";
 
 vi.mock("wouter/use-hash-location", () => ({ useHashLocation: () => ["/donations", vi.fn()] }));
 
@@ -328,8 +329,72 @@ describe("portal system donations", () => {
     // it is in the tab order and can be opened in a new tab.
     const link = container.querySelector<HTMLAnchorElement>('a[href="/donate/r/ADA1"]');
     expect(link).not.toBeNull();
-    expect(link?.textContent).toBe("/donate/r/ADA1");
+    expect(link?.textContent).toBe(`/donate/r/ADA1 ${NEW_TAB_HINT}`);
     expect(container.textContent).toContain("Ada Lovelace");
+  });
+
+  it("narrows the list through the Status column and leaves Sync all inert when nothing needs syncing", async () => {
+    const requests: URL[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        requests.push(url);
+        return new Response(
+          JSON.stringify(
+            donationsListResponseSchema.parse({
+              donations: [],
+              page: { limit: 50, offset: 0, total: 0, hasMore: false },
+              summary: { byStatus: { completed: 2, pending: 1 }, backfillable: 0, syncable: 0 },
+            }),
+          ),
+          { status: 200, headers: { "content-type": "application/json" } },
+        );
+      }),
+    );
+
+    const container = mount(<Donations canSync />);
+    await settle();
+
+    // Nothing is syncable, so Sync all is present but has nothing to do, while
+    // the pending donation the summary counts still offers its own action.
+    const buttons = [...container.querySelectorAll("button")];
+    expect(buttons.find((button) => button.textContent?.includes("Sync all"))?.disabled).toBe(true);
+    expect(buttons.some((button) => button.textContent?.includes("Sync pending (1)"))).toBe(true);
+
+    await chooseColumnFilter(container, "Status", "Completed (2)");
+    await settle();
+    expect(requests.at(-1)?.searchParams.get("status")).toBe("completed");
+    await chooseColumnFilter(container, "Status", "Pending (1)");
+    await settle();
+    expect(requests.at(-1)?.searchParams.get("status")).toBe("pending");
+  });
+
+  it("gives a settled donation its badge and no sync, and an unsettled one the sync", async () => {
+    const settled = { ...donation(), net_amount: 900, payment_method_type: "card" };
+    for (const [record, offersSync] of [
+      [settled, false],
+      [donation(), true],
+    ] as const) {
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async () => {
+          return new Response(JSON.stringify(donationDetailResponseSchema.parse({ donation: record })), {
+            status: 200,
+            headers: { "content-type": "application/json" },
+          });
+        }),
+      );
+      const detail = mount(<DonationDetailPage donationId="donation-1" canSync />);
+      await settle();
+
+      const labels = [...detail.querySelectorAll("button")].map((button) => button.textContent);
+      expect(labels.includes("Sync with Stripe")).toBe(offersSync);
+      expect(detail.querySelector("a[download]")).not.toBeNull();
+    }
   });
 
   it("gives each donations page its own heading instead of a tab strip (#43)", async () => {
@@ -429,7 +494,8 @@ describe("portal system donations", () => {
     expect(detail.querySelectorAll("dl.pk-datalist > dd")).toHaveLength(terms.length);
     // The badge is fetched from a URL, so it stays a link rather than a button.
     const badge = detail.querySelector<HTMLAnchorElement>("a[download]");
-    expect(badge?.textContent).toBe("Download badge");
+    expect(badge?.getAttribute("aria-label")).toBe("Download donation badge (JPEG)");
+    expect(badge?.querySelector("svg")).not.toBeNull();
   });
 
   it("states a permission refusal in words and asks the API for nothing", async () => {

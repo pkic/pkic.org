@@ -6,16 +6,26 @@
  * else. The corner removal control stays visible and keyboard accessible.
  */
 @layer components {
+  /*
+   * The tile is as wide as its picture, never the column it sits in: the
+   * corner removal is positioned against the tile, and a tile stretched across
+   * a panel put it at the panel's far edge instead of on the picture.
+   */
   .pk-picture-tile {
     position: relative;
     display: flex;
     flex-direction: column;
     align-items: center;
     gap: var(--pk-2);
+    inline-size: min(100%, 14rem);
+  }
+
+  .pk-picture-tile--mark {
+    inline-size: fit-content;
   }
 
   .pk-picture-tile__control,
-  .pk-picture-tile[role="img"] {
+  .pk-picture-tile--static {
     position: relative;
     display: grid;
     place-items: center;
@@ -39,16 +49,14 @@
      and a portrait squared off reads as a logo. The veil and the initials
      inherit the radius so the whole affordance keeps one silhouette. */
   .pk-picture-tile--round .pk-picture-tile__control,
-  .pk-picture-tile--round[role="img"],
-  .pk-picture-tile--round .pk-picture-tile__img,
-  .pk-picture-tile--round .pk-picture-tile__initials,
+  .pk-picture-tile--round.pk-picture-tile--static,
   .pk-picture-tile--round .pk-picture-tile__veil {
     border-radius: 50%;
   }
 
   .pk-picture-tile--mark .pk-picture-tile__control,
-  .pk-picture-tile--mark[role="img"] {
-    width: 92px;
+  .pk-picture-tile--mark.pk-picture-tile--static {
+    width: 5.75rem;
     max-width: none;
     aspect-ratio: 1;
     padding: var(--pk-2);
@@ -63,17 +71,37 @@
     cursor: progress;
   }
 
-  .pk-picture-tile__img {
-    max-width: 100%;
-    max-height: 100%;
-    object-fit: contain;
+  .pk-picture-tile__avatar {
+    --pk-avatar-size: 5.75rem;
   }
 
-  .pk-picture-tile__initials {
-    font-size: var(--pk-text-2xl);
-    font-weight: 700;
-    letter-spacing: 0.02em;
-    color: var(--pk-ink-muted);
+  .pk-picture-tile--mark .pk-picture-tile__avatar {
+    --pk-avatar-size: 4.75rem;
+  }
+
+  /* A person's portrait is the silhouette itself: no mat, frame or border
+     around it, so the standing ring sits directly on the photo or initials. */
+  .pk-picture-tile--round.pk-picture-tile--mark .pk-picture-tile__control,
+  .pk-picture-tile--round.pk-picture-tile--mark.pk-picture-tile--static {
+    /* Sized by the portrait and its standing, never a fixed round: a ring
+       and label squeezed into the portrait's own width were clipped and
+       pushed off center. */
+    width: fit-content;
+    aspect-ratio: auto;
+    padding: 0;
+    border: 0;
+    background: transparent;
+    overflow: visible;
+  }
+
+  /* The veil covers the round portrait only, not the standing label below it. */
+  .pk-picture-tile--round.pk-picture-tile--mark .pk-picture-tile__veil {
+    inset: 0 0 auto;
+    aspect-ratio: 1;
+  }
+
+  .pk-picture-tile--round.pk-picture-tile--mark .pk-picture-tile__avatar {
+    --pk-avatar-size: 5.75rem;
   }
 
   .pk-picture-tile__veil {
@@ -103,6 +131,11 @@
     pointer-events: none;
   }
 
+  /*
+   * At rest the tile is the picture and nothing else; the remove appears when
+   * the tile is hovered or holds focus (#89). It stays reachable by keyboard
+   * because focusing it is itself what reveals it.
+   */
   .pk-picture-tile__remove {
     position: absolute;
     inset-block-start: 0;
@@ -119,14 +152,6 @@
     font: inherit;
     font-size: var(--pk-text-lg);
     cursor: pointer;
-  }
-
-  /*
-   * At rest the tile is the picture and nothing else; the remove appears when
-   * the tile is hovered or holds focus (#89). It stays reachable by keyboard
-   * because focusing it is itself what reveals it.
-   */
-  .pk-picture-tile__remove {
     opacity: 0;
     transition: opacity var(--pk-dur-fast) var(--pk-ease);
   }

@@ -14,7 +14,7 @@
    * A syntax-highlight backdrop behind a text control.
    *
    * A highlighted copy of the value is painted in a `pre` underneath a
-   * transparent input, so the coloured spans line up with the characters the
+   * transparent input, so the colored spans line up with the characters the
    * user is typing. The two boxes therefore have to agree exactly — one pixel
    * of padding or a different type size and every highlight drifts off its
    * token — which is why both read the same `--pk-control-*` and type tokens

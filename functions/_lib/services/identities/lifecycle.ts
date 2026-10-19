@@ -1,4 +1,10 @@
-import { serializeLinks } from "../../../../assets/shared/schemas/links";
+import { prepareIdentityEmailOwnershipStatements, requireIdentityEmailAssignable } from "./email-ownership";
+import { prepareOrganizationIdentityPublication } from "./lifecycle-publication";
+import {
+  identityProfileChanges,
+  prepareIdentityProfilePublication,
+  prepareIdentityProfileUpdateStatement,
+} from "./profile-statement";
 import type { IdentityTransition } from "../../../../assets/shared/schemas/identity";
 import { preparePermissionsAuthorizationGuard } from "../../auth/permissions";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
@@ -9,13 +15,24 @@ import { nowIso } from "../../utils/time";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "../audit";
 import { prepareAutomaticGroupEnrollmentForUserStatements } from "../groups/automatic-enrollment";
 import { buildCreateIdentityStatement } from "../membership/identities";
-import { prepareOrganizationIdentityManagementGuard, requireOrganizationIdentityManagement } from "./authorization";
-import { loadIdentityNotificationContext, prepareIdentityNotification } from "./notifications";
+import {
+  organizationIdentityAuditScope,
+  prepareOrganizationIdentityManagementGuard,
+  requireOrganizationIdentityManagement,
+} from "./authorization";
+import { isConcurrentIdentityConflict } from "./conflicts";
+import { resolveIdentityEndedAt } from "./identity-end";
+import {
+  loadIdentityNotificationContext,
+  prepareIdentityNotification,
+  type IdentityNotificationContext,
+} from "./notifications";
+import { loadReinstatementCandidate, planReinstatement, prepareReinstatementStatements } from "./reinstate";
 import type { IdentityManagerActor } from "./types";
 
 interface IdentityStateRow {
   id: string;
-  member_id: string;
+  member_id: string | null;
   user_id: string;
   organization_id: string;
   email_id: string | null;
@@ -39,6 +56,9 @@ async function commitIdentityLifecycleBatch(db: DatabaseLike, statements: Statem
     if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "IDENTITY_CHANGED", "The identity changed concurrently; reload and retry");
     }
+    if (isConcurrentIdentityConflict(error)) {
+      throw new AppError(409, "IDENTITY_CONFLICT", "Another identity for this organization became active");
+    }
     if (error instanceof Error && error.message.includes("IDENTITY_EMAIL_INVALID")) {
       throw new AppError(422, "IDENTITY_EMAIL_INVALID", "The selected email must be verified and owned by this user");
     }
@@ -58,7 +78,7 @@ async function requireOrganizationIdentity(
             identity.show_on_organization_profile, identity.started_at, identity.ended_at,
             identity.blocked_at, identity.updated_at
        FROM identities identity
-       JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
+       LEFT JOIN identity_member_capacities capacity ON capacity.identity_id = identity.id
       WHERE identity.id = ? AND identity.organization_id = ?`,
     [identityId, organizationId],
   );
@@ -74,6 +94,45 @@ function requireActivationPermission(actor: IdentityManagerActor): void {
       "Immediate activation requires membership:write and identities:activate on a user-backed staff session",
     );
   }
+}
+
+/**
+ * An authorized organization representative undoes an end made in error: the
+ * same identity becomes active again. No staff activation permission is
+ * needed; a successor identity is only for a blocked identity.
+ */
+async function reinstateManagedIdentity(
+  db: DatabaseLike,
+  actor: IdentityManagerActor,
+  input: { organizationId: string; identityId: string; reason: string },
+  guard: StatementLike,
+  context: IdentityNotificationContext,
+): Promise<{ identityId: string; state: "active" }> {
+  const candidate = await loadReinstatementCandidate(db, input);
+  if (!candidate) throw new AppError(404, "IDENTITY_NOT_FOUND", "Organization identity not found");
+  const { identity, seatDepth } = await planReinstatement(db, candidate);
+  const at = nowIso();
+  await commitIdentityLifecycleBatch(db, [
+    guard,
+    ...prepareReinstatementStatements(db, {
+      identity,
+      context,
+      seatDepth,
+      at,
+      audit: prepareScopedAuditLogAfterOneChange(
+        db,
+        organizationIdentityAuditScope(identity.member_id, identity.user_id),
+        actor.actorType,
+        actor.userId,
+        "organization_identity_reinstated",
+        "identity",
+        identity.id,
+        { organizationId: input.organizationId, reason: input.reason, endedAt: identity.ended_at },
+        at,
+      ),
+    }),
+  ]);
+  return { identityId: identity.id, state: "active" };
 }
 
 export async function updateOrganizationIdentityProfile(
@@ -92,63 +151,52 @@ export async function updateOrganizationIdentityProfile(
   const identity = await requireOrganizationIdentity(db, input.organizationId, input.identityId);
   await requireOrganizationIdentityManagement(db, {
     memberId: identity.member_id,
+    organizationId: identity.organization_id,
     actorUserId: actor.userId,
     databaseUserId: actor.databaseUserId,
+    sessionId: actor.sessionId,
+    sessionExpiresAt: actor.sessionExpiresAt,
     staffAuthorized: actor.staffAuthorized,
   });
   if (identity.ended_at || identity.blocked_at) {
     throw new AppError(409, "IDENTITY_INACTIVE", "An ended or blocked identity cannot be edited");
   }
+  await requireIdentityEmailAssignable(db, {
+    userId: identity.user_id,
+    emailId: input.emailId,
+    identityId: identity.id,
+  });
   const at = nowIso();
+  const changes = identityProfileChanges(identity, input);
+  const publication = prepareIdentityProfilePublication(db, identity, input, changes, at);
   await commitIdentityLifecycleBatch(db, [
     prepareOrganizationIdentityManagementGuard(db, {
       memberId: identity.member_id,
+      organizationId: identity.organization_id,
       actorUserId: actor.userId,
       databaseUserId: actor.databaseUserId,
+      sessionId: actor.sessionId,
+      sessionExpiresAt: actor.sessionExpiresAt,
       staffAuthorized: actor.staffAuthorized,
     }),
-    db
-      .prepare(
-        `UPDATE identities
-            SET email_id = CASE WHEN ? = 1 THEN ? ELSE email_id END,
-                job_title = CASE WHEN ? = 1 THEN ? ELSE job_title END,
-                biography = CASE WHEN ? = 1 THEN ? ELSE biography END,
-                links_json = CASE WHEN ? = 1 THEN ? ELSE links_json END,
-                show_on_organization_profile = CASE WHEN ? = 1 THEN ? ELSE show_on_organization_profile END,
-                updated_at = ?
-          WHERE id = ? AND ended_at IS NULL AND blocked_at IS NULL AND updated_at = ?`,
-      )
-      .bind(
-        input.emailId !== undefined ? 1 : 0,
-        input.emailId ?? null,
-        input.jobTitle !== undefined ? 1 : 0,
-        input.jobTitle ?? null,
-        input.biography !== undefined ? 1 : 0,
-        input.biography ?? null,
-        input.links !== undefined ? 1 : 0,
-        input.links === undefined ? null : serializeLinks(input.links),
-        input.showOnOrganizationProfile !== undefined ? 1 : 0,
-        input.showOnOrganizationProfile ? 1 : 0,
-        at,
-        identity.id,
-        identity.updated_at,
-      ),
+    ...(publication ? [publication] : []),
+    prepareIdentityProfileUpdateStatement(db, identity, input, at),
     prepareScopedAuditLogAfterOneChange(
       db,
-      { type: "organization", id: identity.member_id },
+      organizationIdentityAuditScope(identity.member_id, identity.user_id),
       actor.actorType,
       actor.userId,
       "organization_identity_profile_updated",
       "identity",
       identity.id,
-      {
-        organizationId: input.organizationId,
-        fields: Object.keys(input)
-          .filter((field) => !["organizationId", "identityId"].includes(field))
-          .sort(),
-      },
+      { organizationId: input.organizationId, ...changes },
       at,
     ),
+    ...prepareIdentityEmailOwnershipStatements(db, {
+      userId: identity.user_id,
+      emailId: input.emailId,
+      identityId: identity.id,
+    }),
   ]);
   return { identityId: identity.id, state: identity.started_at ? "active" : "pending" };
 }
@@ -161,18 +209,28 @@ export async function transitionOrganizationIdentity(
   const identity = await requireOrganizationIdentity(db, input.organizationId, input.identityId);
   await requireOrganizationIdentityManagement(db, {
     memberId: identity.member_id,
+    organizationId: identity.organization_id,
     actorUserId: actor.userId,
     databaseUserId: actor.databaseUserId,
+    sessionId: actor.sessionId,
+    sessionExpiresAt: actor.sessionExpiresAt,
     staffAuthorized: actor.staffAuthorized,
   });
   const at = nowIso();
   const guard = prepareOrganizationIdentityManagementGuard(db, {
     memberId: identity.member_id,
+    organizationId: identity.organization_id,
     actorUserId: actor.userId,
     databaseUserId: actor.databaseUserId,
+    sessionId: actor.sessionId,
+    sessionExpiresAt: actor.sessionExpiresAt,
     staffAuthorized: actor.staffAuthorized,
   });
-  const context = await loadIdentityNotificationContext(db, identity.member_id, identity.user_id, false);
+  const context = await loadIdentityNotificationContext(db, identity.organization_id, identity.user_id, false);
+
+  if (input.transition.state === "active" && identity.started_at && identity.ended_at && !identity.blocked_at) {
+    return reinstateManagedIdentity(db, actor, { ...input, reason: input.transition.reason }, guard, context);
+  }
 
   if (input.transition.state === "active") {
     requireActivationPermission(actor);
@@ -194,7 +252,7 @@ export async function transitionOrganizationIdentity(
           .bind(at, at, identity.id, identity.updated_at),
         prepareScopedAuditLogAfterOneChange(
           db,
-          { type: "organization", id: identity.member_id },
+          organizationIdentityAuditScope(identity.member_id, identity.user_id),
           actor.actorType,
           actor.userId,
           "organization_identity_activated",
@@ -203,6 +261,7 @@ export async function transitionOrganizationIdentity(
           { organizationId: input.organizationId, reason: input.transition.reason ?? null },
           at,
         ),
+        prepareOrganizationIdentityPublication(db, identity.id, at),
         prepareIdentityNotification(db, {
           identityId: identity.id,
           userId: identity.user_id,
@@ -234,7 +293,7 @@ export async function transitionOrganizationIdentity(
       successor.statement,
       prepareScopedAuditLogAfterOneChange(
         db,
-        { type: "organization", id: identity.member_id },
+        organizationIdentityAuditScope(identity.member_id, identity.user_id),
         actor.actorType,
         actor.userId,
         "organization_identity_successor_activated",
@@ -247,6 +306,8 @@ export async function transitionOrganizationIdentity(
         },
         at,
       ),
+      prepareOrganizationIdentityPublication(db, successor.identityId, at),
+      ...successor.emailOwnership,
       prepareIdentityNotification(db, {
         identityId: successor.identityId,
         userId: identity.user_id,
@@ -263,31 +324,27 @@ export async function transitionOrganizationIdentity(
     throw new AppError(409, "IDENTITY_INACTIVE", "The identity is already ended or blocked");
   }
   const blocked = input.transition.state === "blocked";
+  const endedAt =
+    input.transition.state === "ended" ? resolveIdentityEndedAt(input.transition.endedAt, identity.started_at, at) : at;
   await commitIdentityLifecycleBatch(db, [
     guard,
+    prepareOrganizationIdentityPublication(db, identity.id, at),
     db
       .prepare(
         `UPDATE identities
             SET ended_at = ?, blocked_at = ?, blocked_by_user_id = ?, updated_at = ?
           WHERE id = ? AND ended_at IS NULL AND blocked_at IS NULL AND updated_at = ?`,
       )
-      .bind(
-        blocked ? at : at,
-        blocked ? at : null,
-        blocked ? actor.databaseUserId : null,
-        at,
-        identity.id,
-        identity.updated_at,
-      ),
+      .bind(endedAt, blocked ? at : null, blocked ? actor.databaseUserId : null, at, identity.id, identity.updated_at),
     prepareScopedAuditLogAfterOneChange(
       db,
-      { type: "organization", id: identity.member_id },
+      organizationIdentityAuditScope(identity.member_id, identity.user_id),
       actor.actorType,
       actor.userId,
       blocked ? "organization_identity_blocked" : "organization_identity_ended",
       "identity",
       identity.id,
-      { organizationId: input.organizationId, reason: input.transition.reason },
+      { organizationId: input.organizationId, reason: input.transition.reason, endedAt },
       at,
     ),
     prepareIdentityNotification(db, {
@@ -297,7 +354,7 @@ export async function transitionOrganizationIdentity(
       action: blocked ? "blocked" : "ended",
       at,
     }),
-    ...prepareAutomaticGroupEnrollmentForUserStatements(db, identity.user_id, at),
+    ...prepareAutomaticGroupEnrollmentForUserStatements(db, identity.user_id, at, endedAt),
   ]);
   return { identityId: identity.id, state: blocked ? "blocked" : "ended" };
 }

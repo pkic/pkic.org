@@ -7,6 +7,7 @@ import { ButtonLink } from "../ui/Button";
 import { Panel, PanelBody, PanelHeader } from "../ui/Panel";
 
 import "./MembershipWorkflowProgress.css";
+import { SectionHeading } from "../ui/SectionHeading";
 
 export function MembershipWorkflowProgress({ progress }: { progress: Progress }) {
   return (
@@ -24,7 +25,7 @@ export function MembershipWorkflowProgress({ progress }: { progress: Progress })
               </div>
               <div class="membership-progress__content pk-stack pk-stack--snug">
                 <div class="membership-progress__heading">
-                  <h4>{step.label}</h4>
+                  <SectionHeading level={4}>{step.label}</SectionHeading>
                   <Badge status={step.state} />
                 </div>
                 <p>{step.instructions}</p>

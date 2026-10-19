@@ -14,6 +14,7 @@ import { completeSyntheticMembershipReview } from "./helpers/member-provisioning
  * never exercised in a browser.
  */
 import { expect, test, type Page } from "@playwright/test";
+import { EMAIL_FIRST_COPY, WORK_EMAIL_STEER } from "../../assets/shared/email-first-copy";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
 import { signInToPortal } from "./helpers/portal-auth";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./helpers/sendgrid";
@@ -28,14 +29,10 @@ async function openVerifiedApplicationForm(
 ): Promise<void> {
   const since = await capturedEmailCount();
   await page.goto("/join/");
-  if (options.unaffiliated) {
-    await page.getByLabel("No — I am not employed by and do not own an organization").check();
-    await page.getByLabel("Your personal or university email address").fill(email);
-  } else {
-    await page.getByLabel("Yes — I am employed by or own an organization").check();
-    await page.getByLabel("Your official work or organization email address").fill(email);
-  }
-  await page.getByRole("button", { name: "Continue" }).click();
+  const choice = options.unaffiliated ? EMAIL_FIRST_COPY.join.personal : EMAIL_FIRST_COPY.join.work;
+  if (options.unaffiliated) await page.getByRole("radio", { name: choice.title, exact: true }).check();
+  await page.getByLabel(choice.label).fill(email);
+  await page.getByRole("button", { name: choice.action, exact: true }).click();
   const verification = await waitForCapturedEmail(email, "Verify your email address", { since });
   await openMembershipVerificationLink(page, extractEmailUrl(verification, "#verify="));
   await expect(page.locator("[data-verified-application-email]")).toHaveText(email);
@@ -107,12 +104,45 @@ test("an organization applicant submits in a category other than the default", a
     await agreement.check();
   }
 
+  await page.locator('[name="custom.job_title"]').fill("Membership contact");
+  await page.getByLabel("About yourself", { exact: false }).fill("   ");
+  await page.getByLabel("About your organization", { exact: false }).fill("   ");
+  await page.getByRole("button", { name: "Submit membership application" }).click();
+  await expect(page.locator("#custom-about_yourself-error")).toContainText("required");
+  await expect(page.locator("#custom-about_organization-error")).toContainText("required");
+  await expect(reason).toHaveValue("We want to contribute to the PKI community.");
+  await page.getByLabel("About yourself", { exact: false }).fill("I work on PKI interoperability.");
+  await page.getByLabel("About your organization", { exact: false }).fill("We build PKI services.");
   const submission = page.waitForResponse(
     (response) => response.url().endsWith("/api/v1/members/applications") && response.request().method() === "POST",
   );
   await page.getByRole("button", { name: "Submit membership application" }).click();
   expect((await submission).status()).toBe(201);
   await expect(page.getByRole("heading", { name: /Thanks, Alex Applicant!/ })).toBeVisible();
+});
+
+test("an individual must describe themselves and can submit without an organization description", async ({ page }) => {
+  const suffix = uniqueSuffix();
+  await openVerifiedApplicationForm(page, `individual-description-${suffix}@university-${suffix}.test`, {
+    unaffiliated: true,
+  });
+  await page.locator("#membership-category-h6").check();
+  await page.getByLabel("First name").fill("Individual");
+  await page.getByLabel("Last name").fill("Applicant");
+  await page.locator('[name="custom.reason"]').fill("I contribute to PKI interoperability.");
+  for (const agreement of await page.locator('[data-join-application-form] input[type="checkbox"][required]').all())
+    await agreement.check();
+  await expect(page.getByLabel("About your organization", { exact: false })).toHaveCount(0);
+  await page.getByLabel("About yourself", { exact: false }).fill("   ");
+  await page.getByRole("button", { name: "Submit membership application" }).click();
+  await expect(page.locator("#custom-about_yourself-error")).toContainText("required");
+  await expect(page.getByLabel("First name")).toHaveValue("Individual");
+  await page.getByLabel("About yourself", { exact: false }).fill("I work on PKI interoperability.");
+  const submission = page.waitForResponse(
+    (response) => response.url().endsWith("/api/v1/members/applications") && response.request().method() === "POST",
+  );
+  await page.getByRole("button", { name: "Submit membership application" }).click();
+  expect((await submission).status()).toBe(201);
 });
 
 test("a personal address cannot start an organization application without the explicit attestation", async ({
@@ -132,9 +162,9 @@ test("a personal address cannot start an organization application without the ex
   }, email);
 
   // The policy is an explicit attestation, never inferred from picking an
-  // easier category later in the form.
-  expect(outcome.status, JSON.stringify(outcome.body)).toBe(200);
-  expect(outcome.body).toEqual({ status: "unaffiliated_attestation_required" });
+  // easier category later in the form; the shared contract steers to a work address.
+  expect(outcome.status, JSON.stringify(outcome.body)).toBe(400);
+  expect(JSON.stringify(outcome.body)).toContain(WORK_EMAIL_STEER);
 });
 
 test("a verified claimed domain continues into organization access without a second application", async ({ page }) => {

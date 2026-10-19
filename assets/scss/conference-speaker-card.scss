@@ -106,7 +106,8 @@ body {
 }
 
 .speaker-card-logo {
-  height: 8vh;
+  /* The emblem's square box is 360 units high around its 324-unit ink. */
+  height: calc(8vh * 360 / 324);
   width: auto;
   filter: drop-shadow(0 2px 4px rgba(0, 0, 0, 0.1));
 }
@@ -151,19 +152,6 @@ body {
 
 .speaker-photo.has-image {
   font-size: 0;
-}
-
-.speaker-photo-placeholder {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  height: 100%;
-  background: var(--blue-dark);
-  color: white;
-  font-size: 4vh;
-  font-weight: 900;
-  border-radius: 50%;
 }
 
 .speaker-info {
@@ -311,7 +299,7 @@ body.speaker-card-mode #speaker-card {
   object-fit: cover;
 }
 
-@media (min-aspect-ratio: 1/1) {
+@media (min-aspect-ratio: 1 / 1) {
   .speaker-card-main {
     display: grid;
     grid-template-columns: minmax(0, 0.8fr) minmax(0, 1.2fr);
@@ -348,4 +336,8 @@ body.speaker-card-mode #speaker-card {
     max-width: 100%;
     font-size: clamp(1rem, 2.8vh, 1.5rem);
   }
+}
+
+.pk-speaker-card-avatar {
+  --pk-avatar-size: 100%;
 }

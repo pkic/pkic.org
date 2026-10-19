@@ -5,12 +5,20 @@ import { OrganizationGet, OrganizationUpdate } from "./index";
 import { OrganizationLogoDelete, OrganizationLogoPut, OrganizationLogoReviewPost } from "./logo";
 import { OrganizationSecondaryContactConfirm } from "./confirm-secondary-contact";
 import { OrganizationMemberProfileGet } from "./profile";
+import { OrganizationContactDetailsGet, OrganizationContactDetailsPut } from "./contacts/details";
 import { OrganizationContentReviewPost, OrganizationContentReviewsGet } from "./content-reviews";
 import { OrganizationContentReviewDelete } from "./content-reviews/[reviewId]";
 import { OrganizationActiveSponsorshipGet } from "./sponsorships/active";
 import { OrganizationGroupsGet } from "./groups";
 import { OrganizationEventsGet } from "./events";
 import { OrganizationProposalsGet } from "./proposals";
+import { OrganizationMergePost } from "./merges";
+import {
+  OrganizationDomainClaimDelete,
+  OrganizationDomainClaimPost,
+  OrganizationDomainClaimPreviewGet,
+  OrganizationDomainsGet,
+} from "./domains";
 import {
   OrganizationSecondaryContactNominationDelete,
   OrganizationSecondaryContactNominationPut,
@@ -21,7 +29,14 @@ export const openapi = fromHono(app);
 
 openapi.get("/", OrganizationGet);
 openapi.patch("/", OrganizationUpdate);
+openapi.post("/merges", OrganizationMergePost);
+openapi.get("/domains", OrganizationDomainsGet);
+openapi.post("/domains", OrganizationDomainClaimPost);
+openapi.get("/domains/:domain", OrganizationDomainClaimPreviewGet);
+openapi.delete("/domains/:domain", OrganizationDomainClaimDelete);
 openapi.get("/profile", OrganizationMemberProfileGet);
+openapi.get("/contacts/details", OrganizationContactDetailsGet);
+openapi.put("/contacts/details", OrganizationContactDetailsPut);
 // The account record's activity: what the organization's representatives do
 // elsewhere in the system, each as its own bounded, canonical collection.
 openapi.get("/groups", OrganizationGroupsGet);

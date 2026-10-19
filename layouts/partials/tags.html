@@ -1,6 +1,0 @@
-{{ with . }}
-{{ range sort . }}
-{{ $href := print (absURL "tags/") (urlize .) }}
-<a href="{{ $href }}/" class="pk-badge pk-badge--neutral" data-pagefind-filter="tag">{{ . }}</a>
-{{ end }}
-{{ end }}

@@ -160,10 +160,10 @@ export function GroupLeadershipTermForm({
             </Field>
           </fieldset>
           <div class="pk-cluster">
-            <Button type="submit" size="sm" variant="primary" loading={saving} disabled={!title.trim() || !startsOn}>
+            <Button type="submit" variant="primary" loading={saving} disabled={!title.trim() || !startsOn}>
               {saving ? "Saving…" : "Save term"}
             </Button>
-            <Button size="sm" disabled={saving} onClick={onCancel}>
+            <Button disabled={saving} onClick={onCancel}>
               Cancel
             </Button>
           </div>

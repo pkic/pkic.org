@@ -1,14 +1,22 @@
 import { createServer } from "node:http";
 import { readFileSync } from "node:fs";
 
-export function createCaptureServer() {
+export function createCaptureServer({ applicationOrigin = "http://localhost:8788" } = {}) {
+  const applicationHost = new URL(applicationOrigin).hostname;
   /** @type {Array<{to: string; subject: string; payload: unknown; capturedAt: string}>} */
   const outbox = [];
 
-  return createServer((req, res) => {
+  const server = createServer((req, res) => {
     const url = req.url ?? "";
     const host = req.headers.host ?? "";
-    if (!/^(127\.0\.0\.1|localhost):[0-9]+$/.test(host)) {
+    const address = server.address();
+    const listenHost = address && typeof address !== "string" ? address.address : "";
+    const listenAuthority = listenHost.includes(":") ? `[${listenHost}]` : listenHost;
+    if (
+      host !== `${listenAuthority}:${address?.port}` &&
+      !/^(127\.0\.0\.1|localhost|\[::1\]):[0-9]+$/.test(host) &&
+      host !== `${applicationHost}:${server.address()?.port}`
+    ) {
       res.writeHead(403);
       res.end("Local inbox only");
       return;
@@ -19,6 +27,11 @@ export function createCaptureServer() {
       return;
     }
     res.setHeader("Cache-Control", "no-store");
+    if (req.method === "GET" && url === "/configuration") {
+      res.writeHead(200, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ applicationOrigin }));
+      return;
+    }
     if (req.method === "GET" && ["/", "/inbox.js", "/inbox.css"].includes(url)) {
       const file = url === "/" ? "inbox.html" : url.slice(1);
       res.setHeader(
@@ -27,7 +40,7 @@ export function createCaptureServer() {
       );
       res.setHeader(
         "Content-Security-Policy",
-        "default-src 'none'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'",
+        `default-src 'none'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src data: ${applicationOrigin}; frame-src 'self'; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'`,
       );
       res.end(readFileSync(new URL(file, import.meta.url)));
       return;
@@ -84,4 +97,5 @@ export function createCaptureServer() {
     res.writeHead(404);
     res.end();
   });
+  return server;
 }

@@ -1,0 +1,312 @@
+/*
+ * Up next, a broadcast graphic. Each room reads in one sweep: its accent and
+ * start time first, then the room, the session and who speaks. Colors come
+ * from the graphic's theme (LiveGraphicTheme.css); sizes are fixed on the
+ * 1920 × 1080 frame and the layout box scales the whole graphic, so it is set
+ * at one of three widths to suit the box it is drawn into.
+ */
+@layer components {
+  .pk-live-schedule {
+    --schedule-gap: 28px;
+    --schedule-room-block: 184px;
+    --live-room-accent: var(--pk-palette-green);
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-start: 0;
+    box-sizing: border-box;
+    inline-size: 1680px;
+    padding: 40px 48px 32px;
+    border-radius: var(--pk-radius-card);
+    background: var(--graphic-ground);
+    color: var(--graphic-ink);
+    font-family: var(--pk-font);
+    font-size: calc(var(--pk-text-3xl) * 1.0625);
+    line-height: 1.2;
+    text-shadow: var(--graphic-halo);
+  }
+  .pk-live-schedule[data-fit="medium"] {
+    inline-size: 1200px;
+  }
+  .pk-live-schedule[data-fit="narrow"] {
+    inline-size: 860px;
+    padding: 32px 36px 24px;
+  }
+  .pk-live-schedule__header {
+    display: flex;
+    align-items: baseline;
+    justify-content: space-between;
+    gap: var(--pk-6);
+    margin-block-end: 20px;
+  }
+  .pk-live-schedule__heading {
+    margin: 0;
+    font-size: calc(var(--pk-text-3xl) * 2);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    line-height: 1;
+  }
+  .pk-live-schedule__zone {
+    color: var(--graphic-ink-muted);
+    font-size: var(--pk-text-3xl);
+  }
+  .pk-live-schedule__rooms {
+    display: grid;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  /* A room as a row: accent, start time, then the room over its session, and the speakers at the end. */
+  .pk-live-schedule__room {
+    position: relative;
+    display: grid;
+    grid-template-columns: 10px 168px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "accent when room speakers"
+      "accent when title speakers";
+    grid-template-rows: auto 1fr;
+    column-gap: var(--schedule-gap);
+    row-gap: 6px;
+    box-sizing: border-box;
+    block-size: var(--schedule-room-block);
+    padding: 20px 20px 20px 0;
+    border-block-start: 2px solid var(--graphic-rule);
+    overflow: hidden;
+  }
+  .pk-live-schedule__room::before {
+    content: "";
+    grid-area: accent;
+    border-radius: var(--pk-radius-pill);
+    background: var(--live-room-accent);
+  }
+  .pk-live-schedule__room[data-accent="1"] {
+    --live-room-accent: var(--pk-palette-blue);
+  }
+  .pk-live-schedule__room[data-accent="2"] {
+    --live-room-accent: var(--pk-palette-orange);
+  }
+  .pk-live-schedule__room[data-accent="3"] {
+    --live-room-accent: var(--pk-palette-red);
+  }
+  .pk-live-schedule__room[data-accent="4"] {
+    --live-room-accent: var(--pk-palette-purple);
+  }
+  .pk-live-schedule__room[data-accent="5"] {
+    --live-room-accent: var(--pk-palette-teal);
+  }
+  .pk-live-schedule__when {
+    grid-area: when;
+    align-self: start;
+    margin: 0;
+    font-size: calc(var(--pk-text-3xl) * 1.5);
+    font-weight: 700;
+    font-variant-numeric: tabular-nums;
+    line-height: 1;
+  }
+  .pk-live-schedule__room-name {
+    grid-area: room;
+    margin: 0;
+    overflow: hidden;
+    color: var(--graphic-ink-muted);
+    font-weight: 500;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .pk-live-schedule__title {
+    display: -webkit-box;
+    grid-area: title;
+    align-self: start;
+    margin: 0;
+    overflow: hidden;
+    font-size: calc(var(--pk-text-3xl) * 1.25);
+    font-weight: 600;
+    line-height: 1.15;
+    overflow-wrap: anywhere;
+    -webkit-box-orient: vertical;
+    -webkit-line-clamp: 2;
+    line-clamp: 2;
+  }
+  .pk-live-schedule__speakers {
+    display: flex;
+    grid-area: speakers;
+    align-items: center;
+    align-self: center;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .pk-live-schedule__speaker {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    min-inline-size: 0;
+  }
+  .pk-live-schedule__speaker + .pk-live-schedule__speaker {
+    margin-inline-start: -14px;
+  }
+  .pk-live-schedule__speaker .pk-avatar {
+    flex: none;
+    inline-size: 72px;
+    block-size: 72px;
+    box-shadow: 0 0 0 4px var(--graphic-contrast);
+  }
+  .pk-live-schedule__speaker-name {
+    display: none;
+    flex-direction: column;
+    max-inline-size: 300px;
+    font-size: var(--pk-text-3xl);
+    font-weight: 600;
+  }
+  .pk-live-schedule__role {
+    color: var(--graphic-ink-muted);
+    font-size: var(--pk-text-2xl);
+    font-weight: 400;
+  }
+  .pk-live-schedule__more {
+    margin-inline-start: 14px;
+    color: var(--graphic-ink-muted);
+    font-size: var(--pk-text-3xl);
+    font-variant-numeric: tabular-nums;
+  }
+  /*
+   * Speakers are named where there is room to read them: the room brought
+   * forward, every room while nothing cycles, and every card. Elsewhere their
+   * faces stand in, overlapping like a cast list.
+   */
+  .pk-live-schedule:not([data-spotlight]) .pk-live-schedule__speaker,
+  .pk-live-schedule__room[data-active] .pk-live-schedule__speaker {
+    margin-inline-start: 0;
+  }
+  .pk-live-schedule:not([data-spotlight]) .pk-live-schedule__speaker + .pk-live-schedule__speaker,
+  .pk-live-schedule__room[data-active] .pk-live-schedule__speaker + .pk-live-schedule__speaker {
+    margin-inline-start: 28px;
+  }
+  .pk-live-schedule:not([data-spotlight]) .pk-live-schedule__speaker-name,
+  .pk-live-schedule__room[data-active] .pk-live-schedule__speaker-name {
+    display: flex;
+  }
+  /*
+   * With several rooms one comes forward at a time: it lifts onto a light
+   * tint with a wider accent, and a line along its foot fills while it stays
+   * forward. Rows keep their height, so the graphic never changes size.
+   */
+  .pk-live-schedule[data-spotlight] .pk-live-schedule__room {
+    transition:
+      background-color var(--pk-dur-slow) var(--pk-ease),
+      opacity var(--pk-dur-slow) var(--pk-ease);
+    opacity: 0.82;
+  }
+  .pk-live-schedule__room[data-active] {
+    background: var(--graphic-tint);
+    opacity: 1;
+  }
+  .pk-live-schedule[data-spotlight] .pk-live-schedule__room[data-active] {
+    opacity: 1;
+  }
+  .pk-live-schedule__room[data-active]::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    inset-block-end: 0;
+    block-size: 4px;
+    background: var(--live-room-accent);
+    transform-origin: left center;
+    /* The time each room stays forward, LIVE_SCHEDULE_SPOTLIGHT_MS. */
+    animation: pk-live-schedule-hold calc(var(--pk-dur-affiliation) * 1.5) linear both;
+  }
+  @keyframes pk-live-schedule-hold {
+    from {
+      transform: scaleX(0);
+    }
+    to {
+      transform: scaleX(1);
+    }
+  }
+  /* Cards: three or four rooms on a wide box, each room its own column, in the same reading order. */
+  .pk-live-schedule[data-arrangement="cards"] .pk-live-schedule__rooms {
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+    gap: var(--schedule-gap);
+  }
+  .pk-live-schedule[data-arrangement="cards"] .pk-live-schedule__room {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-areas: "when" "room" "title" "speakers";
+    grid-template-rows: auto auto 1fr auto;
+    row-gap: 12px;
+    block-size: 500px;
+    padding: 28px 28px 24px;
+    border-block-start: 10px solid var(--live-room-accent);
+    border-radius: var(--pk-radius-lg);
+    background: var(--graphic-tint);
+  }
+  .pk-live-schedule[data-arrangement="cards"] .pk-live-schedule__room::before {
+    content: none;
+  }
+  .pk-live-schedule[data-arrangement="cards"] .pk-live-schedule__title {
+    -webkit-line-clamp: 4;
+    line-clamp: 4;
+  }
+  .pk-live-schedule[data-arrangement="cards"] .pk-live-schedule__speakers {
+    flex-direction: column;
+    align-items: flex-start;
+    align-self: end;
+    gap: 10px;
+  }
+  .pk-live-schedule[data-arrangement="cards"] .pk-live-schedule__speaker,
+  .pk-live-schedule[data-arrangement="cards"] .pk-live-schedule__speaker + .pk-live-schedule__speaker {
+    margin-inline-start: 0;
+  }
+  .pk-live-schedule[data-arrangement="cards"] .pk-live-schedule__speaker-name {
+    display: flex;
+    font-size: var(--pk-text-2xl);
+  }
+  /* A card with a full panel shows its faces only, overlapping, so the session's title keeps its lines. */
+  .pk-live-schedule[data-arrangement="cards"]
+    .pk-live-schedule__speakers:has(> .pk-live-schedule__speaker:nth-child(3))
+    .pk-live-schedule__speaker-name {
+    display: none;
+  }
+  .pk-live-schedule[data-arrangement="cards"]
+    .pk-live-schedule__speakers:has(> .pk-live-schedule__speaker:nth-child(3)) {
+    flex-direction: row;
+    align-items: center;
+  }
+  .pk-live-schedule[data-arrangement="cards"]
+    .pk-live-schedule__speakers:has(> .pk-live-schedule__speaker:nth-child(3))
+    > .pk-live-schedule__speaker
+    + .pk-live-schedule__speaker {
+    margin-inline-start: -24px;
+  }
+  .pk-live-schedule[data-arrangement="cards"] .pk-live-schedule__speaker .pk-avatar {
+    inline-size: 56px;
+    block-size: 56px;
+  }
+  /* A card brought forward zooms a little toward the viewer; its neighbours keep their place. */
+  .pk-live-schedule[data-arrangement="cards"][data-spotlight] .pk-live-schedule__room {
+    transition:
+      transform var(--pk-dur-slow) var(--pk-ease),
+      opacity var(--pk-dur-slow) var(--pk-ease);
+  }
+  .pk-live-schedule[data-arrangement="cards"] .pk-live-schedule__room[data-active] {
+    background: color-mix(in srgb, var(--graphic-ink) 16%, transparent);
+    transform: scale(1.03);
+  }
+  /* Narrow: the time and room share a line over the session; the faces sit under it. */
+  .pk-live-schedule[data-fit="narrow"] .pk-live-schedule__room {
+    grid-template-columns: 10px minmax(0, 1fr) auto;
+    grid-template-areas:
+      "accent when speakers"
+      "accent room speakers"
+      "accent title title";
+    grid-template-rows: auto auto 1fr;
+    block-size: 236px;
+    column-gap: 22px;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pk-live-schedule__room,
+    .pk-live-schedule[data-spotlight] .pk-live-schedule__room {
+      transition: none;
+    }
+    .pk-live-schedule__room[data-active]::after {
+      animation: none;
+    }
+  }
+}

@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
@@ -15,10 +15,13 @@ const importPayload = {
   source: "hugo",
   event: {
     slug: "synced-event",
+    basePath: "/events/synced-event/",
     name: "Synced Event",
     timezone: "Europe/Amsterdam",
     visibility: "public",
     registrationMode: "open",
+    city: "Amsterdam",
+    country: "NL",
     frontend: { routes: { registration: "/events/synced-event/register/" } },
   },
   terms: {
@@ -60,6 +63,56 @@ describe("event imports", () => {
     expect(parsed.success, parsed.success ? undefined : JSON.stringify(parsed.error.issues)).toBe(true);
   });
 
+  it("reconciles a renamed website event by its stable source path", async () => {
+    const token = await createAdminToken();
+    const imported = { ...importPayload, event: { ...importPayload.event, basePath: "/events/synced-event/" } };
+    const request = () =>
+      app.fetch(
+        new Request("https://app.test/api/v1/events/imports", {
+          method: "POST",
+          headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+          body: JSON.stringify(imported),
+        }),
+        env,
+        { passThroughOnException() {}, waitUntil() {} } as unknown as ExecutionContext,
+      );
+    await expectResponseStatus(await request(), 200);
+    const [original] = await queryAll<{ id: string }>(env.DB, "SELECT id FROM events WHERE slug = 'synced-event'");
+    await env.DB.prepare("UPDATE events SET slug = 'renamed-event' WHERE id = ?").bind(original.id).run();
+    await expectResponseStatus(await request(), 200);
+    const records = await queryAll<{ id: string; slug: string }>(
+      env.DB,
+      "SELECT id, slug FROM events WHERE base_path = '/events/synced-event/'",
+    );
+    expect(records).toEqual([{ id: original.id, slug: "renamed-event" }]);
+    expect(await queryAll(env.DB, "SELECT id FROM events WHERE slug = 'synced-event'")).toHaveLength(0);
+    const stale = { ...imported, event: { ...imported.event, basePath: undefined } };
+    const refused = await app.fetch(
+      new Request("https://app.test/api/v1/events/imports", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify(stale),
+      }),
+      env,
+      { passThroughOnException() {}, waitUntil() {} } as unknown as ExecutionContext,
+    );
+    await expectResponseStatus(refused, 400);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM events WHERE slug IN ('synced-event', 'renamed-event')"),
+    ).toHaveLength(1);
+    const legacy = { ...stale, event: { ...stale.event, slug: "renamed-event" } };
+    const updated = await app.fetch(
+      new Request("https://app.test/api/v1/events/imports", {
+        method: "POST",
+        headers: { authorization: `Bearer ${token}`, "content-type": "application/json" },
+        body: JSON.stringify(legacy),
+      }),
+      env,
+      { passThroughOnException() {}, waitUntil() {} } as unknown as ExecutionContext,
+    );
+    await expectResponseStatus(updated, 200);
+  });
+
   it("requires events:write for an authenticated staff user", async () => {
     await seedEventAndAdmin(env.DB);
     const staffId = crypto.randomUUID();
@@ -97,6 +150,7 @@ describe("event imports", () => {
 
     const base = {
       slug: "strict-import",
+      basePath: "/events/strict-import/",
       name: "Strict import",
       timezone: "Europe/Amsterdam",
       visibility: "invitation_only",
@@ -163,11 +217,17 @@ describe("event imports", () => {
     const response = await callImport(token);
 
     await expectResponseStatus(response, 200);
-    const [event] = await queryAll<{ id: string }>(
+    const [event] = await queryAll<{ id: string; city: string | null; country: string | null }>(
       env.DB,
-      "SELECT id FROM events WHERE slug = ?",
+      "SELECT id, city, country FROM events WHERE slug = ?",
       importPayload.event.slug,
     );
+    // An importer maps its authored place to the city and ISO country columns.
+    expect(event).toMatchObject({ city: "Amsterdam", country: "NL" });
+    expect(((await response.json()) as { event: { city: string; country: string } }).event).toMatchObject({
+      city: "Amsterdam",
+      country: "NL",
+    });
     const terms = await queryAll<{ audience_type: string; term_key: string }>(
       env.DB,
       "SELECT audience_type, term_key FROM event_terms WHERE event_id = ? AND active = 1 ORDER BY audience_type",
@@ -264,7 +324,13 @@ describe("event imports", () => {
       importEvent(
         guardedDb,
         "hugo",
-        { slug: "raced-import", name: "Raced Import", timezone: "UTC", visibility: "invitation_only" },
+        {
+          slug: "raced-import",
+          basePath: "/events/raced-import/",
+          name: "Raced Import",
+          timezone: "UTC",
+          visibility: "invitation_only",
+        },
         undefined,
         staffId,
       ),

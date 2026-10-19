@@ -3,6 +3,7 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { deliveredEmailPayload, seedEventAndAdmin, queryAll } from "./helpers/context";
 import { callApi } from "./helpers/app";
+import { registrationManageUpdateResponseSchema } from "../assets/shared/schemas/registration";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createInvite } from "../functions/_lib/services/invites";
@@ -27,6 +28,7 @@ import {
   seedOrganizationAggregate,
 } from "./helpers/membership";
 import { stubSuccessfulMxLookup } from "./helpers/mx-lookup";
+import { WORK_EMAIL_STEER } from "../assets/shared/email-first-copy";
 
 async function extractConfirmationToken(payloadJson: string): Promise<string> {
   const payload = await deliveredEmailPayload<{ confirmationUrl: string }>(env.DB, env, payloadJson);
@@ -127,9 +129,21 @@ describe("registration workflows", () => {
     );
     expect(attendee).toBeDefined();
     // No capacity to act for the organization, whether pending or active.
-    expect(await queryAll(env.DB, "SELECT id FROM identities WHERE user_id = ?", attendee.id)).toEqual([]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT id FROM identities WHERE user_id = ? AND organization_id IS NOT NULL",
+        attendee.id,
+      ),
+    ).toEqual([]);
     // No membership of their own either.
-    expect(await queryAll(env.DB, "SELECT id FROM members WHERE user_id = ?", attendee.id)).toEqual([]);
+    expect(
+      await queryAll(
+        env.DB,
+        "SELECT member.id FROM members member JOIN identities identity ON identity.id = member.identity_id WHERE identity.user_id = ?",
+        attendee.id,
+      ),
+    ).toEqual([]);
     // Nothing that follows from membership: no group seat, no mailing list.
     expect(await queryAll(env.DB, "SELECT group_id FROM group_memberships WHERE user_id = ?", attendee.id)).toEqual([]);
     expect(
@@ -210,6 +224,28 @@ describe("registration workflows", () => {
       ),
     ).resolves.toEqual([{ created_identity_user_id: null }]);
   }, 15_000);
+
+  it("steers a consumer mailbox to a work address unless the person attends as an individual", async () => {
+    await seedEventAndAdmin(env.DB);
+    const body = {
+      firstName: "Indie",
+      lastName: "Attendee",
+      email: "indie@gmail.com",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      consents: [
+        { termKey: "privacy-policy", version: "v1" },
+        { termKey: "code-of-conduct", version: "v1" },
+      ],
+    };
+    const steered = await postRegistration(body);
+    expect(steered.status).toBe(400);
+    expect(JSON.stringify(await steered.json())).toContain(WORK_EMAIL_STEER);
+    expect(await queryAll(env.DB, "SELECT id FROM registrations")).toHaveLength(0);
+
+    const individual = await postRegistration({ ...body, unaffiliatedAttestation: true });
+    expect(individual.status, await individual.clone().text()).toBe(200);
+  });
 
   it("delivers existing-identity capabilities by email instead of exposing them to the anonymous submitter", async () => {
     await seedEventAndAdmin(env.DB);
@@ -300,7 +336,11 @@ describe("registration workflows", () => {
     );
 
     expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ success: true, emailChanged: true });
+    expect(registrationManageUpdateResponseSchema.parse(await response.json())).toEqual({
+      success: true,
+      emailChanged: true,
+      sponsorSharing: { allowed: false, withdrawnAt: null },
+    });
     await expect(
       queryAll<{ email: string; pending_email: string | null }>(
         env.DB,
@@ -673,8 +713,8 @@ describe("registration workflows", () => {
 
     await env.DB.batch([
       env.DB.prepare(`
-        INSERT INTO users (id, email, normalized_email, first_name, last_name, organization_name, job_title, data_json, created_at, updated_at)
-        VALUES ('${userId}', 'inviter@pkic.org', 'inviter@pkic.org', 'Inviter', NULL, NULL, NULL, NULL, datetime('now'), datetime('now'))
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, data_json, created_at, updated_at)
+        VALUES ('${userId}', 'inviter@pkic.org', 'inviter@pkic.org', 'Inviter', NULL, NULL, datetime('now'), datetime('now'))
       `),
       env.DB.prepare(`
         INSERT INTO registrations (
@@ -803,8 +843,11 @@ describe("registration workflows", () => {
       isWaitlisted: boolean;
       hasActiveDayWaitlist: boolean;
       waitlistedDayCount: number;
+      myAgendaUrl: string;
     };
     expect(emailPayload.status).toBe("registered");
+    // The confirmation links the attendee's own portal agenda.
+    expect(new URL(emailPayload.myAgendaUrl).hash).toMatch(/^#\/events\/[^/]+\/agenda\?mine=1$/);
     expect(emailPayload.registrationStatus).toBe("registered");
     expect(emailPayload.isWaitlisted).toBe(true);
     expect(emailPayload.hasActiveDayWaitlist).toBe(true);
@@ -1271,17 +1314,13 @@ describe("registration workflows", () => {
     expect(stored).toEqual({ status: "cancelled", attendance_type: "virtual" });
   });
 
-  it("rolls back a managed update when its durable notification cannot be queued", async () => {
+  it("queues an existing public member's name change through registration management once", async () => {
     await seedEventAndAdmin(env.DB);
-    await env.DB.prepare(
-      `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
-       VALUES ('update-atomic-user', 'update-atomic@example.test', 'update-atomic@example.test',
-               'Before', 'Update', datetime('now'), datetime('now'))`,
-    ).run();
+    const person = await insertIndividualMember(env.DB, "H6", "registration-name@example.test");
     const event = await getEventBySlug(env.DB, "pqc-2026");
     const created = await createRegistrationService(env.DB, {
       event,
-      userId: "update-atomic-user",
+      userId: person.userId,
       attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -1292,6 +1331,47 @@ describe("registration workflows", () => {
       waitlistClaimWindowHours: 24,
       signingSecret: "test-signing-secret",
     });
+    const saved = await patchManage(confirmed.manageToken, {
+      action: "update",
+      firstName: "Published",
+      lastName: "Member",
+    });
+    expect(saved.status, await saved.clone().text()).toBe(200);
+    expect(await queryAll(env.DB, "SELECT resource_id,reason_code FROM site_publication_requests")).toEqual([
+      { resource_id: person.userId, reason_code: "user_profile_changed" },
+    ]);
+    const repeated = await patchManage(confirmed.manageToken, {
+      action: "update",
+      firstName: "Published",
+      lastName: "Member",
+    });
+    expect(repeated.status, await repeated.clone().text()).toBe(200);
+    expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toHaveLength(1);
+  });
+
+  it("rolls back a managed update when its durable notification cannot be queued", async () => {
+    await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(
+      `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+       VALUES ('a382ed00-0000-4000-8000-000000000001', 'update-atomic@example.test', 'update-atomic@example.test',
+               'Before', 'Update', datetime('now'), datetime('now'))`,
+    ).run();
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const created = await createRegistrationService(env.DB, {
+      event,
+      userId: "a382ed00-0000-4000-8000-000000000001",
+      attendanceType: "virtual",
+      sourceType: "direct",
+      confirmationTtlHours: 48,
+      signingSecret: "test-signing-secret",
+    });
+    const confirmed = await confirmRegistrationByToken(env.DB, {
+      token: created.confirmationToken as string,
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    const memberId = await seedOrganizationAggregate(env.DB, await insertOrganization(env.DB));
+    await addRepresentative(env.DB, memberId, "a382ed00-0000-4000-8000-000000000001");
     await env.DB.prepare(
       `CREATE TRIGGER reject_registration_update_email
        BEFORE INSERT ON email_outbox
@@ -1314,7 +1394,7 @@ describe("registration workflows", () => {
         [created.registration.id],
       );
       const [user] = await queryAll<{ first_name: string }>(env.DB, "SELECT first_name FROM users WHERE id = ?", [
-        "update-atomic-user",
+        "a382ed00-0000-4000-8000-000000000001",
       ]);
       const audit = await queryAll(
         env.DB,
@@ -1323,6 +1403,7 @@ describe("registration workflows", () => {
       );
       expect(registration).toEqual({ attendance_type: "virtual", status: "registered" });
       expect(user.first_name).toBe("Before");
+      expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toHaveLength(0);
       expect(audit).toHaveLength(0);
     } finally {
       await env.DB.prepare("DROP TRIGGER reject_registration_update_email").run();
@@ -1333,13 +1414,13 @@ describe("registration workflows", () => {
     await seedEventAndAdmin(env.DB);
     await env.DB.prepare(
       `INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
-       VALUES ('update-retry-user', 'update-retry@example.test', 'update-retry@example.test',
+       VALUES ('a382ed00-0000-4000-8000-000000000002', 'update-retry@example.test', 'update-retry@example.test',
                'Before', 'Retry', datetime('now'), datetime('now'))`,
     ).run();
     const event = await getEventBySlug(env.DB, "pqc-2026");
     const created = await createRegistrationService(env.DB, {
       event,
-      userId: "update-retry-user",
+      userId: "a382ed00-0000-4000-8000-000000000002",
       attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,

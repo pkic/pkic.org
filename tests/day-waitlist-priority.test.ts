@@ -8,6 +8,8 @@ import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration, updateRegistrationByManageToken } from "../functions/_lib/services/registrations";
 import { updateRegistrationDayAttendance } from "../functions/_lib/services/registrations/day-attendance-management";
 import { promoteDayWaitlistIfCapacity } from "../functions/_lib/services/registrations/day-waitlist";
+import { listEventRegistrations } from "../functions/_lib/services/registrations/event-registrations";
+import { eventRegistrationsQuerySchema } from "../assets/shared/schemas/event-registrations";
 import {
   promoteEventWaitlistWithNotifications,
   runWaitlistPromotionCycle,
@@ -153,6 +155,64 @@ describe("day waitlist priorities", () => {
     );
     expect(outbox[0].template_key).toBe("registration_waitlist_offer");
     expect(outbox[0].recipient_email).toBe("continuity@example.test");
+  });
+
+  it.each([
+    ["handles a personal-address entry after a later work-address entry", "none", "work@example.test"],
+    ["restores the original place once the person switches to a work address", "primary", "early@gmail.com"],
+    ["restores the original place once the person verifies a secondary work address", "secondary", "early@gmail.com"],
+    ["keeps an unverified secondary work address handled last", "unverified", "work@example.test"],
+  ] as const)("%s", async (_name, workAddress, offeredEmail) => {
+    const { eventId } = await seedEventAndAdmin(env.DB);
+    await env.DB.prepare(
+      `INSERT INTO event_days (id, event_id, day_date, label, in_person_capacity, sort_order, created_at, updated_at)
+       VALUES ('day-1', '${eventId}', '2026-12-01', 'Day 1', 1, 10, datetime('now'), datetime('now'))`,
+    ).run();
+    const emails = ["holder@example.test", "early@gmail.com", "work@example.test"];
+    const seeded = await seedUsersAndInvites(env.DB, eventId, emails);
+    const event = await getEventBySlug(env.DB, "pqc-2026");
+    const registrations: Record<string, Awaited<ReturnType<typeof createRegistration>>> = {};
+    for (const email of emails)
+      registrations[email] = await createRegistration(env.DB, {
+        event,
+        userId: seeded[email].userId,
+        attendanceType: "in_person",
+        dayAttendance: [{ dayDate: "2026-12-01", attendanceType: "in_person" }],
+        sourceType: "invite",
+        inviteId: seeded[email].inviteId,
+        confirmationTtlHours: 48,
+        signingSecret: "test-signing-secret",
+      });
+    const early = seeded["early@gmail.com"].userId;
+    if (workAddress === "primary")
+      await env.DB.prepare(
+        "UPDATE users SET email='early@example.test',normalized_email='early@example.test' WHERE id=?",
+      )
+        .bind(early)
+        .run();
+    if (workAddress === "secondary" || workAddress === "unverified")
+      await env.DB.prepare(
+        "INSERT INTO user_emails(id,user_id,email,normalized_email,verified_at,created_at) VALUES(?,?,'early@organization.example','early@organization.example',?,strftime('%Y-%m-%dT%H:%M:%fZ','now'))",
+      )
+        .bind(crypto.randomUUID(), early, workAddress === "secondary" ? new Date().toISOString() : null)
+        .run();
+    const organizerView = await listEventRegistrations(env.DB, eventId, eventRegistrationsQuerySchema.parse({}));
+    expect(
+      organizerView.registrations.find((registration) => registration.user_id === early)?.waitlist_handled_last,
+    ).toBe(workAddress === "none" || workAddress === "unverified");
+    await updateRegistrationByManageToken(env.DB, {
+      manageToken: registrations["holder@example.test"].manageToken,
+      action: "cancel",
+      waitlistClaimWindowHours: 24,
+      signingSecret: "test-signing-secret",
+    });
+    await promoteDayWaitlistIfCapacity(env.DB, { eventId, eventDayId: "day-1", claimWindowHours: 24 });
+    const statuses = await queryAll<{ user_id: string; status: string }>(
+      env.DB,
+      "SELECT user_id, status FROM event_day_waitlist_entries WHERE event_day_id = 'day-1'",
+    );
+    const offered = statuses.filter((row) => row.status === "offered").map((row) => row.user_id);
+    expect(offered).toEqual([seeded[offeredEmail].userId]);
   });
 
   it("offers and notifies each available day independently", async () => {

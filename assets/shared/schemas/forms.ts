@@ -1,9 +1,10 @@
 import { z } from "zod";
 import { databaseIdSchema } from "./identifiers";
+import { IDENTITY_OWNED_FORM_KEY_MESSAGE, isIdentityOwnedFormKey } from "./form-answers";
 import { eventSlugParamsSchema, successResponseSchema, utcInstantSchema } from "./api-common";
 import { formFieldOptionsSchema, formFieldRulesSchema } from "./form-field-rules";
 import { addDuplicateStringIssues } from "./refinements";
-import { proposalTypeSchema } from "./proposal-management";
+import { proposalTypeSchema, proposalSessionTypesSchema } from "./proposal-management";
 import { eventDayReadModelSchema, eventSummarySchema, requiredTermSchema } from "./event-read-models";
 import { eventRegistrationPolicySchema } from "./event-series";
 import { groupIdSchema } from "./groups";
@@ -108,6 +109,20 @@ export function addDuplicateFormFieldIssues(
 }
 
 /**
+ * A form a person answers never asks for organization or job title: those
+ * come from the person's identity. The membership application is the one
+ * exception — its answers create the applicant's identity on approval — so
+ * its editor applies only the duplicate-key policy.
+ */
+export function addFormFieldPolicyIssues(value: { fields?: Array<{ key: string }> }, context: z.RefinementCtx): void {
+  addDuplicateFormFieldIssues(value, context);
+  (value.fields ?? []).forEach((field, index) => {
+    if (isIdentityOwnedFormKey(field.key))
+      context.addIssue({ code: "custom", path: ["fields", index, "key"], message: IDENTITY_OWNED_FORM_KEY_MESSAGE });
+  });
+}
+
+/**
  * Canonical editable form shape before the cross-field duplicate-key policy.
  * Focused management contexts compose this object rather than copying its
  * fields, then apply the same policy after narrowing `purpose`.
@@ -127,16 +142,16 @@ export const formDefinitionCreateBaseSchema = z.object({
 });
 
 /** Canonical editable form definition; placement ownership is supplied by the route context. */
-export const formDefinitionCreateSchema = formDefinitionCreateBaseSchema.superRefine(addDuplicateFormFieldIssues);
+export const formDefinitionCreateSchema = formDefinitionCreateBaseSchema.superRefine(addFormFieldPolicyIssues);
 
-export const formDefinitionUpdateSchema = z
-  .object({
-    title: z.string().trim().min(2).max(200).optional(),
-    description: z.string().trim().min(2).max(1000).nullable().optional(),
-    status: formStatusSchema.optional(),
-    fields: z.array(formFieldInputSchema).max(50).optional(),
-  })
-  .superRefine(addDuplicateFormFieldIssues);
+export const formDefinitionUpdateBaseSchema = z.object({
+  title: z.string().trim().min(2).max(200).optional(),
+  description: z.string().trim().min(2).max(1000).nullable().optional(),
+  status: formStatusSchema.optional(),
+  fields: z.array(formFieldInputSchema).max(50).optional(),
+});
+
+export const formDefinitionUpdateSchema = formDefinitionUpdateBaseSchema.superRefine(addFormFieldPolicyIssues);
 
 export type FormDefinitionCreateInput = z.infer<typeof formDefinitionCreateSchema>;
 export type FormDefinitionUpdateInput = z.infer<typeof formDefinitionUpdateSchema>;
@@ -270,9 +285,12 @@ export const eventFormsResponseSchema = z.object({
   event: eventSummarySchema,
   registrationPolicy: eventRegistrationPolicySchema,
   purpose: eventFormsPurposeSchema,
-  form: activeFormSummarySchema.extend({ key: z.string() }).nullable(),
+  form: activeFormSummarySchema
+    .extend({ key: z.string(), placement: formPlacementSchema.nullable().optional() })
+    .nullable(),
   requiredTerms: z.array(requiredTermSchema),
   allowedSessionTypes: z.array(proposalTypeSchema).max(20),
+  sessionTypes: proposalSessionTypesSchema.optional(),
   eventDays: z.array(eventDayReadModelSchema),
 });
 

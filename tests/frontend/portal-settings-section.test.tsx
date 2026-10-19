@@ -29,6 +29,15 @@ vi.mock("wouter", () => ({
 vi.mock("../../assets/ts/member-flows/portal/sections/SystemAuditLog", () => ({
   SystemAuditLog: () => <h2>Audit log</h2>,
 }));
+vi.mock("../../assets/ts/member-flows/portal/sections/system-operations/EmailOutbox", () => ({
+  EmailOutbox: () => <h2>Email outbox page</h2>,
+}));
+vi.mock("../../assets/ts/member-flows/portal/sections/system-operations/ScheduledWork", () => ({
+  ScheduledWork: () => <h2>Scheduled work page</h2>,
+}));
+vi.mock("../../assets/ts/member-flows/portal/sections/system-operations/ScheduledJobs", () => ({
+  ScheduledJobs: () => <h2>Scheduled jobs page</h2>,
+}));
 vi.mock("../../assets/ts/member-flows/portal/sections/membership-settings/MembershipCategories", () => ({
   MembershipCategories: () => <h2>Membership categories</h2>,
 }));
@@ -119,6 +128,21 @@ describe("settings section", () => {
     const trail = page.querySelector('nav[aria-label="Breadcrumb"]');
     expect(trail?.querySelector<HTMLAnchorElement>("a")?.getAttribute("href")).toBe("#/settings");
     expect(trail?.querySelector('[aria-current="page"]')?.textContent).toBe("Audit log");
+  });
+
+  it("opens the outbox, the due queue and the job registry each at its own address, for the grant each needs", async () => {
+    for (const [permission, page, label] of [
+      ["email:read", "email-outbox", "Email outbox"],
+      ["retention:read", "scheduled-work", "Scheduled work"],
+      ["scheduler:read", "scheduled-jobs", "Scheduled jobs"],
+    ] as const) {
+      const opened = mount(<SettingsSection session={staffWith(permission)} page={page} />);
+      await settle();
+
+      // The address opens its own page, and the trail names it as the current one.
+      expect(opened.querySelector("h2")?.textContent).toBe(`${label} page`);
+      expect(opened.querySelector('nav[aria-label="Breadcrumb"] [aria-current="page"]')?.textContent).toBe(label);
+    }
   });
 
   it("opens each of the three pages the membership tab used to hold", async () => {

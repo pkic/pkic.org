@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { successResponseSchema } from "./api-common";
+import { actingIdentitySchema } from "./identity";
 import { databaseIdSchema } from "./identifiers";
 import { listQuerySchema, paginatedResponseSchema } from "./pagination";
 import {
@@ -17,6 +18,10 @@ export const organizationMemberProfileSchema = z
     name: z.string(),
     isOrgContact: z.boolean(),
     isPrimaryContact: z.boolean(),
+    isSecondaryContact: z.boolean(),
+    primaryContact: actingIdentitySchema.nullable(),
+    secondaryContact: actingIdentitySchema.nullable(),
+    pendingSecondaryContact: actingIdentitySchema.nullable(),
     pendingSecondaryContactUserId: databaseIdSchema.nullable(),
     pendingReview: organizationContentReviewSchema.nullable(),
   })

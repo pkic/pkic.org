@@ -1,0 +1,47 @@
+@layer components {
+  /* One horizontal row of emoji on the menu's popup surface; position and top layer come from the popup placement. */
+  .pk-reaction-picker {
+    position: fixed;
+    z-index: 1050;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    gap: var(--pk-1);
+    max-inline-size: calc(100vw - 1rem);
+    padding: var(--pk-1);
+    background: var(--pk-surface-raise);
+    border: 1px solid var(--pk-line);
+    border-radius: var(--pk-radius);
+    box-shadow: var(--pk-shadow-3);
+  }
+  .pk-reaction-picker[popover] {
+    inset: auto;
+    margin: 0;
+    overflow: visible;
+    color: var(--pk-ink);
+  }
+  .pk-reaction-picker__button {
+    display: inline-grid;
+    place-items: center;
+    inline-size: 2.25rem;
+    block-size: 2.25rem;
+    padding: 0;
+    border: 0;
+    border-radius: var(--pk-radius-sm);
+    background: none;
+    font-size: var(--pk-text-xl);
+    line-height: 1;
+    cursor: pointer;
+  }
+  .pk-reaction-picker__button:hover {
+    background: var(--pk-surface-sunk);
+  }
+  .pk-reaction-picker__button[aria-pressed="true"] {
+    background: var(--pk-accent-soft);
+    box-shadow: inset 0 0 0 1px var(--pk-accent);
+  }
+  .pk-reaction-picker__button:focus-visible {
+    outline: 2px solid var(--pk-focus);
+    outline-offset: 1px;
+  }
+}

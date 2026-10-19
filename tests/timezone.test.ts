@@ -2,7 +2,13 @@ import { describe, expect, it } from "vitest";
 import {
   dateTimeLocalToIso,
   instantToDateTimeLocal,
+  isValidTimeZone,
   parseDateTimeLocal,
+  runtimeDatePresentation,
+  viewerTimeZone,
+  zoneNameAt,
+  zonedClock,
+  zonedDatePart,
   zonedDateTimeToDate,
 } from "../assets/shared/timezone";
 import { localDateTimeInTimeZoneToIso } from "../functions/_lib/utils/timezone";
@@ -34,5 +40,33 @@ describe("shared IANA time-zone conversion", () => {
         "Europe/Amsterdam",
       ).toISOString(),
     ).toMatch(/^2026-10-25T0[01]:30:00\.000Z$/);
+  });
+});
+
+describe("shared zone helpers", () => {
+  it("recognizes IANA identifiers", () => {
+    expect(isValidTimeZone("Europe/Amsterdam")).toBe(true);
+    expect(isValidTimeZone("UTC")).toBe(true);
+    expect(isValidTimeZone("Not/AZone")).toBe(false);
+  });
+
+  it("names the viewer's zone, never empty", () => {
+    expect(viewerTimeZone().length).toBeGreaterThan(0);
+    expect(runtimeDatePresentation().timeZone.length).toBeGreaterThan(0);
+  });
+
+  it("shows a 24-hour clock in a zone, with midnight as 00", () => {
+    expect(zonedClock("2026-07-15T07:05:00.000Z", "Europe/Amsterdam")).toBe("09:05");
+    expect(zonedClock(new Date("2026-07-14T22:00:00.000Z"), "Europe/Amsterdam")).toBe("00:00");
+    expect(() => zonedClock("2026-07-15T07:05:00.000Z", "Not/AZone")).toThrow();
+  });
+
+  it("names a zone at an instant and extracts US English date parts", () => {
+    const at = new Date("2026-07-15T12:00:00.000Z");
+    expect(zoneNameAt(at, "America/Chicago", "en-US", "short")).toBe("CDT");
+    expect(zoneNameAt(at, "Europe/Amsterdam", "en-US", "shortOffset")).toBe("GMT+2");
+    expect(zonedDatePart(new Date("2026-12-31T23:30:00.000Z"), "Asia/Tokyo", "year")).toBe("2027");
+    expect(zonedDatePart(new Date("2026-12-31T23:30:00.000Z"), "Asia/Tokyo", "month")).toBe("January");
+    expect(zonedDatePart(new Date("2026-12-31T23:30:00.000Z"), "Asia/Tokyo", "day")).toBe("1");
   });
 });

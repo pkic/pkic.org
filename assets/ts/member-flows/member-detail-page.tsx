@@ -1,7 +1,7 @@
 /**
  * Member profile detail page. Replaces
- * layouts/members/single.html (and independent.html), which rendered one
- * static page per YAML file via content/members/_content.gotmpl. Organization
+ * the build-time member page templates, which rendered one static page per
+ * YAML file. Organization
  * ids are UUIDs now, not slugs, and D1 (not a build-time YAML scan) is the
  * source of truth — so instead of one generated Hugo page per member, this is
  * a single shell page (content/members/profile.md) that reads `?id=` from the

@@ -1,3 +1,4 @@
+import { queryAll } from "./helpers/context";
 import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
@@ -24,11 +25,137 @@ async function jsonRequest(path: string, token: string, method: string, body?: u
   });
 }
 
+async function publicationFixture(visibility = "public") {
+  const organizationId = await insertOrganization(env.DB, "Publication Lifecycle Organization");
+  const memberId = visibility === "nonmember" ? null : await seedOrganizationAggregate(env.DB, organizationId);
+  if (visibility === "inactive")
+    await env.DB.prepare("UPDATE members SET status='inactive' WHERE id=?").bind(memberId).run();
+  const staffId = await insertUser(env.DB, "lifecycle-staff@example.test");
+  await grantAdministrator(env.DB, staffId);
+  const token = await createAdminSession(env.DB, staffId, "lifecycle-staff-token");
+  const userId = await insertUser(env.DB, "lifecycle-target@example.test");
+  const path = `/api/v1/organizations/${organizationId}/identities`;
+  const command = {
+    userReference: "existing_user",
+    userId,
+    jobTitle: "Engineer",
+    showOnOrganizationProfile: visibility !== "hidden",
+    activation: { mode: "immediate", reason: "Reviewed activation" },
+  };
+  return { organizationId, token, userId, path, command };
+}
+async function publicationRequests() {
+  return (
+    await env.DB.prepare(
+      "SELECT resource_id FROM site_publication_requests WHERE resource_type='identity_profile' ORDER BY sequence",
+    ).all()
+  ).results;
+}
+
 beforeEach(async () => {
   await resetDb();
 });
 
 describe("organization identity API", () => {
+  it("publishes active roster lifecycle changes and changed profiles, but not pending or unchanged edits", async () => {
+    const { path, token, command } = await publicationFixture();
+    const created = await jsonRequest(path, token, "POST", { ...command, activation: { mode: "invitation" } });
+    expect(created.status, await created.clone().text()).toBe(201);
+    let { identityId } = (await created.json()) as { identityId: string };
+    const save = async (body: unknown) => {
+      const response = await jsonRequest(`${path}/${identityId}`, token, "PATCH", body);
+      expect(response.status, await response.clone().text()).toBe(200);
+      return (await response.json()) as { identityId: string };
+    };
+    await save({ profile: { biography: "Pending biography" } });
+    expect(await publicationRequests()).toHaveLength(0);
+    await save({ transition: { state: "active", reason: "Reviewed pending activation" } });
+    expect(await publicationRequests()).toEqual([{ resource_id: identityId }]);
+    const repeated = await jsonRequest(`${path}/${identityId}`, token, "PATCH", {
+      transition: { state: "active", reason: "Already active" },
+    });
+    expect(repeated.status).toBe(409);
+    expect(await publicationRequests()).toHaveLength(1);
+    await save({ profile: { biography: "Public biography", jobTitle: "Public Engineer" } });
+    expect(await publicationRequests()).toHaveLength(2);
+    await save({ profile: { biography: "Public biography", jobTitle: "Public Engineer" } });
+    await save({ profile: { emailId: null } });
+    expect(await publicationRequests()).toHaveLength(2);
+    await save({ profile: { showOnOrganizationProfile: false } });
+    expect(await publicationRequests()).toHaveLength(3);
+    await save({ profile: { showOnOrganizationProfile: false } });
+    expect(await publicationRequests()).toHaveLength(3);
+    await save({ profile: { showOnOrganizationProfile: true } });
+    expect(await publicationRequests()).toHaveLength(4);
+    await save({ transition: { state: "blocked", reason: "Reviewed block" } });
+    expect(await publicationRequests()).toHaveLength(5);
+    const predecessor = identityId;
+    identityId = (await save({ transition: { state: "active", reason: "Reviewed successor" } })).identityId;
+    expect(identityId).not.toBe(predecessor);
+    expect(await publicationRequests()).toHaveLength(6);
+    await save({ transition: { state: "ended", reason: "Representation ended" } });
+    expect(await publicationRequests()).toHaveLength(7);
+    await save({ transition: { state: "active", reason: "Undo mistaken end" } });
+    expect(await publicationRequests()).toHaveLength(8);
+  });
+
+  it.each(["hidden", "inactive", "nonmember"])("keeps %s roster changes quiet", async (visibility) => {
+    const { path, token, command } = await publicationFixture(visibility);
+    // Isolate the organization roster from public groups populated by automatic enrollment.
+    await env.DB.prepare("UPDATE groups SET visibility='authenticated',public_roster=0,public_leadership=0").run();
+    const created = await jsonRequest(path, token, "POST", command);
+    expect(created.status, await created.clone().text()).toBe(201);
+    const { identityId } = (await created.json()) as { identityId: string };
+    for (const body of [
+      { profile: { biography: "Private biography" } },
+      { transition: { state: "ended", reason: "Private representation ended" } },
+      { transition: { state: "active", reason: "Undo private end" } },
+    ]) {
+      const response = await jsonRequest(`${path}/${identityId}`, token, "PATCH", body);
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(await publicationRequests()).toHaveLength(0);
+    }
+  });
+
+  it.each(["creation", "profile"])(
+    "rolls back %s when publication cannot commit, then permits retry",
+    async (operation) => {
+      const { path, token, command, userId } = await publicationFixture();
+      let identityId: string | undefined;
+      if (operation === "profile") {
+        const created = await jsonRequest(path, token, "POST", command);
+        expect(created.status, await created.clone().text()).toBe(201);
+        identityId = ((await created.json()) as { identityId: string }).identityId;
+      }
+      const state = async () =>
+        (
+          await env.DB.prepare("SELECT id,biography,updated_at FROM identities WHERE user_id=? ORDER BY id")
+            .bind(userId)
+            .all()
+        ).results;
+      const before = await state();
+      const requests = await publicationRequests();
+      const ledger = await queryAll(env.DB, "SELECT id FROM site_publication_requests ORDER BY sequence");
+      const attempt = () =>
+        operation === "creation"
+          ? jsonRequest(path, token, "POST", command)
+          : jsonRequest(`${path}/${identityId}`, token, "PATCH", { profile: { biography: "Published after retry" } });
+      await env.DB.prepare(`CREATE TRIGGER fail_organization_publication BEFORE INSERT ON site_publication_requests
+      BEGIN SELECT RAISE(ABORT,'SYNTHETIC_ORGANIZATION_PUBLICATION_FAILURE'); END`).run();
+      try {
+        expect((await attempt()).status).toBe(500);
+        expect(await state()).toEqual(before);
+        expect(await publicationRequests()).toEqual(requests);
+        expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests ORDER BY sequence")).toEqual(ledger);
+      } finally {
+        await env.DB.prepare("DROP TRIGGER fail_organization_publication").run();
+      }
+      const retried = await attempt();
+      expect(retried.status, await retried.clone().text()).toBe(operation === "creation" ? 201 : 200);
+      expect(await publicationRequests()).toHaveLength(requests.length + 1);
+    },
+  );
+
   it("lists imported organization identities with the directory's exact query", async () => {
     const organizationId = await insertOrganization(env.DB, "Imported organization");
     const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
@@ -69,6 +196,7 @@ describe("organization identity API", () => {
 
     const associate = await jsonRequest(`/api/v1/organizations/${organizationId}/identities`, token, "POST", {
       userReference: "existing_user",
+      jobTitle: "Representative",
       userId: targetUserId,
       activation: { mode: "invitation" },
       showOnOrganizationProfile: true,
@@ -171,6 +299,7 @@ describe("organization identity API", () => {
     expect(created.status, await created.clone().text()).toBe(201);
     const receipt = (await created.json()) as { identityId: string; state: string };
     expect(receipt).toMatchObject({ state: "active" });
+    expect(await publicationRequests()).toEqual([{ resource_id: receipt.identityId }]);
     expect(
       await env.DB.prepare("SELECT job_title, links_json, started_at FROM identities WHERE id = ?")
         .bind(receipt.identityId)

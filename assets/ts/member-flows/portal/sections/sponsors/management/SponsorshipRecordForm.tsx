@@ -176,7 +176,7 @@ export function SponsorshipRecordForm({
       </div>
       {/* A search-as-you-type picker: the record stores a user id, but nobody
           types a UUID. A fieldset legend names it, the way every composite
-          picker is labelled, rather than a label with no single control to
+          picker is labeled, rather than a label with no single control to
           point its `for` at. */}
       <fieldset class="pk-fieldset pk-field">
         <legend class="pk-field__label">Assigned staff</legend>
@@ -202,11 +202,11 @@ export function SponsorshipRecordForm({
       </Field>
       <div class="pk-cluster">
         {onCancel && (
-          <Button type="button" size="sm" variant="ghost" disabled={busy} onClick={onCancel}>
+          <Button type="button" variant="ghost" disabled={busy} onClick={onCancel}>
             Cancel
           </Button>
         )}
-        <Button type="submit" variant="primary" size="sm" loading={busy}>
+        <Button type="submit" variant="primary" loading={busy}>
           Save
         </Button>
       </div>

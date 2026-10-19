@@ -1,0 +1,43 @@
+/*
+ * Tone: the brand rainbow as the state and stage family (see tone.ts).
+ *
+ * Each class sets `--tone`, the stop itself. A consumer draws the dot, edge or
+ * border with it and mixes its fill from it, keeping its words in body ink so
+ * every stop reads — yellow included, which is unreadable as text on white.
+ *
+ * Server-rendered pages write `pk-badge--<tone>` by class name, so each tone
+ * answers to that too, and the sheet ships with the public-site stylesheet
+ * (`site/public-styles.ts`). The progress steps stay out of it, in
+ * tone-progress.css: only components set them.
+ */
+
+@layer components {
+  .pk-tone--neutral,
+  .pk-badge--neutral {
+    --tone: var(--pk-line-strong);
+  }
+  .pk-tone--info,
+  .pk-badge--info {
+    --tone: var(--pk-palette-blue);
+  }
+  .pk-tone--warn,
+  .pk-badge--warn {
+    --tone: var(--pk-palette-yellow);
+  }
+  .pk-tone--risk,
+  .pk-badge--risk {
+    --tone: var(--pk-palette-orange);
+  }
+  .pk-tone--ok,
+  .pk-badge--ok {
+    --tone: var(--pk-palette-green);
+  }
+  .pk-tone--danger,
+  .pk-badge--danger {
+    --tone: var(--pk-palette-red);
+  }
+  .pk-tone--accent,
+  .pk-badge--accent {
+    --tone: var(--pk-accent);
+  }
+}

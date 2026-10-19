@@ -2,7 +2,7 @@ import { astroMarkdownWorkerPlugin } from "./scripts/lib/astro-markdown-worker-p
 import { prepareStaticPublicationFixture } from "./tests/helpers/prepare-static-publication.mjs";
 import path from "node:path";
 import { builtinModules } from "node:module";
-import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-pool-workers";
+import { cloudflareTest, readD1Migrations } from "@cloudflare/vitest-plugin";
 import { defineConfig } from "vitest/config";
 import { contentMediaPlugin } from "./scripts/lib/content-media-plugin.mjs";
 import { bylinesPlugin } from "./scripts/lib/bylines-plugin.mjs";
@@ -10,7 +10,7 @@ import { trustListPlugin } from "./scripts/lib/trust-list-plugin.mjs";
 import { NODE_UNIT_TEST_FILES } from "./vitest.config.unit";
 
 export default defineConfig(async () => {
-  await prepareStaticPublicationFixture(import.meta.dirname);
+  const fixture = await prepareStaticPublicationFixture(import.meta.dirname);
   const migrationsPath = path.join(import.meta.dirname, "migrations");
   const migrations = (await readD1Migrations(migrationsPath)).filter(
     (migration) => !path.basename(migration.name).startsWith("._"),
@@ -19,12 +19,23 @@ export default defineConfig(async () => {
   const workerOptions = {
     wrangler: { configPath: "./wrangler.jsonc", environment: "local" },
     miniflare: {
+      // This run's own built site; wrangler.jsonc still supplies the binding and routing.
+      assets: { directory: fixture.publicDirectory },
       // Test-only bindings: secrets not in wrangler.jsonc, plus
       // the pre-read migrations array for the apply-migrations setup file.
       bindings: {
         TEST_MIGRATIONS: migrations,
         APP_BASE_URL: "https://app.test",
+        PKIC_SCANNER_BENCHMARK_MODE: process.env.PKIC_SCANNER_BENCHMARK_MODE ?? "service",
+        PKIC_SCANNER_BENCHMARK_POPULATION: process.env.PKIC_SCANNER_BENCHMARK_POPULATION ?? "2000",
+        PKIC_SCANNER_BENCHMARK_WORKLOAD: process.env.PKIC_SCANNER_BENCHMARK_WORKLOAD ?? "legacy",
+        PKIC_SCANNER_BENCHMARK_RATE: process.env.PKIC_SCANNER_BENCHMARK_RATE ?? "",
+        PKIC_SCANNER_BENCHMARK_CONCURRENCY: process.env.PKIC_SCANNER_BENCHMARK_CONCURRENCY ?? "32",
         INTERNAL_SIGNING_SECRET: "test-signing-secret",
+        BADGE_PRINT_ENCRYPTION_KEYS: JSON.stringify({
+          activeKeyId: "synthetic-test-v1",
+          keys: { "synthetic-test-v1": "synthetic-test-only-badge-print-key-at-least-32-characters" },
+        }),
         SENDGRID_API_KEY: "test-key",
         FEEDBACK_IDENTITY_SECRET_V1: "feedback-secret",
         ADMIN_API_KEY: "test-admin-key",
@@ -65,7 +76,7 @@ export default defineConfig(async () => {
     },
     setupFiles: ["./tests/helpers/apply-migrations.ts"],
   };
-  // Only SELF.fetch needs the application entry point. Other tests import
+  // Only SELF.fetch needs an eagerly loaded entry point. Other tests import
   // their actual router/service explicitly, still inside isolated workerd
   // with the same bindings and real migrations.
   const workerFetchFiles = ["tests/api-security.test.ts", "tests/public-site-rendering.test.ts"];
@@ -102,6 +113,7 @@ export default defineConfig(async () => {
             exclude: [
               ...NODE_UNIT_TEST_FILES,
               ...workerFetchFiles,
+              "tests/event-agenda-scan-load.test.ts",
               "tests/frontend/**",
               "tests/e2e/**",
               "tests/tools/**",
@@ -109,16 +121,29 @@ export default defineConfig(async () => {
             ],
           },
         },
+        ...(process.env.PKIC_SCANNER_BENCHMARK === "1"
+          ? [
+              {
+                ...siteOptions,
+                plugins: [
+                  ...sitePlugins(),
+                  cloudflareTest({ ...workerOptions, main: "./tests/helpers/d1-test-worker.ts" }),
+                ],
+                test: {
+                  ...testOptions,
+                  name: "scanner-load",
+                  include: ["tests/event-agenda-scan-load.test.ts"],
+                  exclude: ["**/._*"],
+                  maxWorkers: 1,
+                  sequence: { groupOrder: 1 },
+                },
+              },
+            ]
+          : []),
         {
           ...siteOptions,
-          plugins: [...sitePlugins(), cloudflareTest({ ...workerOptions, main: "./functions/worker.ts" })],
-          test: {
-            ...testOptions,
-            setupFiles: [...testOptions.setupFiles, "./tests/helpers/load-worker-application.ts"],
-            name: "worker-fetch",
-            include: workerFetchFiles,
-            exclude: ["**/._*"],
-          },
+          plugins: [...sitePlugins(), cloudflareTest({ ...workerOptions, main: "./functions/router.ts" })],
+          test: { ...testOptions, name: "worker-fetch", include: workerFetchFiles, exclude: ["**/._*"] },
         },
       ],
     },

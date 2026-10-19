@@ -1,0 +1,32 @@
+/*
+ * CloseButton.
+ *
+ * One size and one look for closing any window. It inherits its ink from the surface it
+ * sits on, so the same control reads on a light panel and on a dark dialog header; over
+ * an image it brings its own dark backdrop.
+ */
+
+@layer components {
+  .pk-close.pk-btn {
+    flex: none;
+    inline-size: 2.125rem;
+    min-block-size: 0;
+    block-size: 2.125rem;
+    padding: 0;
+    border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+    border-radius: var(--pk-radius);
+    background: transparent;
+    color: inherit;
+  }
+  .pk-close.pk-btn:hover:not(:disabled, [aria-disabled="true"]) {
+    background: color-mix(in srgb, currentColor 12%, transparent);
+    color: inherit;
+  }
+  .pk-close--over-media.pk-btn,
+  .pk-close--over-media.pk-btn:hover:not(:disabled, [aria-disabled="true"]) {
+    border-color: color-mix(in srgb, var(--pk-on-solid) 45%, transparent);
+    background: color-mix(in srgb, var(--pk-on-solid-ink) 72%, transparent);
+    color: var(--pk-on-solid);
+    backdrop-filter: blur(4px);
+  }
+}

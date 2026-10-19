@@ -1,0 +1,96 @@
+@layer components {
+  .pk-live-ticker {
+    position: absolute;
+    inset-inline: 0;
+    bottom: 0;
+    display: flex;
+    align-items: stretch;
+    inline-size: 1920px;
+    block-size: 80px;
+    color: var(--pk-on-solid);
+    background: var(--pk-on-solid-ink);
+    overflow: hidden;
+    box-shadow: var(--pk-shadow-2);
+  }
+  .pk-live-ticker::before {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    top: 0;
+    block-size: var(--pk-1);
+    background: var(--pk-ink-muted);
+  }
+  .pk-live-ticker--gradient::before {
+    background: var(--pk-grad-brand);
+  }
+  .pk-live-ticker--accent::before {
+    background: var(--pk-accent);
+  }
+  .pk-live-ticker__repeat {
+    display: inline-flex;
+    align-items: center;
+    flex-shrink: 0;
+    block-size: 100%;
+  }
+  .pk-live-ticker__label {
+    display: flex;
+    align-items: center;
+    flex-shrink: 0;
+    padding: var(--pk-3) var(--pk-4);
+    background: var(--pk-accent-deep);
+    color: var(--pk-on-solid);
+    font-size: var(--pk-text-3xl);
+    overflow-wrap: anywhere;
+  }
+  .pk-live-ticker--neutral .pk-live-ticker__label {
+    background: var(--pk-ink-muted);
+  }
+  .pk-live-ticker__window {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+  }
+  .pk-live-ticker__track {
+    display: flex;
+    align-items: center;
+    width: max-content;
+    block-size: 100%;
+    animation: pk-live-ticker-scroll var(--pk-public-member-wall-duration) linear infinite;
+  }
+  .pk-live-ticker__group {
+    min-inline-size: 1920px;
+    display: flex;
+    align-items: center;
+    block-size: 100%;
+  }
+  .pk-live-ticker .pk-live-ticker__message {
+    display: inline-block;
+    white-space: nowrap;
+    padding: var(--pk-3) var(--pk-6);
+    color: inherit;
+    font-size: var(--pk-text-3xl);
+  }
+  @keyframes pk-live-ticker-scroll {
+    to {
+      transform: translateX(-50%);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pk-live-ticker__track {
+      animation: none;
+      width: auto;
+      overflow: auto;
+    }
+    .pk-live-ticker__group[aria-hidden] {
+      display: none;
+    }
+    .pk-live-ticker .pk-live-ticker__message {
+      white-space: normal;
+    }
+    .pk-live-ticker__group {
+      min-inline-size: 0;
+      flex-wrap: wrap;
+      block-size: auto;
+    }
+  }
+}

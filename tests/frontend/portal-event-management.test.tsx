@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { cleanup, GROUP_ID, json, mount, responseEvent, settle } from "./helpers/event-management";
 import { GroupEventEditor } from "../../assets/ts/member-flows/portal/sections/management/GroupEventEditor";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
-import { buttonNamed, controlFor, groupNames, submitForm, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, controlFor, groupNames, submitForm, typeInto } from "./helpers/labeled-control";
 
 vi.mock("wouter/use-hash-location", () => ({
   useHashLocation: () => ["", vi.fn()],
@@ -64,7 +64,15 @@ describe("portal event management", () => {
 
     // Every name the form announces resolves to a real control: `controlFor`
     // throws when a label points at nothing, which is the assertion.
-    for (const label of ["Event name", "Slug", "Event profile", "Visibility", "Location", "Peer invitation limit"]) {
+    for (const label of [
+      "Event name",
+      "Slug",
+      "Event profile",
+      "Visibility",
+      "City",
+      "Country",
+      "Peer invitation limit",
+    ]) {
       expect(controlFor(container, label).id).not.toBe("");
     }
     expect(controlFor(container, "Event name").required).toBe(true);

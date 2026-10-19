@@ -1,9 +1,14 @@
+import { prepareSitePublicationRequest } from "../site-publication-requests";
+import { SITE_PUBLICATION_SITE_RESOURCE_ID } from "../../../../assets/shared/schemas/site-publication-requests";
+import { prepareEventSpeakingStanding } from "../member-standing/event-speaking";
 import {
   isEventCustomSettingKey,
   type EventManagementCapability,
   type EventSettingsInput,
   type EventSettingsUpdateInput,
 } from "../../../../assets/shared/schemas/event-management";
+import { prepareDirectProposalWindow } from "./proposal-window";
+import { BADGE_TEMPLATE_SETTINGS_MAX_BYTES } from "../../../../assets/shared/schemas/event-badge-template";
 import type { DatabaseLike, StatementLike, UserBackedAuthAdmin } from "../../types";
 import { AppError } from "../../errors";
 import { parseJsonSafe, stringifyJson } from "../../utils/json";
@@ -35,17 +40,6 @@ function setFormLink(
   settings.forms = forms;
 }
 
-/** Keeps creation routes from inventing divergent venue/virtual-URL codecs. */
-export function initialEventSettings(
-  input: Pick<EventSettingsInput, "venue" | "virtualUrl" | "location">,
-): Record<string, unknown> {
-  const settings: Record<string, unknown> = {};
-  if (input.venue) settings["venue"] = input.venue;
-  if (input.virtualUrl) settings["virtualUrl"] = input.virtualUrl;
-  if (input.location) settings["location"] = input.location;
-  return settings;
-}
-
 function mergeEventSettings(
   existingJson: string,
   input: Omit<EventSettingsInput, "registrationPolicy"> & { registrationPolicy?: string },
@@ -63,8 +57,9 @@ function mergeEventSettings(
     else settings[key] = value;
   };
   assignNullable("venue", input.venue);
+  assignNullable("badgeTemplate", input.badgeTemplate);
   assignNullable("virtualUrl", input.virtualUrl);
-  assignNullable("location", input.location);
+  assignNullable("attendance", input.attendance);
   if (input.heroImageUrl !== undefined) {
     const heroImage =
       input.heroImageUrl === null
@@ -102,6 +97,8 @@ export interface EventSettingsMutationInput {
   auditScope?: AuditScope;
   auditDetails?: unknown;
   authorizationGuards?: StatementLike[];
+  /** A caller-owned monotonic configuration instant when writes share the same clock tick. */
+  updatedAt?: string;
 }
 
 /**
@@ -114,30 +111,82 @@ export function buildEventSettingsMutationStatements(
   input: EventSettingsMutationInput,
 ): StatementLike[] {
   const { event } = input;
-  const at = nowIso();
+  if (input.settings.slug !== undefined && input.settings.slug !== event.slug && !input.settings.confirmSlugChange) {
+    throw new AppError(
+      409,
+      "EVENT_SLUG_CHANGE_CONFIRMATION_REQUIRED",
+      "Changing the event slug breaks existing slug-based links. Confirm this change before saving.",
+    );
+  }
+  if (
+    input.settings.slug !== undefined &&
+    input.settings.slug !== event.slug &&
+    event.source_mode === "hugo" &&
+    !event.base_path
+  ) {
+    throw new AppError(
+      409,
+      "EVENT_SOURCE_IDENTITY_REQUIRED",
+      "Import this event with its stable website path before changing its slug.",
+    );
+  }
+  const at = input.updatedAt ?? nowIso();
   const mergedSettings = mergeEventSettings(
     event.settings_json,
     input.settings,
     input.appBaseUrl,
     input.allowedHeroImageHosts,
   );
+  const settingsJson = stringifyJson(mergedSettings);
+  if (
+    (input.settings.badgeTemplate !== undefined || mergedSettings.badgeTemplate !== undefined) &&
+    new TextEncoder().encode(settingsJson).byteLength > BADGE_TEMPLATE_SETTINGS_MAX_BYTES
+  ) {
+    throw new AppError(
+      422,
+      "BADGE_TEMPLATE_SETTINGS_TOO_LARGE",
+      "The complete event settings with this template must fit within 1 MiB.",
+    );
+  }
+  const auditSource = input.auditDetails ?? input.settings;
+  const auditDetails =
+    input.settings.badgeTemplate === undefined
+      ? auditSource
+      : {
+          ...(auditSource && typeof auditSource === "object" && !Array.isArray(auditSource)
+            ? auditSource
+            : { details: auditSource }),
+          badgeTemplate:
+            input.settings.badgeTemplate === null
+              ? null
+              : {
+                  version: input.settings.badgeTemplate.version,
+                  name: input.settings.badgeTemplate.name,
+                  assetCount: Object.keys(input.settings.badgeTemplate.assets).length,
+                  bytes: new TextEncoder().encode(stringifyJson(input.settings.badgeTemplate)).byteLength,
+                },
+        };
   const statements: StatementLike[] = [
     ...(input.authorizationGuards ?? []),
     db
       .prepare(
         `UPDATE events
-            SET name = COALESCE(?, name),
+            SET slug = COALESCE(?, slug),
+                name = COALESCE(?, name),
                 timezone = COALESCE(?, timezone),
                 starts_at = IIF(? = 1, starts_at, ?),
                 ends_at = IIF(? = 1, ends_at, ?),
                 registration_mode = COALESCE(?, registration_mode),
                 visibility = COALESCE(?, visibility),
                 links_json = IIF(? = 1, ?, links_json),
+                city = IIF(? = 1, city, ?),
+                country = IIF(? = 1, country, ?),
                 invite_limit_attendee = COALESCE(?, invite_limit_attendee),
                 settings_json = ?, updated_at = ?
           WHERE id = ? AND (? IS NULL OR updated_at = ?)`,
       )
       .bind(
+        input.settings.slug ?? null,
         input.settings.name ?? null,
         input.settings.timezone ?? null,
         input.settings.startsAt === undefined ? 1 : 0,
@@ -148,8 +197,12 @@ export function buildEventSettingsMutationStatements(
         input.settings.visibility ?? null,
         input.links === undefined ? 0 : 1,
         input.links === undefined ? null : stringifyJson(input.links),
+        input.settings.city === undefined ? 1 : 0,
+        input.settings.city ?? null,
+        input.settings.country === undefined ? 1 : 0,
+        input.settings.country ?? null,
         input.settings.inviteLimitAttendee ?? null,
-        stringifyJson(mergedSettings),
+        settingsJson,
         at,
         event.id,
         input.expectedUpdatedAt ?? null,
@@ -166,7 +219,7 @@ export function buildEventSettingsMutationStatements(
         "event_settings_updated",
         "event",
         event.id,
-        input.auditDetails ?? input.settings,
+        auditDetails,
         at,
       ),
     );
@@ -193,12 +246,33 @@ export function buildEventSettingsMutationStatements(
         "event_settings_updated",
         "event",
         event.id,
-        input.auditDetails ?? input.settings,
+        auditDetails,
         at,
         null,
         input.auditScope,
       ),
     );
+  }
+  if (input.settings.startsAt !== undefined || input.settings.endsAt !== undefined) {
+    statements.push(
+      prepareSitePublicationRequest(
+        db,
+        {
+          resourceType: "site_content",
+          resourceId: SITE_PUBLICATION_SITE_RESOURCE_ID,
+          revision: Date.parse(at),
+          reasonCode: "sponsorship_changed",
+          deduplicationKey: `event-sponsor-dates:${event.id}:${crypto.randomUUID()}`,
+        },
+        {
+          sql: "EXISTS(SELECT 1 FROM sponsorships WHERE sponsor_type='consortium' OR event_id=?)",
+          bindings: [event.id],
+        },
+      ),
+    );
+  }
+  if (input.settings.endsAt !== undefined) {
+    statements.push(...prepareEventSpeakingStanding(db, at, { eventId: event.id }));
   }
   return statements;
 }
@@ -218,27 +292,43 @@ export async function updateDirectEventSettings(
   await requireDirectEventConfiguration(db, event);
   const { expectedUpdatedAt, ...settings } = input.settings;
   const context = { type: "event", id: event.id };
+  const updatedAt = nowIso();
+  const proposalWindowStatements =
+    settings.proposalSubmissionWindow !== undefined || settings.proposalFormKey !== undefined
+      ? await prepareDirectProposalWindow(
+          db,
+          event,
+          settings.proposalSubmissionWindow,
+          updatedAt,
+          settings.proposalFormKey,
+        )
+      : [];
   try {
-    await db.batch(
-      buildEventSettingsMutationStatements(db, {
+    await db.batch([
+      ...buildEventSettingsMutationStatements(db, {
         event,
         actorId: input.actor.id,
         settings,
         appBaseUrl: input.appBaseUrl,
         allowedHeroImageHosts: input.allowedHeroImageHosts,
         expectedUpdatedAt,
+        updatedAt,
         auditScope: context,
         authorizationGuards: [
           preparePermissionsAuthorizationGuard(db, input.actor, [{ permission: "events:write", context }]),
           prepareDirectEventConfigurationGuard(db, event.id),
         ],
       }),
-    );
+      ...proposalWindowStatements,
+    ]);
   } catch (error) {
     if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "EVENT_CHANGED", "The event changed; reload before saving");
     }
+    if (error instanceof Error && error.message.includes("UNIQUE constraint failed: events.slug")) {
+      throw new AppError(409, "EVENT_SLUG_EXISTS", "An event with this slug already exists");
+    }
     throwEventConfigurationConflict(error);
   }
-  return getEventDetail(db, input.eventSlug, input.capabilities);
+  return getEventDetail(db, settings.slug ?? input.eventSlug, input.capabilities);
 }

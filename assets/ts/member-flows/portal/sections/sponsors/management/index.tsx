@@ -20,10 +20,10 @@
  * browser.
  */
 import { useEffect, useRef, useState } from "preact/hooks";
-import { readHashQueryParam } from "../../../../../shared/hash-query";
+import { readHashQueryParam } from "../../../../../ui/url-query";
 import type { Column } from "../../../../../components/Table";
 import { ApiDataTable, type ApiTableActions } from "../../../../../components/ApiDataTable";
-import { EmptyState } from "../../../../../ui/RecordEmptyState";
+import { EmptyState } from "../../../../../ui/EmptyState";
 import { SPONSORSHIP_PIPELINE_STAGES } from "../../../../../../shared/schemas/sponsorship-management";
 import {
   SPONSOR_TYPES,
@@ -33,6 +33,7 @@ import {
 import { Badge, statusLabel } from "../../../../../components/Badge";
 import { Alert } from "../../../../../ui/Alert";
 import { Button } from "../../../../../ui/Button";
+import { PageHeader } from "../../../../../ui/PageHeader";
 import { CreateSponsorshipForm } from "./CreateSponsorshipForm";
 import { CompanyDetailPanel } from "./CompanyDetailPanel";
 import { SponsorshipDetail } from "./SponsorshipDetail";
@@ -79,12 +80,13 @@ function SponsorshipCreateOnly() {
 
   if (created) {
     return (
-      <section class="pk pk-stack pk-stack--snug" aria-labelledby="sponsorship-created-heading">
-        <h5 id="sponsorship-created-heading">Sponsorship created</h5>
-        <p class="pk-small">You do not have permission to view the sponsorship pipeline.</p>
+      <div class="pk pk-stack pk-stack--snug">
+        <PageHeader
+          title="Sponsorship created"
+          description="You do not have permission to view the sponsorship pipeline."
+        />
         <div class="pk-cluster">
           <Button
-            size="sm"
             variant="primary"
             onClick={() => {
               setCreated(false);
@@ -94,21 +96,23 @@ function SponsorshipCreateOnly() {
             Create another sponsorship
           </Button>
         </div>
-      </section>
+      </div>
     );
   }
 
   return (
-    <section class="pk pk-stack pk-stack--snug" aria-labelledby="sponsorship-create-heading">
-      <h5 id="sponsorship-create-heading">Create sponsorship</h5>
-      <p class="pk-small">You can create a sponsorship without access to the sponsorship pipeline.</p>
+    <div class="pk pk-stack pk-stack--snug">
+      <PageHeader
+        title="Create sponsorship"
+        description="You can create a sponsorship without access to the sponsorship pipeline."
+      />
       <CreateSponsorshipForm
         key={formKey}
         onCreated={() => setCreated(true)}
         onCancel={() => undefined}
         showCancel={false}
       />
-    </section>
+    </div>
   );
 }
 
@@ -135,9 +139,7 @@ export function Sponsorships({
         {/* The page's way back: creating has its own address, so leaving it
             is navigation rather than the disappearance of a layer. */}
         <div class="pk-cluster">
-          <Button size="sm" onClick={() => onNavigate()}>
-            ← All sponsorships
-          </Button>
+          <Button onClick={() => onNavigate()}>← All sponsorships</Button>
         </div>
         <CreateSponsorshipForm onCreated={() => onNavigate()} onCancel={() => onNavigate()} />
       </div>

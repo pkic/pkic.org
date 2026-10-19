@@ -4,15 +4,15 @@ import {
   MEMBERSHIP_APPLICATION_LIFECYCLES,
 } from "./membership-workflows";
 import { z } from "zod";
-import { activeFormSummarySchema } from "./forms";
-import { MEMBERSHIP_APPLICATION_FORM_KEY } from "./membership-application-form";
+import { formAnswersContract } from "./form-answer-contract";
+import { activeFormSummarySchema, type FormFieldDefinition } from "./forms";
+import { MEMBERSHIP_APPLICATION_FORM_KEY, membershipApplicationFields } from "./membership-application-form";
 import { tokenSchema } from "./api-common";
 import { membershipCategorySchema, membershipCategoryCatalogEntrySchema } from "./membership-categories";
 import { formAnswersSchema } from "./form-answers";
 import { databaseIdSchema } from "./identifiers";
 import { memberApplicationCapabilityQuerySchema } from "./membership-application-capability";
 import { membershipApplicantDetailsSchema, refineMembershipApplicant } from "./membership-applicant-policy";
-import type { MembershipCategoryCatalogEntry } from "./membership-categories";
 import {
   applicationDocumentUploadFormSchema,
   applicationDocumentUploadHeadersSchema,
@@ -87,10 +87,17 @@ export const memberApplicationCreateSchema = membershipApplicantDetailsSchema.sa
   answers: formAnswersSchema.optional(),
 });
 
-export function memberApplicationCreateSchemaForCategory(category: MembershipCategoryCatalogEntry) {
-  return memberApplicationCreateSchema.superRefine((input, context) =>
-    refineMembershipApplicant(input, category, context),
-  );
+export function memberApplicationCreateSchemaForCategory(
+  category: MemberApplicationFormResponse["categories"][number],
+  fields: FormFieldDefinition[],
+) {
+  const answers = formAnswersContract(membershipApplicationFields(fields, category));
+  return memberApplicationCreateSchema.superRefine((input, context) => {
+    refineMembershipApplicant(input, category, context);
+    const checked = answers.safeParse(input.answers ?? {});
+    if (!checked.success)
+      for (const issue of checked.error.issues) context.addIssue({ ...issue, path: ["answers", ...issue.path] });
+  });
 }
 
 export type MemberApplicationCreateInput = z.infer<typeof memberApplicationCreateSchema>;

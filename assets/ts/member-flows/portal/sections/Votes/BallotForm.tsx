@@ -71,7 +71,6 @@ export function BallotForm({
         <div class="pk-cluster">
           <Button
             variant="primary"
-            size="sm"
             loading={submitting}
             disabled={!choice || submitting}
             onClick={() => void submit(choice)}
@@ -89,7 +88,6 @@ export function BallotForm({
         <Button
           key={opt.value}
           variant="secondary"
-          size="sm"
           loading={pending === opt.value}
           disabled={submitting}
           onClick={() => void submit(opt.value)}

@@ -1,9 +1,8 @@
-import { SiteImage } from "./SiteImage";
-import { useMemo, useState } from "preact/hooks";
+import { useMemo } from "preact/hooks";
 import type { PublicMemberSummary } from "../../shared/schemas/members-directory";
 import { memberProfileHref } from "../../shared/member-profile-url";
 import { Avatar } from "../ui/Avatar";
-import { EmptyState } from "../ui/RecordEmptyState";
+import { EmptyState } from "../ui/EmptyState";
 import "./member-directory.css";
 const DIGITS = new Set("0123456789".split(""));
 
@@ -22,28 +21,16 @@ export function MemberCard({ member }: { member: DirectoryMember }) {
   // "where is it?" three separate ways (#15).
   const href = memberProfileHref(member);
 
-  // A logo that fails to load is worse than no logo: the card is left with a
-  // broken-image glyph and the file name as alt text, at whatever size the
-  // box gives it. A handful of stored logos are malformed — `ahead.svg` holds
-  // PNG bytes, for one — so a failed load falls back to the monogram the card
-  // already draws for members with no logo at all.
-  const [logoFailed, setLogoFailed] = useState(false);
-  const showLogo = Boolean(member.logoUrl) && !logoFailed;
-
   return (
     <div class="member-card bento-card">
       <div class="member-card-logo-wrap">
-        {showLogo ? (
-          <SiteImage
-            class="member-card-logo"
-            src={member.logoUrl ?? undefined}
-            alt={`${member.name} logo`}
-            loading="lazy"
-            onError={() => setLogoFailed(true)}
-          />
-        ) : (
-          <Avatar name={member.name} shape="square" />
-        )}
+        <Avatar
+          key={member.logoUrl ?? "missing"}
+          name={member.name}
+          src={member.logoUrl ?? undefined}
+          shape="square"
+          class="pk-member-card-avatar"
+        />
       </div>
       <div class="member-card-name">
         <a class="pk-stretched" href={href}>
@@ -78,10 +65,12 @@ export function DirectoryGrid({ members, prefix }: { members: DirectoryMember[];
 
   if (members.length === 0) {
     return (
-      <EmptyState
-        title="No members found."
-        body="No member matches your search. Try a shorter term, or clear the search to see everyone."
-      />
+      <div class="pk">
+        <EmptyState
+          title="No members found."
+          body="No member matches your search. Try a shorter term, or clear the search to see everyone."
+        />
+      </div>
     );
   }
 

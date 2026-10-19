@@ -82,18 +82,17 @@ export function GroupVoteLifecycleActions({ groupId, vote, onChanged }: GroupVot
         {canOpen && (
           // `loading` alongside `disabled`: the spinner and aria-busy say the
           // transition is in flight, and `disabled` still stops a second one.
-          <Button size="sm" variant="primary" loading={busy} disabled={busy} onClick={() => void open()}>
+          <Button variant="primary" loading={busy} disabled={busy} onClick={() => void open()}>
             Open vote now
           </Button>
         )}
         {canClose && (
-          <Button size="sm" variant="primary" loading={busy} disabled={busy} onClick={() => void close()}>
+          <Button variant="primary" loading={busy} disabled={busy} onClick={() => void close()}>
             Close current round
           </Button>
         )}
         {canCancel && (
           <Button
-            size="sm"
             variant="danger-quiet"
             disabled={busy}
             aria-expanded={showCancellation}
@@ -130,16 +129,10 @@ export function GroupVoteLifecycleActions({ groupId, vote, onChanged }: GroupVot
             </Field>
           </fieldset>
           <div class="pk-cluster">
-            <Button
-              type="submit"
-              size="sm"
-              variant="danger"
-              loading={busy}
-              disabled={busy || !cancellationReason.trim()}
-            >
+            <Button type="submit" variant="danger" loading={busy} disabled={busy || !cancellationReason.trim()}>
               {busy ? "Cancelling…" : "Confirm cancellation"}
             </Button>
-            <Button size="sm" disabled={busy} onClick={() => setShowCancellation(false)}>
+            <Button disabled={busy} onClick={() => setShowCancellation(false)}>
               Keep vote
             </Button>
           </div>

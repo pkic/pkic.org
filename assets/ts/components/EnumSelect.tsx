@@ -24,7 +24,7 @@ export interface EnumSelectProps<Value extends string> extends FieldControlProps
  * owns the label, the help text and any validation state, and hands down the
  * id and ARIA the control must carry. A control that rendered its own label
  * could not be composed where the label has to be elsewhere, and two
- * labelling paths is how forms end up with orphaned `for` attributes.
+ * labeling paths is how forms end up with orphaned `for` attributes.
  */
 export function EnumSelect<Value extends string>({
   value,

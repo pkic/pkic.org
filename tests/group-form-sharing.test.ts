@@ -231,7 +231,7 @@ describe("group form sharing", () => {
     const response = await authenticatedRequest(
       fixture.leaderToken,
       `/api/v1/groups/${fixture.grantee.id}/forms/${fixture.placementId}/definition`,
-      { method: "PATCH", body: JSON.stringify({ title: "Unauthorized catalogue edit" }) },
+      { method: "PATCH", body: JSON.stringify({ title: "Unauthorized catalog edit" }) },
     );
     expect(response.status).toBe(403);
     expect((await response.json()) as { error: { code: string } }).toMatchObject({

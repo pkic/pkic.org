@@ -7,7 +7,8 @@ import {
   proposalSpeakerProfileSchema,
 } from "./proposal-management";
 import { proposalStatusSchema } from "./proposal-status";
-import { registrationLifecycleStatusSchema } from "./registration";
+import { attendanceTypeSchema, registrationLifecycleStatusSchema } from "./registration";
+import { independentCapacityReviewSchema } from "./independent-capacity";
 
 /** Canonical transport contract for a proposal's bounded speaker roster. */
 export const proposalSpeakerSchema = proposalSpeakerProfileSchema.extend({
@@ -21,6 +22,17 @@ export const proposalSpeakerSchema = proposalSpeakerProfileSchema.extend({
   profileComplete: z.boolean(),
   hasHeadshot: z.boolean(),
   hasBio: z.boolean(),
+});
+
+/**
+ * The speaker's registration for the proposal's event, so an organizer can
+ * open it from the roster instead of searching for it; null while they hold
+ * none.
+ */
+export const proposalSpeakerRegistrationSchema = z.object({
+  id: databaseIdSchema,
+  status: registrationLifecycleStatusSchema,
+  attendanceType: attendanceTypeSchema,
 });
 
 export const proposalSpeakersResponseSchema = z.object({
@@ -41,7 +53,18 @@ export const proposalSpeakersResponseSchema = z.object({
     presentationUploaded: z.number().int().min(0).max(1),
   }),
   speakers: z
-    .array(proposalSpeakerSchema.extend({ registrationStatus: registrationLifecycleStatusSchema.nullable() }))
+    .array(
+      proposalSpeakerSchema.extend({
+        /**
+         * The identity the speaker speaks as, which their organization, job
+         * title, biography and links come from; null when they hold none.
+         */
+        identityId: databaseIdSchema.nullable(),
+        registration: proposalSpeakerRegistrationSchema.nullable(),
+        /** The current independence disclosure of a speaker taking part as an individual; reviewers only. */
+        independentCapacity: independentCapacityReviewSchema.nullable(),
+      }),
+    )
     .max(MAX_PROPOSAL_PARTICIPANTS),
 });
 
@@ -59,4 +82,5 @@ export const proposalSpeakerReminderRequestSchema = z.object({
 export type ProposalSpeakerPatch = z.infer<typeof proposalSpeakerPatchSchema>;
 export type ProposalSpeaker = z.infer<typeof proposalSpeakerSchema>;
 export type ProposalSpeakersResponse = z.infer<typeof proposalSpeakersResponseSchema>;
+export type ProposalRosterSpeaker = ProposalSpeakersResponse["speakers"][number];
 export type ProposalSpeakerPatchResponse = z.infer<typeof proposalSpeakerPatchResponseSchema>;

@@ -37,7 +37,9 @@ const event: GroupEvent = {
   registrationPolicy: "no_registration",
   visibility: "group_members",
   inviteLimitAttendee: 5,
-  location: "Online",
+  city: null,
+  country: null,
+  meetingLocation: null,
   links: [],
   nextOccurrenceAt: null,
   updatedAt: "2026-08-01T00:00:00.000Z",
@@ -131,7 +133,7 @@ function fieldLabels(container: HTMLElement): HTMLLabelElement[] {
   return [...container.querySelectorAll<HTMLLabelElement>("label.pk-field__label")];
 }
 
-function labelled(container: HTMLElement, text: string): HTMLInputElement[] {
+function labeled(container: HTMLElement, text: string): HTMLInputElement[] {
   return fieldLabels(container)
     .filter((label) => (label.textContent ?? "").startsWith(text))
     .map((label) => byId(container, label.htmlFor))
@@ -188,16 +190,16 @@ describe("event terms editor", () => {
       "Presentation upload terms",
     ]);
 
-    const [key] = labelled(container, "Key");
+    const [key] = labeled(container, "Key");
     expect(key.value).toBe("terms-of-service");
     expect(key.required).toBe(true);
     // The asterisk is decorative; the word behind it is what is announced.
     expect(labels.find((label) => (label.textContent ?? "").startsWith("Key"))?.textContent).toContain("(required)");
     expect(key.className).toContain("pk-mono");
 
-    expect(labelled(container, "Agreement text")[0].value).toBe("I agree to the event terms");
-    expect(labelled(container, "Link URL")[0].value).toBe("https://example.test/terms");
-    const helpId = labelled(container, "Version")[0].getAttribute("aria-describedby") ?? "";
+    expect(labeled(container, "Agreement text")[0].value).toBe("I agree to the event terms");
+    expect(labeled(container, "Link URL")[0].value).toBe("https://example.test/terms");
+    const helpId = labeled(container, "Version")[0].getAttribute("aria-describedby") ?? "";
     expect(byId(container, helpId)?.textContent).toContain("Raise it when the wording changes");
 
     // A half-adopted checkbox — `pk-check` on the label with nothing on the
@@ -246,8 +248,8 @@ describe("event terms editor", () => {
 
     // The label the end-to-end flow clicks; keep it exactly this wording.
     await act(() => buttonNamed(container, "Add attendee term").click());
-    await type(labelled(container, "Key")[0], "code-of-conduct");
-    await type(labelled(container, "Agreement text")[0], "I agree to the code of conduct");
+    await type(labeled(container, "Key")[0], "code-of-conduct");
+    await type(labeled(container, "Agreement text")[0], "I agree to the code of conduct");
     await submit(container);
 
     const put = captured.find(({ method }) => method === "PUT");

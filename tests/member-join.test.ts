@@ -1,12 +1,18 @@
 import { beforeEach, describe, expect, it } from "vitest";
+import { DISPOSABLE_EMAIL_REFUSED, WORK_EMAIL_STEER } from "../assets/shared/email-first-copy";
 import { env } from "cloudflare:workers";
+import { apiValidationErrorDetailsSchema } from "../assets/shared/schemas/api-common";
 import { memberJoinVerifyResponseSchema } from "../assets/shared/schemas/member-join";
 import { memberApplicationCreateResponseSchema } from "../assets/shared/schemas/member-applications";
 import { callApi } from "./helpers/app";
 import { createTestRateLimiter, deliveredEmailPayload, queryAll } from "./helpers/context";
 import { resetDb } from "./helpers/reset-db";
 import { addRepresentative, insertOrganization, insertUser, seedOrganizationAggregate } from "./helpers/membership";
-import { requiredMembershipApplicationAnswers, seedMembershipApplicationForm } from "./helpers/member-applications";
+import {
+  membershipApplicationDescriptionAnswers,
+  requiredMembershipApplicationAnswers,
+  seedMembershipApplicationForm,
+} from "./helpers/member-applications";
 import { materializeQueuedCapabilityLinks } from "../functions/_lib/auth/capability-links";
 import {
   newMemberJoinCapabilityPayload,
@@ -67,18 +73,36 @@ describe("verified-email-first membership join", () => {
     await seedMembershipApplicationForm();
   });
 
-  it("requires the explicit unaffiliated attestation before emailing a personal address", async () => {
+  it("steers a personal address to a work address unless the individual capacity is attested", async () => {
     const testEnv = makeEnv();
     const response = await postJson(testEnv, "/api/v1/members/join/start", {
       email: "person@gmail.com",
       unaffiliatedAttestation: false,
     });
 
-    expect(response.status).toBe(200);
-    await expect(response.json()).resolves.toEqual({ status: "unaffiliated_attestation_required" });
-    expect(
-      await queryAll(testEnv.DB, "SELECT id FROM email_outbox WHERE recipient_email = ?", ["person@gmail.com"]),
-    ).toHaveLength(0);
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await response.json())).toContain(WORK_EMAIL_STEER);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
+
+    const individual = await postJson(testEnv, "/api/v1/members/join/start", {
+      email: "person@gmail.com",
+      unaffiliatedAttestation: true,
+    });
+    expect(individual.status).toBe(200);
+    await expect(individual.json()).resolves.toEqual({ status: "verification_sent" });
+  });
+
+  it("steers an ISP mailbox from the server's lists onto the email field, as the browser reads it", async () => {
+    const testEnv = makeEnv();
+    const response = await postJson(testEnv, "/api/v1/members/join/start", { email: "person@mail.ziggo.nl" });
+
+    expect(response.status).toBe(400);
+    const body = (await response.json()) as { error: { code: string; details: unknown } };
+    expect(body.error.code).toBe("VALIDATION_ERROR");
+    expect(apiValidationErrorDetailsSchema.parse(body.error.details).fieldErrors).toEqual({
+      email: [WORK_EMAIL_STEER],
+    });
+    expect(await queryAll(testEnv.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
   });
 
   it("rejects disposable addresses before queueing external work", async () => {
@@ -88,8 +112,8 @@ describe("verified-email-first membership join", () => {
       unaffiliatedAttestation: true,
     });
 
-    expect(response.status).toBe(422);
-    await expect(response.json()).resolves.toMatchObject({ error: { code: "DISPOSABLE_EMAIL_NOT_ALLOWED" } });
+    expect(response.status).toBe(400);
+    expect(JSON.stringify(await response.json())).toContain(DISPOSABLE_EMAIL_REFUSED);
     expect(await queryAll(testEnv.DB, "SELECT id FROM email_outbox")).toHaveLength(0);
   });
 
@@ -169,6 +193,52 @@ describe("verified-email-first membership join", () => {
     await expect(replay.json()).resolves.toEqual({ status: "already_member" });
     expect(replay.headers.get("set-cookie")).toBeNull();
     expect(await queryAll(testEnv.DB, "SELECT id FROM sessions")).toHaveLength(1);
+  });
+
+  it("binds a verified secondary work mailbox to the same person instead of their primary personal mailbox", async () => {
+    const testEnv = makeEnv();
+    const organizationId = await insertOrganization(testEnv.DB, "Secondary Work Organization");
+    const memberId = await seedOrganizationAggregate(testEnv.DB, organizationId, "A");
+    await testEnv.DB.prepare(
+      `INSERT INTO organization_domain_claims
+         (id, domain, application_id, organization_id, created_at, updated_at)
+       VALUES (?, 'secondary-work.example', NULL, ?, datetime('now'), datetime('now'))`,
+    )
+      .bind(crypto.randomUUID(), organizationId)
+      .run();
+    const userId = await insertUser(testEnv.DB, "known-person@gmail.com");
+    const emailId = crypto.randomUUID();
+    const workEmail = "known-person@secondary-work.example";
+    await testEnv.DB.prepare(
+      `INSERT INTO user_emails
+         (id,user_id,email,normalized_email,verified_at,verification_method,created_at)
+       VALUES (?, ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), 'magic_link', strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+    )
+      .bind(emailId, userId, workEmail, workEmail)
+      .run();
+    const token = await startAndMaterializeVerification(testEnv, workEmail);
+    const response = await verifyJoin(testEnv, token);
+    expect(response.status, await response.clone().text()).toBe(200);
+    const result = memberJoinVerifyResponseSchema.parse(await response.json());
+    expect(result).toMatchObject({
+      status: "organization_access_ready",
+      member: { memberId, userId, email: workEmail },
+    });
+    expect(
+      await queryAll(testEnv.DB, "SELECT user_id,email_id,organization_id FROM identities WHERE user_id=?", [userId]),
+    ).toEqual([{ user_id: userId, email_id: emailId, organization_id: organizationId }]);
+    expect(await queryAll(testEnv.DB, "SELECT id,email FROM users WHERE id=?", [userId])).toEqual([
+      { id: userId, email: "known-person@gmail.com" },
+    ]);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM users WHERE normalized_email=?", [workEmail])).toEqual([]);
+    expect(await queryAll(testEnv.DB, "SELECT user_id FROM sessions")).toEqual([{ user_id: userId }]);
+    expect(await queryAll(testEnv.DB, "SELECT id FROM member_applications")).toEqual([]);
+    const replay = await verifyJoin(testEnv, token);
+    expect(replay.status).toBe(200);
+    await expect(replay.json()).resolves.toEqual({ status: "already_member" });
+    expect(await queryAll(testEnv.DB, "SELECT email_id FROM identities WHERE user_id=?", [userId])).toEqual([
+      { email_id: emailId },
+    ]);
   });
 
   it("does not let an individual attestation bypass an exact claimed organization domain", async () => {
@@ -278,7 +348,11 @@ describe("verified-email-first membership join", () => {
       membershipCategory: "F",
       organizationName: "Verified Alias Organization",
       joinToken: verification.joinToken,
-      answers: { reason: "Apply through a verified alias.", ...requiredMembershipApplicationAnswers },
+      answers: {
+        reason: "Apply through a verified alias.",
+        ...requiredMembershipApplicationAnswers,
+        ...membershipApplicationDescriptionAnswers("F"),
+      },
     });
 
     expect(response.status).toBe(201);
@@ -303,7 +377,11 @@ describe("verified-email-first membership join", () => {
       applicantName: "Independent Person",
       membershipCategory: "H6",
       joinToken: verification.joinToken,
-      answers: { reason: "I want to contribute to the PKI community.", ...requiredMembershipApplicationAnswers },
+      answers: {
+        reason: "I want to contribute to the PKI community.",
+        ...requiredMembershipApplicationAnswers,
+        ...membershipApplicationDescriptionAnswers("H6"),
+      },
     };
     const first = await postJson(testEnv, "/api/v1/members/applications", payload);
     expect(first.status).toBe(201);
@@ -330,7 +408,11 @@ describe("verified-email-first membership join", () => {
       membershipCategory: "F",
       organizationName: "Existing Applicant Organization",
       joinToken: verification.joinToken,
-      answers: { reason: "Apply through the verified canonical identity.", ...requiredMembershipApplicationAnswers },
+      answers: {
+        reason: "Apply through the verified canonical identity.",
+        ...requiredMembershipApplicationAnswers,
+        ...membershipApplicationDescriptionAnswers("F"),
+      },
     });
     expect(response.status).toBe(201);
     expect(
@@ -361,7 +443,11 @@ describe("verified-email-first membership join", () => {
         applicantName: "Application Race",
         membershipCategory: "F",
         organizationName: "Application Race Organization",
-        answers: { reason: "Race the verified account binding.", ...requiredMembershipApplicationAnswers },
+        answers: {
+          reason: "Race the verified account binding.",
+          ...requiredMembershipApplicationAnswers,
+          ...membershipApplicationDescriptionAnswers("F"),
+        },
         appBaseUrl: "https://app.test",
         joinCapabilityId: crypto.randomUUID(),
         applicantKind: "organization",

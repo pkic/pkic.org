@@ -1,7 +1,7 @@
 import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { decorateOpenApiSpec } from "../functions/_lib/openapi/mcp";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
@@ -16,7 +16,7 @@ import {
   eventDaysManagementReplaceResponseSchema,
   eventDaysManagementResponseSchema,
 } from "../assets/shared/schemas/event-configuration";
-import { openapi } from "../functions/router";
+import { openapi } from "../functions/http-router";
 import type { DatabaseLike } from "../functions/_lib/types";
 
 async function setupAdmin(): Promise<string> {
@@ -127,6 +127,7 @@ describe("admin event configuration OpenAPI boundaries", () => {
         source: "hugo",
         event: {
           slug: "contract-event",
+          basePath: "/events/contract-event/",
           name: "Contract Event",
           timezone: "UTC",
           visibility: "invitation_only",

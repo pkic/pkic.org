@@ -2,9 +2,9 @@
 /**
  * The group-settings form after its move onto the design system.
  *
- * The Bootstrap version labelled its controls with bare `form-label` spans
+ * The Bootstrap version labeled its controls with bare `form-label` spans
  * that pointed at hand-written ids, drew its checkboxes with `form-check`
- * alone, and reported both outcomes — the save and the failure — as coloured
+ * alone, and reported both outcomes — the save and the failure — as colored
  * `alert` divs. These assert what replaced them: every label bound to the
  * control it names, the checkbox parts all present so the drawn control is
  * the real one, and each outcome carrying a role rather than only a hue.
@@ -15,7 +15,7 @@ import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { groupSchema, groupSettingsDetailSchema, groupUpdateSchema } from "../../assets/shared/schemas/groups";
 import { GroupSettingsForm } from "../../assets/ts/member-flows/portal/sections/management/GroupSettingsForm";
-import { markdownControl } from "./helpers/labelled-control";
+import { markdownControl } from "./helpers/labeled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const GROUP_PATH = `/api/v1/groups/${GROUP_ID}`;
@@ -95,7 +95,7 @@ function byId(container: HTMLElement, id: string): HTMLElement | null {
   return [...container.querySelectorAll<HTMLElement>("[id]")].find((element) => element.id === id) ?? null;
 }
 
-function labelled(container: HTMLElement, text: string): HTMLElement[] {
+function labeled(container: HTMLElement, text: string): HTMLElement[] {
   return [...container.querySelectorAll<HTMLLabelElement>("label.pk-field__label")]
     .filter((label) => (label.textContent ?? "").startsWith(text))
     .map((label) => byId(container, label.htmlFor))
@@ -131,7 +131,7 @@ describe("group settings form", () => {
     expect(container.querySelector('button[type="submit"]')).toBeNull();
     await beginRecordEdit(container, "Group settings actions");
     expect(container.textContent).toContain("The URL slug is separate.");
-    const name = labelled(container, "Name")[0] as HTMLInputElement;
+    const name = labeled(container, "Name")[0] as HTMLInputElement;
     await act(async () => {
       name.value = "Unsaved name";
       name.dispatchEvent(new Event("input", { bubbles: true }));
@@ -143,7 +143,7 @@ describe("group settings form", () => {
     expect(container.textContent).toContain(group.name);
     expect(container.textContent).not.toContain("Unsaved name");
     await beginRecordEdit(container, "Group settings actions");
-    expect((labelled(container, "Name")[0] as HTMLInputElement).value).toBe(group.name);
+    expect((labeled(container, "Name")[0] as HTMLInputElement).value).toBe(group.name);
   });
   it("binds every label to the control it names and draws real choice controls", async () => {
     stubPatch(() => json(saveResponse));
@@ -163,7 +163,7 @@ describe("group settings form", () => {
       expect(byId(container, label.htmlFor), `label "${label.textContent ?? ""}" points at nothing`).not.toBeNull();
     }
 
-    const [name] = labelled(container, "Name");
+    const [name] = labeled(container, "Name");
     expect((name as HTMLInputElement).value).toBe("Architecture Committee");
     expect((name as HTMLInputElement).required).toBe(true);
     // The asterisk is decorative; the word behind it is what is announced.
@@ -205,18 +205,18 @@ describe("group settings form", () => {
     await settle();
 
     await beginRecordEdit(container, "Group settings actions");
-    const name = labelled(container, "Name")[0] as HTMLInputElement;
+    const name = labeled(container, "Name")[0] as HTMLInputElement;
     name.value = "Architecture and Design Committee";
     void act(() => {
       name.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    const slug = labelled(container, "URL slug")[0] as HTMLInputElement;
+    const slug = labeled(container, "URL slug")[0] as HTMLInputElement;
     expect(slug.value).toBe("architecture");
     slug.value = "architecture-design";
     void act(() => {
       slug.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    const abbreviation = labelled(container, "Abbreviated name")[0] as HTMLInputElement;
+    const abbreviation = labeled(container, "Abbreviated name")[0] as HTMLInputElement;
     abbreviation.value = "ADC";
     void act(() => {
       abbreviation.dispatchEvent(new Event("input", { bubbles: true }));
@@ -237,6 +237,28 @@ describe("group settings form", () => {
     const saved = container.querySelector(".pk-alert--ok");
     expect(saved?.getAttribute("role")).toBe("status");
     expect(saved?.textContent).toContain("Group settings updated.");
+  });
+
+  it("refuses an emptied name on the field itself, sends nothing, and keeps the draft", async () => {
+    const onUpdated = vi.fn(async () => undefined);
+    const { bodies } = stubPatch(() => json(saveResponse));
+    const container = mount(<GroupSettingsForm group={group} onUpdated={onUpdated} />);
+    await settle();
+
+    await beginRecordEdit(container, "Group settings actions");
+    const name = labeled(container, "Name")[0] as HTMLInputElement;
+    name.value = "";
+    await act(async () => {
+      name.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await save(container);
+
+    // The shared contract speaks, not a local check: the field is marked and
+    // nothing leaves the form.
+    expect((labeled(container, "Name")[0] as HTMLInputElement).getAttribute("aria-invalid")).toBe("true");
+    expect(bodies).toEqual([]);
+    expect(onUpdated).not.toHaveBeenCalled();
+    expect(container.querySelector("form")).not.toBeNull();
   });
 
   it("reports a rejected save as an alert and leaves the form usable", async () => {

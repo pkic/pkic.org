@@ -1,0 +1,84 @@
+@layer components {
+  .pk-live-panelists {
+    container-type: inline-size;
+    position: absolute;
+    inset-inline-start: 120px;
+    inset-block-start: 120px;
+    inline-size: 1680px;
+    color: var(--pk-on-solid);
+    padding: var(--pk-4);
+  }
+  .pk-live-panelists__session {
+    margin: 0 0 var(--pk-6);
+    text-align: start;
+    font-size: clamp(var(--pk-agenda-type-8), 3.5cqw, calc(var(--pk-agenda-type-20) * 2.4));
+    line-height: 1.15;
+  }
+  .pk-live-panelists__credits {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: var(--pk-6);
+  }
+  .pk-live-panelists__speaker {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-5);
+    min-inline-size: 0;
+  }
+  .pk-live-panelists__headshot {
+    position: relative;
+    flex-shrink: 0;
+  }
+  .pk-live-panelists__headshot .pk-avatar {
+    inline-size: clamp(var(--pk-4), 12cqw, calc(var(--pk-4) * 10));
+    block-size: clamp(var(--pk-4), 12cqw, calc(var(--pk-4) * 10));
+    background: color-mix(in srgb, var(--pk-on-solid) 15%, transparent);
+    color: var(--pk-on-solid);
+  }
+  .pk-live-panelists__headshot .pk-avatar__initials {
+    color: var(--pk-on-solid);
+    font-size: clamp(var(--pk-text-xl), 4cqw, var(--pk-text-3xl));
+  }
+  .pk-live-panelists__moderator {
+    position: absolute;
+    inset-block-end: calc(var(--pk-1) * -1);
+    inset-inline-start: 50%;
+    transform: translateX(-50%);
+    padding: 0.3cqw 0.5cqw;
+    background: var(--pk-palette-orange);
+    color: var(--pk-on-solid);
+    font-size: min(var(--pk-agenda-type-11), 0.7cqw);
+    font-weight: 800;
+    white-space: nowrap;
+  }
+  .pk-live-panelists__info {
+    min-inline-size: 0;
+    overflow-wrap: anywhere;
+  }
+  .pk-live-panelists__name {
+    font-weight: 800;
+    font-size: clamp(var(--pk-agenda-type-8), 2.4cqw, calc(var(--pk-agenda-type-20) * 1.6));
+    line-height: 1.15;
+  }
+  .pk-live-panelists__title {
+    margin-block-start: var(--pk-2);
+    font-size: clamp(var(--pk-agenda-type-8), 1.5cqw, var(--pk-agenda-type-20));
+    line-height: 1.35;
+  }
+  .pk-live-panelists[data-layout="list"] {
+    inline-size: 640px;
+  }
+  .pk-live-panelists[data-layout="list"] .pk-live-panelists__credits {
+    grid-template-columns: 1fr;
+  }
+  .pk-live-panelists[data-layout="panel"] .pk-live-panelists__credits {
+    display: flex;
+    justify-content: center;
+    gap: 2cqw;
+  }
+  .pk-live-panelists[data-layout="panel"] .pk-live-panelists__speaker {
+    flex: 1 1 0;
+    flex-direction: column;
+    text-align: start;
+  }
+}

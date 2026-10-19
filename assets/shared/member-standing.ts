@@ -70,16 +70,19 @@ export function standingFor(points: number, levels: readonly StandingLevel[]): S
  * is written, so changing one must not silently restate history. Moving them
  * into data is a separate decision that needs a versioning story.
  */
-export const STANDING_REASON_POINTS: Readonly<Record<string, number>> = {
+export const STANDING_REASON_POINTS = {
+  active_month: 2,
   meeting_attended: 5,
   event_attended: 10,
   event_spoke: 40,
   document_authored: 60,
   document_reviewed: 20,
   group_chaired_term: 150,
-};
+} as const;
+
+export type StandingReason = keyof typeof STANDING_REASON_POINTS;
 
 /** Points for a reason, or 0 for one this policy does not recognize. */
 export function pointsFor(reasonKey: string): number {
-  return STANDING_REASON_POINTS[reasonKey] ?? 0;
+  return Object.hasOwn(STANDING_REASON_POINTS, reasonKey) ? STANDING_REASON_POINTS[reasonKey as StandingReason] : 0;
 }

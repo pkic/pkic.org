@@ -7,7 +7,7 @@ import { createGroup } from "../functions/_lib/services/groups";
 import { buildProposalProgramsPageQuery, listProposalPrograms } from "../functions/_lib/services/proposal-programs";
 import type { AuthAdmin } from "../functions/_lib/types";
 import { proposalProgramsListResponseSchema } from "../assets/shared/schemas/proposal-programs";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { createAdminSession } from "./helpers/auth";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";

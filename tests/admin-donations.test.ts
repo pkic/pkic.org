@@ -9,7 +9,7 @@ import { ADMINISTRATOR_FIXTURE_USER_SQL } from "./helpers/administrator";
  */
 import { afterEach, describe, expect, it, beforeEach, vi } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession } from "./helpers/auth";
 import {
@@ -265,15 +265,8 @@ describe("donation-management authorization", () => {
       .bind(staff.grantId)
       .run();
 
-    /*
-     * Same token, same session, no re-authentication in between — and refused
-     * as unauthenticated rather than forbidden, because this grant was the
-     * whole basis of the holder's staff standing. Taking it away does not
-     * leave them a staff actor short of one permission; it leaves them no
-     * staff actor at all. A user whose standing came from elsewhere would meet
-     * a 403 here instead.
-     */
-    expect((await call(staff.token, "/api/v1/donations/sync", { method: "POST", body: "{}" })).status).toBe(401);
+    // The session still identifies the user; its live staff permission is gone.
+    expect((await call(staff.token, "/api/v1/donations/sync", { method: "POST", body: "{}" })).status).toBe(403);
   });
 
   it("removes the legacy admin donation routes", async () => {

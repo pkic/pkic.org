@@ -21,6 +21,7 @@ import {
 } from "../../../shared/schemas/event-registration-detail";
 import { useContractForm } from "../../hooks/useContractForm";
 import { patchJson, postJson } from "../../shared/api-client";
+import { refusalSentence } from "../../shared/form/validation-map";
 import { formatDateTime } from "../../shared/ui";
 import { formatServiceDate } from "../../../shared/format-date";
 import { DataTable } from "../Table";
@@ -166,7 +167,7 @@ export function DayAttendanceManager({
       await request();
       await reloadWithSuccess(success);
     } catch (error) {
-      setMessage({ text: (error as Error).message, kind: "danger" });
+      setMessage({ text: refusalSentence(error), kind: "danger" });
     } finally {
       setBusy(false);
     }
@@ -366,7 +367,7 @@ export function DayAttendanceManager({
       {selected.size > 0 && (
         <BulkBar count={selected.size} total={rows.length} onClear={() => setSelected(new Set())}>
           {bulkPrimary && (
-            <Button size="sm" variant="secondary" disabled={bulkPrimary.disabled} onClick={bulkPrimary.onSelect}>
+            <Button variant="secondary" disabled={bulkPrimary.disabled} onClick={bulkPrimary.onSelect}>
               {bulkPrimary.label}
             </Button>
           )}
@@ -374,21 +375,27 @@ export function DayAttendanceManager({
         </BulkBar>
       )}
       <DataTable
-        caption="Attendance by event day"
+        // The panel around the list is already headed "Attendance by day";
+        // the caption names the table with the same words, not new ones.
+        caption="Attendance by day"
         columns={[
           {
-            // The day's own name over its date: two facts about one thing,
-            // in one column.
+            // The day's own name. A name such as "Tuesday 1 December 2026"
+            // already says the date, so the date is added only under a name
+            // that does not — "Workshop day" — and never as a raw ISO stamp.
             // Not the slack column: a day's name is short, and the primary
             // column's reading-measure floor pushed the two timestamps off
             // the record's main column on a laptop.
             header: "Day",
-            cell: (day) => (
-              <div class="pk-stack pk-stack--tight">
+            cell: (day) =>
+              day.label && !day.label.includes(day.dayDate.slice(0, 4)) ? (
+                <div class="pk-stack pk-stack--tight">
+                  <span class="pk-strong">{day.subject}</span>
+                  <span class="pk-small pk-muted">{formatServiceDate(day.dayDate)}</span>
+                </div>
+              ) : (
                 <span class="pk-strong">{day.subject}</span>
-                <span class="pk-small pk-muted pk-mono">{day.dayDate}</span>
-              </div>
-            ),
+              ),
           },
           {
             header: "Attendance",
@@ -399,9 +406,10 @@ export function DayAttendanceManager({
             cell: (day) =>
               day.waitlist ? (
                 <div class="pk-stack pk-stack--tight pk-small">
+                  {/* The queue's internal lane is the system's ordering, not
+                      something a manager acts on; the badge is the state. */}
                   <div class="pk-cluster">
                     <Badge status={day.waitlist.status} />
-                    <span class="pk-muted">{day.waitlist.priorityLane} lane</span>
                   </div>
                   {day.waitlist.offerExpiresAt && (
                     <span class="pk-muted">Offer expires {formatDateTime(day.waitlist.offerExpiresAt)}</span>
@@ -429,7 +437,7 @@ export function DayAttendanceManager({
         selection={{
           selected,
           onChange: setSelected,
-          rowLabel: (dayDate) => `Select ${rowsByDate.get(dayDate)?.subject ?? dayDate}`,
+          rowLabel: (dayDate) => rowsByDate.get(dayDate)?.subject ?? dayDate,
         }}
       />
       {dialog?.kind === "change" && (

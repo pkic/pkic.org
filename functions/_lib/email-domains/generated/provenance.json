@@ -1,0 +1,50 @@
+{
+  "retrievedAt": "2026-10-10T08:55:45.197Z",
+  "free": {
+    "repository": "https://github.com/Kikobeats/free-email-domains",
+    "file": "domains.json",
+    "commit": "cc960900c419b2daf41c84f2349ce64d973fe129",
+    "committedAt": "2026-10-10T03:33:32Z",
+    "url": "https://raw.githubusercontent.com/Kikobeats/free-email-domains/cc960900c419b2daf41c84f2349ce64d973fe129/domains.json",
+    "license": "MIT",
+    "licenseUrl": "https://raw.githubusercontent.com/Kikobeats/free-email-domains/cc960900c419b2daf41c84f2349ce64d973fe129/LICENSE.md",
+    "note": "Free and shared mailbox providers, ISPs included, derived from HubSpot's list of free email domains.",
+    "upstreamEntries": 14337,
+    "entries": 5111,
+    "excluded": "Entries also on the disposable list, and entries that are or contain a public suffix.",
+    "droppedAsPublicSuffix": [
+      "dyndns.org",
+      "net.ua",
+      "sakura.ne.jp",
+      "za.com"
+    ],
+    "invalid": []
+  },
+  "disposable": {
+    "repository": "https://github.com/disposable-email-domains/disposable-email-domains",
+    "file": "disposable_email_blocklist.conf",
+    "commit": "81a8976e63879a11bf4301a28c14e0eb7a7855cf",
+    "committedAt": "2026-10-09T08:26:42Z",
+    "url": "https://raw.githubusercontent.com/disposable-email-domains/disposable-email-domains/81a8976e63879a11bf4301a28c14e0eb7a7855cf/disposable_email_blocklist.conf",
+    "license": "CC0-1.0",
+    "licenseUrl": "https://raw.githubusercontent.com/disposable-email-domains/disposable-email-domains/81a8976e63879a11bf4301a28c14e0eb7a7855cf/LICENSE.txt",
+    "note": "Disposable and temporary mailbox providers.",
+    "upstreamEntries": 9222,
+    "entries": 9222,
+    "droppedAsPublicSuffix": [],
+    "invalid": []
+  },
+  "publicSuffix": {
+    "repository": "https://github.com/publicsuffix/list",
+    "file": "public_suffix_list.dat",
+    "commit": "3929462652695bad04f0a27afb600974014a3c8b",
+    "committedAt": "2026-10-07T07:28:10Z",
+    "url": "https://raw.githubusercontent.com/publicsuffix/list/3929462652695bad04f0a27afb600974014a3c8b/public_suffix_list.dat",
+    "license": "MPL-2.0",
+    "licenseUrl": "https://raw.githubusercontent.com/publicsuffix/list/3929462652695bad04f0a27afb600974014a3c8b/LICENSE",
+    "note": "The Public Suffix List (https://publicsuffix.org/list/), ICANN and private sections.",
+    "rules": 10336,
+    "icannRules": 6949,
+    "privateRules": 3387
+  }
+}

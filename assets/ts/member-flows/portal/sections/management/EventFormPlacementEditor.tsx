@@ -1,4 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "preact/hooks";
+import { type ClockZone } from "../../../../../shared/event-clock";
+import { useEffect, useMemo, useState } from "preact/hooks";
 import type { z } from "zod";
 import {
   groupEventFormCreateSchema,
@@ -26,8 +27,9 @@ import type { ServerCatalog } from "../../../../shared/server-catalog";
 import { toast } from "../../ui";
 import { GroupFormEditor } from "./GroupFormEditor";
 import { EventSubmissionWindow } from "./EventSubmissionWindow";
+import { useEventFormPlacement } from "./useEventFormPlacement";
+import { SectionHeading } from "../../../../ui/SectionHeading";
 
-type EventFormResponse = z.infer<typeof groupEventFormResponseSchema>;
 type EventForm = z.infer<typeof groupEventFormsResponseSchema>["forms"][number];
 
 function eventFormLabel(purpose: EventFormsPurpose): string {
@@ -51,45 +53,41 @@ export function EventFormPlacementEditor({
   groupId,
   eventId,
   purpose,
+  clock,
   expectedUpdatedAt,
   onRevision,
 }: {
   groupId: string;
   eventId: string;
   purpose: EventFormsPurpose;
+  /** The event's clock, in which the form's submission window is entered and shown. */
+  clock: ClockZone;
   expectedUpdatedAt: string;
   onRevision: (updatedAt: string) => void;
 }) {
-  const base = `/api/v1/groups/${encodeURIComponent(groupId)}/events/${encodeURIComponent(eventId)}/forms/${purpose}`;
+  const { base, placement, setPlacement, loading, error, setError, reload } = useEventFormPlacement(
+    groupId,
+    eventId,
+    purpose,
+  );
   const catalog = useMemo(() => eventFormCatalog(base), [base]);
-  const [placement, setPlacement] = useState<EventFormResponse | null>(null);
   const [formId, setFormId] = useState<string | null>(null);
   const [formLabel, setFormLabel] = useState<string | undefined>();
   const [choosing, setChoosing] = useState(false);
   const [creating, setCreating] = useState(false);
   const [editing, setEditing] = useState<EditableFormDetail | null>(null);
   const [loadingEditor, setLoadingEditor] = useState(false);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const response = await getJson(base, groupEventFormResponseSchema);
-      setPlacement(response);
-      setFormId(response.form?.form.id ?? null);
-      setFormLabel(response.form?.form.title);
-    } catch (cause) {
-      setError((cause as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [base]);
 
+  // The selection follows the form the saved placement holds, so a load, a
+  // save or a creation resets it; a window save leaves the same form and so
+  // does not discard a choice in progress.
+  const attachedFormId = placement?.form?.form.id ?? null;
+  const attachedFormTitle = placement?.form?.form.title;
   useEffect(() => {
-    void load();
-  }, [load]);
+    setFormId(attachedFormId);
+    setFormLabel(attachedFormTitle);
+  }, [attachedFormId, attachedFormTitle]);
 
   async function savePlacement(): Promise<void> {
     setSaving(true);
@@ -98,8 +96,6 @@ export function EventFormPlacementEditor({
       const input = groupEventFormUpdateSchema.parse({ expectedUpdatedAt, formId });
       const response = await putJson(base, input, groupEventFormResponseSchema);
       setPlacement(response);
-      setFormId(response.form?.form.id ?? null);
-      setFormLabel(response.form?.form.title);
       onRevision(response.eventUpdatedAt);
       setChoosing(false);
       toast(
@@ -119,8 +115,6 @@ export function EventFormPlacementEditor({
     const input = groupEventFormCreateSchema.parse({ expectedUpdatedAt, definition: payload });
     const response = await postJson(base, input, groupEventFormResponseSchema);
     setPlacement(response);
-    setFormId(response.form?.form.id ?? null);
-    setFormLabel(response.form?.form.title);
     setCreating(false);
     onRevision(response.eventUpdatedAt);
     toast(`${purpose === "event_registration" ? "Registration" : "Proposal submission"} form created`, "success");
@@ -166,7 +160,7 @@ export function EventFormPlacementEditor({
   return (
     <div class="pk pk-stack pk-stack--snug">
       <div class="pk-cluster pk-cluster--between">
-        <h4>{title}</h4>
+        <SectionHeading level={4}>{title}</SectionHeading>
         {!choosing && (
           <Menu
             label={`${title} actions`}
@@ -215,7 +209,6 @@ export function EventFormPlacementEditor({
           <>
             <Button
               variant="primary"
-              size="sm"
               loading={saving}
               disabled={!hasSelectionChange}
               onClick={() => void savePlacement()}
@@ -223,7 +216,6 @@ export function EventFormPlacementEditor({
               {saving ? "Saving…" : `Save ${purpose === "event_registration" ? "registration" : "proposal"} form`}
             </Button>
             <Button
-              size="sm"
               disabled={saving}
               onClick={() => {
                 setFormId(currentFormId);
@@ -238,7 +230,6 @@ export function EventFormPlacementEditor({
         )}
         <Button
           variant="secondary"
-          size="sm"
           disabled={saving}
           aria-expanded={creating}
           onClick={() => setCreating((shown) => !shown)}
@@ -250,7 +241,6 @@ export function EventFormPlacementEditor({
         {placement.form && formId === currentFormId && (
           <Button
             variant="secondary"
-            size="sm"
             loading={loadingEditor}
             disabled={saving}
             aria-expanded={editing !== null}
@@ -265,6 +255,7 @@ export function EventFormPlacementEditor({
           base={base}
           placement={placement.form.placement}
           expectedUpdatedAt={expectedUpdatedAt}
+          clock={clock}
           onSaved={(response) => {
             setPlacement(response);
             onRevision(response.eventUpdatedAt);
@@ -301,7 +292,7 @@ export function EventFormPlacementEditor({
               purposes={[purpose]}
               onSaved={async () => {
                 setEditing(null);
-                await load();
+                await reload();
               }}
               onCancel={() => setEditing(null)}
             />

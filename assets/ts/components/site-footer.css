@@ -3,7 +3,7 @@
  *
  * Ported from the published site's footer-and-edit stylesheet. It also owns
  * `.member-logo`, which is what keeps a member's logo greyscale and a
- * sponsor's in colour on both the footer marquee and the home-page wall.
+ * sponsor's in color on both the footer marquee and the home-page wall.
  */
 
 @layer legacy {
@@ -73,7 +73,7 @@
   }
 
   .footer-logo-img {
-    height: 42px;
+    height: 2.625rem;
     width: auto;
     opacity: 0.9;
   }
@@ -90,12 +90,12 @@
     display: inline-flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 32px;
+    width: 2rem;
+    height: 2rem;
     border-radius: 6px;
     background: rgba(255, 255, 255, 0.05);
     color: rgba(255, 255, 255, 0.45);
-    margin-right: 6px;
+    margin-right: 0.375rem;
     transition:
       background 0.2s ease,
       color 0.2s ease;
@@ -123,13 +123,13 @@
     color: rgba(255, 255, 255, 0.45);
     border: 1px solid rgba(255, 255, 255, 0.1);
     border-radius: 8px;
-    padding: 7px 9px;
+    padding: 0.4375rem 0.5625rem;
     text-decoration: none;
     font-size: 0.72rem;
     font-weight: 500;
     letter-spacing: 0.03em;
     white-space: nowrap;
-    max-width: 36px;
+    max-width: 2.25rem;
     transition:
       max-width 0.25s ease,
       color 0.2s ease,
@@ -149,15 +149,15 @@
     margin-left: 0;
   }
   .edit-on-github:hover {
-    max-width: 180px;
+    max-width: 11.25rem;
     color: rgba(255, 255, 255, 0.9);
     border-color: rgba(25, 135, 84, 0.5);
     background: rgba(26, 26, 26, 0.95);
   }
   .edit-on-github:hover .edit-on-github-label {
     opacity: 1;
-    max-width: 140px;
-    margin-left: 6px;
+    max-width: 8.75rem;
+    margin-left: 0.375rem;
   }
   @media (max-width: 767px) {
     .edit-on-github {
@@ -170,14 +170,14 @@
     z-index: 1100;
     display: inline-flex;
     align-items: center;
-    gap: 6px;
+    gap: 0.375rem;
     background: rgba(26, 26, 26, 0.92);
     backdrop-filter: blur(8px);
     -webkit-backdrop-filter: blur(8px);
     color: rgba(255, 255, 255, 0.9);
     border: 1px solid rgba(25, 135, 84, 0.5);
     border-radius: 6px;
-    padding: 5px 10px;
+    padding: 0.3125rem 0.625rem;
     font-size: 0.72rem;
     font-weight: 500;
     letter-spacing: 0.03em;
@@ -283,55 +283,55 @@
   .footer-legal a:hover {
     color: rgba(255, 255, 255, 0.8);
   }
-
-  .member-logo {
-    margin: 5px 20px;
-    height: 18px;
-    max-width: 90px;
-    filter: grayscale(1) opacity(0.55) contrast(0.5);
-    transition:
-      filter 0.2s ease,
-      transform 0.2s ease;
-  }
-
-  .member-logo-sponsor {
-    filter: none;
-    opacity: 1;
-    transition: transform 0.2s ease;
-  }
-
-  /* Every logo on the wall is the same size. A sponsor is told apart by
-     keeping its color while member logos sit in grayscale; rank is the
-     sponsors page's job, where the tier wall sizes by weight. */
-  .members a:hover .member-logo {
-    filter: none;
-  }
-
-  .members a:hover .member-logo-sponsor {
-    transform: scale(1.12);
-  }
 }
 
 @layer components {
+  /*
+   * Member logos sit back: greyscale through the theme's logo filter (which
+   * also flips them for the dark theme) at a reduced strength, the way the
+   * published site muted them. A sponsor keeps its artwork at full strength
+   * and is told apart by that alone, and hovering or focusing any logo brings
+   * it up to full strength.
+   */
+  .members {
+    --member-logo-muted-opacity: 0.55;
+  }
+
   /* Intrinsic image dimensions reserve space without stretching the artwork. */
   .member-logo {
     width: auto;
     height: var(--pk-6);
     max-width: calc(var(--pk-8) * 3);
+    margin: 0.3125rem 1.25rem;
     object-fit: contain;
     filter: var(--pk-member-logo-filter);
     mix-blend-mode: var(--pk-member-logo-blend);
+    opacity: var(--member-logo-muted-opacity, 1);
+    transition:
+      filter 0.2s ease,
+      opacity 0.2s ease,
+      transform 0.2s ease;
   }
 
   .members .member-logo-sponsor {
     filter: var(--pk-member-logo-hover-filter);
+    opacity: 1;
   }
 
-  .members a:hover .member-logo {
+  .members a:is(:hover, :focus-visible) .member-logo {
     filter: var(--pk-member-logo-hover-filter);
+    opacity: 1;
+  }
+
+  .members a:is(:hover, :focus-visible) .member-logo-sponsor {
+    transform: scale(1.12);
   }
 
   .members .member-logo[data-logo-ink="light"] {
     filter: var(--pk-member-logo-filter) invert(1);
+  }
+
+  .members a:is(:hover, :focus-visible) .member-logo[data-logo-ink="light"] {
+    filter: var(--pk-member-logo-hover-filter) invert(1);
   }
 }

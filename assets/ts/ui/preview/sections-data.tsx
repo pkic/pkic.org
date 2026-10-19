@@ -5,6 +5,7 @@ import { Breadcrumb } from "../Breadcrumb";
 import { Button } from "../Button";
 import { DataTable } from "../DataTable";
 import { DescriptionList } from "../DescriptionList";
+import { DownloadAction } from "../DownloadAction";
 import { Field } from "../Field";
 import { FileInput } from "../FileInput";
 import { Menu, type MenuItem } from "../Menu";
@@ -227,7 +228,7 @@ export const dataSections: PreviewSection[] = [
               },
               rowLabel: (key) => {
                 const member = MEMBERS.find((m) => m.id === key);
-                return `Select ${member?.name ?? key}`;
+                return member?.name ?? key;
               },
             }}
           />
@@ -250,9 +251,13 @@ export const dataSections: PreviewSection[] = [
                   id: "person",
                   header: "Person",
                   sortable: true,
-                  cell: (row) => <PersonCell name={row.name} email={row.email} size="sm" />,
+                  cell: (row) => <PersonCell name={row.name} size="sm" />,
                 },
-                { id: "organization", header: "Capacity", cell: (row) => row.organization },
+                {
+                  id: "organization",
+                  header: "Capacity",
+                  cell: (row) => <a href={`#organization-${row.id}`}>{row.organization}</a>,
+                },
                 // A date has a bounded length: it hugs, so the columns that
                 // hold prose keep the width instead.
                 { id: "joined", header: "Joined", cell: (row) => row.joined, sortable: true, width: "fit" },
@@ -363,12 +368,8 @@ export const dataSections: PreviewSection[] = [
             }
             actions={
               <>
-                <Button size="sm" variant="secondary">
-                  Export roster
-                </Button>
-                <Button size="sm" variant="primary">
-                  Add member
-                </Button>
+                <DownloadAction label="Download roster (CSV)" href="#" />
+                <Button variant="primary">Add member</Button>
               </>
             }
             description="Coordinates the consortium's migration to quantum-safe certificates."

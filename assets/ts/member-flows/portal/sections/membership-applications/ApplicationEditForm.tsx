@@ -128,7 +128,12 @@ export function ApplicationEditForm({
               />
             )}
           </Field>
-          <Field {...contract.of("membershipCategory")} label="Category" required>
+          <Field
+            {...contract.of("membershipCategory")}
+            label="Category"
+            required
+            help="Changing category restarts its review. Previous objections remain; paid fees require staff handling."
+          >
             {(control) => (
               <Select
                 {...control}
@@ -255,10 +260,10 @@ export function ApplicationEditForm({
       {(validationError || error) && <Alert tone="danger">{friendlyErrorMessage(validationError || error)}</Alert>}
 
       <div class="pk-cluster">
-        <Button type="submit" variant="primary" size="sm" loading={saving}>
+        <Button type="submit" variant="primary" loading={saving}>
           {saving ? "Saving…" : "Save"}
         </Button>
-        <Button size="sm" disabled={saving} onClick={onCancel}>
+        <Button disabled={saving} onClick={onCancel}>
           Cancel
         </Button>
       </div>

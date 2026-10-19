@@ -63,7 +63,6 @@ function createInviteEvent(actor: UserBackedAuthAdmin, groupId: string, label: s
     profileKey: "workshop",
     registrationPolicy: "no_registration",
     inviteLimitAttendee: 5,
-    location: "Online",
     links: [],
   });
 }

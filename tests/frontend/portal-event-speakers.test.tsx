@@ -55,10 +55,13 @@ describe("proposal speakers tab", () => {
                 userId: "30000000-0000-4000-8000-000000000001",
                 proposalId: PROPOSAL_ID,
                 proposalTitle: "Organization security case study",
+                headshotUrl: null,
                 proposalStatus: "accepted",
+                email: "alex@example.test",
                 firstName: "Alex",
                 lastName: "Example",
                 organizationName: "Example Organization",
+                independentCapacityStatus: null,
                 status: "confirmed",
                 registrationId: null,
                 registrationStatus: null,
@@ -69,9 +72,13 @@ describe("proposal speakers tab", () => {
                 id: "10000000-0000-4000-8000-000000000002",
                 proposalId: PROPOSAL_ID,
                 proposalTitle: "Organization security case study",
-                firstName: "Sam",
-                lastName: "Speaker",
+                headshotUrl: null,
+                email: "sam@example.test",
+                // Invited and not yet answered, so no name has been given.
+                firstName: null,
+                lastName: null,
                 organizationName: "Example Organization",
+                independentCapacityStatus: null,
                 status: "invited",
                 registrationStatus: "registered",
                 attendanceType: "in_person",
@@ -109,6 +116,11 @@ describe("proposal speakers tab", () => {
     expect(page.querySelector("tbody")?.textContent).not.toContain("Conference:");
     expect(page.querySelector("tbody .pk-badge--neutral")?.textContent).toBe("Not registered");
     expect(page.querySelector("tbody .pk-badge--ok")?.textContent).toBe("Confirmed");
+    // An unanswered invitation is named by the address it went to, and it is
+    // a warning: the agenda cannot publish that speaker yet.
+    expect(page.querySelector("tbody")?.textContent).toContain("sam@example.test");
+    expect(page.querySelector("tbody")?.textContent).not.toContain("Unnamed speaker");
+    expect(page.querySelector("tbody .pk-badge--warn")?.textContent).toBe("Not yet accepted");
     expect(page.querySelector<HTMLAnchorElement>("tbody a.pk-table__row-link")?.href).toContain(
       `/proposals/detail/${PROPOSAL_ID}`,
     );

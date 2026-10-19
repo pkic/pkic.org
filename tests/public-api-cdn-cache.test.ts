@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
 import { isAnonymousReadRequest, markPublicRead, publicReadCacheResponse } from "../functions/_lib/cache/public-read";
-import worker from "../functions/router";
+import worker from "./helpers/app";
 
 describe("public API CDN cache gateway", () => {
   it("marks only anonymous, nonsensitive successful route responses public", () => {

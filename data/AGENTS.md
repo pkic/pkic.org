@@ -1,4 +1,4 @@
-# Hugo data guidance
+# Site data guidance
 
 - Preserve each data file's existing structure and naming conventions. Reuse existing fields instead of adding a parallel representation.
 - Use US English for authored descriptions and labels. Preserve legal names, trademarks, and attributed source text exactly where required.

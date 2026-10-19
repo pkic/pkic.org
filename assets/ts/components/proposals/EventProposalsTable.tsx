@@ -1,5 +1,5 @@
 /**
- * The shared, D1-backed proposal catalogue for every event-scoped program
+ * The shared, D1-backed proposal catalog for every event-scoped program
  * surface — the group event's Proposals tab and the standalone event's.
  *
  * One list panel, the way every other collection in the portal is drawn.
@@ -13,7 +13,6 @@
  */
 import type { ComponentChildren } from "preact";
 import { useRef, useState } from "preact/hooks";
-import { ProposalTypeIcon } from "./ProposalTypeIcon";
 import { Badge, statusTone } from "../Badge";
 import { ApiDataTable, type ApiTableActions } from "../ApiDataTable";
 import { CollectionTotals } from "../CollectionTotals";
@@ -29,10 +28,8 @@ import {
   PROPOSAL_ADMIN_STATUS_FILTERS,
 } from "../../../shared/schemas/proposal-status";
 import { PROPOSAL_RECOMMENDATIONS } from "../../../shared/schemas/proposal-reviews";
-import { formatDateTime } from "../../shared/ui";
-// `pk-mono` on the score column ships in Content.css, a lazy chunk rather than
-// the entry stylesheet, so the module that writes the class name imports it.
-import "../../ui/Content.css";
+import { proposalSessionTypeLabel, type ProposalSessionType } from "../../../shared/proposal-session-types";
+import { formatDate } from "../../shared/ui";
 
 const RECOMMENDATION_LABELS: Record<string, string> = {
   accept: "Accept",
@@ -66,10 +63,15 @@ function recommendationSummary(proposal: EventProposalSummary) {
       </>
     );
   }
+  /*
+   * Words, not glyphs. A check here meant "recommends accepting" while the
+   * same check in Status meant "accepted"; the words keep a recommendation
+   * from reading as the decision, and the tone still tells them apart.
+   */
   return (
-    <div class="pk-cluster pk-cluster--nowrap">
+    <div class="pk-cluster">
       {visible.map(([status, count]) => (
-        <Badge key={status} status={status} iconOnly count={count} />
+        <Badge key={status} status={status} label={`${recommendationLabel(status)} ${String(count)}`} />
       ))}
     </div>
   );
@@ -84,11 +86,12 @@ export function EventProposalsTable({
   urlState,
   rowHref,
   toolbarPrefix,
+  initialFilters = { status: "active" },
   empty = "No proposals found",
 }: {
   endpoint: string;
   /** Namespace for the list's URL-addressed search, sort, page and filters. */
-  urlState?: string;
+  urlState: string;
   /** Where a row goes: the proposal's own page. */
   rowHref: (proposal: EventProposalSummary) => string;
   toolbarPrefix?: (
@@ -97,7 +100,9 @@ export function EventProposalsTable({
     selectedProposalIds: ReadonlySet<string>,
   ) => ComponentChildren;
   empty?: string;
+  initialFilters?: Record<string, string>;
 }) {
+  const [sessionTypes, setSessionTypes] = useState<ProposalSessionType[] | undefined>();
   const [stats, setStats] = useState<ProposalStats | null>(null);
   const [access, setAccess] = useState<ProposalAccess | null>(null);
   const [selectedProposalIds, setSelectedProposalIds] = useState<ReadonlySet<string>>(new Set());
@@ -116,6 +121,7 @@ export function EventProposalsTable({
         resolvePage={(response) => response.page}
         onData={(response) => {
           setStats(response.stats);
+          setSessionTypes(response.sessionTypes);
           setAccess(response.access);
           visibleProposalTitles.current = new Map(response.proposals.map((proposal) => [proposal.id, proposal.title]));
           setSelectedProposalIds((current) => {
@@ -128,8 +134,8 @@ export function EventProposalsTable({
         initialSort="-submittedAt"
         // The list opens on what is still in play; the archive and every
         // other status are one choice away in the Status column's menu.
-        initialFilters={{ status: "active" }}
-        searchPlaceholder="title, proposer or review"
+        initialFilters={initialFilters}
+        searchPlaceholder="title, speaker or review"
         actionsRef={tableRef}
         toolbar={
           toolbarPrefix
@@ -140,13 +146,15 @@ export function EventProposalsTable({
         selection={{
           selected: selectedProposalIds,
           onChange: setSelectedProposalIds,
-          rowLabel: (id) => visibleProposalTitles.current.get(id) ?? `proposal ${id}`,
+          rowLabel: (id) => visibleProposalTitles.current.get(id) ?? "proposal",
         }}
         columns={[
           {
             header: "Title",
+            // Two lines before the cut: titles that open with the same words
+            // were indistinguishable at one.
             cell: (proposal) => (
-              <span class="pk-strong" title={proposal.title}>
+              <span class="pk-strong pk-table__wrap" title={proposal.title}>
                 {proposal.title}
               </span>
             ),
@@ -155,18 +163,26 @@ export function EventProposalsTable({
           },
           {
             header: "Proposer",
-            cell: proposerName,
+            // A name may take a second line, so the column gives its width to the title.
+            cell: (proposal) => (
+              <span class="pk-table__wrap">
+                {proposerName(proposal)}
+                {proposal.co_speaker_names.length > 0 && (
+                  <span class="pk-muted pk-small"> with {proposal.co_speaker_names.join(", ")}</span>
+                )}
+              </span>
+            ),
             sort: { asc: "proposer", desc: "-proposer", defaultDirection: "asc" },
           },
           {
             header: "Type",
-            cell: (proposal) => <ProposalTypeIcon type={proposal.proposal_type} />,
+            cell: (proposal) => proposalSessionTypeLabel(proposal.proposal_type, sessionTypes),
             width: "fit",
             sort: { asc: "type", desc: "-type", defaultDirection: "asc" },
           },
           {
             header: "Status",
-            cell: (proposal) => <Badge status={proposal.status} iconOnly />,
+            cell: (proposal) => <Badge status={proposal.status} />,
             width: "fit",
             sort: { asc: "status", desc: "-status", defaultDirection: "asc" },
             filter: {
@@ -182,14 +198,18 @@ export function EventProposalsTable({
           },
           {
             header: "Score",
+            // The table's tabular figures line the scores up digit under
+            // digit; a monospace face only made them look like code.
             cell: (proposal) => formatAverageScore(proposal.average_review_score),
-            className: "pk-mono pk-end",
+            className: "pk-end",
             width: "fit",
             sort: { asc: "score", desc: "-score" },
           },
           {
             header: "Recommendations",
             cell: recommendationSummary,
+            // Up to three worded badges. They stack when the row is tight
+            // rather than taking the width the title needs.
             sort: { asc: "recommendations", desc: "-recommendations" },
             filter: {
               param: "recommendation",
@@ -235,7 +255,8 @@ export function EventProposalsTable({
           },
           {
             header: "Submitted",
-            cell: (proposal) => formatDateTime(proposal.submitted_at),
+            // The day is what a list compares; the record keeps the minute.
+            cell: (proposal) => formatDate(proposal.submitted_at),
             width: "fit",
             sort: { asc: "submittedAt", desc: "-submittedAt" },
           },
@@ -262,8 +283,8 @@ function ProposalStatsSummary({ stats }: { stats: ProposalStats }) {
         { label: "under review", value: stats.byStatus.under_review ?? 0, tone: "accent" },
         { label: "accepted", value: stats.byStatus.accepted ?? 0, tone: "ok" },
         { label: "needs work", value: stats.byStatus["needs-work"] ?? 0, tone: "warn" },
-        { label: "reviewed", value: stats.reviewedCount },
-        { label: "no reviews", value: stats.unreviewedCount, tone: stats.unreviewedCount > 0 ? "warn" : "neutral" },
+        // "Reviewed" is the total less this figure, so only the gap is shown.
+        { label: "no reviews", value: stats.unreviewedCount, tone: "warn" },
       ]}
     />
   );

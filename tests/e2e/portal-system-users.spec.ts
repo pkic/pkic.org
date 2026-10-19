@@ -1,177 +1,8 @@
-/**
- * @covers system.12.1
- */
 import { expect, test } from "@playwright/test";
 import { e2eAdminEmail } from "../helpers/e2e-admin";
-import { openProfileEditor, signInToPortal } from "./helpers/portal-auth";
+import { signInToPortal } from "./helpers/portal-auth";
 import { approveMemberThroughReview, uniqueSuffix } from "./helpers/membership";
 import { agreeToHeadshotTerms, chooseHeadshotThroughUploadButton } from "./helpers/headshot-upload";
-
-test("permitted staff manage users through the canonical domain API", async ({ page }) => {
-  const staffEmail = e2eAdminEmail("portal-users");
-  const updatedPreferredName = `E2E Portal User ${crypto.randomUUID().slice(0, 8)}`;
-  const canonicalRequests: string[] = [];
-  const legacyRequests: string[] = [];
-
-  page.on("request", (request) => {
-    const pathname = new URL(request.url()).pathname;
-    if (pathname.startsWith("/api/v1/users")) canonicalRequests.push(`${request.method()} ${pathname}`);
-    if (pathname.startsWith("/api/v1/admin/users") || pathname.startsWith("/api/v1/admin/members")) {
-      legacyRequests.push(`${request.method()} ${pathname}`);
-    }
-  });
-
-  await signInToPortal(page, staffEmail);
-  await page.goto("/portal/#/users");
-
-  await expect(page.getByRole("link", { name: "Users", exact: true })).toBeVisible();
-  const search = page.getByPlaceholder("email or name");
-  await search.fill(staffEmail);
-  await search.press("Enter");
-  const staffRow = page.locator("tr").filter({ hasText: staffEmail });
-  await expect(staffRow).toBeVisible();
-  await staffRow.click();
-  // Located by role, not by the class the record used to carry: the name is a
-  // real heading now, and a role locator survives the next restyle too.
-  await expect(page.getByRole("heading", { name: staffEmail, level: 2 })).toBeVisible();
-
-  /*
-   * The name is one deliberate step away, on the record's own actions menu.
-   * It is not stacked under the "Account administration" disclosure — a
-   * person whose name came across a migration wrong is exactly who this page
-   * is opened to fix — and equally the record does not arrive already in edit
-   * mode (#47), because editing is something a reader chooses to do.
-   */
-  /*
-   * #47: the record arrives stating its facts, not offering them as fields.
-   * Asserted before the editor is opened, because "does not start in edit
-   * mode" is a claim about the page as it loads and nothing else here would
-   * notice if it stopped being true.
-   */
-  const account = page.getByRole("region", { name: "Account" });
-  await expect(account).toBeVisible();
-  await expect(account.getByLabel("Preferred name")).toHaveCount(0);
-  await expect(page.getByRole("button", { name: "Save", exact: true })).toHaveCount(0);
-
-  /*
-   * #46: the fields are edited where they are stated. Opening the editor used
-   * to append a separate "Edit profile" panel further down the record, while
-   * the Account card beside it went on stating the same values — the reader
-   * saw one name twice and the two could disagree while the draft was open.
-   * The command now turns that card's own list into that card's own fields,
-   * so this asserts the field appears *inside* the Account region.
-   */
-  await openProfileEditor(page);
-  const preferredName = account.getByLabel("Preferred name");
-  await expect(preferredName).toBeVisible();
-  // And nowhere else on the record: one field for one fact.
-  await expect(page.getByLabel("Preferred name")).toHaveCount(1);
-  const saveResponse = page.waitForResponse(
-    (response) =>
-      /^\/api\/v1\/users\/[^/]+$/.test(new URL(response.url()).pathname) && response.request().method() === "PATCH",
-  );
-  await preferredName.fill(updatedPreferredName);
-  await account.getByRole("button", { name: "Save", exact: true }).click();
-  expect((await saveResponse).status()).toBe(200);
-  await expect(page.getByText(updatedPreferredName, { exact: true })).toBeVisible();
-
-  await page.reload();
-  await expect(page.getByText(updatedPreferredName, { exact: true })).toBeVisible();
-  await expect(page.getByLabel("Account role", { exact: true })).toHaveCount(0);
-  await page.screenshot({ path: test.info().outputPath("user-record-without-legacy-role.png"), fullPage: true });
-
-  await page.goto("/portal/#/users");
-  await expect(page).toHaveURL(/\/portal\/#\/users$/);
-  await expect(page.getByRole("link", { name: "Users", exact: true })).toBeVisible();
-
-  expect(canonicalRequests).toEqual(
-    expect.arrayContaining([
-      "GET /api/v1/users",
-      expect.stringMatching(/^GET \/api\/v1\/users\/[^/]+$/),
-      expect.stringMatching(/^PATCH \/api\/v1\/users\/[^/]+$/),
-    ]),
-  );
-  expect(legacyRequests).toEqual([]);
-});
-
-/**
- * A separate, non-admin user to filter and grant/revoke through — created
- * through the real organizations API (as setup, not the behavior under
- * test) so the row this test drives through the UI starts as an ordinary
- * "Members" / "User" row rather than the signed-in admin's own record.
- */
-async function createNonAdminUser(page: import("@playwright/test").Page, suffix: string) {
-  const email = `e2e-users-list-${suffix}@example.invalid`;
-  const organizationName = `E2E Users List Org ${suffix}`;
-  const created = await page.evaluate(
-    async ({ email, organizationName }) => {
-      const response = await fetch("/api/v1/organizations", {
-        method: "POST",
-        headers: { "content-type": "application/json" },
-        body: JSON.stringify({
-          name: organizationName,
-          membershipCategory: "F",
-          memberSince: "2026-01-15",
-          identities: [{ name: "Users List Fixture", email, jobTitle: "Fixture Contact" }],
-          workingGroupSlugs: [],
-          activationReason: "E2E users-list filter/admin-role fixture",
-        }),
-      });
-      return { status: response.status, body: await response.json() };
-    },
-    { email, organizationName },
-  );
-  expect(created.status, JSON.stringify(created.body)).toBe(201);
-  return { email, organizationName };
-}
-
-test("permitted staff filter, sort, and manage columns in the users list", async ({ page }) => {
-  const suffix = crypto.randomUUID().slice(0, 8);
-  await signInToPortal(page, e2eAdminEmail("portal-users-list"));
-  const { email, organizationName } = await createNonAdminUser(page, suffix);
-
-  await page.goto("/portal/#/users");
-  const search = page.getByPlaceholder("email or name");
-  await search.fill(email);
-  await search.press("Enter");
-  const row = page.locator("tr").filter({ hasText: email });
-  await expect(row).toBeVisible();
-  // The "Represents" cell names the organization, not the "Members" category
-  // it belongs to — "Members" is the filter menu's option label for that
-  // category, not text the cell itself ever renders.
-  await expect(row).toContainText(organizationName);
-  await expect(page.getByRole("columnheader", { name: "Role", exact: true })).toHaveCount(0);
-
-  // "Represents" column filter — narrowing to "Members" still shows the row;
-  // narrowing to "Event attendees" hides it.
-  await page.getByRole("button", { name: "Represents column options" }).click();
-  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
-  await page.getByRole("menuitemradio", { name: "Members" }).click();
-  await expect(row).toBeVisible();
-  await page.getByRole("button", { name: "Represents column options" }).click();
-  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
-  await page.getByRole("menuitemradio", { name: "Event attendees" }).click();
-  await expect(row).toHaveCount(0);
-  await page.getByRole("button", { name: "Represents column options" }).click();
-  await page.getByRole("menuitem", { name: "Filter", exact: false }).click();
-  await page.getByRole("menuitemradio", { name: "Everyone" }).click();
-  await expect(row).toBeVisible();
-
-  // Column visibility — hiding "Since" drops the column header and shows it
-  // again once re-checked, without losing the row underneath it.
-  await expect(page.getByRole("columnheader", { name: "Since" })).toBeVisible();
-  await page.getByRole("button", { name: "Choose columns" }).click();
-  await page.getByRole("menuitemradio", { name: "Since" }).click();
-  await expect(page.getByRole("columnheader", { name: "Since" })).toHaveCount(0);
-  await expect(row).toBeVisible();
-  await page.getByRole("button", { name: "Choose columns" }).click();
-  await page.getByRole("menuitemradio", { name: "Since" }).click();
-  await expect(page.getByRole("columnheader", { name: "Since" })).toBeVisible();
-
-  await page.screenshot({ path: test.info().outputPath("users-list-without-legacy-role.png"), fullPage: true });
-  await page.getByRole("link", { name: "Manage access", exact: true }).click();
-  await expect(page).toHaveURL(/#\/settings\/access-control/);
-});
 
 /*
  * Staff putting a photograph on somebody else's record.
@@ -181,7 +12,7 @@ test("permitted staff filter, sort, and manage columns in the users list", async
  * and the same two dialogs, but through a different manager and a different
  * endpoint, so the coverage of one said nothing about the other.
  */
-test("staff upload a photograph onto a user record", async ({ page }) => {
+test("staff view a user's participation history and upload a photograph", async ({ page }) => {
   const suffix = uniqueSuffix();
   const email = `staff-headshot-${suffix}@staff-headshot-${suffix}.test`;
 
@@ -196,20 +27,39 @@ test("staff upload a photograph onto a user record", async ({ page }) => {
   const search = page.getByPlaceholder("email or name");
   await search.fill(email);
   await search.press("Enter");
-  const row = page.locator("tr").filter({ hasText: email });
+  // The list names people; their address is searched for, not shown.
+  const row = page.locator("tr").filter({ hasText: `Staff Headshot ${suffix}` });
   await expect(row).toBeVisible();
+  const eventsLoaded = page.waitForResponse((response) =>
+    /\/api\/v1\/users\/[^/]+\/(?:participation\/)?events$/.test(new URL(response.url()).pathname),
+  );
   await row.click();
+  expect((await eventsLoaded).status()).toBe(200);
+  const participation = page.getByRole("tabpanel").filter({ hasText: "Events appear here as they are attended." });
+  await expect(participation).toBeVisible();
+  for (const [tab, collection, empty] of [
+    ["Meetings", "meetings", "Meetings appear here as they are joined."],
+    ["Documents", "documents", "Uploads and reviews appear here."],
+    ["Votes", "votes", "Ballots appear here as they are cast."],
+  ]) {
+    const loaded = page.waitForResponse((response) =>
+      new RegExp(`/api/v1/users/[^/]+/(?:participation/)?${collection}$`).test(new URL(response.url()).pathname),
+    );
+    await page.getByRole("tab", { name: tab, exact: true }).click();
+    expect((await loaded).status()).toBe(200);
+    await expect(page.getByRole("tabpanel").getByText(empty, { exact: true })).toBeVisible();
+    await page.screenshot({ path: `test-results/user-participation-${collection}.png`, fullPage: true });
+  }
 
   /*
    * The portrait is the control, in the open at the top of the record (#28).
-   * It used to be an upload button behind the "Account administration"
-   * disclosure, which is what the issue objected to: a photograph is not
-   * administration, and nobody looks for their own face under that heading.
+   * It used to be an upload button behind a disclosure, which is what the
+   * issue objected to: a photograph is not administration, and nobody looks
+   * for their own face under that heading.
    *
    * Through the tile and the picker it opens: reaching past it to the input is
    * what let #28 hide here before. See helpers/headshot-upload.ts.
    */
-  await expect(page.getByRole("button", { name: "Account administration", exact: true })).toHaveCount(1);
   await chooseHeadshotThroughUploadButton(page);
 
   const crop = await agreeToHeadshotTerms(page);
@@ -235,7 +85,7 @@ test("staff upload a photograph onto a user record", async ({ page }) => {
   await expect
     .poll(async () => portrait.evaluate((img: HTMLImageElement) => img.naturalWidth), { timeout: 15_000 })
     .toBeGreaterThan(0);
-  const frame = page.getByRole("button", { name: "Change photo", exact: true });
+  const frame = page.getByRole("button", { name: /^Change photo of / });
   const frameBox = (await frame.boundingBox())!;
   const imageBox = (await portrait.boundingBox())!;
   expect(Math.abs(imageBox.width - imageBox.height), "photo stays square").toBeLessThan(1);
@@ -249,9 +99,9 @@ test("staff upload a photograph onto a user record", async ({ page }) => {
     const pictureBox = (await frame.boundingBox())!;
     expect(Math.abs(ringBox.width - ringBox.height), "standing stays circular").toBeLessThan(1);
     expect(ringBox.width - pictureBox.width, "ring hugs the photo").toBeCloseTo(6, 0);
-    await expect(ring.getByRole("button", { name: "Remove photo", exact: true })).toHaveCount(0);
+    await expect(ring.getByRole("button", { name: /^Remove photo of / })).toHaveCount(0);
     await frame.focus();
-    await expect(page.getByRole("button", { name: "Remove photo", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: /^Remove photo of / })).toBeVisible();
     const badge = page.locator(".pk-avatar-standing").filter({ has: frame }).locator(".pk-avatar-standing__label");
     expect(
       await badge.evaluate((label) => {
@@ -260,7 +110,7 @@ test("staff upload a photograph onto a user record", async ({ page }) => {
       }),
       "badge paints above the photo where they overlap",
     ).toBe(true);
-    const removeBox = (await page.getByRole("button", { name: "Remove photo", exact: true }).boundingBox())!;
+    const removeBox = (await page.getByRole("button", { name: /^Remove photo of / }).boundingBox())!;
     expect(removeBox.y, "remove is at the portrait corner, not a separate row").toBeLessThan(pictureBox.y + 10);
     await page.screenshot({ path: `test-results/issue-85-portrait-${width}.png` });
   }

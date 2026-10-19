@@ -1,0 +1,21 @@
+@layer components {
+  .pk-studio-operators {
+    display: flex;
+    align-items: center;
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .pk-studio-operators__person {
+    --pk-avatar-size: 1.75rem;
+    display: flex;
+    border-radius: 50%;
+    box-shadow: 0 0 0 2px var(--live-presence);
+  }
+  .pk-studio-operators__person + .pk-studio-operators__person {
+    margin-inline-start: calc(var(--pk-1) * -1);
+  }
+  .pk-studio-operators__person .pk-avatar {
+    border: 2px solid var(--pk-surface);
+  }
+}

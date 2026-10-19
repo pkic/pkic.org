@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { successResponseSchema } from "./api-common";
-import { eventSummarySchema } from "./event-read-models";
+import { eventAttendanceTypeValueSchema, eventSummarySchema } from "./event-read-models";
+import { badgeDisplayRoleSchema } from "./participant-roles";
 import { databaseIdSchema } from "./identifiers";
 import { paginatedResponseSchema, searchableListQuerySchema, sortColumnSchema } from "./pagination";
 import { registrationRecordContextSchema } from "./registration-record";
@@ -83,6 +84,10 @@ export const eventRegistrationSummarySchema = registrationRecordContextSchema.ex
   headshot_url: z.string().nullable(),
   /** Who they represent and what they do, as the account states it (#119). */
   organization_name: z.string().nullable(),
+  /** A consumer mailbox: organizers see "Personal email address" in place of an organization. */
+  personal_email: z.boolean(),
+  /** Waiting for a day while holding no verified work address: handled after every other entry. */
+  waitlist_handled_last: z.boolean(),
   job_title: z.string().nullable(),
   status: eventRegistrationStatusSchema,
   attendance_type: z.string().nullable(),
@@ -118,14 +123,21 @@ export type EventRegistrationsListResponse = z.infer<typeof eventRegistrationsLi
  * Referral, form-answer, RSVP payload, delivery, and sponsor-consent fields
  * deliberately remain exclusive to the full administrator read model above.
  */
-export const eventAttendanceRegistrationsQuerySchema = eventRegistrationsQuerySchema.pick({
-  q: true,
-  limit: true,
-  offset: true,
-  sort: true,
-  status: true,
-  waitlisted: true,
-});
+export const eventAttendanceRegistrationsQuerySchema = eventRegistrationsQuerySchema
+  .pick({
+    q: true,
+    limit: true,
+    offset: true,
+    sort: true,
+    status: true,
+    waitlisted: true,
+  })
+  .extend({
+    /** The whole-registration attendance type: in-person when any day is. */
+    attendance_type: eventAttendanceTypeValueSchema.optional(),
+    /** The role band the registration's badge prints. */
+    badge_role: badgeDisplayRoleSchema.optional(),
+  });
 export type EventAttendanceRegistrationsQuery = z.infer<typeof eventAttendanceRegistrationsQuerySchema>;
 
 export const eventAttendanceRegistrationSummarySchema = registrationRecordContextSchema
@@ -135,6 +147,10 @@ export const eventAttendanceRegistrationSummarySchema = registrationRecordContex
     user_id: z.string(),
     headshot_url: z.string().nullable(),
     organization_name: z.string().nullable(),
+    /** A consumer mailbox: organizers see "Personal email address" in place of an organization. */
+    personal_email: z.boolean(),
+    /** Waiting for a day while holding no verified work address: handled after every other entry. */
+    waitlist_handled_last: z.boolean(),
     job_title: z.string().nullable(),
     status: eventRegistrationStatusSchema,
     attendance_type: z.string().nullable(),

@@ -1,4 +1,5 @@
 import { SpeakerList } from "../components/proposals/ProposerSpeakerList";
+import { ConfirmDialogHost } from "../components/ConfirmDialog";
 import { mountMarkdownField } from "../components/markdown-editor/mount-markdown-field";
 import { render } from "preact";
 import { getJson, patchJson, postJson } from "../shared/api-client";
@@ -16,6 +17,7 @@ import {
   proposalAccessReadResponseSchema,
 } from "../../shared/schemas/proposal-management";
 import { proposalAccessPath } from "../../shared/proposal-access-paths";
+import { isProposalCommitteeNotesEditableStatus } from "../../shared/schemas/proposal-status";
 import { eventFormsResponseSchema } from "../../shared/schemas/forms";
 import { proposalSessionTypeLabel } from "../../shared/proposal-session-types";
 
@@ -57,14 +59,19 @@ function renderSpeakerList(
   const list = q("[data-cospeaker-list]");
   if (!list) return;
   render(
-    <SpeakerList
-      speakers={speakers}
-      token={token}
-      apiBase={apiBase}
-      proposerUserId={proposerUserId}
-      onReload={onReload}
-      onStatus={onStatus}
-    />,
+    <>
+      <SpeakerList
+        speakers={speakers}
+        token={token}
+        apiBase={apiBase}
+        proposerUserId={proposerUserId}
+        onReload={onReload}
+        onStatus={onStatus}
+      />
+      {/* The speaker photo tiles confirm a removal in the shared dialog,
+          which needs a host on this public page as it has in the portal. */}
+      <ConfirmDialogHost />
+    </>,
     list as HTMLElement,
   );
 }
@@ -115,12 +122,21 @@ async function main(): Promise<void> {
     const typeSelect = boot.form.elements.namedItem("proposalType");
     if (typeSelect instanceof HTMLSelectElement) {
       typeSelect.replaceChildren(
-        ...configuration.allowedSessionTypes.map((type) => new Option(proposalSessionTypeLabel(type), type)),
+        ...configuration.allowedSessionTypes.map(
+          (type) => new Option(proposalSessionTypeLabel(type, configuration.sessionTypes), type),
+        ),
       );
     }
     setField(boot.form, "proposalType", proposalData.proposal.proposal_type);
     setField(boot.form, "title", proposalData.proposal.title);
     setField(boot.form, "abstract", proposalData.proposal.abstract);
+    setField(boot.form, "committeeNotes", proposalData.proposal.committee_notes ?? "");
+    // The notes lock once the proposal is accepted or declined; the server refuses an edit after that.
+    const notesLocked = !isProposalCommitteeNotesEditableStatus(proposalData.proposal.status);
+    const notes = boot.form.elements.namedItem("committeeNotes");
+    if (notes instanceof HTMLTextAreaElement) notes.readOnly = notesLocked;
+    const lockedNotice = boot.form.querySelector<HTMLElement>("[data-committee-notes-locked]");
+    if (lockedNotice) lockedNotice.hidden = !notesLocked;
     await mountMarkdownField(
       boot.form.querySelector<HTMLTextAreaElement>("#manage-proposal-abstract"),
       "Abstract",
@@ -157,6 +173,9 @@ async function main(): Promise<void> {
             proposalType: readField(boot.form, "proposalType"),
             title: readField(boot.form, "title"),
             abstract: readField(boot.form, "abstract"),
+            ...(proposalData && isProposalCommitteeNotesEditableStatus(proposalData.proposal.status)
+              ? { committeeNotes: readField(boot.form, "committeeNotes") || null }
+              : {}),
           },
           proposalAccessPatchResponseSchema,
         );

@@ -148,7 +148,7 @@
 .donation-badge-body {
   color: var(--pk-ink-muted);
   margin-bottom: 1.25rem;
-  max-width: 480px;
+  max-width: 30rem;
   margin-left: auto;
   margin-right: auto;
 }
@@ -168,14 +168,14 @@
 }
 
 .donation-badge-share-btn {
-  min-width: 100px;
+  min-width: 6.25rem;
 }
 
 .donation-badge-disclaimer {
   font-size: 0.75rem;
   color: var(--pk-ink-muted);
   margin-bottom: 0;
-  max-width: 420px;
+  max-width: 26.25rem;
   margin-left: auto;
   margin-right: auto;
 }
@@ -191,7 +191,7 @@
 }
 
 .support-cta-card {
-  max-width: 860px;
+  max-width: 53.75rem;
   margin: 0 auto;
   padding: 0 1rem;
 }
@@ -217,7 +217,7 @@
     top: 0;
     left: 0;
     right: 0;
-    height: 4px;
+    height: 0.25rem;
     background: linear-gradient(to right, $green, $teal, $blue, $yellow, $orange, $red);
     border-radius: 1rem 1rem 0 0;
   }
@@ -226,10 +226,10 @@
   &::after {
     content: "";
     position: absolute;
-    right: -30px;
-    top: -30px;
-    width: 140px;
-    height: 140px;
+    right: -1.875rem;
+    top: -1.875rem;
+    width: 8.75rem;
+    height: 8.75rem;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.05);
     pointer-events: none;
@@ -248,17 +248,17 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  min-width: 120px;
+  min-width: 7.5rem;
   position: relative;
   z-index: 1;
 
   &::after {
     content: "";
     position: absolute;
-    right: -50px;
-    bottom: -60px;
-    width: 100px;
-    height: 100px;
+    right: -3.125rem;
+    bottom: -3.75rem;
+    width: 6.25rem;
+    height: 6.25rem;
     border-radius: 50%;
     background: rgba(255, 255, 255, 0.035);
     pointer-events: none;
@@ -411,7 +411,7 @@
 
 .support-cta--banner {
   .support-cta-inner {
-    max-width: 860px;
+    max-width: 53.75rem;
     margin: 0 auto;
   }
 }

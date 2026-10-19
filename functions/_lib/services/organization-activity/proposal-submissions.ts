@@ -6,7 +6,7 @@
  * projection needs, which is the one thing the page adds.
  *
  * The status vocabulary — including its `active` aggregate — is the canonical
- * program-catalogue one; the predicate is the same shape
+ * program-catalog one; the predicate is the same shape
  * `functions/_lib/services/event-proposals-list.ts` uses, so "active" means
  * exactly one thing across the application.
  *

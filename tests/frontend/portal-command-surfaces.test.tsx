@@ -20,7 +20,7 @@ import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
 import { IconInfoCircle, IconLinkedIn, IconXTwitter } from "../../assets/ts/components/icons";
 import { GroupVoteLifecycleActions } from "../../assets/ts/member-flows/portal/sections/management/GroupVoteLifecycleActions";
 import { OperationActions } from "../../assets/ts/member-flows/portal/sections/system-operations/OperationActions";
-import { buttonNamed, buttonNames, markdownControl, markdownValue, typeMarkdown } from "./helpers/labelled-control";
+import { buttonNamed, buttonNames, markdownControl, markdownValue, typeMarkdown } from "./helpers/labeled-control";
 
 const GROUP_ID = "10000000-0000-4000-8000-000000000001";
 const VOTE_ID = "40000000-0000-4000-8000-000000000001";
@@ -138,7 +138,7 @@ describe("system operation commands", () => {
     canApproveMembership: false,
   };
 
-  it("names the group of commands as a region rather than an unlabelled div", () => {
+  it("names the group of commands as a region rather than an unlabeled div", () => {
     const page = mount(<OperationActions {...permissions} reload={vi.fn(async () => undefined)} />);
 
     const region = page.querySelector("section");
@@ -241,8 +241,8 @@ describe("the shared icon set", () => {
       expect(svg.getAttribute("aria-hidden")).toBe("true");
       expect(svg.getAttribute("focusable")).toBe("false");
       // The gap beside a label belongs to the flex parent, so no icon carries
-      // spacing of its own any more.
-      expect(svg.getAttribute("class")).toBeNull();
+      // a spacing class of its own; outline glyphs carry only the shared weight.
+      expect(svg.getAttribute("class") ?? "").toMatch(/^(pk-icon)?$/);
     }
   });
 

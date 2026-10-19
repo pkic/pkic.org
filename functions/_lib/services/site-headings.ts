@@ -1,11 +1,9 @@
 /**
  * Heading ids and their anchor links, as the published site renders them.
  *
- * Hugo gave every heading goldmark's automatic id and hung a link icon off
- * levels two to four (`layouts/_default/_markup/render-heading.html` and
- * `partials/anchor.html`). The migration emitted bare `<h2>`s, which cost the
- * icon and — more than cosmetically — every in-page anchor the content links
- * to: the `#references` jumps in the capability matrix, the section nav's
+ * Every heading gets an automatic id and a link icon hangs off levels two to
+ * four. The Markdown renderer emitted bare `<h2>`s, which cost the icon and —
+ * more than cosmetically — every in-page anchor the content links to: the `#references` jumps in the capability matrix, the section nav's
  * `#wg-focus`, a shared link to a heading.
  */
 

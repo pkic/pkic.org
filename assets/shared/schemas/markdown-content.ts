@@ -3,7 +3,7 @@ import { supportedMarkdownShortcodeList, unsupportedMarkdownShortcodeNames } fro
 
 /**
  * A stored Markdown field, bounded and refusing syntax the renderer cannot
- * honour.
+ * honor.
  *
  * The renderer drops an unsupported `{{< … >}}` rather than printing it (see
  * `assets/shared/markdown-shortcodes.ts`), which is right for the reader and

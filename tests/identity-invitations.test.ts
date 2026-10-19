@@ -16,6 +16,14 @@ import {
 } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 
+async function publicationCount(identityId: string) {
+  return env.DB.prepare(
+    "SELECT COUNT(*) AS count FROM site_publication_requests WHERE resource_type='identity_profile' AND resource_id=?",
+  )
+    .bind(identityId)
+    .first<number>("count");
+}
+
 async function asUser(token: string, path: string, init: RequestInit = {}): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set("authorization", `Bearer ${token}`);
@@ -24,6 +32,8 @@ async function asUser(token: string, path: string, init: RequestInit = {}): Prom
 }
 
 async function inviteIdentity(): Promise<{
+  organizationId: string;
+  contactToken: string;
   identityId: string;
   invitedUserId: string;
   invitedToken: string;
@@ -45,6 +55,7 @@ async function inviteIdentity(): Promise<{
     method: "POST",
     body: JSON.stringify({
       userReference: "existing_user",
+      jobTitle: "Representative",
       userId: invitedUserId,
       activation: { mode: "invitation" },
       showOnOrganizationProfile: true,
@@ -54,6 +65,8 @@ async function inviteIdentity(): Promise<{
   const receipt = (await response.json()) as { identityId: string; state: string };
   expect(receipt.state).toBe("pending");
   return {
+    organizationId,
+    contactToken,
     identityId: receipt.identityId,
     invitedUserId,
     invitedToken: await createMemberSession(env.DB, invitedUserId, "pending-identity-session-token"),
@@ -80,6 +93,7 @@ describe("identity invitation acceptance", () => {
     const body = JSON.stringify({ token });
     const init = { method: "POST", headers: { "content-type": "application/json" }, body };
 
+    expect(await publicationCount(identityId)).toBe(0);
     const reviewed = await callApi(env, "/api/v1/identities/invitations/preview", init);
     expect(reviewed.status, await reviewed.clone().text()).toBe(200);
     expect(await reviewed.json()).toMatchObject({
@@ -94,6 +108,7 @@ describe("identity invitation acceptance", () => {
     const accepted = await callApi(env, "/api/v1/identities/invitations/accept", init);
     expect(accepted.status, await accepted.clone().text()).toBe(200);
     expect(await accepted.json()).toMatchObject({ success: true, identityId, state: "active" });
+    expect(await publicationCount(identityId)).toBe(1);
     expect(
       await env.DB.prepare("SELECT started_at FROM identities WHERE id = ?").bind(identityId).first(),
     ).toMatchObject({
@@ -110,6 +125,53 @@ describe("identity invitation acceptance", () => {
     ).toBeGreaterThan(0);
     expect((await callApi(env, "/api/v1/identities/invitations/accept", init)).status).toBe(404);
     expect((await callApi(env, "/api/v1/identities/invitations/preview", init)).status).toBe(404);
+    expect(await publicationCount(identityId)).toBe(1);
+  });
+
+  it.each(["session", "link"])("rolls back %s acceptance and preserves retry when publication fails", async (mode) => {
+    const { identityId, invitedUserId, invitedToken } = await inviteIdentity();
+    const token = mode === "link" ? await deliveredInvitationToken(identityId) : null;
+    const accept = () =>
+      mode === "link"
+        ? callApi(env, "/api/v1/identities/invitations/accept", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({ token }),
+          })
+        : asUser(invitedToken, `/api/v1/users/current/identities/${identityId}`, {
+            method: "PATCH",
+            body: JSON.stringify({ transition: { state: "active" } }),
+          });
+    await env.DB.prepare(`CREATE TRIGGER fail_invitation_publication BEFORE INSERT ON site_publication_requests
+      BEGIN SELECT RAISE(ABORT,'SYNTHETIC_INVITATION_PUBLICATION_FAILURE'); END`).run();
+    try {
+      expect((await accept()).status).toBe(500);
+      expect(
+        await env.DB.prepare("SELECT started_at FROM identities WHERE id=?").bind(identityId).first("started_at"),
+      ).toBeNull();
+      expect(await publicationCount(identityId)).toBe(0);
+      expect(
+        (
+          await env.DB.prepare("SELECT id FROM group_memberships WHERE user_id=? AND left_at IS NULL")
+            .bind(invitedUserId)
+            .all()
+        ).results,
+      ).toHaveLength(0);
+      expect(
+        (
+          await env.DB.prepare(
+            "SELECT id FROM audit_log WHERE action='organization_identity_invitation_accepted' AND entity_id=?",
+          )
+            .bind(identityId)
+            .all()
+        ).results,
+      ).toHaveLength(0);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_invitation_publication").run();
+    }
+    const retried = await accept();
+    expect(retried.status, await retried.clone().text()).toBe(200);
+    expect(await publicationCount(identityId)).toBe(1);
   });
 
   it("rejects an invitation link after the recipient account email changes", async () => {
@@ -149,6 +211,7 @@ describe("identity invitation acceptance", () => {
     });
     expect(accepted.status, await accepted.clone().text()).toBe(200);
     expect(await accepted.json()).toMatchObject({ success: true, identityId, state: "active" });
+    expect(await publicationCount(identityId)).toBe(1);
     expect(
       await env.DB.prepare("SELECT started_at, ended_at FROM identities WHERE id = ?").bind(identityId).first(),
     ).toMatchObject({ started_at: expect.any(String), ended_at: null });
@@ -197,6 +260,7 @@ describe("identity invitation acceptance", () => {
     await expect(
       acceptPendingIdentity(racingDb, { identityId, userId: invitedUserId, sessionId: session!.id }),
     ).rejects.toMatchObject({ status: 409, code: "IDENTITY_AUTHORIZATION_CHANGED" });
+    expect(await publicationCount(identityId)).toBe(0);
     expect(await env.DB.prepare("SELECT started_at FROM identities WHERE id = ?").bind(identityId).first()).toEqual({
       started_at: null,
     });
@@ -205,5 +269,160 @@ describe("identity invitation acceptance", () => {
         .bind(invitedUserId)
         .first(),
     ).toEqual({ total: 0 });
+  });
+  describe("ending an identity", () => {
+    async function acceptedIdentity() {
+      const invited = await inviteIdentity();
+      const accepted = await asUser(invited.invitedToken, `/api/v1/users/current/identities/${invited.identityId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ transition: { state: "active" } }),
+      });
+      expect(accepted.status, await accepted.clone().text()).toBe(200);
+      await env.DB.prepare("UPDATE identities SET invited_at = ?, started_at = ? WHERE id = ?")
+        .bind("2025-12-01T00:00:00.000Z", "2026-01-01T00:00:00.000Z", invited.identityId)
+        .run();
+      return invited;
+    }
+
+    const endOwn = (token: string, identityId: string, endedAt?: string) =>
+      asUser(token, `/api/v1/users/current/identities/${identityId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ transition: { state: "ended", ...(endedAt ? { endedAt } : {}) } }),
+      });
+
+    it("rolls back an owner's end and its closed seats when publication fails", async () => {
+      const { identityId, invitedUserId, invitedToken } = await acceptedIdentity();
+      const seatsBefore = (
+        await env.DB.prepare("SELECT id FROM group_memberships WHERE user_id=? AND left_at IS NULL ORDER BY id")
+          .bind(invitedUserId)
+          .all()
+      ).results;
+      await env.DB.prepare(`CREATE TRIGGER fail_owner_end_publication BEFORE INSERT ON site_publication_requests
+        BEGIN SELECT RAISE(ABORT,'SYNTHETIC_OWNER_END_PUBLICATION_FAILURE'); END`).run();
+      try {
+        expect((await endOwn(invitedToken, identityId)).status).toBe(500);
+        expect(
+          await env.DB.prepare("SELECT ended_at FROM identities WHERE id=?").bind(identityId).first("ended_at"),
+        ).toBeNull();
+        expect(
+          (
+            await env.DB.prepare("SELECT id FROM group_memberships WHERE user_id=? AND left_at IS NULL ORDER BY id")
+              .bind(invitedUserId)
+              .all()
+          ).results,
+        ).toEqual(seatsBefore);
+        expect(await publicationCount(identityId)).toBe(1);
+      } finally {
+        await env.DB.prepare("DROP TRIGGER fail_owner_end_publication").run();
+      }
+      const retried = await endOwn(invitedToken, identityId);
+      expect(retried.status, await retried.clone().text()).toBe(200);
+      expect(await publicationCount(identityId)).toBe(2);
+    });
+
+    it("lets the owner end an active identity at a past instant and ends its seats at the later of join and end", async () => {
+      const { identityId, invitedUserId, invitedToken } = await acceptedIdentity();
+      const seats = await env.DB.prepare("SELECT id FROM group_memberships WHERE user_id = ? AND left_at IS NULL")
+        .bind(invitedUserId)
+        .all<{ id: string }>();
+      expect(seats.results.length).toBeGreaterThan(0);
+      const [early, ...late] = seats.results;
+      await env.DB.prepare("UPDATE group_memberships SET joined_at = ? WHERE id = ?")
+        .bind("2026-02-01T00:00:00.000Z", early!.id)
+        .run();
+
+      const endedAt = "2026-03-01T00:00:00.000Z";
+      const response = await endOwn(invitedToken, identityId, endedAt);
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(await response.json()).toMatchObject({ success: true, identityId, state: "ended" });
+      expect(await env.DB.prepare("SELECT ended_at FROM identities WHERE id = ?").bind(identityId).first()).toEqual({
+        ended_at: endedAt,
+      });
+      expect(
+        await env.DB.prepare("SELECT left_at FROM group_memberships WHERE id = ?").bind(early!.id).first(),
+      ).toEqual({ left_at: endedAt });
+      for (const seat of late) {
+        const row = await env.DB.prepare("SELECT joined_at, left_at FROM group_memberships WHERE id = ?")
+          .bind(seat.id)
+          .first<{ joined_at: string; left_at: string }>();
+        expect(row!.left_at).toBe(row!.joined_at > endedAt ? row!.joined_at : endedAt);
+      }
+      expect(
+        await env.DB.prepare(
+          "SELECT details_json FROM audit_log WHERE action = 'organization_identity_ended' AND entity_id = ?",
+        )
+          .bind(identityId)
+          .first<{ details_json: string }>(),
+      ).toMatchObject({ details_json: expect.stringContaining('"ended_by":{"from":null,"to":"owner"}') });
+    });
+
+    it("defaults the owner's end date to now", async () => {
+      const { identityId, invitedToken } = await acceptedIdentity();
+      const response = await endOwn(invitedToken, identityId);
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(
+        await env.DB.prepare("SELECT ended_at FROM identities WHERE id = ?").bind(identityId).first(),
+      ).toMatchObject({ ended_at: expect.any(String) });
+    });
+
+    it("refuses an end date in the future or before the identity started", async () => {
+      const { identityId, invitedToken } = await acceptedIdentity();
+      const future = await endOwn(invitedToken, identityId, new Date(Date.now() + 86_400_000).toISOString());
+      expect(future.status).toBe(400);
+      const early = await endOwn(invitedToken, identityId, "2025-12-31T00:00:00.000Z");
+      expect(early.status).toBe(422);
+      expect(await early.json()).toMatchObject({ error: { code: "IDENTITY_END_DATE_INVALID" } });
+      expect(await env.DB.prepare("SELECT ended_at FROM identities WHERE id = ?").bind(identityId).first()).toEqual({
+        ended_at: null,
+      });
+    });
+
+    it("hides a pending identity from the end path", async () => {
+      const pending = await inviteIdentity();
+      expect((await endOwn(pending.invitedToken, pending.identityId)).status).toBe(404);
+    });
+
+    it("hides another user's identity from the end path", async () => {
+      const { identityId } = await acceptedIdentity();
+      const other = await insertIndividualMember(env.DB, "H6", "other-end@invitation-lifecycle.example");
+      const otherToken = await createMemberSession(
+        env.DB,
+        other.userId,
+        "other-end-session-token",
+        undefined,
+        other.identityId,
+      );
+      const response = await endOwn(otherToken, identityId);
+      expect(response.status).toBe(404);
+      expect(await response.json()).toMatchObject({ error: { code: "IDENTITY_NOT_FOUND" } });
+    });
+
+    it("lets a manager end an identity at a past instant and refuses one before it started", async () => {
+      const { organizationId, contactToken, identityId, invitedUserId } = await acceptedIdentity();
+      const path = `/api/v1/organizations/${organizationId}/identities/${identityId}`;
+      const before = await asUser(contactToken, path, {
+        method: "PATCH",
+        body: JSON.stringify({
+          transition: { state: "ended", reason: "Left the organization", endedAt: "2025-06-01T00:00:00.000Z" },
+        }),
+      });
+      expect(before.status).toBe(422);
+
+      const endedAt = "2026-03-01T00:00:00.000Z";
+      const response = await asUser(contactToken, path, {
+        method: "PATCH",
+        body: JSON.stringify({ transition: { state: "ended", reason: "Left the organization", endedAt } }),
+      });
+      expect(response.status, await response.clone().text()).toBe(200);
+      expect(await env.DB.prepare("SELECT ended_at FROM identities WHERE id = ?").bind(identityId).first()).toEqual({
+        ended_at: endedAt,
+      });
+      const open = await env.DB.prepare(
+        "SELECT COUNT(*) AS total FROM group_memberships WHERE user_id = ? AND left_at IS NULL",
+      )
+        .bind(invitedUserId)
+        .first<{ total: number }>();
+      expect(Number(open?.total)).toBe(0);
+    });
   });
 });

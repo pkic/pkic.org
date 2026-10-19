@@ -7,7 +7,7 @@ import { cleanup, GROUP_ID, json, mount, responseEvent, settle } from "./helpers
 import { groupEventCreateSchema, groupEventSettingsUpdateSchema } from "../../assets/shared/schemas/group-events";
 import { GroupEventEditor } from "../../assets/ts/member-flows/portal/sections/management/GroupEventEditor";
 import { GroupEventWorkspace } from "../../assets/ts/member-flows/portal/sections/management/GroupEventWorkspace";
-import { controlFor, submitForm, typeInto } from "./helpers/labelled-control";
+import { controlFor, submitForm, typeInto } from "./helpers/labeled-control";
 import { nameForm } from "./helpers/form-editor";
 
 vi.mock("wouter/use-hash-location", () => ({
@@ -106,7 +106,8 @@ describe("portal event management flows", () => {
       expectedUpdatedAt: responseEvent.updatedAt,
       inviteLimitAttendee: 8,
       links: responseEvent.links,
-      location: responseEvent.location,
+      city: responseEvent.city,
+      country: responseEvent.country,
     });
   });
 
@@ -175,7 +176,11 @@ describe("portal event management flows", () => {
       }),
     );
 
-    const container = mount(<GroupEventWorkspace event={responseEvent} groupId={GROUP_ID} tab="settings" />);
+    // Terms and attendance days are separate registration settings pages. Each
+    // save advances the one event revision the next page writes against.
+    const container = mount(
+      <GroupEventWorkspace event={responseEvent} groupId={GROUP_ID} tab="settings" detailId="terms" />,
+    );
     await settle();
     expect(container.textContent).toContain("Terms and conditions");
     await beginRecordEdit(container, "Event terms actions", "Edit terms");
@@ -209,8 +214,17 @@ describe("portal event management flows", () => {
       },
     });
 
-    await beginRecordEdit(container, "Attendance days actions", "Edit attendance days");
-    const saveDays = Array.from(container.querySelectorAll<HTMLButtonElement>("button")).find(
+    const days = mount(
+      <GroupEventWorkspace
+        event={{ ...responseEvent, updatedAt: revision }}
+        groupId={GROUP_ID}
+        tab="settings"
+        detailId="attendance-days"
+      />,
+    );
+    await settle();
+    await beginRecordEdit(days, "Attendance days actions", "Edit attendance days");
+    const saveDays = Array.from(days.querySelectorAll<HTMLButtonElement>("button")).find(
       (button) => button.textContent === "Save days",
     )!;
     await act(async () => saveDays.click());
@@ -224,10 +238,14 @@ describe("portal event management flows", () => {
 
     // The event's facts are edited where they are read: Edit is the details
     // panel's own command, and the panel's heading becomes "Edit event" so the
-    // form is announced by name rather than as an unlabelled group of controls.
-    await beginRecordEdit(container, "Event actions", "Edit event");
+    // form is announced by name rather than as an unlabeled group of controls.
+    const access = mount(
+      <GroupEventWorkspace event={responseEvent} groupId={GROUP_ID} tab="settings" detailId="access" />,
+    );
     await settle();
-    const heading = Array.from(container.querySelectorAll("h1, h2, h3, h4, h5, h6")).find(
+    await beginRecordEdit(access, "Event actions", "Edit event");
+    await settle();
+    const heading = Array.from(access.querySelectorAll("h1, h2, h3, h4, h5, h6")).find(
       (candidate) => candidate.textContent === "Edit event",
     );
     expect(heading).toBeDefined();
@@ -237,7 +255,11 @@ describe("portal event management flows", () => {
     expect(controlFor(editor, "Peer invitation limit").value).toBe(String(responseEvent.inviteLimitAttendee));
     // The slug is fixed once the event exists, and the control says so itself
     // rather than only looking greyed out.
-    expect(controlFor(editor, "Slug").disabled).toBe(true);
+    const general = mount(
+      <GroupEventEditor groupId={GROUP_ID} event={responseEvent} section="general" onSaved={vi.fn()} />,
+    );
+    await settle();
+    expect(controlFor(general, "Slug").disabled).toBe(true);
   });
 
   it("enables registration without custom questions and creates an exact attendee form through shared contracts", async () => {
@@ -320,13 +342,19 @@ describe("portal event management flows", () => {
 
     const onUpdated = vi.fn();
     const container = mount(
-      <GroupEventWorkspace event={responseEvent} groupId={GROUP_ID} tab="settings" onUpdated={onUpdated} />,
+      <GroupEventWorkspace
+        event={responseEvent}
+        groupId={GROUP_ID}
+        tab="settings"
+        detailId="registration"
+        onUpdated={onUpdated}
+      />,
     );
     await settle();
 
     // Resolved through the label's own for/id pair rather than through an id
     // the surface happened to compose, so the lookup fails exactly when the
-    // labelling contract is broken.
+    // labeling contract is broken.
     await beginRecordEdit(container, "Registration policy actions");
     const policy = controlFor<HTMLSelectElement>(container, "Registration policy");
     policy.value = "optional";

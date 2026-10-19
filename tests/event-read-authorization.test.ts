@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { computeGrantsForUser } from "../functions/_lib/auth/permissions";
 import { listVisibleEvents } from "../functions/_lib/services/events/catalog";
 import type { DatabaseLike, UserBackedAuthAdmin } from "../functions/_lib/types";

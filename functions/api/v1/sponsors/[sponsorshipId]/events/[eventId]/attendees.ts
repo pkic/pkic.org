@@ -9,6 +9,7 @@ import {
   listSponsorAttendeesPageWithAudit,
   requireSponsorAttendeeAccess,
 } from "../../../../../../_lib/services/sponsorship";
+import { PERSONAL_EMAIL_ADDRESS_LABEL } from "../../../../../../../assets/shared/email-first-copy";
 import { buildPageInfo } from "../../../../../../../assets/shared/schemas/pagination";
 import {
   sponsorAttendeesListResponseSchema,
@@ -30,7 +31,7 @@ export const SponsorAttendeesList = openApiRoute(sponsorAttendeesListRouteSchema
           attendee.firstName,
           attendee.lastName,
           attendee.email,
-          attendee.organizationName,
+          attendee.personalEmail ? PERSONAL_EMAIL_ADDRESS_LABEL : attendee.organizationName,
           attendee.jobTitle,
           attendee.attendanceType,
         ]),

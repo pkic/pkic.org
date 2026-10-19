@@ -1,3 +1,4 @@
+import { sessionEmailSignInAllowedSql } from "./email-sign-in-policy";
 import { hasEventParticipation } from "./event-participation";
 import type { AuthMember, DatabaseLike, EligibleIdentity } from "../types";
 import { all, first } from "../db/queries";
@@ -5,7 +6,13 @@ import type { AuthorizationEvidence } from "../db/authorization-guard";
 import { normalizeEmail } from "../validation";
 import type { SponsorCapacity } from "../../../assets/shared/schemas/sponsor-access";
 import { findActiveSponsorCapacitiesByUserId } from "./sponsor-capacity";
+import { findActingIdentitiesForUser } from "./session-acting-identities";
+import {
+  resolveSessionActingIdentityId,
+  type SessionActingIdentity,
+} from "../../../assets/shared/session-acting-identity";
 import { executiveCouncilSeatSql } from "./executive-council";
+import { activeOrganizationMemberRepresentationPredicate } from "../services/membership/capacity-query";
 
 export const STAFF_ACCESS_CONDITION = `(
   EXISTS (
@@ -100,8 +107,9 @@ export const MEMBER_ELIGIBLE_USER_SELECT = `
     ON selected_email.id = identity.email_id
    AND selected_email.user_id = u.id
    AND selected_email.verified_at IS NOT NULL
-  JOIN members m ON m.user_id = u.id AND m.status = 'active'
+  JOIN members m ON m.identity_id = identity.id AND m.member_type = 'individual' AND m.status = 'active'
   JOIN member_category_assignments mca ON mca.member_id = m.id
+  WHERE NOT ${activeOrganizationMemberRepresentationPredicate("u.id")}
 
   UNION ALL
 
@@ -148,6 +156,22 @@ export function memberSignInAuthorizationEvidence(userId: string, normalizedEmai
   };
 }
 
+/** Rechecks that the exact session behind a current-user mutation is live and its user still active; no capacity is implied. */
+export function userSessionAuthorizationEvidence(userId: string, sessionId: string): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1
+            FROM sessions session
+            JOIN users u ON u.id = session.user_id AND u.active = 1
+           WHERE session.id = ?
+             AND session.user_id = ?
+             AND session.revoked_at IS NULL
+             AND ${sessionEmailSignInAllowedSql("session.id", "session.user_id")}
+             AND session.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now')
+           LIMIT 1`,
+    bindings: [sessionId, userId],
+  };
+}
+
 /** Rechecks the exact live session and selected member capacity used by a current-user mutation. */
 export function memberSessionAuthorizationEvidence(member: AuthMember): AuthorizationEvidence {
   if (!member.sessionId) return { sql: "SELECT 1 WHERE 0", bindings: [] };
@@ -161,13 +185,14 @@ export function memberSessionAuthorizationEvidence(member: AuthMember): Authoriz
            WHERE session.id = ?
              AND session.user_id = ?
              AND session.revoked_at IS NULL
+             AND ${sessionEmailSignInAllowedSql("session.id", "session.user_id")}
              AND session.expires_at > strftime('%Y-%m-%dT%H:%M:%fZ','now')
            LIMIT 1`,
     bindings: [member.identityId, member.sessionId, member.userId],
   };
 }
 
-function toEligibleIdentity(row: MemberEligibleUserRow): EligibleIdentity {
+export function toEligibleIdentity(row: MemberEligibleUserRow): EligibleIdentity {
   return {
     identityId: row.identity_id,
     memberId: row.member_id,
@@ -177,8 +202,17 @@ function toEligibleIdentity(row: MemberEligibleUserRow): EligibleIdentity {
   };
 }
 
-export function toAuthMember(rows: MemberEligibleUserRow[], preferredIdentityId?: string | null): AuthMember {
-  const selected = (preferredIdentityId && rows.find((row) => row.identity_id === preferredIdentityId)) || rows[0];
+/**
+ * The membership context of exactly the identity a session acts as. An
+ * identity that holds no membership, or no chosen identity at all, has no
+ * member context: membership never falls back to another identity.
+ */
+export function selectActingMember(
+  rows: readonly MemberEligibleUserRow[],
+  actingIdentityId: string | null,
+): AuthMember | null {
+  const selected = actingIdentityId ? rows.find((row) => row.identity_id === actingIdentityId) : undefined;
+  if (!selected) return null;
   return {
     userId: selected.id,
     identityId: selected.identity_id,
@@ -191,6 +225,7 @@ export function toAuthMember(rows: MemberEligibleUserRow[], preferredIdentityId?
   };
 }
 
+/** Every membership the person can act through, whichever identity the session acts as. */
 export async function resolveEligibleMembershipRows(
   db: DatabaseLike,
   userId: string,
@@ -205,25 +240,21 @@ export async function resolveEligibleMembershipRows(
   );
 }
 
+/**
+ * The member context a session for this person would have: the membership
+ * of the identity it acts as, resolved by the shared acting-identity rule
+ * from the session's selection.
+ */
 export async function findEligibleMemberById(
   db: DatabaseLike,
   userId: string,
-  preferredIdentityId?: string | null,
+  selectedIdentityId?: string | null,
 ): Promise<AuthMember | null> {
-  const rows = await resolveEligibleMembershipRows(db, userId);
-  return rows.length ? toAuthMember(rows, preferredIdentityId) : null;
-}
-
-export async function findEligibleMemberByEmail(db: DatabaseLike, email: string): Promise<AuthMember | null> {
-  const row = await first<MemberEligibleUserRow>(
-    db,
-    `SELECT ${MEMBER_ELIGIBLE_USER_COLUMNS}
-     FROM (${MEMBER_ELIGIBLE_USER_SELECT}) combined
-     WHERE normalized_email = ? AND active = 1
-     ORDER BY sort_key ASC`,
-    [normalizeEmail(email)],
-  );
-  return row ? toAuthMember([row]) : null;
+  const [rows, actingIdentities] = await Promise.all([
+    resolveEligibleMembershipRows(db, userId),
+    findActingIdentitiesForUser(db, userId),
+  ]);
+  return selectActingMember(rows, resolveSessionActingIdentityId(actingIdentities, selectedIdentityId));
 }
 
 export async function countPendingIdentitiesForUser(db: DatabaseLike, userId: string): Promise<number> {
@@ -274,28 +305,108 @@ export interface IdentityCapacity {
   email: string;
 }
 
+export function activeIdentityPredicate(userAlias: string): string {
+  return `EXISTS (
+    SELECT 1 FROM identities identity
+     WHERE identity.user_id = ${userAlias}.id
+       AND identity.started_at IS NOT NULL
+       AND identity.ended_at IS NULL
+       AND identity.blocked_at IS NULL
+  )`;
+}
+
+/** Any active identity, personal or organization, permits account access without granting membership. */
+export async function hasActiveIdentity(db: DatabaseLike, userId: string): Promise<boolean> {
+  return (
+    (await first<{ id: string }>(
+      db,
+      `SELECT user.id FROM users user
+       WHERE user.id = ? AND user.active = 1
+         AND user.pii_redacted_at IS NULL AND user.merged_into_user_id IS NULL
+         AND ${activeIdentityPredicate("user")}`,
+      [userId],
+    )) !== null
+  );
+}
+
+/** Rechecks that the canonical user is still active and owns the proved sign-in address; no capacity is implied. */
+export function activeUserSignInAuthorizationEvidence(userId: string, normalizedEmail: string): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1 FROM users user
+       WHERE user.id = ? AND user.active = 1
+         AND user.pii_redacted_at IS NULL AND user.merged_into_user_id IS NULL
+         AND (user.normalized_email = ? OR EXISTS (
+           SELECT 1 FROM user_emails address
+            WHERE address.user_id = user.id AND address.normalized_email = ? AND address.verified_at IS NOT NULL
+         ))`,
+    bindings: [userId, normalizedEmail, normalizedEmail],
+  };
+}
+
+/** Rechecks the live affiliation, canonical user, and proved sign-in address in the session batch. */
+export function identitySignInAuthorizationEvidence(userId: string, normalizedEmail: string): AuthorizationEvidence {
+  return {
+    sql: `SELECT 1 FROM users user
+       WHERE user.id = ? AND user.active = 1
+         AND user.pii_redacted_at IS NULL AND user.merged_into_user_id IS NULL
+         AND (user.normalized_email = ? OR EXISTS (
+           SELECT 1 FROM user_emails address
+            WHERE address.user_id = user.id AND address.normalized_email = ? AND address.verified_at IS NOT NULL
+         ))
+         AND ${activeIdentityPredicate("user")}`,
+    bindings: [userId, normalizedEmail, normalizedEmail],
+  };
+}
+
 export interface IdentityCapacityResolution {
   identity: IdentityCapacity;
   staff: EligibleStaffUser | null;
-  member: AuthMember | null;
+  /** Every membership the person holds through any identity; sign-in eligibility, not session context. */
+  memberships: MemberEligibleUserRow[];
   sponsors: SponsorCapacity[];
   pendingIdentityCount: number;
   eventParticipation: boolean;
+  hasActiveIdentity: boolean;
+  actingIdentities: SessionActingIdentity[];
 }
 
 export async function resolveIdentityCapacities(
   db: DatabaseLike,
   userId: string,
 ): Promise<IdentityCapacityResolution | null> {
-  const [identity, staff, member, sponsors, pendingIdentityCount, eventParticipation] = await Promise.all([
-    first<{ id: string; email: string }>(db, "SELECT id, email FROM users WHERE id = ? AND active = 1", [userId]),
+  const [
+    identity,
+    staff,
+    memberships,
+    sponsors,
+    pendingIdentityCount,
+    eventParticipation,
+    affiliation,
+    actingIdentities,
+  ] = await Promise.all([
+    first<{ id: string; email: string }>(
+      db,
+      "SELECT id, email FROM users WHERE id = ? AND active = 1 AND pii_redacted_at IS NULL AND merged_into_user_id IS NULL",
+      [userId],
+    ),
     findEligibleStaffUserById(db, userId),
-    findEligibleMemberById(db, userId),
+    resolveEligibleMembershipRows(db, userId),
     findActiveSponsorCapacitiesByUserId(db, userId),
     countPendingIdentitiesForUser(db, userId),
     hasEventParticipation(db, userId),
+    hasActiveIdentity(db, userId),
+    findActingIdentitiesForUser(db, userId),
   ]);
-  return identity && (staff || member || sponsors.length > 0 || pendingIdentityCount > 0 || eventParticipation)
-    ? { identity, staff, member, sponsors, pendingIdentityCount, eventParticipation }
+  return identity
+    ? {
+        identity,
+        staff,
+        memberships,
+        sponsors,
+        pendingIdentityCount,
+        eventParticipation,
+        hasActiveIdentity: affiliation,
+        actingIdentities,
+      }
     : null;
 }

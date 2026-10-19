@@ -1,5 +1,5 @@
 import { json } from "../../../../../_lib/http";
-import { guardMemberSessionMutationDatabase, requireMemberFromRequest } from "../../../../../_lib/auth/member";
+import { guardOwnAccountMutationDatabase, requireOwnAccountFromRequest } from "../../../../../_lib/auth/member";
 import {
   getMyNotificationPreferences,
   updateMyNotificationPreferences,
@@ -15,8 +15,8 @@ export const CurrentUserNotificationPreferencesGet = openApiRoute(
   myNotificationPreferencesGetRouteSchema,
   async (c: AdminContext) => {
     const db = requestDb(c);
-    const member = await requireMemberFromRequest(db, c.req.raw, c.env);
-    const preferences = await getMyNotificationPreferences(db, member);
+    const account = await requireOwnAccountFromRequest(db, c.req.raw, c.env);
+    const preferences = await getMyNotificationPreferences(db, account);
     return json(preferences);
   },
 );
@@ -25,10 +25,10 @@ export const CurrentUserNotificationPreferencesPatch = openApiRoute(
   myNotificationPreferencesUpdateRouteSchema,
   async (c: AdminContext, data) => {
     const db = requestDb(c);
-    const member = await requireMemberFromRequest(db, c.req.raw, c.env);
+    const account = await requireOwnAccountFromRequest(db, c.req.raw, c.env);
     const preferences = await updateMyNotificationPreferences(
-      guardMemberSessionMutationDatabase(db, member),
-      member,
+      guardOwnAccountMutationDatabase(db, account),
+      account,
       data.body,
     );
     return json(preferences);

@@ -12,6 +12,7 @@ import { refreshMemberNews } from "../functions/_lib/services/member-news/refres
 import { renderMemberNews, renderMemberNewsFeed } from "../functions/_lib/services/member-news/render";
 import { insertOrganization, seedOrganizationAggregate } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
+import { createD1QueryBudgetedDatabase } from "../functions/_lib/db/query-budget";
 
 const feedUrl = "https://news.example.test/feed.xml";
 const publishedAt = new Date(Date.now() - 86_400_000).toISOString();
@@ -20,13 +21,22 @@ const rss = (title = "Certificates &amp; trust", count = 1) =>
 
 beforeEach(resetDb);
 afterEach(() => vi.unstubAllGlobals());
-async function source() {
-  const organizationId = await insertOrganization(env.DB, "News publisher");
+async function source(name = "News publisher") {
+  const organizationId = await insertOrganization(env.DB, name);
   const memberId = await seedOrganizationAggregate(env.DB, organizationId, "A");
   await env.DB.prepare("UPDATE organizations SET blog_feed_url = ?, sponsor_tier = 'Gold' WHERE id = ?")
     .bind(feedUrl, organizationId)
     .run();
   return { organizationId, memberId };
+}
+async function publicationCount() {
+  return env.DB.prepare(
+    "SELECT COUNT(*) AS count FROM site_publication_requests WHERE resource_type='member_news'",
+  ).first<number>("count");
+}
+async function refreshDue() {
+  await env.DB.prepare("UPDATE member_news_sources SET next_refresh_at='2000-01-01T00:00:00.000Z'").run();
+  return refreshMemberNews(env.DB);
 }
 const read = (options = {}) => readMemberNews(env.DB, memberNewsQuerySchema.parse(options));
 
@@ -111,6 +121,7 @@ describe("D1 member news cache and public rendering", () => {
     );
     expect((await refreshMemberNews(env.DB)).summary.failed).toBe(1);
     expect((await read()).page.total).toBe(1);
+    expect(await publicationCount()).toBe(1);
     expect(
       await env.DB.prepare("SELECT last_error FROM member_news_sources WHERE organization_id = ?")
         .bind(f.organizationId)
@@ -140,7 +151,143 @@ describe("D1 member news cache and public rendering", () => {
     await refreshMemberNews(env.DB);
     expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM member_news_articles").first("count")).toBe(0);
     expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM member_news_sources").first("count")).toBe(0);
+    expect(await publicationCount()).toBe(0);
   });
+  it("queues changed article sets, including removal and a return to earlier content, but not identical refreshes", async () => {
+    await source();
+    let feed = rss("Original", 2);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(feed)),
+    );
+    await refreshMemberNews(env.DB);
+    expect(await publicationCount()).toBe(1);
+    await refreshDue();
+    expect(await publicationCount()).toBe(1);
+    feed = feed.replace(/(<item>.*?<\/item>)(<item>.*?<\/item>)/s, "$2$1");
+    await refreshDue();
+    expect(await publicationCount()).toBe(1);
+    feed = rss("Edited", 2);
+    await refreshDue();
+    expect(await publicationCount()).toBe(2);
+    feed = rss("Edited", 1);
+    await refreshDue();
+    expect(await publicationCount()).toBe(3);
+    feed = rss("Empty", 0);
+    await refreshDue();
+    expect(await publicationCount()).toBe(4);
+    expect((await read()).page.total).toBe(0);
+    await refreshDue();
+    expect(await publicationCount()).toBe(4);
+    feed = rss("Original", 2);
+    await refreshDue();
+    expect(await publicationCount()).toBe(5);
+  });
+
+  it("does not enqueue a publication for an initially empty feed", async () => {
+    await source();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(rss("Empty", 0))),
+    );
+    await refreshMemberNews(env.DB);
+    expect(await publicationCount()).toBe(0);
+  });
+
+  it("rechecks active membership after retrieving a feed", async () => {
+    const f = await source();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        await env.DB.prepare("UPDATE members SET status='inactive' WHERE id=?").bind(f.memberId).run();
+        return new Response(rss());
+      }),
+    );
+    await refreshMemberNews(env.DB);
+    expect(await publicationCount()).toBe(0);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM member_news_articles").first("count")).toBe(0);
+    expect(await env.DB.prepare("SELECT COUNT(*) AS count FROM member_news_sources").first("count")).toBe(0);
+  });
+
+  it("deduplicates simultaneous identical refreshes against the cache inside the transaction", async () => {
+    await source();
+    let arrivals = 0;
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => {
+        if (++arrivals === 2) release();
+        await gate;
+        return new Response(rss());
+      }),
+    );
+    await Promise.all([refreshMemberNews(env.DB), refreshMemberNews(env.DB)]);
+    expect(arrivals).toBe(2);
+    expect(await publicationCount()).toBe(1);
+    expect((await read()).page.total).toBe(1);
+  });
+
+  it("retains the last successful articles and publication position when replacement fails, then safely retries", async () => {
+    await source();
+    let feed = rss("Original");
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => new Response(feed)),
+    );
+    await refreshMemberNews(env.DB);
+    expect(await publicationCount()).toBe(1);
+    const previous = await read();
+    const sequence = await env.DB.prepare(
+      "SELECT desired_sequence FROM site_publication_delivery_state WHERE id=1",
+    ).first("desired_sequence");
+    await env.DB.prepare("UPDATE member_news_sources SET next_refresh_at='2000-01-01T00:00:00.000Z'").run();
+    const state = await env.DB.prepare(
+      "SELECT feed_url,next_refresh_at,last_success_at,last_error FROM member_news_sources",
+    ).first();
+    feed = rss("Changed");
+    await env.DB.prepare(`CREATE TRIGGER fail_news_cache BEFORE INSERT ON member_news_articles
+      BEGIN SELECT RAISE(ABORT,'forced news cache failure'); END`).run();
+    try {
+      await expect(refreshMemberNews(env.DB)).rejects.toThrow("forced news cache failure");
+      expect(await publicationCount()).toBe(1);
+      expect(await read()).toEqual(previous);
+      expect(
+        await env.DB.prepare(
+          "SELECT feed_url,next_refresh_at,last_success_at,last_error FROM member_news_sources",
+        ).first(),
+      ).toEqual(state);
+      expect(
+        await env.DB.prepare("SELECT desired_sequence FROM site_publication_delivery_state WHERE id=1").first(
+          "desired_sequence",
+        ),
+      ).toBe(sequence);
+    } finally {
+      await env.DB.prepare("DROP TRIGGER fail_news_cache").run();
+    }
+    await refreshMemberNews(env.DB);
+    expect(await publicationCount()).toBe(2);
+    expect((await read()).articles[0]?.title).toBe("Changed 0");
+  });
+
+  it("reserves the whole four-statement transaction within the scheduled D1 budget", async () => {
+    await source();
+    await source("Second news publisher");
+    const fetcher = vi.fn(async () => new Response(rss()));
+    vi.stubGlobal("fetch", fetcher);
+    const insufficient = createD1QueryBudgetedDatabase(env.DB, 4);
+    expect((await refreshMemberNews(insufficient.db, insufficient.budget)).summary.refreshed).toBe(0);
+    expect(insufficient.budget.usedQueries()).toBe(0);
+    expect(fetcher).not.toHaveBeenCalled();
+    const enough = createD1QueryBudgetedDatabase(env.DB, 5);
+    expect((await refreshMemberNews(enough.db, enough.budget)).summary.refreshed).toBe(1);
+    expect(enough.budget.usedQueries()).toBe(5);
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(await publicationCount()).toBe(1);
+  });
+
   it("keeps foreign markup escaped and returns an honest empty page and valid empty RSS", async () => {
     await source();
     vi.stubGlobal(

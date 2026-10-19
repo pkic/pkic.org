@@ -1,12 +1,14 @@
 import "./site/public-styles";
+// Site chrome must be interactive when the deferred public entry finishes loading.
+import "../js/navbar.js";
 /**
- * Public-site entry: presentation and behaviour.
+ * Public-site entry: presentation and behavior.
  *
  * The server renders these components before client JavaScript runs, so their
  * styles must be linked from the document head. Keeping them in a dedicated
  * entry preserves the small universal loader used by portal-only surfaces.
  *
- * The behaviour half is the site's own scripts. Hugo loaded them from its
+ * The behavior half is the site's own scripts. Hugo loaded them from its
  * templates — `navbar.js` from the navbar partial, `main.js` from the footer,
  * `wg-nav.js` from the working-group layout, the event scripts from the event
  * layouts — and the migration inherited the markup without ever loading them,
@@ -17,17 +19,17 @@ import "./site/public-styles";
  * blog post does not download the agenda.
  */
 
-/** Load a behaviour module when the markup it drives is present. */
+/** Load a behavior module when the markup it drives is present. */
 async function whenPresent(selector: string, load: () => Promise<unknown>): Promise<void> {
   if (!document.querySelector(selector)) return;
   await load();
 }
 
 async function start(): Promise<void> {
-  // Site chrome: the mega menus, the search panel and the collapsed menu.
-  await import("../js/navbar.js");
+  const { installPublicAccountMenu } = await import("./account-menu");
+  void installPublicAccountMenu();
 
-  // Site-wide behaviour that `main.js` carried, minus its Bootstrap import:
+  // Site-wide behavior that `main.js` carried, minus its Bootstrap import:
   // this build has no Bootstrap to load.
   await Promise.all([
     import("../js/modules/global-ui.js"),
@@ -38,7 +40,12 @@ async function start(): Promise<void> {
   initLocalTime();
 
   await Promise.all([
-    whenPresent("img.member-logo, img.member-profile-logo", async () => {
+    // A logo or headshot that fails to load leaves the avatar's initials, as a mounted Avatar does.
+    whenPresent("[data-avatar-fallback] img", async () => {
+      const { observeStaticImageFallbacks } = await import("./site/static-image-fallbacks");
+      observeStaticImageFallbacks(document.body);
+    }),
+    whenPresent("img.member-logo", async () => {
       const { initMemberLogoTreatment } = await import("./shared/member-logo-treatment");
       initMemberLogoTreatment();
     }),

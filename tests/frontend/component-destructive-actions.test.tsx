@@ -3,11 +3,12 @@ import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { ConfirmDialogHost } from "../../assets/ts/components/ConfirmDialog";
-import { LogoManager } from "../../assets/ts/components/LogoManager";
+import { PictureTile, type PictureTileProps } from "../../assets/ts/components/PictureTile";
 import { PasskeySettings } from "../../assets/ts/components/passkey-settings";
 import { ProposalSpeakerCard } from "../../assets/ts/components/proposals/ProposalSpeakerCard";
 import type { ProposalSpeaker } from "../../assets/shared/schemas/proposal-speakers";
-import { controlFor, labelNames } from "./helpers/labelled-control";
+import { controlFor, labelNames } from "./helpers/labeled-control";
+import { beginRecordEdit } from "./helpers/record-edit";
 import { rowActionControlNames, runCardAction, runRowAction } from "./helpers/row-actions";
 
 const mounted: HTMLElement[] = [];
@@ -23,15 +24,6 @@ function mount(node: ComponentChildren): HTMLElement {
 function findButton(root: ParentNode, label: string): HTMLButtonElement {
   const button = [...root.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
   if (!button) throw new Error(`missing button: ${label}`);
-  return button;
-}
-
-/** A button on the page, outside the confirm dialog (which may reuse the same label). */
-function pageButton(container: HTMLElement, label: string): HTMLButtonElement {
-  const button = [...container.querySelectorAll("button")].find(
-    (candidate) => candidate.textContent === label && !candidate.closest('[role="alertdialog"]'),
-  );
-  if (!button) throw new Error(`missing page button: ${label}`);
   return button;
 }
 
@@ -56,16 +48,15 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-describe("LogoManager confirmation", () => {
-  function props(overrides: Partial<Parameters<typeof LogoManager>[0]> = {}) {
+describe("PictureTile logo confirmation", () => {
+  function props(overrides: Partial<PictureTileProps> = {}): PictureTileProps {
     return {
+      name: "Example Corp",
+      canChange: true,
       imageUrl: "https://example.test/logo.png",
       alt: "Example Corp logo",
-      layout: "inline" as const,
-      imageClass: "logo",
-      placeholderClass: "logo-placeholder",
       removeConfirmation: "Remove this organization's logo?",
-      removeLabel: "Remove logo",
+      accept: "image/svg+xml",
       onUpload: vi.fn(async () => undefined),
       onRemove: vi.fn(async () => undefined),
       onChanged: vi.fn(),
@@ -74,16 +65,23 @@ describe("LogoManager confirmation", () => {
     };
   }
 
+  /** A control named for what it does to whose logo, the way a screen reader hears it. */
+  function namedControl(container: HTMLElement, name: string): HTMLButtonElement {
+    const button = container.querySelector<HTMLButtonElement>(`button[aria-label="${name}"]`);
+    if (!button) throw new Error(`missing control: ${name}`);
+    return button;
+  }
+
   it("removes the logo only after the named confirmation is accepted", async () => {
     const onRemove = vi.fn(async () => undefined);
     const container = mount(
       <>
         <ConfirmDialogHost />
-        <LogoManager {...props({ onRemove })} />
+        <PictureTile {...props({ onRemove })} />
       </>,
     );
 
-    await act(() => pageButton(container, "Remove logo").click());
+    await act(() => namedControl(container, "Remove logo of Example Corp").click());
     const dialog = container.querySelector('[role="alertdialog"]');
     expect(dialog?.textContent).toContain("Remove this organization's logo?");
     expect(onRemove).not.toHaveBeenCalled();
@@ -99,11 +97,11 @@ describe("LogoManager confirmation", () => {
     const container = mount(
       <>
         <ConfirmDialogHost />
-        <LogoManager {...props({ onRemove })} />
+        <PictureTile {...props({ onRemove })} />
       </>,
     );
 
-    await act(() => pageButton(container, "Remove logo").click());
+    await act(() => namedControl(container, "Remove logo of Example Corp").click());
     await act(() => dialogButton(container, "Cancel").click());
     await settle();
 
@@ -111,32 +109,38 @@ describe("LogoManager confirmation", () => {
     expect(container.querySelector('[role="alertdialog"]')).toBeNull();
   });
 
-  it("names the file input and ties the upload policy to it", () => {
-    const container = mount(<LogoManager {...props({ hint: "SVG only. The logo is sanitized automatically." })} />);
+  it("is itself the control, named for the organization, with the upload policy tied to it", () => {
+    const container = mount(<PictureTile {...props({ hint: "SVG only. The logo is sanitized automatically." })} />);
 
-    // A bare <input type="file"> announces as "file upload button" and nothing
-    // else, which is what this was. The label resolves through for/id.
-    const input = controlFor(container, "Replace logo");
-    expect(input.getAttribute("type")).toBe("file");
-    expect(container.querySelector(`#${input.getAttribute("aria-describedby")!}`)?.textContent).toBe(
+    const control = namedControl(container, "Change logo of Example Corp");
+    expect(container.querySelector(`#${control.getAttribute("aria-describedby")!}`)?.textContent).toBe(
       "SVG only. The logo is sanitized automatically.",
     );
-  });
-
-  it("names the input after what activating it does when there is no logo yet", () => {
-    const container = mount(<LogoManager {...props({ imageUrl: null })} />);
-
-    expect(controlFor(container, "Upload logo").getAttribute("type")).toBe("file");
-    // With nothing to remove, no dead removal control is offered.
+    // The SVG-only policy reaches the picker, not only the sentence.
+    expect(container.querySelector<HTMLInputElement>('input[type="file"]')?.accept).toBe("image/svg+xml");
+    // No full-width command buttons stand beside the picture.
     expect([...container.querySelectorAll("button")].map((button) => button.textContent)).not.toContain("Remove logo");
-    expect(container.textContent).toContain("No logo");
   });
 
-  it("reports a refused upload through the caller's notifier and clears the chosen file", async () => {
+  it("offers to upload when there is no logo yet, and nothing to remove", () => {
+    const container = mount(<PictureTile {...props({ imageUrl: null })} />);
+
+    expect(namedControl(container, "Upload logo of Example Corp")).toBeInstanceOf(HTMLButtonElement);
+    expect(container.querySelector('button[aria-label^="Remove"]')).toBeNull();
+  });
+
+  it("offers no removal where the surface cannot remove the logo", () => {
+    const container = mount(<PictureTile {...props({ onRemove: undefined })} />);
+
+    expect(namedControl(container, "Change logo of Example Corp")).toBeInstanceOf(HTMLButtonElement);
+    expect(container.querySelector('button[aria-label^="Remove"]')).toBeNull();
+  });
+
+  it("reports a refused upload through the caller's notifier and resets the file control", async () => {
     const toast = vi.fn();
     const onChanged = vi.fn();
     const container = mount(
-      <LogoManager
+      <PictureTile
         {...props({
           toast,
           onChanged,
@@ -147,7 +151,7 @@ describe("LogoManager confirmation", () => {
       />,
     );
 
-    const input = controlFor<HTMLInputElement>(container, "Replace logo");
+    const input = container.querySelector<HTMLInputElement>('input[type="file"]')!;
     const file = new File(["<svg />"], "logo.svg", { type: "image/svg+xml" });
     Object.defineProperty(input, "files", { value: [file], configurable: true });
     await act(async () => {
@@ -157,8 +161,9 @@ describe("LogoManager confirmation", () => {
 
     expect(toast).toHaveBeenCalledWith("That file is not an SVG.", "error");
     expect(onChanged).not.toHaveBeenCalled();
-    // The rejected file is not left sitting in the control as though it took.
-    expect(input.value).toBe("");
+    // The control is remounted after every attempt, so the rejected file is
+    // not left sitting in it as though it took.
+    expect(container.querySelector('input[type="file"]')).not.toBe(input);
   });
 });
 
@@ -217,7 +222,7 @@ describe("PasskeySettings confirmation and row actions", () => {
     expect(requests.some((request) => request.method === "DELETE")).toBe(true);
   });
 
-  it("names the table and the device-name field instead of leaving both anonymous", async () => {
+  it("names the list and the device-name field instead of leaving both anonymous", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => passkeysResponse()),
@@ -230,8 +235,9 @@ describe("PasskeySettings confirmation and row actions", () => {
     const container = mount(<PasskeySettings toastTargetId="toast" />);
     await settle();
 
-    // A page of unnamed tables is announced as a list of "table"s.
-    expect(container.querySelector("caption")?.textContent).toBe("Passkeys registered to this account");
+    // A page of unnamed lists is announced as a list of "list"s.
+    expect(container.querySelector("ul")?.getAttribute("aria-label")).toBe("Passkeys");
+    expect(container.textContent).toContain("Never used");
     // The Bootstrap version's <label> carried no `for`, and the input carried
     // no id, so the field announced nothing at all.
     const field = controlFor(container, "Device name (optional)");
@@ -239,7 +245,25 @@ describe("PasskeySettings confirmation and row actions", () => {
     expect(labelNames(container)).toContain("Device name (optional)");
   });
 
-  it("states a failed passkey list as a sentence and shows no table", async () => {
+  it("opens the add form in a dialog from the panel menu", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => passkeysResponse()),
+    );
+    vi.stubGlobal("PublicKeyCredential", function PublicKeyCredentialStub() {
+      /* presence is the whole capability check */
+    });
+    const container = mount(<PasskeySettings toastTargetId="toast" />);
+    await settle();
+
+    const dialog = container.querySelector("dialog")!;
+    expect(dialog.hasAttribute("open")).toBe(false);
+    await beginRecordEdit(container, "Passkeys actions", "Add a passkey");
+    expect(dialog.hasAttribute("open")).toBe(true);
+    expect(dialog.querySelector(".pk-input-group")).not.toBeNull();
+  });
+
+  it("states a failed passkey list as a sentence and shows no list", async () => {
     vi.stubGlobal(
       "fetch",
       vi.fn(async () => new Response("nope", { status: 403 })),
@@ -249,7 +273,7 @@ describe("PasskeySettings confirmation and row actions", () => {
 
     const alert = container.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain("You don't have access to this.");
-    expect(container.querySelector("table")).toBeNull();
+    expect(container.querySelector("ul")).toBeNull();
   });
 
   it("says so, once, when the browser has no passkey support", async () => {
@@ -270,6 +294,9 @@ describe("PasskeySettings confirmation and row actions", () => {
 describe("ProposalSpeakerCard confirmation", () => {
   function speaker(overrides: Partial<ProposalSpeaker> = {}): ProposalSpeaker {
     return {
+      actingIdentityId: null,
+      actingIdentitySelectedAt: null,
+      actingIdentitySelection: "unrecorded",
       userId: "00000000-0000-4000-8000-000000000021",
       role: "speaker",
       status: "confirmed",
@@ -321,14 +348,12 @@ describe("ProposalSpeakerCard confirmation", () => {
         <ProposalSpeakerCard
           speaker={speaker()}
           proposalId="00000000-0000-4000-8000-000000000099"
-          canEdit={false}
           canFinalize
           isCurrentProposer={false}
           replacementSpeakers={[{ userId: "00000000-0000-4000-8000-000000000022", label: "Backup Speaker" }]}
           endpoints={{
             speakerPath: (proposalId, userId, suffix = "") =>
               `/api/v1/proposals/${proposalId}/speakers/${userId}${suffix ? `/${suffix}` : ""}`,
-            assetPath: (proposalId, userId, asset) => `/api/v1/proposals/${proposalId}/speakers/${userId}/${asset}`,
           }}
           onSaved={vi.fn()}
           onRemoved={onRemoved}
@@ -362,14 +387,12 @@ describe("ProposalSpeakerCard confirmation", () => {
         <ProposalSpeakerCard
           speaker={speaker()}
           proposalId="00000000-0000-4000-8000-000000000099"
-          canEdit={false}
           canFinalize
           isCurrentProposer={false}
           replacementSpeakers={[{ userId: "00000000-0000-4000-8000-000000000022", label: "Backup Speaker" }]}
           endpoints={{
             speakerPath: (proposalId, userId, suffix = "") =>
               `/api/v1/proposals/${proposalId}/speakers/${userId}${suffix ? `/${suffix}` : ""}`,
-            assetPath: (proposalId, userId, asset) => `/api/v1/proposals/${proposalId}/speakers/${userId}/${asset}`,
           }}
           onSaved={vi.fn()}
           onRemoved={onRemoved}

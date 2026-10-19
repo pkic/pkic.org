@@ -8,6 +8,13 @@ import { registrationManagePageUrl } from "../frontend-links";
 import { isStaleRegistrationTransition, prepareConfirmRegistrationByToken } from "./confirm";
 import { prepareRegistrationConfirmedEmail } from "./status-notifications";
 import { firstReferralCodeQuerySql } from "../referral-code-projection";
+import { nowIso } from "../../utils/time";
+import type { RegistrationConfirmOrganization } from "../../../../assets/shared/schemas/registration";
+import {
+  linkConfirmedRegistrationOrganization,
+  type RegistrationOrganizationOutcome,
+} from "./confirmation-organization";
+import { linkVerifiedAddressToDomainOrganization } from "../identities/email-domain-link";
 
 export interface ConfirmRegistrationWorkflowPayload {
   event: EventRecord;
@@ -18,6 +25,8 @@ export interface ConfirmRegistrationWorkflowPayload {
   signingSecret: string;
   appBaseUrl: string;
   rsvpEmail?: string;
+  /** The organization the confirmation page asked for, linked once the confirmation has committed. */
+  organization?: RegistrationConfirmOrganization;
 }
 
 type PreparedConfirmation = Awaited<ReturnType<typeof prepareConfirmRegistrationByToken>>;
@@ -29,6 +38,7 @@ export interface ConfirmRegistrationWorkflowResult {
   manageUrl: string;
   shareUrl: string | null;
   outboxId: string;
+  organizationOutcome: RegistrationOrganizationOutcome | null;
 }
 
 async function commitConfirmationIntent(
@@ -49,6 +59,7 @@ function confirmationResult(
   prepared: PreparedConfirmation,
   outboxId: string,
   shareUrl: string | null,
+  organizationOutcome: RegistrationOrganizationOutcome | null,
 ): ConfirmRegistrationWorkflowResult {
   return {
     stage: prepared.stage,
@@ -59,6 +70,7 @@ function confirmationResult(
     manageUrl: registrationManagePageUrl(payload.appBaseUrl, payload.event, prepared.manageToken),
     shareUrl,
     outboxId,
+    organizationOutcome,
   };
 }
 
@@ -110,10 +122,22 @@ async function confirmRegistrationWithNotificationOnce(
     outboxId: (await sha256Hex(idempotencyKey)).slice(0, 32),
   });
   await commitConfirmationIntent(db, prepared, email.statement);
+  // The proved address joins the organization its domain belongs to, when the shared rule links it automatically.
+  await linkVerifiedAddressToDomainOrganization(db, prepared.verifiedAddress);
+  // Its own atomic command after the confirmation: the committed confirmation is the mailbox proof,
+  // and an organization that needs review never undoes the confirmation itself.
+  const organizationOutcome = payload.organization
+    ? await linkConfirmedRegistrationOrganization(db, {
+        registrationId: prepared.registration.id,
+        organization: payload.organization,
+        at: nowIso(),
+      })
+    : null;
   return confirmationResult(
     payload,
     prepared,
     email.outboxId,
     referral ? `${payload.appBaseUrl}/r/${referral.code}` : null,
+    organizationOutcome,
   );
 }

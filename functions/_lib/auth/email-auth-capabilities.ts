@@ -17,11 +17,25 @@ import {
 import { decodeCapabilityPayload, encodeCapabilityPayload } from "./capability-payload";
 
 const EMAIL_FINGERPRINT_DOMAIN = "pkic-email-auth-address:v1";
+
+/**
+ * What a refused sign-in link says to the person holding it. These reach the
+ * screen as written, so they name the link the way the interface does — a
+ * sign-in link, never a "magic link" or a "token" — and say what to do next.
+ */
+export const SIGN_IN_LINK_REFUSALS = {
+  expired: "This sign-in link has expired. Request a new one.",
+  invalid: "This sign-in link is not valid. Request a new one.",
+  used: "This sign-in link has already been used. Request a new one to sign in again.",
+  otherNetwork: "This sign-in link was requested from another network. Open it there, or request a new one here.",
+  otherBrowser: "This sign-in link was requested in another browser. Open it there, or request a new one here.",
+} as const;
 const DEFAULT_MAX_RETURN_TO_LENGTH = 2048;
 
 const emailAuthCapabilityPayloadSchema = z
   .object({
     subjectId: z.string().min(1).max(128),
+    authorizationRevision: z.string().uuid().optional(),
     capabilityId: z.string().min(16).max(64),
     emailFingerprint: z.string().regex(/^[a-f0-9]{64}$/),
     ipHash: z
@@ -51,6 +65,7 @@ export async function queueEmailAuthCapability(options: {
   purpose: EmailAuthCapabilityPurpose;
   subjectId: string;
   email: string;
+  authorizationRevision?: string;
   ttlSeconds: number;
   ipHash?: string | null;
   userAgentHash?: string | null;
@@ -60,6 +75,7 @@ export async function queueEmailAuthCapability(options: {
   const capabilityId = randomToken(18);
   const payload = emailAuthCapabilityPayloadSchema.parse({
     subjectId: options.subjectId,
+    ...(options.authorizationRevision ? { authorizationRevision: options.authorizationRevision } : {}),
     capabilityId,
     emailFingerprint: await hmacSha256Hex(options.signingSecret, emailFingerprintInput(options.email)),
     ipHash: options.ipHash ?? null,
@@ -96,17 +112,17 @@ export async function verifyEmailAuthCapabilityToken(options: {
     throw new AppError(
       verified.reason === "expired" ? 410 : 404,
       verified.reason === "expired" ? "MAGIC_LINK_EXPIRED" : "MAGIC_LINK_INVALID",
-      verified.reason === "expired" ? "Magic link expired" : "Invalid magic link token",
+      verified.reason === "expired" ? SIGN_IN_LINK_REFUSALS.expired : SIGN_IN_LINK_REFUSALS.invalid,
     );
   }
 
   const payload = decodeCapabilityPayload(verified.resourceId, emailAuthCapabilityPayloadSchema);
-  if (!payload) throw new AppError(404, "MAGIC_LINK_INVALID", "Invalid magic link token");
+  if (!payload) throw new AppError(404, "MAGIC_LINK_INVALID", SIGN_IN_LINK_REFUSALS.invalid);
   if (payload.ipHash && payload.ipHash !== (options.ipHash ?? null)) {
-    throw new AppError(403, "MAGIC_LINK_CONTEXT_MISMATCH", "Magic link is not valid from this network");
+    throw new AppError(403, "MAGIC_LINK_CONTEXT_MISMATCH", SIGN_IN_LINK_REFUSALS.otherNetwork);
   }
   if (payload.userAgentHash && payload.userAgentHash !== (options.userAgentHash ?? null)) {
-    throw new AppError(403, "MAGIC_LINK_CONTEXT_MISMATCH", "Magic link is not valid from this browser");
+    throw new AppError(403, "MAGIC_LINK_CONTEXT_MISMATCH", SIGN_IN_LINK_REFUSALS.otherBrowser);
   }
   return { ...payload, expiresAt: verified.expiresAt };
 }
@@ -117,7 +133,7 @@ export async function assertEmailAuthCapabilityEmail(options: {
   currentEmail: string;
 }): Promise<void> {
   if (!(await emailAuthCapabilityMatchesEmail(options))) {
-    throw new AppError(404, "MAGIC_LINK_INVALID", "Invalid magic link token");
+    throw new AppError(404, "MAGIC_LINK_INVALID", SIGN_IN_LINK_REFUSALS.invalid);
   }
 }
 
@@ -145,7 +161,7 @@ function isEmailAuthReplayConflict(error: unknown): boolean {
 }
 
 function emailAuthReplayError(): AppError {
-  return new AppError(409, "MAGIC_LINK_USED", "Magic link already used");
+  return new AppError(409, "MAGIC_LINK_USED", SIGN_IN_LINK_REFUSALS.used);
 }
 
 export async function commitEmailAuthRedemption(
@@ -187,7 +203,7 @@ export async function commitEmailAuthRedemption(
     ]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) {
-      throw new AppError(404, "MAGIC_LINK_INVALID", "Invalid magic link token");
+      throw new AppError(404, "MAGIC_LINK_INVALID", SIGN_IN_LINK_REFUSALS.invalid);
     }
     if (isEmailAuthReplayConflict(error)) throw emailAuthReplayError();
     throw error;

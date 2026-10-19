@@ -42,8 +42,8 @@
   }
 
   /*
-   * A measured column aligned to the page's start rather than centred. A lone
-   * form card centred under a left-aligned page heading reads as two pages
+   * A measured column aligned to the page's start rather than centered. A lone
+   * form card centered under a left-aligned page heading reads as two pages
    * that happen to share a screen; on a wide display the heading sat at the
    * far left with the card floating in the middle (#49, #53).
    */
@@ -61,6 +61,11 @@
     display: flex;
     flex-direction: column;
     gap: var(--pk-gap, var(--pk-4));
+  }
+
+  /* A button is as wide as its label, never the column: a stacked layout must not stretch it. */
+  :is(.pk-stack, .pk-form) > :is(.pk-btn, button, a.pk-btn) {
+    align-self: flex-start;
   }
 
   /* Tighter rhythms, as classes. A surface that needs a smaller gap picks one
@@ -90,12 +95,16 @@
     flex-wrap: nowrap;
   }
 
-  /* Forms fill their containing layout; field groups own their columns. */
+  /* Forms fill their containing layout; field groups own their columns. A form
+     separates its fields by `pk-4`, twice the `pk-2` a `Field` keeps between a
+     label and its control, so a label reads as belonging to the control below
+     it and not to the field above. */
   .pk-form {
     min-width: 0;
+    gap: var(--pk-gap, var(--pk-4));
   }
 
-  /* A cluster whose items align to their tops rather than their centres —
+  /* A cluster whose items align to their tops rather than their centers —
      an icon beside a wrapping paragraph, where centring looks accidental. */
   .pk-cluster--start {
     align-items: flex-start;
@@ -155,27 +164,6 @@
   }
 
   /*
-   * A row of small figures that stays a row.
-   *
-   * `pk-grid` sizes tracks from a minimum and folds to one column when the
-   * container is narrower than that. Right for cards; wrong for the three
-   * figures in a glance panel, which in an 18rem aside fell below even
-   * `--pk-col-min: 11rem` and stacked into a column three tiles tall. These
-   * tracks are equal fractions of whatever width there is: the figures are
-   * short enough to survive the squeeze, and reading them side by side is the
-   * whole point of a glance.
-   */
-  .pk-figure-row,
-  .pk-stat-row {
-    display: grid;
-    gap: var(--pk-gap, var(--pk-3));
-  }
-
-  .pk-figure-row {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-
-  /*
    * A row of stat cards that uses the width it has.
    *
    * `pk-grid` is `auto-fill`: it lays as many minimum-width tracks as fit
@@ -187,6 +175,8 @@
    * width, not a card's, so the row stays a row on a laptop.
    */
   .pk-stat-row {
+    display: grid;
+    gap: var(--pk-gap, var(--pk-3));
     grid-template-columns: repeat(auto-fit, minmax(min(var(--pk-stat-min, 9.5rem), 100%), 1fr));
   }
 
@@ -266,20 +256,6 @@
   }
 
   /*
-   * A closing note, set off from what it explains by a hairline.
-   *
-   * Not `pk-section`: that is the page's rhythm between whole sections and
-   * pads by `--pk-7`, which inside a panel opens a hole under the content and
-   * pushes the note away from the thing it is a note about. This is the small
-   * separation a footnote wants — the caption under a chip shelf, the sentence
-   * under a set of figures.
-   */
-  .pk-footnote {
-    padding-block-start: var(--pk-3);
-    border-block-start: 1px solid var(--pk-line-soft);
-  }
-
-  /*
    * A fieldset carrying no visible frame.
    *
    * `disabled` on a fieldset is the only way to take a whole form out of play
@@ -288,7 +264,7 @@
    * agent's groove border, its own padding, and `min-inline-size: min-content`,
    * which stops it shrinking inside a grid or flex parent. `base.css` resets
    * headings and lists, not this, so the reset lives here rather than being
-   * re-derived by every form that needs the disabled behaviour. Padding is
+   * re-derived by every form that needs the disabled behavior. Padding is
    * removed rather than tokenised: the spacing belongs to the parent's `gap`.
    */
   .pk-fieldset {
@@ -296,23 +272,6 @@
     padding: 0;
     border: 0;
     min-inline-size: 0;
-  }
-
-  /*
-   * The framed variant: a repeated sub-record inside a form — one person in a
-   * list of drafts — whose fields must read as its own rather than as the
-   * surrounding form's. The frame is what carries that boundary, and the
-   * legend sits on it, naming the card the way a fieldset always could.
-   */
-  .pk-fieldset--boxed {
-    border: 1px solid var(--pk-line);
-    border-radius: var(--pk-radius-lg);
-    padding: var(--pk-4);
-    background: var(--pk-surface);
-  }
-
-  .pk-fieldset--boxed > legend {
-    padding-inline: var(--pk-1);
   }
 
   /* The few text utilities worth having, all reading tokens. */
@@ -386,7 +345,8 @@
    * will stretch the whole document sideways from wherever it happens to land.
    * Any scroll container that can hold one needs `position: relative`.
    */
-  .pk-sr-only {
+  .pk-sr-only,
+  .pk-field__sr {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -425,7 +385,7 @@
     }
   }
 
-  /* A required marker beside a label. Its colour is the danger state, because
+  /* A required marker beside a label. Its color is the danger state, because
      that is what it means, not because red was handy. */
   .pk-required {
     color: var(--pk-danger-ink);
@@ -434,20 +394,6 @@
   /* An inline caution beside a control, short of a full Alert. */
   .pk-warning-note {
     color: var(--pk-warn-ink);
-  }
-
-  /*
-   * The affirmative and informational counterparts, for a statement a panel
-   * leads with — "Open to employment", "Available for contract work". The
-   * words carry the meaning; the ink only tells the two states apart at a
-   * glance, so a reader who cannot see the difference loses nothing.
-   */
-  .pk-ok-note {
-    color: var(--pk-ok-ink);
-  }
-
-  .pk-info-note {
-    color: var(--pk-info-ink);
   }
 
   /* Long unbroken strings — a token, a URL — that would otherwise widen their
@@ -470,5 +416,4 @@
      40px indent, which would push the values out of line with their term. */
   /* Preformatted text that must still wrap: a long free-text answer has no
      line breaks of its own and would otherwise scroll sideways forever. */
-
 }

@@ -23,35 +23,6 @@ import { describe, expect, it } from "vitest";
 /** The components that own drawing initials. */
 const OWNERS = new Set([
   "assets/ts/ui/Avatar.css", // a person's face
-  "assets/ts/components/PictureTile.css", // an organization's logo
-]);
-
-/**
- * Surfaces that still draw their own, and why each one still does.
- *
- * This is an inventory, not an exemption: it exists so a *new* surface cannot
- * quietly become the seventh, and it shrinks as each entry migrates. Every
- * one of these is markup a Hugo template emits, so using the component means
- * making the surface an island first — a rendering change, not a restyle.
- *
- * Delete an entry when its surface moves to `Avatar`; the test then requires
- * the stylesheet to have stopped drawing initials.
- */
-const TEMPLATE_RENDERED = new Map([
-  // Blocked on the same question as the rest of the blog author work: a post
-  // names its author as a display name with no organization beside it, so
-  // answering it from D1 needs a public people-search across the membership
-  // as of a date — a privacy decision, not a refactor (#8).
-  ["assets/scss/_blog.scss", "blog author cards, blocked on #8's people-search question"],
-  // The agenda is a shortcode over event front matter, not a fetched surface.
-  ["assets/scss/_agenda.scss", "agenda speaker portraits, rendered by layouts/shortcodes/agenda.html"],
-  // The member grid and profile hero, rendered by Preact but with the public
-  // site's own `initial-color-N` palette rather than the design tokens.
-  ["assets/scss/_bento.scss", "public member cards, pending the palette decision"],
-  // The public person card: the one remaining Preact holdout. Swapping it to
-  // `Avatar` changes the ring and the accent palette on published pages, so it
-  // is a visual decision rather than a like-for-like migration.
-  ["assets/scss/_leadership-cards.scss", "PublicPersonCard's accent ring, pending the palette decision"],
 ]);
 
 /** The one module answering "what letters stand in for this picture". */
@@ -75,17 +46,7 @@ describe("initials avatars", () => {
       .filter((file) => !OWNERS.has(file))
       .filter((file) => /[.&-]initials?\b|initials-avatar|-initials\s*\{/.test(fs.readFileSync(file, "utf8")));
 
-    expect(
-      drawing.filter((file) => !TEMPLATE_RENDERED.has(file)),
-      "a new surface is drawing its own initials avatar instead of using the component",
-    ).toEqual([]);
-
-    // And the inventory does not outlive what it describes: an entry whose
-    // stylesheet has stopped drawing initials is a migration nobody recorded.
-    expect(
-      [...TEMPLATE_RENDERED.keys()].filter((file) => !drawing.includes(file)),
-      "this surface no longer draws its own initials — remove it from the inventory",
-    ).toEqual([]);
+    expect(drawing, "only Avatar draws initials").toEqual([]);
   });
 
   it("take their letters from one implementation", () => {

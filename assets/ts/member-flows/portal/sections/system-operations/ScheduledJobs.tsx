@@ -95,12 +95,10 @@ function JobHealth({ job }: { job: ScheduledJobResource }) {
         Failures {job.consecutiveFailures}; abandoned {job.consecutiveAbandoned}
       </div>
       {job.lastError ? (
-        <details>
-          {/* The word carries the meaning. A red line and nothing else leaves
-              anyone who cannot separate the hues with an unexplained colour. */}
-          <summary class="pk-small">Last error</summary>
-          <div class="pk-small pk-break">{job.lastError}</div>
-        </details>
+        <div class="pk-small pk-break">
+          <span class="pk-strong">Last error: </span>
+          {job.lastError}
+        </div>
       ) : null}
     </div>
   );
@@ -353,6 +351,7 @@ export function ScheduledJobs() {
         Inspect dispatcher cadence and outcomes. Pausing prevents future claims but does not cancel a running job.
       </p>
       <ApiDataTable
+        urlState="scheduled-jobs"
         caption="Scheduled jobs"
         endpoint="/api/v1/scheduler/jobs"
         responseSchema={schedulerJobsListResponseSchema}

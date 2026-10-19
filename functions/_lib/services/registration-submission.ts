@@ -20,6 +20,8 @@ import {
   type CustomAnswerValue,
 } from "./forms";
 import { isAuthorizationGuardFailure } from "../db/authorization-guard";
+import { prepareVerifyOwnedEmailStatements } from "./email-verification";
+import { normalizeEmail } from "../validation";
 
 export interface PreparedRegistrationSubmission {
   user: UserRecord;
@@ -61,6 +63,8 @@ export async function prepareRegistrationSubmission(
     authorizationGuards?: readonly StatementLike[];
     termsSnapshotGuard?: StatementLike | null;
     verifiedIdentity?: VerifiedRegistrationIdentityContext;
+    /** The registrant opened the verification link for this address; it is recorded as verified with the registration. */
+    mailboxVerified?: boolean;
   },
 ): Promise<PreparedRegistrationSubmission> {
   const preparedUser = await buildFindOrCreateUserStatement(db, payload.user);
@@ -83,12 +87,7 @@ export async function prepareRegistrationSubmission(
     signingSecret: payload.signingSecret,
     unverifiedEmailCorrectionAllowed: preparedUser.created,
     verifiedIdentity: payload.verifiedIdentity,
-    eventOrganizationName: payload.verifiedIdentity?.selectedIdentity
-      ? (payload.verifiedIdentity.selectedIdentity.organizationName ?? payload.user.organizationName ?? null)
-      : null,
-    eventJobTitle: payload.verifiedIdentity?.selectedIdentity
-      ? (payload.verifiedIdentity.selectedIdentity.jobTitle ?? payload.user.jobTitle ?? null)
-      : null,
+    mailboxVerified: payload.mailboxVerified,
   });
   const existingReferral = await first<{ code: string }>(db, firstReferralCodeQuerySql("registration", "?"), [
     builtRegistration.registration.id,
@@ -121,7 +120,15 @@ export async function prepareRegistrationSubmission(
   statements.push(...(payload.authorizationGuards ?? []));
   if (payload.termsSnapshotGuard) statements.push(payload.termsSnapshotGuard);
   if (payload.formRevisionGuard) statements.push(payload.formRevisionGuard);
-  if (preparedUser.statement) statements.push(preparedUser.statement);
+  statements.push(...preparedUser.statements);
+  if (payload.mailboxVerified)
+    statements.push(
+      ...prepareVerifyOwnedEmailStatements(db, {
+        userId: preparedUser.user.id,
+        normalizedEmail: normalizeEmail(payload.user.email),
+        method: "registration_confirmation",
+      }),
+    );
   statements.push(
     ...builtRegistration.statements,
     ...(formSubmission?.statements ?? []),
@@ -170,13 +177,7 @@ export async function prepareRegistrationSubmission(
   );
 
   return {
-    user: payload.verifiedIdentity?.selectedIdentity
-      ? {
-          ...preparedUser.user,
-          organization_name: builtRegistration.registration.registration_organization_name,
-          job_title: builtRegistration.registration.registration_job_title,
-        }
-      : preparedUser.user,
+    user: preparedUser.user,
     identityWasCreated: preparedUser.created,
     registration: builtRegistration.registration,
     manageToken: builtRegistration.manageToken,

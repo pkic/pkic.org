@@ -4,6 +4,8 @@ import type { DatabaseLike } from "../../types";
 import { REGISTRATION_CONFIRMATION_RECIPIENT_EMAIL_SQL } from "./recipient-email";
 
 export interface RegistrationConfirmationInfo {
+  user_id: string;
+  normalized_email: string;
   first_name: string | null;
   last_name: string | null;
   email: string | null;
@@ -18,7 +20,7 @@ export function getRegistrationConfirmationInfo(
 ): Promise<RegistrationConfirmationInfo | null> {
   return first<RegistrationConfirmationInfo>(
     db,
-    `SELECT u.first_name, u.last_name, ${REGISTRATION_CONFIRMATION_RECIPIENT_EMAIL_SQL} AS email, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name,
+    `SELECT u.id AS user_id, u.normalized_email, u.first_name, u.last_name, ${REGISTRATION_CONFIRMATION_RECIPIENT_EMAIL_SQL} AS email, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name,
             e.name AS event_name
        FROM registrations r
        JOIN users u ON u.id = r.user_id

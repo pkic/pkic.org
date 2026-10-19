@@ -1,7 +1,6 @@
 import { administratorGrants } from "./helpers/administrator";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
 import {
   addProposalSpeaker,
   createProposal,
@@ -14,12 +13,11 @@ import { resetDb } from "./helpers/reset-db";
 import { queryAll, registrationAdmissionRole } from "./helpers/context";
 import {
   inviteSpeakerAndSubmitCapacityProposal,
+  requestProposalSpeakerCapacity,
   seedAcceptedSpeakerRegistration,
   seedPendingSpeakerRegistration,
   setupProposalSpeakerCapacityWorkflow,
 } from "./helpers/proposal-speaker-capacity";
-
-const requestOptions = { passThroughOnException: () => {}, waitUntil: () => {} } as any;
 
 async function expectWaitingAndNotExempt(registrationId: string): Promise<void> {
   await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBeNull();
@@ -57,13 +55,11 @@ describe("proposal speaker capacity reconciliation", () => {
       speakerUserId: coSpeakerUserId,
     });
 
-    const response = await app.fetch(
+    const response = await requestProposalSpeakerCapacity(
       new Request(
         `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
         { method: "DELETE", headers: { "content-type": "application/json" }, body: "{}" },
       ),
-      env,
-      requestOptions,
     );
     expect(response.status).toBe(200);
     await expectWaitingAndNotExempt(registrationId);
@@ -78,14 +74,12 @@ describe("proposal speaker capacity reconciliation", () => {
       speakerUserId: coSpeakerUserId,
     });
 
-    const response = await app.fetch(
+    const response = await requestProposalSpeakerCapacity(
       new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
         method: "DELETE",
         headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
         body: "{}",
       }),
-      env,
-      requestOptions,
     );
     expect(response.status).toBe(200);
     await expectWaitingAndNotExempt(registrationId);
@@ -101,7 +95,7 @@ describe("proposal speaker capacity reconciliation", () => {
       speakerUserId: coSpeakerUserId,
     });
 
-    const response = await app.fetch(
+    const response = await requestProposalSpeakerCapacity(
       new Request(
         `https://app.test/api/v1/proposals/speakers/access/${encodeURIComponent(speakerManageToken)}/participation`,
         {
@@ -110,8 +104,6 @@ describe("proposal speaker capacity reconciliation", () => {
           body: JSON.stringify({ status: "declined", reason: "Schedule conflict" }),
         },
       ),
-      env,
-      requestOptions,
     );
     expect(response.status).toBe(200);
     await expectWaitingAndNotExempt(registrationId);
@@ -143,7 +135,7 @@ describe("proposal speaker capacity reconciliation", () => {
       .bind(eventId, registrationId, coSpeakerUserId)
       .run();
 
-    const response = await app.fetch(
+    const response = await requestProposalSpeakerCapacity(
       new Request(
         `https://app.test/api/v1/proposals/speakers/access/${encodeURIComponent(speakerManageToken)}/participation`,
         {
@@ -152,8 +144,6 @@ describe("proposal speaker capacity reconciliation", () => {
           body: JSON.stringify({ status: "declined", reason: "Schedule conflict" }),
         },
       ),
-      env,
-      requestOptions,
     );
     expect(response.status).toBe(200);
     await expectWaitingAndNotExempt(registrationId);
@@ -169,7 +159,7 @@ describe("proposal speaker capacity reconciliation", () => {
       speakerUserId: coSpeakerUserId,
     });
 
-    const response = await app.fetch(
+    const response = await requestProposalSpeakerCapacity(
       new Request(
         `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
         {
@@ -178,8 +168,6 @@ describe("proposal speaker capacity reconciliation", () => {
           body: JSON.stringify({ role: "panelist" }),
         },
       ),
-      env,
-      requestOptions,
     );
     expect(response.status).toBe(200);
     await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBe("panelist");
@@ -201,14 +189,12 @@ describe("proposal speaker capacity reconciliation", () => {
       speakerUserId: coSpeakerUserId,
     });
 
-    const response = await app.fetch(
+    const response = await requestProposalSpeakerCapacity(
       new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/${coSpeakerUserId}`, {
         method: "PATCH",
         headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
         body: JSON.stringify({ role: "panelist" }),
       }),
-      env,
-      requestOptions,
     );
     expect(response.status).toBe(200);
     await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBe("panelist");
@@ -230,16 +216,14 @@ describe("proposal speaker capacity reconciliation", () => {
       proposalId,
       speakerUserId: coSpeakerUserId,
     });
-    const removeResponse = await app.fetch(
+    const removeResponse = await requestProposalSpeakerCapacity(
       new Request(
         `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
         { method: "DELETE", headers: { "content-type": "application/json" }, body: "{}" },
       ),
-      env,
-      requestOptions,
     );
     expect(removeResponse.status).toBe(200);
-    const addResponse = await app.fetch(
+    const addResponse = await requestProposalSpeakerCapacity(
       new Request(`https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers`, {
         method: "POST",
         headers: { "content-type": "application/json" },
@@ -250,8 +234,6 @@ describe("proposal speaker capacity reconciliation", () => {
           role: "speaker",
         }),
       }),
-      env,
-      requestOptions,
     );
     expect(addResponse.status).toBe(200);
     await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBe("speaker");
@@ -274,7 +256,7 @@ describe("proposal speaker capacity reconciliation", () => {
       .bind(proposal.event_id, coSpeakerUserId)
       .run();
 
-    const response = await app.fetch(
+    const response = await requestProposalSpeakerCapacity(
       new Request(
         `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
         {
@@ -283,8 +265,6 @@ describe("proposal speaker capacity reconciliation", () => {
           body: JSON.stringify({ role: "panelist" }),
         },
       ),
-      env,
-      requestOptions,
     );
     expect(response.status).toBe(200);
     await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBe("organizer");
@@ -299,7 +279,7 @@ describe("proposal speaker capacity reconciliation", () => {
       speakerUserId: coSpeakerUserId,
     });
 
-    const moderator = await app.fetch(
+    const moderator = await requestProposalSpeakerCapacity(
       new Request(
         `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
         {
@@ -308,8 +288,6 @@ describe("proposal speaker capacity reconciliation", () => {
           body: JSON.stringify({ role: "moderator" }),
         },
       ),
-      env,
-      requestOptions,
     );
     expect(moderator.status).toBe(200);
     await expect(
@@ -322,7 +300,7 @@ describe("proposal speaker capacity reconciliation", () => {
     ).resolves.toContainEqual({ role: "moderator", subrole: null, status: "active" });
     await expect(registrationAdmissionRole(env.DB, registrationId)).resolves.toBe("moderator");
 
-    const panelist = await app.fetch(
+    const panelist = await requestProposalSpeakerCapacity(
       new Request(
         `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
         {
@@ -331,8 +309,6 @@ describe("proposal speaker capacity reconciliation", () => {
           body: JSON.stringify({ role: "panelist" }),
         },
       ),
-      env,
-      requestOptions,
     );
     expect(panelist.status).toBe(200);
     await expect(
@@ -374,13 +350,11 @@ describe("proposal speaker capacity reconciliation", () => {
       minReviewsRequired: 0,
     });
 
-    const removal = await app.fetch(
+    const removal = await requestProposalSpeakerCapacity(
       new Request(
         `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${coSpeakerUserId}`,
         { method: "DELETE", headers: { "content-type": "application/json" }, body: "{}" },
       ),
-      env,
-      requestOptions,
     );
     expect(removal.status).toBe(200);
     await expect(
@@ -488,14 +462,12 @@ describe("proposal speaker capacity reconciliation", () => {
     const { proposalManageToken, coSpeakerUserId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
     const registrationId = await seedPendingSpeakerRegistration({ eventId, speakerUserId: coSpeakerUserId });
 
-    const response = await app.fetch(
+    const response = await requestProposalSpeakerCapacity(
       new Request(`https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}`, {
         method: "PATCH",
         headers: { "content-type": "application/json" },
         body: JSON.stringify({ status: "withdrawn" }),
       }),
-      env,
-      requestOptions,
     );
     expect(response.status).toBe(200);
     await expectWaitingAndNotExempt(registrationId);
@@ -543,24 +515,20 @@ describe("proposal speaker capacity reconciliation", () => {
         coSpeakerUserId,
       ),
     ]);
-    const proposerResponse = await app.fetch(
+    const proposerResponse = await requestProposalSpeakerCapacity(
       new Request(
         `https://app.test/api/v1/proposals/access/${encodeURIComponent(proposalManageToken)}/speakers/${proposal.proposer_user_id}`,
         { method: "DELETE", headers: { "content-type": "application/json" }, body: "{}" },
       ),
-      env,
-      requestOptions,
     );
     expect(proposerResponse.status).toBe(409);
     await expect(proposerResponse.json()).resolves.toMatchObject({ error: { code: "LAST_SPEAKER_REQUIRED" } });
-    const adminResponse = await app.fetch(
+    const adminResponse = await requestProposalSpeakerCapacity(
       new Request(`https://app.test/api/v1/proposals/${proposalId}/speakers/${proposal.proposer_user_id}`, {
         method: "DELETE",
         headers: { "content-type": "application/json", authorization: `Bearer ${adminSessionToken}` },
         body: "{}",
       }),
-      env,
-      requestOptions,
     );
     expect(adminResponse.status).toBe(409);
     await expect(adminResponse.json()).resolves.toMatchObject({ error: { code: "LAST_SPEAKER_REQUIRED" } });

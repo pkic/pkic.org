@@ -1,16 +1,12 @@
-import {
-  emailDomainOf,
-  isDisposableEmailDomain,
-  isPersonalEmailDomain,
-} from "../../../../../assets/shared/constants/email-domains";
+import { emailDomainOf } from "../../../../../assets/shared/schemas/email-domains";
 import type { MemberJoinApplicantKind } from "../../../../../assets/shared/schemas/member-join";
 import { prepareQueueEmailStatement } from "../../../email/outbox-queue";
-import { AppError } from "../../../errors";
 import type { DatabaseLike } from "../../../types";
 import { prepareAuditLog } from "../../audit";
 import { findExistingJoinMember } from "./existing-member";
 import { newMemberJoinCapabilityPayload, queuedMemberJoinVerificationToken } from "./capabilities";
 
+/** The route's work-email screen has already refused disposable and unattested free addresses. */
 export async function startMemberJoin(
   db: DatabaseLike,
   input: {
@@ -19,16 +15,8 @@ export async function startMemberJoin(
     ttlMinutes: number;
     appBaseUrl: string;
   },
-): Promise<
-  { status: "unaffiliated_attestation_required"; outboxId: null } | { status: "verification_sent"; outboxId: string }
-> {
+): Promise<{ status: "verification_sent"; outboxId: string }> {
   const domain = emailDomainOf(input.email);
-  if (isDisposableEmailDomain(domain)) {
-    throw new AppError(422, "DISPOSABLE_EMAIL_NOT_ALLOWED", "Disposable email providers are not accepted");
-  }
-  if (isPersonalEmailDomain(domain) && !input.unaffiliatedAttestation) {
-    return { status: "unaffiliated_attestation_required", outboxId: null };
-  }
 
   const member = await findExistingJoinMember(db, input.email);
   if (member) {

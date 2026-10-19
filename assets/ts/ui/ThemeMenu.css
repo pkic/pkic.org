@@ -1,0 +1,16 @@
+/*
+ * The hydrated theme menu. These rules ride the menu chunk after `Menu.css`,
+ * so they outrank the shared trigger's hover and open states and keep the
+ * navbar's translucent treatment.
+ */
+@layer components {
+  .pk-theme-control .pk-menu__trigger.pk-menu__trigger--plain {
+    border-color: transparent;
+    background: none;
+    color: inherit;
+  }
+  .pk-theme-control .pk-menu__trigger.pk-menu__trigger--plain:hover,
+  .pk-theme-control .pk-menu__trigger.pk-menu__trigger--plain:focus-visible {
+    background: color-mix(in srgb, currentColor 12%, transparent);
+  }
+}

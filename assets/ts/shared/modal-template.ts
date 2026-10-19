@@ -49,7 +49,7 @@ export function mountModalTemplate(templateId: string, dialogId: string, errorLa
   const dialog = document.getElementById(dialogId);
   if (!(dialog instanceof HTMLDialogElement)) {
     // Not merely "no root": a root that is not a dialog would render as an
-    // ordinary block in the page flow, with none of the modal behaviour the
+    // ordinary block in the page flow, with none of the modal behavior the
     // caller is relying on. Failing here is better than showing that.
     console.error(`${errorLabel} template did not render a dialog`);
     return null;

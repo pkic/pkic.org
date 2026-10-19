@@ -1,4 +1,4 @@
-import app from "../../functions/router";
+import app from "./app";
 import { env } from "cloudflare:workers";
 import { createAdminSession } from "./auth";
 import { queryAll, seedEventAndAdmin } from "./context";

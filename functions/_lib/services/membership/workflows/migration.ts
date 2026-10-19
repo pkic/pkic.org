@@ -16,9 +16,8 @@ import { prepareAuditLog } from "../../audit";
 import { getMemberApplicationById } from "../applications/queries";
 import { requireMembershipCategory } from "../categories";
 import { getMembershipWorkflowVersion } from "./catalog";
-import { prepareMembershipWorkflowPin } from "./pinning";
+import { prepareMembershipWorkflowRestart } from "./restart";
 import { workflowWriteConflict } from "./drafts";
-import { prepareRemoveMembershipReviewSnapshots } from "./review-digest-content";
 
 async function migrationSnapshot(db: DatabaseLike, applicationId: string, versionId: string) {
   const application = await getMemberApplicationById(db, applicationId);
@@ -101,18 +100,7 @@ export async function migrateMembershipWorkflow(
           current.revision,
         ],
       }),
-      ...prepareRemoveMembershipReviewSnapshots(db, applicationId, now),
-      db
-        .prepare(
-          "UPDATE membership_application_workflows SET superseded_at = ?, next_evaluation_at = NULL WHERE application_id = ? AND superseded_at IS NULL",
-        )
-        .bind(now, applicationId),
-      ...prepareMembershipWorkflowPin(db, applicationId, category, target, generation, now, true),
-      db
-        .prepare(
-          "UPDATE membership_fee_intents SET handling_required = 1, updated_at = ? WHERE application_id = ? AND status = 'paid'",
-        )
-        .bind(now, applicationId),
+      ...prepareMembershipWorkflowRestart(db, applicationId, current, category, target, now, true),
       db
         .prepare(
           "UPDATE member_applications SET stage = ?, stage_entered_at = ?, transition_revision = transition_revision + 1, updated_at = ? WHERE id = ?",

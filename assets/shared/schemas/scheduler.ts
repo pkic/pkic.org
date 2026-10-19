@@ -8,8 +8,37 @@ import { listQuerySchema, paginatedResponseSchema } from "./pagination";
  * Jobs are nested under it so `/api/v1/jobs` stays available for unrelated
  * postings, and so neither segment is a compound name.
  */
+export const SCHEDULED_JOB_KEYS = [
+  "membership_workflows",
+  "membership_fee_checkouts",
+  "member_news_refresh",
+  "due_work",
+  "agenda_participation",
+  "agenda_reminders",
+  "site_publication",
+  "recording_acquisitions",
+  "on_hold_due_work",
+  "google_groups_sync",
+  "sponsorship_due_work",
+  "sponsor_logo_publication",
+  "votes_due_work",
+  "retention",
+  "working_group_chair_digest",
+  "meeting_invitations",
+  "event_email_campaigns",
+  "live_session_erasures",
+  "organization_domain_linking",
+  "person_profile_addresses",
+  "standing_chair_terms",
+  "standing_event_speakers",
+  "oauth_authorization_completions",
+] as const;
+export const scheduledJobKeySchema = z.enum(SCHEDULED_JOB_KEYS);
+export type ScheduledJobKey = z.infer<typeof scheduledJobKeySchema>;
+
 export const SCHEDULED_JOB_STATUSES = ["succeeded", "failed", "abandoned", "budget_exhausted"] as const;
 export const scheduledJobStatusSchema = z.enum(SCHEDULED_JOB_STATUSES);
+export type ScheduledJobStatus = z.infer<typeof scheduledJobStatusSchema>;
 
 export const scheduledJobSchema = z.object({
   jobKey: z.string().min(1).max(80),

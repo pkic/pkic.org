@@ -273,7 +273,8 @@ export function WorkflowReviewPage({
       )}
       <ErrorAlert error={state.error} />
       <p>
-        Submitted by {review.application.applicantName} ({review.application.applicantEmail}).
+        Submitted by {review.application.applicantName}
+        {review.application.applicantEmail && ` (${review.application.applicantEmail})`}.
       </p>
       <MembershipWorkflowProgress progress={review.workflow} />
       <ReviewAction key={review.workflow.revision} base={base} review={review} onSaved={refresh} />
@@ -289,6 +290,7 @@ export function WorkflowReviewPage({
         />
       )}
       <ApiDataTable
+        urlState="review-objections"
         caption="Review objections"
         endpoint={`${base}/objections`}
         responseSchema={membershipWorkflowObjectionsResponseSchema}

@@ -3,6 +3,7 @@ import { preparePermissionsAuthorizationGuard } from "../../../auth/permissions"
 import { isAuthorizationGuardFailure } from "../../../db/authorization-guard";
 import { getRequestedApplicationGroups } from "./queries";
 import { membershipApplicantPolicySchema } from "../../../../../assets/shared/schemas/membership-applicant-policy";
+import { mailboxKind } from "../../../email-domains/classification";
 /**
  * Staff listing/detail queries for member_applications. This management view
  * includes every lifecycle state and staff-only communications and notes.
@@ -14,9 +15,11 @@ import { buildD1TextSearchFilter } from "../../../db/search";
 import { AppError } from "../../../errors";
 import { uuid } from "../../../utils/ids";
 import { nowIso } from "../../../utils/time";
-import { MEMBERSHIP_APPLICATION_FORM_KEY } from "../../../../../assets/shared/schemas/membership-application-form";
+import {
+  MEMBERSHIP_APPLICATION_FORM_KEY,
+  applicationFieldRulesForApplicantKind,
+} from "../../../../../assets/shared/schemas/membership-application-form";
 import { requireMembershipApplicationPolicyFields } from "../application-form";
-import { emailDomain } from "./create";
 import { requireMembershipCategory } from "../categories";
 import {
   getApplicationAnswers,
@@ -35,6 +38,7 @@ import {
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange } from "../../audit";
 import {
   getOrganizationDomainClaim,
+  organizationLinkDomain,
   prepareClaimDomainForApplication,
   prepareReleaseApplicationDomainClaim,
 } from "../organization-domain-claims";
@@ -72,6 +76,14 @@ type MembershipApplicationSummaryRow = Pick<
   | "created_at"
   | "updated_at"
 >;
+
+// The list and record read the same pinned requirement, including configured labels.
+const CURRENT_APPLICATION_REQUIREMENT_SQL = `CASE WHEN ma.stage IN ('submitted', 'processing', 'on_hold')
+  THEN json_extract(version.definition_json, '$.steps[' || workflow.current_position || '].label')
+  ELSE NULL END`;
+const APPLICATION_REQUIREMENT_JOINS_SQL = `LEFT JOIN membership_application_workflows workflow
+  ON workflow.application_id = ma.id AND workflow.superseded_at IS NULL
+  LEFT JOIN membership_workflow_versions version ON version.id = workflow.version_id`;
 
 type MembershipApplicationManagementSummaryRow = MembershipApplicationSummaryRow & {
   membership_category_label: string;
@@ -134,13 +146,10 @@ export async function listMembershipApplications(
                    ma.membership_category, mc.label AS membership_category_label,
                    ma.stage, ma.on_hold_subtype, ma.assigned_to_user_id,
                    ma.created_at, ma.updated_at,
-                   CASE WHEN ma.stage IN ('submitted', 'processing', 'on_hold')
-                     THEN json_extract(version.definition_json, '$.steps[' || workflow.current_position || '].label')
-                     ELSE NULL END AS current_requirement
+                   ${CURRENT_APPLICATION_REQUIREMENT_SQL} AS current_requirement
             FROM member_applications ma
             JOIN membership_categories mc ON mc.code = ma.membership_category
-            LEFT JOIN membership_application_workflows workflow ON workflow.application_id = ma.id AND workflow.superseded_at IS NULL
-            LEFT JOIN membership_workflow_versions version ON version.id = workflow.version_id ${where}`,
+            ${APPLICATION_REQUIREMENT_JOINS_SQL} ${where}`,
     bindings: values,
     orderBy,
     limit: params.limit,
@@ -172,9 +181,13 @@ export async function getMembershipApplicationDetail(
 
   const answers = await getApplicationAnswers(db, application.form_submission_id);
   const [category, eventRows, communications, requestedWorkingGroupRows, form] = await Promise.all([
-    first<{ label: string }>(db, "SELECT label FROM membership_categories WHERE code = ?", [
-      application.membership_category,
-    ]),
+    first<{ label: string; current_requirement: string | null }>(
+      db,
+      `SELECT mc.label, ${CURRENT_APPLICATION_REQUIREMENT_SQL} AS current_requirement
+       FROM member_applications ma JOIN membership_categories mc ON mc.code = ma.membership_category
+       ${APPLICATION_REQUIREMENT_JOINS_SQL} WHERE ma.id = ?`,
+      [applicationId],
+    ),
     all<ApplicationEventRow>(
       db,
       `SELECT from_stage, to_stage, actor_user_id, note, created_at FROM member_application_events WHERE application_id = ? ORDER BY created_at ASC`,
@@ -186,7 +199,7 @@ export async function getMembershipApplicationDetail(
   ]);
 
   return membershipApplicationDetailSchema.parse({
-    ...toSummary(application, category?.label ?? application.membership_category),
+    ...toSummary(application, category?.label ?? application.membership_category, category?.current_requirement),
     stageEnteredAt: application.stage_entered_at,
     answers,
     answerFields: form?.fields ?? [],
@@ -276,7 +289,7 @@ export async function updateMembershipApplication(
   }
 
   const nextApplicantEmail = input.applicantEmail ?? application.applicant_email;
-  const policy = membershipApplicantPolicySchema(nextCategory).safeParse({
+  const policy = membershipApplicantPolicySchema(nextCategory, mailboxKind(nextApplicantEmail)).safeParse({
     applicantEmail: nextApplicantEmail,
     organizationName: nextOrganizationName ?? undefined,
   });
@@ -291,7 +304,7 @@ export async function updateMembershipApplication(
   // Keep the denormalized application snapshot and canonical claim registry
   // in lockstep. The delete + replacement insert joins the application
   // update below in one batch, so a conflicting domain rolls everything back.
-  const nextOrganizationDomain = nextIsIndividual ? null : emailDomain(nextApplicantEmail);
+  const nextOrganizationDomain = nextIsIndividual ? null : await organizationLinkDomain(db, nextApplicantEmail);
   const organizationDomainChanged = nextOrganizationDomain !== application.organization_domain;
   if (organizationDomainChanged) {
     if (application.stage === "approved") {
@@ -348,6 +361,11 @@ export async function updateMembershipApplication(
         throw new AppError(500, "APPLICATION_FORM_MISSING", "No active membership application form is configured");
       }
       requireMembershipApplicationPolicyFields(form.fields);
+      // An earlier answer stays editable, but only an organization's application must name the applicant's job title.
+      form.fields = applicationFieldRulesForApplicantKind(
+        form.fields,
+        nextIsIndividual ? "individual" : "organization",
+      );
       const normalizedAnswers = await validateCustomAnswersAgainstForm(form, {
         customAnswers: mergedAnswers,
         errorStatus: 422,
@@ -383,13 +401,7 @@ export async function updateMembershipApplication(
     return getMembershipApplicationDetail(db, applicationId);
   }
 
-  dependentStatements.push(
-    ...(await prepareApplicationEditEvidenceGuard(
-      db,
-      application,
-      nextMembershipCategory !== application.membership_category,
-    )),
-  );
+  dependentStatements.push(...(await prepareApplicationEditEvidenceGuard(db, application, nextCategory, now)));
   dependentStatements.push(preparePermissionsAuthorizationGuard(db, actor, [{ permission: "membership:write" }]));
   setClauses.push("updated_at = ?");
   values.push(now);

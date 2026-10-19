@@ -37,6 +37,8 @@
     white-space: nowrap;
     align-items: center;
     justify-content: center;
+    /* Separates the label from an attention badge. */
+    gap: var(--pk-2);
     padding: 0.5rem var(--pk-4);
     margin: 0;
     color: var(--pk-ink-muted);
@@ -49,6 +51,15 @@
 
   .pk-tabs__link:hover:not([aria-current], [aria-selected="true"]) {
     color: var(--pk-ink);
+  }
+
+  /*
+   * A section's own tabs hang directly under the strip that opened it, so the
+   * two levels read as one navigation. Every section does this the same way:
+   * the panel after a strip loses the stack gap when it opens with tabs.
+   */
+  .pk-tabs + .pk-stack:has(> .pk-tabs:first-child, > .pk-stack:first-child > .pk-tabs:first-child) {
+    margin-block-start: calc(-1 * var(--pk-gap, var(--pk-4)));
   }
 
   .pk-tabs__link[aria-current="page"],

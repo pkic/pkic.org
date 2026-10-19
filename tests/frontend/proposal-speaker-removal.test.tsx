@@ -2,17 +2,15 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { render } from "preact";
 import { act } from "preact/test-utils";
-import type { ProposalAccessResponse } from "../../assets/shared/schemas/proposal-management";
 import type { ProposalSpeaker } from "../../assets/ts/member-flows/portal/sections/events/types";
 import {
   buildReplacementProposerOptions,
   proposalSpeakerEndpoints,
   SpeakerCard,
 } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/SpeakerCard";
-import { proposalSpeakerAssetPath } from "../../assets/ts/member-flows/portal/sections/events/detail/proposal-detail/ProposalSpeakerHeadshotManager";
 import { ProposalSpeakerCard } from "../../assets/ts/components/proposals/ProposalSpeakerCard";
 import { proposalSpeakerPatchSchema } from "../../assets/shared/schemas/proposal-management";
-import { ProposalManageSpeakerCard, SpeakerList } from "../../assets/ts/components/proposals/ProposerSpeakerList";
+import { identityUpdateSchema } from "../../assets/shared/schemas/identity-public-profile";
 import { PROPOSAL_SPEAKER_ROLES } from "../../assets/shared/schemas/participant-roles";
 import {
   controlFor,
@@ -22,8 +20,15 @@ import {
   optionValues,
   submitForm,
   typeMarkdown,
-} from "./helpers/labelled-control";
+} from "./helpers/labeled-control";
+
+// The consent asked before a photo import is the shared disclaimer's own test; here it is given.
+vi.mock("../../assets/ts/shared/headshot/upload", async (original) => ({
+  ...(await original<typeof import("../../assets/ts/shared/headshot/upload")>()),
+  showHeadshotDisclaimer: () => Promise.resolve(true),
+}));
 import { openCardMenu, runCardAction } from "./helpers/row-actions";
+import { SPEAKER_NOT_YET_ACCEPTED_LABEL } from "../../assets/shared/proposal-speaker-acceptance";
 
 let container: HTMLElement | null = null;
 
@@ -41,31 +46,11 @@ async function settle(): Promise<void> {
   });
 }
 
-function managedSpeaker(
-  overrides: Partial<ProposalAccessResponse["speakers"][number]> = {},
-): ProposalAccessResponse["speakers"][number] {
-  return {
-    userId: "speaker-1",
-    role: "co_speaker",
-    status: "confirmed",
-    email: "speaker@example.test",
-    firstName: "Casey",
-    lastName: "Speaker",
-    organizationName: null,
-    jobTitle: null,
-    links: [],
-    headshotUpdatedAt: null,
-    headshotUrl: null,
-    confirmedAt: "2026-08-01T00:00:00.000Z",
-    declinedAt: null,
-    bio: null,
-    headshotUploaded: false,
-    ...overrides,
-  };
-}
-
 function proposalSpeaker(overrides: Partial<ProposalSpeaker> = {}): ProposalSpeaker {
   return {
+    actingIdentityId: null,
+    actingIdentitySelectedAt: null,
+    actingIdentitySelection: "unrecorded",
     userId: "speaker-1",
     role: "co_speaker",
     status: "confirmed",
@@ -91,6 +76,34 @@ function proposalSpeaker(overrides: Partial<ProposalSpeaker> = {}): ProposalSpea
   };
 }
 
+const IDENTITY_ID = "60000000-0000-4000-8000-000000000001";
+const EDIT_IDENTITY = { canEditIdentity: true, canEditHeadshot: true };
+
+/** The identity resource the card's editor reads, answering every write with `write`. */
+function stubIdentity(requests: Array<{ url: string; method: string; body: string | null }>, write?: Response) {
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+      const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+      const method = init?.method ?? "GET";
+      requests.push({ url, method, body: init?.body?.toString() ?? null });
+      if (method !== "GET" && write) return write.clone();
+      return Response.json({
+        identityId: IDENTITY_ID,
+        userId: "40000000-0000-4000-8000-000000000001",
+        personName: "Casey Speaker",
+        organizationId: null,
+        organizationName: null,
+        endedAt: null,
+        hiddenFromPublicProfile: false,
+        jobTitle: null,
+        biography: "The identity biography.",
+        links: [],
+      });
+    }),
+  );
+}
+
 function mount(node: Parameters<typeof render>[0]): HTMLElement {
   container = document.createElement("div");
   document.body.append(container);
@@ -99,21 +112,15 @@ function mount(node: Parameters<typeof render>[0]): HTMLElement {
 }
 
 describe("proposal speaker removal UI", () => {
-  it("keeps admin headshot operations scoped to the proposal speaker", async () => {
-    expect(proposalSpeakerAssetPath("proposal/1", "user/1", "headshot")).toBe(
-      "/api/v1/proposals/proposal%2F1/speakers/user%2F1/headshot",
-    );
-    expect(proposalSpeakerAssetPath("proposal-1", "user-1", "gravatar")).toBe(
-      "/api/v1/proposals/proposal-1/speakers/user-1/headshot",
-    );
-  });
-
   it("shows proposal reviewers the headshot without mutation controls", async () => {
     const root = mount(
       <SpeakerCard
-        speaker={proposalSpeaker({ headshotUrl: "/api/v1/proposals/proposal-1/speakers/speaker-1/headshot" })}
+        speaker={proposalSpeaker({
+          headshotUrl: "/api/v1/users/speaker-1/headshot",
+          biography: "Protected full biography remains readable in the selected profile.",
+        })}
+        identityId={IDENTITY_ID}
         proposalId="proposal-1"
-        canEdit={false}
         isCurrentProposer={false}
         replacementSpeakers={[]}
         onSaved={() => {}}
@@ -121,36 +128,65 @@ describe("proposal speaker removal UI", () => {
       />,
     );
 
-    expect(root.querySelector<HTMLImageElement>('img[alt="Casey Speaker"]')?.src).toContain(
-      "/api/v1/proposals/proposal-1/speakers/speaker-1/headshot",
-    );
-    expect(root.textContent).not.toContain("Upload headshot");
-    expect(root.textContent).not.toContain("Fetch from Gravatar");
-    expect(root.textContent).not.toContain("Remove headshot");
+    expect(root.querySelector<HTMLImageElement>(".pk-avatar img")?.src).toContain("/api/v1/users/speaker-1/headshot");
+    expect(root.querySelector("article.pk-agenda-speaker-directory__card")).not.toBeNull();
+    expect(root.textContent).not.toContain("speaker@example.test");
+    // The read-only tile is the photo alone: it is not a control, and nothing
+    // beside it changes or removes it.
+    expect(root.querySelector('button[aria-label$="photo of Casey Speaker"]')).toBeNull();
+    expect(root.querySelector('input[type="file"]')).toBeNull();
+    const items = await openCardMenu(root, "Casey Speaker");
+    const labels = items.map((item) => item.textContent?.trim());
+    expect(labels).not.toContain("Edit identity");
+    expect(labels).not.toContain("Import photo from Gravatar…");
+    await act(() => items.find((item) => item.textContent?.trim() === "View profile details")!.click());
+    expect(root.querySelector("dialog")?.textContent).toContain("Protected full biography remains readable");
+    expect(root.querySelector("dialog")?.textContent).toContain("speaker@example.test");
   });
 
-  it("uses canonical speaker reminder and headshot resources with natural JSON bodies", async () => {
+  it("leads to the speaker's user and identity from the card's menu", async () => {
+    const root = mount(
+      <SpeakerCard
+        speaker={proposalSpeaker()}
+        identityId={IDENTITY_ID}
+        userHref="#/users/speaker-1"
+        identityHref="#/users/speaker-1/profile"
+        proposalId="proposal-1"
+        isCurrentProposer={false}
+        replacementSpeakers={[]}
+        onSaved={() => {}}
+        onRemoved={() => {}}
+      />,
+    );
+    const items = await openCardMenu(root, "Casey Speaker");
+    const identity = items.find((item) => item.textContent?.trim() === "Open identity");
+    expect(identity?.getAttribute("href")).toBe("#/users/speaker-1/profile");
+  });
+
+  it("sends reminders to the speaker and imports a Gravatar onto the person's own headshot", async () => {
     const requests: Array<{ url: string; method: string; body: string | null }> = [];
     vi.stubGlobal(
       "fetch",
       vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
         const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
         requests.push({ url, method: init?.method ?? "GET", body: init?.body?.toString() ?? null });
-        return Response.json({ success: true, headshotUrl: "https://example.test/headshot.jpg" });
+        return Response.json({ success: true, source: "gravatar" });
       }),
     );
+    const onProfileChanged = vi.fn();
 
     const root = mount(
       <SpeakerCard
         speaker={proposalSpeaker()}
         proposalId="proposal-1"
-        canEdit
+        profileAccess={{ canEditIdentity: false, canEditHeadshot: true }}
         canFinalize
         decisionStatus="accepted"
         requiresPresentation
         isCurrentProposer={false}
         replacementSpeakers={[]}
         onSaved={() => {}}
+        onProfileChanged={onProfileChanged}
         onRemoved={() => {}}
       />,
     );
@@ -164,65 +200,26 @@ describe("proposal speaker removal UI", () => {
       body: JSON.stringify({ kind: "profile" }),
     });
 
-    // The Gravatar import is a command on the same menu; the photo itself is
-    // the shared picture tile, which carries the upload and the remove.
-    await runCardAction(root, "Casey Speaker", "Use Gravatar photo");
+    // A headshot is the person's, not the proposal's: the import writes theirs.
+    await runCardAction(root, "Casey Speaker", "Import photo from Gravatar…");
     await settle();
-    expect(requests[1]).toMatchObject({
-      url: "/api/v1/proposals/proposal-1/speakers/speaker-1/headshot",
-      method: "POST",
-      body: JSON.stringify({ source: "gravatar" }),
-    });
+    expect(requests[1]).toMatchObject({ url: "/api/v1/users/speaker-1/gravatar", method: "POST" });
+    expect(onProfileChanged).toHaveBeenCalledTimes(1);
     expect(requests.every(({ url }) => !url.includes("/api/v1/admin/"))).toBe(true);
   });
 
-  it("lets a proposer remove only non-proposer speakers", async () => {
-    const nonProposer = mount(
-      <ProposalManageSpeakerCard
-        speaker={managedSpeaker()}
-        token="manage-token"
-        apiBase="/api/v1"
+  it("tells organizers which speaker has not accepted yet", () => {
+    const root = mount(
+      <SpeakerCard
+        speaker={proposalSpeaker({ userId: "invited-1", status: "invited", firstName: "Invited" })}
+        proposalId="proposal-1"
         isCurrentProposer={false}
-        onReload={async () => {}}
-        onStatus={() => {}}
+        replacementSpeakers={[]}
+        onSaved={() => {}}
+        onRemoved={() => {}}
       />,
     );
-    expect(nonProposer.querySelector("[data-remove-proposal-speaker]")).not.toBeNull();
-    expect(
-      [...nonProposer.querySelectorAll("select option")].map((option) => option.getAttribute("value")),
-    ).not.toContain("proposer");
-
-    void act(() => render(null, nonProposer));
-    const currentProposer = mount(
-      <ProposalManageSpeakerCard
-        speaker={managedSpeaker({ userId: "proposer-1", role: "proposer" })}
-        token="manage-token"
-        apiBase="/api/v1"
-        isCurrentProposer
-        onReload={async () => {}}
-        onStatus={() => {}}
-      />,
-    );
-    expect(currentProposer.querySelector("[data-remove-proposal-speaker]")).toBeNull();
-    expect(
-      [...currentProposer.querySelectorAll("select option")].map((option) => option.getAttribute("value")),
-    ).toContain("proposer");
-
-    void act(() => render(null, currentProposer));
-    const presentingProposer = mount(
-      <ProposalManageSpeakerCard
-        speaker={managedSpeaker({ userId: "proposer-1", role: "moderator" })}
-        token="manage-token"
-        apiBase="/api/v1"
-        isCurrentProposer
-        onReload={async () => {}}
-        onStatus={() => {}}
-      />,
-    );
-    expect(presentingProposer.querySelector<HTMLSelectElement>("select")?.value).toBe("moderator");
-    expect(
-      [...presentingProposer.querySelectorAll("select option")].map((option) => option.getAttribute("value")),
-    ).toEqual(expect.arrayContaining(["moderator", "speaker"]));
+    expect(root.textContent).toContain(SPEAKER_NOT_YET_ACCEPTED_LABEL);
   });
 
   it("offers admin proposer transfer only to invited or confirmed speakers", async () => {
@@ -243,7 +240,6 @@ describe("proposal speaker removal UI", () => {
       <SpeakerCard
         speaker={speakers[0]}
         proposalId="proposal-1"
-        canEdit
         canFinalize
         isCurrentProposer
         replacementSpeakers={buildReplacementProposerOptions(speakers, "proposer-1")}
@@ -262,12 +258,14 @@ describe("proposal speaker removal UI", () => {
     expect(confirm?.disabled).toBe(true);
   });
 
-  it("surfaces final-speaker guidance instead of an admin removal action", async () => {
+  it("explains final-proposer removal only when the action is attempted", async () => {
+    const notify = vi.fn();
     const root = mount(
-      <SpeakerCard
+      <ProposalSpeakerCard
+        endpoints={proposalSpeakerEndpoints()}
+        notify={notify}
         speaker={proposalSpeaker({ userId: "proposer-1", role: "proposer" })}
         proposalId="proposal-1"
-        canEdit
         canFinalize
         isCurrentProposer
         replacementSpeakers={[]}
@@ -277,22 +275,33 @@ describe("proposal speaker removal UI", () => {
     );
 
     const items = await openCardMenu(root, "Casey Speaker");
-    expect(items.map((item) => item.textContent?.trim())).not.toContain("Remove speaker");
-    expect(root.textContent).toContain("every proposal must retain its speaker roster");
+    expect(items.map((item) => item.textContent?.trim())).toContain("Remove speaker");
+    expect(root.textContent).not.toContain("first invite another speaker");
+    await act(() => items.find((item) => item.textContent?.trim() === "Remove speaker")!.click());
+    expect(notify).toHaveBeenCalledWith("Invite another speaker to take over before removing the proposer.", "error");
+    expect(root.querySelector("dialog")).toBeNull();
+    // The answer is said once, in words with its date, not as a pill.
+    expect(root.textContent?.match(/Accepted/g)).toHaveLength(1);
+    expect(root.querySelector(".pk-speaker-portrait-standing")?.textContent).toMatch(/Accepted \w/);
+    expect(root.querySelector(".pk-badge")).toBeNull();
+    // The role is read once.
+    expect(root.textContent?.match(/Proposer/g)).toHaveLength(1);
   });
 
   /**
-   * The edit form used to be bare `<label>`s beside bare inputs with nothing
-   * tying either pair together, so every control in it announced itself
-   * unnamed. Assert the association rather than the appearance: that is the
-   * half a visual review cannot see.
+   * Editing a speaker edits the identity they speak as, through the same
+   * fields the identity's owner uses — never a second set of fields kept on
+   * the proposal. Assert the association rather than the appearance: that is
+   * the half a visual review cannot see.
    */
-  it("gives every editable speaker field a name a screen reader can reach", async () => {
+  it("edits the identity itself with the shared identity fields, each named for a screen reader", async () => {
+    stubIdentity([]);
     const root = mount(
       <SpeakerCard
         speaker={proposalSpeaker()}
+        identityId={IDENTITY_ID}
+        profileAccess={EDIT_IDENTITY}
         proposalId="proposal-1"
-        canEdit
         isCurrentProposer={false}
         replacementSpeakers={[]}
         onSaved={() => {}}
@@ -300,32 +309,48 @@ describe("proposal speaker removal UI", () => {
       />,
     );
 
-    await runCardAction(root, "Casey Speaker", "Edit profile");
+    await runCardAction(root, "Casey Speaker", "Edit identity");
+    await settle();
 
     const form = root.querySelector("form")!;
-    expect(labelNames(form)).toEqual(["First name", "Last name", "Organization", "Job title", "Role", "Biography"]);
-    // Resolving through the `for`/`id` pair fails exactly when the pair is
-    // broken, so this asserts the contract rather than the markup.
-    expect(controlFor(form, "Role").tagName.toLowerCase()).toBe("select");
-    // The biography is the shared Markdown editor (#114), a textbox canvas.
+    expect(form.noValidate).toBe(true);
+    expect(labelNames(form)).toEqual(["Job title", "Biography"]);
+    // The links are a group of one-URL inputs, named as a group rather than by a single label.
+    expect(form.querySelector('input[aria-label="Profile link URL"]')).not.toBeNull();
+    expect(form.textContent).toContain("Social and profile links");
     expect((await markdownControl(form, "Biography")).getAttribute("role")).toBe("textbox");
+    expect(await markdownValue(root, "Biography")).toBe("The identity biography.");
+    expect(form.textContent).toContain("This changes the identity itself.");
+    // The headshot is the person's own, changed with the shared picture tile.
+    expect(root.querySelector('button[aria-label$="photo of Casey Speaker"]')).not.toBeNull();
+  });
 
-    // ProfileLinksInput names its own controls, so the surrounding group is
-    // named by the heading beside it rather than by an orphaned `for`.
-    // The editor's toolbar is a group of its own; the links group is the
-    // one the form names.
-    const group = form.querySelector<HTMLElement>('[role="group"][aria-labelledby]');
-    const groupName = group?.getAttribute("aria-labelledby");
-    expect(groupName).toBeTruthy();
-    expect(root.ownerDocument.getElementById(groupName!)?.textContent?.trim()).toBe("Profile links");
+  it("offers editing only to a viewer who may change the identity", async () => {
+    const root = mount(
+      <SpeakerCard
+        speaker={proposalSpeaker()}
+        identityId={IDENTITY_ID}
+        profileAccess={{ canEditIdentity: false, canEditHeadshot: false }}
+        canFinalize
+        proposalId="proposal-1"
+        isCurrentProposer={false}
+        replacementSpeakers={[]}
+        onSaved={() => {}}
+        onRemoved={() => {}}
+      />,
+    );
+    const labels = (await openCardMenu(root, "Casey Speaker")).map((item) => item.textContent?.trim());
+    expect(labels).not.toContain("Edit identity");
+    expect(labels).not.toContain("Change headshot");
+    expect(root.textContent).not.toContain("Add headshot");
   });
 
   it("offers a co-speaker every role in the contract except the proposer's", async () => {
     const root = mount(
       <SpeakerCard
         speaker={proposalSpeaker()}
+        canFinalize
         proposalId="proposal-1"
-        canEdit
         isCurrentProposer={false}
         replacementSpeakers={[]}
         onSaved={() => {}}
@@ -333,12 +358,13 @@ describe("proposal speaker removal UI", () => {
       />,
     );
 
-    await runCardAction(root, "Casey Speaker", "Edit profile");
+    await runCardAction(root, "Casey Speaker", "Change role…");
 
     // Derived from the vocabulary rather than listed here: a role added to the
     // contract becomes available to every speaker but the proposer, whose role
     // moves by promoting someone else.
-    expect(optionValues(controlFor<HTMLSelectElement>(root, "Role"))).toEqual(
+    const dialog = root.querySelector<HTMLDialogElement>("dialog")!;
+    expect(optionValues(controlFor<HTMLSelectElement>(dialog, "Role"))).toEqual(
       PROPOSAL_SPEAKER_ROLES.filter((role) => role !== "proposer"),
     );
   });
@@ -347,8 +373,8 @@ describe("proposal speaker removal UI", () => {
     const root = mount(
       <SpeakerCard
         speaker={proposalSpeaker({ role: "proposer" })}
+        canFinalize
         proposalId="proposal-1"
-        canEdit
         isCurrentProposer
         replacementSpeakers={[]}
         onSaved={() => {}}
@@ -356,127 +382,91 @@ describe("proposal speaker removal UI", () => {
       />,
     );
 
-    await runCardAction(root, "Casey Speaker", "Edit profile");
-
-    expect(optionValues(controlFor<HTMLSelectElement>(root, "Role"))).toEqual(["proposer"]);
+    const labels = (await openCardMenu(root, "Casey Speaker")).map((item) => item.textContent?.trim());
+    expect(labels).not.toContain("Change role…");
   });
 
-  it("reports a refused profile save and keeps the reader in the form", async () => {
-    const bodies: string[] = [];
+  it("changes the role through the proposal's own contract", async () => {
+    const requests: Array<{ url: string; method: string; body: string | null }> = [];
     vi.stubGlobal(
       "fetch",
-      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
-        bodies.push(String(init?.body));
-        return Response.json({ error: { code: "CONFLICT", message: "Another editor saved first" } }, { status: 409 });
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = typeof input === "string" ? input : input instanceof URL ? input.toString() : input.url;
+        requests.push({ url, method: init?.method ?? "GET", body: init?.body?.toString() ?? null });
+        return Response.json({
+          success: true,
+          speaker: { ...proposalSpeaker(), userId: "40000000-0000-4000-8000-000000000001", role: "moderator" },
+        });
       }),
     );
-    const notify = vi.fn();
+    const onSaved = vi.fn();
+    const root = mount(
+      <SpeakerCard
+        speaker={proposalSpeaker()}
+        canFinalize
+        proposalId="proposal-1"
+        isCurrentProposer={false}
+        replacementSpeakers={[]}
+        onSaved={onSaved}
+        onRemoved={() => {}}
+      />,
+    );
+
+    await runCardAction(root, "Casey Speaker", "Change role…");
+    const dialog = root.querySelector<HTMLDialogElement>("dialog")!;
+    const select = controlFor<HTMLSelectElement>(dialog, "Role");
+    await act(async () => {
+      select.value = "moderator";
+      select.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    const save = [...dialog.querySelectorAll("button")].find((button) => button.textContent?.trim() === "Save role")!;
+    await act(() => save.click());
+    await settle();
+
+    expect(requests).toHaveLength(1);
+    expect(requests[0]).toMatchObject({ url: "/api/v1/proposals/proposal-1/speakers/speaker-1", method: "PATCH" });
+    expect(proposalSpeakerPatchSchema.parse(JSON.parse(requests[0].body!))).toEqual({ role: "moderator" });
+    expect(onSaved).toHaveBeenCalledWith("speaker-1", { role: "moderator" });
+  });
+
+  it("reports a refused identity save and keeps the reader in the form", async () => {
+    const requests: Array<{ url: string; method: string; body: string | null }> = [];
+    stubIdentity(
+      requests,
+      Response.json({ error: { code: "CONFLICT", message: "Another editor saved first" } }, { status: 409 }),
+    );
 
     const root = mount(
       <ProposalSpeakerCard
         speaker={proposalSpeaker()}
+        identityId={IDENTITY_ID}
+        profileAccess={EDIT_IDENTITY}
         proposalId="proposal-1"
-        canEdit
         isCurrentProposer={false}
         replacementSpeakers={[]}
         endpoints={proposalSpeakerEndpoints()}
         onSaved={() => {}}
         onRemoved={() => {}}
-        notify={notify}
       />,
     );
 
-    await runCardAction(root, "Casey Speaker", "Edit profile");
+    await runCardAction(root, "Casey Speaker", "Edit identity");
+    await settle();
     await typeMarkdown(root, "Biography", "A biography the server will refuse.");
     await submitForm(root);
+    await settle();
 
-    // The request is checked against the canonical contract rather than a
-    // literal, so a schema change cannot leave this passing on a shape the
-    // endpoint no longer accepts.
-    expect(bodies).toHaveLength(1);
-    expect(proposalSpeakerPatchSchema.parse(JSON.parse(bodies[0]))).toMatchObject({
+    // The request goes to the identity and is checked against the contract the
+    // identity's route parses, so a schema change cannot leave this passing on
+    // a shape the endpoint no longer accepts.
+    const writes = requests.filter(({ method }) => method !== "GET");
+    expect(writes).toHaveLength(1);
+    expect(writes[0]).toMatchObject({ url: `/api/v1/identities/${IDENTITY_ID}`, method: "PATCH" });
+    expect(identityUpdateSchema.parse(JSON.parse(writes[0].body!))).toMatchObject({
       biography: "A biography the server will refuse.",
-      role: "co_speaker",
     });
-    expect(notify).toHaveBeenCalledWith("Another editor saved first", "error");
+    expect(root.querySelector("form")?.textContent).toContain("Another editor saved first");
     // The form stays open, so the refused edit is still there to correct.
     expect(await markdownValue(root, "Biography")).toBe("A biography the server will refuse.");
-  });
-
-  it("names the managed speaker's card and ties its biography guidance to the control", async () => {
-    const root = mount(
-      <ProposalManageSpeakerCard
-        speaker={managedSpeaker()}
-        token="manage-token"
-        apiBase="/api/v1"
-        isCurrentProposer={false}
-        onReload={async () => {}}
-        onStatus={() => {}}
-      />,
-    );
-
-    // A proposal can carry several of these; an unnamed <section> is not
-    // exposed as a region at all, so each card says whose it is.
-    const card = root.querySelector("section");
-    expect(card?.getAttribute("aria-label")).toBe("Speaker Casey Speaker");
-    expect(labelNames(root)).toEqual(["First name", "Last name", "Role", "Organization", "Job title", "Biography"]);
-
-    const biography = await markdownControl(root, "Biography");
-    const help = root.querySelector(`#${biography.getAttribute("aria-describedby")!}`);
-    expect(help?.textContent).toBe("Visible to attendees on the event program.");
-  });
-
-  it("keeps the removal control focusable while the request is in flight", async () => {
-    let resolveRemoval: (() => void) | undefined;
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(
-        async () =>
-          new Promise<Response>((resolve) => {
-            resolveRemoval = () => resolve(Response.json({ success: true }));
-          }),
-      ),
-    );
-    vi.stubGlobal("confirm", () => true);
-
-    const root = mount(
-      <ProposalManageSpeakerCard
-        speaker={managedSpeaker()}
-        token="manage-token"
-        apiBase="/api/v1"
-        isCurrentProposer={false}
-        onReload={async () => {}}
-        onStatus={() => {}}
-      />,
-    );
-
-    const remove = root.querySelector<HTMLButtonElement>("[data-remove-proposal-speaker]")!;
-    void act(() => remove.click());
-
-    // A `disabled` control loses focus, which throws a screen-reader user out
-    // of the card mid-request; the busy state is announced instead.
-    expect(remove.disabled).toBe(false);
-    expect(remove.getAttribute("aria-disabled")).toBe("true");
-    expect(remove.getAttribute("aria-busy")).toBe("true");
-    expect(remove.textContent).toBe("Removing…");
-
-    resolveRemoval?.();
-    await settle();
-  });
-
-  it("says the roster is empty in words rather than rendering nothing", async () => {
-    const root = mount(
-      <SpeakerList
-        speakers={[]}
-        token="manage-token"
-        apiBase="/api/v1"
-        proposerUserId="proposer-1"
-        onReload={async () => {}}
-        onStatus={() => {}}
-      />,
-    );
-
-    const status = root.querySelector('[role="status"]');
-    expect(status?.textContent).toContain("No speakers added yet");
   });
 });

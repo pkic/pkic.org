@@ -110,6 +110,12 @@ describe("form answer rows", () => {
     expect(formatFormAnswerValue([], field())).toEqual(["-"]);
   });
 
+  it("reads a stored country code as the country's name", () => {
+    const country = field({ validation: { format: "iso_country" } } as Partial<FormFieldDefinition>);
+    expect(formatFormAnswerValue("NL", country)).toEqual(["Netherlands"]);
+    expect(formatFormAnswerValue("zz", country)).toEqual(["zz"]);
+  });
+
   it("keeps answers to fields the definition no longer lists", () => {
     const rows = buildFormAnswerRows({ priority: "high", retired_question: "kept" }, [field()]);
     expect(rows.map((row) => row.key)).toEqual(["priority", "retired_question"]);
@@ -194,7 +200,7 @@ describe("the submissions table", () => {
     await settle();
 
     expect(page.textContent).not.toContain("No responses found");
-    // The error is announced, not merely coloured.
+    // The error is announced, not merely colored.
     const alert = page.querySelector('[role="alert"]');
     expect(alert).toBeTruthy();
     expect(alert?.textContent).toContain("Responses are not visible to you.");
@@ -246,9 +252,10 @@ describe("the per-field breakdown", () => {
       picker.dispatchEvent(new Event("change", { bubbles: true }));
     });
 
-    const bars = [...page.querySelectorAll("progress")];
+    const bars = [...page.querySelectorAll("[role=meter]")];
     expect(bars).toHaveLength(2);
     expect(bars.map((bar) => bar.getAttribute("aria-label"))).toEqual(["High: 75%", "Low: 25%"]);
+    expect(page.querySelector(".pk-chart__bars")?.textContent).toContain("3 · 75%");
   });
 
   it("distinguishes no responses from responses that cannot be summarized", () => {

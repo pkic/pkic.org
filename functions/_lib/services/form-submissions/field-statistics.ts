@@ -2,6 +2,7 @@ import { batchFirst, batchRows } from "../../db/pagination";
 import { parseJsonSafe } from "../../utils/json";
 import { parseFormFieldOptions } from "../../../../assets/shared/schemas/form-field-rules";
 import { formSubmissionStatsResponseSchema } from "../../../../assets/shared/schemas/form-management";
+import { formFieldStatEntries } from "../../../../assets/shared/form-field-statistics";
 import type { DatabaseLike } from "../../types";
 import type { FieldRow, FieldStatPayload, GetFormSubmissionStatsParams, GetFormSubmissionStatsResult } from "./types";
 import { parseFormFieldOptionSource, resolveFormFieldOptionCatalogs } from "../forms/read";
@@ -43,21 +44,9 @@ function buildFieldStatistics(
   }
 
   return Array.from(rowsByField.entries()).map(([fieldKey, fieldRows]) => {
-    const merged = new Map<string, number>();
-    for (const row of fieldRows) {
-      const label = optionLabelsByField.get(fieldKey)?.get(row.label) ?? row.label;
-      merged.set(label, (merged.get(label) ?? 0) + Number(row.count));
-    }
-    const maxCount = Math.max(1, ...merged.values());
-    const countedValues = Array.from(merged.values()).reduce((sum, count) => sum + count, 0) || 1;
-    const entries = Array.from(merged.entries())
-      .map(([label, count]) => ({
-        label,
-        count,
-        percent: Math.round((count / countedValues) * 100),
-        weight: count / maxCount,
-      }))
-      .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label));
+    const entries = formFieldStatEntries(
+      fieldRows.map((row) => [optionLabelsByField.get(fieldKey)?.get(row.label) ?? row.label, Number(row.count)]),
+    );
 
     return {
       fieldKey,

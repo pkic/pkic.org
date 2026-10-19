@@ -21,6 +21,7 @@ import {
 import { prepareReconcileMailingListSubscriptionsStatement } from "../mailing-list-subscriptions";
 import { prepareGroupJoinEligibilityGuard, selectGroupCapacities } from "./capacities";
 import { prepareGroupManagementAuthorizationGuard } from "./governance";
+import { prepareGroupSeatInsertionPublication, prepareGroupSeatChangePublication } from "./seat-publication";
 import { getGroup, listActiveGroupMembershipsForUser } from "./read-model";
 
 async function requireGroupIdentity(db: DatabaseLike, idOrSlug: string): Promise<{ id: string; slug: string }> {
@@ -156,6 +157,12 @@ export function buildGroupCapacityJoinStatements(
       createdAt: options.at,
       scope: { type: "group", id: options.groupId },
     }),
+    prepareGroupSeatInsertionPublication(
+      db,
+      options.groupId,
+      plannedMemberships.map((seat) => seat.id),
+      options.at,
+    ),
   );
   return statements;
 }
@@ -254,6 +261,11 @@ export async function leaveGroup(
       ...(options.managementActor
         ? [prepareGroupManagementAuthorizationGuard(db, options.managementActor, [group.id])]
         : []),
+      prepareGroupSeatChangePublication(db, group.id, at, {
+        sql: `SELECT id,group_id,user_id,member_id,left_at,1 AS closes,1 AS membership_changed
+          FROM group_memberships WHERE id IN (SELECT value FROM json_each(?)) AND left_at IS NULL`,
+        bindings: [JSON.stringify(active.map((seat) => seat.id))],
+      }),
       db
         .prepare(`UPDATE group_memberships SET left_at = ?, updated_at = ? WHERE ${conditions.join(" AND ")}`)
         .bind(at, at, ...bindings),
@@ -410,6 +422,7 @@ export async function recordFormerGroupMembership(
           leftAt: options.leftAt,
         },
       ),
+      prepareGroupSeatInsertionPublication(db, group.id, membershipIds, at),
     ]);
   } catch (error) {
     translateSeatWriteError(error);
@@ -484,6 +497,13 @@ export async function updateGroupMembership(
   try {
     await db.batch([
       prepareGroupManagementAuthorizationGuard(db, actor, [group.id]),
+      prepareGroupSeatChangePublication(db, group.id, at, {
+        sql: `SELECT id,group_id,user_id,member_id,left_at,
+          CASE WHEN left_at IS NULL AND ? IS NOT NULL THEN 1 ELSE 0 END AS closes,
+          CASE WHEN (left_at IS NULL)<>(? IS NULL) THEN 1 ELSE 0 END AS membership_changed
+          FROM group_memberships WHERE id=? AND group_id=? AND (joined_at IS NOT ? OR left_at IS NOT ?)`,
+        bindings: [leftAt, leftAt, membershipId, group.id, joinedAt, leftAt],
+      }),
       db
         .prepare(
           `UPDATE group_memberships SET ${setters.join(", ")}

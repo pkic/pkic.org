@@ -27,7 +27,7 @@ const PLAIN_ROOT = "/Users/someone/Code/pkic.org";
 const SITE_FILES = [
   "content/_index.md",
   "content/blog/a-post/index.md",
-  "layouts/_default/all.og-card.html",
+  "site/layouts/PublicPage.astro",
   "assets/ts/loader.ts",
   "data/members/example.yaml",
   "static/img/logo.svg",
@@ -36,7 +36,7 @@ const SITE_FILES = [
 const HIDDEN_INSIDE_THE_SITE = [
   "content/blog/.drafts/unfinished.md",
   "static/.well-known/security.txt",
-  "layouts/.backup/single.html",
+  "assets/.backup/single.ts",
 ];
 
 function ignorePatterns(): RegExp[] {

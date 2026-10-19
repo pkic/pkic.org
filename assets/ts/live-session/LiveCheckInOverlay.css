@@ -1,0 +1,23 @@
+@layer components {
+  /* The code's standard broadcast size; the output layout scales it to the element's box, larger or smaller. */
+  .pk-live-check-in {
+    inline-size: 520px;
+  }
+  /*
+   * The whole graphic follows its theme, the code included: its modules take
+   * the theme's ink and its ground, the four-module quiet zone with it, the
+   * theme's ground. On a transparent theme the quiet zone is clear, so the
+   * picture behind it must stay calm and dark (or light) enough to scan.
+   */
+  .pk-live-check-in .pk-check-in-qr {
+    background: var(--graphic-ground);
+    color: var(--graphic-ink);
+    text-shadow: var(--graphic-halo);
+  }
+  .pk-live-check-in .pk-check-in-qr__ground {
+    fill: var(--graphic-ground);
+  }
+  .pk-live-check-in .pk-check-in-qr__modules {
+    fill: var(--graphic-ink);
+  }
+}

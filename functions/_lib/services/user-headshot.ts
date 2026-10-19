@@ -1,4 +1,4 @@
-import type { DatabaseLike } from "../types";
+import type { DatabaseLike, StatementLike } from "../types";
 import { AppError } from "../errors";
 import { nowIso } from "../utils/time";
 import { uuid } from "../utils/ids";
@@ -6,15 +6,22 @@ import { imageExtension, putUploadedImage } from "../utils/image-upload";
 import { first } from "../db/queries";
 import { isAuditChangeGuardFailure, prepareAuditLogAfterOneChange, type AuditScope } from "./audit";
 import { storedRasterImageResponse } from "./image-response";
+import { userHeadshotRenditionResponse } from "./user-headshot-variants";
+import type { HeadshotVariantWidth } from "../../../assets/shared/headshot-variants";
 import { profileImageBucketName, requireProfileImageBucket } from "./profile-image-storage";
 import {
   prepareStorageDeletion,
   processStorageDeletionForKey,
   withStorageUploadCompensation,
 } from "./storage-deletion-outbox";
-import type { Env, StatementLike } from "../types";
+import type { Env } from "../types";
 import { resolveAppBaseUrl } from "../config";
+import { publicGroupProfileUserCondition } from "./groups/profile-publication";
+import { PUBLIC_MEMBER_USER_SOURCE_SQL } from "./membership/public-profile-sql";
+import { prepareSitePublicationRequest } from "./site-publication-requests";
 import { prepareBadgeRenderJobsForUser } from "./badge-render-job-statements";
+
+import { PERSON_PORTRAIT_CACHE_CONTROL, imageEntityTag, notModifiedImage, withImageEntityTag } from "./image-cache";
 
 export interface HeadshotAudit {
   actorType: string;
@@ -33,7 +40,31 @@ export interface UserHeadshotContext {
   previousKey: string | null;
   audit: HeadshotAudit;
   commitGuard?: { sql: string; bindings: unknown[] };
-  prepareAdditionalCommitStatements?: (at: string) => StatementLike[];
+}
+
+/** Runs after the guarded pointer/audit pair, within their transaction. */
+function prepareUserHeadshotPublication(
+  context: Omit<UserHeadshotContext, "bucket">,
+  nextKey: string | null,
+  at: string,
+): StatementLike | null {
+  if (context.previousKey === nextKey) return null;
+  const groups = publicGroupProfileUserCondition(context.userId);
+  return prepareSitePublicationRequest(
+    context.db,
+    {
+      resourceType: "user_profile",
+      resourceId: context.userId,
+      revision: Date.parse(at),
+      reasonCode: "user_headshot_changed",
+      deduplicationKey: `user-headshot:${context.userId}:${crypto.randomUUID()}`,
+    },
+    {
+      sql: `EXISTS(SELECT 1 FROM users holder WHERE holder.id=? AND holder.headshot_r2_key IS ?
+        AND (EXISTS(SELECT 1 ${PUBLIC_MEMBER_USER_SOURCE_SQL} AND person.id=holder.id) OR ${groups.sql}))`,
+      bindings: [context.userId, nextKey, ...groups.bindings],
+    },
+  );
 }
 
 export interface UserHeadshotRecord {
@@ -77,9 +108,9 @@ export function userHeadshotKeyFile(storageKey: string | null): string | null {
  * The public address of a user's current headshot.
  *
  * The owner comes from the row, never from the key. A self-service or staff
- * upload writes `headshots/<userId>/<file>`, but the member migration writes
+ * upload writes `headshots/<userId>/<file>`, but the legacy member import wrote
  * `member-photos/<orgSlug>/<file>` for a portrait it carried over from the
- * repository (scripts/migrate-members/individuals.mjs). Reading the id out of
+ * legacy member YAML. Reading the id out of
  * the key turned those into `/api/v1/users/member-photos/headshots/…`, an
  * address for a user that does not exist — which is why a migrated portrait
  * appeared on the public members page and nowhere in the portal (issue #28).
@@ -194,8 +225,9 @@ export async function replaceUserHeadshot(
             context.audit.scope,
           ),
           prepareBadgeRenderJobsForUser(context.db, context.userId, at),
-          ...(context.prepareAdditionalCommitStatements?.(at) ?? []),
         ];
+        const publication = prepareUserHeadshotPublication(context, r2Key, at);
+        if (publication) statements.push(publication);
         const deletionStatement = prepareStorageDeletion(
           context.db,
           context.previousKey,
@@ -238,8 +270,9 @@ export async function removeUserHeadshot(context: Omit<UserHeadshotContext, "buc
       context.audit.scope,
     ),
     prepareBadgeRenderJobsForUser(context.db, context.userId, at),
-    ...(context.prepareAdditionalCommitStatements?.(at) ?? []),
   ];
+  const publication = prepareUserHeadshotPublication(context, null, at);
+  if (publication) statements.push(publication);
   const deletionStatement = prepareStorageDeletion(
     context.db,
     context.previousKey,
@@ -301,7 +334,6 @@ export async function commitUserHeadshotUpload(
     source: context.source,
     audit: context.audit,
     commitGuard: context.commitGuard,
-    prepareAdditionalCommitStatements: context.prepareAdditionalCommitStatements,
   });
   finalizeUserHeadshotChange(context, waitUntil);
   return r2Key;
@@ -327,7 +359,6 @@ export async function uploadUserHeadshotForRequest(
     source?: string;
     audit: HeadshotAudit;
     commitGuard?: { sql: string; bindings: unknown[] };
-    prepareAdditionalCommitStatements?: (at: string) => StatementLike[];
   },
 ): Promise<{ r2Key: string; origin: string }> {
   const origin = resolveAppBaseUrl(env, request);
@@ -345,7 +376,6 @@ export function removeUserHeadshotForRequest(
     previousKey: string | null;
     audit: HeadshotAudit;
     commitGuard?: { sql: string; bindings: unknown[] };
-    prepareAdditionalCommitStatements?: (at: string) => StatementLike[];
   },
 ): Promise<void> {
   return commitUserHeadshotRemoval({ db, env, origin: resolveAppBaseUrl(env, request), ...payload }, waitUntil);
@@ -360,13 +390,17 @@ export function removeUserHeadshotForRequest(
  * writer — the member migration's `member-photos/<orgSlug>/<file>` — could
  * never be served at all. Comparing the file segment keeps what the rebuild
  * was for: a replaced or removed photograph's address stops resolving at once,
- * because the row no longer names that file.
+ * because the row no longer names that file. A requested rendition is derived
+ * only after that same check, so it is revoked with the file it came from.
  */
 export async function currentUserHeadshotResponse(
   db: DatabaseLike,
-  env: Pick<Env, "ASSETS_BUCKET" | "SPEAKER_UPLOADS_BUCKET">,
+  env: Pick<Env, "ASSETS_BUCKET" | "SPEAKER_UPLOADS_BUCKET" | "IMAGES">,
   userId: string,
   requestedFile: string,
+  rendition?: { width: HeadshotVariantWidth; origin: string },
+  /** The browser's or edge's request, so a revalidation is answered without reading the file. */
+  request?: Request,
 ): Promise<Response> {
   const current = await first<{ headshot_r2_key: string | null }>(
     db,
@@ -377,9 +411,29 @@ export async function currentUserHeadshotResponse(
   if (!storedKey || userHeadshotKeyFile(storedKey) !== requestedFile) {
     throw new AppError(404, "NOT_FOUND", "Headshot not found");
   }
-  return storedRasterImageResponse(requireProfileImageBucket(env, storedKey), storedKey, {
-    notFoundCode: "NOT_FOUND",
-    notFoundMessage: "Headshot not found",
-    cacheControl: "public, max-age=300, s-maxage=300, must-revalidate",
-  });
+  // The address names the file, so its bytes never change: browsers keep it, the edge rechecks it here.
+  const entityTag = imageEntityTag(requestedFile, rendition?.width);
+  const unchanged = request && notModifiedImage(request, entityTag, PERSON_PORTRAIT_CACHE_CONTROL);
+  if (unchanged) return unchanged;
+  const bucket = requireProfileImageBucket(env, storedKey);
+  if (rendition) {
+    const response = await userHeadshotRenditionResponse({
+      bucket,
+      storedKey,
+      userId,
+      width: rendition.width,
+      images: env.IMAGES,
+      origin: rendition.origin,
+      cacheControl: PERSON_PORTRAIT_CACHE_CONTROL,
+    });
+    return withImageEntityTag(response, entityTag);
+  }
+  return withImageEntityTag(
+    await storedRasterImageResponse(bucket, storedKey, {
+      notFoundCode: "NOT_FOUND",
+      notFoundMessage: "Headshot not found",
+      cacheControl: PERSON_PORTRAIT_CACHE_CONTROL,
+    }),
+    entityTag,
+  );
 }

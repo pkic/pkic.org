@@ -26,6 +26,7 @@ import { getJson, putJson } from "../../../../shared/api-client";
 // `pk-mono` — the term key and its version are identifiers, and Content.css
 // rides a lazy chunk rather than the entry stylesheet.
 import "../../../../ui/Content.css";
+import { SectionHeading } from "../../../../ui/SectionHeading";
 
 type TermsResponse = z.infer<typeof groupEventTermsResponseSchema>;
 type TermInput = EventTermsReplaceInput["attendee"][number];
@@ -171,7 +172,7 @@ function TermRow({
           onChange={(event) => update({ required: event.currentTarget.checked })}
           label="Required to complete registration"
         />
-        <Button size="sm" variant="danger-quiet" onClick={onRemove}>
+        <Button variant="danger-quiet" onClick={onRemove}>
           Remove {audienceLabel.toLowerCase()} term {ordinal}
         </Button>
       </div>
@@ -229,9 +230,7 @@ function AudienceTerms({
           />
         ))}
         <div class="pk-cluster">
-          <Button size="sm" onClick={() => onChange([...terms, emptyTerm()])}>
-            Add {label.toLowerCase()} term
-          </Button>
+          <Button onClick={() => onChange([...terms, emptyTerm()])}>Add {label.toLowerCase()} term</Button>
         </div>
       </PanelBody>
     </Panel>
@@ -315,12 +314,10 @@ function TermsForm({
         />
 
         <div class="pk-cluster">
-          <Button type="submit" variant="primary" size="sm" loading={saving}>
+          <Button type="submit" variant="primary" loading={saving}>
             {saving ? "Saving terms…" : "Save terms"}
           </Button>
-          <Button size="sm" onClick={() => void reload()}>
-            Cancel
-          </Button>
+          <Button onClick={() => void reload()}>Cancel</Button>
         </div>
       </fieldset>
 
@@ -370,9 +367,9 @@ export function EventTermsEditor({
         <div class="pk-stack">
           {(["attendee", "speaker", "presentation"] as const).map((audience) => (
             <div key={audience}>
-              <h4>
+              <SectionHeading level={4}>
                 {audience === "attendee" ? "Attendee" : audience === "speaker" ? "Speaker" : "Presentation upload"}
-              </h4>
+              </SectionHeading>
               {resource.data!.terms[audience].length ? (
                 <DescriptionList
                   items={resource.data!.terms[audience].map((term) => ({

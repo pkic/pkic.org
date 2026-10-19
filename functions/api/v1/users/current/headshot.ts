@@ -8,7 +8,7 @@
  * accepts a target-user parameter.
  */
 import { json } from "../../../../_lib/http";
-import { guardMemberSessionMutationDatabase, requireMemberFromRequest } from "../../../../_lib/auth/member";
+import { guardOwnAccountMutationDatabase, requireOwnAccountFromRequest } from "../../../../_lib/auth/member";
 import { readValidatedUploadedImage, resizeHeadshot } from "../../../../_lib/utils/image-upload";
 import {
   getUserHeadshotRecord,
@@ -30,7 +30,7 @@ import type { DatabaseLike } from "../../../../_lib/types";
 interface CurrentUserHeadshotTarget {
   userId: string;
   user: UserHeadshotRecord;
-  /** Writes are guarded by the exact session and membership that authorized them. */
+  /** Writes are guarded by the exact session that authorized them. */
   db: DatabaseLike;
   waitUntil: (promise: Promise<unknown>) => void;
 }
@@ -38,12 +38,12 @@ interface CurrentUserHeadshotTarget {
 /** Resolves the caller's own live headshot record and the database its writes must commit through. */
 async function currentUserHeadshotTarget(c: AdminContext): Promise<CurrentUserHeadshotTarget> {
   const db = requestDb(c);
-  const member = await requireMemberFromRequest(db, c.req.raw, c.env);
-  const user = await getUserHeadshotRecord(db, member.userId);
+  const account = await requireOwnAccountFromRequest(db, c.req.raw, c.env);
+  const user = await getUserHeadshotRecord(db, account.userId);
   return {
-    userId: member.userId,
+    userId: account.userId,
     user,
-    db: guardMemberSessionMutationDatabase(db, member),
+    db: guardOwnAccountMutationDatabase(db, account),
     waitUntil: c.executionCtx.waitUntil.bind(c.executionCtx),
   };
 }

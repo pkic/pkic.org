@@ -11,7 +11,8 @@ import {
   registrationDayAttendanceResponseItemSchema,
 } from "./registration";
 import { eventDayResponseSchema } from "./event-configuration";
-import { sourceTypeSchema } from "./source";
+import { registrationSourceTypeSchema } from "./source";
+import { eventRegistrationAttendanceChangeSchema } from "./event-registrations";
 
 /** RSVP state attached to a registration's most recent response for each day. */
 export const eventRegistrationRsvpDaySchema = z.object({
@@ -31,7 +32,7 @@ export const eventRegistrationDetailSchema = registrationRecordContextSchema.ext
   status: z.string(),
   cancellation_reason_code: z.string().nullable(),
   attendance_type: attendanceTypeSchema,
-  source_type: sourceTypeSchema,
+  source_type: registrationSourceTypeSchema,
   rsvp_status: z.string().nullable(),
   rsvpByDay: z.array(eventRegistrationRsvpDaySchema),
   customAnswers: z.record(z.string(), z.unknown()).nullable(),
@@ -49,7 +50,7 @@ export const eventRegistrationAttendanceDetailSchema = registrationRecordContext
     user_id: databaseIdSchema,
     status: z.string(),
     attendance_type: attendanceTypeSchema,
-    source_type: sourceTypeSchema,
+    source_type: registrationSourceTypeSchema,
   });
 
 export const eventRegistrationDayAttendanceSchema = registrationDayAttendanceResponseItemSchema;
@@ -60,6 +61,7 @@ export const eventRegistrationDetailResponseSchema = z.object({
   form: activeFormSummarySchema.nullable(),
   dayAttendance: z.array(eventRegistrationDayAttendanceSchema),
   dayWaitlist: z.array(eventRegistrationDayWaitlistSchema),
+  attendanceChangeHistory: z.array(eventRegistrationAttendanceChangeSchema),
 });
 
 export const eventRegistrationAttendanceDetailResponseSchema = z.object({

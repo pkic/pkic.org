@@ -27,7 +27,6 @@ node scripts/seed-email-templates.mjs --env local --local --db pkic-db-local --p
 # The member-profile demo record, so portal specs and manual review both have a
 # contact page with skills, participation and standing on it.
 node --experimental-strip-types scripts/seed-member-profiles.mjs --local --persist-to "$STATE_DIR"
-pnpm exec wrangler d1 execute pkic-db-local --env local --local --persist-to="$STATE_DIR" --file tests/fixtures/e2e-donations.sql
 pnpm exec wrangler d1 execute pkic-db-local --env local --local --persist-to="$STATE_DIR" --file tests/fixtures/e2e-settings.sql
 
 # Publish the synthetic local D1 snapshot into the complete Worker asset build.

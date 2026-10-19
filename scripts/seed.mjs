@@ -12,6 +12,7 @@
  * Optional flags:
  *   --only admin|event|templates|profiles   run only one component (can repeat)
  *   --skip-migrations              skip D1 migration apply step
+ *   --persist-to <directory>       local only: seed an isolated local state directory
  */
 
 import { execFileSync } from "node:child_process";
@@ -56,7 +57,12 @@ function wranglerArgs(cfg) {
 
 /** Seed sub-scripts take the target name and map it through the same helper. */
 function targetFlag(cfg) {
-  return ["--env", cfg.wranglerEnv];
+  return ["--env", cfg.wranglerEnv, ...persistFlag(cfg)];
+}
+
+/** An isolated local state directory, when one was selected. */
+function persistFlag(cfg) {
+  return cfg.persistTo ? ["--persist-to", cfg.persistTo] : [];
 }
 
 // ── CLI parsing ─────────────────────────────────────────────────────────────
@@ -65,6 +71,7 @@ function parseArgs(argv) {
   let env = null;
   const only = new Set();
   let skipMigrations = false;
+  let persistTo = null;
 
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -91,16 +98,25 @@ function parseArgs(argv) {
       skipMigrations = true;
       continue;
     }
+
+    if (arg === "--persist-to" && argv[i + 1]) {
+      persistTo = resolve(argv[++i]);
+      continue;
+    }
   }
 
   if (!env) {
     console.error(
-      "Usage: node scripts/seed.mjs --local | --preview | --production [--only admin|event|templates] [--skip-migrations]",
+      "Usage: node scripts/seed.mjs --local | --preview | --production [--only admin|event|templates] [--skip-migrations] [--persist-to <directory>]",
     );
     process.exit(1);
   }
+  if (persistTo && env !== "local") {
+    console.error("--persist-to applies only to --local seeding.");
+    process.exit(1);
+  }
 
-  return { env, only, skipMigrations };
+  return { env, only, skipMigrations, persistTo };
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
@@ -121,7 +137,17 @@ function applyMigrations(cfg) {
     run("node", [script("apply-d1-migrations.mjs"), cfg.wranglerEnv]);
     return;
   }
-  run("pnpm", ["exec", "wrangler", "d1", "migrations", "apply", cfg.database, ...wranglerArgs(cfg), cfg.wranglerFlag]);
+  run("pnpm", [
+    "exec",
+    "wrangler",
+    "d1",
+    "migrations",
+    "apply",
+    cfg.database,
+    ...wranglerArgs(cfg),
+    cfg.wranglerFlag,
+    ...persistFlag(cfg),
+  ]);
 }
 
 function seedAdmin(cfg) {
@@ -157,13 +183,18 @@ function seedMemberProfiles(cfg) {
   if (cfg.wranglerEnv !== "local") {
     throw new Error("Demo member profiles may only be seeded into local D1.");
   }
-  run("node", [script("seed-member-profiles.mjs"), `--${cfg.wranglerEnv}`]);
+  run("node", [
+    "--experimental-strip-types",
+    script("seed-member-profiles.mjs"),
+    `--${cfg.wranglerEnv}`,
+    ...persistFlag(cfg),
+  ]);
 }
 
 // ── Main ─────────────────────────────────────────────────────────────────────
 
-const { env, only, skipMigrations } = parseArgs(process.argv.slice(2));
-const cfg = ENVS[env];
+const { env, only, skipMigrations, persistTo } = parseArgs(process.argv.slice(2));
+const cfg = { ...ENVS[env], persistTo };
 const runAll = only.size === 0;
 
 console.log(`\nSeeding ${cfg.label} …`);

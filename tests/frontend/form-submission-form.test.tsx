@@ -8,10 +8,11 @@
  */
 import { render, type ComponentChildren } from "preact";
 import { act } from "preact/test-utils";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { FormFieldDefinition } from "../../assets/shared/schemas/forms";
+import { ApiClientError } from "../../assets/ts/shared/api-client";
 import { FormSubmissionForm } from "../../assets/ts/components/forms/FormSubmissionForm";
-import { buttonNamed, typeInto } from "./helpers/labelled-control";
+import { buttonNamed, typeInto } from "./helpers/labeled-control";
 
 const mounted: HTMLElement[] = [];
 
@@ -75,6 +76,53 @@ describe("form submission form", () => {
     const status = container.querySelector('[role="status"]');
     expect(status?.textContent).toBe("Response submitted.");
     expect(container.querySelector('[role="alert"]')).toBeNull();
+  });
+
+  it("refuses an unanswered required question on the question itself, before anything is sent", async () => {
+    const onSubmit = vi.fn(() => Promise.resolve());
+    const container = mount(
+      <FormSubmissionForm
+        fields={[{ ...field("reason", "Why are you interested?"), required: true }]}
+        onSubmit={onSubmit}
+      />,
+    );
+
+    await act(() => buttonNamed(container, "Submit response").click());
+    await settle();
+
+    expect(onSubmit).not.toHaveBeenCalled();
+    const row = container.querySelector('[data-custom-field-key="reason"]')!;
+    expect(row.classList.contains("pk-field--invalid")).toBe(true);
+    expect(row.querySelector("[data-field-error]")?.textContent).toContain("Why are you interested? is required");
+    expect(container.querySelector<HTMLInputElement>("#custom-reason")?.getAttribute("aria-invalid")).toBe("true");
+  });
+
+  it("marks the question a server refusal names", async () => {
+    const container = mount(
+      <FormSubmissionForm
+        fields={[field("reason", "Why are you interested?")]}
+        onSubmit={() =>
+          Promise.reject(
+            new ApiClientError(
+              {
+                error: {
+                  code: "VALIDATION_ERROR",
+                  message: "Answer the highlighted questions.",
+                  details: { fieldErrors: { reason: ["Say a little more."] } },
+                },
+              },
+              400,
+            ),
+          )
+        }
+      />,
+    );
+
+    await typeInto(container.querySelector<HTMLInputElement>("#custom-reason")!, "PKI");
+    await act(() => buttonNamed(container, "Submit response").click());
+    await settle();
+
+    expect(container.querySelector('[data-field-error="reason"]')?.textContent).toContain("Say a little more.");
   });
 
   it("announces a rejected submission as an alert and does not claim success", async () => {

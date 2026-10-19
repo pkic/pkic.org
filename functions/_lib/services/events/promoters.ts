@@ -12,6 +12,7 @@ import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveMappedOrderBy } from "../../db/sort";
 import { publicUserHeadshotPath } from "../user-headshot";
 import type { DatabaseLike } from "../../types";
+import { affiliationJobTitleSql, affiliationOrganizationNameSql } from "../identities/affiliation-projection";
 
 // Keep schema-facing keys and SQL mappings type-coupled: adding a key to a
 // view's API tuple requires adding its trusted SQL expression here.
@@ -101,8 +102,8 @@ const PROMOTER_READ_MODEL = `
            u.email,
            u.first_name,
            u.last_name,
-           u.organization_name AS organization,
-           u.job_title,
+           ${affiliationOrganizationNameSql("pu.user_id")} AS organization,
+           ${affiliationJobTitleSql("pu.user_id")} AS job_title,
            u.headshot_r2_key,
            COALESCE(i.invites_sent, 0) AS invites_sent,
            COALESCE(i.invites_accepted, 0) AS invites_accepted,

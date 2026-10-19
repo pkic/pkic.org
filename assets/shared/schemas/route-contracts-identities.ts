@@ -3,13 +3,16 @@ import { jsonErrorResponse } from "./api-common";
 import { databaseIdSchema } from "./identifiers";
 import {
   currentUserIdentityCreateSchema,
-  currentUserIdentityAcceptSchema,
+  currentUserIdentityUpdateSchema,
   identitiesListQuerySchema,
   identitiesListResponseSchema,
   identityCreateSchema,
   identityMutationResponseSchema,
   identityInvitationLinkRequestSchema,
   identityInvitationPreviewResponseSchema,
+  identityReinstatementLinkRequestSchema,
+  identityReinstatementPreviewResponseSchema,
+  identityReinstatementRequestResponseSchema,
   identityUpdateSchema,
 } from "./identity";
 import { requiresSession } from "./route-contract";
@@ -74,7 +77,7 @@ export const organizationIdentityUpdateRouteSchema = {
   tags: ["Organizations"],
   summary: "Update an organization identity",
   description:
-    "Updates either scoped profile data or one lifecycle transition. Immediate activation requires a user-backed staff session with both membership:write and identities:activate.",
+    "Updates either scoped profile data or one lifecycle transition. Moving an ended identity to `active` reinstates that same identity: its end date is removed, and the group seats and roles its end closed reopen where they can still be held. An authorized organization contact may reinstate; an identity that was blocked, was replaced by a successor, or whose person already has another active or pending identity for the organization cannot be reinstated. Activating a pending identity immediately, or starting a successor to a blocked identity, requires a user-backed staff session with both membership:write and identities:activate.",
   request: {
     params: organizationIdentityParamsSchema,
     body: { required: true, content: { "application/json": { schema: identityUpdateSchema } } },
@@ -85,7 +88,9 @@ export const organizationIdentityUpdateRouteSchema = {
       content: { "application/json": { schema: identityMutationResponseSchema } },
     },
     "403": jsonErrorResponse("An organization contact or the required staff permission is required."),
-    "409": jsonErrorResponse("The identity or authorization changed concurrently."),
+    "409": jsonErrorResponse(
+      "The identity or authorization changed concurrently, or the identity cannot be reinstated (IDENTITY_NOT_REINSTATABLE, IDENTITY_SUPERSEDED, IDENTITY_CONFLICT).",
+    ),
   },
 };
 
@@ -121,23 +126,24 @@ export const currentUserIdentityCreateRouteSchema = {
   },
 };
 
-export const currentUserIdentityAcceptRouteSchema = {
+export const currentUserIdentityUpdateRouteSchema = {
   ...requiresSession(),
   tags: ["Users"],
-  summary: "Accept the current user's pending identity invitation",
+  summary: "Accept or end one of the current user's identities",
   description:
-    "Activates only a pending identity owned by the signed-in user. Member and automatic group access begin in the same guarded D1 batch; merely receiving or verifying the invitation email grants no access.",
+    "Accepts a pending identity invitation or ends an active identity, only when it is owned by the signed-in user. Accepting begins Member and automatic group access in the same guarded D1 batch; merely receiving or verifying the invitation email grants no access. Ending takes an optional end date that defaults to now and can be neither in the future nor before the identity started; group seats held through the identity end at the same instant.",
   request: {
     params: z.object({ identityId: databaseIdSchema }),
-    body: { required: true, content: { "application/json": { schema: currentUserIdentityAcceptSchema } } },
+    body: { required: true, content: { "application/json": { schema: currentUserIdentityUpdateSchema } } },
   },
   responses: {
     "200": {
-      description: "Identity invitation accepted.",
+      description: "Identity invitation accepted or identity ended.",
       content: { "application/json": { schema: identityMutationResponseSchema } },
     },
-    "404": jsonErrorResponse("Pending identity invitation not found."),
-    "409": jsonErrorResponse("The identity or user session changed while accepting the invitation."),
+    "404": jsonErrorResponse("Pending identity invitation or active identity not found."),
+    "409": jsonErrorResponse("The identity or user session changed while saving."),
+    "422": jsonErrorResponse("The end date is in the future or before the identity started."),
   },
 };
 
@@ -169,11 +175,73 @@ export const identityInvitationAcceptRouteSchema = {
   },
   responses: {
     "200": {
-      description: "Identity invitation accepted.",
+      description: "Identity invitation accepted or identity ended.",
       content: { "application/json": { schema: identityMutationResponseSchema } },
     },
     "404": jsonErrorResponse("Invitation link or pending identity not found."),
     "409": jsonErrorResponse("Invitation was already used or changed."),
     "410": jsonErrorResponse("Invitation link expired."),
+  },
+};
+
+const identityReinstatementLinkBody = {
+  body: { required: true, content: { "application/json": { schema: identityReinstatementLinkRequestSchema } } },
+};
+
+export const currentUserIdentityReinstatementRequestRouteSchema = {
+  ...requiresSession(),
+  tags: ["Users"],
+  summary: "Ask to reinstate one of the current user's ended identities",
+  description:
+    "Emails a single-use link, valid for 24 hours, to the identity's own address: its selected verified address, or the person's primary address. Asking again sends a new link and retires the previous one. Nothing changes until the link is confirmed while signed in to the same account.",
+  request: { params: z.object({ identityId: databaseIdSchema }) },
+  responses: {
+    "202": {
+      description: "Reinstatement link sent.",
+      content: { "application/json": { schema: identityReinstatementRequestResponseSchema } },
+    },
+    "404": jsonErrorResponse("Identity not found for the current user."),
+    "409": jsonErrorResponse(
+      "The identity cannot be reinstated (IDENTITY_NOT_ENDED, IDENTITY_NOT_REINSTATABLE, IDENTITY_SUPERSEDED, IDENTITY_CONFLICT).",
+    ),
+    "422": jsonErrorResponse("The identity's selected address is not verified."),
+    "429": jsonErrorResponse("Too many links requested."),
+  },
+};
+
+export const currentUserIdentityReinstatementPreviewRouteSchema = {
+  ...requiresSession(),
+  tags: ["Users"],
+  summary: "Review an emailed identity reinstatement link",
+  description: "Names the organization and address of the identity a link would reinstate, without changing it.",
+  request: identityReinstatementLinkBody,
+  responses: {
+    "200": {
+      description: "The identity the link would reinstate.",
+      content: { "application/json": { schema: identityReinstatementPreviewResponseSchema } },
+    },
+    "403": jsonErrorResponse("The link belongs to another account (IDENTITY_REINSTATEMENT_OTHER_ACCOUNT)."),
+    "404": jsonErrorResponse("The link is not valid."),
+    "409": jsonErrorResponse("The link was used, or the identity can no longer be reinstated."),
+    "410": jsonErrorResponse("The link expired."),
+  },
+};
+
+export const currentUserIdentityReinstatementConfirmRouteSchema = {
+  ...requiresSession(),
+  tags: ["Users"],
+  summary: "Confirm an emailed identity reinstatement link",
+  description:
+    "Redeems the latest reinstatement link once, for the signed-in account it was sent for, and reinstates the identity in the same atomic D1 command: its end date is removed, and the group seats and roles its end closed reopen where they can still be held.",
+  request: identityReinstatementLinkBody,
+  responses: {
+    "200": {
+      description: "Identity reinstated.",
+      content: { "application/json": { schema: identityMutationResponseSchema } },
+    },
+    "403": jsonErrorResponse("The link belongs to another account (IDENTITY_REINSTATEMENT_OTHER_ACCOUNT)."),
+    "404": jsonErrorResponse("The link is not valid, was replaced by a newer one, or the address changed."),
+    "409": jsonErrorResponse("The link was used, or the identity can no longer be reinstated."),
+    "410": jsonErrorResponse("The link expired."),
   },
 };

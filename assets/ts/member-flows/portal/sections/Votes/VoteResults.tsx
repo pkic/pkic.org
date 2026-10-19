@@ -5,6 +5,7 @@ import { Badge as ToneBadge } from "../../../../ui/Badge";
 // `pk-answer-list` is defined in Content.css, which ships in a lazy chunk, so
 // the module that writes the class name has to import the stylesheet itself.
 import "../../../../ui/Content.css";
+import { SectionHeading } from "../../../../ui/SectionHeading";
 
 export function MotionResultView({ result }: { result: MotionVoteResult }) {
   return (
@@ -60,7 +61,9 @@ export function ElectionResultView({
           // under it, so the tallies are reachable as structure rather than as
           // an unlabeled list among several identical ones.
           <div key={round.round} class="pk-small">
-            <h6 class="pk-muted">Round {round.round}</h6>
+            <SectionHeading level={4} class="pk-muted">
+              Round {round.round}
+            </SectionHeading>
             <ul class="pk-answer-list">
               {Object.entries(round.counts).map(([candidateId, count]) => (
                 <li key={candidateId}>

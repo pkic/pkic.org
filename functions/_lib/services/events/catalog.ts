@@ -1,5 +1,8 @@
+import { nowIso } from "../../utils/time";
+import { readEventAudienceAccess } from "./scanner-access";
+import type { CountryCode } from "../../../../assets/shared/countries";
 import { fetchEventParticipation } from "./participation";
-import { resolveEventFrontendRoutes } from "../event-presentation";
+import { resolveHeroImageUrl, resolveEventFrontendRoutes } from "../event-presentation";
 import {
   EVENT_LIST_SORT_COLUMNS,
   EVENT_MANAGEMENT_LIST_SORT_COLUMNS,
@@ -19,7 +22,6 @@ import { activeEffectiveInviteExpirySql, effectiveInviteExpirySql } from "../../
 import { AppError } from "../../errors";
 import { permissionsAuthorizationEvidence } from "../../auth/permissions";
 import type { DatabaseLike } from "../../types";
-import { parseJsonSafe } from "../../utils/json";
 import { parseLinksJson } from "../../../../assets/shared/schemas/links";
 import { normalizeEventRegistrationPolicy } from "./detail";
 import { buildEventAudiencePredicate, guardEventReadDatabase, type EventAudienceViewer } from "./visibility";
@@ -36,24 +38,26 @@ interface EventAudienceRow {
   registration_mode: string;
   visibility: EventAudienceDetail["visibility"];
   settings_json: string;
+  city: string | null;
+  country: CountryCode | null;
   links_json: string | null;
   base_path: string | null;
 }
 
 const EVENT_AUDIENCE_SELECT = `SELECT event.id, event.slug, event.name, event.timezone,
   event.starts_at, event.ends_at, event.profile_key, event.registration_mode,
-  event.visibility, event.settings_json, event.links_json, event.base_path`;
+  event.visibility, event.settings_json, event.city, event.country, event.links_json, event.base_path`;
 
-function eventLocation(settingsJson: string): string | null {
-  const value = parseJsonSafe<Record<string, unknown>>(settingsJson, {}).location;
-  return typeof value === "string" ? value : null;
-}
-
-function mapEventAudience(row: EventAudienceRow, viewer: EventViewerState | null): EventAudienceDetail {
+function mapEventAudience(
+  row: EventAudienceRow,
+  viewer: EventViewerState | null,
+  access?: Pick<EventAudienceDetail, "scannerAccess" | "sponsorLeadAccess">,
+): EventAudienceDetail {
   return eventAudienceDetailSchema.parse({
     id: row.id,
     slug: row.slug,
     name: row.name,
+    heroImageUrl: resolveHeroImageUrl(row),
     timezone: row.timezone,
     startsAt: row.starts_at,
     endsAt: row.ends_at,
@@ -61,9 +65,12 @@ function mapEventAudience(row: EventAudienceRow, viewer: EventViewerState | null
     registrationPolicy: normalizeEventRegistrationPolicy(row.registration_mode),
     visibility: row.visibility,
     accessLevel: row.visibility === "public" ? "public" : "participant",
-    location: eventLocation(row.settings_json),
+    city: row.city,
+    country: row.country,
     links: parseLinksJson(row.links_json),
     basePath: row.base_path,
+    scannerAccess: access?.scannerAccess,
+    sponsorLeadAccess: access?.sponsorLeadAccess ?? false,
     viewer,
     registrationPath:
       row.base_path && ["open", "invite_or_open", "public", "optional"].includes(row.registration_mode)
@@ -93,8 +100,23 @@ function buildEventsListPredicate(
       `${query.kind === "series" ? "" : "NOT "}EXISTS (SELECT 1 FROM event_series series WHERE series.event_id = event.id)`,
     );
   }
+  if (query.phase) {
+    const at = nowIso();
+    if (query.phase === "now") {
+      conditions.push("event.starts_at <= ? AND event.ends_at > ?");
+      bindings.push(at, at);
+    } else if (query.phase === "upcoming") {
+      conditions.push("event.starts_at > ?");
+      bindings.push(at);
+    } else {
+      conditions.push("event.starts_at IS NOT NULL AND COALESCE(event.ends_at, event.starts_at) <= ?");
+      bindings.push(at);
+    }
+  }
   if (query.from) {
-    conditions.push("COALESCE(event.ends_at, event.starts_at) >= ?");
+    // Upcoming: an event without a start date is never upcoming, even when it
+    // carries an end date. Unscoped listings still include it.
+    conditions.push("event.starts_at IS NOT NULL AND COALESCE(event.ends_at, event.starts_at) >= ?");
     bindings.push(query.from);
   }
   if (query.to) {
@@ -152,9 +174,14 @@ export async function listVisibleEvents(db: DatabaseLike, viewer: EventAudienceV
     viewer.userId,
     page.rows.map((row) => row.id),
   );
+  const audienceAccess = await readEventAudienceAccess(
+    db,
+    viewer,
+    page.rows.map((row) => row.id),
+  );
   return {
     events: page.rows.map((row) => ({
-      ...mapEventAudience(row, viewerStates.get(row.id) ?? null),
+      ...mapEventAudience(row, viewerStates.get(row.id) ?? null, audienceAccess.get(row.id)),
       participation: participation.get(row.id),
     })),
     total: page.total,
@@ -164,10 +191,13 @@ export async function listVisibleEvents(db: DatabaseLike, viewer: EventAudienceV
 const EVENT_MANAGEMENT_SELECT = `SELECT event.id, event.slug, event.name, event.timezone,
   event.starts_at, event.ends_at, event.profile_key, event.source_mode, event.registration_mode,
   event.visibility, event.invite_limit_attendee, event.owner_group_id, owner_group.name AS owner_group_name,
-  event.source_path, event.base_path, event.settings_json, event.updated_at`;
+  owner_group_type.singular_label AS owner_group_type_label,
+  event.source_path, event.base_path, event.settings_json, event.city, event.country, event.updated_at`;
 
 interface EventManagementRow {
   settings_json: string;
+  city: string | null;
+  country: CountryCode | null;
   id: string;
   slug: string;
   name: string;
@@ -181,6 +211,7 @@ interface EventManagementRow {
   invite_limit_attendee: number;
   owner_group_id: string | null;
   owner_group_name: string | null;
+  owner_group_type_label: string | null;
   source_path: string | null;
   base_path: string | null;
   updated_at: string;
@@ -201,6 +232,7 @@ export function buildManagedEventsPageQuery(viewer: EventAudienceViewer, query: 
     sql: `${EVENT_MANAGEMENT_SELECT}
       FROM events event
       LEFT JOIN groups owner_group ON owner_group.id = event.owner_group_id
+      LEFT JOIN group_types owner_group_type ON owner_group_type.key = owner_group.type_key
       WHERE ${whereSql}`,
     bindings,
     orderBy: resolveMappedOrderBy(
@@ -297,6 +329,7 @@ export async function listManagedEvents(db: DatabaseLike, viewer: EventAudienceV
       id: row.id,
       slug: row.slug,
       name: row.name,
+      heroImageUrl: resolveHeroImageUrl(row),
       timezone: row.timezone,
       startsAt: row.starts_at,
       endsAt: row.ends_at,
@@ -308,9 +341,11 @@ export async function listManagedEvents(db: DatabaseLike, viewer: EventAudienceV
       updatedAt: row.updated_at,
       ownerGroupId: row.owner_group_id,
       ownerGroupName: row.owner_group_name,
+      ownerGroupTypeLabel: row.owner_group_type_label,
       sourcePath: row.source_path,
       basePath: row.base_path,
-      location: eventLocation(row.settings_json),
+      city: row.city,
+      country: row.country,
       totalRegistrations: statsByEvent.get(row.id)?.total_registrations ?? 0,
       confirmedRegistrations: statsByEvent.get(row.id)?.confirmed_registrations ?? 0,
       pendingInvites: statsByEvent.get(row.id)?.pending_invites ?? 0,
@@ -334,5 +369,6 @@ export async function getVisibleEventAudienceDetail(
   );
   if (!row) throw new AppError(404, "EVENT_NOT_FOUND", "Event not found or not visible to this caller");
   const viewerState = await fetchViewerEventState(db, viewer.userId, row.id);
-  return mapEventAudience(row, viewerState);
+  const audienceAccess = await readEventAudienceAccess(db, viewer, [row.id]);
+  return mapEventAudience(row, viewerState, audienceAccess.get(row.id));
 }

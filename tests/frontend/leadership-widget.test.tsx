@@ -196,7 +196,7 @@ describe("GroupGovernanceWidget", () => {
     expect(card?.querySelector(".person-card-jobtitle")?.textContent).toBe("Vice Chair");
     expect(container.querySelector("h2")).toBeNull();
     // The company is still attributed, once, by the organization block.
-    expect(card?.querySelector(".person-card-org")?.textContent).toContain("Entrust");
+    expect(card?.querySelector(".person-card-org a")?.getAttribute("title")).toBe("Entrust");
     expect(card?.querySelector(".person-card-jobtitle")?.textContent).not.toContain("Entrust");
   });
 

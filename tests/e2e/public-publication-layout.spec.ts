@@ -62,19 +62,12 @@ test("sponsor tier frames scale small artwork and stay contained across screen s
   }
 });
 
-test("member profile logos keep a balanced frame across wide, square, and tall artwork", async ({ page }) => {
+test("member profile logos sit whole in the square avatar frame and fall back to the monogram", async ({ page }) => {
   await page.goto("/members/example-corp/");
-  const logo = page.locator(".member-profile-logo");
-  const frame = page.locator(".member-profile-logo-wrap");
-  for (const theme of ["light", "dark"]) {
-    await page.evaluate((theme) => localStorage.setItem("pk-theme", theme), theme);
-    await page.reload();
-    await expect(logo).toHaveAttribute("data-logo-ink", "light");
-    expect(await logo.evaluate((image) => getComputedStyle(image).filter)).toBe("none");
-    const backing = await frame.evaluate((element) => getComputedStyle(element).backgroundColor);
-    expect(backing).not.toBe("rgba(0, 0, 0, 0)");
-    await frame.screenshot({ path: test.info().outputPath(`member-white-logo-${theme}.png`) });
-  }
+  const frame = page.locator(".pk-member-profile-avatar");
+  const logo = frame.locator(".pk-avatar__img");
+  // An organization's mark is framed square, never cropped into a circle.
+  await expect(frame).toHaveClass(/pk-avatar--square/);
   await page.route("**/img/synthetic-balance.svg*", (route) => {
     const shape = new URL(route.request().url()).searchParams.get("shape");
     const [width, height] = shape === "wide" ? [1200, 100] : shape === "tall" ? [100, 1200] : [200, 200];
@@ -95,17 +88,21 @@ test("member profile logos keep a balanced frame across wide, square, and tall a
     await expect
       .poll(() => logo.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0))
       .toBe(true);
-    const bounds = await logo.boundingBox();
-    const container = await frame.boundingBox();
-    expect(bounds!.width).toBeLessThanOrEqual(320);
-    expect(bounds!.height).toBeLessThanOrEqual(112);
-    expect(bounds!.width).toBeLessThanOrEqual(container!.width);
+    const bounds = (await logo.boundingBox())!;
+    const container = (await frame.boundingBox())!;
+    expect(bounds.x).toBeGreaterThanOrEqual(container.x);
+    expect(bounds.x + bounds.width).toBeLessThanOrEqual(container.x + container.width + 1);
+    expect(bounds.y + bounds.height).toBeLessThanOrEqual(container.y + container.height + 1);
     expect(await logo.evaluate((image) => getComputedStyle(image).objectFit)).toBe("contain");
     expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(
       page.viewportSize()!.width,
     );
     await frame.screenshot({ path: test.info().outputPath(`member-logo-${shape}.png`) });
   }
+  // A logo that fails to load leaves the organization's monogram, not a broken image.
+  await page.route("**/img/missing-logo.svg", (route) => route.fulfill({ status: 404, body: "" }));
+  await logo.evaluate((image) => image.setAttribute("src", "/img/missing-logo.svg"));
+  await expect(frame.locator(".pk-avatar__initials")).toHaveText((await frame.getAttribute("data-avatar-fallback"))!);
 });
 
 test("working-group introduction, leaders and social icons share the full row", async ({ page }) => {

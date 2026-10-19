@@ -1,4 +1,5 @@
 import { badgeCacheMetadata } from "./badge-render-job-statements";
+import type { CountryCode } from "../../../assets/shared/countries";
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./registrations/selected-identity";
 /**
  * OG badge pre-rendering service.
@@ -17,17 +18,20 @@ import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./reg
  */
 
 import { ensureResvgWasm } from "../utils/resvg";
-import { renderBadgeSvg, renderDonationBadgeSvg, type BadgeRole } from "./og-badge";
+import { renderBadgeSvg, renderDonationBadgeSvg } from "./og-badge";
 import { first, all } from "../db/queries";
 import { fetchGravatar } from "./gravatar";
 import type { DatabaseLike, Env } from "../types";
 import { fetchHeroImage, fetchStaticAsset, uint8ToBase64 } from "./og-badge-hero-image";
 import { validateRasterImage } from "../utils/image-format";
 import { STANDARD_HEADSHOT_MAX_BYTES } from "../../../assets/shared/schemas/images";
+import { socialBadgeRoleSchema } from "../../../assets/shared/schemas/participant-roles";
+import { formatEventPlace } from "../../../assets/shared/event-place";
+import { proposalSpeakerProfileColumns } from "./proposal-speakers";
 import {
-  proposalSpeakerEffectiveHeadshotExpression,
-  proposalSpeakerEffectiveProfileColumns,
-} from "./proposal-speakers";
+  selectedOrAffiliationJobTitleSql,
+  selectedOrAffiliationOrganizationNameSql,
+} from "./identities/affiliation-projection";
 
 type BadgeRenderEnv = Pick<Env, "DB" | "SPEAKER_UPLOADS_BUCKET" | "ASSETS" | "ASSETS_PUBLIC" | "IMAGES">;
 type BadgeCacheEnv = Pick<
@@ -62,17 +66,6 @@ function getFontBuffers(origin: string, env: Pick<Env, "ASSETS" | "ASSETS_PUBLIC
     });
   }
   return fontBuffersCache;
-}
-
-function extractLocation(settingsJson: string): string | null {
-  try {
-    const s = JSON.parse(settingsJson) as Record<string, unknown>;
-    if (typeof s.location === "string" && s.location) return s.location;
-    if (typeof s.city === "string" && s.city) return s.city;
-  } catch {
-    /* ignore */
-  }
-  return null;
 }
 
 export async function loadValidatedHeadshotDataUrl(
@@ -113,6 +106,8 @@ interface AttendeeRow {
   starts_at: string | null;
   ends_at: string | null;
   settings_json: string;
+  city: string | null;
+  country: CountryCode | null;
   /** Effective badge role: highest-priority active non-attendee participant role, or null (= attendee) */
   effective_role: string | null;
 }
@@ -133,10 +128,12 @@ export async function getProposalSpeakerBadgeRenderData(
 ): Promise<SpeakerRow | null> {
   return first<SpeakerRow>(
     db,
-    `SELECT ${proposalSpeakerEffectiveProfileColumns("u", "ps", "", ["firstName", "lastName", "organizationName", "jobTitle"])},
-            ${proposalSpeakerEffectiveHeadshotExpression("u", "ps")} AS headshot_r2_key,
+    `SELECT ${proposalSpeakerProfileColumns("u", "ps", "", ["firstName", "lastName"])},
+            ${selectedOrAffiliationOrganizationNameSql("ps.acting_identity_id", "u.id")} AS organization_name,
+            ${selectedOrAffiliationJobTitleSql("ps.acting_identity_id", "u.id")} AS job_title,
+            u.headshot_r2_key AS headshot_r2_key,
             e.name AS event_name,
-            e.starts_at, e.ends_at, e.settings_json,
+            e.starts_at, e.ends_at, e.settings_json, e.city, e.country,
             COALESCE(ps.role, 'speaker') AS speaker_role
      FROM session_proposals sp
      JOIN users u ON u.id = ?
@@ -179,7 +176,7 @@ export async function generateBadgePng(code: string, env: BadgeRenderEnv, origin
       `SELECT u.first_name, u.last_name, ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title,
               u.headshot_r2_key,
               e.name   AS event_name,
-              e.starts_at, e.ends_at, e.settings_json,
+              e.starts_at, e.ends_at, e.settings_json, e.city, e.country,
               COALESCE(bro.role, (
                 SELECT ep2.role
                 FROM   event_participant_badge_roles ep2
@@ -206,11 +203,11 @@ export async function generateBadgePng(code: string, env: BadgeRenderEnv, origin
     svg = renderBadgeSvg({
       firstName: row.first_name ?? "",
       lastName: row.last_name ?? "",
-      role: (row.effective_role as BadgeRole) ?? "attendee",
+      role: socialBadgeRoleSchema.parse(row.effective_role ?? "attendee"),
       eventName: row.event_name,
       startsAt: row.starts_at,
       endsAt: row.ends_at,
-      location: extractLocation(row.settings_json),
+      location: formatEventPlace(row, "en"),
       organization: row.organization_name,
       jobTitle: row.job_title,
       headshotDataUrl,
@@ -231,11 +228,11 @@ export async function generateBadgePng(code: string, env: BadgeRenderEnv, origin
     svg = renderBadgeSvg({
       firstName: row.first_name ?? "",
       lastName: row.last_name ?? "",
-      role: (row.speaker_role as BadgeRole) ?? "speaker",
+      role: socialBadgeRoleSchema.parse(row.speaker_role ?? "speaker"),
       eventName: row.event_name,
       startsAt: row.starts_at,
       endsAt: row.ends_at,
-      location: extractLocation(row.settings_json),
+      location: formatEventPlace(row, "en"),
       organization: row.organization_name,
       jobTitle: row.job_title,
       headshotDataUrl,

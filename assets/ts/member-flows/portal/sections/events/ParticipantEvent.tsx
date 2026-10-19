@@ -1,3 +1,10 @@
+import { lazy, Suspense } from "preact/compat";
+import { useHashLocation } from "wouter/use-hash-location";
+import {
+  eventAgendaRoute,
+  eventVirtualRoomRoute,
+  isMyAgendaQuery,
+} from "../../../../../shared/event-participation-link";
 import type { ComponentChildren } from "preact";
 import { eventParticipantRecordPath } from "./event-participant-paths";
 import { useData } from "../../../../hooks/useData";
@@ -7,24 +14,52 @@ import type { z } from "zod";
 import { currentUserProposalsListResponseSchema } from "../../../../../shared/schemas/current-user-proposals";
 import { proposalAccessReadResponseSchema } from "../../../../../shared/schemas/proposal-management";
 import { speakerSelfServiceReadResponseSchema } from "../../../../../shared/schemas/speaker-self-service";
-import { eventFormsResponseSchema } from "../../../../../shared/schemas/forms";
+import { eventFormsResponseSchema, eventTermsResponseSchema } from "../../../../../shared/schemas/forms";
 import { ApiDataTable } from "../../../../components/ApiDataTable";
 import { ParticipantRegistration } from "../../../../components/events/ParticipantRegistration";
 import { ParticipantSubmission } from "../../../../components/events/ParticipantSubmission";
 import { ParticipantSpeaker } from "../../../../components/events/ParticipantSpeaker";
 import { Spinner } from "../../../../components/Spinner";
 import { Badge } from "../../../../components/Badge";
-import { PageHeader } from "../../../../ui/PageHeader";
-import { Panel, PanelHeader, PanelBody } from "../../../../ui/Panel";
 import { Tabs } from "../../../../ui/Tabs";
+import { ParticipantEventNavigation, ParticipantLeadScanner } from "./ParticipantEventNavigation";
 import { Alert } from "../../../../ui/Alert";
-import { DescriptionList } from "../../../../ui/DescriptionList";
-import { formatDateRange } from "../../ui";
 import { usePortalHashLocation } from "../../hash-location";
+import { portalHashParam } from "../../hash-route";
+import { EventAppHero, EventHome } from "./app/EventHome";
+import { SectionHeading } from "../../../../ui/SectionHeading";
+import { EventTicket } from "./app/EventTicket";
+import { EventMore } from "./app/EventMore";
+import { eventRegistrationStanding } from "./app/event-app-model";
+import { participantEventAppSubject } from "./app/event-app-tabs";
 
+const MyAgenda = lazy(() => import("./detail/participation/MyAgenda").then((module) => ({ default: module.MyAgenda })));
+const EventCheckIn = lazy(() => import("./app/EventCheckIn").then((module) => ({ default: module.EventCheckIn })));
+const VirtualRoom = lazy(() =>
+  import("./app/virtual-room/VirtualRoom").then((module) => ({ default: module.VirtualRoom })),
+);
+const MyPromotionKits = lazy(() =>
+  import("./detail/agenda/MyPromotionKits").then((module) => ({ default: module.MyPromotionKits })),
+);
+const MySessionManagement = lazy(() =>
+  import("./detail/participation/MySessionManagement").then((module) => ({ default: module.MySessionManagement })),
+);
 type EventDetail = z.infer<typeof eventDetailResponseSchema>["event"];
-type Selection = { kind?: "registration" | "proposal"; resourceId?: string; tab?: string };
+type Selection = { kind?: "registration" | "proposal"; resourceId?: string; tab?: string; pointToken?: string };
 const href = usePortalHashLocation.hrefs;
+/** The compact header's title for each participant page other than the event home. */
+const PAGE_LABELS: Record<string, string> = {
+  registration: "Registration",
+  program: "Agenda",
+  agenda: "My agenda",
+  promotion: "Promotion kits",
+  "lead-scanner": "Lead scanner",
+  "session-management": "My sessions",
+  ticket: "Ticket",
+  "check-in": "Check in",
+  virtual: "Virtual room",
+  more: "More",
+};
 
 export function ParticipantEventPage({ slug, ...selection }: Selection & { slug: string }) {
   const loaded = useData(
@@ -36,14 +71,41 @@ export function ParticipantEventPage({ slug, ...selection }: Selection & { slug:
   return <ParticipantEvent event={loaded.data.event} {...selection} />;
 }
 
-export function ParticipantEvent({ event, kind, resourceId, tab }: Selection & { event: EventDetail }) {
+export function ParticipantEvent({ event, kind, resourceId, tab, pointToken }: Selection & { event: EventDetail }) {
+  const [location] = useHashLocation();
+  // One agenda route: the whole program, or with `?mine=1` the same view filtered to the reader's sessions.
+  const mine = isMyAgendaQuery(new URLSearchParams(location.split("?", 2)[1] ?? ""));
   const base = `/events/${encodeURIComponent(event.slug)}`;
   const registrationId = event.participation?.registrationId;
   const hasProposals = Boolean(event.participation?.proposals || event.participation?.speakerProposals);
   const active =
-    kind === "registration" ? "registration" : kind === "proposal" || tab === "submissions" ? "proposals" : "overview";
+    kind === "registration"
+      ? "registration"
+      : kind === "proposal" || tab === "submissions"
+        ? "proposals"
+        : tab === "agenda"
+          ? mine
+            ? "agenda"
+            : "program"
+          : tab === "promotion"
+            ? "promotion"
+            : tab === "lead-scanner"
+              ? "lead-scanner"
+              : tab === "session-management"
+                ? "session-management"
+                : tab === "ticket" || tab === "more" || tab === "virtual" || tab === "check-in"
+                  ? tab
+                  : "overview";
   const tabs = [
     { id: "overview", label: "Overview", href: href(base) },
+    { id: "program", label: "Agenda", href: href(eventAgendaRoute(event.slug)) },
+    { id: "agenda", label: "My agenda", href: href(eventAgendaRoute(event.slug, { mine: true })) },
+    ...(eventRegistrationStanding(event).registered
+      ? [
+          { id: "ticket", label: "Ticket", href: href(base + "/ticket") },
+          { id: "virtual", label: "Virtual room", href: href(eventVirtualRoomRoute(event.slug)) },
+        ]
+      : []),
     ...(registrationId
       ? [
           {
@@ -53,62 +115,75 @@ export function ParticipantEvent({ event, kind, resourceId, tab }: Selection & {
           },
         ]
       : []),
-    ...(hasProposals ? [{ id: "proposals", label: "Proposals", href: href(base + "/submissions") }] : []),
+    ...(hasProposals
+      ? [
+          {
+            id: "proposals",
+            label: "Proposals",
+            href: href(base + "/submissions"),
+          },
+          { id: "promotion", label: "Promotion kits", href: href(base + "/promotion") },
+          { id: "session-management", label: "My sessions", href: href(base + "/session-management") },
+        ]
+      : []),
   ];
+  const navigation = (
+    <ParticipantEventNavigation event={participantEventAppSubject(event)} activeId={active} items={tabs} />
+  );
+  // Every page belongs to this event; the section title follows its persistent hero.
   const header = (recordTitle?: string) => (
     <>
-      <PageHeader
-        title={event.name}
-        trail={[
-          { label: "Events", href: href("/events") },
-          { label: event.name, ...(active !== "overview" ? { href: href(base) } : {}) },
-          ...(active !== "overview"
-            ? [
-                {
-                  label: active === "registration" ? "Registration" : "Proposals",
-                  ...(kind === "proposal" ? { href: href(base + "/submissions") } : {}),
-                },
-              ]
-            : []),
-          ...(kind === "proposal" ? [{ label: recordTitle ?? "Proposal" }] : []),
-        ]}
-      />
-      <Tabs label="Event" activeId={active} items={tabs} />
+      <EventAppHero event={event} />
+      {navigation}
+      {active !== "overview" && (
+        <SectionHeading level={3}>
+          {kind === "proposal" ? (recordTitle ?? "Proposal") : (PAGE_LABELS[active] ?? "Proposals")}
+        </SectionHeading>
+      )}
     </>
   );
   return (
     <div class="pk-stack">
       {kind !== "proposal" && header()}
       {kind === "registration" && resourceId ? (
-        <ParticipantRegistration registrationId={resourceId} eventId={event.id} slug={event.slug} />
+        <ParticipantRegistration
+          registrationId={resourceId}
+          eventId={event.id}
+          slug={event.slug}
+          focusDay={portalHashParam(window.location.hash, "day")}
+        />
       ) : kind === "proposal" && resourceId ? (
         <ParticipantProposal event={event} proposalId={resourceId} facet={tab} header={header} />
+      ) : tab === "agenda" ? (
+        <Suspense fallback={<Spinner />}>
+          <MyAgenda slug={event.slug} eventId={event.id} eventName={event.name} mine={mine} />
+        </Suspense>
+      ) : tab === "session-management" ? (
+        <Suspense fallback={<Spinner />}>
+          <MySessionManagement slug={event.slug} />
+        </Suspense>
+      ) : tab === "promotion" ? (
+        <Suspense fallback={<Spinner />}>
+          <MyPromotionKits slug={event.slug} />
+        </Suspense>
+      ) : tab === "lead-scanner" ? (
+        <ParticipantLeadScanner eventId={event.id} slug={event.slug} scannerAccess={event.scannerAccess} />
       ) : tab === "submissions" ? (
         <ParticipantProposals event={event} />
+      ) : tab === "virtual" ? (
+        <Suspense fallback={<Spinner />}>
+          <VirtualRoom slug={event.slug} eventName={event.name} />
+        </Suspense>
+      ) : tab === "ticket" ? (
+        <EventTicket event={event} />
+      ) : tab === "check-in" ? (
+        <Suspense fallback={<Spinner />}>
+          <EventCheckIn slug={event.slug} pointToken={pointToken} />
+        </Suspense>
+      ) : tab === "more" ? (
+        <EventMore event={event} />
       ) : (
-        <Panel>
-          <PanelHeader title="Event details" />
-          <PanelBody>
-            <div class="pk-stack">
-              <DescriptionList
-                items={[
-                  { term: "When", value: formatDateRange(event.startsAt, event.endsAt, event.timezone) },
-                  { term: "Location", value: event.location ?? "Not specified" },
-                ]}
-              />
-              {registrationId && (
-                <div class="pk-cluster">
-                  <Badge status={event.participation?.registrationStatus ?? "pending"} />
-                  <a href={href(eventParticipantRecordPath(event.slug, "registration", registrationId))}>
-                    Manage registration
-                  </a>
-                </div>
-              )}
-              {hasProposals && <a href={href(base + "/submissions")}>View your proposals and speaker participation</a>}
-              {event.basePath && <a href={event.basePath}>Public event information</a>}
-            </div>
-          </PanelBody>
-        </Panel>
+        <EventHome event={event} />
       )}
     </div>
   );
@@ -117,6 +192,7 @@ export function ParticipantEvent({ event, kind, resourceId, tab }: Selection & {
 function ParticipantProposals({ event }: { event: EventDetail }) {
   return (
     <ApiDataTable
+      urlState="event-proposals"
       endpoint="/api/v1/users/current/proposals"
       responseSchema={currentUserProposalsListResponseSchema}
       params={{ eventId: event.id }}
@@ -160,13 +236,14 @@ function ParticipantProposal({
 }) {
   const base = `/api/v1/proposals/${encodeURIComponent(proposalId)}`;
   const loaded = useData(async () => {
-    const [submission, speaker, forms] = await Promise.all([
+    const [submission, speaker, forms, speakerTerms] = await Promise.all([
       optionalRecord(getJson(base + "/submission", proposalAccessReadResponseSchema)),
       optionalRecord(getJson(base + "/participation", speakerSelfServiceReadResponseSchema)),
       getJson(
         `/api/v1/events/${encodeURIComponent(event.slug)}/forms/placements/proposal_submission`,
         eventFormsResponseSchema,
       ),
+      getJson(`/api/v1/events/${encodeURIComponent(event.slug)}/terms?audience=speaker`, eventTermsResponseSchema),
     ]);
     if (
       (!submission && !speaker) ||
@@ -174,7 +251,7 @@ function ParticipantProposal({
       (speaker?.proposal.eventId && speaker.proposal.eventId !== event.id)
     )
       throw new Error("Proposal not found for this event.");
-    return { submission, speaker, forms };
+    return { submission, speaker, forms, speakerTerms };
   }, [proposalId, event.id]);
   if (loaded.loading)
     return (
@@ -190,13 +267,12 @@ function ParticipantProposal({
         <Alert tone="danger">{loaded.error}</Alert>
       </>
     );
-  const { submission, speaker, forms } = loaded.data;
+  const { submission, speaker, forms, speakerTerms } = loaded.data;
   const route = eventParticipantRecordPath(event.slug, "proposal", proposalId);
   const active = facet ?? (submission ? "submission" : "participation");
   return (
     <div class="pk-stack">
       {header(submission?.proposal.title ?? speaker?.proposal.title)}
-      <h2>{submission?.proposal.title ?? speaker?.proposal.title}</h2>
       <Tabs
         label="Proposal"
         activeId={active}
@@ -211,7 +287,7 @@ function ParticipantProposal({
         ]}
       />
       {active === "participation" && speaker ? (
-        <ParticipantSpeaker data={speaker} forms={forms} reload={loaded.reload} />
+        <ParticipantSpeaker data={speaker} eventSlug={event.slug} terms={speakerTerms.terms} reload={loaded.reload} />
       ) : submission && ["submission", "speakers"].includes(active) ? (
         <ParticipantSubmission data={submission} forms={forms} event={event} facet={active} reload={loaded.reload} />
       ) : (

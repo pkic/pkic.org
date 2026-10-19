@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { eventIdSchema } from "./api-common";
+import { eventIdSchema, utcInstantSchema } from "./api-common";
 import { eventSummarySchema } from "./event-read-models";
 import { activeFormSummarySchema } from "./forms";
 import { databaseIdSchema } from "./identifiers";
@@ -9,7 +9,7 @@ import { proposalRecommendationSchema } from "./proposal-reviews";
 import { proposalAdminStatusFilterSchema, proposalDecisionStatusSchema, proposalStatusSchema } from "./proposal-status";
 import { eventInviteWindowSchema } from "./event-invite-validity";
 
-/** Canonical server-side list dialect for program proposal catalogues. */
+/** Canonical server-side list dialect for program proposal catalogs. */
 export const EVENT_PROPOSALS_SORT_COLUMNS = [
   "submittedAt",
   "score",
@@ -29,6 +29,7 @@ export const eventProposalsListQuerySchema = listQuerySchema(EVENT_PROPOSALS_SOR
   status: proposalAdminStatusFilterSchema.optional(),
   recommendation: proposalRecommendationSchema.optional(),
   presentation: proposalPresentationFilterSchema.optional(),
+  agenda: z.enum(["imported", "unimported"]).optional(),
 });
 export type EventProposalsListQuery = z.infer<typeof eventProposalsListQuerySchema>;
 
@@ -67,6 +68,12 @@ const proposalDecisionSchema = z.object({
   decision_decided_at: z.string().nullable(),
 });
 
+/** Where a placed proposal first runs on the agenda. */
+export const proposalAgendaPlacementSchema = z.object({
+  startAt: utcInstantSchema,
+  roomName: z.string().nullable(),
+});
+
 export const eventProposalSummarySchema = eventProposalCoreSchema
   .extend(proposalProposerSchema.shape)
   .extend(proposalDecisionSchema.shape)
@@ -77,6 +84,14 @@ export const eventProposalSummarySchema = eventProposalCoreSchema
     recommendation_needs_work_count: z.number(),
     recommendation_reject_count: z.number(),
     has_presentation: z.boolean(),
+    /** On the agenda: imported from this proposal, or a session that carries its exact title. */
+    agendaImported: z.boolean().default(false),
+    /** The first scheduled run of the proposal's agenda session; null while unscheduled or not on the agenda. */
+    agendaPlacement: proposalAgendaPlacementSchema.nullable().default(null),
+    /** Speakers who have not personally accepted yet; none of them appears on the agenda until they do. */
+    pending_speaker_count: z.number().int().nonnegative().default(0),
+    /** The other speakers on the proposal, so a search that matched one of them is understandable. */
+    co_speaker_names: z.array(z.string()).default([]),
   });
 
 export const eventProposalDetailSchema = eventProposalCoreSchema
@@ -87,6 +102,8 @@ export const eventProposalDetailSchema = eventProposalCoreSchema
     details: z.record(z.string(), z.unknown()).nullable(),
     canceled_at: z.string().nullable(),
     cancellation_comment: z.string().nullable(),
+    /** Private notes for reviewers and organizers; never published. */
+    committee_notes: z.string().nullable().default(null),
   });
 
 export const eventProposalDetailResponseSchema = z.object({
@@ -110,6 +127,7 @@ export const eventProposalsResponseSchema = paginatedResponseSchema("proposals",
   event: eventSummarySchema,
   access: proposalAccessSchema,
   stats: proposalStatsSchema,
+  sessionTypes: proposalSessionTypesSchema.optional(),
 });
 
 export type ProposalAccess = z.infer<typeof proposalAccessSchema>;

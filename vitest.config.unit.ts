@@ -1,12 +1,21 @@
 import { defineConfig } from "vitest/config";
+import { contentMediaPlugin } from "./scripts/lib/content-media-plugin.mjs";
 
 // These suites exercise schemas and pure domain policy. Keeping their canonical
 // file list here lets the Node and Workers pools stay disjoint without moving
 // tests away from the domain files they cover.
 export const NODE_UNIT_TEST_FILES = [
+  "tests/site-publication-provider.test.ts",
   "tests/access-control-role-id-contract.test.ts",
   "tests/access-control-schema.test.ts",
   "tests/admin-identity.test.ts",
+  "tests/attendance-attribution-policy.test.ts",
+  "tests/attendance-points-policy.test.ts",
+  "tests/badge-credential.test.ts",
+  "tests/badge-generic-template.test.ts",
+  "tests/badge-template-import.test.ts",
+  "tests/badge-template-render.test.ts",
+  "tests/calendar-subscription-links.test.ts",
   "tests/calendar-timezone.test.ts",
   "tests/csv.test.ts",
   "tests/db-json-membership.test.ts",
@@ -18,13 +27,20 @@ export const NODE_UNIT_TEST_FILES = [
   "tests/download-disposition.test.ts",
   "tests/email-attachments.test.ts",
   "tests/email-campaign-custom.test.ts",
+  "tests/email-domain-classification.test.ts",
   "tests/email-markdown-escape.test.ts",
   "tests/email-template-engine.test.ts",
+  "tests/event-agenda-pdf-binding-contract.test.ts",
+  "tests/event-attendance-capture.test.ts",
   "tests/event-email-campaign-token.test.ts",
   "tests/event-invite-preview-token.test.ts",
+  "tests/event-live-stream-schema.test.ts",
   "tests/event-registration-status-policy.test.ts",
   "tests/form-answers.test.ts",
+  "tests/form-answer-contract.test.ts",
   "tests/form-field-rules.test.ts",
+  "tests/live-overlay-layout-geometry.test.ts",
+  "tests/live-session-poll-field.test.ts",
   "tests/form-submission-window.test.ts",
   "tests/gravatar-download.test.ts",
   "tests/image-upload.test.ts",
@@ -40,10 +56,12 @@ export const NODE_UNIT_TEST_FILES = [
   "tests/pagination-sort-schema.test.ts",
   "tests/proposal-access-paths.test.ts",
   "tests/proposal-route-policy.test.ts",
+  "tests/proposal-session-types.test.ts",
   "tests/provider-failure-safety.test.ts",
   "tests/security-primitives.test.ts",
   "tests/scheduled-job-runner.test.ts",
   "tests/server-collection-controller.test.ts",
+  "tests/sealed-value.test.ts",
   "tests/session-policy.test.ts",
   "tests/shared-schema-composition.test.ts",
   "tests/slug.test.ts",
@@ -58,10 +76,12 @@ export const NODE_UNIT_TEST_FILES = [
 ];
 
 export default defineConfig({
+  plugins: [contentMediaPlugin(import.meta.dirname)],
   test: {
     include: [...NODE_UNIT_TEST_FILES],
     exclude: ["**/._*"],
     environment: "node",
+    pool: "threads",
     reporters: ["default", "./tests/tools/slowest-tests-reporter.ts"],
   },
 });

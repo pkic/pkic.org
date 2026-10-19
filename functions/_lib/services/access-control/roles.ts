@@ -8,13 +8,14 @@ import {
 } from "../../../../assets/shared/schemas/access-control";
 import { buildPageInfo, type PageInfo } from "../../../../assets/shared/schemas/pagination";
 import { AppError } from "../../errors";
-import { hasPermission, isPermission, requirePermission } from "../../auth/permissions";
+import { hasPermission, isPermission, requirePermission, type PermissionRequirement } from "../../auth/permissions";
+import { prepareAccessAdministratorGuard, requireRemainingAccessAdministrator } from "./role-administrator";
 import { all, first } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { resolveOrderBy } from "../../db/sort";
 import { parseJsonSafe } from "../../utils/json";
-import { nowIso } from "../../utils/time";
+import { nowIso, nextIsoRevision } from "../../utils/time";
 import { uuid } from "../../utils/ids";
 import { prepareAuditLog, prepareAuditLogAfterOneChange } from "../audit";
 import { commitAccessControlMutation, requireAccessControlRead } from "./authorization";
@@ -145,12 +146,41 @@ export async function updateRole(
     description: string | null;
     is_system_role: number;
     created_at: string;
-  }>(db, "SELECT id, name, description, is_system_role, created_at FROM roles WHERE id = ?", [roleId]);
+    updated_at: string;
+  }>(db, "SELECT id, name, description, is_system_role, created_at, updated_at FROM roles WHERE id = ?", [roleId]);
   if (!existing) throw new AppError(404, "NOT_FOUND", "Role not found");
-  if (existing.is_system_role === 1) throw new AppError(409, "SYSTEM_ROLE", "System roles cannot be edited");
+  if (existing.is_system_role === 1 && input.name !== undefined && input.name !== existing.name) {
+    throw new AppError(409, "SYSTEM_ROLE", "System role names cannot be changed");
+  }
+  const currentPermissions = (
+    await all<{ permission: string }>(
+      db,
+      "SELECT permission FROM role_permissions WHERE role_id = ? ORDER BY permission ASC",
+      [roleId],
+    )
+  ).map((row) => row.permission);
+  const added = (input.permissions ?? []).filter((permission) => !currentPermissions.includes(permission));
+  const proposedPermissions = input.permissions === undefined ? undefined : new Set<string>(input.permissions);
+  const removed = proposedPermissions
+    ? currentPermissions.filter((permission) => !proposedPermissions.has(permission))
+    : [];
+  const requirements: PermissionRequirement[] = [
+    { permission: "access:grant" },
+    ...added.map((permission) => ({ permission })),
+  ];
+  if (removed.length) {
+    requirePermission(actor, "access:revoke");
+    requirements.push({ permission: "access:revoke" });
+  }
+  const changesAccessAdministration = removed.some(
+    (permission) => permission === "access:grant" || permission === "access:revoke",
+  );
+  if (changesAccessAdministration) {
+    await requireRemainingAccessAdministrator(db, roleId, input.permissions!);
+  }
 
   if (input.permissions !== undefined) {
-    for (const permission of input.permissions) {
+    for (const permission of added) {
       if (!isPermission(permission)) throw new AppError(400, "INVALID_PERMISSION", `Unknown permission: ${permission}`);
       if (!hasPermission(actor, permission)) {
         throw new AppError(403, "PERMISSION_REQUIRED", `Cannot bundle a permission you do not hold: ${permission}`);
@@ -164,7 +194,7 @@ export async function updateRole(
     }
   }
 
-  const now = nowIso();
+  const now = nextIsoRevision(existing.updated_at);
   const setClauses = ["updated_at = ?"];
   const values: unknown[] = [now];
   if (input.name !== undefined) {
@@ -184,8 +214,8 @@ export async function updateRole(
   // user-role-assignments.ts).
   const statements: StatementLike[] = [
     db
-      .prepare(`UPDATE roles SET ${setClauses.join(", ")} WHERE id = ? AND updated_at = ? AND is_system_role = 0`)
-      .bind(...values),
+      .prepare(`UPDATE roles SET ${setClauses.join(", ")} WHERE id = ? AND updated_at = ? AND is_system_role = ?`)
+      .bind(...values, existing.is_system_role),
     prepareAuditLogAfterOneChange(
       db,
       "admin",
@@ -193,7 +223,14 @@ export async function updateRole(
       "role_updated",
       "role",
       roleId,
-      { name: input.name, description: input.description, permissions: input.permissions },
+      {
+        name: { from: existing.name, to: input.name ?? existing.name },
+        description: {
+          from: existing.description,
+          to: input.description === undefined ? existing.description : input.description,
+        },
+        permissions: { from: currentPermissions, to: input.permissions ?? currentPermissions },
+      },
       now,
     ),
   ];
@@ -209,12 +246,8 @@ export async function updateRole(
     );
   }
 
-  await commitAccessControlMutation(
-    db,
-    actor,
-    [{ permission: "access:grant" }, ...(input.permissions ?? []).map((permission) => ({ permission }))],
-    statements,
-  );
+  if (changesAccessAdministration) statements.push(prepareAccessAdministratorGuard(db));
+  await commitAccessControlMutation(db, actor, requirements, statements);
 
   const permissions =
     input.permissions ??
@@ -230,7 +263,7 @@ export async function updateRole(
     id: roleId,
     name: input.name ?? existing.name,
     description: input.description !== undefined ? input.description : existing.description,
-    isSystemRole: false,
+    isSystemRole: existing.is_system_role === 1,
     permissions,
     createdAt: existing.created_at,
     updatedAt: now,

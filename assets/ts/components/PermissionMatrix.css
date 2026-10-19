@@ -1,0 +1,101 @@
+/*
+ * The permission matrix: one grid for the column header and every row, the
+ * name first, then a Read and a Write cell in narrow fixed columns, then the
+ * disclosure. The cells carry no text of their own; the header names them.
+ */
+@layer components {
+  .pk-permission-matrix__columns,
+  .pk-permission-matrix__row {
+    display: grid;
+    grid-template-columns: 1fr 3rem 3rem 2.25rem;
+    align-items: center;
+    padding: var(--pk-2) var(--pk-3) var(--pk-2) var(--pk-5);
+  }
+
+  /* The column header and the all-areas row form one band, set apart like a table head. */
+  .pk-permission-matrix__header {
+    border-bottom: 1px solid var(--pk-line);
+    background: var(--pk-surface-sunk);
+  }
+
+  .pk-permission-matrix__columns {
+    padding-block: var(--pk-2) 0;
+    font-size: var(--pk-text-2xs);
+    font-weight: 700;
+    color: var(--pk-ink-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+  }
+
+  .pk-permission-matrix__cell--read {
+    grid-column: 2;
+    justify-self: center;
+  }
+
+  .pk-permission-matrix__cell--write {
+    grid-column: 3;
+    justify-self: center;
+  }
+
+  /* A read-only cell: the check in the accent, sized like the checkbox it stands for. */
+  span.pk-permission-matrix__cell {
+    display: inline-grid;
+    place-items: center;
+    min-height: 1.25rem;
+    color: var(--pk-accent);
+  }
+
+  span.pk-permission-matrix__cell > svg {
+    width: 1rem;
+    height: 1rem;
+  }
+
+  .pk-permission-matrix__row > .pk-btn {
+    grid-column: 4;
+    justify-self: end;
+  }
+
+  .pk-permission-matrix__name {
+    display: grid;
+  }
+
+  .pk-permission-matrix__areas,
+  .pk-permission-matrix__permissions {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+
+  .pk-permission-matrix__area + .pk-permission-matrix__area {
+    border-top: 1px solid var(--pk-line-soft);
+  }
+
+  .pk-permission-matrix__chevron {
+    transition: transform var(--pk-dur-fast);
+  }
+
+  [aria-expanded="true"] > .pk-permission-matrix__chevron {
+    transform: rotate(180deg);
+  }
+
+  /* A permission under its area: indented, and closer together than the areas. */
+  .pk-permission-matrix__permissions {
+    padding-bottom: var(--pk-2);
+  }
+
+  .pk-permission-matrix__permissions > .pk-permission-matrix__row {
+    padding-block: var(--pk-1);
+    padding-left: calc(var(--pk-5) + var(--pk-4));
+  }
+
+  @media (max-width: 48rem) {
+    .pk-permission-matrix__columns,
+    .pk-permission-matrix__row {
+      padding-left: var(--pk-4);
+    }
+
+    .pk-permission-matrix__permissions > .pk-permission-matrix__row {
+      padding-left: calc(var(--pk-4) + var(--pk-4));
+    }
+  }
+}

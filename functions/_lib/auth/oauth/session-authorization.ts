@@ -1,59 +1,90 @@
-import { OAuthError } from "@cloudflare/workers-oauth-provider";
+import {
+  OAuthError,
+  GrantType,
+  type TokenExchangeCallbackOptions,
+  type TokenExchangeCallbackResult,
+} from "@cloudflare/workers-oauth-provider";
 import { getCurrentUserBackedAdmin } from "../admin";
 import { signMcpSessionToken } from "../mcp-session";
 import { AppError } from "../../errors";
 import type { Env } from "../../types";
-import { parseMcpOauthProps, type McpOAuthProps } from "./authorization";
+import { parseMcpOauthProps, type McpOAuthProps } from "./props";
+import { readActiveOauthAuthorization } from "./authorization-ceiling";
+import { mcpOauthLifetimes } from "./policy";
+import { effectiveMcpPermissionContexts } from "./grantable-permissions";
 
-/** OAuth refresh never extends the grant's signed authorization deadline. */
-export async function requireActiveMcpSession(env: Env, props: McpOAuthProps): Promise<number | null> {
-  if (props.identityType === "service") return null;
+/** Frozen session deadlines and approved resource limits both cap live authority. */
+export async function resolveActiveMcpSession(env: Env, props: McpOAuthProps, clientId?: string) {
+  if (props.identityType === "service") return { remainingSeconds: null, scopes: props.scopes };
   const idleExpiresAt = Date.parse(props.sessionIdleExpiresAt);
-  if (!Number.isFinite(idleExpiresAt) || idleExpiresAt <= Date.now()) {
-    // This snapshot bounds the grant. Portal activity can extend its own
-    // signed idle deadline, so grant expiry must not revoke the shared session.
+  if (!Number.isFinite(idleExpiresAt) || idleExpiresAt <= Date.now())
     throw new AppError(401, "AUTH_EXPIRED", "Your MCP authorization session expired. Sign in again.");
-  }
-  const admin = await getCurrentUserBackedAdmin(env.DB, props.id, props.sessionId);
-  const expiresAt = Math.min(Date.parse(props.sessionExpiresAt), idleExpiresAt, Date.parse(admin?.expiresAt ?? ""));
+  const authorization =
+    props.authTransport === "oauth"
+      ? await readActiveOauthAuthorization(env.DB, {
+          id: props.authorizationId,
+          userId: props.id,
+          sessionId: props.sessionId,
+          clientId,
+        })
+      : null;
+  const admin = await getCurrentUserBackedAdmin(env.DB, props.id, props.sessionId, authorization?.memberId);
+  const expiresAt = Math.min(
+    Date.parse(props.sessionExpiresAt),
+    idleExpiresAt,
+    Date.parse(admin?.expiresAt ?? ""),
+    authorization ? Date.parse(authorization.expiresAt) : Infinity,
+  );
   const remainingSeconds = Math.floor(expiresAt / 1000) - Math.floor(Date.now() / 1000);
-  if (!admin || !Number.isFinite(remainingSeconds) || remainingSeconds <= 0) {
+  if (!admin || !Number.isFinite(remainingSeconds) || remainingSeconds <= 0)
     throw new AppError(401, "AUTH_EXPIRED", "Your MCP authorization session expired. Sign in again.");
-  }
-  return remainingSeconds;
+  const scopes = authorization
+    ? [
+        ...new Set(
+          effectiveMcpPermissionContexts(admin, authorization.scopes, props.scopes).map((scope) => scope.permission),
+        ),
+      ]
+    : props.scopes;
+  if (authorization && !scopes.length)
+    throw new AppError(401, "MCP_AUTHORIZATION_INACTIVE", "Authorize the MCP client again");
+  return { remainingSeconds, scopes };
 }
-
 export async function mcpTokenLifetime(
   env: Env,
   value: unknown,
   accessTokenTTL: number,
-  requestedScope?: string[],
-): Promise<{ accessTokenTTL: number; accessTokenScope?: string[]; accessTokenProps?: McpOAuthProps }> {
+  exchange?: Pick<TokenExchangeCallbackOptions, "clientId" | "userId" | "requestedScope" | "grantType">,
+): Promise<TokenExchangeCallbackResult> {
   try {
     const props = parseMcpOauthProps(value);
     if (!props) throw new AppError(401, "AUTH_INVALID", "Missing MCP authorization");
-    const remainingSeconds = await requireActiveMcpSession(env, props);
-    const ttl = remainingSeconds === null ? accessTokenTTL : Math.min(accessTokenTTL, remainingSeconds);
-    // Cloudflare KV rejects expirationTtl below 60 seconds. Never round up
-    // beyond the signed session deadline to satisfy that storage minimum.
-    if (ttl < 60) {
-      throw new AppError(401, "AUTH_EXPIRED", "Your MCP authorization session expired. Sign in again.");
+    if (props.identityType === "user" && props.authTransport === "oauth" && (!exchange || exchange.userId !== props.id))
+      throw new AppError(401, "MCP_AUTHORIZATION_INACTIVE", "Authorize the MCP client again");
+    const active = await resolveActiveMcpSession(env, props, exchange?.clientId);
+    const ttl = active.remainingSeconds === null ? accessTokenTTL : Math.min(accessTokenTTL, active.remainingSeconds);
+    // KV never receives a minimum TTL rounded past the signed authorization deadline.
+    if (ttl < 60) throw new AppError(401, "AUTH_EXPIRED", "Your MCP authorization session expired. Sign in again.");
+    if (props.identityType === "user" && props.authTransport === "oauth") {
+      const scopes = active.scopes.filter((scope) => exchange!.requestedScope.includes(scope));
+      if (!scopes.length) throw new AppError(401, "MCP_AUTHORIZATION_INACTIVE", "Authorize the MCP client again");
+      return {
+        accessTokenTTL: ttl,
+        ...(exchange!.grantType === GrantType.AUTHORIZATION_CODE
+          ? { refreshTokenTTL: Math.min(mcpOauthLifetimes(env).refreshTokenTTL, active.remainingSeconds!) }
+          : {}),
+        accessTokenScope: scopes,
+        newProps: { ...props, scopes },
+      };
     }
-    const scopes = requestedScope ? props.scopes.filter((scope) => requestedScope.includes(scope)) : props.scopes;
-    if (scopes.length === 0) throw new AppError(401, "AUTH_EXPIRED", "No approved permissions remain.");
-    return {
-      accessTokenScope: scopes,
-      accessTokenProps: { ...props, scopes },
-      accessTokenTTL: ttl,
-    };
+    return { accessTokenTTL: ttl };
   } catch (error) {
-    if (error instanceof AppError && error.status === 401) {
-      throw new OAuthError("invalid_grant", { description: "Your MCP authorization session expired. Sign in again." });
-    }
+    if (error instanceof AppError && error.status === 401)
+      throw new OAuthError("invalid_grant", {
+        description: "Your MCP authorization is no longer active. Authorize the client again.",
+      });
     throw error;
   }
 }
-
 export function mcpAuthenticationError(request: Request, error: unknown): Response | null {
   if (!(error instanceof AppError) || error.status !== 401) return null;
   const resourceMetadata = new URL(
@@ -61,7 +92,10 @@ export function mcpAuthenticationError(request: Request, error: unknown): Respon
     request.url,
   ).toString();
   return Response.json(
-    { error: "invalid_token", error_description: "Your MCP authorization session expired. Sign in again." },
+    {
+      error: "invalid_token",
+      error_description: "Your MCP authorization is no longer active. Authorize the client again.",
+    },
     {
       status: 401,
       headers: {
@@ -71,34 +105,22 @@ export function mcpAuthenticationError(request: Request, error: unknown): Respon
     },
   );
 }
-
 export async function authorizationHeaderForMcp(
   request: Request,
   env: Env,
   oauthProps?: McpOAuthProps,
 ): Promise<string | null> {
-  if (!oauthProps) {
-    return request.headers.get("authorization");
-  }
-
-  if (oauthProps.identityType === "service") {
-    return request.headers.get("authorization");
-  }
-
-  const remainingSeconds = await requireActiveMcpSession(env, oauthProps);
-
-  if (!env.INTERNAL_SIGNING_SECRET) {
-    return null;
-  }
-
+  if (!oauthProps || oauthProps.identityType === "service") return request.headers.get("authorization");
+  const active = await resolveActiveMcpSession(env, oauthProps);
+  if (!env.INTERNAL_SIGNING_SECRET) return null;
   const token = await signMcpSessionToken(env.INTERNAL_SIGNING_SECRET, {
     sub: oauthProps.id,
     sid: oauthProps.sessionId,
-    exp: Math.floor(Date.now() / 1000) + remainingSeconds!,
+    exp: Math.floor(Date.now() / 1000) + active.remainingSeconds!,
     email: oauthProps.email,
     state: oauthProps.state ?? undefined,
-    scopes: oauthProps.scopes,
+    scopes: active.scopes,
+    ...(oauthProps.authTransport === "oauth" ? { authorizationId: oauthProps.authorizationId } : {}),
   });
-
   return `Bearer ${token}`;
 }

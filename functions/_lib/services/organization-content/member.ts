@@ -5,6 +5,7 @@ import { resolveMappedOrderBy } from "../../db/sort";
 import { AppError } from "../../errors";
 import { nowIso } from "../../utils/time";
 import { uuid } from "../../utils/ids";
+import { readOrganizationContactIdentities } from "../identities/read-model";
 import { resolveRepresentativeRoleHolders } from "../membership/representative-roles";
 import {
   ORGANIZATION_CONTENT_SELECT_COLUMNS,
@@ -26,7 +27,10 @@ import {
 } from "./model";
 import type { AuthMember, DatabaseLike, StatementLike } from "../../types";
 import { prepareStorageDeletion } from "../storage-deletion-outbox";
-import { prepareOrganizationContentReviewNotificationIntents } from "./notifications";
+import {
+  prepareOrganizationContentReviewDigestDeliveryGuard,
+  prepareRefreshOrganizationContentReviewDigests,
+} from "./notifications";
 import type { OrganizationContentReviewsListQuery } from "../../../../assets/shared/schemas/organization-self-service";
 import { prepareOrganizationIdentityManagementGuard } from "../identities/authorization";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
@@ -55,6 +59,14 @@ export async function getMyOrganizationProfile(db: DatabaseLike, member: AuthMem
     ),
   ]);
 
+  const pendingSecondaryContactUserId = nomination?.nominated_user_id ?? null;
+  const contacts = await readOrganizationContactIdentities(db, member.memberId, [
+    holders.primaryContactUserId,
+    holders.secondaryContactUserId,
+    pendingSecondaryContactUserId,
+  ]);
+  const contact = (userId: string | null) => contacts.find((identity) => identity.userId === userId) ?? null;
+
   return {
     id: row.id,
     name: row.name,
@@ -62,7 +74,11 @@ export async function getMyOrganizationProfile(db: DatabaseLike, member: AuthMem
     ...toOrganizationExtendedContent(row),
     isOrgContact: member.userId === holders.primaryContactUserId || member.userId === holders.secondaryContactUserId,
     isPrimaryContact: member.userId === holders.primaryContactUserId,
-    pendingSecondaryContactUserId: nomination?.nominated_user_id ?? null,
+    isSecondaryContact: member.userId === holders.secondaryContactUserId,
+    primaryContact: contact(holders.primaryContactUserId),
+    secondaryContact: contact(holders.secondaryContactUserId),
+    pendingSecondaryContact: contact(pendingSecondaryContactUserId),
+    pendingSecondaryContactUserId,
     pendingReview: pendingReview ? toReviewSummary(pendingReview) : null,
   };
 }
@@ -76,7 +92,6 @@ export async function submitOrgContentChange(
   db: DatabaseLike,
   member: AuthMember,
   input: ContentReviewFieldInput,
-  reviewUrl: string,
 ): Promise<SubmitContentChangeResult> {
   const org = await requireOrgContact(db, member);
   if (await fetchPendingReview(db, org.id)) {
@@ -119,7 +134,6 @@ export async function submitOrgContentChange(
         { organizationId: org.id, changedFields: Object.keys(changedFields) },
         now,
       ),
-      prepareOrganizationContentReviewNotificationIntents(db, id, org.id, member.email, reviewUrl, now),
     ]);
   } catch (error) {
     if (isAuthorizationGuardFailure(error)) {
@@ -209,6 +223,7 @@ export async function withdrawMyOrganizationReview(db: DatabaseLike, member: Aut
         actorUserId: member.userId,
         staffAuthorized: false,
       }),
+      prepareOrganizationContentReviewDigestDeliveryGuard(db),
       prepareReviewTransitionGuard(db, review),
       db
         .prepare("UPDATE organization_content_reviews SET status = 'withdrawn' WHERE id = ? AND status = 'pending'")
@@ -226,6 +241,7 @@ export async function withdrawMyOrganizationReview(db: DatabaseLike, member: Aut
         .prepare("UPDATE organizations SET logo_staging_r2_key = NULL WHERE id = ? AND logo_staging_r2_key = ?")
         .bind(org.id, review.logo_staging_r2_key),
     ];
+    statements.push(prepareRefreshOrganizationContentReviewDigests(db, nowIso()));
     const deletion = prepareStorageDeletion(db, review.logo_staging_r2_key, nowIso(), "assets");
     if (deletion) statements.push(deletion);
     await db.batch(statements);
@@ -234,7 +250,7 @@ export async function withdrawMyOrganizationReview(db: DatabaseLike, member: Aut
       throw new AppError(
         409,
         "ORGANIZATION_CONTACT_CHANGED",
-        "Organization-contact access changed while the review was being withdrawn",
+        "Organization access changed or a review digest is being delivered; please retry",
       );
     }
     if (!isStaleContentReviewTransition(error)) throw error;
@@ -256,7 +272,6 @@ export async function prepareAuthorizedOrganizationLogoStage(
   member: AuthMember,
   organizationId: string,
   r2Key: string,
-  reviewUrl: string,
 ): Promise<PreparedOrganizationLogoStage> {
   const now = nowIso();
   const existingPending = await fetchPendingReview(db, organizationId);
@@ -336,7 +351,6 @@ export async function prepareAuthorizedOrganizationLogoStage(
       db
         .prepare("UPDATE organizations SET logo_staging_r2_key = ?, updated_at = ? WHERE id = ?")
         .bind(r2Key, now, organizationId),
-      prepareOrganizationContentReviewNotificationIntents(db, reviewId, organizationId, member.email, reviewUrl, now),
     ],
     mapCommitError(error) {
       if (isAuthorizationGuardFailure(error)) {

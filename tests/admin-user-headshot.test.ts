@@ -5,7 +5,14 @@ import { resetDb } from "./helpers/reset-db";
 import { createContext, queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
 import { validJpegBytes, validPngBytes } from "./helpers/raster-images";
-import app from "../functions/router";
+import app from "./helpers/app";
+import { callApi } from "./helpers/app";
+import {
+  insertIndividualMembershipForUser,
+  insertOrganization,
+  seedOrganizationAggregate,
+  addRepresentative,
+} from "./helpers/membership";
 import {
   getUserHeadshotRecord,
   replaceUserHeadshot,
@@ -143,6 +150,57 @@ describe("admin user headshot upload", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
   });
+
+  it.each(["individual", "organization", "hidden", "inactive", "nonmember"] as const)(
+    "queues changed public member portraits and keeps private portraits quiet: %s",
+    async (visibility) => {
+      const { targetUserId } = await setup();
+      if (visibility === "individual" || visibility === "inactive") {
+        const member = await insertIndividualMembershipForUser(env.DB, targetUserId);
+        if (visibility === "inactive")
+          await env.DB.prepare("UPDATE members SET status='inactive' WHERE id=?").bind(member.memberId).run();
+      } else if (visibility !== "nonmember") {
+        const memberId = await seedOrganizationAggregate(env.DB, await insertOrganization(env.DB));
+        await addRepresentative(env.DB, memberId, targetUserId, { showOnOrgProfile: visibility !== "hidden" });
+      }
+      const response = await callApi({ ...env, IMAGES: undefined }, `/api/v1/users/${targetUserId}/headshot`, {
+        method: "PUT",
+        headers: { authorization: `Bearer ${ADMIN_TOKEN}`, "content-type": "image/png" },
+        body: validPngBytes(),
+      });
+      expect(response.status, await response.clone().text()).toBe(200);
+      const key = await env.DB.prepare("SELECT headshot_r2_key FROM users WHERE id=?")
+        .bind(targetUserId)
+        .first<string>("headshot_r2_key");
+      expect(key).toBeTruthy();
+      expect(await env.SPEAKER_UPLOADS_BUCKET!.head(key!)).not.toBeNull();
+      const requests = await queryAll(env.DB, "SELECT resource_id,reason_code FROM site_publication_requests");
+      expect(requests).toEqual(
+        visibility === "individual" || visibility === "organization"
+          ? [{ resource_id: targetUserId, reason_code: "user_headshot_changed" }]
+          : [],
+      );
+      if (visibility === "individual") {
+        const replaced = await callApi({ ...env, IMAGES: undefined }, `/api/v1/users/${targetUserId}/headshot`, {
+          method: "PUT",
+          headers: { authorization: `Bearer ${ADMIN_TOKEN}`, "content-type": "image/png" },
+          body: validPngBytes(),
+        });
+        expect(replaced.status, await replaced.clone().text()).toBe(200);
+        expect(await env.SPEAKER_UPLOADS_BUCKET!.head(key!)).toBeNull();
+        const removed = await callApi(env, `/api/v1/users/${targetUserId}/headshot`, {
+          method: "DELETE",
+          headers: { authorization: `Bearer ${ADMIN_TOKEN}` },
+        });
+        expect(removed.status, await removed.clone().text()).toBe(200);
+        expect(await queryAll(env.DB, "SELECT resource_id FROM site_publication_requests")).toEqual([
+          { resource_id: targetUserId },
+          { resource_id: targetUserId },
+          { resource_id: targetUserId },
+        ]);
+      }
+    },
+  );
 
   it.each(["replace", "remove", "anonymize"] as const)(
     "reads imported portraits and cleans the assets bucket on %s",
@@ -557,43 +615,48 @@ describe("admin user headshot upload", () => {
     ).toEqual([{ object_key: oldKey }]);
   });
 
-  it("removes a new headshot when its audited pointer commit fails", async () => {
-    const { adminId, targetUserId } = await setup();
-    const bucket = new FakeUploadsBucket();
-    await env.DB.prepare(
-      `CREATE TRIGGER fail_headshot_upload_audit
-       BEFORE INSERT ON audit_log
-       WHEN NEW.action = 'headshot_uploaded'
+  it.each(["audit_log", "site_publication_requests"] as const)(
+    "removes a new public headshot when %s refuses its commit",
+    async (table) => {
+      const { adminId, targetUserId } = await setup();
+      await insertIndividualMembershipForUser(env.DB, targetUserId);
+      const bucket = new FakeUploadsBucket();
+      await env.DB.prepare(
+        `CREATE TRIGGER fail_headshot_upload_audit
+       BEFORE INSERT ON ${table}
+       ${table === "audit_log" ? "WHEN NEW.action = 'headshot_uploaded'" : ""}
        BEGIN
          SELECT RAISE(ABORT, 'forced headshot audit failure');
        END`,
-    ).run();
+      ).run();
 
-    try {
-      await expect(
-        replaceUserHeadshot({
-          db: env.DB,
-          bucket: bucket as unknown as R2Bucket,
-          userId: targetUserId,
-          previousKey: null,
-          image: { buffer: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer, contentType: "image/jpeg" },
-          audit: { actorType: "admin", actorId: adminId, action: "headshot_uploaded" },
-        }),
-      ).rejects.toThrow("forced headshot audit failure");
-    } finally {
-      await env.DB.prepare("DROP TRIGGER fail_headshot_upload_audit").run();
-    }
+      try {
+        await expect(
+          replaceUserHeadshot({
+            db: env.DB,
+            bucket: bucket as unknown as R2Bucket,
+            userId: targetUserId,
+            previousKey: null,
+            image: { buffer: new Uint8Array([0xff, 0xd8, 0xff, 0xd9]).buffer, contentType: "image/jpeg" },
+            audit: { actorType: "admin", actorId: adminId, action: "headshot_uploaded" },
+          }),
+        ).rejects.toThrow("forced headshot audit failure");
+      } finally {
+        await env.DB.prepare("DROP TRIGGER fail_headshot_upload_audit").run();
+      }
 
-    expect(bucket.keys()).toEqual([]);
-    expect(
-      await queryAll<{ headshot_r2_key: string | null }>(env.DB, "SELECT headshot_r2_key FROM users WHERE id = ?", [
-        targetUserId,
-      ]),
-    ).toEqual([{ headshot_r2_key: null }]);
-    expect(
-      await queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox WHERE bucket = 'speaker_uploads'"),
-    ).toEqual([]);
-  });
+      expect(bucket.keys()).toEqual([]);
+      expect(await queryAll(env.DB, "SELECT id FROM site_publication_requests")).toEqual([]);
+      expect(
+        await queryAll<{ headshot_r2_key: string | null }>(env.DB, "SELECT headshot_r2_key FROM users WHERE id = ?", [
+          targetUserId,
+        ]),
+      ).toEqual([{ headshot_r2_key: null }]);
+      expect(
+        await queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox WHERE bucket = 'speaker_uploads'"),
+      ).toEqual([]);
+    },
+  );
 
   it("retains a failed headshot compensation for durable retry", async () => {
     const { adminId, targetUserId } = await setup();
@@ -711,7 +774,7 @@ describe("admin user headshot upload", () => {
     );
     expect(validResponse.status).toBe(200);
     expect(validResponse.headers.get("content-type")).toBe("image/jpeg");
-    expect(validResponse.headers.get("cache-control")).toBe("public, max-age=300, s-maxage=300, must-revalidate");
+    expect(validResponse.headers.get("cache-control")).toBe("public, max-age=31536000, s-maxage=300, immutable");
 
     const retiredRouteResponse = await app.fetch(
       new Request(`https://app.test/api/v1/headshots/${targetUserId}/legacy.jpg`),

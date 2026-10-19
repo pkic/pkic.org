@@ -1,0 +1,12 @@
+/*
+ * The figures above a list are short counts with one-word labels. At the
+ * dashboard minimum six of them wrapped on a laptop and left the last card
+ * alone on a second line; at a count's own width they stay one row there and
+ * still fold, two or three across, on a phone. Loaded with the component, so
+ * the document's entry stylesheet stays within its budget.
+ */
+@layer components {
+  .pk-stat-row--fit {
+    --pk-stat-min: 7rem;
+  }
+}

@@ -86,11 +86,11 @@ export function MeetingOccurrenceEditor({
         onChange={setDraft}
       />
       <div class="pk-cluster">
-        <Button type="submit" variant="primary" size="sm" loading={saving} disabled={saving}>
+        <Button type="submit" variant="primary" loading={saving} disabled={saving}>
           {saving ? "Saving…" : "Save occurrence"}
         </Button>
         {onCancel && (
-          <Button type="button" size="sm" disabled={saving} onClick={onCancel}>
+          <Button type="button" disabled={saving} onClick={onCancel}>
             Cancel
           </Button>
         )}

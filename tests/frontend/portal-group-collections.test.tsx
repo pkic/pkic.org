@@ -159,7 +159,9 @@ describe("portal selected-group collections", () => {
                 registrationPolicy: "optional",
                 visibility: "group_members",
                 inviteLimitAttendee: 0,
-                location: "Online",
+                city: null,
+                country: null,
+                meetingLocation: null,
                 links: [],
                 nextOccurrenceAt: "2026-09-01T15:00:00.000Z",
                 updatedAt: "2026-08-01T00:00:00.000Z",
@@ -177,6 +179,8 @@ describe("portal selected-group collections", () => {
                 actor_type: "member",
                 actor_id: "90000000-0000-4000-8000-000000000002",
                 actor_display: "Group Chair",
+                actor_identity_id: null,
+                actor_organization_name: null,
                 action: "group_updated",
                 entity_type: "group",
                 entity_id: GROUP_ID,
@@ -240,7 +244,7 @@ describe("portal selected-group collections", () => {
         { path: `/api/v1/groups/${GROUP_ID}/forms`, limit: "50", sort: "title" },
         { path: `/api/v1/groups/${GROUP_ID}/events`, limit: "50", sort: "next_occurrence_at" },
         { path: `/api/v1/groups/${GROUP_ID}/audit-log`, limit: "50", sort: "-createdAt" },
-        { path: `/api/v1/groups/${GROUP_ID}/votes`, limit: "50", sort: "-closes_at" },
+        { path: `/api/v1/groups/${GROUP_ID}/votes`, limit: "50", sort: "-created_at" },
       ]),
     );
   });
@@ -262,7 +266,9 @@ describe("portal selected-group collections", () => {
       registrationPolicy: "optional",
       visibility: "group_members",
       inviteLimitAttendee: 0,
-      location: "Online",
+      city: null,
+      country: null,
+      meetingLocation: null,
       links: ["https://example.test/architecture-workshop"],
       nextOccurrenceAt: "2026-09-01T15:00:00.000Z",
       updatedAt: "2026-08-01T00:00:00.000Z",
@@ -308,6 +314,8 @@ describe("portal selected-group collections", () => {
                 display_name: "Group Member",
                 headshot_url: null,
                 organization_name: null,
+                personal_email: false,
+                waitlist_handled_last: false,
                 job_title: null,
                 referral_code: null,
                 status: "registered",
@@ -356,8 +364,15 @@ describe("portal selected-group collections", () => {
 
     // Arriving on that URL loads the event and renders its workspace.
     const record = mount(<GroupEvents groupId={GROUP_ID} initialEventId={event.id} />);
-    await settle();
-    await settle();
+    // Wait for the real record after its lazy workspace module and registration data load; the
+    // module graph is transformed on first import, which takes seconds on a busy machine.
+    await vi.waitFor(
+      async () => {
+        await settle();
+        expect(record.textContent).toContain("Register for this event");
+      },
+      { timeout: 15_000 },
+    );
     expect(requests.some(({ url }) => url.pathname.endsWith(`/events/${event.id}`))).toBe(true);
 
     // The default tab is the overview, which shows the registration panel — not the settings form.

@@ -14,15 +14,22 @@
  * already written; it was only ever named after one of the two things it is
  * for. Both now use it, and the noun and the shape are the caller's.
  */
-import { useId, useRef, useState } from "preact/hooks";
-import { AvatarStanding, type AvatarStatus } from "../ui/Avatar";
-import { monogramFrom } from "../shared/initials";
-import { useLogoCommands, type LogoManagerProps } from "./LogoManager";
+import { useId, useRef } from "preact/hooks";
+import { Avatar, AvatarStanding, type AvatarStatus } from "../ui/Avatar";
+import { usePictureCommands, type PictureCommandOptions } from "./usePictureCommands";
 import "./PictureTile.css";
 
-export interface PictureTileProps extends Omit<LogoManagerProps, "hint" | "uploadLabel"> {
-  /** The name whose initials stand in while there is no picture. */
+export interface PictureTileProps extends Omit<PictureCommandOptions, "noun"> {
+  /**
+   * Whose picture this is. Its initials stand in while there is no picture,
+   * and the controls carry it so a page holding several tiles still says
+   * which one a button changes.
+   */
   name: string;
+  imageUrl: string | null;
+  alt: string;
+  /** Accepted upload types; callers with an SVG-only policy narrow this. */
+  accept?: string;
   /** Standing surrounds the picture only, excluding editor actions. */
   status?: AvatarStatus;
   /** Whether the reader may change the picture. Read-only viewers get the tile alone. */
@@ -54,24 +61,20 @@ export interface PictureTileProps extends Omit<LogoManagerProps, "hint" | "uploa
 
 export function PictureTile(props: PictureTileProps) {
   const hintId = useId();
-  const [failedUrl, setFailedUrl] = useState<string | null>(null);
-  const hasPicture = Boolean(props.imageUrl && props.imageUrl !== failedUrl);
-  const { busy, attempt, upload, remove } = useLogoCommands({ ...props, noun: props.noun });
-  const inputRef = useRef<HTMLInputElement>(null);
   const noun = props.noun ?? "logo";
+  const { busy, attempt, upload, remove, removeLabel } = usePictureCommands({ ...props, noun });
+  const inputRef = useRef<HTMLInputElement>(null);
   const label = props.imageUrl ? `Change ${noun}` : `Upload ${noun}`;
 
-  const picture = hasPicture ? (
-    <img
-      class={props.shape === "round" ? "portal-picture-tile-portrait" : "pk-picture-tile__img"}
+  const picture = (
+    <Avatar
+      key={props.imageUrl ?? "missing"}
+      name={props.name}
       src={props.imageUrl ?? undefined}
-      alt={props.alt}
-      onError={() => setFailedUrl(props.imageUrl)}
+      shape={props.shape ?? "square"}
+      class="pk-picture-tile__avatar"
+      original
     />
-  ) : (
-    <span class="pk-picture-tile__initials" aria-hidden="true">
-      {monogramFrom(props.name)}
-    </span>
   );
 
   const sizing =
@@ -82,11 +85,12 @@ export function PictureTile(props: PictureTileProps) {
     props.status ? <AvatarStanding status={props.status}>{picture}</AvatarStanding> : picture;
 
   if (!props.canChange) {
+    // Avatar draws decorative media; the tile names the photo, or says there is none.
     return withStanding(
       <div
-        class={`pk pk-picture-tile${sizing}`}
+        class={`pk pk-picture-tile pk-picture-tile--static${sizing}`}
         role="img"
-        aria-label={hasPicture ? props.alt : `${props.name} has no ${noun}`}
+        aria-label={props.imageUrl ? props.alt : `${props.name} has no ${noun}`}
       >
         {picture}
       </div>,
@@ -99,7 +103,7 @@ export function PictureTile(props: PictureTileProps) {
         <button
           type="button"
           class="pk-picture-tile__control"
-          aria-label={label}
+          aria-label={`${label} of ${props.name}`}
           aria-describedby={props.hint ? hintId : undefined}
           disabled={busy}
           onClick={() => inputRef.current?.click()}
@@ -130,12 +134,12 @@ export function PictureTile(props: PictureTileProps) {
           {props.hint}
         </span>
       )}
-      {props.imageUrl && (
+      {props.imageUrl && remove && (
         <button
           type="button"
           class="pk-picture-tile__remove"
-          aria-label={props.removeLabel}
-          title={props.removeLabel}
+          aria-label={`${removeLabel} of ${props.name}`}
+          title={removeLabel}
           disabled={busy}
           onClick={() => void remove()}
         >

@@ -41,9 +41,13 @@ export async function listPermissionTargets(
               FROM members m
               JOIN organizations o ON o.id = m.organization_id
              WHERE ? = 'organization'
+            UNION ALL
+            SELECT s.id AS id, 'event_sponsor' AS type, COALESCE(o.name,s.non_member_name,'Sponsor') || ' — ' || e.name AS name
+              FROM sponsorships s JOIN events e ON e.id=s.event_id LEFT JOIN organizations o ON o.id=s.organization_id
+             WHERE ? = 'event_sponsor' AND s.sponsor_type='event' AND s.pipeline_stage='active'
           ) AS contexts
           ${where}`,
-    bindings: [query.contextType, query.contextType, query.contextType, ...(search?.bindings ?? [])],
+    bindings: [query.contextType, query.contextType, query.contextType, query.contextType, ...(search?.bindings ?? [])],
     orderBy: resolveOrderBy(query.sort, ["name"], "ORDER BY contexts.name COLLATE NOCASE ASC", "contexts.id ASC"),
     limit: query.limit,
     offset: query.offset,

@@ -4,11 +4,15 @@ import type { FormField } from "../types";
 import type { AttendanceType } from "../../../shared/schemas/registration";
 import { isFieldVisible, readRules, type FieldRules } from "../form/custom-field-rules";
 import { CustomFieldInput } from "../form/custom-field-widgets";
+import { setFieldMessage } from "../form/validation-map";
+import { applyFieldState } from "../../ui/field-state";
+import type { FieldPresentation } from "../../hooks/useContractForm";
 // `pk-field__label` and `pk-field__message` are written here as class names
 // rather than reached through `Field` — the control itself is rendered by
 // `CustomFieldInput`, which owns its own markup — so this module has to pull
 // their stylesheet into its own chunk.
 import "../../ui/Field.css";
+import { ExternalLink } from "../../ui/ExternalLink";
 
 type FieldValue = string | number | boolean | string[] | { start: string; end: string };
 
@@ -33,12 +37,14 @@ function CustomFieldRow({
   visible,
   geoHint,
   initialValue,
+  presentation,
 }: {
   field: FormField;
   rules: FieldRules;
   visible: boolean;
   geoHint?: string | null;
   initialValue?: unknown;
+  presentation?: FieldPresentation;
 }) {
   const isBoolean = field.fieldType === "boolean";
   // The row is a `pk-field`: it holds a label, a control, help text and the
@@ -95,6 +101,22 @@ function CustomFieldRow({
     if (visible && rowRef.current) writeValuesToDOM(rowRef.current, { [field.key]: initialValue });
   }, [field.key, initialValue, visible]);
 
+  // A form on the answer contract says each question's state here, in the
+  // same slot and through the same field-state module the DOM validators use.
+  const state = presentation?.state ?? null;
+  const message = presentation?.message ?? "";
+  useLayoutEffect(() => {
+    const row = rowRef.current;
+    if (!row || !presentation) return;
+    const slot = row.querySelector<HTMLElement>("[data-field-error]");
+    setFieldMessage(slot, message, state ?? "invalid");
+    if (!message) applyFieldState(row, state);
+    for (const control of Array.from(row.querySelectorAll("[name^='custom.']"))) {
+      if (state === "invalid") control.setAttribute("aria-invalid", "true");
+      else control.removeAttribute("aria-invalid");
+    }
+  }, [presentation !== undefined, state, message]);
+
   const widget = <CustomFieldInput field={field} geoHint={geoHint} initialValue={initialValue} />;
   const controlId = `custom-${field.key}`;
 
@@ -130,7 +152,7 @@ function CustomFieldRow({
            * group rather than one box — a checkbox set, a tag picker, a date
            * range. The control box is a flex parent sized to its contents, so
            * putting a group inside one would shrink it to its widest option.
-           * The border and the message still take their colour from the
+           * The border and the message still take their color from the
            * field's state; only the in-control mark has nowhere to sit, and a
            * group has no single control to mark anyway.
            */}
@@ -140,9 +162,9 @@ function CustomFieldRow({
       {hasHelp && <HelpText id={helpId} text={rules.helpText ?? ""} />}
       {rules.referenceLink && (
         <p class="pk-small" id={linkId}>
-          <a href={rules.referenceLink.href} target="_blank" rel="noopener noreferrer">
+          <ExternalLink href={rules.referenceLink.href} external>
             {rules.referenceLink.label}
-          </a>
+          </ExternalLink>
         </p>
       )}
       {/* The validators write into this slot after render, so it is a live
@@ -158,11 +180,14 @@ export function CustomFieldList({
   context,
   geoHint,
   initialValues,
+  presentationOf,
 }: {
   fields: FormField[];
   context: VisibilityContext;
   geoHint?: string | null;
   initialValues?: Record<string, unknown>;
+  /** Each question's state from the answer contract, for a form validated through it. */
+  presentationOf?: (key: string) => FieldPresentation;
 }) {
   if (fields.length === 0) {
     return <p>No additional questions.</p>;
@@ -183,6 +208,7 @@ export function CustomFieldList({
             visible={visible}
             geoHint={geoHint}
             initialValue={initialValues?.[field.key]}
+            presentation={presentationOf?.(field.key)}
           />
         );
       })}
@@ -285,6 +311,13 @@ function writeValuesToDOM(container: HTMLElement, answers: Record<string, unknow
       continue;
     }
 
+    // One choice from a visible list
+    const radios = container.querySelectorAll<HTMLInputElement>(`input[type='radio'][name='custom.${key}']`);
+    if (radios.length > 0) {
+      for (const radio of Array.from(radios)) radio.checked = radio.value === String(value);
+      continue;
+    }
+
     // Boolean checkbox
     if (typeof value === "boolean") {
       const cb = container.querySelector<HTMLInputElement>(`input[type='checkbox'][name='custom.${key}']`);
@@ -378,6 +411,8 @@ export function readCustomFieldValues(form: HTMLFormElement): Record<string, Fie
     if (key.endsWith(".start") || key.endsWith(".end")) continue;
     if (key.endsWith("[]")) continue;
     if (handled.has(key)) continue;
+    // Of a radio list only the chosen one answers.
+    if (field instanceof HTMLInputElement && field.type === "radio" && !field.checked) continue;
 
     if (field instanceof HTMLSelectElement && field.multiple) {
       const values = Array.from(field.selectedOptions).map((option) => option.value);

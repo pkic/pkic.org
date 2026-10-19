@@ -7,6 +7,7 @@ import { Chip } from "../Chip";
 import { EmptyState } from "../EmptyState";
 import { Kicker } from "../Kicker";
 import { PersonCell } from "../PersonCell";
+import { PkicMark } from "../PkicMark";
 import { Spinner } from "../Spinner";
 import { StatCard } from "../StatCard";
 
@@ -14,7 +15,7 @@ export const basicSections: PreviewSection[] = [
   {
     id: "actions",
     title: "Actions",
-    note: "Every button variant and size, with state combinations.",
+    note: "Every button variant, the large call-to-action size, and compact density for dense surfaces, with state combinations.",
     render: () => (
       <>
         <div class="pk-preview__shelf">
@@ -27,9 +28,16 @@ export const basicSections: PreviewSection[] = [
         </div>
 
         <div class="pk-preview__shelf">
-          <Button size="sm">Small</Button>
-          <Button size="md">Medium</Button>
           <Button size="lg">Large</Button>
+        </div>
+
+        {/* No small size: a dense surface sets compact density once. */}
+        <div class="pk-preview__shelf" data-density="compact">
+          <Button variant="primary">Compact primary</Button>
+          <Button>Compact secondary</Button>
+          <Button icon aria-label="Compact settings">
+            ⚙️
+          </Button>
         </div>
 
         <div class="pk-preview__shelf">
@@ -38,7 +46,6 @@ export const basicSections: PreviewSection[] = [
           <Button icon aria-label="Settings">
             ⚙️
           </Button>
-          <Button block>Block width</Button>
         </div>
       </>
     ),
@@ -54,7 +61,9 @@ export const basicSections: PreviewSection[] = [
           <Badge tone="ok" dot>
             Approved
           </Badge>
-          <Badge tone="ok">No dot</Badge>
+          <Badge tone="ok" dot={false}>
+            No dot
+          </Badge>
           <Badge tone="warn" dot>
             Pending
           </Badge>
@@ -124,26 +133,52 @@ export const basicSections: PreviewSection[] = [
   {
     id: "identity",
     title: "People",
-    note: "Avatars, member cells, and statistics.",
+    note: "Avatars, member cells, and statistics. Avatar is the one initials fallback: no picture, or one that fails to load, shows the person's initials or the organization's monogram.",
     render: () => (
       <>
         <div class="pk-preview__shelf">
           <Avatar name="Alice Chen" />
           <Avatar name="Bob Martinez" size="sm" />
           <Avatar name="Carol Davis" size="lg" />
+          <Avatar name="Erin Okafor" size="xl" />
           <Avatar
             name="David Rodriguez"
             src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%2348bb78' width='32' height='32'/%3E%3C/svg%3E"
           />
+          {/* A picture that fails to load falls back to initials, never a broken circle. */}
+          <Avatar name="Frank Ito" src="/missing-headshot.jpg" />
+          <Avatar name="Grace Hopper" status={{ label: "Chair" }} />
+        </div>
+
+        <div class="pk-preview__shelf">
+          <Avatar name="Example Trust Services" shape="square" />
+          <Avatar name="Example Trust Services" shape="square" size="lg" src="/missing-logo.png" />
+          <Avatar
+            name="Example Trust Services"
+            shape="square"
+            size="lg"
+            src="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 32'%3E%3Crect fill='%233182ce' width='64' height='32'/%3E%3C/svg%3E"
+          />
+        </div>
+
+        {/* The consortium mark: whole, or pointing at one element with the rest receding. */}
+        <div class="pk-preview__shelf">
+          <PkicMark width="48" height="48" />
+          <PkicMark width="48" height="48" highlight="arcs" />
+          <PkicMark width="48" height="48" highlight="table" />
+          <PkicMark width="20" height="20" highlight="arcs" />
+          <PkicMark width="20" height="20" highlight="table" />
         </div>
 
         <div class="pk-preview__shelf--stack">
           <PersonCell
             name="Alice Chen"
-            email="achen@example.com"
+
             avatarSrc="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect fill='%239f7aea' width='32' height='32'/%3E%3C/svg%3E"
           />
           <PersonCell name="Bob Martinez" size="sm" />
+          <PersonCell name="Jane Doe" title="CTO" organization="Example Org" />
+          <PersonCell name="Kai Lindqvist" organization="Example Trust Services" size="sm" />
         </div>
 
         <div class="pk-preview__grid">

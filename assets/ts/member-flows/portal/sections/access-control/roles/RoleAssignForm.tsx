@@ -72,7 +72,7 @@ export function RoleAssignForm({ roleId, onAssigned }: { roleId: string; onAssig
         {/* Not disabled on an empty picker: a control that is inert and says
             nothing leaves the reader to guess which of the three groups above
             it is unhappy. Submitting states the reason instead. */}
-        <Button type="submit" variant="primary" size="sm" loading={submitting}>
+        <Button type="submit" variant="primary" loading={submitting}>
           {submitting ? "Assigning…" : "Assign"}
         </Button>
       </div>

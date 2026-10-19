@@ -1,3 +1,4 @@
+import { databaseIdSchema } from "../../../assets/shared/schemas/identifiers";
 import { signJwt, verifyJwt, type JwtVerifyResult } from "../utils/jwt";
 
 export interface McpSessionTokenClaims {
@@ -7,6 +8,7 @@ export interface McpSessionTokenClaims {
   email: string;
   scopes: string[];
   state?: string;
+  authorizationId?: string;
   exp: number;
 }
 
@@ -21,6 +23,7 @@ function isMcpSessionClaims(value: object): value is McpSessionTokenClaims {
     Array.isArray(claims.scopes) &&
     claims.scopes.every((scope) => typeof scope === "string") &&
     (claims.state === undefined || typeof claims.state === "string") &&
+    (claims.authorizationId === undefined || databaseIdSchema.safeParse(claims.authorizationId).success) &&
     typeof claims.exp === "number"
   );
 }

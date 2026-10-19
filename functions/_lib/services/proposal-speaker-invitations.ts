@@ -9,6 +9,7 @@ import { buildProposalInviteEmailContext, proposalInviteEmailTextVariables } fro
 import { buildAddProposalSpeaker, formatInvitePerson } from "./proposal-speakers";
 import type { ProposalRecord } from "./proposals";
 import { buildFindOrCreateUserStatement } from "./users";
+import { prepareInvitedSpeakerRepresentation } from "./proposal-invited-speaker-identity";
 import type { ProposalSpeakerRole } from "../../../assets/shared/schemas/participant-roles";
 import { isProposalSpeakerRosterEditableStatus } from "../../../assets/shared/schemas/proposal-status";
 import { isAuditChangeGuardFailure, prepareScopedAuditLogAfterOneChange } from "./audit";
@@ -22,7 +23,9 @@ import {
 } from "./event-participant-source-revision";
 import { withProposalWriteContextGuard, type ProposalWriteAuthorization } from "./proposal-write-authorization";
 import { nowIso } from "../utils/time";
+import { normalizeEmail } from "../validation";
 import { first } from "../db/queries";
+import { readAffiliation } from "./identities/affiliation-projection";
 
 class ConcurrentSpeakerInvitation extends Error {}
 
@@ -49,16 +52,24 @@ async function inviteProposalSpeakerOnce(
   }
 
   const now = nowIso();
+  // Keep delivery at the explicitly invited mailbox; aliases still resolve one canonical person.
+  const invitedEmail = normalizeEmail(payload.email);
   const requestedExpiresAt = resolveEventInviteExpiry(payload.event, payload.expiresAt, now);
   const preparedUser = await buildFindOrCreateUserStatement(db, {
-    email: payload.email,
+    email: invitedEmail,
     firstName: payload.firstName,
     lastName: payload.lastName,
+  });
+  const actingIdentity = await prepareInvitedSpeakerRepresentation(db, {
+    userId: preparedUser.user.id,
+    email: invitedEmail,
+    at: now,
   });
   const preparedSpeaker = await buildAddProposalSpeaker(db, {
     proposalId: payload.proposal.id,
     userId: preparedUser.user.id,
     role: payload.role,
+    actingIdentity,
     inviteExpiresAt: requestedExpiresAt,
     renewExpiredInvitation: { event: payload.event, now },
     proposalContext: {
@@ -81,8 +92,10 @@ async function inviteProposalSpeakerOnce(
   const pendingLine = `- ${formatInvitePerson(
     preparedUser.user.first_name,
     preparedUser.user.last_name,
-    preparedUser.user.organization_name,
-    preparedUser.user.email,
+    actingIdentity
+      ? actingIdentity.representation.organizationName
+      : (await readAffiliation(db, preparedUser.user.id)).organizationName,
+    invitedEmail,
   )}`;
   const speakerLineupText = preparedSpeaker.alreadyPresent
     ? context.speakerLineupText
@@ -96,7 +109,7 @@ async function inviteProposalSpeakerOnce(
     eventId: payload.event.id,
     baseUrl: payload.appBaseUrl,
     templateKey: "co_speaker_invite",
-    recipientEmail: preparedUser.user.email,
+    recipientEmail: invitedEmail,
     recipientUserId: preparedUser.user.id,
     messageType: "transactional",
     subject: `You have been added as a speaker — ${payload.event.name}`,
@@ -117,7 +130,7 @@ async function inviteProposalSpeakerOnce(
     ...(payload.permissionGuard ? [payload.permissionGuard] : []),
     prepareAuthorizationGuard(db, eventInviteWindowEvidence(payload.event.id, payload.event, expiresAt, now)),
   ];
-  if (preparedUser.statement) statements.push(preparedUser.statement);
+  statements.push(...preparedUser.statements);
   statements.push(
     ...preparedSpeaker.speakerStatements,
     prepareScopedAuditLogAfterOneChange(
@@ -131,7 +144,7 @@ async function inviteProposalSpeakerOnce(
       {
         proposalId: payload.proposal.id,
         speakerUserId: preparedUser.user.id,
-        email: preparedUser.user.email,
+        email: invitedEmail,
         role: payload.role,
         expiresAt,
       },
@@ -172,7 +185,7 @@ async function inviteProposalSpeakerOnce(
     throw error;
   }
   return {
-    email: preparedUser.user.email,
+    email: invitedEmail,
     outboxId: queued.id,
     expiresAt,
     queued: !preparedSpeaker.alreadyPresent || preparedSpeaker.renewedInvitation,

@@ -1,3 +1,5 @@
+// Prepare the real HTTP graph before timed journeys, as the shared API test helper does.
+import "../functions/http-router";
 import { grantAdministrator } from "./helpers/administrator";
 /**
  * passkeys.test.ts
@@ -9,15 +11,20 @@ import { grantAdministrator } from "./helpers/administrator";
  */
 import { describe, expect, it, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { createAdminSession, createMemberSession } from "./helpers/auth";
 import { queryAll } from "./helpers/context";
 import { buildCreateIndividualMemberStatements } from "../functions/_lib/services/membership/memberships";
 import { buildCreateIdentityStatement } from "../functions/_lib/services/membership/identities";
 import { MAX_PASSKEY_CREDENTIALS_PER_USER } from "../assets/shared/constants/passkeys";
-import { persistVerifiedPasskeyCredential } from "../functions/_lib/services/passkeys";
-import { passkeyAuthenticateCompleteResponseSchema } from "../assets/shared/schemas/passkeys";
+import { completePasskeyAuthentication, persistVerifiedPasskeyCredential } from "../functions/_lib/services/passkeys";
+import {
+  passkeyAuthenticateCompleteSchema,
+  passkeyAuthenticateCompleteResponseSchema,
+} from "../assets/shared/schemas/passkeys";
+import { insertIndividualMembershipForUser, insertOrganization } from "./helpers/membership";
+import { mutateBeforeNextBatch } from "./helpers/database-races";
 import {
   buildAuthenticationResponse,
   buildRegistrationResponse,
@@ -66,7 +73,6 @@ async function insertStaffUser(email: string): Promise<string> {
 async function insertActiveMemberUser(email: string): Promise<string> {
   const userId = crypto.randomUUID();
   const now = new Date().toISOString();
-  const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, "H5", now);
   const identity = await buildCreateIdentityStatement(env.DB, {
     userId,
     organizationId: null,
@@ -74,28 +80,20 @@ async function insertActiveMemberUser(email: string): Promise<string> {
     startImmediately: true,
     now,
   });
+  const { statements } = buildCreateIndividualMemberStatements(env.DB, identity.identityId, "H5", now);
   await env.DB.batch([
     env.DB.prepare(
       `INSERT INTO users (id, email, normalized_email, first_name, active, created_at, updated_at)
        VALUES (?, ?, ?, 'Test', 1, datetime('now'), datetime('now'))`,
     ).bind(userId, email, email),
-    ...statements,
     identity.statement,
+    ...statements,
   ]);
   return userId;
 }
 
 async function addActiveIndividualMembership(userId: string): Promise<void> {
-  const now = new Date().toISOString();
-  const { statements } = buildCreateIndividualMemberStatements(env.DB, userId, "H5", now);
-  const identity = await buildCreateIdentityStatement(env.DB, {
-    userId,
-    organizationId: null,
-    source: "staff",
-    startImmediately: true,
-    now,
-  });
-  await env.DB.batch([...statements, identity.statement]);
+  await insertIndividualMembershipForUser(env.DB, userId, "H5");
 }
 
 interface BeginResponse {
@@ -152,6 +150,126 @@ describe("passkeys (WebAuthn)", () => {
     const passkey = (await completeResponse.json()) as { id: string };
     return { passkeyId: passkey.id, authenticator };
   }
+
+  async function makeAffiliationOnlyUser(): Promise<string> {
+    const organizationId = await insertOrganization(env.DB, "Passkey employer without membership");
+    const identity = await buildCreateIdentityStatement(env.DB, {
+      userId,
+      organizationId,
+      source: "staff",
+      startImmediately: true,
+    });
+    await env.DB.batch([
+      identity.statement,
+      env.DB.prepare(
+        `UPDATE user_roles SET revoked_at=strftime('%Y-%m-%dT%H:%M:%fZ','now')
+          WHERE user_id=? AND role_id='role-admin'
+            AND context_type IS NULL AND context_id IS NULL AND revoked_at IS NULL`,
+      ).bind(userId),
+    ]);
+    return identity.identityId;
+  }
+
+  it("registers and authenticates a passkey for affiliation-only account access without Member or staff authority", async () => {
+    const identityId = await makeAffiliationOnlyUser();
+    const { passkeyId, authenticator } = await registerPasskey();
+    const begin = await beginAuthentication();
+    const assertion = await buildAuthenticationResponse(authenticator, {
+      challenge: begin.options.challenge,
+      rpId: RP_ID,
+      origin: ORIGIN,
+      signCount: 1,
+    });
+    const complete = await call("/api/v1/auth/passkeys/authenticate/complete", {
+      method: "POST",
+      body: JSON.stringify({ challengeToken: begin.challengeToken, response: assertion }),
+    });
+    expect(complete.status).toBe(200);
+    const session = passkeyAuthenticateCompleteResponseSchema.parse(await complete.json());
+    expect(session).toMatchObject({ identity: { id: userId }, hasActiveIdentity: true, sponsors: [] });
+    expect(session.member).toBeUndefined();
+    expect(session.staff).toBeUndefined();
+    expect(await queryAll(env.DB, "SELECT id FROM members")).toEqual([]);
+    expect(
+      await queryAll(env.DB, "SELECT role_id,context_type,context_id,revoked_at FROM user_roles WHERE user_id=?", [
+        userId,
+      ]),
+    ).toEqual([{ role_id: "role-admin", context_type: null, context_id: null, revoked_at: expect.any(String) }]);
+    expect(
+      await queryAll(env.DB, "SELECT id FROM user_roles WHERE user_id=? AND revoked_at IS NULL", [userId]),
+    ).toEqual([]);
+    const listed = await call("/api/v1/auth/passkeys", {}, token);
+    expect(listed.status).toBe(200);
+    expect(await listed.json()).toMatchObject({ passkeys: [{ id: passkeyId }] });
+    const otherUserId = await insertStaffUser("unrelated-passkey-owner@example.test");
+    const foreignCredentialId = crypto.randomUUID();
+    await env.DB.prepare(
+      "INSERT INTO passkey_credentials(id,user_id,credential_id,public_key,sign_count,created_at) VALUES(?,?,?,'AQ',0,?)",
+    )
+      .bind(foreignCredentialId, otherUserId, crypto.randomUUID(), new Date().toISOString())
+      .run();
+    expect((await call(`/api/v1/auth/passkeys/${foreignCredentialId}`, { method: "DELETE" }, token)).status).toBe(403);
+    await env.DB.prepare("UPDATE identities SET ended_at=?,updated_at=? WHERE id=?")
+      .bind(new Date().toISOString(), new Date().toISOString(), identityId)
+      .run();
+    // The user keeps their session with no capacity left, and so keeps control of their own passkeys.
+    expect((await call("/api/v1/auth/passkeys", {}, token)).status).toBe(200);
+    expect((await call(`/api/v1/auth/passkeys/${passkeyId}`, { method: "DELETE" }, token)).status).toBe(200);
+    expect(
+      (
+        await env.DB.prepare("SELECT revoked_at FROM passkey_credentials WHERE id=?").bind(passkeyId).first<{
+          revoked_at: string | null;
+        }>()
+      )?.revoked_at,
+    ).not.toBeNull();
+  });
+
+  it.each(["ended", "blocked", "disabled"] as const)(
+    "rolls back the passkey counter, challenge, audit, and session if affiliation access becomes %s before commit",
+    async (change) => {
+      const identityId = await makeAffiliationOnlyUser();
+      const { passkeyId, authenticator } = await registerPasskey();
+      const begin = await beginAuthentication();
+      const assertion = await buildAuthenticationResponse(authenticator, {
+        challenge: begin.options.challenge,
+        rpId: RP_ID,
+        origin: ORIGIN,
+        signCount: 1,
+      });
+      const sessionsBefore = await queryAll(env.DB, "SELECT id FROM sessions WHERE user_id=?", [userId]);
+      const raced = mutateBeforeNextBatch(env.DB, async () => {
+        const at = new Date().toISOString();
+        if (change === "disabled") await env.DB.prepare("UPDATE users SET active=0 WHERE id=?").bind(userId).run();
+        else
+          await env.DB.prepare("UPDATE identities SET ended_at=?,blocked_at=?,updated_at=? WHERE id=?")
+            .bind(at, change === "blocked" ? at : null, at, identityId)
+            .run();
+      });
+      await expect(
+        completePasskeyAuthentication(
+          raced,
+          env,
+          `https://${RP_ID}/api/v1/auth/passkeys/authenticate/complete`,
+          passkeyAuthenticateCompleteSchema.parse({
+            challengeToken: begin.challengeToken,
+            response: assertion,
+          }),
+        ),
+      ).rejects.toMatchObject({ code: "AUTH_FORBIDDEN" });
+      expect(await queryAll(env.DB, "SELECT id FROM sessions WHERE user_id=?", [userId])).toEqual(sessionsBefore);
+      expect(
+        await queryAll(env.DB, "SELECT sign_count,last_used_at FROM passkey_credentials WHERE id=?", [passkeyId]),
+      ).toEqual([{ sign_count: 0, last_used_at: null }]);
+      expect(
+        await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='passkey_authenticated' AND actor_id=?", [
+          userId,
+        ]),
+      ).toEqual([]);
+      expect(
+        await queryAll(env.DB, "SELECT challenge_id FROM passkey_challenge_uses WHERE purpose='authentication'"),
+      ).toEqual([]);
+    },
+  );
 
   it("POST register/begin returns PublicKeyCredentialCreationOptions for an authenticated user; unauthenticated -> 401", async () => {
     const unauthenticated = await call("/api/v1/auth/passkeys/register/begin", { method: "POST" });
@@ -519,7 +637,7 @@ describe("passkeys (WebAuthn)", () => {
       ),
     ).resolves.toEqual([
       {
-        details_json: expect.stringContaining('"to":["admin","member"]'),
+        details_json: expect.stringContaining('"to":["admin","member","identity"]'),
       },
     ]);
   });

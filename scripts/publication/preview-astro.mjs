@@ -6,15 +6,16 @@ import { tmpdir } from "node:os";
 import { resolve } from "node:path";
 import { unstable_readConfig as readConfig } from "wrangler";
 import { assembleStaticRelease } from "./assemble-static-release.mjs";
+import { astroOutputDirectory } from "./build-context.mjs";
 
 // Browser tests must enforce the same native headers and redirects as deployment.
 const root = await mkdtemp(resolve(process.env.E2E_STATE_ROOT ?? tmpdir(), "pkic-static-preview-"));
 try {
   const assets = resolve(root, "assets");
   const main = resolve(root, "worker.mjs");
-  await cp(resolve("dist/astro"), assets, { recursive: true, mode: constants.COPYFILE_FICLONE });
+  await cp(astroOutputDirectory(), assets, { recursive: true, mode: constants.COPYFILE_FICLONE });
   await copyFile(resolve("static/_headers"), resolve(assets, "_headers"));
-  await assembleStaticRelease(resolve("dist/astro"), assets, "local");
+  await assembleStaticRelease(astroOutputDirectory(), assets, "local");
   await writeFile(
     main,
     'export default { fetch() { return new Response("API unavailable in static preview", { status: 503 }); } };',

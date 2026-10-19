@@ -1,0 +1,29 @@
+@layer components {
+  .pk-live-answers {
+    margin-block-start: var(--pk-2);
+  }
+  .pk-live-answers__thread {
+    padding-block-start: var(--pk-3);
+  }
+  .pk-live-answers__list {
+    display: grid;
+    gap: var(--pk-4);
+    padding: 0;
+    margin: 0;
+    list-style: none;
+  }
+  .pk-live-answers__answer {
+    padding-block-end: var(--pk-3);
+    border-block-end: 1px solid var(--pk-line);
+  }
+  .pk-live-answers__text {
+    margin: 0;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+  }
+  .pk-live-answers__acceptance {
+    margin: 0;
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink-muted);
+  }
+}

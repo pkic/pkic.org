@@ -1,11 +1,13 @@
-import { SiteImage } from "./SiteImage";
+import { usePersonCard, personAffiliation } from "./PersonCard";
 import type { ComponentChildren } from "preact";
 import type { PublicOrganizationPerson } from "../../shared/schemas/public-person";
 import { Avatar } from "../ui/Avatar";
 import { LinkList } from "../ui/LinkList";
+import { IconCalendar } from "../ui/MediaIcons";
 import { EMPTY_DATE, formatServiceDate } from "../../shared/format-date";
 
 import "./leadership.css";
+import { ExternalLink } from "../ui/ExternalLink";
 
 export type PublicPerson = PublicOrganizationPerson;
 
@@ -19,15 +21,14 @@ export function PublicPersonOrgLink({
   children: ComponentChildren;
 }) {
   return person.organizationWebsite ? (
-    <a
+    <ExternalLink
       href={person.organizationWebsite}
-      target="_blank"
-      rel="noopener noreferrer"
+      external
       title={person.organizationName ?? undefined}
       class={className}
     >
       {children}
-    </a>
+    </ExternalLink>
   ) : (
     <span class={className}>{children}</span>
   );
@@ -51,21 +52,14 @@ function OrganizationBlock({ person }: { person: PublicPerson }) {
   if (!person.organizationName) return null;
   return (
     <div class="person-card-org">
-      {person.organizationLogoUrl ? (
-        <PublicPersonOrgLink person={person} className="person-card-org-logo-wrap">
-          <SiteImage
-            portrait
-            src={person.organizationLogoUrl}
-            alt={person.organizationName}
-            class="person-card-org-logo"
-            loading="lazy"
-          />
-        </PublicPersonOrgLink>
-      ) : (
-        <PublicPersonOrgLink person={person} className="person-card-org-name">
-          {person.organizationName}
-        </PublicPersonOrgLink>
-      )}
+      <PublicPersonOrgLink person={person} className="person-card-org-logo-wrap">
+        <Avatar
+          name={person.organizationName}
+          src={person.organizationLogoUrl ?? undefined}
+          shape="square"
+          class="person-card-org-logo"
+        />
+      </PublicPersonOrgLink>
     </div>
   );
 }
@@ -83,6 +77,13 @@ export function PublicPersonCard({
   from?: string;
   till?: string | null;
 }) {
+  const subject = {
+    name: person.name,
+    photoUrl: person.photoUrl,
+    affiliation: personAffiliation(person.jobTitle, person.organizationName),
+    sessionRole: role,
+  };
+  const preview = usePersonCard<HTMLButtonElement>({ person: subject });
   const past = Boolean(till);
   /*
    * A term is shown only when at least one of its ends is a date that can
@@ -101,7 +102,12 @@ export function PublicPersonCard({
     .join(" ");
 
   return (
-    <div class={`person-card${past ? " person-card--past" : ""}`}>
+    <div
+      data-person-card={JSON.stringify(subject)}
+      data-module="member-flows/public-person-previews"
+      {...preview.hoverProps}
+      class={`person-card${past ? " person-card--past" : ""}`}
+    >
       <div class="person-card-main">
         <div class={frameClasses}>
           {/* The name is the next thing in the card, so the portrait is decorative. */}
@@ -110,7 +116,18 @@ export function PublicPersonCard({
         </div>
         <div class="person-card-body">
           <div class="pk-cluster pk-stack--snug">
-            <span class="person-card-name">{person.name}</span>
+            <button
+              type="button"
+              class="person-card-name"
+              ref={(element) => {
+                preview.anchorRef.current = element;
+                const card = element?.closest<HTMLElement>(".person-card");
+                if (card) card.dataset.personCardHydrated = "true";
+              }}
+              {...preview.toggleProps}
+            >
+              {person.name}
+            </button>
             <PersonLinks person={person} />
           </div>
           {/*
@@ -129,19 +146,10 @@ export function PublicPersonCard({
           <OrganizationBlock person={person} />
         </div>
       </div>
+      {preview.card}
       {tenure && (
         <div class="person-card-footer">
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            width="11"
-            height="11"
-            fill="currentColor"
-            viewBox="0 0 16 16"
-            aria-hidden="true"
-          >
-            <path d="M11 6.5a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5zm-3 0a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5zm-5 3a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5zm3 0a.5.5 0 0 1 .5-.5h1a.5.5 0 0 1 .5.5v1a.5.5 0 0 1-.5.5h-1a.5.5 0 0 1-.5-.5z" />
-            <path d="M3.5 0a.5.5 0 0 1 .5.5V1h8V.5a.5.5 0 0 1 1 0V1h1a2 2 0 0 1 2 2v11a2 2 0 0 1-2 2H2a2 2 0 0 1-2-2V3a2 2 0 0 1 2-2h1V.5a.5.5 0 0 1 .5-.5M1 4v10a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V4z" />
-          </svg>
+          <IconCalendar width="11" height="11" />
           <span class="person-card-footer-label">
             {fromLabel !== EMPTY_DATE && tillLabel === EMPTY_DATE ? "In role since" : "In role"}
           </span>

@@ -1,3 +1,7 @@
+import { lazy, Suspense } from "preact/compat";
+const MeetingAgendaEditor = lazy(() =>
+  import("./MeetingAgendaEditor").then((module) => ({ default: module.MeetingAgendaEditor })),
+);
 import { useState } from "preact/hooks";
 import { BreadcrumbBranch } from "../../../../ui/BreadcrumbScope";
 import { groupEventSeriesResponseSchema } from "../../../../../shared/schemas/event-series";
@@ -21,6 +25,7 @@ import { downloadMeetingCalendar } from "./meeting-calendar-actions";
 /** The series record's facets. Each one loads its data when it is opened. */
 const SERIES_RECORD_TABS = [
   { key: "occurrences", label: "Occurrences", manage: false },
+  { key: "agenda", label: "Agenda format", manage: true },
   { key: "settings", label: "Series settings", manage: true },
 ] as const;
 
@@ -221,6 +226,11 @@ export function GroupMeetingSeriesRecord({
                 </section>
               )}
             </>
+          )}
+          {tab === "agenda" && canManage && (
+            <Suspense fallback={<Spinner />}>
+              <MeetingAgendaEditor groupId={groupId} seriesId={series.id} />
+            </Suspense>
           )}
           {tab === "settings" && canManage && !openingOccurrence && (
             <section aria-label={`${series.eventName} series settings`}>

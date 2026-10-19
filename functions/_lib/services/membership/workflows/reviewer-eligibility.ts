@@ -1,4 +1,7 @@
-import type { MembershipWorkflowStep } from "../../../../../assets/shared/schemas/membership-workflows";
+import type {
+  MembershipReviewAudience,
+  MembershipWorkflowStep,
+} from "../../../../../assets/shared/schemas/membership-workflows";
 import { executiveCouncilSeatSql, EXECUTIVE_COUNCIL_GROUP_SLUG } from "../../../auth/executive-council";
 import { hasPermission, preparePermissionsAuthorizationGuard } from "../../../auth/permissions";
 import { prepareAuthorizationGuard, type AuthorizationEvidence } from "../../../db/authorization-guard";
@@ -20,6 +23,10 @@ function groupReviewer(groupId: string, userId: string, userExpression = "?"): A
         AND reviewer.merged_into_user_id IS NULL AND reviewer_group.id = ?`,
     bindings: [...(userExpression === "?" ? [userId] : []), groupId],
   };
+}
+/** Only the Executive Council reads how to reach an applicant; members and groups review the application itself. */
+export function audienceSeesApplicantEmail(audience: MembershipReviewAudience): boolean {
+  return audience.kind === "executive_council";
 }
 /** Uses the existing live voting-capacity and council-roster policies, never the notice address. */
 export function consensusReviewerEvidence(

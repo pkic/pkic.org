@@ -107,11 +107,33 @@ describe("useHashQueryParam", () => {
     expect(window.location.hash).toBe("#/x?probeTab=second");
   });
 
-  it("removes only its own key on unmount", async () => {
+  it("preserves its bookmarked state and other keys on unmount", async () => {
     history.replaceState(null, "", "/portal/#/x?other=keep&probeTab=second");
     const container = mount(<Probe />);
     await act(() => render(null, container));
-    expect(window.location.hash).toBe("#/x?other=keep");
+    expect(window.location.hash).toBe("#/x?other=keep&probeTab=second");
+  });
+  it("restores inner state through Back and Forward without remounting", async () => {
+    history.replaceState(null, "", "/portal/#/x?other=keep");
+    const container = mount(<Probe />);
+    await act(() => container.querySelector("button")!.click());
+    expect(container.querySelector("button")?.textContent).toBe("second");
+    history.back();
+    await vi.waitFor(() => expect(container.querySelector("button")?.textContent).toBe("first"));
+    expect(location.hash).toBe("#/x?other=keep");
+    history.forward();
+    await vi.waitFor(() => expect(container.querySelector("button")?.textContent).toBe("second"));
+    expect(location.hash).toBe("#/x?other=keep&probeTab=second");
+  });
+
+  it("does not let outgoing unmount erase the incoming bookmark", async () => {
+    history.replaceState(null, "", "/portal/#/x?probeTab=second");
+    const container = mount(<Probe />);
+    history.replaceState(null, "", "/portal/#/other?probeTab=bookmarked&keep=yes");
+    await act(() => render(null, container));
+    expect(location.hash).toBe("#/other?probeTab=bookmarked&keep=yes");
+    const restored = mount(<Probe />);
+    expect(restored.querySelector("button")?.textContent).toBe("bookmarked");
   });
 });
 

@@ -5,6 +5,7 @@ import emailTemplates_Router from "./templates/router";
 import { EmailReminderRunCreate } from "./reminders/runs/index";
 import { EmailOutboxDetailGet } from "./outbox/[id]";
 import { EmailOutboxGet } from "./outbox";
+import { EmailDomainGet } from "./domains/[domain]";
 import { EmailOutboxProcessPost } from "./outbox/process";
 import { EmailOutboxResetFailedPost } from "./outbox/reset-failed";
 import { EmailSendgridWebhookPost } from "./sendgrid/webhook";
@@ -14,6 +15,7 @@ import type { RequestDbContext } from "../../../_lib/db/context";
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
 
+openapi.get("/domains/:domain", EmailDomainGet);
 openapi.get("/templates", EmailTemplatesList);
 openapi.route("/templates", emailTemplates_Router);
 openapi.post("/sendgrid/webhook", EmailSendgridWebhookPost);

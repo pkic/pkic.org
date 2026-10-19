@@ -18,6 +18,8 @@ import { CurrentUserRegistrationsGet } from "./registrations/index";
 import { CurrentUserDonationsGet } from "./donations/index";
 import { CurrentUserProposalsGet } from "./proposals/index";
 import identitiesRouter from "./identities/router";
+import emailsRouter from "./emails/router";
+import { OwnedWebPushDeviceRevokeDelete } from "./web-push";
 
 const app = new Hono<RequestDbContext>();
 export const openapi = fromHono(app);
@@ -35,9 +37,11 @@ openapi.get("/forms", CurrentUserFormsGet);
 openapi.get("/registrations", CurrentUserRegistrationsGet);
 openapi.get("/donations", CurrentUserDonationsGet);
 openapi.get("/proposals", CurrentUserProposalsGet);
+openapi.delete("/push/devices/:deviceId", OwnedWebPushDeviceRevokeDelete);
 openapi.route("/groups", groupsRouter);
 openapi.route("/applications", applicationsRouter);
 openapi.route("/organizations", organizationsRouter);
 openapi.route("/identities", identitiesRouter);
+openapi.route("/emails", emailsRouter);
 
 export default openapi;

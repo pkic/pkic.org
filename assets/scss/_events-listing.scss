@@ -19,7 +19,7 @@
 }
 
 // The menu is hidden below md, as `d-md-block collapse` used to make it. There
-// is no toggle anywhere on the page, so this preserves the existing behaviour
+// is no toggle anywhere on the page, so this preserves the existing behavior
 // rather than introducing a control the surface never had.
 .events-page-menu {
   display: none;
@@ -109,7 +109,6 @@
 .events-year-heading {
   font-size: 1.05rem;
   font-weight: 700;
-  color: var(--pk-ink-muted);
   letter-spacing: 0.04em;
   text-transform: uppercase;
   margin-bottom: 1rem;
@@ -127,7 +126,7 @@
   // Taller header so landscape conference photos look good
   .event-card-header,
   .blog-card-header {
-    height: 230px;
+    height: 14.375rem;
   }
 
   // Gradient palette for event cards when there is no photo
@@ -260,7 +259,7 @@
 // Banner — gradient strip with sponsor logo
 .event-webinar-card-banner {
   position: relative;
-  height: 72px;
+  height: 4.5rem;
   background: linear-gradient(135deg, $blue-deep 0%, $purple-deep 100%);
   display: flex;
   align-items: center;
@@ -297,8 +296,8 @@
   justify-content: center;
 
   img {
-    max-width: 110px;
-    max-height: 28px;
+    max-width: 6.875rem;
+    max-height: 1.75rem;
     object-fit: contain;
     display: block;
   }
@@ -423,7 +422,6 @@
   font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
-  color: var(--pk-ink-muted);
   margin: 0 0 0.75rem;
   padding-top: 0.25rem;
   border-top: 1px solid var(--pk-line);
@@ -450,6 +448,6 @@
 }
 
 // The sidebar CTA used to re-size Bootstrap's `.btn-outline-secondary` here.
-// Its button is now `pk-btn pk-btn--secondary pk-btn--sm`, which reads its size
+// Its button is now `pk-btn pk-btn--secondary`, which reads its size
 // from the type scale, so the local override has been removed rather than
 // translated.

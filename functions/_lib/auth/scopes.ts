@@ -2,7 +2,6 @@ import { AppError } from "../errors";
 import type { AuthAdmin } from "../types";
 import { PERMISSION_DENIED_MESSAGE } from "../../../assets/shared/auth-errors";
 import { PERMISSIONS, type Permission } from "../../../assets/shared/schemas/permissions";
-import { hasPermission } from "./permissions";
 
 /** OAuth scopes are the canonical permission vocabulary, not a parallel ACL. */
 export const AUTH_SCOPES = PERMISSIONS;
@@ -18,10 +17,17 @@ export function requireAuthScope(actor: AuthAdmin, scope: AuthScope): void {
   }
 }
 
-export function grantableScopesForActor(actor: AuthAdmin, requestedScopes: readonly AuthScope[]): AuthScope[] {
-  return requestedScopes.filter(
-    (scope) =>
-      (!actor.scopeRestricted || actor.scopes?.includes(scope)) &&
-      (hasPermission(actor, scope) || actor.grants?.some((grant) => grant.permission === scope)),
-  );
+const AUTH_SCOPE_SET = new Set<string>(AUTH_SCOPES);
+export function isAuthScope(scope: string): scope is AuthScope {
+  return AUTH_SCOPE_SET.has(scope);
+}
+
+export function normalizeMcpOauthScopes(
+  scopes: readonly string[],
+  fallback: readonly AuthScope[] = AUTH_SCOPES,
+): AuthScope[] {
+  const normalized = scopes.filter(isAuthScope);
+  // An omitted scope list receives the documented default. A supplied but
+  // wholly invalid list must not be promoted to every supported permission.
+  return [...new Set(scopes.length === 0 ? fallback : normalized)];
 }
