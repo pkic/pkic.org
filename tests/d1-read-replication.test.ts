@@ -1,4 +1,10 @@
-import { describe, expect, it } from "vitest";
+import { beforeEach, describe, expect, it } from "vitest";
+import { env } from "cloudflare:workers";
+import { resetDb } from "./helpers/reset-db";
+import { insertUser } from "./helpers/membership";
+import { grantAdministrator } from "./helpers/administrator";
+import { createAdminSession } from "./helpers/auth";
+import { mutateBeforeMatchingQuery } from "./helpers/database-races";
 import usersRouter from "../functions/api/v1/users/router";
 import { cacheAdminForRequest, requireAdminFromRequest } from "../functions/_lib/auth/admin";
 import { signUserSessionToken, verifyUserSessionToken } from "../functions/_lib/auth/user-session";
@@ -9,13 +15,17 @@ import { requestD1SessionConstraint } from "../functions/_lib/db/session";
 import { resilientDatabase } from "../functions/_lib/dependency-bindings";
 
 const signingSecret = "test-admin-signing-secret";
-const adminTokenExpiresAt = "2999-01-01T00:00:00.000Z";
 
 async function createAdminToken(state?: string | null): Promise<string> {
+  const userId = await insertUser(env.DB, "admin@example.test");
+  await grantAdministrator(env.DB, userId);
+  const token = await createAdminSession(env.DB, userId, crypto.randomUUID(), signingSecret);
+  const verified = await verifyUserSessionToken(signingSecret, token);
+  if (!verified.ok) throw new Error("Expected a valid staff fixture session");
   return signUserSessionToken(signingSecret, {
-    sub: "admin-user",
-    sid: "admin-session",
-    exp: Math.floor(new Date(adminTokenExpiresAt).getTime() / 1000),
+    sub: verified.claims.sub,
+    sid: verified.claims.sid,
+    exp: verified.claims.exp,
     state,
   });
 }
@@ -26,56 +36,21 @@ interface StatementOptions {
   bookmark?: string | null;
 }
 
-function emptyStatement(query: string, queries: string[], options: StatementOptions = {}): StatementLike {
+function recordedStatement(database: DatabaseLike, query: string, queries: string[]): StatementLike {
   queries.push(query);
-  return {
-    bind() {
-      return this;
-    },
-    async run() {
-      return { success: true, meta: { changes: 0 } };
-    },
-    async all<T>() {
-      if (query.includes("SELECT rp.permission AS permission")) {
-        return { results: [{ permission: "users:read", context_type: null, context_id: null }] as T[] };
-      }
-      options.onQuery?.();
-      await options.waitForQuery?.();
-      return { results: [] as T[] };
-    },
-    async first<T>() {
-      if (query.includes("FROM sessions")) {
-        return {
-          id: "admin-session",
-          subject_id: "admin-user",
-          expires_at: adminTokenExpiresAt,
-          created_at: new Date().toISOString(),
-          revoked_at: null,
-        } as T;
-      }
-      if (query.includes("FROM users u WHERE u.id = ? AND u.active = 1")) {
-        return {
-          id: "admin-user",
-          email: "admin@example.test",
-          role: "admin",
-          active: 1,
-        } as T;
-      }
-      if (query.includes("SELECT id, email, normalized_email FROM users WHERE id")) {
-        return {
-          id: "admin-user",
-          email: "admin@example.test",
-          normalized_email: "admin@example.test",
-        } as T;
-      }
-      options.onQuery?.();
-      await options.waitForQuery?.();
-      return null;
-    },
-  };
+  return database.prepare(query);
 }
 
 function createDbWithSessionRecorder(options: StatementOptions = {}) {
+  const database: DatabaseLike = env.DB;
+  const sessionDatabase = mutateBeforeMatchingQuery(
+    database,
+    () => true,
+    async () => {
+      options.onQuery?.();
+      await options.waitForQuery?.();
+    },
+  );
   const primaryQueries: string[] = [];
   const sessionQueries: string[] = [];
   const withSessionCalls: string[] = [];
@@ -85,12 +60,10 @@ function createDbWithSessionRecorder(options: StatementOptions = {}) {
       if (query.includes("FROM sessions")) {
         throw new Error("admin auth should stay on the primary DB");
       }
-      return emptyStatement(query, sessionQueries, options);
+      return recordedStatement(sessionDatabase, query, sessionQueries);
     },
     async batch(statements) {
-      options.onQuery?.();
-      await options.waitForQuery?.();
-      return statements.map(() => ({ success: true, results: [], meta: { changes: 0 } }));
+      return sessionDatabase.batch(statements);
     },
     getBookmark() {
       return options.bookmark ?? null;
@@ -99,15 +72,13 @@ function createDbWithSessionRecorder(options: StatementOptions = {}) {
 
   const primaryDb: DatabaseLike = {
     prepare(query) {
-      return emptyStatement(query, primaryQueries);
+      return recordedStatement(database, query, primaryQueries);
     },
-    async batch() {
-      return [];
-    },
+    batch: (statements) => database.batch(statements),
     withSession(constraintOrBookmark) {
       withSessionCalls.push(String(constraintOrBookmark));
       if (constraintOrBookmark === "first-primary") {
-        return { ...sessionDb, prepare: (query) => emptyStatement(query, sessionQueries, options) };
+        return { ...sessionDb, prepare: (query) => recordedStatement(sessionDatabase, query, sessionQueries) };
       }
       return sessionDb;
     },
@@ -117,6 +88,7 @@ function createDbWithSessionRecorder(options: StatementOptions = {}) {
 }
 
 describe("D1 read replication", () => {
+  beforeEach(resetDb);
   it.each([
     ["/api/v1/members", "first-unconstrained"],
     ["/api/v1/members?view=staff", "first-primary"],
