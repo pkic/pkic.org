@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { env as workerEnv } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import {
   MCP_AUTHORIZE_MAX_BYTES,
   SENDGRID_WEBHOOK_MAX_BYTES,

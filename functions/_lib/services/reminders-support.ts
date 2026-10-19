@@ -42,6 +42,7 @@ export function attendeeRegistrationClosesAt(invite: DueInviteRow): string | nul
 }
 
 export interface DuePresentationRow {
+  proposal_type: string;
   speaker_id: string;
   proposal_id: string;
   user_id: string;

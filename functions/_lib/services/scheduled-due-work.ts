@@ -1,11 +1,11 @@
-import { getConfig } from "../config";
+import { getConfig, resolveAppBaseUrl } from "../config";
 import { processPendingOutbox } from "../email/outbox";
 import { runReminderCycle } from "./reminders";
 import { runRsvpEnforcer } from "./rsvp-enforcer";
 import { runWaitlistPromotionCycle } from "./registrations/waitlist-promotions";
 import { processPendingStorageDeletions, type StorageDeletionResult } from "./storage-deletion-outbox";
 import { processPendingBadgeRenders, type BadgeRenderResult } from "./registration-badge-regeneration";
-import { drainOrganizationContentReviewNotificationIntents } from "./organization-content";
+import { queueOrganizationContentReviewDigests } from "./organization-content";
 import type { Env } from "../types";
 import type { D1QueryBudget } from "../db/query-budget";
 
@@ -272,21 +272,17 @@ export async function runScheduledDueWork(
       claimWindowHours: config.waitlistClaimWindowHours,
       limit: config.scheduledWaitlistPromotionLimit,
     });
-    // Reviewer intents are durable independently of request/background
-    // execution. Drain a bounded batch before the normal outbox processor so
-    // a failed waitUntil callback is recovered by the existing 15-minute due
-    // work lane. One read plus one bulk-insert and one mark statement are the
-    // minimum D1 cost, so reserve those queries before entering the drain.
+    // Queue one digest per reviewer/day, then refresh unsent mail from the live queue.
     const notificationRemainingD1Queries =
       invocationBudget?.d1QueryBudget?.remainingQueries() ?? Number.POSITIVE_INFINITY;
     const notificationLimit = Math.min(
       config.scheduledOutboxLimit,
       invocationBudget?.d1QueryBudget
-        ? Math.floor(Math.max(0, notificationRemainingD1Queries - NOTIFICATION_DRAIN_DOWNSTREAM_D1_RESERVE - 1) / 2)
+        ? Math.floor(Math.max(0, notificationRemainingD1Queries - NOTIFICATION_DRAIN_DOWNSTREAM_D1_RESERVE - 4) / 2)
         : config.scheduledOutboxLimit,
     );
     if (notificationLimit > 0) {
-      await drainOrganizationContentReviewNotificationIntents(env.DB, notificationLimit);
+      await queueOrganizationContentReviewDigests(env.DB, resolveAppBaseUrl(env), notificationLimit);
     }
     const outboxPass = await processPendingOutbox(env.DB, env, config.scheduledOutboxLimit);
     const storageDeletionPass = await processPendingStorageDeletions(env.DB, env, config.scheduledStorageDeletionLimit);

@@ -1,3 +1,4 @@
+import { useHashQueryParam } from "../../../../hooks/useHashQueryParam";
 import { EmailHtmlPreview } from "../../../../ui/EmailHtmlPreview";
 import { IconBraces } from "../../../../components/icons";
 import { MarkdownEditor } from "../../../../components/markdown-editor/MarkdownInput";
@@ -18,12 +19,7 @@ import { toast } from "../../ui";
 import { highlightTemplateSyntax } from "../../../../shared/email-template-syntax";
 import { bodyTemplateInsertions, subjectTemplateInsertions } from "../../../../shared/email-template-insertions";
 import type { EmailTemplateVersion } from "../../../../../shared/schemas/email-templates";
-import {
-  TEMPLATE_HELPERS,
-  TEMPLATE_PARTIALS,
-  PREVIEW_DEFAULTS,
-  type TemplateHelperCategory,
-} from "../../../../shared/email-template-helpers";
+import { PREVIEW_DEFAULTS } from "../../../../shared/email-template-helpers";
 import {
   emailTemplatePreviewResponseSchema,
   emailTemplateVersionCreateResponseSchema,
@@ -41,7 +37,6 @@ import { EmailTemplateVersionHistory } from "./EmailTemplateVersionHistory";
 import "../../../../ui/OverlayEditor.css";
 import "../../../../ui/Content.css";
 const EMAIL_LAYOUT_TEMPLATE_KEY = "email_layout";
-const HELPER_CATEGORIES: TemplateHelperCategory[] = ["Variables", "Conditions", "CTAs"];
 
 export function TemplateEditor({
   templateKey,
@@ -62,7 +57,11 @@ export function TemplateEditor({
   const [fromName, setFromName] = useState(current?.from_name ?? "");
   const [body, setBody] = useState(current?.body ?? "");
   const [previewData, setPreviewData] = useState(JSON.stringify(PREVIEW_DEFAULTS, null, 2));
-  const [previewTab, setPreviewTab] = useState<EmailPreviewTab>("html");
+  const [previewTab, setPreviewTab] = useHashQueryParam<EmailPreviewTab>(
+    "templateSection",
+    "html",
+    EMAIL_PREVIEW_TABS.map((tab) => tab.key),
+  );
   const [previewSubject, setPreviewSubject] = useState("");
   const [previewHtml, setPreviewHtml] = useState("");
   const [previewText, setPreviewText] = useState("");
@@ -111,7 +110,12 @@ export function TemplateEditor({
     }
   }
 
+  function invalidatePreview() {
+    hasPreviewedRef.current = false;
+  }
+
   function insertSnippet(snippet: string, preferredTarget?: "subject" | "body" | null) {
+    invalidatePreview();
     const target = preferredTarget ?? editorFocusRef.current;
     if (target === "subject") {
       const input = subjectPreRef.current?.parentElement?.querySelector("input");
@@ -267,7 +271,6 @@ export function TemplateEditor({
           {canWrite && (
             <Button
               variant="primary"
-              size="sm"
               onClick={() => void doSave()}
               disabled={saving || !hasPreviewedRef.current}
               loading={saving}
@@ -361,7 +364,7 @@ export function TemplateEditor({
                         placeholder="e.g. Your invitation to {{eventName}}"
                         onInput={(e) => {
                           setSubject((e.target as HTMLInputElement).value);
-                          hasPreviewedRef.current = false;
+                          invalidatePreview();
                         }}
                         onFocus={() => {
                           editorFocusRef.current = "subject";
@@ -402,93 +405,49 @@ export function TemplateEditor({
                       }}
                       onChange={(value) => {
                         setBody(value);
-                        hasPreviewedRef.current = false;
+                        invalidatePreview();
                       }}
                     />
                   ) : (
-                    <div class="pk-overlay-editor">
-                      <pre
-                        ref={bodyPreRef}
-                        aria-hidden="true"
-                        class="pk-overlay-editor__backdrop pk-overlay-editor__backdrop--wrap"
-                      ></pre>
-                      <Textarea
-                        {...control}
-                        class="pk-mono pk-overlay-editor__input"
-                        rows={16}
-                        defaultValue={body}
-                        readOnly={!canWrite}
-                        onInput={(e) => {
-                          setBody((e.target as HTMLTextAreaElement).value);
-                          hasPreviewedRef.current = false;
-                        }}
-                        onFocus={() => {
-                          editorFocusRef.current = "body";
-                        }}
-                        onScroll={handleBodyScroll}
-                      />
+                    <div class="pk-stack pk-stack--snug">
+                      <div class="pk-cluster pk-cluster--end">
+                        <Menu
+                          label="Insert body variable or reusable content"
+                          align="end"
+                          items={bodyTemplateInsertions((snippet) => insertSnippet(snippet, "body")).map((item) => ({
+                            ...item,
+                            disabled: !canWrite,
+                          }))}
+                        >
+                          <IconBraces />
+                        </Menu>
+                      </div>
+                      <div class="pk-overlay-editor">
+                        <pre
+                          ref={bodyPreRef}
+                          aria-hidden="true"
+                          class="pk-overlay-editor__backdrop pk-overlay-editor__backdrop--wrap"
+                        ></pre>
+                        <Textarea
+                          {...control}
+                          class="pk-mono pk-overlay-editor__input"
+                          rows={16}
+                          defaultValue={body}
+                          readOnly={!canWrite}
+                          onInput={(e) => {
+                            setBody((e.target as HTMLTextAreaElement).value);
+                            invalidatePreview();
+                          }}
+                          onFocus={() => {
+                            editorFocusRef.current = "body";
+                          }}
+                          onScroll={handleBodyScroll}
+                        />
+                      </div>
                     </div>
                   )
                 }
               </Field>
-
-              {contentType !== "markdown" && (
-                <details>
-                  <summary class="pk-small pk-strong">Insert variables and reusable content</summary>
-                  <div class="pk-stack">
-                    {/* Partials */}
-                    <Field label="Insert partial">
-                      {(control) => (
-                        <Select
-                          {...control}
-                          disabled={!canWrite}
-                          onChange={(e) => {
-                            const sel = e.target as HTMLSelectElement;
-                            if (!sel.value) return;
-                            insertSnippet(`{{> ${sel.value}}}`, "body");
-                            sel.value = "";
-                          }}
-                        >
-                          <option value="">— select partial to insert —</option>
-                          {TEMPLATE_PARTIALS.map((p) => (
-                            <option key={p.name} value={p.name}>
-                              {p.name} — {p.description}
-                            </option>
-                          ))}
-                        </Select>
-                      )}
-                    </Field>
-
-                    {/* Template helpers */}
-                    <div class="pk-stack pk-stack--snug">
-                      {/* A heading over a row of buttons, not the label of a control:
-                    `pk-field__label` outside a `pk-field` names nothing and can
-                    never carry a state. */}
-                      <div class="pk-stack pk-stack--tight">
-                        <span class="pk-small pk-strong">Template helpers</span>
-                        <span class="pk-small">Click to insert into the active field.</span>
-                      </div>
-                      {HELPER_CATEGORIES.map((cat) => (
-                        <div key={cat} class="pk-stack pk-stack--tight">
-                          <span class="pk-small pk-strong">{cat}</span>
-                          <div class="pk-cluster">
-                            {TEMPLATE_HELPERS.filter((item) => item.category === cat).map((item) => (
-                              <Button
-                                key={item.label}
-                                size="sm"
-                                disabled={!canWrite}
-                                onClick={() => insertSnippet(item.snippet, item.target)}
-                              >
-                                {item.label}
-                              </Button>
-                            ))}
-                          </div>
-                        </div>
-                      ))}
-                    </div>
-                  </div>
-                </details>
-              )}
 
               <p class="pk-small">
                 {canWrite
@@ -501,7 +460,7 @@ export function TemplateEditor({
             {canWrite && (
               <Panel>
                 <PanelHeader title="Rendered Preview">
-                  <Button variant="secondary" size="sm" onClick={() => void doPreview()}>
+                  <Button variant="secondary" onClick={() => void doPreview()}>
                     Render Preview
                   </Button>
                 </PanelHeader>
@@ -523,8 +482,7 @@ export function TemplateEditor({
                   <p class="pk-small" role="status">
                     {previewStatus}
                   </p>
-                  <details>
-                    <summary class="pk-small pk-strong">Preview sample data</summary>
+                  <div class="pk-stack pk-stack--tight">
                     {/* Preview data. The reset sits under the field rather than in
                   its label row: the label names the control and nothing else. */}
                     <div class="pk-stack pk-stack--tight">
@@ -542,14 +500,13 @@ export function TemplateEditor({
                       <div class="pk-cluster pk-cluster--end">
                         <Button
                           variant="link"
-                          size="sm"
                           onClick={() => setPreviewData(JSON.stringify(PREVIEW_DEFAULTS, null, 2))}
                         >
                           Reset to defaults
                         </Button>
                       </div>
                     </div>
-                  </details>
+                  </div>
                 </PanelBody>
               </Panel>
             )}

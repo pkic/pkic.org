@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { decorateOpenApiSpec } from "../functions/_lib/openapi/mcp";
-import { openapi } from "../functions/router";
+import { openapi } from "../functions/http-router";
 
 describe("proposal speaker reminder contracts", () => {
   it("documents the typed per-speaker reminder resource", () => {

@@ -1,6 +1,8 @@
+// Prepare the real HTTP graph before timed journeys, as the shared API test helper does.
+import "../functions/http-router";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { seedPersona } from "./personas/seed";
 import { onlyPersona } from "./personas/catalog";
@@ -108,6 +110,9 @@ describe("scheduler API", () => {
     expect(retention!.leaseExpired).toBe(false);
     expect(retention!.capabilities).toEqual({ manageState: false, run: false });
     expect(payload.jobs.map((job) => job.jobKey)).toContain("votes_due_work");
+    expect(payload.jobs.map((job) => job.jobKey)).toContain("standing_chair_terms");
+    expect(payload.jobs.map((job) => job.jobKey)).toContain("standing_event_speakers");
+    expect(payload.jobs.map((job) => job.jobKey)).toContain("sponsor_logo_publication");
   });
 
   it("searches, sorts, and pages jobs through the shared list query", async () => {
@@ -158,12 +163,13 @@ describe("scheduler API", () => {
     // The escalation this surface must not permit: retention redacts user data,
     // so triggering it through the scheduler still requires users:anonymize.
     const token = await staffWith(["schedulerOperator"]);
-    const response = await call(token, "/api/v1/scheduler/jobs/retention/runs", {
-      method: "POST",
-      body: JSON.stringify({}),
-    });
-
-    expect(response.status).toBe(403);
+    for (const job of ["retention", "recording_acquisitions", "standing_event_speakers", "sponsor_logo_publication"]) {
+      const response = await call(token, `/api/v1/scheduler/jobs/${job}/runs`, {
+        method: "POST",
+        body: JSON.stringify({}),
+      });
+      expect(response.status).toBe(403);
+    }
     expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'scheduled_job_triggered'")).toHaveLength(0);
   });
 

@@ -1,17 +1,18 @@
 import { emailPreviewDocumentMessageSchema } from "../../assets/shared/email-preview-document";
-import { markdownControl, markdownValue, typeMarkdown } from "./helpers/labelled-control";
+import { markdownControl, markdownValue, typeMarkdown } from "./helpers/labeled-control";
 // @vitest-environment jsdom
 import { render } from "preact";
 import { act } from "preact/test-utils";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { TemplateEditor } from "../../assets/ts/member-flows/portal/sections/email-templates/EmailTemplateEditor";
 import {
+  emailTemplateActivateSchema,
   emailTemplatePreviewSchema,
   emailTemplateVersionSchema,
   type EmailTemplateVersion,
 } from "../../assets/shared/schemas/email-templates";
 import { emailContentTypeSchema, emailMessageTypeSchema } from "../../assets/shared/schemas/api-common";
-import { controlFor, labelNames, optionValues } from "./helpers/labelled-control";
+import { controlFor, labelNames, optionValues } from "./helpers/labeled-control";
 import { menuItemNamed, openRowMenu } from "./helpers/row-actions";
 
 const TEMPLATE_KEY = "welcome_email";
@@ -104,17 +105,23 @@ async function settle(): Promise<void> {
   });
 }
 
-async function mount(props: { canWrite?: boolean } = {}): Promise<void> {
+async function mount(
+  props: { canWrite?: boolean; contentType?: EmailTemplateVersion["content_type"] } = {},
+): Promise<void> {
   container = document.createElement("div");
   document.body.append(container);
   await act(() =>
     render(
-      <TemplateEditor templateKey={TEMPLATE_KEY} initialVersion={ACTIVE_VERSION} canWrite={props.canWrite ?? true} />,
+      <TemplateEditor
+        templateKey={TEMPLATE_KEY}
+        initialVersion={{ ...ACTIVE_VERSION, content_type: props.contentType ?? ACTIVE_VERSION.content_type }}
+        canWrite={props.canWrite ?? true}
+      />,
       container!,
     ),
   );
   await settle();
-  await markdownControl(container!, "Body");
+  if (!props.contentType || props.contentType === "markdown") await markdownControl(container!, "Body");
 }
 
 function button(label: string): HTMLButtonElement | undefined {
@@ -123,7 +130,7 @@ function button(label: string): HTMLButtonElement | undefined {
 
 async function click(label: string): Promise<void> {
   const target = button(label);
-  if (!target) throw new Error(`No button labelled "${label}"`);
+  if (!target) throw new Error(`No button labeled "${label}"`);
   await act(() => target.click());
   await settle();
 }
@@ -169,6 +176,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  history.replaceState(null, "", location.pathname);
   if (container) {
     void act(() => render(null, container!));
     container.remove();
@@ -180,6 +188,90 @@ afterEach(() => {
 });
 
 describe("portal email template editor", () => {
+  it("restores the bookmarked preview section while draft content stays local across history navigation", async () => {
+    history.replaceState(
+      null,
+      "",
+      `/portal/#/settings/email-templates/${TEMPLATE_KEY}?templateSection=text&templates.q=kept`,
+    );
+    stubApi();
+    await mount({ contentType: "text" });
+    expect(button("Text")?.getAttribute("aria-selected")).toBe("true");
+    await typeInto("Subject template", "Private unsaved subject");
+    const draftBody = controlFor<HTMLTextAreaElement>(container!, "Body");
+    await act(() => {
+      draftBody.value = "Private unsaved body";
+      draftBody.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await click("HTML");
+    expect(location.hash).not.toContain("templateSection=");
+    expect(location.hash).toContain("templates.q=kept");
+    history.back();
+    await vi.waitFor(() => expect(button("Text")?.getAttribute("aria-selected")).toBe("true"));
+    expect(controlFor<HTMLInputElement>(container!, "Subject template").value).toBe("Private unsaved subject");
+    expect(controlFor<HTMLTextAreaElement>(container!, "Body").value).toBe("Private unsaved body");
+    expect(location.hash).not.toContain("Private");
+    await act(() => render(null, container!));
+    container!.remove();
+    container = null;
+    await mount({ contentType: "text" });
+    expect(button("Text")?.getAttribute("aria-selected")).toBe("true");
+    expect(controlFor<HTMLInputElement>(container!, "Subject template").value).toBe(ACTIVE_VERSION.subject_template);
+  });
+
+  it("requires a new preview after inserting reusable content into a previewed draft", async () => {
+    const requests = stubApi();
+    await mount({ contentType: "text" });
+    await click("Render Preview");
+    expect(button("Save as Draft")?.disabled).toBe(false);
+    await act(() => {
+      container!
+        .querySelector<HTMLButtonElement>('button[aria-label="Insert body variable or reusable content"]')!
+        .click();
+    });
+    await settle();
+    const partial = [...container!.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) =>
+      item.textContent?.startsWith("about_pkic"),
+    )!;
+    await act(() => partial.click());
+    await settle();
+    expect(controlFor<HTMLTextAreaElement>(container!, "Body").value).toContain("{{> about_pkic}}");
+    expect(button("Save as Draft")?.disabled).toBe(true);
+    expect(requests.filter((request) => request.pathname === VERSIONS_PATH && request.method === "POST")).toHaveLength(
+      0,
+    );
+    await click("Render Preview");
+    const previews = requests.filter((request) => request.pathname === PREVIEW_PATH);
+    expect(emailTemplatePreviewSchema.parse(previews.at(-1)?.body).content).toContain("{{> about_pkic}}");
+    expect(button("Save as Draft")?.disabled).toBe(false);
+  });
+
+  it("inserts reusable content into the raw body through the shared menu and previews visible sample data", async () => {
+    const requests = stubApi();
+    await mount({ contentType: "text" });
+    const menu = container!.querySelector<HTMLButtonElement>(
+      'button[aria-label="Insert body variable or reusable content"]',
+    );
+    expect(menu).not.toBeNull();
+    await act(() => menu!.click());
+    await settle();
+    const partial = [...container!.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find((item) =>
+      item.textContent?.startsWith("about_pkic"),
+    );
+    expect(partial).toBeDefined();
+    await act(() => partial!.click());
+    await settle();
+    const body = controlFor<HTMLTextAreaElement>(container!, "Body");
+    expect(body.value).toContain("{{> about_pkic}}");
+    const sample = controlFor<HTMLTextAreaElement>(container!, "Preview data (JSON)");
+    expect(sample.closest("details")).toBeNull();
+    await typeInto("Preview data (JSON)", '{"firstName":"Alex"}');
+    await click("Render Preview");
+    const request = requests.find((item) => item.pathname === PREVIEW_PATH);
+    const parsed = emailTemplatePreviewSchema.parse(request?.body);
+    expect(parsed.content).toContain("{{> about_pkic}}");
+    expect(parsed.data).toEqual({ firstName: "Alex" });
+  });
   it("sends an inserted reusable template to preview without Markdown escaping its syntax", async () => {
     const requests = stubApi();
     await mount();
@@ -366,6 +458,99 @@ describe("portal email template editor", () => {
     expect(requests.every((request) => request.pathname !== `/api/v1/email/templates/${TEMPLATE_KEY}/activate`)).toBe(
       true,
     );
+  });
+
+  it("replaces the selected subject text with the chosen variable and keeps the author typing there", async () => {
+    stubApi();
+    await mount();
+    await typeInto("Subject template", "Hello organization");
+    const subject = controlFor<HTMLInputElement>(container!, "Subject template");
+    subject.setSelectionRange(6, 18);
+
+    await act(async () =>
+      container!.querySelector<HTMLButtonElement>('button[aria-label="Insert subject variable"]')!.click(),
+    );
+    const variable = [...container!.querySelectorAll<HTMLButtonElement>('[role="menuitem"]')].find(
+      (item) => item.textContent === "organizationName",
+    );
+    await act(async () => variable!.click());
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 50));
+    });
+
+    expect(subject.value).toBe("Hello {{organizationName}}");
+    expect(document.activeElement).toBe(subject);
+    // The highlighted copy behind the field marks the same variable.
+    expect(container!.querySelector(".pk-template-subject .adm-template-token-var")?.textContent).toBe(
+      "{{organizationName}}",
+    );
+  });
+
+  it("marks conditions and variables in a raw body without changing what is sent", async () => {
+    const requests = stubApi();
+    await mount({ contentType: "html" });
+    const source = "{{#if organizationName}}<h2>{{organizationName}}</h2>{{else}}Hello user{{/if}}<script>x()</script>";
+    const body = controlFor<HTMLTextAreaElement>(container!, "Body");
+    body.value = source;
+    await act(() => {
+      body.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    await settle();
+
+    const backdrop = container!.querySelector(".pk-overlay-editor pre:not(.pk-template-subject pre)")!;
+    expect(backdrop.querySelectorAll(".adm-template-token")).toHaveLength(4);
+    expect(backdrop.querySelectorAll(".adm-template-token-var")).toHaveLength(1);
+    // Author markup is shown as text behind the field, never as live elements.
+    expect(backdrop.querySelector("script, h2")).toBeNull();
+
+    await click("Render Preview");
+    const preview = requests.find((request) => request.pathname === PREVIEW_PATH)!;
+    expect(emailTemplatePreviewSchema.parse(preview.body)).toMatchObject({ content: source, contentType: "html" });
+  });
+
+  it("activates a draft version from its row and shows it as the version in use", async () => {
+    const posts: unknown[] = [];
+    let activeVersion = 1;
+    const version = (number: number): EmailTemplateVersion => ({
+      ...ACTIVE_VERSION,
+      id: `version-${number}`,
+      version: number,
+      status: number === activeVersion ? "active" : "draft",
+    });
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+        const url = new URL(
+          typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+          location.origin,
+        );
+        const method = init?.method ?? "GET";
+        if (url.pathname === VERSIONS_PATH && method === "GET") {
+          return json({ versions: [version(2), version(1)], page: { limit: 25, offset: 0, total: 2, hasMore: false } });
+        }
+        if (url.pathname === `/api/v1/email/templates/${TEMPLATE_KEY}/activate` && method === "POST") {
+          const body = emailTemplateActivateSchema.parse(JSON.parse(String(init?.body)));
+          posts.push(body);
+          activeVersion = body.version;
+          return json({ success: true });
+        }
+        throw new Error(`Unexpected request: ${method} ${url.pathname}`);
+      }),
+    );
+    await mount();
+
+    await openRowMenu(container!, "v2");
+    await act(async () => menuItemNamed(container!, "Activate")!.click());
+    await settle();
+    await settle();
+
+    expect(posts).toEqual([{ version: 2 }]);
+    expect(toastMessages()).toContain("v2 is now active");
+    // The history is read again, so the row now offers the old version for activation instead.
+    await openRowMenu(container!, "v2");
+    expect(menuItemNamed(container!, "Activate")).toBeNull();
+    await openRowMenu(container!, "v1");
+    expect(menuItemNamed(container!, "Activate")).not.toBeNull();
   });
 
   it("shows the template's addressable place in the settings breadcrumb", async () => {

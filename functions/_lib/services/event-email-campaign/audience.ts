@@ -1,13 +1,17 @@
 import { isInvitationCampaignAudience } from "../../../../assets/shared/schemas/event-email-campaigns";
 import { listInvitationCampaignRecipients } from "./invitation-audience";
 import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "../registrations/selected-identity";
+import {
+  selectedOrAffiliationJobTitleSql,
+  selectedOrAffiliationOrganizationNameSql,
+} from "../identities/affiliation-projection";
 import { all } from "../../db/queries";
 import { AppError } from "../../errors";
 import { buildSpeakerTemplateData, buildAttendeeCampaignRecipients } from "./template-data";
 import { projectAttendeeDayState } from "./attendance-projection";
 import { resolveEventFormResponses, type EventFormResponse } from "../forms";
 import type { DatabaseLike } from "../../types";
-import { proposalSpeakerEffectiveProfileExpression } from "../proposal-speakers";
+import { proposalSpeakerProfileValueSql } from "../proposal-speakers";
 import type {
   AttendeeCampaignRow,
   CampaignAudienceFilter,
@@ -170,10 +174,10 @@ export function speakerCampaignSelection(
     sql: `WITH ranked_recipients AS (
        SELECT sp.id AS proposal_id, sp.form_placement_id,
               u.email,
-              ${proposalSpeakerEffectiveProfileExpression("u", "ps", "firstName", "first_name")} AS first_name,
-              ${proposalSpeakerEffectiveProfileExpression("u", "ps", "lastName", "last_name")} AS last_name,
-              ${proposalSpeakerEffectiveProfileExpression("u", "ps", "organizationName", "organization_name")} AS organization_name,
-              ${proposalSpeakerEffectiveProfileExpression("u", "ps", "jobTitle", "job_title")} AS job_title,
+              ${proposalSpeakerProfileValueSql("u", "ps", "firstName")} AS first_name,
+              ${proposalSpeakerProfileValueSql("u", "ps", "lastName")} AS last_name,
+              ${selectedOrAffiliationOrganizationNameSql("ps.acting_identity_id", "ps.user_id")} AS organization_name,
+              ${selectedOrAffiliationJobTitleSql("ps.acting_identity_id", "ps.user_id")} AS job_title,
               ps.status AS speaker_status,
               sp.title AS proposal_title,
               sp.abstract AS proposal_abstract,

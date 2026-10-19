@@ -11,8 +11,10 @@ import {
 } from "../reminders-support";
 import { batchQueueEmailsAndUpdateState, prepareSpeakerReminderRecipientGuard } from "./shared";
 import type { DatabaseLike } from "../../types";
-import { proposalSpeakerEffectiveProfileColumns, queuedSpeakerManageToken } from "../proposal-speakers";
-import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import { proposalSpeakerProfileColumns, queuedSpeakerManageToken } from "../proposal-speakers";
+import { eventSessionTypeRequiresPresentation } from "../event-presentation";
+import { stringifyJson } from "../../utils/json";
+import { prepareAuthorizationGuard, isAuthorizationGuardFailure } from "../../db/authorization-guard";
 
 export async function runPresentationReminders(
   db: DatabaseLike,
@@ -31,15 +33,15 @@ export async function runPresentationReminders(
 }> {
   const { appBaseUrl, limit, maxPresentationReminders, windowEnd, cutoff, now, dryRun } = params;
 
-  const duePresentation =
+  const candidates =
     limit > 0
       ? await all<DuePresentationRow>(
           db,
           `SELECT
          ps.id AS speaker_id, ps.proposal_id, ps.user_id, ps.manage_link_secret,
          u.email, u.normalized_email,
-         ${proposalSpeakerEffectiveProfileColumns("u", "ps", "", ["firstName", "lastName"])},
-         sp.title AS proposal_title, sp.event_id,
+         ${proposalSpeakerProfileColumns("u", "ps", "", ["firstName", "lastName"])},
+         sp.title AS proposal_title, sp.event_id, sp.proposal_type,
          e.name AS event_name, e.slug AS event_slug,
          e.base_path AS event_base_path, e.starts_at AS event_starts_at,
          e.settings_json AS event_settings_json,
@@ -49,6 +51,12 @@ export async function runPresentationReminders(
        JOIN session_proposals sp ON sp.id = ps.proposal_id
        JOIN events e ON e.id = sp.event_id
        WHERE sp.status = 'accepted'
+         AND NOT EXISTS (
+           SELECT 1 FROM json_each(e.settings_json, '$.proposal.sessionTypes') configured
+           WHERE CASE WHEN configured.type = 'object' THEN
+             lower(json_extract(configured.value, '$.label')) = lower(sp.proposal_type)
+             AND json_extract(configured.value, '$.requiresPresentation') = 0 ELSE 0 END
+         )
          AND ps.status IN ('invited', 'confirmed')
          AND NOT EXISTS (
            SELECT 1
@@ -67,6 +75,10 @@ export async function runPresentationReminders(
           [now, windowEnd, maxPresentationReminders, now, cutoff, limit],
         )
       : [];
+
+  const duePresentation = candidates.filter((row) =>
+    eventSessionTypeRequiresPresentation(row.event_settings_json, row.proposal_type),
+  );
 
   const preparedRows = duePresentation.map((row) => {
     const event: EventRouteRow = {
@@ -149,6 +161,25 @@ export async function runPresentationReminders(
       {
         isExpectedConflict: isAuthorizationGuardFailure,
         prepareSliceStatements: (start, end) => [
+          prepareAuthorizationGuard(db, {
+            sql: `SELECT 1 WHERE NOT EXISTS (
+              SELECT 1 FROM json_each(?) candidate
+              LEFT JOIN session_proposals sp ON sp.id = json_extract(candidate.value, '$.proposalId')
+              LEFT JOIN events e ON e.id = sp.event_id
+              WHERE sp.id IS NULL OR sp.status != 'accepted'
+                OR sp.proposal_type IS NOT json_extract(candidate.value, '$.proposalType')
+                OR e.settings_json IS NOT json_extract(candidate.value, '$.settingsJson')
+            )`,
+            bindings: [
+              stringifyJson(
+                duePresentation.slice(start, end).map((row) => ({
+                  proposalId: row.proposal_id,
+                  proposalType: row.proposal_type,
+                  settingsJson: row.event_settings_json,
+                })),
+              ),
+            ],
+          }),
           prepareSpeakerReminderRecipientGuard(
             db,
             duePresentation.slice(start, end).map((row) => ({

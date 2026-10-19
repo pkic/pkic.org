@@ -1,3 +1,4 @@
+import { eventVirtualRoomRoute } from "../../../../../assets/shared/event-participation-link";
 import { json } from "../../../../_lib/http";
 import { renderEmail, renderSubject } from "../../../../_lib/email/render";
 import { loadEmailPartials, loadEmailRenderResources } from "../../../../_lib/email/partials";
@@ -15,6 +16,7 @@ function buildDefaultPreviewData(baseUrl: string): Record<string, unknown> {
   return {
     eventName: "PKI Consortium Summit 2026",
     eventUrl: `${baseUrl}/example/event/`,
+    virtualRoomUrl: new URL(`/portal/#${eventVirtualRoomRoute("example-event")}`, baseUrl).href,
     firstName: "Alex",
     lastName: "Morgan",
     proposalTitle: "Operational Trust in a Post-Quantum Transition",

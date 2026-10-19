@@ -59,7 +59,7 @@ const rowColumns: Column<EmailOutboxRow>[] = [
         name={row.recipientName || row.recipientEmail}
         // The address is the second line only when the first line is a name;
         // a row without a name already leads with the address.
-        email={row.recipientName ? row.recipientEmail : undefined}
+        detail={row.recipientName ? row.recipientEmail : undefined}
         size="sm"
       />
     ),
@@ -223,7 +223,7 @@ export function EmailOutbox({ canManage }: { canManage: boolean }) {
   /** Names a selection checkbox after the message it selects. */
   function rowLabel(key: string): string {
     const row = lastData.current?.outbox.find((candidate) => candidate.id === key);
-    return `Select ${row?.subject || key}`;
+    return row?.subject || key;
   }
 
   return (
@@ -285,7 +285,6 @@ export function EmailOutbox({ canManage }: { canManage: boolean }) {
                 <span class="pk-small">Selection exceeds the {MAX_SELECTION}-message limit per request.</span>
               )}
               <Button
-                size="sm"
                 variant="secondary"
                 disabled={busy || overCap}
                 onClick={() => void process("/api/v1/email/outbox/process", { ids: [...selected] }, false)}
@@ -293,7 +292,6 @@ export function EmailOutbox({ canManage }: { canManage: boolean }) {
                 Process selected
               </Button>
               <Button
-                size="sm"
                 variant="danger-quiet"
                 disabled={busy || overCap}
                 onClick={() => void process("/api/v1/email/outbox/reset-failed", { ids: [...selected] }, true)}

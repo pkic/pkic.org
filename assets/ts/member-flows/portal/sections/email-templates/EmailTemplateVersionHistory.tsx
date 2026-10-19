@@ -52,6 +52,7 @@ export function EmailTemplateVersionHistory({
     <Panel>
       <PanelHeader title="Version History" />
       <ApiDataTable
+        urlState="email-template-versions"
         caption="Email template versions"
         endpoint={`${EMAIL_TEMPLATES_API}/${encodeURIComponent(templateKey)}/versions`}
         responseSchema={emailTemplateVersionsListResponseSchema}
