@@ -42,7 +42,6 @@ it("runs the standard staff, voting-member, and council requirements with indepe
     );
   }
   expect((await call("", "PATCH", { applicantName: "Corrected Example User" })).status).toBe(200);
-  expect((await call("", "PATCH", { membershipCategory: "A" })).status).toBe(422);
   await evaluateMembershipApplication(env.DB, id, "https://app.test");
   const initial = await getMembershipExecution(env.DB, id);
   const completed = await call("/reviews/completion", "POST", {

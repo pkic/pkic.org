@@ -113,8 +113,8 @@ describe("affiliation reviews by group", () => {
     const member = await insertUser(env.DB, "plain-member@example.test");
     const token = await createMemberSession(env.DB, member, "affiliation-review-member-token");
     await insertReview(member, "Nowhere Ltd", null);
-    // A member session is not a staff session: the staff guard refuses it before any permission check.
-    expect((await call(token, `${BASE}/groups`)).status).toBe(401);
-    expect((await call(token, `${groupPath("Nowhere Ltd")}/dismiss`, { method: "POST" })).status).toBe(401);
+    // The valid human session carries no staff authority.
+    expect((await call(token, `${BASE}/groups`)).status).toBe(403);
+    expect((await call(token, `${groupPath("Nowhere Ltd")}/dismiss`, { method: "POST" })).status).toBe(403);
   });
 });

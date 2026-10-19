@@ -23,13 +23,17 @@ const LOGO_SVG = new TextEncoder().encode(
 const get = (path: string, headers: Record<string, string> = {}) => callApi(env, path, { headers });
 
 async function sponsorship(listed: boolean) {
+  const tier = await env.DB.prepare(
+    "SELECT tier FROM sponsorship_tier_catalog WHERE sponsor_type='consortium' AND active=1 AND display_weight>0 ORDER BY display_weight DESC,tier LIMIT 1",
+  ).first<string>("tier");
+  if (!tier) throw new Error("Expected a configured public consortium sponsor tier");
   const id = crypto.randomUUID();
   const key = `sponsor-logos/${id}/${crypto.randomUUID()}.svg`;
   await env.DB.prepare(
     `INSERT INTO sponsorships (id, sponsor_type, non_member_name, tier, pipeline_stage, non_member_logo_r2_key, created_at, updated_at)
-     VALUES (?, 'consortium', 'Example Sponsor', 'gold', ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
+     VALUES (?, 'consortium', 'Example Sponsor', ?, ?, ?, strftime('%Y-%m-%dT%H:%M:%fZ','now'), strftime('%Y-%m-%dT%H:%M:%fZ','now'))`,
   )
-    .bind(id, listed ? "active" : "prospect", key)
+    .bind(id, tier, listed ? "active" : "prospect", key)
     .run();
   await env.ASSETS_BUCKET!.put(key, LOGO_SVG);
   return { id, version: key.split("/").pop()! };
