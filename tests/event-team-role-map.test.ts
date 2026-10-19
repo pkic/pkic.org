@@ -21,7 +21,7 @@ describe("event-team role vocabulary", () => {
     expect(() => eventTeamRoleForRoleId("role-event-unknown")).toThrow("Event-team data contains an unsupported role");
   });
 
-  it("keeps every canonical event-team role present in the migrated role catalogue", async () => {
+  it("keeps every canonical event-team role present in the migrated role catalog", async () => {
     const expected = Object.values(EVENT_TEAM_ROLE_IDS).sort();
     const rows = await env.DB.prepare(
       "SELECT id FROM roles WHERE id IN (SELECT value FROM json_each(?)) ORDER BY id ASC",

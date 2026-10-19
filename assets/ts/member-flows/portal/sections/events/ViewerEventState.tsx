@@ -1,40 +1,21 @@
 /**
- * The viewer's own registration standing for an event: a status badge, the
- * attendance type, and any per-day registered/waitlisted dates. Shared by
- * the portal Home upcoming-events panel and the root events overview so the
- * chip rendering and day-label formatting live in one place rather than
- * being duplicated per surface.
+ * The viewer's own registration standing for an event, linked to that
+ * registration: the portal Home upcoming-events panel's line. It draws the
+ * same badges the events list and its cards draw ("Registered · in person"),
+ * from the same derivation.
  */
 import { Link } from "wouter";
 import type { EventViewerState } from "../../../../../shared/schemas/event-management";
-import { Badge } from "../../../../components/Badge";
-// Dates render through the one shared module, which is day-precise, follows
-// the viewer's own locale, and answers an em dash rather than "Invalid Date"
-// for a value it cannot read. A formatter written here would be another copy
-// of that policy, and copies drift (issue #19).
-import { formatDayAndMonth } from "../../../../shared/ui";
-
-function attendanceLabel(value: string): string {
-  return value.replaceAll("_", " ").replace(/^./, (letter) => letter.toUpperCase());
-}
+import { CollectionStatusLine } from "../../../../ui/CollectionCard";
+import { eventViewerStatus } from "./event-viewer-status";
 
 export function ViewerEventState({ viewer, href }: { viewer: EventViewerState; href?: string }) {
-  const registeredDays = viewer.days.filter((day) => day.state === "registered").map((day) => day.date);
-  const waitlistedDays = viewer.days.filter((day) => day.state === "waitlisted").map((day) => day.date);
-  const content = (
-    <>
-      <Badge status={viewer.registrationStatus} label={attendanceLabel(viewer.registrationStatus)} />
-      <span>{attendanceLabel(viewer.attendanceType)}</span>
-      {registeredDays.length > 0 && <span>Days: {registeredDays.map(formatDayAndMonth).join(", ")}</span>}
-      {waitlistedDays.length > 0 && <span>Waitlisted: {waitlistedDays.map(formatDayAndMonth).join(", ")}</span>}
-      {viewer.waitlisted && waitlistedDays.length === 0 && <Badge status="waitlisted" label="Waitlisted" />}
-    </>
-  );
+  const badges = <CollectionStatusLine items={eventViewerStatus({ viewer })} />;
   return href ? (
-    <Link href={href} class="pk-cluster pk-small">
-      {content}
+    <Link href={href} class="pk-small">
+      {badges}
     </Link>
   ) : (
-    <span class="pk-cluster pk-small">{content}</span>
+    badges
   );
 }

@@ -1,0 +1,26 @@
+@layer components {
+  /* The Transition: its button in the middle of whatever holds it, its panel or the phone's switcher row. */
+  .pk-studio-transition {
+    display: grid;
+    place-items: center;
+    block-size: 100%;
+  }
+  /* A 44px target wherever it sits, desk or phone. */
+  .pk-studio-transition > .pk-btn {
+    min-block-size: 2.75rem;
+    min-inline-size: 2.75rem;
+  }
+  /* The Undo after a clear, above the panels at the foot of the window, out of the way of the header. */
+  .pk-studio__toast {
+    position: fixed;
+    z-index: 1001;
+    inset-block-end: var(--pk-4);
+    inset-inline: var(--pk-4);
+    display: flex;
+    justify-content: center;
+    pointer-events: none;
+  }
+  .pk-studio__toast > * {
+    pointer-events: auto;
+  }
+}

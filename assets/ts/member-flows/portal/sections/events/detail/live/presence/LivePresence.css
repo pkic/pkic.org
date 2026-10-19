@@ -1,0 +1,98 @@
+/*
+ * Operator presence. Each operator wears one palette color, picked from
+ * their name, on every mark: a ring on the button they are on, a chip with
+ * their initials beside the control, and a pointer on the monitors. The
+ * chip always carries initials and a spoken name, so color is never the
+ * only cue. The colors avoid the tally greens, reds and blues.
+ */
+@layer components {
+  :root {
+    --live-presence-0: var(--pk-palette-violet);
+    --live-presence-1: var(--pk-palette-amber);
+    --live-presence-2: var(--pk-palette-teal);
+    --live-presence-3: var(--pk-palette-rose);
+    --live-presence-4: var(--pk-palette-indigo);
+    --live-presence-5: var(--pk-palette-orange);
+  }
+  [data-presence-color="0"] {
+    --live-presence: var(--live-presence-0);
+  }
+  [data-presence-color="1"] {
+    --live-presence: var(--live-presence-1);
+  }
+  [data-presence-color="2"] {
+    --live-presence: var(--live-presence-2);
+  }
+  [data-presence-color="3"] {
+    --live-presence: var(--live-presence-3);
+  }
+  [data-presence-color="4"] {
+    --live-presence: var(--live-presence-4);
+  }
+  [data-presence-color="5"] {
+    --live-presence: var(--live-presence-5);
+  }
+
+  .pk-live-presence {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: 2px;
+  }
+  .pk-live-presence__chip {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: var(--pk-1);
+    min-block-size: 1.25rem;
+    min-inline-size: 1.25rem;
+    padding: 0 0.1875rem;
+    border: 2px solid var(--live-presence, var(--pk-line-strong));
+    border-radius: var(--pk-radius-pill);
+    background: var(--pk-surface);
+    color: var(--pk-ink);
+    font-family: var(--pk-font-mono);
+    font-size: var(--pk-text-2xs);
+    font-weight: 700;
+    line-height: 1;
+    white-space: nowrap;
+  }
+  /* Who just changed the control: their name, on a wash of their color. */
+  .pk-live-presence__chip[data-flash="true"] {
+    padding-inline: var(--pk-1);
+    background: color-mix(in srgb, var(--live-presence) 22%, var(--pk-surface));
+    animation: pk-live-presence-flash var(--pk-dur-slow) var(--pk-ease) 2;
+  }
+  .pk-live-presence__name {
+    font-family: var(--pk-font);
+    font-weight: 600;
+  }
+
+  /* A pointer on a monitor sits on the composition and never takes the operator's own pointer. */
+  .pk-live-pointers {
+    position: absolute;
+    inset: 0;
+    z-index: 1;
+    overflow: visible;
+    pointer-events: none;
+  }
+  .pk-live-pointer__dot {
+    fill: var(--live-presence);
+    stroke: var(--pk-surface);
+    stroke-width: 2;
+  }
+  .pk-live-presence__avatar {
+    --pk-avatar-size: 1.25rem;
+  }
+
+  @keyframes pk-live-presence-flash {
+    50% {
+      transform: scale(1.12);
+    }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .pk-live-presence__chip[data-flash="true"] {
+      animation: none;
+    }
+  }
+}

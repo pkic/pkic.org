@@ -17,7 +17,7 @@ import {
   MeetingOccurrenceFields,
   type MeetingOccurrenceDraft,
 } from "../../assets/ts/member-flows/portal/sections/management/MeetingOccurrenceFields";
-import { chooseOption, controlFor, labelNames, typeInto } from "./helpers/labelled-control";
+import { chooseOption, controlFor, labelNames, typeInto } from "./helpers/labeled-control";
 
 function draft(overrides: Partial<MeetingOccurrenceDraft> = {}): MeetingOccurrenceDraft {
   return {

@@ -111,7 +111,7 @@ export function BadgeRolePanel({ slug, regId }: { slug: string; regId: string })
       {saveError && <Alert tone="danger">{saveError}</Alert>}
 
       <div class="pk-cluster">
-        <Button variant="primary" size="sm" loading={saving} onClick={() => void handleSave()}>
+        <Button variant="primary" loading={saving} onClick={() => void handleSave()}>
           {saving ? "Saving…" : "Save"}
         </Button>
       </div>
@@ -171,7 +171,6 @@ export function RegistrationEmailEditor({
             and a voice-control user actually get. */}
         <Button
           variant="link"
-          size="sm"
           aria-label={`Change the registration email address, currently ${email}`}
           onClick={() => {
             setValue(email);
@@ -253,10 +252,10 @@ export function RegistrationEmailEditor({
       </Field>
       {error && <Alert tone="danger">{error}</Alert>}
       <div class="pk-cluster">
-        <Button variant="primary" size="sm" loading={saving} onClick={() => void handleSave()}>
+        <Button variant="primary" loading={saving} onClick={() => void handleSave()}>
           {saving ? "Saving…" : "Save"}
         </Button>
-        <Button size="sm" disabled={saving} onClick={stopEditing}>
+        <Button disabled={saving} onClick={stopEditing}>
           Cancel
         </Button>
       </div>

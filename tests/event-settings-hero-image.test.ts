@@ -1,8 +1,9 @@
+import { resolveHeroImageUrl } from "../functions/_lib/services/event-presentation";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env as workerEnv } from "cloudflare:workers";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { normalizeHttpOrSameOriginUrl } from "../assets/shared/schemas/urls";
 import type { Env } from "../functions/_lib/types";
 import { eventSettingsSchema } from "../assets/shared/schemas/event-management";
@@ -20,6 +21,21 @@ async function eventAdminAuth() {
     updatedAt: event.updated_at,
   };
 }
+
+describe("published event hero projection", () => {
+  it("uses the actual authored asset inventory instead of exposing the old bundle URL", () => {
+    expect(
+      resolveHeroImageUrl({
+        settings_json: JSON.stringify({ heroImageUrl: "/events/2026/pqc-conference-amsterdam-nl/amsterdam-nl.png" }),
+      }),
+    ).toBe("/content-media/events/2026/pqc-conference-amsterdam-nl/amsterdam-nl.png");
+  });
+  it("leaves configured static and external destinations intact", () => {
+    for (const image of ["/img/custom-event.png", "https://images.example.test/hero.png"]) {
+      expect(resolveHeroImageUrl({ settings_json: JSON.stringify({ heroImageUrl: image }) })).toBe(image);
+    }
+  });
+});
 
 describe("event hero image URL handling", () => {
   beforeEach(async () => {
@@ -84,6 +100,49 @@ describe("event hero image URL handling", () => {
     expect(JSON.parse(rows[0].settings_json)).toMatchObject({
       heroImageUrl: "/events/2026/pqc-conference-amsterdam-nl/hero.png?version=1",
     });
+  });
+
+  it("requires confirmation before renaming and preserves the event identity", async () => {
+    await seedEventAndAdmin(workerEnv.DB);
+    const auth = await eventAdminAuth();
+    const [before] = await queryAll<{ id: string }>(workerEnv.DB, "SELECT id FROM events WHERE slug = ?", ["pqc-2026"]);
+    const patch = (confirmSlugChange: boolean) =>
+      app.fetch(
+        new Request("https://preview.pkic.org/api/v1/events/pqc-2026/settings", {
+          method: "PATCH",
+          headers: { authorization: `Bearer ${auth.token}`, "content-type": "application/json" },
+          body: JSON.stringify({ expectedUpdatedAt: auth.updatedAt, slug: "pqc-renamed", confirmSlugChange }),
+        }),
+        workerEnv as Env,
+        { passThroughOnException() {}, waitUntil() {} } as unknown as ExecutionContext,
+      );
+    expect((await patch(false)).status).toBe(409);
+    const response = await patch(true);
+    expect(response.status).toBe(200);
+    const { event } = eventManagementDetailResponseSchema.parse(await response.json());
+    expect(event.id).toBe(before.id);
+    expect(event.slug).toBe("pqc-renamed");
+    expect(await queryAll(workerEnv.DB, "SELECT id FROM events WHERE slug = ?", ["pqc-2026"])).toHaveLength(0);
+  });
+
+  it("refuses an imported slug change without a stable website path", async () => {
+    await seedEventAndAdmin(workerEnv.DB);
+    await workerEnv.DB.prepare(
+      "UPDATE events SET source_mode = 'hugo', base_path = NULL WHERE slug = 'pqc-2026'",
+    ).run();
+    const auth = await eventAdminAuth();
+    const response = await app.fetch(
+      new Request("https://preview.pkic.org/api/v1/events/pqc-2026/settings", {
+        method: "PATCH",
+        headers: { authorization: `Bearer ${auth.token}`, "content-type": "application/json" },
+        body: JSON.stringify({ expectedUpdatedAt: auth.updatedAt, slug: "pqc-renamed", confirmSlugChange: true }),
+      }),
+      workerEnv as Env,
+      { passThroughOnException() {}, waitUntil() {} } as unknown as ExecutionContext,
+    );
+    expect(response.status).toBe(409);
+    expect(apiErrorPayloadSchema.parse(await response.json()).error.code).toBe("EVENT_SOURCE_IDENTITY_REQUIRED");
+    expect(await queryAll(workerEnv.DB, "SELECT id FROM events WHERE slug = 'pqc-2026'")).toHaveLength(1);
   });
 
   it("rejects custom settings that try to overwrite dedicated settings", () => {

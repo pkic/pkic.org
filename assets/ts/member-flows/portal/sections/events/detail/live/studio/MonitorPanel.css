@@ -1,0 +1,296 @@
+/*
+ * A monitor fits its panel. Its frame is a size container, so each 16:9
+ * picture takes the largest size its place allows: resizing the panel
+ * rescales the compositions in CSS alone, without rendering them again. A
+ * multiview's cards are exactly as wide as their pictures, packed together;
+ * places the grid has left over offer another output, and nothing stretches.
+ */
+@layer components {
+  /*
+   * The frame is the container and the monitor inside it reads its units:
+   * container units on the container itself would measure the panel grid
+   * around it instead of this panel.
+   */
+  .pk-studio-monitor-frame {
+    container: studio-monitor / size;
+    box-sizing: border-box;
+    block-size: 100%;
+  }
+  .pk-studio-monitor {
+    --monitor-columns: 1;
+    --monitor-rows: 1;
+    /* The card header's height above each picture, and the frame's padding. */
+    --monitor-caption: 2.25rem;
+    --monitor-pad: var(--pk-2);
+    /* The room the pictures have: the frame less its padding. */
+    --monitor-across: calc(100cqi - var(--monitor-pad) * 2);
+    --monitor-down: calc(100cqb - var(--monitor-pad) * 2);
+    display: grid;
+    gap: var(--pk-2);
+    box-sizing: border-box;
+    block-size: 100%;
+    padding: var(--monitor-pad);
+  }
+  .pk-studio-monitor[data-columns="2"] {
+    --monitor-columns: 2;
+  }
+  .pk-studio-monitor[data-columns="3"] {
+    --monitor-columns: 3;
+  }
+  .pk-studio-monitor[data-rows="2"] {
+    --monitor-rows: 2;
+  }
+  .pk-studio-monitor[data-rows="3"] {
+    --monitor-rows: 3;
+  }
+
+  /* One output: its picture as large as the panel allows, centered; its controls are in the panel's header. */
+  .pk-studio-monitor[data-single] {
+    place-content: center;
+    grid-template-columns: min(var(--monitor-across), calc(var(--monitor-down) * 16 / 9));
+  }
+
+  /* A multiview: each card the width its column or its row allows a 16:9 picture, whichever is less. */
+  .pk-studio-monitor[data-columns] {
+    --monitor-width: min(
+      calc((var(--monitor-across) - var(--pk-2) * (var(--monitor-columns) - 1)) / var(--monitor-columns)),
+      calc(
+        (
+            (var(--monitor-down) - var(--pk-2) * (var(--monitor-rows) - 1)) / var(--monitor-rows) -
+              var(--monitor-caption)
+          ) *
+          16 / 9
+      )
+    );
+    grid-template-columns: repeat(var(--monitor-columns), var(--monitor-width));
+    place-content: center;
+  }
+
+  /* On a phone, and stacked on a narrow screen, a monitor is as tall as its pictures at full width. */
+  .pk-studio-phone .pk-studio-monitor-frame {
+    container-type: inline-size;
+    block-size: auto;
+  }
+  .pk-studio-phone .pk-studio-monitor {
+    block-size: auto;
+  }
+  .pk-studio-phone :is(.pk-studio-monitor[data-single], .pk-studio-monitor[data-columns]) {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .pk-studio-phone .pk-studio-monitor__free {
+    display: none;
+  }
+  @container studio (width < 760px) {
+    .pk-studio-monitor-frame {
+      container-type: inline-size;
+      block-size: auto;
+    }
+    .pk-studio-monitor {
+      block-size: auto;
+    }
+    .pk-studio-monitor[data-single],
+    .pk-studio-monitor[data-columns] {
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .pk-studio-monitor__free {
+      display: none;
+    }
+  }
+
+  .pk-studio-monitor,
+  .pk-studio-monitor__tile,
+  .pk-studio-monitor__name {
+    --tally: var(--live-tally-stream);
+  }
+  :is(
+    .pk-studio-monitor,
+    .pk-studio-monitor__tile,
+    .pk-studio-monitor__screen,
+    .pk-studio-monitor__name
+  )[data-tally="preview"] {
+    --tally: var(--live-tally-preview);
+  }
+  :is(
+    .pk-studio-monitor,
+    .pk-studio-monitor__tile,
+    .pk-studio-monitor__screen,
+    .pk-studio-monitor__name
+  )[data-tally="program"] {
+    --tally: var(--live-tally-program);
+  }
+  :is(
+    .pk-studio-monitor,
+    .pk-studio-monitor__tile,
+    .pk-studio-monitor__screen,
+    .pk-studio-monitor__name
+  )[data-tally="aux"] {
+    --tally: var(--live-tally-aux);
+  }
+  /* A single monitor's header: its output, then the layout it is drawn in, on the left. */
+  .pk-studio-monitor__heading {
+    display: flex;
+    flex: 1;
+    align-items: center;
+    gap: var(--pk-2);
+    min-inline-size: 0;
+  }
+  .pk-studio-monitor__heading > .pk-studio-panel__title {
+    flex: none;
+  }
+  .pk-studio-monitor__name {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-2);
+  }
+
+  /* A multiview card: the picture with its own header bar, edged in its tally; its header fits its own width. */
+  .pk-studio-monitor__tile {
+    container: monitor-card / inline-size;
+    display: flex;
+    flex-direction: column;
+    min-inline-size: 0;
+    margin: 0;
+    overflow: hidden;
+    border: 2px solid var(--tally);
+    border-radius: var(--pk-radius);
+    background: var(--pk-surface-sunk);
+  }
+  .pk-studio-monitor__tile > .pk-studio-monitor__screen {
+    border: 0;
+    border-radius: 0;
+  }
+  .pk-studio-monitor__caption {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+    box-sizing: border-box;
+    min-block-size: var(--monitor-caption);
+    min-inline-size: 0;
+    padding: 0 var(--pk-1) 0 var(--pk-2);
+    font-size: var(--pk-text-sm);
+  }
+  .pk-studio-monitor__output {
+    display: inline-flex;
+    flex: none;
+    align-items: center;
+    gap: var(--pk-2);
+  }
+  /* The output's tally color as a small dot beside its name; no codes to decode. */
+  .pk-studio-monitor__dot {
+    flex: none;
+    inline-size: 0.6rem;
+    block-size: 0.6rem;
+    border-radius: 50%;
+    background: var(--tally);
+  }
+  /* The switcher abbreviation, PVW or PGM, without the browser's dotted underline. */
+  .pk-studio-monitor__label {
+    flex: none;
+    font-weight: 600;
+    text-decoration: none;
+  }
+  .pk-studio-monitor__purpose {
+    flex: 1;
+    min-inline-size: 0;
+    overflow: hidden;
+    color: var(--pk-ink-muted);
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .pk-studio-monitor__controls {
+    display: flex;
+    flex: none;
+    align-items: center;
+    gap: var(--pk-1);
+    margin-inline-start: auto;
+  }
+  /*
+   * On a small card the purpose goes first, then the layout's name, then the
+   * output's name beside its tag; Clear and full screen always stay.
+   */
+  @container monitor-card (width < 24rem) {
+    .pk-studio-monitor__caption .pk-studio-monitor__purpose {
+      display: none;
+    }
+  }
+  @container monitor-card (width < 18rem) {
+    .pk-studio-monitor__caption .pk-studio-monitor__layout {
+      display: none;
+    }
+  }
+
+  .pk-studio-monitor__screen {
+    position: relative;
+    display: grid;
+    place-items: center;
+    aspect-ratio: 16 / 9;
+    overflow: hidden;
+    border: 2px solid var(--tally, var(--pk-line));
+    border-radius: var(--pk-radius);
+    background: var(--pk-chrome-deep);
+    cursor: zoom-in;
+  }
+  .pk-studio-monitor__screen > * {
+    grid-area: 1 / 1;
+    inline-size: 100%;
+    block-size: 100%;
+  }
+  /* An output with nothing on it: a quiet line in the dark picture itself, no card inside the frame. */
+  .pk-studio-monitor__idle {
+    display: grid;
+    place-items: center;
+    margin: 0;
+    padding: var(--pk-2);
+    color: color-mix(in srgb, var(--pk-on-solid) 62%, transparent);
+    font-size: var(--pk-text-sm);
+    text-align: center;
+  }
+
+  /* A free place: as large as a card, dashed, offering another output. */
+  .pk-studio-monitor__free {
+    display: grid;
+    place-items: center;
+    box-sizing: border-box;
+    aspect-ratio: 16 / 10.25;
+    border: 2px dashed var(--pk-line);
+    border-radius: var(--pk-radius);
+  }
+  .pk-studio-monitor__add {
+    gap: var(--pk-1);
+    padding: var(--pk-1) var(--pk-2);
+    color: var(--pk-ink-muted);
+    font: inherit;
+    font-size: var(--pk-text-sm);
+  }
+  .pk-studio-monitor__add:hover {
+    color: var(--pk-ink);
+  }
+
+  .pk-studio-monitor__picker {
+    gap: var(--pk-1);
+    padding: var(--pk-1);
+    font: inherit;
+    white-space: nowrap;
+  }
+  /* The layout, named quietly; it gives way first on a narrow header. */
+  .pk-studio-monitor__layout {
+    flex: 0 1 auto;
+    min-inline-size: 0;
+    min-block-size: 1.5rem;
+    overflow: hidden;
+    color: var(--pk-ink-muted);
+    text-overflow: ellipsis;
+  }
+  /* Full screen, an output takes the whole window at 16:9, its title bar the only chrome. */
+  .pk-dialog.pk-studio-monitor__viewer {
+    max-inline-size: none;
+    max-height: 100dvh;
+    width: min(100vw, calc((100dvh - 3.5rem) * 16 / 9));
+    margin: auto;
+    padding: 0;
+  }
+  .pk-studio-monitor__viewer .pk-studio-monitor__screen {
+    border-radius: 0;
+    cursor: default;
+  }
+}

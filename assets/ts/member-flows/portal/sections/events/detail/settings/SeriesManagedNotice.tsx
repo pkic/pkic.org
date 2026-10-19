@@ -25,7 +25,6 @@ export function SeriesManagedNotice({ event }: { event: Pick<EventDetail, "owner
             // a new tab and say where it goes.
             <div class="pk-cluster">
               <ButtonLink
-                size="sm"
                 href={`#/groups/${encodeURIComponent(ownerGroupId)}/meetings/${encodeURIComponent(seriesId)}`}
               >
                 Open meeting series <span aria-hidden="true">→</span>

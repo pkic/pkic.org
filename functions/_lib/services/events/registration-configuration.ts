@@ -41,6 +41,7 @@ export async function getEventRegistrationConfiguration(
     registrationPolicy: normalizeEventRegistrationPolicy(event.registration_mode),
     purpose,
     form,
+    sessionTypes: resolveEventSessionTypes(event.settings_json),
     allowedSessionTypes: resolveEventSessionTypes(event.settings_json).map((sessionType) => sessionType.label),
     requiredTerms: requiredTerms.map(requiredTermReadModel),
     eventDays: eventDayReadModels(eventDays, registeredCounts),

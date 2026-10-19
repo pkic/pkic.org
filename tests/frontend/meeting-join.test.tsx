@@ -43,16 +43,16 @@ function fieldOf(control: HTMLElement): HTMLElement {
 }
 
 /** The control a visible label points at, found the way a reader would. */
-function controlLabelled(root: ParentNode, label: string): HTMLInputElement {
+function controlLabeled(root: ParentNode, label: string): HTMLInputElement {
   const match = [...root.querySelectorAll("label")].find((candidate) => candidate.textContent?.includes(label));
   const control = match?.htmlFor ? root.querySelector<HTMLInputElement>(`#${match.htmlFor}`) : null;
-  if (!control) throw new Error(`No control labelled ${label}`);
+  if (!control) throw new Error(`No control labeled ${label}`);
   return control;
 }
 
-function buttonLabelled(root: ParentNode, label: string): HTMLButtonElement {
+function buttonLabeled(root: ParentNode, label: string): HTMLButtonElement {
   const found = [...root.querySelectorAll("button")].find((candidate) => candidate.textContent?.includes(label));
-  if (!found) throw new Error(`No button labelled ${label}`);
+  if (!found) throw new Error(`No button labeled ${label}`);
   return found;
 }
 
@@ -81,47 +81,69 @@ describe("secure meeting join browser flow", () => {
     expect(replaceState).toHaveBeenCalledWith({}, "", "/meetings/join/?occurrence=occurrence-id");
   });
 
-  it("keeps a personal link reloadable and requires verification on a new browser", async () => {
-    const token = `m2.${"A".repeat(22)}.${"B".repeat(22)}.0.${"C".repeat(22)}`;
-    expect(parsePersonalMeetingLinkFragment(`#token=${token}`)).toBe(token);
-    expect(parsePersonalMeetingLinkFragment(`#p=${token}`)).toBeNull();
-    const requests: string[] = [];
-    vi.stubGlobal(
-      "fetch",
-      vi.fn(async (input: RequestInfo | URL) => {
-        const url = String(input);
-        requests.push(url);
-        if (url === "/api/v1/meetings/links/resolve")
-          return jsonResponse({
-            occurrenceId: occurrence.id,
-            seriesId: occurrence.seriesId,
-            eventName: occurrence.eventName,
-            startsAt: occurrence.startsAt,
-            name: "Paul",
-          });
-        if (url === `/api/v1/meetings/occurrences/${occurrence.id}/links/session`)
-          return jsonResponse({
-            status: "verify",
-            verification: "member",
-            occurrenceId: occurrence.id,
-            eventName: occurrence.eventName,
-            name: "Paul",
-          });
-        throw new Error(`Unexpected request: ${url}`);
-      }),
-    );
-    const container = document.createElement("div");
-    document.body.append(container);
-    mounted.push(container);
-    await act(async () => render(<App invitation={null} personalToken={token} />, container));
-    await vi.waitFor(() => expect(container.textContent).toContain("Welcome, Paul"));
-    expect(container.textContent).toContain("Verify and continue");
-    expect(container.textContent).toContain("Not Paul?");
-    expect(requests).toEqual([
-      "/api/v1/meetings/links/resolve",
-      `/api/v1/meetings/occurrences/${occurrence.id}/links/session`,
-    ]);
-  });
+  it.each([true, false])(
+    "keeps a personal link reloadable and requires verification on a new browser (clear succeeds=%s)",
+    async (clearSucceeds) => {
+      const token = `m2.${"A".repeat(22)}.${"B".repeat(22)}.0.${"C".repeat(22)}`;
+      expect(parsePersonalMeetingLinkFragment(`#token=${token}`)).toBe(token);
+      expect(parsePersonalMeetingLinkFragment(`#p=${token}`)).toBeNull();
+      const requests: string[] = [];
+      const assign = vi.fn();
+      vi.stubGlobal("location", { ...window.location, assign });
+      vi.stubGlobal(
+        "fetch",
+        vi.fn(async (input: RequestInfo | URL, init?: RequestInit) => {
+          const url = String(input);
+          requests.push(url);
+          if (url === "/api/v1/meetings/links/resolve")
+            return jsonResponse({
+              occurrenceId: occurrence.id,
+              seriesId: occurrence.seriesId,
+              eventName: occurrence.eventName,
+              startsAt: occurrence.startsAt,
+              name: "Paul",
+            });
+          if (url === `/api/v1/meetings/occurrences/${occurrence.id}/links/session` && init?.method === "DELETE")
+            return clearSucceeds ? new Response(null, { status: 204 }) : jsonResponse({ error: "refused" }, 403);
+          if (url === "/api/v1/auth/logout") return jsonResponse({ success: true, outcome: "no_current_session" });
+          if (url === `/api/v1/meetings/occurrences/${occurrence.id}/links/session`)
+            return jsonResponse({
+              status: "verify",
+              verification: "member",
+              occurrenceId: occurrence.id,
+              eventName: occurrence.eventName,
+              name: "Paul",
+            });
+          throw new Error(`Unexpected request: ${url}`);
+        }),
+      );
+      const container = document.createElement("div");
+      document.body.append(container);
+      mounted.push(container);
+      await act(async () => render(<App invitation={null} personalToken={token} />, container));
+      await vi.waitFor(() => expect(container.textContent).toContain("Welcome, Paul"));
+      expect(container.textContent).toContain("Verify and continue");
+      expect(container.textContent).toContain("Not Paul?");
+      expect(requests).toEqual([
+        "/api/v1/meetings/links/resolve",
+        `/api/v1/meetings/occurrences/${occurrence.id}/links/session`,
+      ]);
+      await act(async () => buttonLabeled(container, "Verify and continue").click());
+      if (clearSucceeds) {
+        await vi.waitFor(() => expect(assign).toHaveBeenCalledWith(`/portal/#/meeting-link/${token}`));
+        expect(requests.slice(2)).toEqual([
+          `/api/v1/meetings/occurrences/${occurrence.id}/links/session`,
+          "/api/v1/auth/logout",
+        ]);
+      } else {
+        await vi.waitFor(() => expect(container.textContent).toContain("Meeting entry is temporarily unavailable."));
+        expect(assign).not.toHaveBeenCalled();
+        expect(requests.slice(2)).toEqual([`/api/v1/meetings/occurrences/${occurrence.id}/links/session`]);
+        expect(requests).not.toContain("/api/v1/auth/logout");
+        expect(buttonLabeled(container, "Verify and continue").disabled).toBe(false);
+      }
+    },
+  );
 
   it("renders only the server-authored identity and submits checked current terms", () => {
     const onJoin = vi.fn();
@@ -225,7 +247,7 @@ describe("secure meeting join browser flow", () => {
       checkbox.dispatchEvent(new Event("change", { bubbles: true }));
     });
     await act(async () => {
-      buttonLabelled(container, "Agree and join meeting").click();
+      buttonLabeled(container, "Agree and join meeting").click();
     });
     await vi.waitFor(() => expect(assign).toHaveBeenCalled());
 
@@ -277,7 +299,7 @@ describe("secure meeting join browser flow", () => {
 
     // Located by its label rather than by a hard-coded id: the Field owns
     // the id/for pair now, and a name will not break the next time either.
-    const code = controlLabelled(container, "Verification code");
+    const code = controlLabeled(container, "Verification code");
     // The control carries the field's ARIA, not just its label.
     expect(code.getAttribute("aria-describedby")).toBeTruthy();
     expect(code.required).toBe(true);
@@ -286,7 +308,7 @@ describe("secure meeting join browser flow", () => {
       code.dispatchEvent(new Event("input", { bubbles: true }));
     });
     await act(async () => {
-      buttonLabelled(container, "Verify invitation").click();
+      buttonLabeled(container, "Verify invitation").click();
     });
     await vi.waitFor(() => expect(container.textContent).toContain("Canonical meeting entry"));
 
@@ -442,7 +464,7 @@ describe("secure meeting join browser flow", () => {
   }
 
   async function typeCode(container: HTMLElement, value: string): Promise<HTMLInputElement> {
-    const code = controlLabelled(container, "Verification code");
+    const code = controlLabeled(container, "Verification code");
     code.value = value;
     await act(async () => {
       code.dispatchEvent(new Event("input", { bubbles: true }));
@@ -462,9 +484,9 @@ describe("secure meeting join browser flow", () => {
     expect(code.getAttribute("aria-invalid")).toBe("true");
     const message = container.querySelector(`#${code.getAttribute("aria-describedby") ?? ""}`);
     expect(message?.getAttribute("role")).toBe("alert");
-    expect(buttonLabelled(container, "Verify invitation").disabled).toBe(true);
+    expect(buttonLabeled(container, "Verify invitation").disabled).toBe(true);
     await act(async () => {
-      buttonLabelled(container, "Verify invitation").click();
+      buttonLabeled(container, "Verify invitation").click();
     });
     expect(
       fetchMock.mock.calls.filter(([, init]) => (init as RequestInit | undefined)?.method === "PATCH"),
@@ -474,7 +496,7 @@ describe("secure meeting join browser flow", () => {
     await typeCode(container, "abcdefgh");
     expect(code.value).toBe("ABCDEFGH");
     expect(fieldOf(code).classList.contains("pk-field--ok")).toBe(true);
-    expect(buttonLabelled(container, "Verify invitation").disabled).toBe(false);
+    expect(buttonLabeled(container, "Verify invitation").disabled).toBe(false);
   });
 
   it("attaches a code the server refuses by name to the control it is about", async () => {
@@ -493,7 +515,7 @@ describe("secure meeting join browser flow", () => {
 
     const code = await typeCode(container, "WRNGCDEX");
     await act(async () => {
-      buttonLabelled(container, "Verify invitation").click();
+      buttonLabeled(container, "Verify invitation").click();
     });
     await vi.waitFor(() => expect(container.textContent).toContain("That code is not correct."));
 
@@ -513,7 +535,7 @@ describe("secure meeting join browser flow", () => {
 
     const code = await typeCode(container, "WRNGCDEX");
     await act(async () => {
-      buttonLabelled(container, "Verify invitation").click();
+      buttonLabeled(container, "Verify invitation").click();
     });
     await vi.waitFor(() => expect(container.textContent).toContain("The challenge expired."));
 

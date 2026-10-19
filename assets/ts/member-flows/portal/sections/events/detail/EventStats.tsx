@@ -1,3 +1,6 @@
+import { formatNumber } from "../../../../../../shared/format-number";
+import { type ClockZone } from "../../../../../../shared/event-clock";
+import { lazy, Suspense } from "preact/compat";
 import { Alert } from "../../../../../ui/Alert";
 import { Badge } from "../../../../../ui/Badge";
 import { Button } from "../../../../../ui/Button";
@@ -15,10 +18,16 @@ import { getJson } from "../../../../../shared/api-client";
 import { eventAnalyticsResponseSchema } from "../../../../../../shared/schemas/event-analytics";
 import { ATTENDANCE_TYPE_LABELS, attendanceTypeLabel } from "../../../../../shared/attendance";
 import { StackedBarChart } from "../../../../../ui/StackedBarChart";
+import { formatDayAndMonth } from "../../../../../../shared/format-date";
 import { isoDateRange } from "../../../../../components/analytics/date-range";
 import type { EventStatsResponse } from "../types";
 import { useData } from "../../../../../hooks/useData";
 import { AttendanceChangeDashboard } from "./AttendanceChangeDashboard";
+import { SectionHeading } from "../../../../../ui/SectionHeading";
+const SessionDemandReport = lazy(() =>
+  import("./SessionDemandReport").then((module) => ({ default: module.SessionDemandReport })),
+);
+const Promoters = lazy(() => import("./Promoters").then((module) => ({ default: module.Promoters })));
 
 /**
  * Chart fills read the state tokens rather than brand hexes, so the bars stay
@@ -54,27 +63,112 @@ interface WaitlistDayRow {
 }
 
 /** The page's sections, each a routed tab (#118). */
-type StatsSection = "overview" | "attendance" | "registrations" | "invitations" | "calendar";
+type StatsSection =
+  | "overview"
+  | "registration-changes"
+  | "registrations"
+  | "invitations"
+  | "calendar"
+  | "promoters"
+  | "session-demand";
 const STATS_SECTIONS: ReadonlyArray<{ key: StatsSection; label: string }> = [
   { key: "overview", label: "Overview" },
-  { key: "attendance", label: "Attendance" },
+  { key: "registration-changes", label: "Registration changes" },
   { key: "registrations", label: "Registrations" },
   { key: "invitations", label: "Invitations" },
   { key: "calendar", label: "Calendar" },
+  { key: "promoters", label: "Promoters" },
+  { key: "session-demand", label: "Session demand" },
 ];
+
+const AttendanceReport = lazy(() =>
+  import("./agenda/AttendanceReport").then((module) => ({ default: module.AttendanceReport })),
+);
+type AttendanceAccess = { timeZone: ClockZone; canRead: boolean; canImport: boolean; canCorrect: boolean };
 
 export function EventStats({
   slug,
   section,
+  subTab,
   basePath = `/events/${encodeURIComponent(slug)}/stats`,
+  canViewAnalytics = true,
+  attendance,
+  legacyAttendanceBasePath,
+}: {
+  slug: string;
+  section?: string;
+  subTab?: string;
+  basePath?: string;
+  canViewAnalytics?: boolean;
+  attendance?: AttendanceAccess;
+  legacyAttendanceBasePath?: string;
+}) {
+  const [location, navigate] = usePortalHashLocation();
+  const canViewAttendance = Boolean(attendance?.canRead || attendance?.canImport);
+  const sections = [
+    ...(canViewAnalytics ? STATS_SECTIONS : []),
+    ...(canViewAttendance ? [{ key: "attendance", label: "Attendance" }] : []),
+  ];
+  const active = sections.some((item) => item.key === section) ? section! : sections[0]?.key;
+  const hrefFor = (key: string) => (key === "overview" ? basePath : `${basePath}/${key}`);
+  const attendanceBase = `${basePath}/attendance`;
+  const requestedAttendanceBase =
+    legacyAttendanceBasePath && location.startsWith(`${legacyAttendanceBasePath}/`)
+      ? legacyAttendanceBasePath
+      : attendanceBase;
+  const attendanceParts = location.startsWith(`${requestedAttendanceBase}/`)
+    ? location
+        .slice(requestedAttendanceBase.length + 1)
+        .split("/")
+        .filter(Boolean)
+        .map(decodeURIComponent)
+    : [];
+  return (
+    <div class="pk pk-stack">
+      <Tabs
+        label="Analytics sections"
+        items={sections}
+        active={active ?? ""}
+        onChange={(key) => navigate(hrefFor(key))}
+        hrefFor={hrefFor}
+      />
+      {active === "attendance" && attendance && (
+        <Suspense fallback={<Spinner label="Loading attendance…" />}>
+          <AttendanceReport
+            slug={slug}
+            basePath={attendanceBase}
+            section={attendanceParts[0]}
+            detailId={attendanceParts[1]}
+            detailTab={attendanceParts[2]}
+            {...attendance}
+          />
+        </Suspense>
+      )}
+      {active === "session-demand" && (
+        <Suspense fallback={<Spinner label="Loading session demand…" />}>
+          <SessionDemandReport slug={slug} clock={attendance?.timeZone} />
+        </Suspense>
+      )}
+      {active === "promoters" && (
+        <Suspense fallback={<Spinner label="Loading promoters…" />}>
+          <Promoters slug={slug} subTab={subTab} basePath={`${basePath}/promoters`} />
+        </Suspense>
+      )}
+      {active && !["attendance", "session-demand", "promoters"].includes(active) && canViewAnalytics && (
+        <EventStatsData slug={slug} section={active} />
+      )}
+    </div>
+  );
+}
+
+function EventStatsData({
+  slug,
+  section,
 }: {
   slug: string;
   /** The routed section below the tab; the overview when absent. */
   section?: string;
-  /** Where the sections live, so the tabs stay inside the workspace that rendered them. */
-  basePath?: string;
 }) {
-  const [, navigate] = usePortalHashLocation();
   const {
     data: stats,
     loading,
@@ -139,13 +233,15 @@ export function EventStats({
 
   /**
    * The Bootstrap surface tinted two stat values amber to mark them
-   * actionable. StatCard has no warning variant by design — colour alone is
+   * actionable. StatCard has no warning variant by design — color alone is
    * not a signal — so the same meaning is stated in words, once, in the
    * system's own device for it.
    */
   const needsAttention = [
-    waitlistedAttendees > 0 ? `${String(waitlistedAttendees)} attendees are on an active day waitlist` : null,
-    pendingConfirmation > 0 ? `${String(pendingConfirmation)} registrations have not confirmed their email` : null,
+    waitlistedAttendees > 0 ? `${formatNumber(waitlistedAttendees)} attendees are on an active day waitlist` : null,
+    pendingConfirmation > 0
+      ? `${formatNumber(pendingConfirmation)} registrations have not confirmed their email`
+      : null,
   ].filter((item): item is string => item !== null);
 
   // Growth chart
@@ -167,6 +263,9 @@ export function EventStats({
 
   // By-day chart
   const dayLabels = [...new Set(registrationsByEventDay.map((r) => r.label ?? r.day_date))];
+  const dayDates = dayLabels.map(
+    (label) => registrationsByEventDay.find((row) => (row.label ?? row.day_date) === label)!.day_date,
+  );
   const dayAttTypes = [...new Set(registrationsByEventDay.map((r) => r.attendance_type))];
   const dayIdx: Record<string, Record<string, { accepted: number; pending: number }>> = {};
   for (const r of registrationsByEventDay) {
@@ -223,13 +322,8 @@ export function EventStats({
 
   // The sections a reader can open: the calendar only once something has
   // been answered, and the invitation section only when invitations exist.
-  const hasInvites = Boolean(s.invites?.attendee || s.invites?.speaker);
-  const hasRsvp = (s.rsvp?.total ?? 0) > 0;
-  const sections = STATS_SECTIONS.filter(
-    ({ key }) => (key !== "calendar" || hasRsvp) && (key !== "invitations" || hasInvites),
-  );
+  const sections = STATS_SECTIONS;
   const active: StatsSection = sections.find(({ key }) => key === section)?.key ?? "overview";
-  const hrefFor = (key: string) => (key === "overview" ? basePath : `${basePath}/${key}`);
 
   return (
     <div class="pk pk-stack">
@@ -237,18 +331,10 @@ export function EventStats({
           moving, how registrations arrived, how invitations fared. Each is a
           section with its own address rather than a column of every panel
           at once (#118). */}
-      <Tabs
-        label="Analytics sections"
-        items={sections}
-        active={active}
-        onChange={(key) => navigate(hrefFor(key))}
-        hrefFor={hrefFor}
-      />
-
       {active === "overview" && (
         <>
           <Panel>
-            <PanelHeader title="Event dashboard" headingLevel={2}>
+            <PanelHeader title="Event dashboard">
               <Button onClick={() => void reload()} aria-label="Refresh dashboard" icon>
                 <IconRefresh />
               </Button>
@@ -259,30 +345,34 @@ export function EventStats({
                     unconfirmed — beside the label that says so in words (#110). */}
                 <StatCard
                   label="Accepted attendees"
-                  value={String(acceptedAttendees)}
+                  value={formatNumber(acceptedAttendees)}
                   note="not on an active waitlist"
                   tone="ok"
                 />
                 <StatCard
                   label="Waitlisted attendees"
-                  value={String(waitlistedAttendees)}
+                  value={formatNumber(waitlistedAttendees)}
                   note="unique people with an active day waitlist"
                   tone={waitlistedAttendees > 0 ? "warn" : "neutral"}
                 />
                 <StatCard
                   label="Pending confirmation"
-                  value={String(pendingConfirmation)}
+                  value={formatNumber(pendingConfirmation)}
                   note="email not confirmed"
                   tone={pendingConfirmation > 0 ? "info" : "neutral"}
                 />
-                <StatCard label="Total registrations" value={String(s.registrations?.total ?? 0)} note="all statuses" />
+                <StatCard
+                  label="Total registrations"
+                  value={formatNumber(s.registrations?.total ?? 0)}
+                  note="all statuses"
+                />
                 {s.proposals && (
-                  <StatCard label="Proposals" value={String(s.proposals.total)} note="all proposal statuses" />
+                  <StatCard label="Proposals" value={formatNumber(s.proposals.total)} note="all proposal statuses" />
                 )}
                 <StatCard
                   label="Sponsor consent"
-                  value={String(consentGranted)}
-                  note={`${String(consentPct)}% of ${String(consentTotal)}`}
+                  value={formatNumber(consentGranted)}
+                  note={`${formatNumber(consentPct)}% of ${formatNumber(consentTotal)}`}
                   tone="info"
                 />
               </div>
@@ -296,15 +386,15 @@ export function EventStats({
           </Panel>
 
           <Panel>
-            <PanelHeader title="Attendance status" headingLevel={2} />
+            <PanelHeader title="Attendance status" />
             <PanelBody>
               <div class="pk-stat-row">
                 {attendanceStatuses.map(({ type, label, accepted, waitlisted }) => (
                   <StatCard
                     key={type}
                     label={`${label} accepted`}
-                    value={String(accepted)}
-                    note={waitlisted > 0 ? `+${String(waitlisted)} waitlisted` : "No active waitlist"}
+                    value={formatNumber(accepted)}
+                    note={waitlisted > 0 ? `+${formatNumber(waitlisted)} waitlisted` : "No active waitlist"}
                     tone={waitlisted > 0 ? "warn" : undefined}
                   />
                 ))}
@@ -314,17 +404,22 @@ export function EventStats({
 
           {dayLabels.length > 0 && (
             <Panel>
-              <PanelHeader title="Registrations by event day" headingLevel={2} />
+              <PanelHeader title="Registrations by event day" />
               <PanelBody class="pk-stack pk-stack--snug">
                 {/* The chart's own legend names each series; this key explains what
                     the two shades within a series mean. The badge dot repeats the
-                    tone as a shape, so it does not rest on colour alone. */}
+                    tone as a shape, so it does not rest on color alone. */}
                 <div class="pk-cluster">
                   <Badge tone="ok">solid = accepted</Badge>
                   <Badge tone="neutral">light = pending/waitlisted</Badge>
                 </div>
                 {daySeries.length > 0 ? (
-                  <StackedBarChart labels={dayLabels} series={daySeries} caption="Registrations by event day" />
+                  <StackedBarChart
+                    labels={dayDates.map(formatDayAndMonth)}
+                    isoLabels={dayDates}
+                    series={daySeries}
+                    caption="Registrations by event day"
+                  />
                 ) : (
                   <EmptyState title="No registrations on any event day yet." />
                 )}
@@ -334,12 +429,12 @@ export function EventStats({
         </>
       )}
 
-      {active === "attendance" && <AttendanceChangeDashboard slug={slug} changes={attendanceChanges} />}
+      {active === "registration-changes" && <AttendanceChangeDashboard slug={slug} changes={attendanceChanges} />}
 
       {active === "registrations" && (
         <>
           <Panel>
-            <PanelHeader title="Registrations received by day" headingLevel={2} />
+            <PanelHeader title="Registrations received by day" />
             <PanelBody>
               {growthDates.length > 0 && growthSeries.length > 0 ? (
                 <StackedBarChart
@@ -356,24 +451,24 @@ export function EventStats({
 
           {waitlistDayRows.length > 0 && (
             <Panel>
-              <PanelHeader title="Open waitlist by event day" headingLevel={2} />
+              <PanelHeader title="Open waitlist by event day" />
               <PanelBody class="pk-stack">
                 <div class="pk-stat-row">
                   <StatCard
                     label="Open day entries"
-                    value={String(waitlistOpenCount)}
+                    value={formatNumber(waitlistOpenCount)}
                     note="waiting + offered"
                     tone={waitlistOpenCount > 0 ? "warn" : "neutral"}
                   />
                   <StatCard
                     label="Offers awaiting response"
-                    value={String(waitlistOfferedCount)}
+                    value={formatNumber(waitlistOfferedCount)}
                     note="included in open entries"
                     tone={waitlistOfferedCount > 0 ? "info" : "neutral"}
                   />
                   <StatCard
                     label="Accepted from waitlist"
-                    value={String(waitlistAcceptedCount)}
+                    value={formatNumber(waitlistAcceptedCount)}
                     note="historical total"
                     tone="ok"
                   />
@@ -403,7 +498,7 @@ export function EventStats({
             const title = type === "attendee" ? "Attendee invites" : "Speaker invites";
             return (
               <Panel key={type} aria-label={title}>
-                <PanelHeader title={title} headingLevel={2} />
+                <PanelHeader title={title} />
                 <PanelBody class="pk-stack">
                   <div
                     dangerouslySetInnerHTML={{
@@ -420,7 +515,9 @@ export function EventStats({
                   />
                   {declineReasons.length > 0 && (
                     <section aria-label={`${title}: decline reasons`} class="pk-stack pk-stack--snug">
-                      <h3 class="pk-panel__title">Decline reasons</h3>
+                      <SectionHeading level={4} class="pk-panel__title">
+                        Decline reasons
+                      </SectionHeading>
                       <div
                         dangerouslySetInnerHTML={{
                           __html: statusBars(
@@ -445,10 +542,12 @@ export function EventStats({
 
       {active === "calendar" && (
         <Panel>
-          <PanelHeader title={`Calendar RSVP (${String(s.rsvp.total)})`} headingLevel={2} />
+          <PanelHeader title={`Calendar RSVP (${formatNumber(s.rsvp.total)})`} />
           <PanelBody>
             <div class="pk-stack">
-              <h3 class="pk-panel__title">By status</h3>
+              <SectionHeading level={4} class="pk-panel__title">
+                By status
+              </SectionHeading>
               <div
                 dangerouslySetInnerHTML={{
                   __html: statusBars(
@@ -459,7 +558,9 @@ export function EventStats({
               />
               {rsvpActionRows.length > 0 && (
                 <>
-                  <h3 class="pk-panel__title">Actions taken</h3>
+                  <SectionHeading level={4} class="pk-panel__title">
+                    Actions taken
+                  </SectionHeading>
                   <div
                     dangerouslySetInnerHTML={{
                       __html: statusBars(

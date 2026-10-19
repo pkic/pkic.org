@@ -1,0 +1,21 @@
+@layer components {
+  .pk-live-poll-status {
+    display: inline-flex;
+    align-items: center;
+    gap: var(--pk-1);
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+    white-space: nowrap;
+  }
+  .pk-live-poll-status[data-status="open"] {
+    color: var(--pk-ink);
+    font-weight: 600;
+  }
+  .pk-live-poll-status[data-status="open"]::before {
+    content: "";
+    inline-size: 0.5rem;
+    block-size: 0.5rem;
+    border-radius: 50%;
+    background: var(--pk-accent);
+  }
+}

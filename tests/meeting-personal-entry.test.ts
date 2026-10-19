@@ -1,7 +1,7 @@
 import { grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
 import { beforeEach, describe, expect, it } from "vitest";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { configureMeetingOccurrence } from "./helpers/meeting-occurrence";
 import { createGroupEventSeries, inviteOccurrenceGuest } from "../functions/_lib/services/event-series";
 import {

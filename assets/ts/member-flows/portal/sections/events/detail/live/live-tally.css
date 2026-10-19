@@ -1,0 +1,13 @@
+/*
+ * Tally colors: what a broadcast crew reads at a glance. Preview is the
+ * ok tone, Program the danger tone, the auxiliary outputs the info tone and
+ * the livestream a neutral rule. They follow the site theme like every token.
+ */
+@layer components {
+  :root {
+    --live-tally-preview: var(--pk-ok);
+    --live-tally-program: var(--pk-danger);
+    --live-tally-aux: var(--pk-info);
+    --live-tally-stream: var(--pk-line-strong);
+  }
+}

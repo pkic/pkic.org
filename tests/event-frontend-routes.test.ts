@@ -2,11 +2,11 @@ import { eventFormsResponseSchema } from "../assets/shared/schemas/forms";
 import { describe, it, expect, beforeEach } from "vitest";
 import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
-import { createContext, seedEventAndAdmin } from "./helpers/context";
+import { seedEventAndAdmin } from "./helpers/context";
+import { callApi } from "./helpers/app";
 import { createReferralCode } from "../functions/_lib/services/referrals";
 import { resolveEventFrontendRoutes } from "../functions/_lib/services/events";
-import { onRequestGet as referralRedirect } from "../functions/r/[code]";
-import app from "../functions/router";
+import app from "./helpers/app";
 
 describe("event frontend routes and hydration contracts", () => {
   beforeEach(async () => {
@@ -137,7 +137,7 @@ describe("event frontend routes and hydration contracts", () => {
       length: 7,
     });
 
-    const response = await referralRedirect(createContext(env, new Request(`https://app.test/r/${code}`), { code }));
+    const response = await callApi(env, `/r/${code}`);
     const html = await response.text();
 
     expect(response.status).toBe(200);
@@ -165,7 +165,7 @@ describe("event frontend routes and hydration contracts", () => {
     expect(payload.requiredTerms[0]).toHaveProperty("termKey");
   });
 
-  it("honours an explicit form link over the current active form", async () => {
+  it("honors an explicit form link over the current active form", async () => {
     const { eventId } = await seedEventAndAdmin(env.DB);
     const registrationLinkedKey = "reg-linked";
     const registrationNewestKey = "reg-newest";

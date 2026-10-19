@@ -59,6 +59,9 @@ export interface EventUpsertPayload {
   inviteLimitAttendee?: number;
   inviteLimitSpeakerNomination?: number;
   settings?: Record<string, unknown>;
+  /** Where the event takes place; an update leaves a field it omits unchanged. */
+  city?: string | null;
+  country?: string | null;
   /** Only portal/integration event creation supplies group ownership metadata. */
   ownerGroupId?: string;
   profileKey?: string;
@@ -94,8 +97,8 @@ export function prepareEventCreateStatement(
         `INSERT INTO events (
           id, slug, name, timezone, starts_at, ends_at, source_path, base_path, capacity_in_person,
           registration_mode, visibility, invite_limit_attendee, invite_limit_speaker_nomination, settings_json, created_at, updated_at,
-          owner_group_id, profile_key, source_mode, links_json
-        ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          owner_group_id, profile_key, source_mode, links_json, city, country
+        ) VALUES (?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .bind(
         eventId,
@@ -116,6 +119,8 @@ export function prepareEventCreateStatement(
         payload.profileKey ?? null,
         payload.sourceMode ?? null,
         payload.links === undefined ? null : stringifyJson(payload.links),
+        payload.city ?? null,
+        payload.country ?? null,
       ),
   };
 }
@@ -136,7 +141,7 @@ async function buildEventUpsertStatement(
         `UPDATE events
          SET name = ?, timezone = ?, starts_at = ?, ends_at = ?,
              capacity_in_person = ?, registration_mode = ?, visibility = ?, invite_limit_attendee = ?,
-             invite_limit_speaker_nomination = ?, settings_json = ?, updated_at = ?
+             invite_limit_speaker_nomination = ?, settings_json = ?, city = ?, country = ?, updated_at = ?
          WHERE id = ?`,
       )
       .bind(
@@ -153,6 +158,8 @@ async function buildEventUpsertStatement(
           ...parseJsonSafe<Record<string, unknown>>(existing.settings_json, {}),
           ...(payload.settings ?? {}),
         }),
+        payload.city === undefined ? existing.city : payload.city,
+        payload.country === undefined ? existing.country : payload.country,
         now,
         existing.id,
       ),
@@ -263,7 +270,30 @@ export async function importEvent(
   terms: EventSyncTerms | undefined,
   actorUserId: string,
 ): Promise<{ event: EventRecord; created: boolean }> {
-  const existing = await first<EventRecord>(db, `SELECT ${EVENT_COLUMNS} FROM events WHERE slug = ?`, [payload.slug]);
+  const sourceMatches = payload.basePath
+    ? await all<EventRecord>(
+        db,
+        `SELECT ${EVENT_COLUMNS} FROM events WHERE source_mode = ? AND base_path = ? LIMIT 2`,
+        [source, payload.basePath],
+      )
+    : [];
+  if (sourceMatches.length > 1)
+    throw new AppError(409, "EVENT_SOURCE_IDENTITY_AMBIGUOUS", "Multiple events use this website path.");
+  const slugMatch = await first<EventRecord>(db, `SELECT ${EVENT_COLUMNS} FROM events WHERE slug = ?`, [payload.slug]);
+  if (sourceMatches[0] && slugMatch && sourceMatches[0].id !== slugMatch.id) {
+    throw new AppError(409, "EVENT_SOURCE_CONFLICT", "The authored slug belongs to another event.");
+  }
+  const existing = sourceMatches[0] ?? slugMatch;
+  if (source === "hugo" && !existing && !payload.basePath) {
+    throw new AppError(
+      400,
+      "EVENT_SOURCE_IDENTITY_REQUIRED",
+      "New or unresolved website imports require their stable base path.",
+    );
+  }
+  if (existing?.base_path && payload.basePath && existing.base_path !== payload.basePath) {
+    throw new AppError(409, "EVENT_SOURCE_CONFLICT", "The website path does not match this event's source identity.");
+  }
   if (existing && existing.source_mode !== null && existing.source_mode !== source) {
     throw new AppError(
       409,
@@ -271,7 +301,11 @@ export async function importEvent(
       `Event '${payload.slug}' is owned by the '${existing.source_mode}' source and cannot be imported from '${source}'`,
     );
   }
-  const mutation = await buildEventUpsertStatement(db, { ...payload, sourceMode: source });
+  const mutation = await buildEventUpsertStatement(db, {
+    ...payload,
+    slug: existing?.slug ?? payload.slug,
+    sourceMode: source,
+  });
   const statements: StatementLike[] = [];
   if (existing) {
     statements.push(
@@ -283,7 +317,18 @@ export async function importEvent(
       }),
     );
   }
+  if (payload.basePath)
+    statements.push(
+      prepareAuthorizationGuard(db, {
+        sql: `SELECT 1 WHERE NOT EXISTS (SELECT 1 FROM events WHERE source_mode = ? AND base_path = ? AND id <> ?)`,
+        bindings: [source, payload.basePath, mutation.eventId],
+      }),
+    );
   statements.push(mutation.statement);
+  if (payload.basePath)
+    statements.push(
+      db.prepare("UPDATE events SET base_path = ? WHERE id = ?").bind(payload.basePath, mutation.eventId),
+    );
   if (terms) {
     statements.push(
       ...buildReplaceEventTermsStatements(db, mutation.eventId, "attendee", terms.attendee),
@@ -307,5 +352,5 @@ export async function importEvent(
     }
     throw error;
   }
-  return { event: await getEventBySlug(db, payload.slug), created: !existing };
+  return { event: await getEventById(db, mutation.eventId), created: !existing };
 }

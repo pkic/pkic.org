@@ -7,9 +7,9 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { EventDetail } from "../../assets/ts/member-flows/portal/sections/events/types";
 import { GeneralTab } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/GeneralTab";
 import { Settings } from "../../assets/ts/member-flows/portal/sections/events/detail/Settings";
-import { eventTeamRolesResponseSchema } from "../../assets/shared/schemas/event-team";
+import { eventTeamRosterResponseSchema } from "../../assets/shared/schemas/event-team";
 import { SponsorTiersTab } from "../../assets/ts/member-flows/portal/sections/events/detail/settings/SponsorTiersTab";
-import { controlFor } from "./helpers/labelled-control";
+import { controlFor, typeInto } from "./helpers/labeled-control";
 
 /*
  * The surface addresses its own add page, so it reads the portal's location
@@ -67,7 +67,8 @@ const portalEvent = {
   venue: null,
   virtualUrl: null,
   heroImageUrl: null,
-  location: null,
+  city: null,
+  country: null,
   sessionTypes: null,
   ownerGroupId: "20000000-0000-4000-8000-000000000001",
   sourceMode: "portal",
@@ -121,7 +122,7 @@ describe("admin event general settings", () => {
         return json({ forms: [], page: { limit: 100, offset: 0, total: 0, hasMore: false } });
       }),
     );
-    const container = mount(<GeneralTab event={writableEvent} onUpdated={vi.fn()} />);
+    const container = mount(<GeneralTab section="location" event={writableEvent} onUpdated={vi.fn()} />);
     await settle();
     expect(container.querySelector("input,select,textarea")).toBeNull();
     await beginRecordEdit(container, "Event settings actions");
@@ -142,6 +143,47 @@ describe("admin event general settings", () => {
     expect(bodies).toHaveLength(1);
     expect(start.getAttribute("aria-invalid")).toBe("true");
   });
+  it("discards an abandoned edit and saves a changed name while the event keeps its own wall clock", async () => {
+    const bodies: unknown[] = [];
+    const onUpdated = vi.fn();
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PATCH") {
+          bodies.push(JSON.parse(String(init.body)));
+          return json({ event: { ...writableEvent, name: "Saved event settings" } });
+        }
+        return json({ forms: [], page: { limit: 100, offset: 0, total: 0, hasMore: false } });
+      }),
+    );
+    const container = mount(<GeneralTab event={writableEvent} onUpdated={onUpdated} />);
+    await settle();
+
+    await beginRecordEdit(container, "Event settings actions");
+    const name = controlFor(container, "Event name") as HTMLInputElement;
+    await typeInto(name, "Discarded name");
+    const cancel = [...container.querySelectorAll("button")].find((button) => button.textContent === "Cancel")!;
+    await act(async () => cancel.click());
+    expect(container.querySelector("input,select,textarea")).toBeNull();
+    expect(container.textContent).toContain("Portal workshop");
+    expect(container.textContent).not.toContain("Discarded name");
+    expect(bodies).toEqual([]);
+
+    await beginRecordEdit(container, "Event settings actions");
+    const reopened = controlFor(container, "Event name") as HTMLInputElement;
+    expect(reopened.value).toBe("Portal workshop");
+    await typeInto(reopened, "Saved event settings");
+    await submitForm(container);
+
+    expect(bodies).toHaveLength(1);
+    // The unchanged start is the same instant the event already had.
+    expect(eventSettingsUpdateSchema.parse(bodies[0])).toMatchObject({
+      name: "Saved event settings",
+    });
+    expect(eventSettingsUpdateSchema.parse(bodies[0])).not.toHaveProperty("startsAt");
+    expect(onUpdated).toHaveBeenCalledTimes(1);
+  });
+
   it("does not render or submit portal-owned attendee registration controls", async () => {
     vi.stubGlobal(
       "fetch",
@@ -153,7 +195,7 @@ describe("admin event general settings", () => {
     );
 
     const onUpdated = vi.fn();
-    const container = mount(<GeneralTab event={portalEvent} onUpdated={onUpdated} />);
+    const container = mount(<GeneralTab section="registration" event={portalEvent} onUpdated={onUpdated} />);
     await settle();
     expect(container.textContent).not.toContain("Registration form");
     expect(container.textContent).not.toContain("Registration mode");
@@ -196,20 +238,76 @@ describe("admin event general settings", () => {
       "(required)",
     );
 
-    // The slug is shown but not editable, and it says why rather than only
-    // looking greyed out.
     const slug = named("Slug") as HTMLInputElement | null;
     expect(slug?.value).toBe("portal-workshop");
-    expect(slug?.disabled).toBe(true);
-    const describedBy = slug?.getAttribute("aria-describedby") ?? "";
-    expect(describedBy).not.toBe("");
-    expect(byId(describedBy)?.textContent).toContain("cannot be changed here");
+    expect(slug?.disabled).toBe(false);
+    expect(slug?.required).toBe(true);
+  });
 
-    // The session-type toggle is the design system's drawn checkbox with its
-    // own label, not a bare box beside loose text.
-    const check = container.querySelector<HTMLInputElement>("input.pk-check__input");
-    expect(check?.type).toBe("checkbox");
-    expect(check?.closest("label.pk-check")?.textContent).toContain("Requires presentation");
+  it("asks for the city and country, sends the country's code and only suggests a time zone", async () => {
+    const bodies: unknown[] = [];
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async (_input: RequestInfo | URL, init?: RequestInit) => {
+        if (init?.method === "PATCH") {
+          bodies.push(JSON.parse(String(init.body)));
+          return json({ event: { ...writableEvent, city: "Singapore", country: "SG" } });
+        }
+        return json({ forms: [], page: { limit: 100, offset: 0, total: 0, hasMore: false } });
+      }),
+    );
+    const container = mount(<GeneralTab section="location" event={writableEvent} onUpdated={vi.fn()} />);
+    await settle();
+    // The summary prompts for a place the event does not have yet.
+    expect(container.textContent).toContain("City and country needed");
+    expect(container.textContent).not.toContain("Location label");
+
+    await beginRecordEdit(container, "Event settings actions");
+    expect(() => controlFor(container, "Location label")).toThrow();
+    await typeInto(controlFor(container, "City"), "Singapore");
+    const country = controlFor(container, "Country");
+    await typeInto(country, "Atlantis");
+    await submitForm(container);
+    // Text that names no country is the contract's to refuse; nothing is sent.
+    expect(bodies).toHaveLength(0);
+    expect(container.textContent).toContain("Choose a country from the list.");
+
+    await typeInto(country, "singapore");
+    // Singapore keeps one zone; the form offers it and leaves the event's zone alone.
+    const suggestion = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Use Asia/Singapore",
+    );
+    expect(suggestion).toBeDefined();
+    expect(controlFor(container, "Timezone").value).toBe("Europe/Amsterdam");
+    await submitForm(container);
+    expect(bodies).toHaveLength(1);
+    expect(eventSettingsUpdateSchema.parse(bodies[0])).toMatchObject({
+      city: "Singapore",
+      country: "SG",
+      timezone: "Europe/Amsterdam",
+    });
+  });
+
+  it("applies a suggested time zone only when the organizer chooses it", async () => {
+    stubFormCatalog();
+    const container = mount(
+      <GeneralTab
+        section="location"
+        event={{ ...writableEvent, city: "Amsterdam", country: "NL", timezone: "UTC" }}
+        onUpdated={vi.fn()}
+      />,
+    );
+    await settle();
+    expect(container.textContent).not.toContain("City and country needed");
+    await beginRecordEdit(container, "Event settings actions");
+    expect(controlFor(container, "Country").value).toBe("Netherlands");
+    const suggestion = [...container.querySelectorAll("button")].find(
+      (button) => button.textContent === "Use Europe/Amsterdam",
+    )!;
+    await act(async () => {
+      suggestion.click();
+    });
+    expect(controlFor(container, "Timezone").value).toBe("Europe/Amsterdam");
   });
 
   it("announces a rejected save rather than tinting the message red", async () => {
@@ -272,10 +370,10 @@ describe("admin event general settings", () => {
           location.origin,
         );
         requests.push(url);
-        if (url.pathname.endsWith("/roles")) {
+        if (url.pathname.endsWith("/team")) {
           return json(
-            eventTeamRolesResponseSchema.parse({
-              roles: [],
+            eventTeamRosterResponseSchema.parse({
+              people: [],
               page: { limit: 100, offset: 0, total: 0, hasMore: false },
             }),
           );
@@ -287,7 +385,7 @@ describe("admin event general settings", () => {
     const reader = mount(<Settings event={portalEvent} onUpdated={vi.fn()} subTab="team" />);
     await settle();
     expect(reader.textContent).not.toContain("Add team member");
-    expect(requests.some(({ pathname }) => pathname.endsWith("/roles"))).toBe(false);
+    expect(requests.some(({ pathname }) => pathname.endsWith("/team"))).toBe(false);
 
     const manager = mount(
       <Settings event={{ ...portalEvent, capabilities: ["read", "manage"] }} onUpdated={vi.fn()} subTab="team" />,
@@ -295,7 +393,7 @@ describe("admin event general settings", () => {
     await settle();
     await settle();
     expect(manager.textContent).toContain("Add team member");
-    expect(requests.some(({ pathname }) => pathname === "/api/v1/events/portal-workshop/roles")).toBe(true);
+    expect(requests.some(({ pathname }) => pathname === "/api/v1/events/portal-workshop/team")).toBe(true);
   });
 
   it("keeps sponsor-tier actions hidden from an event reader", async () => {
@@ -334,6 +432,8 @@ describe("admin event general settings", () => {
     await settle();
 
     await beginRecordEdit(container, "Sponsor tier actions");
+    // Each draft row's removal names the row it removes.
+    expect([...container.querySelectorAll("button")].map((button) => button.textContent)).toContain("Remove tier 1");
     const save = [...container.querySelectorAll("button")].find(
       (button) => button.textContent === "Save sponsor tiers",
     )!;
@@ -343,7 +443,7 @@ describe("admin event general settings", () => {
     });
 
     // A failure interrupts; the tick that means "saved" does not. Both carry
-    // the words, so neither rests on its colour.
+    // the words, so neither rests on its color.
     const alert = container.querySelector('[role="alert"]');
     expect(alert?.textContent).toContain("Tiers changed elsewhere.");
     expect(container.textContent).not.toContain("✓ Saved");

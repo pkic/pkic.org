@@ -1,3 +1,4 @@
+import { prepareMeetingAgendaSchedule, rethrowMeetingAgendaScheduleFailure } from "./agenda-intervals";
 import { buildD1TextSearchFilter } from "../../db/search";
 import { meetingRecurrenceId } from "../../../../assets/shared/meeting-calendar-policy";
 import { prepareCalendarRevision } from "./calendar-schedule";
@@ -214,6 +215,10 @@ export function buildSeriesOccurrencesPageQuery(
     conditions.push("occurrence.starts_at <= ?");
     bindings.push(query.to);
   }
+  if (query.overlapsFrom && query.overlapsTo) {
+    conditions.push("occurrence.ends_at > ?", "occurrence.starts_at < ?");
+    bindings.push(query.overlapsFrom, query.overlapsTo);
+  }
   return {
     sql: `WITH ${accessibleEvents.sql}
       ${OCCURRENCE_SELECT}
@@ -280,8 +285,10 @@ export async function createSeriesOccurrence(
         )
         .bind(seriesId, seriesId, now, series.eventId),
       ...prepareCalendarRevision(db, seriesId),
+      ...prepareMeetingAgendaSchedule(db, series.eventId, seriesId, [id]),
     ]);
   } catch (error) {
+    rethrowMeetingAgendaScheduleFailure(error);
     if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "EVENT_OCCURRENCE_CHANGED", "The meeting occurrence changed while it was being saved");
     }
@@ -417,8 +424,10 @@ export async function updateSeriesOccurrence(
         .bind(seriesId, seriesId, now, current.series.eventId),
       ...notifications,
       ...(change ? prepareCalendarRevision(db, seriesId) : []),
+      ...prepareMeetingAgendaSchedule(db, current.series.eventId, seriesId, [occurrenceId]),
     ]);
   } catch (error) {
+    rethrowMeetingAgendaScheduleFailure(error);
     if (isAuditChangeGuardFailure(error)) {
       throw new AppError(409, "EVENT_OCCURRENCE_CHANGED", "The meeting occurrence changed while it was being saved");
     }

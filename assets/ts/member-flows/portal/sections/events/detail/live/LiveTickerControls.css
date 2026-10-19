@@ -1,0 +1,20 @@
+@layer components {
+  /* The ticker editor fills the wide dialog: its style on top, then the messages beside the selected one. */
+  .pk-live-ticker-editor {
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-3);
+    block-size: 100%;
+    min-block-size: 0;
+  }
+  .pk-live-ticker-editor > .pk-list-detail {
+    flex: 1 1 auto;
+  }
+  .pk-live-ticker-editor__head {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--pk-2);
+  }
+}

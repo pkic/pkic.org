@@ -1,5 +1,5 @@
 /**
- * The event's proposal catalogue, its form responses, and its speaker mail.
+ * The event's proposal catalog, its form responses, and its speaker mail.
  *
  * The two archive links stay anchors — downloading an archive is a
  * navigation, not a page action — and borrow the button's appearance rather
@@ -33,7 +33,7 @@ function ProposalsList({ slug }: { slug: string }) {
   );
 }
 
-/** Portal adapter for the shared event-proposal catalogue. */
+/** Portal adapter for the shared event-proposal catalog. */
 export function Proposals({ slug, subTab, canWrite }: { slug: string; subTab?: string; canWrite: boolean }) {
   const [, navigate] = usePortalHashLocation();
   const tab =

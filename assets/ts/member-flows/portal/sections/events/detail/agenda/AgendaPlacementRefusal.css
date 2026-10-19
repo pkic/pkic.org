@@ -1,0 +1,65 @@
+/*
+ * A refused schedule change in the planner toolbar: the danger alert's soft fill and leading bar, laid out as
+ * one line of reason and actions, with the conflicts opening below it.
+ */
+@layer components {
+  .pk-agenda-refusal {
+    position: relative;
+    flex: 1 0 100%;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-2) var(--pk-3);
+    padding: var(--pk-2) var(--pk-2) var(--pk-2) var(--pk-4);
+    border-radius: var(--pk-radius);
+    background: var(--pk-danger-soft);
+    color: var(--pk-ink);
+    font-size: var(--pk-text-sm);
+    text-align: start;
+  }
+  .pk-agenda-refusal::before {
+    content: "";
+    position: absolute;
+    inset: 0 auto 0 0;
+    inline-size: 0.25rem;
+    background: var(--pk-danger);
+    border-radius: var(--pk-radius-sm) 0 0 var(--pk-radius-sm);
+  }
+
+  /*
+   * Without a refusal the empty status line stays in the document, out of the toolbar's flow, so the next
+   * refusal is announced.
+   */
+  .pk-agenda-refusal--idle {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    padding: 0;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .pk-agenda-refusal__message {
+    flex: 1 1 18rem;
+    margin: 0;
+  }
+  .pk-agenda-refusal__message strong {
+    color: var(--pk-danger-ink);
+  }
+  .pk-agenda-refusal__actions {
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+  }
+  .pk-agenda-refusal__details {
+    flex: 1 0 100%;
+    max-block-size: 40vh;
+    overflow: auto;
+    padding-block-start: var(--pk-2);
+    border-block-start: 1px solid var(--pk-line-soft);
+  }
+  .pk-agenda-refusal__details ul {
+    margin-block: 0;
+  }
+}

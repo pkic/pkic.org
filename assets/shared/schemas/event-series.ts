@@ -16,6 +16,7 @@ import { httpsCapabilityUrlSchema } from "./urls";
 import { eventGroupGrantSchemas } from "./resource-grants";
 import { eventInviteValiditySchema, eventInviteWindowSchema } from "./event-invite-validity";
 import { requiresSession } from "./route-contract";
+import { isValidTimeZone } from "../timezone";
 import { DEFAULT_MEETING_ENTRY_POLICY, meetingEntryPolicySchema } from "./meeting-entry-policy";
 
 export const EVENT_PROFILE_KEYS = ["meeting", "board_meeting", "conference", "workshop", "tutorial"] as const;
@@ -108,15 +109,6 @@ export const eventProfilePolicySchema = z.object({
   guestPolicy: eventGuestPolicySchema,
   meetingEntryPolicy: meetingEntryPolicySchema.default(DEFAULT_MEETING_ENTRY_POLICY),
 });
-
-function isValidTimeZone(value: string): boolean {
-  try {
-    new Intl.DateTimeFormat("en-US", { timeZone: value });
-    return true;
-  } catch {
-    return false;
-  }
-}
 
 export const timeZoneSchema = z
   .string()
@@ -304,11 +296,26 @@ export const eventOccurrenceUpdateSchema = eventOccurrenceInputSchema
   });
 
 export const EVENT_OCCURRENCE_SORT_COLUMNS = ["starts_at", "ends_at", "status"] as const;
-export const eventOccurrencesListQuerySchema = listQuerySchema(EVENT_OCCURRENCE_SORT_COLUMNS).extend({
-  status: eventOccurrenceStatusSchema.optional(),
-  from: utcInstantSchema.optional(),
-  to: utcInstantSchema.optional(),
-});
+export const eventOccurrencesListQuerySchema = listQuerySchema(EVENT_OCCURRENCE_SORT_COLUMNS)
+  .extend({
+    status: eventOccurrenceStatusSchema.optional(),
+    from: utcInstantSchema.optional(),
+    to: utcInstantSchema.optional(),
+    overlapsFrom: utcInstantSchema.optional(),
+    overlapsTo: utcInstantSchema.optional(),
+  })
+  .superRefine((query, context) => {
+    if (
+      Boolean(query.overlapsFrom) !== Boolean(query.overlapsTo) ||
+      (query.overlapsFrom && query.overlapsTo && query.overlapsTo <= query.overlapsFrom)
+    ) {
+      context.addIssue({
+        code: "custom",
+        path: ["overlapsTo"],
+        message: "Choose both ends of an increasing calendar range.",
+      });
+    }
+  });
 export const eventOccurrencesListResponseSchema = paginatedResponseSchema("occurrences", eventOccurrenceSchema);
 
 export const eventOccurrenceGuestSchema = z.object({

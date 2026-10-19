@@ -1,0 +1,25 @@
+@layer components {
+  /* The link and its recovery actions are rarely needed, so they sit folded under the tiles. */
+  .pk-calendar-link {
+    border-block-start: 1px solid var(--pk-line-soft);
+    padding-block-start: var(--pk-3);
+  }
+
+  .pk-calendar-link > summary {
+    inline-size: fit-content;
+    cursor: pointer;
+    font-size: var(--pk-text-sm);
+    font-weight: 500;
+    color: var(--pk-ink-muted);
+  }
+
+  .pk-calendar-link__body {
+    padding-block-start: var(--pk-3);
+  }
+
+  .pk-calendar-link__note {
+    margin: 0;
+    font-size: var(--pk-text-sm);
+    color: var(--pk-ink-muted);
+  }
+}
