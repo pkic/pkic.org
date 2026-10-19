@@ -26,6 +26,7 @@ beforeEach(resetDb);
 
 async function fixture(additionalRoomCount: number) {
   const pilot = await integratedPilot();
+  await env.DB.prepare("UPDATE events SET visibility='public' WHERE id=?").bind(pilot.eventId).run();
   const base = "/api/v1/events/pqc-2026/agenda";
   let snapshot = await pilot.api(base, agendaSnapshotSchema);
   const rooms: string[] = [];

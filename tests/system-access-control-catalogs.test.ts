@@ -59,6 +59,8 @@ describe("Permission subjects and targets", () => {
         email: "ada.catalog@example.test",
         first_name: "Ada",
         last_name: "Lovelace",
+        job_title: null,
+        headshotUrl: null,
         organization_name: "Analytical Engines",
       },
     ]);
@@ -71,7 +73,9 @@ describe("Permission subjects and targets", () => {
     expect(Object.keys(payload.users[0]).sort()).toEqual([
       "email",
       "first_name",
+      "headshotUrl",
       "id",
+      "job_title",
       "last_name",
       "organization_name",
     ]);
