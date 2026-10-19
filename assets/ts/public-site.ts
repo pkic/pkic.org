@@ -1,4 +1,6 @@
 import "./site/public-styles";
+// Site chrome must be interactive when the deferred public entry finishes loading.
+import "../js/navbar.js";
 /**
  * Public-site entry: presentation and behavior.
  *
@@ -26,9 +28,6 @@ async function whenPresent(selector: string, load: () => Promise<unknown>): Prom
 async function start(): Promise<void> {
   const { installPublicAccountMenu } = await import("./account-menu");
   void installPublicAccountMenu();
-
-  // Site chrome: the mega menus, the search panel and the collapsed menu.
-  await import("../js/navbar.js");
 
   // Site-wide behavior that `main.js` carried, minus its Bootstrap import:
   // this build has no Bootstrap to load.

@@ -1,12 +1,16 @@
 /** @covers presentation.13.7 */
 import { expect, test } from "@playwright/test";
 
-test("public search accepts focus and closes with Escape", async ({ page }) => {
-  await page.goto("/wg/cm/");
-  await page.getByRole("button", { name: "Open search", exact: true }).filter({ visible: true }).click();
-  await expect(page.getByRole("searchbox", { name: "Search", exact: true }).filter({ visible: true })).toBeFocused();
-  await page.keyboard.press("Escape");
-  await expect(page.locator("#pkicSearchPanel")).toBeHidden();
+test("public search accepts focus and closes with Escape", async ({ page }, testInfo) => {
+  for (const width of [1280, 375]) {
+    await page.setViewportSize({ width, height: 812 });
+    await page.goto("/wg/cm/");
+    await page.getByRole("button", { name: "Open search", exact: true }).filter({ visible: true }).click();
+    await expect(page.getByRole("searchbox", { name: "Search", exact: true }).filter({ visible: true })).toBeFocused();
+    await page.screenshot({ path: testInfo.outputPath(`public-search-${width}.png`) });
+    await page.keyboard.press("Escape");
+    await expect(page.locator("#pkicSearchPanel")).toBeHidden();
+  }
 });
 
 test("mobile navigation opens and closes with Escape", async ({ page }) => {
