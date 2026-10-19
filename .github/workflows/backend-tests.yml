@@ -176,7 +176,8 @@ jobs:
           retention-days: 7
 
       - name: Run Worker and D1 integration tests
-        timeout-minutes: 35
+        # Include cold optimized publication setup and the complete integration suite.
+        timeout-minutes: 60
         env:
           NODE_OPTIONS: --max-old-space-size=4096
         run: pnpm run test:worker --bail=1
