@@ -340,7 +340,10 @@ describe("MCP OAuth session interoperability", () => {
     "handles the KV lifetime boundary during %s exchange",
     async (flow) => {
       vi.useFakeTimers({ toFake: ["Date"] });
-      vi.setSystemTime(Math.floor(Date.now() / 1000) * 1000);
+      // Fake timers do not affect the KV simulator's clock. Keep the frozen
+      // application clock ahead so setup latency cannot invalidate native KV writes.
+      // https://developers.cloudflare.com/workers/testing/vitest-integration/known-issues/
+      vi.setSystemTime(Math.ceil(Date.now() / 1000) * 1000 + 60_000);
       for (const remainingSeconds of [59, 60]) {
         const grant = flow === "authorization_code" ? await createAuthorization() : await authorize();
         await env.DB.prepare("UPDATE sessions SET expires_at = ? WHERE user_id = ? AND revoked_at IS NULL")
