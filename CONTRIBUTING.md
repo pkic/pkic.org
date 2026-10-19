@@ -21,7 +21,32 @@ geometry checks to every CI run. The catalog-wide contrast audit
 (`pnpm run test:e2e:contrast`) is also opt-in. Wait for the rendered state or
 resource being tested; do not add fixed sleeps.
 
-Use focused tests while iterating. For repeatable timing profiles, set
+Each Worker test run (`pnpm run test:worker`) builds the static site into its
+own temporary directory under `PKIC_BUILD_TMPDIR` (else `TMPDIR`) and serves its
+assets from there, with a copy-on-write clone of the shared Astro cache. Runs in
+one checkout or across checkouts that share `node_modules` therefore never
+replace each other's `public/` or `dist/`. The directory is removed when the run
+ends, fails, or is stopped; the next run removes any directory left by a killed
+one.
+
+Use focused tests while iterating. `pnpm test:changed` runs the tests related
+to uncommitted changes in every suite (`--since <ref>` compares with a branch
+instead). The selection follows imports, so it is advisory: Worker routes and
+migrations are not always visible through them, and a change to `package.json`
+or a Vite or Vitest config runs every test.
+
+The optional pre-commit hook checks formatting and lint on staged files in a few
+seconds and runs no tests. Enable it once per clone with
+`git config core.hooksPath .githooks`.
+
+The component gallery renders the design-system primitives and every pattern
+catalog entry (`.agents/skills/pkic-ui/patterns.md`) with fixture data, served
+by Vite alone in a second. `pnpm gallery` serves it on port 8796 (`?only=<id>`
+shows one entry); `pnpm gallery:shot <id> [--phone] [--dark]` writes a
+screenshot of one entry, with its popup open, to `.gallery-shots/`. The same
+page is also served by the site at `/design/`.
+
+For repeatable timing profiles, set
 `PKIC_TEST_PROFILE_PATH` to a path outside the repository. The report records
 test, import, environment, and setup durations without disabling test isolation:
 
@@ -38,8 +63,13 @@ missing images and entity precedence. Durations are advisory; query-count and
 plan regressions fail the test. Compare repeated runs under similar machine
 load and keep profiles outside the repository.
 
-ESLint and Prettier run as separate gates so formatting is checked once. The
-Worker suite has two projects that share bindings and migrations. `d1` tests
+Oxlint (`pnpm run lint`) and Oxfmt (`pnpm run format:check`) run as separate
+gates so formatting is checked once. Oxlint's type-aware rules read the nearest
+`tsconfig.json` of each file. The `tsconfig.json` in `assets/ts`, `assets/design`,
+`tests/frontend`, `tests/tools`, `scripts`, and `site` only extends the project
+that owns the directory, so every group is typed against its own compiler options.
+The architecture rules live in `scripts/oxlint/pkic-rules.mjs` and are scoped in
+`.oxlintrc.json`. The Worker suite has two projects that share bindings and migrations. `d1` tests
 explicitly import their real service or router without eagerly loading the
 entire application during setup. Tests using `SELF.fetch` belong in the
 `workerFetchFiles` list in `vitest.config.ts`; the `worker-fetch` project runs
@@ -74,15 +104,34 @@ latency.
 
 ## Local backend data
 
-Run the local seed flow to create admin and event data, forms, terms, and default
-email templates in D1 and R2:
+`pnpm dev` migrates and seeds its own synthetic database. To seed a remote
+target (admin and event data, forms, terms, and default email templates in D1
+and R2), run `pnpm seed --preview` or `pnpm seed --production`; add
+`--only <step>` to run one seeder.
 
-```bash
-pnpm run seed:local
-```
+For interactive development, use `pnpm dev` or its alias `pnpm dev:test` (see
+the [README](README.md#test-the-portal-locally)). This is the default local
+environment for everyone. It keeps a migrated and seeded synthetic database in
+`.local-test/`, generates its own local secrets, and captures all email in a
+local inbox; no local command delivers email. It shares its serving code with
+`pnpm dev:rehearsal` below.
 
-For ordinary interactive development, use `pnpm run dev`. It reuses persistent
-local D1 state and configured local email delivery.
+Both hot-reload by default: the Vite dev server runs the Worker from source
+against the state directory, and a watching client build rewrites the portal
+bundle under stable development names. Pass `--build` to serve the bundled
+Worker and built site instead. Development and built behavior differ in these
+ways:
+
+- Public pages are prerendered once at startup in both modes; only `--build`
+  uses optimized images and social images (unless `--fast`). Diagrams render in
+  every mode, including hot reload and `--fast`, and reuse cached output. An
+  uncached diagram starts the build-time browser renderer.
+- The portal bundle is unminified with inline source maps and no bundle budget
+  or subresource integrity; `--build` produces the hashed, budgeted release.
+- The Worker runs through Vite's module runner instead of the bundled output, so
+  bundling problems show only with `--build` or `pnpm run build`.
+
+Run `--build` before a push or release, not for UI iteration.
 
 For an isolated disposable database with SendGrid delivery captured by a local
 interceptor, use:
@@ -102,11 +151,99 @@ If templates are missing or you want to reseed template versions only, run:
 pnpm run seed:templates:local
 ```
 
+## Rehearse against a database backup
+
+`pnpm dev:rehearsal` is opt-in and only for operators who are authorized to hold
+a production database backup. Everyone else uses `pnpm dev:test`. The rehearsal
+imports the backup into a new local directory, applies this branch's migrations
+to it locally, and serves it with the same hot reload and captured inbox as
+`pnpm dev:test`, so you can check a migration and the portal against real data
+before anything reaches preview or production. Nothing it runs touches a remote
+database, and no email leaves the computer.
+
+The backup is a D1 SQL export, such as the file `pnpm backup production`
+writes to `backups/d1/`. It holds the database only: R2 uploads such as logos
+and portraits are not copied, and the published pages show those images as
+missing. Keep the state directory outside the repository (`backups/` is ignored
+by Git), and delete the backup and the state directory when the rehearsal is
+finished.
+
+One command prepares and serves a fresh rehearsal. It exports the latest
+production backup (read-only), imports it into a new state directory, applies
+this branch's migrations, and serves it. With `--plans`, it then applies each
+reviewed agenda migration plan (`<event>/plan.json`, kept outside the
+repository) in directory-name order, authenticated by `PKIC_AGENDA_IMPORT_TOKEN`.
+Public pages are published before the plans run, so restart with `start` to see
+migrated agendas on them.
+
+```bash
+PKIC_AGENDA_IMPORT_TOKEN=… pnpm dev:rehearsal refresh --state ../rehearsal-<date> [--plans ../agenda-migration-plans]
+```
+
+The individual steps are available on their own:
+
+```bash
+# Import the backup once into a new directory; no migrations or seeders run.
+pnpm dev:rehearsal init --state ../rehearsal --dump backups/d1/production-<timestamp>.sql
+# Apply this branch's pending migrations to the imported database.
+pnpm dev:rehearsal migrate --state ../rehearsal
+# Optionally run one SQL file against it, such as a data repair under review.
+pnpm dev:rehearsal apply --state ../rehearsal --sql repair.sql
+# Serve with hot reload; add --build [--fast] to serve the built release instead.
+pnpm dev:rehearsal start --state ../rehearsal [--build [--fast]] [--port 8788] [--inbox-port 8799] [--host 127.0.0.1]
+```
+
+To access the site and captured email inbox from another device, bind both to
+an IP address assigned to the host (the default is `127.0.0.1`):
+
+```bash
+pnpm dev:rehearsal start --state ../pkic-rehearsal --port 8788 --host 192.168.1.10
+```
+
+Open `http://192.168.1.10:8788/portal/` and `http://192.168.1.10:8799/`.
+`--inbox-port` changes the inbox port. Generated sign-in links use the selected
+host; `--base-url <origin>` overrides the application's public origin when needed.
+Pass IPv6 addresses without brackets; printed URLs include the required brackets.
+Wildcard hosts (`0.0.0.0` or `::`) bind all interfaces and need `--base-url` set to
+a reachable address for remote sign-in links. Only expose a rehearsal containing
+private data on a trusted network. Passkeys require a secure browser context;
+use the email sign-in link when accessing a LAN IP over HTTP.
+
+`start` prints the portal and captured inbox URLs; sign in with a link from the
+inbox. It never migrates the database, so run `migrate` first when the branch
+adds migrations. `init` refuses an existing directory: import every backup into
+a new one.
+
+## Email-domain lists
+
+Free and ISP mail, disposable mail, and the Public Suffix List are vendored in
+`functions/_lib/email-domains/generated/` from open-source lists (free mail:
+`Kikobeats/free-email-domains`, MIT; disposable mail:
+`disposable-email-domains/disposable-email-domains`, CC0-1.0; Public Suffix
+List: `publicsuffix/list`, MPL-2.0). `provenance.json` records each source's
+commit, counts and license. The Worker never fetches them and the browser never
+bundles them; it asks `GET /api/v1/email/domains/:domain`.
+
+To move them forward, run the refresh and review the diff like code:
+
+```bash
+pnpm run refresh:email-domains
+```
+
+Correct a provider the lists miss, or an organization they list by mistake, in
+`functions/_lib/email-domains/overrides.ts`. Migration 0038 embeds the free and
+disposable set; until it is applied, regenerate its `affiliation_free_email_domains`
+inserts when the lists change (the organization-domain migration test shows the
+expected text). An applied migration stays as it is.
+
 ## Build and deployment
 
-The Cloudflare Worker uses Vite with `@cloudflare/vite-plugin`. The Vite build
-runs Hugo, indexes the generated site with Pagefind, bundles the native
-TypeScript Worker, and writes the deployable Wrangler output config to `dist`.
+The Cloudflare Worker uses Vite with `@cloudflare/vite-plugin`. The build
+(`scripts/build-site.mjs`) prepares the public shell, bundles the native
+TypeScript Worker and interactive application with Vite, renders the Astro
+publication and its Pagefind index, generates the OpenAPI document, and
+assembles one static release with the deployable Wrangler output config in
+`dist`.
 
 ```bash
 pnpm run build
@@ -130,9 +267,9 @@ appears there.
   branch. A preview build without a non-`main` branch fails.
 - All Previews share the `pkic-db-preview` D1 database, which is also the
   production `DB` binding's `preview_database_id`. Deployments never apply
-  migrations; apply them separately with `pnpm migrate:preview`, which runs
-  Wrangler with `--env production --preview`. `pnpm seed:preview` uses the same
-  arguments, and `pnpm backup:preview` exports `pkic-db-preview` by name
+  migrations; apply them separately with `pnpm migrate preview`, which runs
+  Wrangler with `--env production --preview`. `pnpm seed --preview` uses the same
+  arguments, and `pnpm backup preview` exports `pkic-db-preview` by name
   because `d1 export` has no `--preview` option. Wrangler takes the account
   from `wrangler.jsonc`.
 - Cron Triggers, routes, and inbound email do not run in Previews, so the
@@ -175,3 +312,22 @@ pnpm run deploy:production
 The MCP OAuth binding uses Wrangler automatic provisioning for `OAUTH_KV`. On
 the first deployment for an environment, Wrangler creates the namespace and
 writes the generated IDs back into [wrangler.jsonc](wrangler.jsonc).
+
+### System role permission defaults
+
+System role IDs and names identify product responsibilities and remain immutable;
+permission bundles are editable by authorized operators. An assignment keeps its
+scope and responsibilities (such as group leadership) when the bundle changes.
+Effective access remains the union of current role assignments and direct grants.
+
+Future migrations must preserve operator-managed bundles. Seed a complete default
+bundle only when creating a new role. Adding a default permission to an existing
+system role requires an explicit rollout decision: add it only where the current
+bundle still matches the documented prior default, or require an audited operator
+change. Do not regenerate existing bundles, restore removed permissions with
+unconditional inserts, or treat a new permission as automatically granted. Document
+the prior/default comparison and the affected roles in that migration's review.
+Advance the role's timestamp revision whenever a migration changes its bundle so
+concurrent operator edits retain their compare-and-set protection.
+Applied migrations remain immutable; these rules govern future schema/reference
+data work rather than rewriting existing migration history.
