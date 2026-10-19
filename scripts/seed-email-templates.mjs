@@ -896,13 +896,9 @@ Thank you for your interest in contributing to **{{eventName}}**.
 <div class="notice notice-warning">A quick follow-up: we still need your confirmation for this speaker invitation.</div>
 {{/if}}
 
-{{#if invitedByDisplay}}
-**{{invitedByDisplay}}** invited you as a speaker for **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org).
-{{else}}
-{{proposerFirstName}} has listed you as a speaker on their proposal for **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org).
-{{/if}}
+{{#if invitedByDisplay}}{{invitedByDisplay}}{{else}}{{#if proposerFirstName}}{{proposerFirstName}}{{else}}The proposer{{/if}}{{/if}} has proposed a session for **{{eventName}}**, organized by the [PKI Consortium](https://pkic.org), and invited you to take part as a speaker.
 
-> **Proposal:** {{proposalTitle}}
+> **Proposal:** **{{proposalTitle}}**
 
 {{#if proposalAbstract}}
 ## Proposal abstract
@@ -916,7 +912,7 @@ Thank you for your interest in contributing to **{{eventName}}**.
 {{speakerLineupText}}
 {{/if}}
 
-Please review the proposal and **confirm or decline your participation**. You will also be prompted to review your speaker profile (bio and headshot) so we can promote the session.
+You take part in the session only once you accept. Please review the proposal and **confirm or decline your participation**. You will also be prompted to review your speaker profile (bio and headshot) so we can promote the session.
 
 <div class="cta"><a href="{{manageUrl}}">Review proposal &amp; confirm participation &rarr;</a></div>
 
