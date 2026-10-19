@@ -1,7 +1,7 @@
 import { env as workerEnv } from "cloudflare:workers";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createReferralCode } from "../functions/_lib/services/referrals";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import {
   processBadgeRenderJobById,

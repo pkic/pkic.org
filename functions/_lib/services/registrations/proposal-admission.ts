@@ -45,8 +45,6 @@ export async function prepareProposalAdmission(
     dayAttendance,
     customAnswersJson: previous?.custom_answers_json,
     formPlacementId: previous?.form_placement_id,
-    eventOrganizationName: previous?.registration_organization_name,
-    eventJobTitle: previous?.registration_job_title,
     sourceType: previous?.source_type ?? "proposal",
     sourceRef: previous?.source_ref,
     inviteId: previous?.invite_id,

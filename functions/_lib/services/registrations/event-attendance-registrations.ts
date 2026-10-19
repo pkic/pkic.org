@@ -1,3 +1,4 @@
+import { REGISTRATION_ORGANIZATION_SQL, REGISTRATION_JOB_TITLE_SQL } from "./selected-identity";
 import {
   eventAttendanceRegistrationSummarySchema,
   eventAttendanceRegistrationsStatsSchema,
@@ -7,13 +8,16 @@ import {
 } from "../../../../assets/shared/schemas/event-registrations";
 import { all } from "../../db/queries";
 import { queryPage } from "../../db/pagination";
-import { buildD1TextSearchFilter } from "../../db/search";
+import { registrationPopulationFilter } from "./registration-population-filter";
 import type { DatabaseLike } from "../../types";
 import { publicUserHeadshotPath } from "../user-headshot";
 import { getAttendanceStatusByType } from "./attendance-statistics";
-import { activeDayWaitlistExistsSql, loadRegistrationDayStates } from "./day-states";
+import { loadRegistrationDayStates } from "./day-states";
 import { aggregateEventRegistrationStats, type EventRegistrationStatsRow } from "./event-registration-stats";
 import { resolveEventRegistrationOrderBy } from "./event-registration-sort";
+import { contactAffiliation } from "../../email-domains/contact-kind";
+import { waitlistHandledLast } from "../../email-domains/contact-kind";
+import { parseVerifiedAddresses, verifiedAddressesJsonSql } from "../user-emails";
 
 interface AttendanceRegistrationRow {
   id: string;
@@ -26,6 +30,7 @@ interface AttendanceRegistrationRow {
   display_name: string | null;
   headshot_r2_key: string | null;
   organization_name: string | null;
+  verified_addresses: string | null;
   job_title: string | null;
 }
 
@@ -41,36 +46,16 @@ export interface EventAttendanceRegistrationsListResult {
  * administrator-only columns from D1.
  */
 export function buildEventAttendanceRegistrationsPageQuery(eventId: string, params: EventAttendanceRegistrationsQuery) {
-  const conditions = ["r.event_id = ?"];
-  const bindings: unknown[] = [eventId];
-  if (params.status) {
-    conditions.push("r.status = ?");
-    bindings.push(params.status);
-  }
-  if (params.waitlisted === "true") conditions.push(activeDayWaitlistExistsSql("r"));
-  else if (params.waitlisted === "false") conditions.push(`NOT ${activeDayWaitlistExistsSql("r")}`);
-  const search = (params.q ?? "").trim();
-  if (search) {
-    const filter = buildD1TextSearchFilter(search, [
-      "u.email",
-      "u.first_name",
-      "u.last_name",
-      "u.first_name || ' ' || u.last_name",
-    ]);
-    conditions.push(filter.sql);
-    bindings.push(...filter.bindings);
-  }
+  const population = registrationPopulationFilter(eventId, params);
   return {
     source: {
       selectSql: `SELECT r.id, r.user_id, r.status, r.attendance_type, r.created_at, r.updated_at,
                          u.email AS user_email,
                          COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
                          u.headshot_r2_key AS headshot_r2_key,
-                         u.organization_name AS organization_name, u.job_title AS job_title`,
-      fromSql: `FROM registrations r
-                LEFT JOIN users u ON u.id = r.user_id
-                WHERE ${conditions.join(" AND ")}`,
-      bindings,
+                         ${REGISTRATION_ORGANIZATION_SQL} AS organization_name, ${REGISTRATION_JOB_TITLE_SQL} AS job_title,
+                         ${verifiedAddressesJsonSql("r.user_id")} AS verified_addresses`,
+      ...population,
     },
     orderBy: resolveEventRegistrationOrderBy(params.sort),
     limit: params.limit,
@@ -107,6 +92,12 @@ export async function listEventAttendanceRegistrations(
     registrations: rows.map((row) =>
       eventAttendanceRegistrationSummarySchema.parse({
         ...row,
+        organization_name: contactAffiliation(row.user_email, row.organization_name).organization,
+        personal_email: contactAffiliation(row.user_email, row.organization_name).personalEmail,
+        waitlist_handled_last: waitlistHandledLast(
+          parseVerifiedAddresses(row.verified_addresses),
+          dayStates.get(row.id) ?? [],
+        ),
         headshot_url: publicUserHeadshotPath(row.user_id, row.headshot_r2_key),
         days: dayStates.get(row.id) ?? [],
       }),

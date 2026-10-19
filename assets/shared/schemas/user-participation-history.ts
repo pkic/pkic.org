@@ -27,6 +27,7 @@
  * carry rows written before it. Localization stays at the rendering boundary.
  */
 import { z } from "zod";
+import { eventPlaceSchema } from "../event-place";
 
 import { eventIdSchema, trimmedString, userIdParamsSchema } from "./api-common";
 import { eventOccurrenceStatusSchema } from "./event-series";
@@ -73,7 +74,7 @@ export const userEventParticipationSchema = participationHistoryEntrySchema.exte
   eventId: eventIdSchema,
   eventSlug: z.string(),
   eventName: trimmedString(1, 180),
-  location: z.string().nullable().optional(),
+  ...eventPlaceSchema.shape,
   /**
    * The active roles held at this event, in vocabulary order. One row per
    * event, not per role: somebody who spoke and also organized took part in

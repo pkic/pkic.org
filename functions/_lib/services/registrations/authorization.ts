@@ -14,10 +14,8 @@ export function prepareVerifiedRegistrationUserGuard(db: DatabaseLike, user: Use
              AND normalized_email IS ?
              AND first_name IS ?
              AND last_name IS ?
-             AND organization_name IS ?
-             AND job_title IS ?
            LIMIT 1`,
-    bindings: [user.id, user.normalized_email, user.first_name, user.last_name, user.organization_name, user.job_title],
+    bindings: [user.id, user.normalized_email, user.first_name, user.last_name],
   });
 }
 

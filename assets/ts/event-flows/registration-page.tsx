@@ -1,4 +1,4 @@
-import { RegistrationIdentitySelect } from "../components/RegistrationIdentitySelect";
+import { RegistrationContactStep } from "../components/RegistrationContactStep";
 import { render, createRef } from "preact";
 import type { ComponentChildren } from "preact";
 import { getJson, postJson } from "../shared/api-client";
@@ -15,7 +15,7 @@ import type { FormField } from "../shared/types";
 import { installLiveValidation, validateBeforeSubmit } from "../shared/form/validation";
 import { installStepNavigation } from "../shared/form/step-navigation";
 import { handleSubmitError, withLoadingButton } from "../shared/form/submit";
-import { bootstrap, setStatus } from "./boot";
+import { bootstrap, setStatus, type FlowBoot } from "./boot";
 import { clearReferralSession } from "../shared/query-context";
 import {
   registrationCreateSchema,
@@ -25,17 +25,41 @@ import {
 import { eventFormsResponseSchema } from "../../shared/schemas/forms";
 import { readField, deriveEventAttendanceType, findSubmitButton } from "../shared/form/helpers";
 import { SuccessPanel } from "../components/SuccessPanel";
-import { ButtonLink } from "../ui/Button";
+import { forgetRegistrationEmailProof } from "../components/useRegistrationEmailProof";
+import { ATTENDANCE_WAITLIST_COPY } from "../components/DayAttendancePicker";
 import {
   hasPendingRegistrationDayWaitlist,
   RegistrationDayStatusSummary,
 } from "../components/RegistrationDayStatusSummary";
 import { optionsFor } from "../shared/form/custom-field-rules";
 import { registrationInvitation } from "./registration-invitation";
-import { installEmailReviewCard, resetEmailReviewConfirmation } from "./registration-email-review";
+import type { ConfirmOrganizationController } from "../components/RegistrationConfirmOrganization";
+import { REGISTRATION_ORGANIZATION_COPY } from "../../shared/email-first-copy";
+import type { RegistrationEntry } from "../../shared/schemas/registration-email-proof";
+import { sourceTypeSchema } from "../../shared/schemas/source";
+import { Alert } from "../ui/Alert";
+import { isIdentityOwnedFormKey } from "../../shared/schemas/form-answers";
+import { PersonalAddressPrompt } from "../components/events/PersonalAddressPrompt";
 type RegistrationSubmitResponse = RegistrationSubmissionResponse;
 
 type CustomAnswerValue = string | number | boolean | string[] | { start: string; end: string };
+
+/** The organization question refuses to continue until it is answered; it shows why on its own fields. */
+function refusesOrganization(organization: ConfirmOrganizationController): boolean {
+  const named = organization.read?.();
+  return Boolean(named && "refused" in named);
+}
+
+/** How the person reached this form, carried through the verification link. */
+function registrationEntry(query: FlowBoot["query"]): RegistrationEntry {
+  const sourceType = sourceTypeSchema.safeParse(query.sourceType);
+  return {
+    inviteToken: query.inviteToken ?? undefined,
+    inviteId: query.inviteToken ? (query.inviteId ?? undefined) : undefined,
+    referralCode: query.referralCode ?? undefined,
+    sourceType: sourceType.success ? sourceType.data : undefined,
+  };
+}
 
 function formatSubmittedEmail(email: string): ComponentChildren {
   return <span class="event-flow-address">{email || "the email address you entered"}</span>;
@@ -51,9 +75,8 @@ function showSuccessPanel(
   organization: string,
   eventName: string,
   eventSlug: string,
-  days?: number,
 ): void {
-  // The form's markup (layouts/shortcodes/event-registration.html) no longer
+  // The form's markup no longer
   // carries Bootstrap, so `d-none` would stop hiding it the moment that page
   // drops `main.scss`. The stepper below already uses the platform attribute;
   // the form now does too.
@@ -70,44 +93,14 @@ function showSuccessPanel(
   let showShare = false;
 
   if (result.status === "pending_email_confirmation") {
-    icon = "✉️";
-    title = `Check your email to finish registration${firstName ? `, ${firstName}` : ""}`;
+    // Only a submission without a verified address waits; the browser verifies first, so this is the exception.
+    icon = "";
+    title = "Check your email";
     body = (
-      <>
-        <div class="event-flow-pending-alert pk-start" role="alert">
-          <span class="event-flow-review-warning-marker" aria-hidden="true">
-            !
-          </span>
-          <div>
-            <p class="event-flow-pending-alert-title">
-              IMPORTANT: Click the link in the email to confirm your registration
-            </p>
-            <ul class="event-flow-pending-steps">
-              <li>We sent the confirmation link to {formatSubmittedEmail(email)}.</li>
-              <li>Keep this page open until the email arrives.</li>
-              <li>Open the email, click the confirmation link, and confirm on the next page.</li>
-              <li>
-                Your spot is not secured and you will not be admitted until you receive the final confirmation email.
-              </li>
-              <li>That final email may still say you are on the waitlist for one or more days.</li>
-            </ul>
-          </div>
-        </div>
-        <div class="event-flow-submission-review pk-start">
-          <p class="event-flow-submission-review-label">Confirmation email sent to</p>
-          <p class="event-flow-submission-review-value">{email}</p>
-          {result.manageUrl && (
-            <div class="event-flow-submission-action">
-              <p class="pk-small">Wrong email address?</p>
-              <ButtonLink href={result.manageUrl}>Edit email address</ButtonLink>
-            </div>
-          )}
-        </div>
-        <p class="pk-small">
-          If the email does not arrive after a few minutes, check your spam folder and confirm that the address above is
-          correct.
-        </p>
-      </>
+      <Alert tone="info">
+        Open the link we sent to {formatSubmittedEmail(email)} to confirm your registration. Your place is held only
+        after you confirm.
+      </Alert>
     );
   } else if (hasPendingRegistrationDayWaitlist(result.dayWaitlist)) {
     icon = "🗓️";
@@ -126,6 +119,7 @@ function showSuccessPanel(
           {result.manageUrl && <a href={result.manageUrl}>Review or change registration</a>}
         </div>
         <RegistrationDayStatusSummary dayAttendance={result.dayAttendance} dayWaitlist={result.dayWaitlist} />
+        <PersonalAddressPrompt email={email} waiting />
       </>
     );
   } else {
@@ -133,12 +127,19 @@ function showSuccessPanel(
     title = `You're registered${firstName ? `, ${firstName}` : ""}!`;
     showShare = !!result.shareUrl;
     body = (
-      <p class="event-flow-success-body">
-        A confirmation email with your calendar invite is on its way.{" "}
-        {result.manageUrl && <a href={result.manageUrl}>Manage your registration</a>}
-      </p>
+      <>
+        <p class="event-flow-success-body">
+          A confirmation email with your calendar invite is on its way.{" "}
+          {result.manageUrl && <a href={result.manageUrl}>Manage your registration</a>}
+        </p>
+        <PersonalAddressPrompt email={email} />
+      </>
     );
   }
+  const organizationNote =
+    result.organizationOutcome === "review_required" ? (
+      <Alert tone="info">{REGISTRATION_ORGANIZATION_COPY.reviewRequired}</Alert>
+    ) : null;
 
   const container = document.createElement("div");
   const shareRef = createRef<HTMLDivElement>();
@@ -147,6 +148,7 @@ function showSuccessPanel(
   render(
     <SuccessPanel icon={icon} title={title}>
       {body}
+      {organizationNote}
       {showShare && <div ref={shareRef} />}
       <div ref={donateRef} />
     </SuccessPanel>,
@@ -160,6 +162,7 @@ function showSuccessPanel(
       firstName,
       manageToken: result.manageToken,
       eventSlug,
+      waitlisted: hasPendingRegistrationDayWaitlist(result.dayWaitlist),
     });
   }
 
@@ -170,7 +173,6 @@ function showSuccessPanel(
       email,
       organizationName: organization || undefined,
       source: window.location.pathname,
-      days,
     });
   }
 
@@ -193,7 +195,14 @@ function readAttendanceReview(form: HTMLFormElement): Array<{ label: string; val
       const optionLabel = field.nextElementSibling
         ?.querySelector<HTMLElement>(".event-flow-attendance-title")
         ?.textContent?.trim();
-      return { label: dayLabel || field.name.replace(/^dayAttendance\./, ""), value: optionLabel || field.value };
+      const value = optionLabel || field.value;
+      // A full option joins the waitlist; the review says so where the choice is checked.
+      return {
+        label: dayLabel || field.name.replace(/^dayAttendance\./, ""),
+        value: field.hasAttribute("data-waitlist")
+          ? `${value} (${ATTENDANCE_WAITLIST_COPY.badge.toLowerCase()})`
+          : value,
+      };
     })
     .filter((entry) => entry.label || entry.value);
 }
@@ -309,28 +318,6 @@ function RegistrationReview({
 }) {
   return (
     <section class="event-flow-review" aria-label="Registration review">
-      <div class="event-flow-review-header">
-        <div>
-          <p class="event-flow-review-eyebrow">Check this first</p>
-          <h3 class="event-flow-review-title">Confirmation email</h3>
-          <p class="event-flow-review-email" data-registration-review-email>
-            {email || "Not provided yet"}
-          </p>
-        </div>
-        <div class="event-flow-review-critical">
-          <span class="event-flow-review-status">Registration pending email confirmation</span>
-          <div class="event-flow-review-warning" role="note">
-            <span class="event-flow-review-warning-marker" aria-hidden="true">
-              !
-            </span>
-            <p class="event-flow-review-help">
-              <strong>Check your email address.</strong> We will send the confirmation link to this address. Your spot
-              is not secured and your registration is not final until you confirm through that email.
-            </p>
-          </div>
-        </div>
-      </div>
-
       <ReviewSection title="Contact" step={1}>
         <ReviewRow label="Name" value={fullName || "Not provided yet"} empty={!fullName} />
         <ReviewRow
@@ -366,7 +353,6 @@ function updateRegistrationReview(root: HTMLElement, form: HTMLFormElement, cust
   const email = readField(form, "email");
 
   const reviewEl = root.querySelector<HTMLElement>("[data-registration-review]");
-  const inlineEmailEl = root.querySelector<HTMLElement>("[data-registration-review-email-inline]");
 
   if (reviewEl) {
     if (reviewEl.dataset.registrationReviewMounted !== "true") {
@@ -385,8 +371,6 @@ function updateRegistrationReview(root: HTMLElement, form: HTMLFormElement, cust
       reviewEl,
     );
   }
-
-  if (inlineEmailEl) inlineEmailEl.textContent = email || "the email address above";
 }
 
 async function main(): Promise<void> {
@@ -400,18 +384,50 @@ async function main(): Promise<void> {
   const invitation = registrationInvitation(boot);
   let customFieldDefs: FormField[] = [];
   installLiveValidation(form, statusEl);
-  installEmailReviewCard(form);
-  installStepNavigation(boot.root, form, statusEl, (currentStep) => {
-    if (currentStep === 3) {
-      updateRegistrationReview(boot.root, form, customFieldDefs);
-    }
-  });
+  // The organization a verified work address names when its domain resolves to none, asked in the first step.
+  const organization: ConfirmOrganizationController = {};
+  // The first step continues through its own email action; the wizard's Continue appears once it has.
+  const nextButton = boot.root.querySelector<HTMLButtonElement>("[data-step-next]");
+  let contactReady = false;
+  let currentStep = 1;
+  const syncContactGate = () => {
+    if (nextButton && currentStep === 1) nextButton.hidden = !contactReady;
+  };
+  installStepNavigation(
+    boot.root,
+    form,
+    statusEl,
+    (step) => {
+      if (step === 1 && (!contactReady || refusesOrganization(organization))) return false;
+      if (step === 3) {
+        updateRegistrationReview(boot.root, form, customFieldDefs);
+      }
+    },
+    (step) => {
+      currentStep = step;
+      syncContactGate();
+    },
+  );
+  syncContactGate();
+  const contactMount = form.querySelector<HTMLElement>("[data-registration-contact]");
+  if (contactMount)
+    render(
+      <RegistrationContactStep
+        endpoint={`${apiBase}/events/${eventSlug}/registrations`}
+        entry={registrationEntry(query)}
+        organization={organization}
+        onReadyChange={(ready) => {
+          contactReady = ready;
+          syncContactGate();
+        }}
+      />,
+      contactMount,
+    );
   const consentsContainer = boot.root.querySelector<HTMLElement>("[data-consents]");
   const customFieldsContainer = boot.root.querySelector<HTMLElement>("[data-custom-fields]");
   const dayAttendanceContainer = boot.root.querySelector<HTMLElement>("[data-day-attendance]");
 
   let eventName = eventSlug;
-  let eventDayCount = 0;
   let customFields: CustomFieldsController | null = null;
 
   try {
@@ -420,13 +436,13 @@ async function main(): Promise<void> {
       eventFormsResponseSchema,
     );
     eventName = forms.event.name;
-    eventDayCount = forms.eventDays.length;
     if (consentsContainer) {
       renderConsentInputs(consentsContainer, forms.requiredTerms);
     }
     if (customFieldsContainer && forms.form) {
-      customFieldDefs = forms.form.fields;
-      customFields = renderCustomFields(customFieldsContainer, forms.form.fields);
+      // Organization and title come from the identity, never from an event question.
+      customFieldDefs = forms.form.fields.filter((field) => !isIdentityOwnedFormKey(field.key));
+      customFields = renderCustomFields(customFieldsContainer, customFieldDefs);
     }
     if (dayAttendanceContainer) {
       renderDayAttendance(dayAttendanceContainer, forms.eventDays);
@@ -439,7 +455,6 @@ async function main(): Promise<void> {
       });
     }
 
-    const nextButton = boot.root.querySelector<HTMLButtonElement>("[data-step-next]");
     if (nextButton) nextButton.disabled = false;
     await invitation.check(forms.registrationPolicy);
   } catch {
@@ -465,26 +480,10 @@ async function main(): Promise<void> {
     });
   });
 
-  form.addEventListener("input", (event) => {
-    if (event.target instanceof HTMLInputElement && event.target.name === "email") {
-      resetEmailReviewConfirmation(form);
-    }
-  });
-
   const referralInput = form.elements.namedItem("referralCode");
   if (query.referralCode && referralInput instanceof HTMLInputElement) {
     referralInput.value = query.referralCode;
   }
-
-  const identityMount = form.querySelector<HTMLElement>("[data-registration-identity]");
-  if (identityMount)
-    render(
-      <RegistrationIdentitySelect
-        form={form}
-        deferUntilRequested={Boolean(document.querySelector("#pkic-public-form-resources"))}
-      />,
-      identityMount,
-    );
 
   form.addEventListener("submit", async (event) => {
     event.preventDefault();
@@ -496,6 +495,8 @@ async function main(): Promise<void> {
     if (!validateBeforeSubmit(form, statusEl)) {
       return;
     }
+    const named = organization.read?.();
+    if (named && "refused" in named) return;
 
     await withLoadingButton(findSubmitButton(form), async () => {
       try {
@@ -506,6 +507,7 @@ async function main(): Promise<void> {
           identityId: readField(form, "identityId") || undefined,
           lastName: readField(form, "lastName"),
           email: readField(form, "email"),
+          unaffiliatedAttestation: readField(form, "unaffiliatedAttestation") === "true",
           attendanceType: dayAttendance.length === 0 ? "virtual" : undefined,
           dayAttendance,
           sourceType: query.sourceType ?? "direct",
@@ -515,6 +517,8 @@ async function main(): Promise<void> {
           inviteId: query.inviteId ?? undefined,
           referralCode: query.referralCode ?? undefined,
           consents: readConsentValues(form),
+          emailProof: readField(form, "emailProof") || undefined,
+          organization: named?.organization,
         });
 
         const result = await postJson(
@@ -524,6 +528,7 @@ async function main(): Promise<void> {
           eventPathHeaders,
         );
         clearReferralSession();
+        forgetRegistrationEmailProof();
         showSuccessPanel(
           boot.root,
           form,
@@ -531,10 +536,9 @@ async function main(): Promise<void> {
           firstName,
           payload.lastName,
           payload.email,
-          "",
+          named?.organization.name ?? "",
           eventName,
           boot.eventSlug,
-          eventDayCount || undefined,
         );
       } catch (error) {
         if (!invitation.handleError(error)) handleSubmitError(error, form, statusEl);

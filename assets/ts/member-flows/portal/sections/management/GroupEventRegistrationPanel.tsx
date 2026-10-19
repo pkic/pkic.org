@@ -27,6 +27,7 @@ import type { GroupEvent } from "../../../../../shared/schemas/group-events";
 // than rendered through a component, so this module has to pull in the
 // stylesheet that defines them.
 import "../../../../ui/Field.css";
+import { SectionHeading } from "../../../../ui/SectionHeading";
 
 const ATTENDANCE_LABELS: Record<AttendanceType, string> = {
   in_person: "In person",
@@ -96,13 +97,13 @@ function RegistrationFields({ config }: { config: EventFormsResponse }): JSX.Ele
       )}
       {config.form && (
         <div class="pk-stack pk-stack--tight">
-          <h4>{config.form.title}</h4>
+          <SectionHeading level={4}>{config.form.title}</SectionHeading>
           {config.form.description && <p class="pk-small">{config.form.description}</p>}
           <CustomFieldList fields={config.form.fields} context={customFieldContext} />
         </div>
       )}
       <div class="pk-stack">
-        <h4>Terms and conditions</h4>
+        <SectionHeading level={4}>Terms and conditions</SectionHeading>
         <ConsentList terms={config.requiredTerms} />
       </div>
     </div>
@@ -165,7 +166,7 @@ function RegistrationPanel({ groupId, event }: { groupId: string; event: GroupEv
           {termsConfigured && <RegistrationIdentitySelect key={`identity-${resetKey}`} />}
           <RegistrationFields key={resetKey} config={config.data} />
           <div class="pk-cluster">
-            <Button type="submit" variant="primary" size="sm" loading={saving} disabled={!termsConfigured}>
+            <Button type="submit" variant="primary" loading={saving} disabled={!termsConfigured}>
               {saving ? "Registering…" : "Register"}
             </Button>
           </div>

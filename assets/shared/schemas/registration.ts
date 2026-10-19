@@ -1,23 +1,26 @@
 import { z } from "zod";
-import { formAnswersSchema } from "./form-answers";
+import { formAnswersSchema, submittedFormAnswersSchema } from "./form-answers";
 import { databaseIdSchema } from "./identifiers";
 import {
   emailRecoveryRequestSchema,
   firstNameSchema,
   eventIdSchema,
-  eventSlugParamsSchema,
   jobTitleSchema,
+  organizationNameSchema,
+  eventSlugParamsSchema,
   lastNameSchema,
   normalizedEmailSchema,
-  organizationNameSchema,
   registrationManageTokenParamsSchema,
   successResponseSchema,
   termKeyPattern,
   tokenSchema,
   trimmedString,
+  utcInstantSchema,
   versionPattern,
 } from "./api-common";
 import { linksSchema } from "./links";
+import { workEmailStepSchema } from "./work-email";
+import { registrationEmailProofTokenSchema, registrationEntrySchema } from "./registration-email-proof";
 import { defaultedSourceTypeSchema } from "./source";
 import { IMAGE_UPLOAD_ALLOWED_MIME_TYPES } from "./images";
 import { proposalSpeakerRoleSchema } from "./participant-roles";
@@ -162,6 +165,7 @@ export const consentItemSchema = z.object({
   termKey: z.string().trim().regex(termKeyPattern),
   version: z.string().trim().regex(versionPattern),
 });
+export type ConsentItem = z.infer<typeof consentItemSchema>;
 
 export const dayDateSchema = eventDayDateSchema;
 
@@ -194,8 +198,6 @@ export const userProfileSchema = z.object({
   firstName: firstNameSchema,
   lastName: lastNameSchema,
   email: normalizedEmailSchema,
-  organizationName: organizationNameSchema.optional(),
-  jobTitle: jobTitleSchema.optional(),
 });
 
 const speakerBioSchema = trimmedString(40, 5000);
@@ -237,12 +239,10 @@ export const attendeeRegistrationFieldsSchema = z.object({
   firstName: firstNameSchema,
   lastName: lastNameSchema,
   email: normalizedEmailSchema,
-  organizationName: organizationNameSchema.optional(),
-  jobTitle: jobTitleSchema.optional(),
   identityId: databaseIdSchema.optional(),
   attendanceType: attendanceTypeSchema.optional(),
   dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
-  customAnswers: formAnswersSchema.optional(),
+  customAnswers: submittedFormAnswersSchema.optional(),
   consents: z.array(consentItemSchema).min(1).max(20),
 });
 export type AttendeeRegistrationFields = z.infer<typeof attendeeRegistrationFieldsSchema>;
@@ -260,22 +260,40 @@ export const attendeeRegistrationParticipationSchema = attendeeRegistrationField
   .superRefine(requireAttendance);
 export type AttendeeRegistrationParticipation = z.infer<typeof attendeeRegistrationParticipationSchema>;
 
+/**
+ * The organization a verified work address names when its domain resolves to
+ * none — asked once, after the mailbox is proved.
+ */
+export const registrationConfirmOrganizationSchema = z
+  .object({ name: organizationNameSchema, jobTitle: jobTitleSchema })
+  .strict();
+export type RegistrationConfirmOrganization = z.infer<typeof registrationConfirmOrganizationSchema>;
+
+/**
+ * A public registration starts from the shared email-first step, including its
+ * individual capacity. `emailProof` is the verification link the person
+ * opened, which makes the registration final on submission; without it (and
+ * without a signed-in session for the same address) the registration waits
+ * for email confirmation.
+ */
 export const registrationCreateSchema = attendeeRegistrationFieldsSchema
+  .extend(registrationEntrySchema.shape)
   .extend({
+    unaffiliatedAttestation: workEmailStepSchema.shape.unaffiliatedAttestation,
     sourceType: defaultedSourceTypeSchema,
     sourceRef: trimmedString(2, 200).optional(),
-    inviteToken: tokenSchema.optional(),
-    inviteId: databaseIdSchema.optional(),
-    referralCode: z
-      .string()
-      .trim()
-      .regex(/^[A-Za-z0-9]{6,12}$/)
-      .optional(),
+    emailProof: registrationEmailProofTokenSchema.optional(),
+    organization: registrationConfirmOrganizationSchema.optional(),
   })
   .superRefine(requireAttendance);
 
-export const registrationConfirmSchema = z.object({ id: databaseIdSchema.optional(), token: tokenSchema });
-export const registrationConfirmQuerySchema = registrationConfirmSchema;
+export const registrationConfirmQuerySchema = z.object({ id: databaseIdSchema.optional(), token: tokenSchema });
+
+export const registrationConfirmSchema = registrationConfirmQuerySchema.extend({
+  organization: registrationConfirmOrganizationSchema.optional(),
+});
+/** Linked through the canonical affiliation rule, or queued for staff review; null when nothing was asked. */
+export const registrationOrganizationOutcomeSchema = z.enum(["linked", "review_required"]).nullable();
 
 const registrationCompletionResponseBaseSchema = successResponseSchema.merge(registrationDayStateSchema).extend({
   status: registrationLifecycleStatusSchema,
@@ -286,6 +304,7 @@ export const registrationConfirmResponseSchema = registrationCompletionResponseB
   stage: z.literal("confirmed"),
   manageUrl: httpCapabilityUrlSchema,
   manageToken: tokenSchema,
+  organizationOutcome: registrationOrganizationOutcomeSchema.default(null),
 });
 export type RegistrationConfirmResponse = z.infer<typeof registrationConfirmResponseSchema>;
 
@@ -301,6 +320,8 @@ export const registrationConfirmInfoResponseSchema = z.object({
   lastName: z.string().nullable(),
   email: normalizedEmailSchema.nullable(),
   organizationName: z.string().nullable(),
+  /** A work address whose domain resolves to no organization: the page asks for it once. */
+  asksOrganization: z.boolean().default(false),
   eventName: z.string().nullable(),
   expired: z.boolean(),
   recoverable: z.boolean(),
@@ -313,6 +334,7 @@ export const registrationSubmissionResponseSchema = registrationCompletionRespon
   // A newly created identity may still receive the immediate correction link.
   manageUrl: httpCapabilityUrlSchema.nullable(),
   manageToken: tokenSchema.nullable(),
+  organizationOutcome: registrationOrganizationOutcomeSchema.default(null),
 });
 export type RegistrationSubmissionResponse = z.infer<typeof registrationSubmissionResponseSchema>;
 
@@ -326,19 +348,30 @@ export const registrationResendConfirmationSchema = z
 
 export const okResponseSchema = z.object({ ok: z.boolean() });
 
-export const registrationManageSchema = z.object({
-  action: z.enum(["update", "cancel", "report_unauthorized"]),
-  attendanceType: attendanceTypeSchema.optional(),
-  dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
-  claimDayWaitlistOffers: z.array(dayDateSchema).max(31).optional(),
-  customAnswers: formAnswersSchema.optional(),
-  sourceRef: trimmedString(2, 200).optional(),
-  email: normalizedEmailSchema.optional(),
-  firstName: firstNameSchema.optional(),
-  lastName: lastNameSchema.optional(),
-  organizationName: organizationNameSchema.optional(),
-  jobTitle: jobTitleSchema.optional(),
+export const registrationManageSchema = z
+  .object({
+    action: z.enum(["update", "cancel", "report_unauthorized", "withdraw_sponsor_sharing"]),
+    attendanceType: attendanceTypeSchema.optional(),
+    dayAttendance: z.array(dayAttendanceItemSchema).max(31).optional(),
+    claimDayWaitlistOffers: z.array(dayDateSchema).max(31).optional(),
+    customAnswers: submittedFormAnswersSchema.optional(),
+    sourceRef: trimmedString(2, 200).optional(),
+    email: normalizedEmailSchema.optional(),
+    firstName: firstNameSchema.optional(),
+    lastName: lastNameSchema.optional(),
+  })
+  .refine(
+    (value) =>
+      value.action !== "withdraw_sponsor_sharing" ||
+      Object.entries(value).every(([key, field]) => key === "action" || field === undefined),
+    { message: "Withdraw sponsor sharing separately from registration changes" },
+  );
+
+export const registrationSponsorSharingSchema = z.object({
+  allowed: z.boolean(),
+  withdrawnAt: utcInstantSchema.nullable(),
 });
+export type RegistrationSponsorSharing = z.infer<typeof registrationSponsorSharingSchema>;
 
 /** Explicit capability-safe registration projection; never spread a D1 row into this response. */
 export const registrationManageRegistrationSchema = z.object({
@@ -360,6 +393,7 @@ export const registrationManageUserSchema = z.object({
 });
 
 export const registrationManageReadResponseSchema = successResponseSchema.extend({
+  sponsorSharing: registrationSponsorSharingSchema,
   registration: registrationManageRegistrationSchema,
   identityId: databaseIdSchema.nullable().optional(),
   badgeVersion: z.string().optional(),
@@ -368,12 +402,15 @@ export const registrationManageReadResponseSchema = successResponseSchema.extend
   eventDays: z.array(eventDayReadModelSchema),
   dayAttendance: registrationDayStateSchema.shape.dayAttendance,
   dayWaitlist: registrationDayStateSchema.shape.dayWaitlist,
+  /** The registrant holds no verified work address, so their waiting days are handled last. */
+  waitlistHandledLast: z.boolean(),
   shareUrl: httpUrlSchema.nullable(),
   headshotUrl: httpUrlSchema.nullable(),
 });
 
 export const registrationManageUpdateResponseSchema = successResponseSchema.extend({
   emailChanged: z.boolean(),
+  sponsorSharing: registrationSponsorSharingSchema,
 });
 
 export type RegistrationManageReadResponse = z.infer<typeof registrationManageReadResponseSchema>;

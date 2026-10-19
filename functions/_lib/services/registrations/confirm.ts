@@ -18,6 +18,7 @@ import { REGISTRATION_COLUMNS, type RegistrationRecord } from "./types";
 import { isRegistrationTransitionConflict, prepareRegistrationTransitionGuard } from "./transition-guard";
 import { prepareVerifyPrimaryEmailStatement } from "../email-verification";
 import { isAuthorizationGuardFailure } from "../../db/authorization-guard";
+import { linkVerifiedAddressToDomainOrganization } from "../identities/email-domain-link";
 
 export interface PreparedRegistrationConfirmation {
   stage: "confirmed";
@@ -25,6 +26,8 @@ export interface PreparedRegistrationConfirmation {
   manageToken: string;
   recipientEmail: string;
   statements: StatementLike[];
+  /** The address this confirmation proves, for the organization link that follows the commit. */
+  verifiedAddress: { userId: string; normalizedEmail: string };
 }
 
 export function isStaleRegistrationTransition(error: unknown): boolean {
@@ -285,6 +288,7 @@ export async function prepareConfirmRegistrationByToken(
     manageToken,
     recipientEmail: inviteEmail ?? user.normalized_email,
     statements: updateStatements,
+    verifiedAddress: { userId: registration.user_id, normalizedEmail: verifiedEmail },
   };
 }
 
@@ -315,6 +319,7 @@ export async function confirmRegistrationByToken(
       [prepared.registration.id],
     );
     if (!registration) throw new AppError(500, "REGISTRATION_CONFIRM_FAILED", "Registration update failed");
+    await linkVerifiedAddressToDomainOrganization(db, prepared.verifiedAddress);
     return { registration, manageToken: prepared.manageToken };
   }
   throw new AppError(409, "INVITE_CHANGED", "Linked invite state changed; please retry confirmation");

@@ -4,7 +4,7 @@ import { createExecutionContext } from "cloudflare:test";
 import { createRegistration } from "../functions/_lib/services/registrations/create";
 import { beforeEach, describe, expect, it } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { queryAll } from "./helpers/context";
 import {
@@ -61,6 +61,17 @@ describe("accepted proposal speaker registration", () => {
     const byFullName = eventSpeakersResponseSchema.parse(await (await request("?q=Co%20Speaker")).json());
     expect(byFullName.speakers).toHaveLength(1);
     expect(byFullName.speakers[0].firstName).toBe("Co");
+    // The roster row shows the speaker's face: none on file is null, the
+    // account's own headshot is its public same-origin path.
+    expect(byFullName.speakers[0].headshotUrl).toBeNull();
+    await env.DB.prepare(
+      `UPDATE users SET headshot_r2_key = 'headshots/' || id || '/face.webp'
+       WHERE id = (SELECT user_id FROM proposal_speakers WHERE id = ?)`,
+    )
+      .bind(byFullName.speakers[0].id)
+      .run();
+    const withFace = eventSpeakersResponseSchema.parse(await (await request("?q=Co%20Speaker")).json());
+    expect(withFace.speakers[0].headshotUrl).toMatch(/^\/api\/v1\/users\/[^/]+\/headshots\/face\.webp$/);
     const searched = eventSpeakersResponseSchema.parse(await (await request("?q=nomatch")).json());
     expect(searched.speakers).toEqual([]);
     expect(searched.page.total).toBe(0);
@@ -81,16 +92,19 @@ describe("accepted proposal speaker registration", () => {
       expect(response.status).toBe(200);
       return proposalSpeakersResponseSchema.parse(await response.json()).speakers;
     };
-    expect((await proposalSpeakers()).map((speaker) => speaker.registrationStatus)).toEqual([null, null]);
+    expect((await proposalSpeakers()).map((speaker) => speaker.registration)).toEqual([null, null]);
     await accept(proposalId);
-    expect((await proposalSpeakers()).map((speaker) => speaker.registrationStatus)).toEqual([
-      "registered",
-      "registered",
-    ]);
     const registrations = await queryAll<{ id: string; status: string; attendance_type: string }>(
       env.DB,
       "SELECT id, status, attendance_type FROM registrations WHERE event_id = ?",
       eventId,
+    );
+    // The roster names each speaker's registration, so the card can open it.
+    const rosterRegistrations = (await proposalSpeakers()).map((speaker) => speaker.registration);
+    expect(rosterRegistrations.map((registration) => registration?.status)).toEqual(["registered", "registered"]);
+    expect(rosterRegistrations.map((registration) => registration?.attendanceType)).toEqual(["in_person", "in_person"]);
+    expect(rosterRegistrations.map((registration) => registration?.id).sort()).toEqual(
+      registrations.map((row) => row.id).sort(),
     );
     expect(registrations).toHaveLength(2);
     expect(registrations.every((row) => row.status === "registered" && row.attendance_type === "in_person")).toBe(true);
@@ -165,7 +179,7 @@ describe("accepted proposal speaker registration", () => {
     );
     expect(rows).toEqual([{ attendance_type: "virtual" }]);
   });
-  it("confirms a pending registration while preserving selected days, organization and form answers", async () => {
+  it("confirms a pending registration while preserving selected days and form answers", async () => {
     const { proposalId, coSpeakerUserId } = await inviteSpeakerAndSubmitCapacityProposal(adminSessionToken);
     const { registration } = await createRegistration(env.DB, {
       event: { id: eventId },
@@ -174,22 +188,19 @@ describe("accepted proposal speaker registration", () => {
       dayAttendance: [{ dayDate: "2026-12-02", attendanceType: "virtual" }],
       sourceType: "public",
       customAnswersJson: '{"diet":"vegetarian"}',
-      eventOrganizationName: "Example Organization",
     });
     expect(registration.status).toBe("pending_email_confirmation");
     await accept(proposalId);
     expect(
       await queryAll(
         env.DB,
-        `SELECT status, custom_answers_json, registration_organization_name,
-      confirmation_link_secret FROM registrations WHERE id = ?`,
+        "SELECT status, custom_answers_json, confirmation_link_secret FROM registrations WHERE id = ?",
         registration.id,
       ),
     ).toEqual([
       {
         status: "registered",
         custom_answers_json: '{"diet":"vegetarian"}',
-        registration_organization_name: "Example Organization",
         confirmation_link_secret: null,
       },
     ]);
@@ -210,7 +221,6 @@ describe("accepted proposal speaker registration", () => {
       attendanceType: "virtual",
       sourceType: "public",
       customAnswersJson: '{"diet":"vegetarian"}',
-      eventOrganizationName: "Example Organization",
       dayAttendance: [{ dayDate: "2026-12-02", attendanceType: "virtual" }],
     });
     await env.DB.prepare("UPDATE registrations SET status = 'cancelled' WHERE id = ?").bind(registration.id).run();
@@ -221,13 +231,12 @@ describe("accepted proposal speaker registration", () => {
     expect(
       await queryAll(
         env.DB,
-        "SELECT custom_answers_json, registration_organization_name, source_type FROM registrations WHERE id = ?",
+        "SELECT custom_answers_json, source_type FROM registrations WHERE id = ?",
         registration.id,
       ),
     ).toEqual([
       {
         custom_answers_json: '{"diet":"vegetarian"}',
-        registration_organization_name: "Example Organization",
         source_type: "public",
       },
     ]);

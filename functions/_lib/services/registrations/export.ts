@@ -7,6 +7,9 @@ import { formatCustomAnswerValue } from "../../utils/custom-answer-display";
 import { writeAuditLog } from "../audit";
 import { resolveEventFormResponses, type EventFormResponse, type EventFormResolutionEvent } from "../forms";
 import type { FormFieldDefinition } from "../forms";
+import { sponsorConsentSql } from "../event-participation/sponsor-consent";
+import { contactAffiliation } from "../../email-domains/contact-kind";
+import { PERSONAL_EMAIL_ADDRESS_LABEL } from "../../../../assets/shared/email-first-copy";
 
 interface ExportRow {
   id: string;
@@ -74,8 +77,7 @@ export async function buildRegistrationCsv(
             COALESCE(u.first_name || ' ' || u.last_name, u.first_name, u.email) AS display_name,
             ${REGISTRATION_ORGANIZATION_SQL} AS organization,
             ${REGISTRATION_JOB_TITLE_SQL} AS job_title,
-            EXISTS(SELECT 1 FROM consent_acceptances ca
-                   WHERE ca.registration_id = r.id AND ca.term_key = 'sponsor-data-sharing') AS sponsor_consent,
+            ${sponsorConsentSql("r")} AS sponsor_consent,
             r.custom_answers_json, r.form_placement_id
      FROM registrations r
      LEFT JOIN users u ON u.id = r.user_id
@@ -117,11 +119,12 @@ export async function buildRegistrationCsv(
   const dataRows = rows.map((row) => {
     const response = responseByRegistration.get(row.id) ?? null;
     const customAnswers = response ? response.answers : null;
+    const affiliation = contactAffiliation(row.user_email, row.organization);
     return [
       row.id,
       row.display_name,
       row.user_email,
-      row.organization,
+      affiliation.personalEmail ? PERSONAL_EMAIL_ADDRESS_LABEL : affiliation.organization,
       row.job_title,
       row.status,
       row.attendance_type,

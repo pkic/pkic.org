@@ -1,0 +1,368 @@
+// @vitest-environment jsdom
+import { render } from "preact";
+import { act } from "preact/test-utils";
+import { afterEach, describe, expect, it, vi } from "vitest";
+import { identitiesListQuerySchema, identitiesListResponseSchema } from "../../assets/shared/schemas/identity";
+import { userAuthSessionResponseSchema } from "../../assets/shared/schemas/user-auth";
+import {
+  registrationEmailProofStartSchema,
+  registrationEmailProofVerifyResponseSchema,
+  registrationEmailProofVerifySchema,
+} from "../../assets/shared/schemas/registration-email-proof";
+import type { ConfirmOrganizationController } from "../../assets/ts/components/RegistrationConfirmOrganization";
+import { userDetailResponseSchema } from "../../assets/shared/schemas/user-management";
+import { RegistrationIdentitySelect } from "../../assets/ts/components/RegistrationIdentitySelect";
+import { RegistrationContactStep } from "../../assets/ts/components/RegistrationContactStep";
+import {
+  EMAIL_FIRST_ADVISORY_COPY,
+  EMAIL_FIRST_COPY,
+  REGISTRATION_IDENTITY_COPY,
+  REGISTRATION_ORGANIZATION_COPY,
+  WORK_EMAIL_STEER,
+} from "../../assets/shared/email-first-copy";
+import { emailDomainResponseSchema } from "../../assets/shared/schemas/email-domains";
+import { controlFor } from "./helpers/labeled-control";
+
+const USER_ID = "00000000-0000-4000-8000-000000000041";
+const IDENTITY_ID = "00000000-0000-4000-8000-000000000042";
+const MEMBER_ID = "00000000-0000-4000-8000-000000000043";
+const ORGANIZATION_ID = "00000000-0000-4000-8000-000000000044";
+const NOW = "2026-01-01T00:00:00.000Z";
+let host: HTMLDivElement | null = null;
+
+function session() {
+  // Event participation is an authenticated capacity without membership.
+  return userAuthSessionResponseSchema.parse({
+    success: true,
+    sessionId: "00000000-0000-4000-8000-000000000045",
+    expiresAt: "2099-12-31T23:59:59.000Z",
+    idleExpiresAt: "2099-12-31T23:59:59.000Z",
+    identity: { id: USER_ID, email: "ada@example.test" },
+    eventParticipation: true,
+  });
+}
+
+function profile() {
+  return userDetailResponseSchema.parse({
+    user: {
+      id: USER_ID,
+      email: "ada@example.test",
+      first_name: "Ada",
+      last_name: "Lovelace",
+      preferred_name: null,
+      role: "user",
+      active: true,
+      isEcMember: false,
+      created_at: NOW,
+      updated_at: NOW,
+      pii_redacted_at: null,
+      headshotUrl: null,
+      identities: [],
+      formerIdentities: [],
+    },
+  });
+}
+
+function identity(organizationName: string | null) {
+  return {
+    id: IDENTITY_ID,
+    memberId: MEMBER_ID,
+    organizationId: organizationName ? ORGANIZATION_ID : null,
+    organizationName,
+    membershipCategory: "full",
+    userId: USER_ID,
+    userName: "Ada Lovelace",
+    emailId: null,
+    email: "ada@example.test",
+    jobTitle: "Engineer",
+    biography: null,
+    links: [],
+    headshotUrl: null,
+    source: "membership_approval",
+    state: "active",
+    showOnOrganizationProfile: true,
+    invitedAt: NOW,
+    startedAt: NOW,
+    endedAt: null,
+    blockedAt: null,
+    blockedByUserId: null,
+    predecessorIdentityId: null,
+    createdAt: NOW,
+    updatedAt: NOW,
+  };
+}
+
+interface Recorded {
+  path: string;
+  query: URLSearchParams;
+  body: unknown;
+}
+
+/** `signedIn` false answers the session with 401; `organizationName` undefined holds no identity. */
+function installResponses(
+  organizationName: string | null | undefined,
+  signedIn = true,
+  verifiedPerson: { firstName: string | null; lastName: string | null } | null = null,
+  asksOrganization = false,
+): Recorded[] {
+  const recorded: Recorded[] = [];
+  vi.stubGlobal(
+    "fetch",
+    vi.fn(async (input: RequestInfo | URL, init: RequestInit = {}) => {
+      const url = new URL(
+        typeof input === "string" ? input : input instanceof URL ? input.href : input.url,
+        location.origin,
+      );
+      recorded.push({
+        path: url.pathname,
+        query: url.searchParams,
+        body: typeof init.body === "string" ? JSON.parse(init.body) : undefined,
+      });
+      let body: unknown;
+      let status = 200;
+      if (url.pathname === "/api/v1/auth/session") {
+        body = signedIn ? session() : { error: { code: "UNAUTHORIZED", message: "Sign in" } };
+        status = signedIn ? 200 : 401;
+      } else if (url.pathname.endsWith("/registrations/proof")) body = { status: "verification_sent" };
+      else if (url.pathname.endsWith("/registrations/proof/verify"))
+        body = registrationEmailProofVerifyResponseSchema.parse({
+          email: "ada@example.test",
+          unaffiliatedAttestation: false,
+          person: verifiedPerson,
+          asksOrganization,
+        });
+      else if (url.pathname === `/api/v1/users/${USER_ID}`) body = profile();
+      else if (url.pathname.startsWith("/api/v1/email/domains/")) {
+        // The server's lists; the browser only ever sees this answer.
+        const domain = decodeURIComponent(url.pathname.slice("/api/v1/email/domains/".length));
+        body = emailDomainResponseSchema.parse({ domain, kind: domain === "ziggo.nl" ? "free" : "work" });
+      } else if (url.pathname === "/api/v1/users/current/identities") {
+        const identities = organizationName === undefined ? [] : [identity(organizationName)];
+        body = identitiesListResponseSchema.parse({
+          identities,
+          page: {
+            limit: Number(url.searchParams.get("limit") ?? 50),
+            offset: 0,
+            total: identities.length,
+            hasMore: false,
+          },
+        });
+      } else throw new Error(`Unexpected request: ${url.pathname}`);
+      return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+    }),
+  );
+  return recorded;
+}
+
+async function settle() {
+  for (let round = 0; round < 3; round += 1)
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+}
+
+async function mount(node: preact.ComponentChild): Promise<HTMLFormElement> {
+  host = document.createElement("div");
+  document.body.append(host);
+  const form = document.createElement("form");
+  const mountPoint = document.createElement("div");
+  form.append(mountPoint);
+  host.append(form);
+  await act(async () => {
+    render(node, mountPoint);
+  });
+  await settle();
+  return form;
+}
+
+async function continueWith(form: HTMLFormElement, email: string) {
+  await act(() => {
+    const control = controlFor(form, copy.work.label);
+    control.value = email;
+    control.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => {
+    [...form.querySelectorAll("button")].find((button) => button.textContent === copy.work.action)!.click();
+  });
+  await settle();
+}
+
+function value(form: HTMLFormElement, name: string): string | undefined {
+  return (form.elements.namedItem(name) as HTMLInputElement | null)?.value;
+}
+
+const copy = EMAIL_FIRST_COPY.registration;
+
+afterEach(() => {
+  sessionStorage.clear();
+  if (host) render(null, host.querySelector("form > div")!);
+  host?.remove();
+  host = null;
+  vi.unstubAllGlobals();
+});
+
+const ENDPOINT = "/api/v1/events/pqc/registrations";
+const PROOF_TOKEN = "proof-token-0123456789abcdefghijklmnopqrstuvwxyz";
+
+function contactStep(
+  onReadyChange: (ready: boolean) => void = () => {},
+  organization: ConfirmOrganizationController = {},
+) {
+  return (
+    <RegistrationContactStep
+      endpoint={ENDPOINT}
+      entry={{ referralCode: "AB12CD" }}
+      organization={organization}
+      onReadyChange={onReadyChange}
+    />
+  );
+}
+
+const button = (form: HTMLFormElement, label: string) =>
+  [...form.querySelectorAll("button")].find((candidate) => candidate.textContent === label);
+
+describe("registration contact step", () => {
+  it("asks nothing until the visitor continues, then verifies the address before anything else", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc/register/?ref=AB12CD");
+    const recorded = installResponses(undefined, false);
+    let ready = false;
+    const form = await mount(contactStep((next) => (ready = next)));
+    expect(recorded).toHaveLength(0);
+    expect(form.querySelectorAll('input:not([type="radio"])')).toHaveLength(1);
+
+    await continueWith(form, "Ada@Example.test");
+    const proof = recorded.find((request) => request.path === `${ENDPOINT}/proof`);
+    expect(registrationEmailProofStartSchema.parse(proof!.body)).toEqual({
+      email: "ada@example.test",
+      unaffiliatedAttestation: false,
+      entry: { referralCode: "AB12CD" },
+    });
+    expect(form.textContent).toContain(copy.sentTitle);
+    expect(form.textContent).toContain(copy.sent("ada@example.test"));
+    // Nothing else is asked, and the wizard cannot continue, until the link is opened.
+    expect(form.querySelector('input[name="firstName"]')).toBeNull();
+    expect(ready).toBe(false);
+
+    await act(async () => button(form, copy.changeEmail)!.click());
+    expect(controlFor(form, copy.work.label)).not.toBeNull();
+  });
+
+  it("continues from the opened link with the address verified and a known person's names filled in", async () => {
+    window.history.replaceState({}, "", `/events/2026/pqc/register/?ref=AB12CD#verify=${PROOF_TOKEN}`);
+    const recorded = installResponses(undefined, false, { firstName: "Ada", lastName: "Lovelace" });
+    let ready = false;
+    const form = await mount(contactStep((next) => (ready = next)));
+    const verify = recorded.find((request) => request.path === `${ENDPOINT}/proof/verify`);
+    expect(registrationEmailProofVerifySchema.parse(verify!.body)).toEqual({ token: PROOF_TOKEN });
+    // The token leaves the address bar, so the page can be shared without it.
+    expect(location.hash).toBe("");
+    expect(location.search).toBe("?ref=AB12CD");
+    expect(value(form, "email")).toBe("ada@example.test");
+    expect(value(form, "emailProof")).toBe(PROOF_TOKEN);
+    expect(value(form, "firstName")).toBe("Ada");
+    expect(form.querySelector('input[name="firstName"]')?.getAttribute("type")).toBe("hidden");
+    expect(form.textContent).toContain("Ada Lovelace");
+    expect(ready).toBe(true);
+  });
+
+  it("continues when the link opens in the tab already showing the form", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc/register/");
+    installResponses(undefined, false, { firstName: "Ada", lastName: "Lovelace" });
+    let ready = false;
+    const form = await mount(contactStep((next) => (ready = next)));
+    expect(ready).toBe(false);
+    await act(async () => {
+      window.history.replaceState({}, "", `/events/2026/pqc/register/#verify=${PROOF_TOKEN}`);
+      window.dispatchEvent(new HashChangeEvent("hashchange"));
+    });
+    await settle();
+    expect(value(form, "emailProof")).toBe(PROOF_TOKEN);
+    expect(location.hash).toBe("");
+    expect(ready).toBe(true);
+  });
+
+  it("asks a verified work address with an unknown domain for its organization and job title", async () => {
+    window.history.replaceState({}, "", `/events/2026/pqc/register/#verify=${PROOF_TOKEN}`);
+    installResponses(undefined, false, null, true);
+    const organization: ConfirmOrganizationController = {};
+    const form = await mount(contactStep(() => {}, organization));
+    expect(form.textContent).toContain(REGISTRATION_ORGANIZATION_COPY.question);
+    expect(controlFor(form, "First name").value).toBe("");
+    let named: ReturnType<NonNullable<ConfirmOrganizationController["read"]>> | undefined;
+    await act(() => {
+      named = organization.read?.();
+    });
+    expect(named).toEqual({ refused: true });
+  });
+
+  it("continues a known signed-in person without verifying again and shows their organization read-only", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc/register/");
+    const recorded = installResponses("Example Corp");
+    const form = await mount(contactStep());
+    await continueWith(form, "ada@example.test");
+    expect(recorded.some((request) => request.path === `${ENDPOINT}/proof`)).toBe(false);
+    expect(form.querySelector('input[name="firstName"]')?.getAttribute("type")).toBe("hidden");
+    expect(value(form, "firstName")).toBe("Ada");
+    expect(value(form, "lastName")).toBe("Lovelace");
+    expect(value(form, "emailProof")).toBeUndefined();
+    expect(form.textContent).toContain(REGISTRATION_IDENTITY_COPY.representing("Example Corp"));
+    expect(value(form, "identityId")).toBe(IDENTITY_ID);
+    const lookup = recorded.find((request) => request.path === "/api/v1/users/current/identities");
+    expect(identitiesListQuerySchema.parse(Object.fromEntries(lookup!.query))).toMatchObject({
+      emailDomain: "example.test",
+      organizationOnly: true,
+      active: true,
+    });
+
+    await act(async () => button(form, REGISTRATION_IDENTITY_COPY.chooseOther)!.click());
+    expect(form.querySelector('[role="combobox"]')).not.toBeNull();
+  });
+
+  it("steers a free address from the server's answer before sending anything", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc/register/");
+    const recorded = installResponses(undefined, false);
+    const form = await mount(contactStep());
+    await continueWith(form, "ada@ziggo.nl");
+    expect(recorded.map((request) => request.path)).toEqual(["/api/v1/email/domains/ziggo.nl"]);
+    const field = controlFor(form, copy.work.label).closest(".pk-field")!;
+    expect(field.textContent).toContain(WORK_EMAIL_STEER);
+    expect(field.classList.contains("pk-field--advisory")).toBe(true);
+
+    await act(async () => button(form, EMAIL_FIRST_ADVISORY_COPY.usePersonal)!.click());
+    await act(async () => button(form, copy.personal.action)!.click());
+    await settle();
+    const proof = recorded.find((request) => request.path === `${ENDPOINT}/proof`);
+    expect(registrationEmailProofStartSchema.parse(proof!.body).unaffiliatedAttestation).toBe(true);
+  });
+
+  it("verifies a different address than the signed-in one", async () => {
+    window.history.replaceState({}, "", "/events/2026/pqc/register/");
+    const recorded = installResponses("Example Corp");
+    const form = await mount(contactStep());
+    await continueWith(form, "colleague@example.test");
+    expect(recorded.some((request) => request.path === `${ENDPOINT}/proof`)).toBe(true);
+    expect(value(form, "identityId")).toBeUndefined();
+  });
+});
+
+describe("signed-in registration identity", () => {
+  it("offers an existing organization identity", async () => {
+    installResponses("Example Corp");
+    const form = await mount(<RegistrationIdentitySelect />);
+    const combobox = form.querySelector<HTMLInputElement>('[role="combobox"]');
+    expect(combobox).not.toBeNull();
+    await act(async () => {
+      combobox!.click();
+    });
+    expect(
+      [...document.querySelectorAll('[role="option"]')].some((option) => option.textContent === "Example Corp"),
+    ).toBe(true);
+  });
+
+  it("hides the selector for a person with only an individual identity", async () => {
+    installResponses(null);
+    const form = await mount(<RegistrationIdentitySelect />);
+    expect(form.querySelector('[role="combobox"]')).toBeNull();
+    expect(value(form, "identityId")).toBeUndefined();
+  });
+});

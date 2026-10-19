@@ -86,6 +86,7 @@ function statValues(): Record<string, string | undefined> {
 }
 
 beforeEach(() => {
+  history.replaceState(null, "", "/portal/#/events/example/analytics");
   container = document.createElement("div");
   document.body.append(container);
 });
@@ -154,7 +155,7 @@ describe("portal attendance movement dashboard", () => {
     expect(container.querySelector(".pk-table--data")).toBeNull();
   });
 
-  it("states the direction of movement in words, not by colour alone", () => {
+  it("states the direction of movement in words, not by color alone", () => {
     mount(<AttendanceChangeDashboard slug={SLUG} changes={changes()} />);
 
     const text = container.textContent ?? "";
@@ -193,4 +194,15 @@ describe("portal attendance movement dashboard", () => {
     expect(statValues()["Attendees changed"]).toBe("5");
     expect(container.querySelector("table")).toBeNull();
   });
+});
+
+it("restores bookmarked attendance movement and browser history", async () => {
+  history.replaceState(null, "", "/portal/#/events/example/analytics?attendanceMovement=left");
+  mount(<AttendanceChangeDashboard slug={SLUG} changes={changes()} />);
+  expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Left in-person");
+  await act(() => {
+    history.replaceState(null, "", "/portal/#/events/example/analytics");
+    window.dispatchEvent(new PopStateEvent("popstate"));
+  });
+  expect(container.querySelector('[role="tab"][aria-selected="true"]')?.textContent).toBe("Summary");
 });

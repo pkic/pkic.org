@@ -48,8 +48,8 @@ export interface CreateRegistrationPayload {
   /** True only when this registration transaction creates the user identity. */
   unverifiedEmailCorrectionAllowed?: boolean;
   verifiedIdentity?: VerifiedRegistrationIdentityContext;
-  eventOrganizationName?: string | null;
-  eventJobTitle?: string | null;
+  /** The registrant opened the verification link for this address: no confirmation email follows. */
+  mailboxVerified?: boolean;
 }
 
 function initialRegistrationStatus(
@@ -121,7 +121,7 @@ export async function buildCreateRegistration(
   const capacityExemptReason = roleExemptReason;
   const status = initialRegistrationStatus(
     payload.inviteId ?? null,
-    Boolean(payload.verifiedIdentity || payload.acceptedProposalRoles?.length),
+    Boolean(payload.verifiedIdentity || payload.mailboxVerified || payload.acceptedProposalRoles?.length),
   );
   let confirmationLinkSecret: string | null = null;
   let pendingConfirmationDeadlineAt: string | null = null;
@@ -153,8 +153,6 @@ export async function buildCreateRegistration(
       payload.verifiedIdentity?.selectedIdentity?.id ??
       (payload.acceptedProposalRoles ? existing?.registration_identity_id : null) ??
       null,
-    registration_organization_name: payload.eventOrganizationName ?? null,
-    registration_job_title: payload.eventJobTitle ?? null,
     referred_by_code:
       payload.referredByCode ?? (payload.acceptedProposalRoles ? existing?.referred_by_code : null) ?? null,
     confirmation_link_secret: confirmationLinkSecret,
@@ -179,7 +177,7 @@ export async function buildCreateRegistration(
         .prepare(
           `UPDATE registrations
        SET invite_id = ?, status = ?, attendance_type = ?, source_type = ?, source_ref = ?,
-           custom_answers_json = ?, form_placement_id = ?, registration_group_id = ?, registration_identity_id = ?, registration_organization_name = ?, registration_job_title = ?, referred_by_code = ?, confirmation_link_secret = ?,
+           custom_answers_json = ?, form_placement_id = ?, registration_group_id = ?, registration_identity_id = ?, referred_by_code = ?, confirmation_link_secret = ?,
            pending_confirmation_deadline_at = ?,
            manage_link_secret = ?,
            cancellation_reason_code = NULL, created_identity_user_id = NULL,
@@ -196,8 +194,6 @@ export async function buildCreateRegistration(
           registration.form_placement_id,
           registration.registration_group_id,
           registration.registration_identity_id,
-          registration.registration_organization_name,
-          registration.registration_job_title,
           registration.referred_by_code,
           registration.confirmation_link_secret,
           registration.pending_confirmation_deadline_at,
@@ -213,11 +209,11 @@ export async function buildCreateRegistration(
         .prepare(
           `INSERT INTO registrations (
       id, event_id, user_id, invite_id, status, attendance_type, source_type, source_ref,
-      custom_answers_json, form_placement_id, registration_group_id, registration_identity_id, registration_organization_name, registration_job_title, referred_by_code, confirmation_link_secret,
+      custom_answers_json, form_placement_id, registration_group_id, registration_identity_id, referred_by_code, confirmation_link_secret,
       pending_confirmation_deadline_at,
       manage_link_secret, cancellation_reason_code,
       created_identity_user_id, confirmed_at, cancelled_at, created_at, updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .bind(
           registration.id,
@@ -232,8 +228,6 @@ export async function buildCreateRegistration(
           registration.form_placement_id,
           registration.registration_group_id,
           registration.registration_identity_id,
-          registration.registration_organization_name,
-          registration.registration_job_title,
           registration.referred_by_code,
           registration.confirmation_link_secret,
           registration.pending_confirmation_deadline_at,

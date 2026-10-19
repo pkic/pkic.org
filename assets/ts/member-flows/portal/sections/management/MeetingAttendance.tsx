@@ -34,6 +34,7 @@ export function MeetingAttendance({ base, occurrence }: { base: string; occurren
 
   return (
     <ApiDataTable
+      urlState="meeting-attendance"
       caption="Meeting attendance"
       endpoint={endpoint}
       responseSchema={eventAttendanceListResponseSchema}
@@ -91,7 +92,6 @@ export function MeetingAttendance({ base, occurrence }: { base: string; occurren
               // reading "Verify" is nothing to choose between when the
               // controls are listed on their own.
               <Button
-                size="sm"
                 variant="secondary"
                 loading={pendingId === entry.id}
                 disabled={pendingId === entry.id}

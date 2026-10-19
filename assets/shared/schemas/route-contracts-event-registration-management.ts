@@ -31,7 +31,9 @@ export const personalEventCalendarRouteSchema = {
   "x-pkic-auth": { required: true },
 };
 
-export const eventRegistrationManagementUpdateSchema = registrationManageSchema;
+export const eventRegistrationManagementUpdateSchema = registrationManageSchema.safeExtend({
+  action: registrationManageSchema.shape.action.exclude(["withdraw_sponsor_sharing"]),
+});
 export const eventRegistrationNotificationCreateSchema = z.object({ type: z.literal("confirmation") });
 
 export const eventRegistrationBadgeRegenerationResponseSchema = successResponseSchema.extend({

@@ -10,7 +10,7 @@ import {
   createRegistration,
 } from "../functions/_lib/services/registrations";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { eventRegistrationAdmissionResponseSchema } from "../assets/shared/schemas/route-contracts-event-registration-management";
 
 async function seedInvite(

@@ -17,6 +17,7 @@ import { issueDatabaseCapability, materializeQueuedCapabilityLinks } from "../fu
 import { getRegistrationByManageToken } from "../functions/_lib/services/registrations";
 import { callApi } from "./helpers/app";
 import { gateNextBatch } from "./helpers/d1-batch-gate";
+import { registrationManageUpdateResponseSchema } from "../assets/shared/schemas/registration";
 
 const signingSecret = "test-signing-secret";
 
@@ -252,7 +253,11 @@ describe("resend-confirmation endpoint", () => {
       body: JSON.stringify({ action: "update", email: "resend-corrected@example.test" }),
     });
     expect(emailChange.status).toBe(200);
-    expect(await emailChange.json()).toEqual({ success: true, emailChanged: true });
+    expect(registrationManageUpdateResponseSchema.parse(await emailChange.json())).toEqual({
+      success: true,
+      emailChanged: true,
+      sponsorSharing: { allowed: false, withdrawnAt: null },
+    });
 
     gate.release();
     const recoveryResponse = await staleRecovery;
@@ -516,6 +521,7 @@ describe("resend-manage-link endpoint", () => {
       JSON.parse(queued.payload_json) as Record<string, unknown>,
     );
     const freshToken = new URL(delivered.manageUrl as string).searchParams.get("token") as string;
+    expect(new URL(delivered.myAgendaUrl as string).hash).toMatch(/^#\/events\/[^/]+\/agenda\?mine=1$/);
     const [earlierRegistration, freshRegistration] = await Promise.all([
       getRegistrationByManageToken(env.DB, manageToken, signingSecret),
       getRegistrationByManageToken(env.DB, freshToken, signingSecret),
