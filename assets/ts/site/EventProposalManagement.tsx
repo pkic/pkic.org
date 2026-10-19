@@ -4,6 +4,7 @@ import { Field } from "../ui/Field";
 import { Select, TextInput, Textarea } from "../ui/TextControl";
 import { Button } from "../ui/Button";
 import { HeadshotDialogTemplates } from "./HeadshotDialogTemplates";
+import { PROPOSAL_COMMITTEE_NOTES_COPY } from "../../shared/proposal-committee-notes-copy";
 
 /** Token-dependent content is populated by the existing proposal controller. */
 export function EventProposalManagement() {
@@ -29,6 +30,17 @@ export function EventProposalManagement() {
           <Field id="manage-proposal-abstract" label="Abstract" errorSlot="abstract" required>
             {(control) => <Textarea {...control} name="abstract" rows={8} required />}
           </Field>
+          <Field
+            id="manage-proposal-committee-notes"
+            label={PROPOSAL_COMMITTEE_NOTES_COPY.label}
+            errorSlot="committeeNotes"
+            help={PROPOSAL_COMMITTEE_NOTES_COPY.help}
+          >
+            {(control) => <Textarea {...control} name="committeeNotes" rows={4} maxLength={4000} />}
+          </Field>
+          <p class="pk-small pk-muted" data-committee-notes-locked hidden>
+            {PROPOSAL_COMMITTEE_NOTES_COPY.locked}
+          </p>
           <div class="pk-cluster">
             <Button type="submit">Save changes</Button>
             <Button type="button" variant="danger-quiet" data-action="withdraw">
@@ -80,7 +92,7 @@ export function EventProposalManagement() {
               </Field>
             </div>
             <div class="pk-cluster">
-              <Button type="button" variant="secondary" size="sm" data-cospeaker-invite-btn>
+              <Button type="button" variant="secondary" data-cospeaker-invite-btn>
                 Send invite
               </Button>
             </div>

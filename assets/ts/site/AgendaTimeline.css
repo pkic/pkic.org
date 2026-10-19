@@ -1,0 +1,442 @@
+/*
+ * The timeline's grid, clocks, location headings and the organizer editor's
+ * columns, refined over the agenda design. Loaded after AgendaDesign.css, so at
+ * equal specificity these rules are the ones that hold.
+ */
+
+@layer components {
+  .pk-content-agenda__timeline thead th.pk-content-agenda__location .pk-btn {
+    background: transparent;
+    border-color: transparent;
+  }
+  .pk-content-agenda__session--break {
+    background: var(--pk-on-solid-ink);
+    color: var(--pk-on-solid);
+    border-color: var(--pk-on-solid-ink);
+    box-shadow: none;
+  }
+  .pk-content-agenda__session--break h3,
+  .pk-content-agenda__session--break .pk-content-agenda__unknown-end,
+  .pk-content-agenda__session--break .pk-content-agenda__duration {
+    color: inherit;
+  }
+  .pk-content-agenda__session--break .pk-content-agenda__session-body {
+    justify-content: center;
+    text-align: center;
+  }
+  .pk-content-agenda__session--break .pk-content-agenda__duration {
+    justify-content: center;
+  }
+  .pk-content-agenda__session--break .pk-content-agenda__title-action {
+    inline-size: 100%;
+    text-align: center;
+  }
+  .pk-content-agenda__session--break:has(> .pk-content-agenda__card-header) > .pk-content-agenda__session-body > h3 {
+    padding-inline: var(--pk-8);
+  }
+
+  /* Preserve calendar context when room columns scroll horizontally. */
+  .pk-agenda-editor .pk-content-agenda__timeline .pk-content-agenda__time,
+  .pk-agenda-editor .pk-content-agenda__timeline .pk-content-agenda__time-heading {
+    position: sticky;
+    inset-inline-start: 0;
+    z-index: 4;
+    background: var(--pk-surface);
+    box-shadow: 1px 0 0 var(--pk-line);
+  }
+  .pk-content-agenda__time-heading small {
+    display: block;
+    font-size: var(--pk-text-xs);
+    font-weight: 400;
+    overflow-wrap: anywhere;
+  }
+  .pk-agenda-room-heading {
+    position: relative;
+    padding-inline-end: 2.25rem;
+    min-height: 1.75rem;
+  }
+  /* The location's name is the column's heading, read on the location's own tint: full ink, not a quiet command. */
+  .pk-agenda-room-heading > .pk-btn {
+    color: var(--pk-ink);
+    max-width: 100%;
+    text-align: start;
+    white-space: normal;
+  }
+  .pk-agenda-room-heading > .pk-menu {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline-end: 0;
+  }
+  .pk-agenda-room-heading--add {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 0;
+  }
+  .pk-agenda-editor .pk-content-agenda__timeline thead th.pk-agenda-editor__add-room {
+    vertical-align: middle;
+  }
+  .pk-agenda-editor .pk-content-agenda__timeline thead th.pk-agenda-editor__add-room,
+  .pk-agenda-editor .pk-content-agenda__slot td.pk-agenda-editor__add-room {
+    width: 3.5rem;
+    min-width: 3.5rem;
+  }
+
+  .pk-content-agenda__zone-key {
+    display: none;
+  }
+  @media (min-width: 46.001rem) {
+    .pk-content-agenda__timeline .pk-content-agenda__time,
+    .pk-content-agenda__timeline .pk-content-agenda__time-heading {
+      position: sticky;
+      inset-inline-start: 0;
+      z-index: 4;
+      background: var(--pk-surface);
+      box-shadow: 1px 0 0 var(--pk-line);
+    }
+  }
+  @media (max-width: 46rem) {
+    .pk-content-agenda__zone-key {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--pk-2) var(--pk-4);
+      font-size: var(--pk-text-xs);
+      color: var(--pk-ink-muted);
+      padding-block: var(--pk-2);
+    }
+  }
+
+  /* Major clocks extend beyond short empty grid rows; keep later sticky cells behind them. */
+  .pk-agenda-editor .pk-content-agenda__slot[data-agenda-major] > .pk-content-agenda__time {
+    border-block-start: 1px solid var(--pk-line);
+    z-index: 6;
+  }
+  .pk-agenda-editor .pk-content-agenda__timeline .pk-content-agenda__time-heading {
+    z-index: 7;
+  }
+
+  /* Card controls reserve their own space instead of covering the Locations action. */
+  .pk-content-agenda__card-header > .pk-agenda-editor__card-actions {
+    position: static;
+    display: flex;
+    flex-shrink: 0;
+    order: 1;
+    opacity: 1;
+  }
+
+  /* Opaque, flat headers keep room colors legible while the agenda scrolls. */
+  .pk-content-agenda__controls:not([hidden]),
+  .pk-content-agenda__timeline thead th {
+    backdrop-filter: none;
+    background: var(--pk-surface);
+  }
+  .pk-content-agenda__timeline thead th {
+    padding-block: var(--pk-2);
+    block-size: 3.625rem;
+    box-sizing: border-box;
+  }
+  .pk-content-agenda__timeline thead th.pk-content-agenda__location {
+    --agenda-fill: color-mix(in srgb, var(--agenda-color) 18%, var(--pk-surface));
+    border-block-end: 2px solid var(--agenda-color);
+    background: var(--agenda-fill);
+  }
+  .pk-content-agenda__toolbar-actions {
+    display: flex;
+    flex: 1 1 100%;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: var(--pk-2);
+    min-inline-size: 0;
+  }
+  .pk-agenda-editor .pk-content-agenda__clocks:not(.pk-sr-only) {
+    inset-inline-end: var(--pk-3);
+  }
+  /* Raise the owning context, not only its popup child, above nearby card actions. */
+  .pk-agenda-editor .pk-content-agenda__card-header:has(.pk-menu__trigger[aria-expanded="true"]),
+  .pk-agenda-editor .pk-content-agenda__duration:has(.pk-menu__trigger[aria-expanded="true"]) {
+    z-index: 7;
+  }
+  .pk-agenda-editor .pk-content-agenda__duration:has(.pk-menu__trigger[aria-expanded="true"]) {
+    position: relative;
+  }
+  .pk-agenda-editor__card-actions:has(.pk-menu__trigger[aria-expanded="true"]) {
+    z-index: 7;
+  }
+
+  /* The supplied reference uses one stacked track: 84px, or 96px for two zones. */
+  .pk-content-agenda {
+    --agenda-time-width: 84px;
+    --agenda-room-width: 340px;
+    /* The width the time track keeps pinned while rooms scroll: none on phones, where it scrolls with them. */
+    --agenda-pinned-width: var(--agenda-time-width);
+  }
+  .pk-content-agenda[data-agenda-distinct-zones="true"] {
+    --agenda-time-width: 96px;
+  }
+  @media (max-width: 46rem) {
+    .pk-content-agenda {
+      --agenda-pinned-width: 0px;
+    }
+  }
+  .pk-content-agenda__timeline {
+    background: var(--pk-surface);
+    /* Only the time column has a preferred width; spare space belongs to flexible rooms. */
+    table-layout: auto;
+  }
+  .pk-content-agenda__time-column {
+    width: var(--agenda-time-width);
+  }
+  .pk-content-agenda .pk-content-agenda__timeline .pk-content-agenda__time,
+  .pk-content-agenda .pk-content-agenda__timeline .pk-content-agenda__time-heading {
+    width: var(--agenda-time-width);
+    min-width: var(--agenda-time-width);
+    max-width: var(--agenda-time-width);
+    box-sizing: border-box;
+  }
+  .pk-content-agenda .pk-content-agenda__clocks {
+    gap: 2px;
+    flex-direction: column;
+    align-items: flex-end;
+    justify-content: flex-start;
+  }
+  .pk-content-agenda__clock {
+    width: auto;
+    max-inline-size: 100%;
+    flex-shrink: 0;
+  }
+  .pk-content-agenda .pk-content-agenda__clock > time {
+    font-size: var(--pk-agenda-type-18);
+    font-weight: 700;
+    color: var(--pk-ink);
+  }
+  .pk-content-agenda:not([data-agenda-time-display="browser"]) [data-agenda-clock="browser"],
+  .pk-content-agenda[data-agenda-time-display="browser"] [data-agenda-clock="venue"] {
+    order: 1;
+  }
+  .pk-content-agenda__zone-headings > small {
+    display: block;
+    width: auto;
+    font-size: var(--pk-agenda-type-12);
+    line-height: 1.3;
+  }
+  .pk-content-agenda__zone-headings > small[hidden] {
+    display: none;
+  }
+  .pk-content-agenda .pk-content-agenda__time-heading {
+    display: table-cell;
+    vertical-align: middle;
+  }
+  .pk-content-agenda__room-column {
+    width: auto;
+  }
+  .pk-content-agenda__add-column {
+    width: 3.5rem;
+  }
+  .pk-content-agenda__timeline thead th.pk-content-agenda__location,
+  .pk-content-agenda__cell {
+    width: auto;
+    min-width: var(--agenda-room-width);
+  }
+  .pk-agenda-editor .pk-content-agenda__timeline {
+    width: 100%;
+  }
+  @media (max-width: 46rem) {
+    .pk-content-agenda {
+      --agenda-room-width: 280px;
+    }
+  }
+
+  @media screen {
+    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__timeline,
+    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__timeline tbody,
+    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__slot > td {
+      display: block;
+    }
+    /* The list row's grid is the agenda design's; here it only takes the full width. */
+    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__timeline,
+    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__timeline tbody,
+    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__timeline .pk-content-agenda__slot,
+    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__slot > td {
+      inline-size: 100%;
+      min-inline-size: 0;
+      block-size: auto;
+      height: auto;
+    }
+    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__timeline thead,
+    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__cell:empty {
+      display: none;
+    }
+    .pk-content-agenda[data-agenda-view="list"]
+      .pk-content-agenda__timeline
+      .pk-content-agenda__cell
+      > .pk-content-agenda__session {
+      position: relative;
+      inset: auto;
+    }
+    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__time {
+      display: block;
+      position: static;
+      padding-block: var(--pk-3);
+      box-shadow: none;
+    }
+    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__room {
+      display: flex;
+    }
+    .pk-content-agenda[data-agenda-view="list"] .pk-content-agenda__description {
+      mask-image: none;
+    }
+  }
+  @media screen and (max-width: 46rem) {
+    .pk-content-agenda[data-agenda-view="grid"] .pk-content-agenda__timeline {
+      display: table;
+      min-inline-size: 100%;
+    }
+    .pk-content-agenda[data-agenda-view="grid"] .pk-content-agenda__timeline thead {
+      display: table-header-group;
+    }
+    .pk-content-agenda[data-agenda-view="grid"] .pk-content-agenda__timeline tbody {
+      display: table-row-group;
+    }
+    .pk-content-agenda[data-agenda-view="grid"] .pk-content-agenda__slot {
+      display: table-row;
+    }
+    .pk-content-agenda[data-agenda-view="grid"] .pk-content-agenda__slot td {
+      display: table-cell;
+      inline-size: 19rem;
+      min-inline-size: 19rem;
+      padding: var(--pk-1);
+    }
+    .pk-content-agenda[data-agenda-view="grid"] .pk-content-agenda__time {
+      display: table-cell;
+      vertical-align: top;
+    }
+    .pk-content-agenda[data-agenda-view="grid"] .pk-content-agenda__room {
+      display: none;
+    }
+  }
+
+  .pk-content-agenda__zone-headings {
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+  }
+  .pk-content-agenda:not([data-agenda-time-display="browser"]) [data-agenda-zone-heading="browser"],
+  .pk-content-agenda[data-agenda-time-display="browser"] [data-agenda-zone-heading="venue"] {
+    order: 1;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-agenda-type-10);
+  }
+  .pk-content-agenda__session-body .pk-content-agenda__speaker-info {
+    flex: 1;
+  }
+  .pk-content-agenda__session-body > .pk-agenda-speaker > .pk-agenda-speaker__open .pk-content-agenda__speaker small {
+    display: block;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+
+  /* With every physical room filtered out, an isolated clock must not fill the whole canvas. */
+  @media screen {
+    .pk-content-agenda__timeline:has(col[data-agenda-column-room]):not(:has(col[data-agenda-column-room]:not([hidden]))) {
+      width: var(--agenda-time-width);
+    }
+  }
+
+  /* Time-zone selection belongs to the shared time track, not the action toolbar. */
+  .pk-content-agenda__time-heading .pk-content-agenda__time-choice {
+    inline-size: 100%;
+    min-inline-size: 0;
+    margin: 0;
+  }
+  .pk-content-agenda__time-heading .pk-content-agenda__time-choice .pk-field__control {
+    min-inline-size: 0;
+  }
+  .pk-content-agenda__time-heading .pk-content-agenda__time-choice select {
+    inline-size: 100%;
+    min-inline-size: 0;
+    border-color: transparent;
+    background-color: transparent;
+    font-weight: 600;
+    text-overflow: ellipsis;
+  }
+  .pk-content-agenda__time-heading:has([data-agenda-time-choice]:not([hidden])) .pk-content-agenda__zone-headings {
+    display: none;
+  }
+  .pk-content-agenda__time-heading .pk-content-agenda__time-choice .pk-field__label {
+    position: static;
+    display: block;
+    margin: 0;
+  }
+  .pk-content-agenda__tabs .pk-tabs__link {
+    display: flex;
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 2px;
+  }
+  .pk-content-agenda__tabs .pk-tabs__link small {
+    font-size: var(--pk-agenda-type-12);
+    font-weight: 400;
+  }
+  @media print {
+    .pk-content-agenda__time-heading .pk-content-agenda__time-choice {
+      display: none !important;
+    }
+    .pk-content-agenda__time-heading .pk-content-agenda__zone-headings {
+      display: flex !important;
+    }
+    .pk-content-agenda__time-heading .pk-content-agenda__zone-headings > small:not([hidden]) {
+      display: block !important;
+    }
+  }
+
+  /* Compact break intervals keep their exact time rows without clock-content floors. */
+  @media screen and (min-width: 46.001rem) {
+    .pk-content-agenda__slot[data-agenda-compact-break] > .pk-content-agenda__time {
+      padding-block: 0;
+    }
+    .pk-content-agenda__slot[data-agenda-compact-break] .pk-content-agenda__clocks:not(.pk-sr-only) {
+      position: absolute;
+      inset-block-start: 0;
+      inset-inline-end: var(--pk-2);
+    }
+  }
+  .pk-agenda-editor .pk-content-agenda__slot[data-agenda-compact-break] > .pk-content-agenda__time {
+    padding-block: 0;
+  }
+
+  /* Viewer dates remain one naturally wrapping sentence in narrow session headers. */
+  .session-modal__header .pk-content-agenda__metadata[data-local-time-container] > span {
+    display: block;
+    min-inline-size: 0;
+  }
+
+  /*
+   * Printed, the agenda design's screen sizes do not apply; the time track and
+   * its time-zone choice keep these compact print values.
+   */
+  @media print {
+    .pk-content-agenda .pk-content-agenda__timeline .pk-content-agenda__time,
+    .pk-content-agenda .pk-content-agenda__timeline .pk-content-agenda__time-heading {
+      padding-inline: var(--pk-2);
+    }
+    .pk-content-agenda .pk-content-agenda__clock > time {
+      line-height: 1.2;
+    }
+    .pk-content-agenda:not([data-agenda-time-display="browser"]) [data-agenda-clock="browser"] > time,
+    .pk-content-agenda[data-agenda-time-display="browser"] [data-agenda-clock="venue"] > time {
+      font-size: var(--pk-agenda-type-10);
+      font-weight: 400;
+      color: var(--pk-ink-muted);
+    }
+    .pk-content-agenda__time-heading .pk-content-agenda__time-choice select {
+      padding: 2px 1.125rem 2px 2px;
+      font-size: var(--pk-agenda-type-11);
+    }
+    .pk-content-agenda__time-heading .pk-content-agenda__time-choice .pk-field__label {
+      font-size: var(--pk-agenda-type-10);
+      line-height: 1.2;
+    }
+  }
+}

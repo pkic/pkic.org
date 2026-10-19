@@ -5,11 +5,16 @@ import { getImage } from "astro:assets";
 import { imageMetadata } from "astro/assets/utils";
 import sharp from "sharp";
 import { publicImageFile } from "../scripts/publication/public-image-source.mjs";
-import { publicationStagingDirectory } from "../scripts/publication/build-context.mjs";
+import {
+  astroOutputDirectory,
+  publicationFastLocalBuild,
+  publicationStagingDirectory,
+} from "../scripts/publication/build-context.mjs";
 import { configureSiteImages } from "../assets/ts/site/SiteImage";
 
 const sourceDirectory = resolve(publicationStagingDirectory(), "public");
-const output = resolve("dist/astro");
+const fastBuild = publicationFastLocalBuild();
+const output = astroOutputDirectory();
 const originals = new Map();
 configureSiteImages(async (source, avatar) => {
   const file = publicImageFile(source, sourceDirectory, { allowSvg: true });
@@ -47,6 +52,9 @@ configureSiteImages(async (source, avatar) => {
   const metadata = await originals.get(file);
   if (!metadata) return null;
   const width = Math.min(metadata.width, maxWidth);
+  const height = Math.round((metadata.height * width) / metadata.width);
+  // A fast local build serves the original at the displayed size instead of encoding variants.
+  if (fastBuild) return { src: metadata.src, width, height };
   const widths = [64, 128, 256, 384, 640, 960, 1280].filter((value) => value < width).concat(width);
   const [webp, avif] = await Promise.all([
     getImage({ src: metadata, width, widths, format: "webp", quality: 82 }),
@@ -57,6 +65,6 @@ configureSiteImages(async (source, avatar) => {
     srcSet: webp.srcSet.attribute,
     avifSrcSet: avif.srcSet.attribute,
     width,
-    height: Math.round((metadata.height * width) / metadata.width),
+    height,
   };
 });

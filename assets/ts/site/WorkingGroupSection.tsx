@@ -2,6 +2,7 @@ import { Fragment } from "preact";
 
 import type { SiteHero, SiteWorkingGroupCard, SiteWorkingGroupSection } from "../../shared/site-content";
 import { ButtonLink } from "../ui/Button";
+import { IconChevron } from "../ui/MediaIcons";
 import { BlogCard } from "./BlogCard";
 import { EventCard } from "./EventCard.tsx";
 import { SiteHero as PageHero } from "./SitePrimitives";
@@ -12,6 +13,7 @@ import { GroupChairsView } from "./GroupChairs";
 import { DirectoryGrid, type DirectoryMember } from "./MemberDirectory";
 
 import "./WorkingGroupSection.css";
+import { ExternalLink } from "../ui/ExternalLink";
 
 function statusTone(status?: string): string {
   if (status === "planned") return "warn";
@@ -22,7 +24,7 @@ function statusTone(status?: string): string {
 /**
  * A card in one of the data-driven sections.
  *
- * The published markup is the bento card, whose stylesheet the group's colour
+ * The published markup is the bento card, whose stylesheet the group's color
  * tints; the status badge and the footer link are its own parts.
  */
 function BentoCard({ accent, card }: { accent: string; card: SiteWorkingGroupCard }) {
@@ -48,18 +50,13 @@ function BentoCard({ accent, card }: { accent: string; card: SiteWorkingGroupCar
   );
   if (!card.href) return <div class={`bento-card bento-${accent}-pale`}>{body}</div>;
   return (
-    <a
-      class={`bento-card bento-card-link bento-${accent}-pale`}
-      href={card.href}
-      rel={card.external ? "noopener noreferrer" : undefined}
-      target={card.external ? "_blank" : undefined}
-    >
+    <ExternalLink class={`bento-card bento-card-link bento-${accent}-pale`} href={card.href} external={card.external}>
       {body}
       <div class="bento-footer pk-strong">
         {card.external ? "Visit ↗" : "Explore →"}
         {card.external ? <span class="pk-sr-only"> (opens in a new site)</span> : null}
       </div>
-    </a>
+    </ExternalLink>
   );
 }
 
@@ -97,20 +94,7 @@ function SectionNav({ section }: { section: SiteWorkingGroupSection }) {
                 aria-expanded="false"
                 aria-label="Show contents"
               >
-                <svg
-                  xmlns="http://www.w3.org/2000/svg"
-                  width="11"
-                  height="11"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                  stroke-linecap="round"
-                  stroke-linejoin="round"
-                  aria-hidden="true"
-                >
-                  <polyline points="6 9 12 15 18 9" />
-                </svg>
+                <IconChevron pointing="down" width="11" height="11" />
               </button>
             </div>
           ) : (
@@ -193,7 +177,7 @@ function JoinCta({ section }: { section: SiteWorkingGroupSection }) {
             {section.join.label}
           </ButtonLink>
         ) : null}
-        <ButtonLink href={section.base} size="sm" variant="secondary">
+        <ButtonLink href={section.base} variant="secondary">
           ← Back to {section.groupTitle}
         </ButtonLink>
       </div>
@@ -333,7 +317,7 @@ export function WorkingGroupLandingPage({
               {/*
                 The intro column carries no class of its own: `wg/section.html`
                 leaves it bare so the body reads at the page's own scale, and a
-                prose class here would repaint its colour and its leading.
+                prose class here would repaint its color and its leading.
               */}
               <div data-pagefind-body dangerouslySetInnerHTML={{ __html: section.introHtml }} />
               <div>

@@ -1,7 +1,30 @@
-import { sitePublicationReleaseSchema } from "../../assets/shared/schemas/site-publication-release.ts";
+import { registerLegacyAgendaSchemaResolution } from "../lib/legacy-agenda-runtime.mjs";
 import { readFile, access, rm } from "node:fs/promises";
 import { resolve } from "node:path";
+import { astroOutputDirectory } from "./build-context.mjs";
+import { privatePageHeaderRules } from "./private-page-header-rules.mjs";
 import { installReleaseBytes, installReleaseFile, synchronizeReleaseDirectory } from "./synchronize-release-files.mjs";
+
+// Register native TypeScript resolution before loading the canonical shared schema graph.
+registerLegacyAgendaSchemaResolution();
+const { prepareDocumentRetirement, readReleaseDocumentRoutes, validateDocumentRedirectRules } =
+  await import("./collect-document-redirects.mjs");
+const { sitePublicationReleaseSchema } = await import("../../assets/shared/schemas/site-publication-release.ts");
+const { createReleaseIntegrity, verifyReleaseIntegrity, synchronizedPublicationDirectories } =
+  await import("./release-integrity.mjs");
+
+/** Permanent moves of public URLs whose old paths no source document owns. */
+const movedRouteRedirects = [
+  ...["/news/feed", "/news/feed/", "/news/feed/index.xml"].map((from) => ({
+    from,
+    to: "/news/feed.xml",
+    status: 301,
+  })),
+  // PKIMM 2.0.0 removed the Excel and web tools; the 1.0.0 release still publishes them.
+  // A splat does not match the path without its trailing slash.
+  { from: "/wg/pkimm/model/tools", to: "/wg/pkimm/1.0.0/tools/", status: 301 },
+  { from: "/wg/pkimm/model/tools/*", to: "/wg/pkimm/1.0.0/tools/:splat", status: 301 },
+];
 
 /** Merge a complete publication into the complete Worker build, never a partial asset upload. */
 export async function assembleStaticRelease(source, destination, environment) {
@@ -12,8 +35,10 @@ export async function assembleStaticRelease(source, destination, environment) {
     throw new Error("Publication environment does not match the Worker build");
   if (environment !== "local" && release.source !== "native")
     throw new Error("Remote deployments require a native publication snapshot");
-  // A repeated assembly replaces only the previous publication's owned files.
-  // The normal pipeline starts from a fresh complete Vite build.
+  if (environment !== "local" && (release.sourceSequence === null || !release.integrity))
+    throw new Error("Remote deployments require tracked publication provenance and integrity");
+  if (release.integrity) await verifyReleaseIntegrity(source, release);
+  const documentRoutes = await readReleaseDocumentRoutes(source, release);
   const previousPath = resolve(destination, "publication.json");
   let previous;
   try {
@@ -21,14 +46,29 @@ export async function assembleStaticRelease(source, destination, environment) {
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
   }
-  if (previous) {
-    const manifest = sitePublicationReleaseSchema.parse(JSON.parse(previous));
+  const manifest = previous ? sitePublicationReleaseSchema.parse(JSON.parse(previous)) : null;
+  const retired = new Set(documentRoutes.retiredPaths.map(({ path }) => path));
+  const redirectPath = resolve(destination, "_redirects");
+  let redirects = "";
+  try {
+    redirects = await readFile(redirectPath, "utf8");
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+  }
+  redirects = redirects.replace(/\n# BEGIN PUBLICATION[\s\S]*?# END PUBLICATION\n?/g, "");
+  const installedRedirects = [...release.redirects, ...movedRouteRedirects];
+  validateDocumentRedirectRules(installedRedirects, documentRoutes, redirects);
+  const retire = await prepareDocumentRetirement([source, destination], documentRoutes);
+  await retire();
+  // A repeated assembly replaces only the previous publication's owned files.
+  // Normal fresh builds cannot derive prior document routes from this local destination.
+  if (manifest) {
     const incoming = new Set(release.files);
     for (const file of manifest.files) {
-      if (!incoming.has(file)) await rm(resolve(destination, file), { force: true });
+      if (!incoming.has(file) && !retired.has(file)) await rm(resolve(destination, file), { force: true });
     }
   }
-  for (const directory of ["_assets", "_published", "pagefind", "js/built"]) {
+  for (const directory of synchronizedPublicationDirectories) {
     try {
       await access(resolve(source, directory));
     } catch (error) {
@@ -46,11 +86,12 @@ export async function assembleStaticRelease(source, destination, environment) {
   }
   // Asset responses carry the selected publication identity without running application code.
   const headerPath = resolve(destination, "_headers");
-  let headers = "";
+  let headers;
   try {
     headers = await readFile(headerPath, "utf8");
   } catch (error) {
     if (error.code !== "ENOENT") throw error;
+    headers = await readFile(new URL("../../static/_headers", import.meta.url), "utf8");
   }
   headers = headers
     .replace(/\n# BEGIN PUBLICATION[\s\S]*?# END PUBLICATION\n?/g, "")
@@ -61,14 +102,23 @@ export async function assembleStaticRelease(source, destination, environment) {
   headers = /^\/\*\r?\n/m.test(headers)
     ? headers.replace(/^\/\*\r?\n/m, (rule) => rule + global)
     : `${headers}\n/*\n${global}`;
-  const privateRules = release.privatePaths
+  const privateRules = privatePageHeaderRules(release.privatePaths, release.files)
     .map(
       (path) =>
         `\n${path}\n    ! Cache-Control\n    Cache-Control: no-store, max-age=0\n    ! Referrer-Policy\n    Referrer-Policy: no-referrer\n    ! X-Robots-Tag\n    X-Robots-Tag: noindex, nofollow, noarchive\n`,
     )
     .join("");
-  const conferenceRules = release.files
-    .filter((file) => /^events\/.*\/(?:event-data\.json|agenda\.ics)$/.test(file))
+  const conferenceRules = [
+    ...new Set(
+      release.files
+        .filter((file) =>
+          /^(?:events\/.*\/(?:event-data\.json|agenda\.ics)|.*\/agenda\/(?:data\.json|calendar\.ics|calendar\/[^/]+\.ics))$/.test(
+            file,
+          ),
+        )
+        .map((file) => file.replace(/(\/agenda\/calendar)\/[^/]+\.ics$/, "$1/*")),
+    ),
+  ]
     .map((file) => `\n/${file}\n    ! X-Robots-Tag\n    X-Robots-Tag: noindex, nofollow, noarchive\n`)
     .join("");
   const immutableRules = [
@@ -79,31 +129,41 @@ export async function assembleStaticRelease(source, destination, environment) {
     "/_published/diagrams/*",
     "/_published/agenda/*",
   ]
-    .map((path) => `\n${path}\n    ! Cache-Control\n    Cache-Control: public, max-age=31536000, immutable\n`)
+    .map(
+      (path) =>
+        `\n${path}\n    ! Cache-Control\n    Cache-Control: public, max-age=31536000, immutable\n${path === "/_assets/*" ? "    Service-Worker-Allowed: /portal/\n" : ""}`,
+    )
     .join("");
   const rules =
     immutableRules +
     "\n/_published/news/*\n    ! Cache-Control\n    Cache-Control: public, max-age=300, must-revalidate\n\n/feed/*\n    Content-Type: application/rss+xml; charset=UTF-8\n\n/ms/feed/*\n    Content-Type: application/rss+xml; charset=UTF-8\n\n/news/feed.xml\n    Content-Type: application/rss+xml; charset=UTF-8\n";
+  const installedHeaders = `${headers}\n# BEGIN PUBLICATION${rules}${conferenceRules}${privateRules}# END PUBLICATION\n`;
+  // Cloudflare ignores rules beyond this limit, which could silently drop private-page protections.
+  const headerRuleCount = installedHeaders.split(/\r?\n/).filter((line) => line && !/^(?:\s|#)/.test(line)).length;
+  if (headerRuleCount > 100) throw new Error("Publication exceeds Cloudflare's 100 header-rule limit");
+  await installReleaseBytes(installedHeaders, headerPath);
   await installReleaseBytes(
-    `${headers}\n# BEGIN PUBLICATION${rules}${conferenceRules}${privateRules}# END PUBLICATION\n`,
-    headerPath,
-  );
-  const redirectPath = resolve(destination, "_redirects");
-  let redirects = "";
-  try {
-    redirects = await readFile(redirectPath, "utf8");
-  } catch (error) {
-    if (error.code !== "ENOENT") throw error;
-  }
-  redirects = redirects.replace(/\n# BEGIN PUBLICATION[\s\S]*?# END PUBLICATION\n?/g, "");
-  await installReleaseBytes(
-    `${redirects}\n# BEGIN PUBLICATION\n${release.redirects.map(({ from, to, status }) => `${from} ${to} ${status}`).join("\n")}\n/news/feed /news/feed.xml 301\n/news/feed/ /news/feed.xml 301\n/news/feed/index.xml /news/feed.xml 301\n# END PUBLICATION\n`,
+    `${redirects}\n# BEGIN PUBLICATION\n${installedRedirects.map(({ from, to, status }) => `${from} ${to} ${status}`).join("\n")}\n# END PUBLICATION\n`,
     redirectPath,
   );
-  await installReleaseBytes(JSON.stringify(release), previousPath);
+  const installed = {
+    ...release,
+    integrity: await createReleaseIntegrity(destination, [...release.files, "_headers", "_redirects"]),
+  };
+  if (release.integrity) {
+    for (const [path, expected] of Object.entries(release.integrity.files)) {
+      // These two policy files are deliberately generated for the complete
+      // target Worker. Every incoming page and synchronized asset stays exact.
+      if (path === "_headers" || path === "_redirects") continue;
+      const actual = installed.integrity.files[path];
+      if (!actual || actual.sha256 !== expected.sha256 || actual.bytes !== expected.bytes)
+        throw new Error(`Publication changed during installation: ${path}`);
+    }
+  }
+  await installReleaseBytes(JSON.stringify(sitePublicationReleaseSchema.parse(installed)), previousPath);
   console.log(`[publication] assembled ${release.files.length} static pages from snapshot ${release.snapshotId}`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === resolve(import.meta.filename)) {
-  await assembleStaticRelease(resolve("dist/astro"), resolve("dist/client"), process.env.CLOUDFLARE_ENV ?? "local");
+  await assembleStaticRelease(astroOutputDirectory(), resolve("dist/client"), process.env.CLOUDFLARE_ENV ?? "local");
 }

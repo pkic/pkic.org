@@ -94,3 +94,28 @@ it("publishes a bounded optimized derivative while leaving the original intact",
     await rm(output, { recursive: true, force: true });
   }
 });
+
+it("publishes approved images without local R2 objects as missing only when a rehearsal allows it", async () => {
+  const output = await mkdtemp(resolve(tmpdir(), "pkic-public-media-"));
+  const warning = vi.spyOn(console, "warn").mockImplementation(() => {});
+  try {
+    const logo = "/api/v1/members/synthetic/logo";
+    const photo = "/api/v1/users/synthetic/headshots/portrait.webp";
+    const request = {
+      output,
+      snapshot: { member: { logoUrl: logo, photoUrl: photo }, memberWall: [{ logoUrl: logo }] },
+      keys: { [logo]: "private/logo.png", [photo]: "private/portrait.webp" },
+      manifest: new Map(),
+      getObject: async () => null,
+    };
+    await expect(copyPublicMedia(request)).rejects.toThrow("missing from R2");
+    const result = await copyPublicMedia({ ...request, omitMissingSources: true });
+    expect(result.member).toEqual({ logoUrl: null, photoUrl: null });
+    expect(result.memberWall).toEqual([{ logoUrl: "/img/logo.svg" }]);
+    expect(JSON.stringify(warning.mock.calls)).toContain("2 approved image(s)");
+    expect(JSON.stringify([result, warning.mock.calls])).not.toContain("private/");
+  } finally {
+    warning.mockRestore();
+    await rm(output, { recursive: true, force: true });
+  }
+});

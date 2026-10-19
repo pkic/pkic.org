@@ -1,0 +1,50 @@
+@layer components {
+  .pk-person-preview-host {
+    display: contents;
+  }
+  /*
+   * The person card: the agenda directory's portrait card, floating beside a
+   * name. Wide enough for a face to be recognized, never wider than a phone.
+   */
+  .pk-live-person-card {
+    position: fixed;
+    z-index: 30;
+    inline-size: min(15rem, calc(100vw - 2rem));
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    border: 0;
+    border-radius: var(--pk-radius-lg);
+    background: transparent;
+    color: var(--pk-ink);
+    box-shadow: var(--pk-shadow-3);
+    font-size: var(--pk-text-sm);
+    font-weight: 400;
+    text-align: start;
+    white-space: normal;
+  }
+  .pk-live-person-card > .pk-agenda-speaker-directory__card {
+    cursor: default;
+  }
+  .pk-live-person-card .pk-agenda-speaker-directory__name a {
+    color: inherit;
+    text-decoration: underline;
+    text-decoration-color: var(--pk-line-strong);
+    text-underline-offset: 0.2em;
+  }
+  .pk-live-person-card .pk-agenda-speaker-directory__name a:hover {
+    text-decoration-color: currentColor;
+  }
+  .pk-live-person-card__role {
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-sm);
+  }
+  .pk-live-person-card .pk-live-roles--full {
+    margin-block-start: var(--pk-1);
+  }
+
+  /* A preview region takes the shape of the control it wraps. */
+  .pk-live-person-preview {
+    display: block;
+  }
+}

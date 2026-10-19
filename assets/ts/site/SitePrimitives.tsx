@@ -8,8 +8,6 @@ import { EventCard } from "./EventCard";
 import { WorkingGroupIcon } from "./WorkingGroupIcon.tsx";
 import { WorkingGroupCard } from "./WorkingGroupCard";
 
-export { CalendarIcon } from "./SiteDate";
-
 import "./SitePages.css";
 
 /**
@@ -205,7 +203,7 @@ export function SiteListingSection({
           <div class={`${band.solidHeader ? "pk " : ""}pk-cluster pk-cluster--between`}>
             <h2>{listing.heading}</h2>
             {moreHref ? (
-              <ButtonLink href={moreHref} size="sm" variant="secondary">
+              <ButtonLink href={moreHref} variant="secondary">
                 {moreLabel ?? "View all →"}
               </ButtonLink>
             ) : null}

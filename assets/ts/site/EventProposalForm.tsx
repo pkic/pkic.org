@@ -3,6 +3,7 @@ import { TextInput, Textarea } from "../ui/TextControl";
 import { Checkbox } from "../ui/Checkbox";
 import { Button } from "../ui/Button";
 import { EventFlowProgress } from "./EventFlowProgress";
+import { PROPOSAL_COMMITTEE_NOTES_COPY } from "../../shared/proposal-committee-notes-copy";
 
 /** Published proposal controls enhanced by the canonical proposal controller. */
 export function EventProposalForm() {
@@ -25,40 +26,7 @@ export function EventProposalForm() {
             Who should we contact about this proposal? Your details are used only for organizer communication and are
             kept confidential from the public.
           </p>
-          <div class="pk-grid">
-            <Field id="proposal-first-name" label="First name" errorSlot="proposer.firstName" required>
-              {(control) => <TextInput {...control} name="firstName" autoComplete="given-name" required />}
-            </Field>
-            <Field id="proposal-last-name" label="Last name" errorSlot="proposer.lastName" required>
-              {(control) => <TextInput {...control} name="lastName" autoComplete="family-name" required />}
-            </Field>
-          </div>
-          <Field
-            id="proposal-email"
-            label="Work email"
-            errorSlot="proposer.email"
-            help="We'll send your proposal management link here — use it to track status, edit details, and add speakers after submission."
-            required
-          >
-            {(control) => <TextInput {...control} name="email" type="email" autoComplete="email" required />}
-          </Field>
-          <p data-email-warning class="pk-warning-note" hidden>
-            This looks like a personal email address. Consider using your professional email so we can verify your
-            affiliation.
-          </p>
-          <div class="pk-grid">
-            <Field id="proposal-organization" label="Organization (optional)" errorSlot="proposer.organizationName">
-              {(control) => <TextInput {...control} name="organizationName" autoComplete="organization" />}
-            </Field>
-            <Field id="proposal-job-title" label="Job title (optional)" errorSlot="proposer.jobTitle">
-              {(control) => <TextInput {...control} name="jobTitle" autoComplete="organization-title" />}
-            </Field>
-          </div>
-          <Checkbox
-            id="proposal-is-presenting"
-            name="isPresenting"
-            label="I will also be presenting — add me as one of the speakers"
-          />
+          <div data-proposer-identity />
         </div>
         <div data-step="3" class="event-flow-step pk-stack" hidden>
           <p class="event-flow-step-intro">
@@ -84,6 +52,14 @@ export function EventProposalForm() {
           >
             {(control) => <Textarea {...control} name="abstract" rows={8} required minLength={80} maxLength={8000} />}
           </Field>
+          <Field
+            id="proposal-committee-notes"
+            label={PROPOSAL_COMMITTEE_NOTES_COPY.label}
+            errorSlot="proposal.committeeNotes"
+            help={PROPOSAL_COMMITTEE_NOTES_COPY.help}
+          >
+            {(control) => <Textarea {...control} name="committeeNotes" rows={4} maxLength={4000} />}
+          </Field>
           <div data-custom-fields />
         </div>
         <div data-step="4" class="event-flow-step pk-stack" hidden>
@@ -91,10 +67,15 @@ export function EventProposalForm() {
             Each speaker receives a personal link by email to confirm their participation, complete their profile, and
             upload a headshot once the proposal is accepted.
           </p>
+          <Checkbox
+            id="proposal-is-presenting"
+            name="isPresenting"
+            label="I will also be presenting — add me as one of the speakers"
+          />
           <div data-proposal-speakers class="pk-stack" />
           <Field group label="Speakers" errorSlot="speakers">
             {() => (
-              <Button type="button" variant="secondary" size="sm" data-add-speaker>
+              <Button type="button" variant="secondary" data-add-speaker>
                 Add speaker
               </Button>
             )}

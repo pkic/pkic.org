@@ -3,11 +3,11 @@ import type { SitePublicationSnapshot } from "../../../assets/shared/schemas/sit
 import type { SiteContentPage } from "../../../assets/shared/site-content";
 
 /** Reuse the authored workflow template for explicitly published public events. */
-export async function loadPublishedEventFlow(
+export async function loadPublishedEventFlow<T extends Pick<SiteContentPage, "route" | "title" | "hero">>(
   route: string,
   publication: SitePublicationSnapshot | undefined,
-  loadTemplate: (path: string) => Promise<SiteContentPage | null>,
-): Promise<SiteContentPage | null> {
+  loadTemplate: (path: string) => Promise<T | null>,
+): Promise<T | null> {
   const page = publication?.eventFlows?.find((page) => page.route === route);
   if (!page) return null;
   const template = await loadTemplate(EVENT_FLOW_SHELL_PATHS[page.flow]);

@@ -1,0 +1,89 @@
+@layer components {
+  .pk-agenda-locations {
+    display: grid;
+    gap: var(--pk-2);
+  }
+
+  .pk-agenda-locations__actions {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--pk-2);
+  }
+
+  .pk-agenda-locations__choices {
+    display: grid;
+  }
+
+  .pk-agenda-locations__row {
+    display: flex;
+    align-items: center;
+    min-block-size: calc(var(--pk-6) + var(--pk-2));
+    padding-inline: var(--pk-2);
+    border-radius: var(--pk-radius);
+  }
+
+  .pk-agenda-locations__row .pk-check__input:checked {
+    background: var(--agenda-color, var(--pk-accent-strong));
+    border-color: var(--agenda-color, var(--pk-accent-strong));
+  }
+
+  .pk-agenda-locations__row:hover,
+  .pk-agenda-locations__row:focus-within {
+    background: var(--pk-surface-sunk);
+  }
+
+  .pk-agenda-locations__row[hidden] {
+    display: none;
+  }
+
+  .pk-agenda-locations__empty {
+    margin: 0;
+    padding: var(--pk-2);
+    color: var(--pk-ink-muted);
+  }
+}
+
+@layer utilities {
+  [data-agenda-editor-controls] {
+    display: flex;
+    gap: var(--pk-2);
+  }
+  @container (max-width: 63.9375rem) {
+    .pk-toolbar-row
+      .pk-content-agenda__toolbar-actions
+      > :is(
+        [data-agenda-scroll],
+        [data-agenda-compact],
+        [data-agenda-expand],
+        [data-agenda-print],
+        [data-agenda-mine-filter]
+      ) {
+      display: none;
+    }
+    .pk-content-agenda .pk-toolbar-row .pk-content-agenda__filter-controls:not(:popover-open) {
+      display: none;
+    }
+    .pk-content-agenda .pk-toolbar-row .pk-content-agenda__filter-controls:popover-open {
+      display: flex;
+      flex-direction: column;
+      align-items: stretch;
+      gap: var(--pk-3);
+      padding: var(--pk-4);
+      inline-size: min(22rem, calc(100vw - var(--pk-6)));
+      border: 1px solid var(--pk-line);
+      border-radius: var(--pk-radius);
+      background: var(--pk-surface);
+      box-shadow: var(--pk-shadow-3);
+    }
+    .pk-content-agenda .pk-toolbar-row .pk-content-agenda__filter-controls:popover-open :is(.pk-field, select, input) {
+      inline-size: 100%;
+    }
+    .pk-content-agenda
+      .pk-toolbar-row
+      .pk-content-agenda__toolbar-actions
+      > :is([data-agenda-filters-toggle], [data-agenda-editor-controls]) {
+      display: none;
+    }
+  }
+}

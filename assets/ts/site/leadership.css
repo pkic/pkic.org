@@ -40,7 +40,7 @@
     border: 1px solid var(--pk-line);
     border-radius: var(--pk-radius-card);
     flex: 1 1 280px;
-    max-width: 440px;
+    max-width: 27.5rem;
     transition:
       box-shadow var(--pk-dur-fast),
       border-color var(--pk-dur-fast);
@@ -65,8 +65,8 @@
     --pk-avatar-size: var(--avatar-px);
     position: relative;
     flex-shrink: 0;
-    width: calc(var(--avatar-px) + 10px);
-    height: calc(var(--avatar-px) + 10px);
+    width: calc(var(--avatar-px) + 0.625rem);
+    height: calc(var(--avatar-px) + 0.625rem);
     border-radius: 50%;
     border: 3px solid var(--pk-accent);
     padding: 2px;
@@ -97,7 +97,7 @@
     border: 2px solid var(--pk-surface);
     line-height: 1.4;
     z-index: 1;
-    max-width: 120px;
+    max-width: 7.5rem;
     text-overflow: ellipsis;
     overflow: hidden;
   }
@@ -114,6 +114,14 @@
     min-width: 0;
   }
 
+  button.person-card-name {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    text-align: start;
+    font-family: inherit;
+    cursor: pointer;
+  }
   .person-card-name {
     font-size: var(--pk-text-lg);
     font-weight: 700;
@@ -140,8 +148,8 @@
   .person-card-org-logo-wrap {
     display: flex;
     align-items: center;
-    height: 28px;
-    max-width: 120px;
+    height: 1.75rem;
+    max-width: 7.5rem;
     overflow: hidden;
   }
 

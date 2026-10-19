@@ -1,3 +1,4 @@
+import "./headshot-dialogs.css";
 import { Button } from "../ui/Button";
 import { Checkbox } from "../ui/Checkbox";
 import { Field } from "../ui/Field";
@@ -16,10 +17,10 @@ export function HeadshotDialogTemplates() {
           <form class="hsd-form" noValidate>
             <Checkbox data-headshot-agreement class="hsd-agree-row" label="I confirm all of the above." />
             <div class="hsd-actions">
-              <Button type="submit" variant="primary" size="sm" class="hsd-confirm" disabled>
+              <Button type="submit" variant="primary" class="hsd-confirm" disabled>
                 Upload photo
               </Button>
-              <Button type="button" variant="secondary" size="sm" class="hsd-cancel">
+              <Button type="button" variant="secondary" class="hsd-cancel">
                 Cancel
               </Button>
             </div>
@@ -31,8 +32,17 @@ export function HeadshotDialogTemplates() {
           <h2 id="crop-headshot-title" class="crop-headshot-title">
             Crop headshot
           </h2>
-          <div class="crop-headshot-viewport">
-            <img alt="Headshot crop preview" draggable={false} />
+          <p id="crop-headshot-help" class="crop-headshot-help">
+            Drag the photo or use the arrow keys to position it. Zoom in to crop more closely.
+          </p>
+          <div
+            class="crop-headshot-viewport"
+            tabIndex={0}
+            role="group"
+            aria-label="Position photo"
+            aria-describedby="crop-headshot-help"
+          >
+            <canvas width={1024} height={1024} role="img" aria-label="Headshot crop preview" />
           </div>
           <div class="crop-headshot-zoom">
             <Field label="Zoom image">
@@ -40,11 +50,11 @@ export function HeadshotDialogTemplates() {
             </Field>
           </div>
           <div class="crop-headshot-actions">
-            <Button type="button" variant="secondary" size="sm" class="crop-headshot-cancel">
+            <Button type="button" variant="secondary" class="crop-headshot-cancel">
               Cancel
             </Button>
-            <Button type="button" variant="primary" size="sm" class="crop-headshot-confirm">
-              Crop &amp; Upload
+            <Button type="button" variant="primary" class="crop-headshot-confirm">
+              Crop and upload
             </Button>
           </div>
         </dialog>

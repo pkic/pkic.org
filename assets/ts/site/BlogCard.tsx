@@ -4,7 +4,7 @@ import { Fragment } from "preact";
 import type { SiteAuthor, SiteListingItem } from "../../shared/site-content";
 import { Avatar } from "../ui/Avatar";
 import { LocalTime } from "./SiteDate";
-import { CalendarGlyph } from "./SiteGlyphs";
+import { IconCalendar } from "../ui/MediaIcons";
 
 import "./BlogCard.css";
 
@@ -68,7 +68,7 @@ export function BlogCard({ item }: { item: SiteListingItem }) {
           </h2>
           {item.date ? (
             <p class="blog-card-date">
-              <CalendarGlyph />
+              <IconCalendar width="12" height="12" />
               <LocalTime value={item.date} />
             </p>
           ) : null}

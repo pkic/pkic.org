@@ -24,3 +24,10 @@
     gap: var(--pk-5);
   }
 }
+
+@layer components {
+  .blog-author-org-logo {
+    --pk-avatar-size: 2rem;
+    border: 0;
+  }
+}

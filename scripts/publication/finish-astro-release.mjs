@@ -1,16 +1,34 @@
+import {
+  assertDocumentRoutesSnapshot,
+  prepareDocumentRetirement,
+  validateDocumentRedirectRules,
+} from "./collect-document-redirects.mjs";
+import { collectSessionRedirects } from "./collect-session-redirects.mjs";
+import { publishPortalOfflineInventory } from "./publish-portal-offline-inventory.mjs";
+import { createReleaseIntegrity } from "./release-integrity.mjs";
 import { publicationTimings } from "./publication-timings.mjs";
-import { sitePublicationReleaseSchema } from "../../assets/shared/schemas/site-publication-release.ts";
-import { publicationStagingDirectory } from "./build-context.mjs";
-import { cp, readFile, writeFile, access, rm, readdir } from "node:fs/promises";
+import {
+  PUBLICATION_DOCUMENT_ROUTES_PATH,
+  sitePublicationReleaseSchema,
+} from "../../assets/shared/schemas/site-publication-release.ts";
+import { localSnapshotReceiptPath } from "./local-snapshot-receipt.mjs";
+import { sitePublicationSnapshotSchema } from "../../assets/shared/schemas/site-publication.ts";
+import {
+  publicAssetsDirectory,
+  publicationFastLocalBuild,
+  publicationOutputRoot,
+  publicationStagingDirectory,
+} from "./build-context.mjs";
+import { cp, readFile, writeFile, access, rm, readdir, mkdir } from "node:fs/promises";
 import { resolve, relative } from "node:path";
 import { JSDOM } from "jsdom";
 import { indexPublicPages } from "./index-public-pages.mjs";
 import { publishedNewsPages } from "../../site/news-pages.ts";
-import { mkdir } from "node:fs/promises";
 import { XMLValidator } from "fast-xml-parser";
 import { optimizePublicSvgFiles, publicInlineSvgOptimizer } from "./optimize-public-svg.mjs";
 import { publicDownloadPublisher } from "./publish-linked-downloads.mjs";
-import { publicSocialCardPublisher } from "./publish-social-cards.mjs";
+import { publishAuthoredAgendaDownloads } from "./publish-authored-agenda-downloads.mjs";
+import { omittedSocialCardPublisher, publicSocialCardPublisher } from "./publish-social-cards.mjs";
 import { publishAgendaLayout } from "./publish-agenda-layout.mjs";
 import { publicDiagramPublisher } from "./publish-diagrams.mjs";
 import { excludeNonindexableSitemapEntries } from "./exclude-nonindexable-sitemap-entries.mjs";
@@ -30,27 +48,54 @@ export async function finishAstroRelease(output, pages) {
 }
 
 async function finishRelease(output, pages, timings) {
-  // Content-addressed originals are only inputs to Astro's image service.
-  // Generated variants have a transform suffix; retain those and all other framework assets.
-  for (const name of await readdir(resolve(output, "_assets"))) {
+  const fast = publicationFastLocalBuild();
+  // Content-addressed originals are only inputs to Astro's image service, except in a fast
+  // local build, whose pages show them directly. Generated variants have a transform suffix;
+  // retain those and all other framework assets.
+  for (const name of fast ? [] : await readdir(resolve(output, "_assets"))) {
     if (/^[a-f0-9]{64}\.(png|jpe?g|webp|avif|gif)$/i.test(name)) await rm(resolve(output, "_assets", name));
   }
   const environment = process.env.CLOUDFLARE_ENV ?? "local";
   const source = process.env.PKIC_PUBLICATION_SNAPSHOT;
-  const snapshot = JSON.parse(
-    await readFile(source ?? resolve(publicationStagingDirectory(), "snapshot.json"), "utf8"),
+  const snapshot = sitePublicationSnapshotSchema.parse(
+    JSON.parse(await readFile(source ?? resolve(publicationStagingDirectory(), "snapshot.json"), "utf8")),
+  );
+  const receiptPath = await localSnapshotReceiptPath(process.env.PKIC_PUBLICATION_SNAPSHOT_RECEIPT, environment, [
+    output,
+    publicAssetsDirectory(),
+    resolve("static"),
+    resolve("content"),
+    resolve(publicationOutputRoot(), ".cache/publication"),
+  ]);
+  const documentRoutes = assertDocumentRoutesSnapshot(
+    { ...snapshot, sourceSequence: source ? null : snapshot.sourceSequence },
+    JSON.parse(await readFile(resolve(publicationStagingDirectory(), "document-routes.json"), "utf8")),
+    JSON.parse(await readFile(resolve(publicationStagingDirectory(), "retained-documents.json"), "utf8")),
+    JSON.parse(await readFile(resolve(publicationStagingDirectory(), "repair-aliases.json"), "utf8")),
+    JSON.parse(await readFile(resolve(publicationStagingDirectory(), "retained-repair-aliases.json"), "utf8")),
   );
   if (!source)
     await cp(resolve(publicationStagingDirectory(), "media", "_published"), resolve(output, "_published"), {
       recursive: true,
     });
-  const socialCards = await timings.measure("OG image setup", () => publicSocialCardPublisher(output));
+  const socialCards = fast
+    ? omittedSocialCardPublisher()
+    : await timings.measure("OG image setup", () => publicSocialCardPublisher(output));
   const diagrams = await timings.measure("diagram setup", () => publicDiagramPublisher(output));
+  if (fast)
+    console.log(
+      "[publication] fast local build: original images; cached diagrams; no social cards or SVG optimization",
+    );
   try {
     const svgFiles = await timings.measure("SVG file optimization", () => optimizePublicSvgFiles(output));
-    const optimizeInlineSvg = publicInlineSvgOptimizer();
-    const publishDownloads = publicDownloadPublisher(output);
-    const downloads = new Set();
+    // Inline SVG optimization only reduces size; a fast local build serves the markup as rendered.
+    const optimizeInlineSvg = fast ? () => {} : publicInlineSvgOptimizer();
+    const publishDownloads = publicDownloadPublisher(output, documentRoutes);
+    const downloads = new Set(
+      await timings.measure("authored public downloads", () =>
+        publishAuthoredAgendaDownloads(output, snapshot, documentRoutes),
+      ),
+    );
     const files = svgFiles.map((file) => relative(output, file).split("\\").join("/"));
     const privatePaths = [];
     const memberData = resolve(output, "_published", "members");
@@ -101,8 +146,12 @@ async function finishRelease(output, pages, timings) {
           downloads.add(download);
         if (/noindex/.test(document.window.document.querySelector('meta[name="robots"]')?.content ?? ""))
           privatePaths.push(`/${file.replace(/index\.html$/, "")}`);
-        for (const element of document.window.document.querySelectorAll("[src], [srcset]")) {
-          for (const attribute of ["src", "srcset"]) {
+        // Deferred images (assets/ts/site/deferred-images.ts) carry their sources until opened.
+        const mediaAttributes = ["src", "srcset", "data-deferred-src", "data-deferred-srcset"];
+        for (const element of document.window.document.querySelectorAll(
+          mediaAttributes.map((attribute) => `[${attribute}]`).join(", "),
+        )) {
+          for (const attribute of mediaAttributes) {
             if (/\/api\//.test(element.getAttribute(attribute) ?? ""))
               throw new Error(`An API media reference remains on ${file}`);
           }
@@ -149,6 +198,26 @@ async function finishRelease(output, pages, timings) {
     files.push("robots.txt");
     if (!files.some((file) => file.startsWith("members/"))) throw new Error("Publication contains no member pages");
     await timings.measure("Pagefind search", () => indexPublicPages(output));
+    const redirects = [
+      ...conferenceDisplayRedirects(files),
+      ...collectSessionRedirects(snapshot, files),
+      ...JSON.parse(await readFile(resolve(publicationStagingDirectory(), "redirects.json"), "utf8")),
+      ...socialCards.manifest.map(({ route, url }) => ({
+        from: `/og/${route.replace(/^\/|\/$/g, "") || "index"}/og.jpg`,
+        to: url,
+        status: 302,
+      })),
+      ...documentRoutes.redirects,
+    ];
+    validateDocumentRedirectRules(redirects, documentRoutes);
+    const retired = new Set(documentRoutes.retiredPaths.map(({ path }) => path));
+    if (files.some((file) => retired.has(file))) throw new Error("Publication still owns a retired document copy");
+    const retire = await prepareDocumentRetirement([output], documentRoutes);
+    await retire();
+    await mkdir(resolve(output, "_published/agenda"), { recursive: true });
+    await writeFile(resolve(output, PUBLICATION_DOCUMENT_ROUTES_PATH), JSON.stringify(documentRoutes));
+    files.push(PUBLICATION_DOCUMENT_ROUTES_PATH);
+    files.push(await publishPortalOfflineInventory(output));
     await writeFile(
       resolve(output, "publication.json"),
       JSON.stringify(
@@ -156,21 +225,16 @@ async function finishRelease(output, pages, timings) {
           version: 1,
           source: source ? "fixture" : "native",
           snapshotId: snapshot.snapshotId,
+          sourceSequence: source ? null : snapshot.sourceSequence,
+          integrity: await createReleaseIntegrity(output, files),
           environment,
           files,
           privatePaths,
-          redirects: [
-            ...conferenceDisplayRedirects(files),
-            ...JSON.parse(await readFile(resolve(publicationStagingDirectory(), "redirects.json"), "utf8")),
-            ...socialCards.manifest.map(({ route, url }) => ({
-              from: `/og/${route.replace(/^\/|\/$/g, "") || "index"}/og.jpg`,
-              to: url,
-              status: 302,
-            })),
-          ],
+          redirects,
         }),
       ),
     );
+    if (receiptPath) await writeFile(receiptPath, JSON.stringify(snapshot), { flag: "wx" });
     await rm(publicationStagingDirectory(), { recursive: true, force: true });
   } finally {
     await diagrams.finish();

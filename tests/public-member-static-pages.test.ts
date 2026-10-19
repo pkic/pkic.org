@@ -1,6 +1,6 @@
 import { expect, it, vi } from "vitest";
 import { env } from "cloudflare:test";
-import app from "../functions/router";
+import app from "./helpers/app";
 
 it("serves member publication assets without reading D1, including missing profiles", async () => {
   const fetch = vi.fn(

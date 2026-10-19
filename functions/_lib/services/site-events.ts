@@ -4,7 +4,7 @@ import type { ContentDocument } from "./site-documents";
 /**
  * The events index: the consortium's own events by year, and the webinars.
  *
- * `layouts/events/list.html` reads the whole catalog rather than the section's
+ * The index reads the whole catalog rather than the section's
  * children, because a webinar and a conference live in the same year folder
  * and are told apart by `eventType`.
  */

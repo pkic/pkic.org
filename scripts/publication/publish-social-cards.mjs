@@ -60,6 +60,24 @@ export async function renderSocialCard(card, assets, fonts) {
 }
 
 /** Page metadata and the raster image are published together, or the build fails. */
+function removeSocialImageMetadata(document) {
+  for (const meta of document.querySelectorAll('meta[property^="og:image"], meta[name="twitter:image"]')) meta.remove();
+}
+
+/** A fast local build publishes pages without card images, as a page without a card would be. */
+export function omittedSocialCardPublisher() {
+  return {
+    manifest: [],
+    async publish(document) {
+      document.querySelector("#pkic-social-card")?.remove();
+      removeSocialImageMetadata(document);
+    },
+    async finish() {
+      return [];
+    },
+  };
+}
+
 export async function publicSocialCardPublisher(output) {
   const fonts = await Promise.all(
     [400, 700].map(async (weight) => ({
@@ -136,8 +154,7 @@ export async function publicSocialCardPublisher(output) {
     async publish(document) {
       const template = document.querySelector("#pkic-social-card");
       if (!template) {
-        for (const meta of document.querySelectorAll('meta[property^="og:image"], meta[name="twitter:image"]'))
-          meta.remove();
+        removeSocialImageMetadata(document);
         return;
       }
       const card = JSON.parse(template.content.textContent);

@@ -177,26 +177,6 @@
     height: 7rem;
     margin-inline: auto;
   }
-
-  .member-profile-logo-wrap:has(.member-profile-logo) {
-    background: var(--pk-logo-surface);
-    border-radius: var(--pk-radius-card);
-    padding: 0.75rem;
-  }
-
-  .member-profile-logo-wrap:has(.member-profile-logo[data-logo-ink="light"]) {
-    background: var(--pk-accent-strong);
-  }
-
-  .member-profile-logo-wrap .member-profile-logo {
-    display: block;
-    width: 100%;
-    max-width: 100%;
-    height: 100%;
-    max-height: 100%;
-    object-fit: contain;
-    object-position: center;
-  }
 }
 
 @layer legacy {
@@ -244,7 +224,7 @@
   }
 
   .members-search-bar {
-    max-width: 560px;
+    max-width: 35rem;
     margin-left: auto;
     margin-right: auto;
   }
@@ -255,16 +235,6 @@
     align-items: flex-start;
   }
 
-  .members-az-sidebar {
-    flex-shrink: 0;
-    width: 34px;
-    display: flex;
-    flex-direction: column;
-    gap: 1px;
-    max-height: calc(100vh - 88px);
-    overflow-y: auto;
-    scrollbar-width: none;
-  }
   .members-az-sidebar::-webkit-scrollbar {
     display: none;
   }
@@ -272,8 +242,8 @@
     display: flex;
     align-items: center;
     justify-content: center;
-    width: 32px;
-    height: 26px;
+    width: 2rem;
+    height: 1.625rem;
     border-radius: var(--pk-radius);
     font-size: var(--pk-text-2xs);
     font-weight: 700;
@@ -297,8 +267,15 @@
     pointer-events: none;
   }
   .members-az-sidebar {
+    flex-shrink: 0;
+    width: 2.125rem;
+    flex-direction: column;
+    gap: 1px;
+    max-height: calc(100vh - 5.5rem);
+    overflow-y: auto;
+    scrollbar-width: none;
     position: sticky;
-    top: 68px;
+    top: 4.25rem;
     display: none;
   }
   @media (min-width: 992px) {
@@ -331,5 +308,14 @@
     padding-bottom: 0.5rem;
     margin-bottom: 1rem;
     scroll-margin-top: 80px;
+  }
+}
+
+@layer components {
+  .pk-member-card-avatar {
+    --pk-avatar-size: 3.5rem;
+  }
+  .pk-member-profile-avatar {
+    --pk-avatar-size: 7rem;
   }
 }

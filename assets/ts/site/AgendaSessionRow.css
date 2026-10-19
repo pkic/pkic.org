@@ -1,0 +1,102 @@
+@layer components {
+  /* A compact, chronological list of sessions: My agenda and a speaker's sessions. */
+  .pk-agenda-session-rows {
+    margin: 0;
+    padding: 0;
+    list-style: none;
+  }
+  .pk-agenda-session-rows__day {
+    margin: 0;
+    font-size: var(--pk-text-md);
+    font-weight: 700;
+  }
+  .pk-agenda-session-rows__clock {
+    margin: 0;
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+  }
+  /* Times over the title on phones; beside it where there is room. The marks keep the row's end. */
+  .pk-agenda-session-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    grid-template-areas:
+      "when actions"
+      "main actions";
+    align-items: start;
+    gap: var(--pk-1) var(--pk-3);
+    padding: var(--pk-3) 0;
+    border-block-start: 1px solid var(--pk-line-soft);
+    font-size: var(--pk-text-sm);
+  }
+  .pk-agenda-session-row:first-child {
+    border-block-start: 0;
+  }
+  .pk-agenda-session-row__when {
+    grid-area: when;
+    color: var(--pk-ink-muted);
+    font-variant-numeric: tabular-nums;
+    white-space: nowrap;
+  }
+  /* A list spanning days names each row's day before its times; beside the title, over them. */
+  .pk-agenda-session-row__when > span + span::before {
+    content: " · ";
+  }
+  .pk-agenda-session-row__main {
+    grid-area: main;
+    display: flex;
+    flex-direction: column;
+    gap: var(--pk-1);
+    min-inline-size: 0;
+  }
+  .pk-agenda-session-row__title {
+    padding: 0;
+    border: 0;
+    background: transparent;
+    color: var(--pk-ink);
+    font: inherit;
+    font-weight: 600;
+    text-align: start;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  :is(a, button).pk-agenda-session-row__title:hover {
+    color: var(--pk-accent-ink);
+    text-decoration: underline;
+    text-underline-offset: 0.2em;
+  }
+  .pk-agenda-session-row__meta {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: var(--pk-1) var(--pk-2);
+    color: var(--pk-ink-muted);
+    font-size: var(--pk-text-xs);
+  }
+  .pk-agenda-session-row__meta .pk-badge {
+    padding: 0 var(--pk-2);
+    font-size: var(--pk-text-2xs);
+    line-height: 1.6;
+  }
+  .pk-agenda-session-row__actions {
+    grid-area: actions;
+    display: flex;
+    align-items: center;
+    gap: var(--pk-2);
+  }
+  /* A star on a row is the agenda's favorite, in the agenda's favorite color. */
+  .pk-agenda-session-row__actions .pk-btn[aria-pressed="true"] {
+    color: var(--pk-agenda-favorite);
+  }
+  @media (min-width: 36rem) {
+    .pk-agenda-session-row {
+      grid-template-columns: 7.5rem minmax(0, 1fr) auto;
+      grid-template-areas: "when main actions";
+    }
+    .pk-agenda-session-row__when > span {
+      display: block;
+    }
+    .pk-agenda-session-row__when > span + span::before {
+      content: none;
+    }
+  }
+}

@@ -1,10 +1,14 @@
+import { boundDocumentRedirect, validateDocumentRoutes } from "./collect-document-redirects.mjs";
+import { legacyDownloadAliasPublisher } from "./publish-legacy-download-aliases.mjs";
 import { stat, copyFile, mkdir } from "node:fs/promises";
 import { resolve, dirname, sep } from "node:path";
 
 /** Preserve authored bundle download URLs while publishing only referenced static files. */
-export function publicDownloadPublisher(output) {
+export function publicDownloadPublisher(output, documentRoutes) {
+  if (documentRoutes) validateDocumentRoutes(documentRoutes);
   const published = new Set();
   const root = resolve(output);
+  const publishAliases = legacyDownloadAliasPublisher(output, documentRoutes);
   return async (document, route) => {
     const references = [...document.querySelectorAll("a[href]")].map((link) => ({
       href: link.getAttribute("href"),
@@ -21,6 +25,8 @@ export function publicDownloadPublisher(output) {
       if (/^(?:[a-z][a-z0-9+.-]*:|\/\/|#)/i.test(href)) continue;
       const url = new URL(href, `https://pkic.org${route}`);
       if (url.origin !== "https://pkic.org" || !/\.[a-z0-9]+$/i.test(url.pathname)) continue;
+      if (boundDocumentRedirect(documentRoutes, url.pathname)) continue;
+      if (boundDocumentRedirect(documentRoutes, `/content-media${url.pathname}`)) continue;
       const path = decodeURIComponent(url.pathname).replace(/^\//, "");
       const destination = resolve(root, path);
       if (!destination.startsWith(`${root}${sep}`)) throw new Error("Download escapes the release directory");
@@ -43,6 +49,7 @@ export function publicDownloadPublisher(output) {
       await copyFile(source, destination);
       published.add(path);
     }
+    for (const alias of await publishAliases(document, route)) published.add(alias);
     return [...published];
   };
 }
