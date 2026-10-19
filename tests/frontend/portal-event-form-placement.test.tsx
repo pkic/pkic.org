@@ -12,7 +12,7 @@ import {
   openCombobox,
   typeInto,
   submitForm,
-} from "./helpers/labelled-control";
+} from "./helpers/labeled-control";
 import { beginRecordEdit } from "./helpers/record-edit";
 import { nameForm } from "./helpers/form-editor";
 
@@ -140,6 +140,7 @@ describe("portal event form placement management", () => {
         groupId={GROUP_ID}
         eventId={EVENT_ID}
         purpose="event_registration"
+        clock="Europe/Amsterdam"
         expectedUpdatedAt={NOW}
         onRevision={() => undefined}
       />,
@@ -149,6 +150,7 @@ describe("portal event form placement management", () => {
     expect(window.textContent).toContain("No opening restriction");
     expect(window.querySelector("input")).toBeNull();
     await beginRecordEdit(window, "Submission window actions");
+    expect(window.textContent).toContain("Event time (Europe/Amsterdam)");
     await typeInto(controlFor(window, "Opens"), "2027-06-10T10:00");
     await act(async () => buttonNamed(window, "Cancel").click());
     await beginRecordEdit(window, "Submission window actions");
@@ -161,7 +163,12 @@ describe("portal event form placement management", () => {
     await typeInto(controlFor(window, "Closes"), "2027-06-10T11:00");
     await submitForm(window);
     expect(writes).toHaveLength(1);
-    expect(writes[0]).toMatchObject({ expectedUpdatedAt: NOW });
+    // Entered on the event's own clock: 10:00 and 11:00 in Amsterdam (CEST) are 08:00 and 09:00 UTC.
+    expect(writes[0]).toMatchObject({
+      expectedUpdatedAt: NOW,
+      opensAt: "2027-06-10T08:00:00.000Z",
+      closesAt: "2027-06-10T09:00:00.000Z",
+    });
     expect(window.querySelector("input")).toBeNull();
     expect(window.textContent).toContain("Submission window saved.");
   });
@@ -184,6 +191,7 @@ describe("portal event form placement management", () => {
         groupId={GROUP_ID}
         eventId={EVENT_ID}
         purpose="proposal_submission"
+        clock="Europe/Amsterdam"
         expectedUpdatedAt={NOW}
         onRevision={() => undefined}
       />,
@@ -223,6 +231,7 @@ describe("portal event form placement management", () => {
         groupId={GROUP_ID}
         eventId={EVENT_ID}
         purpose="event_registration"
+        clock="Europe/Amsterdam"
         expectedUpdatedAt={NOW}
         onRevision={() => undefined}
       />,
@@ -260,6 +269,7 @@ describe("portal event form placement management", () => {
         groupId={GROUP_ID}
         eventId={EVENT_ID}
         purpose="proposal_submission"
+        clock="Europe/Amsterdam"
         expectedUpdatedAt={NOW}
         onRevision={() => undefined}
       />,
@@ -312,6 +322,7 @@ describe("portal event form placement management", () => {
         groupId={GROUP_ID}
         eventId={EVENT_ID}
         purpose="event_registration"
+        clock="Europe/Amsterdam"
         expectedUpdatedAt={NOW}
         onRevision={onRevision}
       />,
@@ -379,6 +390,7 @@ describe("portal event form placement management", () => {
         groupId={GROUP_ID}
         eventId={EVENT_ID}
         purpose="proposal_submission"
+        clock="Europe/Amsterdam"
         expectedUpdatedAt={NOW}
         onRevision={vi.fn()}
       />,
@@ -459,18 +471,25 @@ describe("portal event form placement management", () => {
       registrationPolicy: "no_registration",
       visibility: "group_members",
       inviteLimitAttendee: 5,
-      location: null,
+      city: null,
+      country: null,
+      meetingLocation: null,
       links: [],
       nextOccurrenceAt: NOW,
       updatedAt: NOW,
       proposalAccess: null,
       capabilities: ["view", "manage"],
     };
-    const manager = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" />);
+    const manager = mount(<GroupEventWorkspace event={event} groupId={GROUP_ID} tab="settings" detailId="cfp" />);
     await settle();
     expect(manager.textContent).toContain("Proposal submission questions");
     const reviewer = mount(
-      <GroupEventWorkspace event={{ ...event, capabilities: ["view"] }} groupId={GROUP_ID} tab="settings" />,
+      <GroupEventWorkspace
+        event={{ ...event, capabilities: ["view"] }}
+        groupId={GROUP_ID}
+        tab="settings"
+        detailId="cfp"
+      />,
     );
     await settle();
     expect(reviewer.textContent).not.toContain("Proposal submission questions");

@@ -4,6 +4,10 @@ export function nowIso(): string {
   return new Date().toISOString();
 }
 
+export function addSeconds(baseIso: string, seconds: number): string {
+  return new Date(new Date(baseIso).getTime() + seconds * 1000).toISOString();
+}
+
 export function addMinutes(baseIso: string, minutes: number): string {
   return new Date(new Date(baseIso).getTime() + minutes * 60_000).toISOString();
 }
@@ -38,4 +42,9 @@ export function persistedUtcInstant(value: string | null): string | null {
   if (value === null) return null;
   const sqlite = /^(\d{4}-\d{2}-\d{2})[ T](\d{2}:\d{2}:\d{2})(?:\.(\d{1,3}))?Z?$/.exec(value);
   return utcInstantSchema.parse(sqlite ? `${sqlite[1]}T${sqlite[2]}.${(sqlite[3] ?? "").padEnd(3, "0")}Z` : value);
+}
+
+/** A successful edit must advance its timestamp revision even within the same millisecond. */
+export function nextIsoRevision(previous: string): string {
+  return new Date(Math.max(Date.now(), Date.parse(persistedUtcInstant(previous)) + 1)).toISOString();
 }

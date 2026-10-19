@@ -1,7 +1,6 @@
 import { Hono } from "hono";
 import { logError } from "../_lib/logging";
 import { resolveEventFlowShell } from "../_lib/services/events/public-shell";
-import { servePublicSiteRequest } from "../_lib/services/site-rendering";
 import { getStaticAssetsBinding } from "../_lib/static-assets";
 import type { Env } from "../_lib/types";
 import { siteSecurityHeaders } from "../../assets/shared/site-security-policy";
@@ -31,7 +30,13 @@ function secureShellResponse(response: Response, headOnly: boolean): Response {
   return new Response(headOnly ? null : response.body, { status: response.status, headers });
 }
 
+/** Rendering from source parses every content page; it loads only where no static assets serve the site. */
+async function renderFromSource() {
+  return (await import("../_lib/services/site-rendering")).servePublicSiteRequest;
+}
+
 async function secureRenderedShell(request: Request, env: Env, shellPath: string): Promise<Response> {
+  const servePublicSiteRequest = await renderFromSource();
   let response = await servePublicSiteRequest(request, env, { privatePage: true });
   if (response.status === 404) {
     response = await servePublicSiteRequest(request, env, {
@@ -57,7 +62,8 @@ async function serveEventPage(request: Request, env: Env): Promise<Response> {
   const pathname = new URL(request.url).pathname;
   const shell = resolveEventFlowShell(pathname);
   const assets = getStaticAssetsBinding(env);
-  if (!assets) return shell ? secureRenderedShell(request, env, shell.assetPath) : servePublicSiteRequest(request, env);
+  if (!assets)
+    return shell ? secureRenderedShell(request, env, shell.assetPath) : (await renderFromSource())(request, env);
 
   try {
     const staticResponse = await assets.fetch(staticAssetRequest(request));

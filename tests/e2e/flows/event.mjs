@@ -27,7 +27,12 @@ export const EVENT_FLOW = {
       note: "Issue #23. An event form asks for a name, an address and consent to a privacy policy; it does not ask whether somebody wants to represent their employer or sit in its working groups, so confirming one must not decide that — not even for an address under a domain a member organization has claimed, which is the exact signal the join flow uses to place a person inside an organization when they have asked to be there. Covered at the route in registration-workflows, because what is being asserted is the absence of identity, member, group-seat and mailing rows: a browser can only show the same absence more weakly, one screen at a time.",
     },
     { id: "3.3", title: "A manager changes an attendee's days", status: "covered" },
-    { id: "3.4", title: "A manager manages attendee and speaker invitations", status: "covered" },
+    {
+      id: "3.4",
+      title: "A manager manages attendee and speaker invitations",
+      status: "unit",
+      note: "Covered in portal-event-invitations and component-bulk-invite-composer for the screens (parse, preview, confirm and send, then search, resend with a deadline, and revoke behind a confirmation) and in group-event-invites and group-event-invite-bulk for the nested group routes and the resend and revoke lifecycle.",
+    },
     { id: "3.5", title: "An external guest verifies a mailbox code and enters a meeting", status: "covered" },
     {
       id: "3.6",
@@ -51,13 +56,13 @@ export const EVENT_FLOW = {
       id: "3.9",
       title: "Publishing an agenda fixes what it says, and republishing makes a revision beside it",
       status: "absent",
-      note: "A published agenda is a document rather than a view: it says what it said on the day it was published, and a correction makes a second revision rather than editing the first. Nothing publishes one today — the agenda is rendered from live proposals and speakers every time it is read, so a talk retitled or a speaker changing employer silently rewrites a programme somebody has already printed. Revisions are what let a correction be made honestly: readers of the old one can still see what they were given, and the difference between the two is visible rather than silent.",
+      note: "A published agenda is a document rather than a view: it says what it said on the day it was published, and a correction makes a second revision rather than editing the first. Nothing publishes one today — the agenda is rendered from live proposals and speakers every time it is read, so a talk retitled or a speaker changing employer silently rewrites a program somebody has already printed. Revisions are what let a correction be made honestly: readers of the old one can still see what they were given, and the difference between the two is visible rather than silent.",
     },
     {
       id: "3.9.a",
       title: "A published agenda keeps the affiliations its speakers had at publication",
       status: "absent",
-      note: "The reason 3.9 belongs beside the affiliation flow. Freezing at publication answers the programme case completely and without touching any record: the agenda holds what was true when it was published, whatever the speakers do afterwards. It answers only the programme, though — badges, attendee exports and the speaker wall are not the agenda and would still resolve live.",
+      note: "The reason 3.9 belongs beside the affiliation flow. Freezing at publication answers the program case completely and without touching any record: the agenda holds what was true when it was published, whatever the speakers do afterwards. It answers only the program, though — badges, attendee exports and the speaker wall are not the agenda and would still resolve live.",
     },
     {
       id: "3.10",

@@ -4,12 +4,13 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { queryAll, seedEventAndAdmin } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
+import { insertUser } from "./helpers/membership";
 import { sha256Hex } from "../functions/_lib/utils/crypto";
 import { getEventBySlug } from "../functions/_lib/services/events";
 import { createRegistration, confirmRegistrationByToken } from "../functions/_lib/services/registrations";
 import { issueDatabaseCapability } from "../functions/_lib/services/capability-links";
 import { signAdminManageJwt } from "../functions/_lib/utils/jwt";
-import app from "../functions/router";
+import app from "./helpers/app";
 import {
   registrationManageReadResponseSchema,
   registrationManageUpdateResponseSchema,
@@ -271,17 +272,12 @@ describe("manage read endpoints", () => {
     const admin = (await queryAll<{ id: string }>(env.DB, ADMINISTRATOR_FIXTURE_USER_SQL))[0];
     const adminToken = await createAdminSession(env.DB, admin.id, "admin-manage-token");
 
-    await env.DB.prepare(
-      `
-      INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
-      VALUES ('jwt-user', 'jwt-user@example.test', 'jwt-user@example.test', 'Jwt', 'User', datetime('now'), datetime('now'))
-    `,
-    ).run();
+    const registrantId = await insertUser(env.DB, "jwt-user@example.test");
 
     const event = await getEventBySlug(env.DB, "pqc-2026");
     const created = await createRegistration(env.DB, {
       event,
-      userId: "jwt-user",
+      userId: registrantId,
       attendanceType: "virtual",
       sourceType: "direct",
       confirmationTtlHours: 48,
@@ -333,7 +329,11 @@ describe("manage read endpoints", () => {
     );
     expect(updateResponse.status).toBe(200);
     const updatePayload = registrationManageUpdateResponseSchema.parse(await updateResponse.clone().json());
-    expect(updatePayload).toEqual({ success: true, emailChanged: false });
+    expect(updatePayload).toEqual({
+      success: true,
+      emailChanged: false,
+      sponsorSharing: { allowed: false, withdrawnAt: null },
+    });
     expect(updatePayload).not.toHaveProperty("registration");
     const [audit] = await queryAll<{ actor_type: string; actor_id: string }>(
       env.DB,
@@ -557,8 +557,8 @@ describe("manage read endpoints", () => {
 
     await env.DB.batch([
       env.DB.prepare(`
-        INSERT INTO users (id, email, normalized_email, first_name, last_name, biography, created_at, updated_at)
-        VALUES ('${userId}', 'speaker@example.test', 'speaker@example.test', 'Sam', 'Taylor', 'Speaker bio with enough detail for testing.', datetime('now'), datetime('now'))
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES ('${userId}', 'speaker@example.test', 'speaker@example.test', 'Sam', 'Taylor', datetime('now'), datetime('now'))
       `),
       env.DB.prepare(`
         INSERT INTO session_proposals (
@@ -617,8 +617,8 @@ describe("manage read endpoints", () => {
 
     await env.DB.batch([
       env.DB.prepare(`
-        INSERT INTO users (id, email, normalized_email, first_name, last_name, biography, created_at, updated_at)
-        VALUES ('${userId}', 'panel-lead@example.test', 'panel-lead@example.test', 'Panel', 'Lead', 'Speaker bio with enough detail for testing.', datetime('now'), datetime('now'))
+        INSERT INTO users (id, email, normalized_email, first_name, last_name, created_at, updated_at)
+        VALUES ('${userId}', 'panel-lead@example.test', 'panel-lead@example.test', 'Panel', 'Lead', datetime('now'), datetime('now'))
       `),
       env.DB.prepare(`
         INSERT INTO session_proposals (

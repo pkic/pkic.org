@@ -33,7 +33,6 @@ test("maintenance refusal preserves a public form and recovery never replays it"
     else await route.continue();
   });
   await page.goto("/join/");
-  await page.getByLabel("Yes — I am employed by or own an organization").check();
   const email = page.getByLabel("Your official work or organization email address");
   const address = `maintenance-${Date.now()}@organization.test`;
   await email.fill(address);

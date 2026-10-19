@@ -7,7 +7,7 @@
  */
 import { describe, it, expect, beforeEach } from "vitest";
 import { env } from "cloudflare:workers";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { resetDb } from "./helpers/reset-db";
 import { seedPersona } from "./personas/seed";
 import { onlyPersona } from "./personas/catalog";
@@ -294,7 +294,7 @@ describe("GET /api/v1/audit-log", () => {
      * A blank filter and an absent one are the same request, which is what
      * the frontend's shared collection has always assumed: it drops empty
      * values before building the query. Both ends now agree, and the
-     * behaviour is stated rather than inferred — an empty search returns the
+     * behavior is stated rather than inferred — an empty search returns the
      * same rows as no search at all.
      */
     await insertAuditLogRow({ actorType: "system", action: "a1", entityType: "event", secondsAgo: 10 });

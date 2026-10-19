@@ -34,7 +34,6 @@ test("public join preserves input on cancel and submits once after verification"
     }
   });
   await page.goto("/join/");
-  await page.getByLabel("Yes — I am employed by or own an organization").check();
   const email = page.getByLabel("Your official work or organization email address");
   await email.fill(`turnstile-${Date.now()}@organization.test`);
   await page.getByRole("button", { name: "Continue", exact: true }).click();

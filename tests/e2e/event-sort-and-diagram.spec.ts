@@ -52,7 +52,6 @@ test("Next sorts the displayed dates of ordinary group events in both directions
             endsAt: `${date}T09:00:00.000Z`,
             profileKey: "workshop",
             registrationPolicy: "no_registration",
-            location: "Online",
             links: [],
           }),
         });

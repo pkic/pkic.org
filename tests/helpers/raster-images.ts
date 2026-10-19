@@ -27,3 +27,16 @@ export function validPngBytes(width = 1, height = 1): Uint8Array<ArrayBuffer> {
   bytes.set([0x08, 0x06, 0x00, 0x00, 0x00], 24);
   return bytes;
 }
+
+export function validWebpBytes(width = 1, height = 1): Uint8Array<ArrayBuffer> {
+  const bytes = new Uint8Array(30);
+  bytes.set([
+    0x52, 0x49, 0x46, 0x46, 0x16, 0x00, 0x00, 0x00, 0x57, 0x45, 0x42, 0x50, 0x56, 0x50, 0x38, 0x58, 0x0a, 0x00, 0x00,
+    0x00,
+  ]);
+  const encodedWidth = width - 1;
+  const encodedHeight = height - 1;
+  bytes.set([0x00, 0x00, 0x00, 0x00, encodedWidth & 0xff, encodedWidth >> 8, encodedWidth >> 16], 20);
+  bytes.set([encodedHeight & 0xff, encodedHeight >> 8, encodedHeight >> 16], 27);
+  return bytes;
+}

@@ -1,6 +1,8 @@
 import { createHash } from "node:crypto";
 import { expect, type Page } from "@playwright/test";
 import { capturedEmailCount, extractEmailUrl, waitForCapturedEmail } from "./sendgrid";
+import { userAuthSessionResponseSchema } from "../../../assets/shared/schemas/user-auth";
+import { sessionActingIdentityChoiceRequired } from "../../../assets/shared/session-acting-identity";
 
 /** A stable per-identity client address, so parallel sign-ins do not share one rate-limit bucket. */
 export function clientIpForIdentity(email: string): string {
@@ -31,31 +33,17 @@ export async function openEmailSignIn(page: Page): Promise<void> {
   await expect(page.getByLabel("Work email")).toBeVisible({ timeout: 10_000 });
 }
 
-/**
- * Opens the signed-in identity's own record, the way a member reaches it.
- *
- * "My profile" is no longer a page of its own: it navigates to
- * `#/users/<own id>`, the same record staff open about anybody. The id is not
- * something a spec knows, so the menu item is what these specs follow — which
- * is also the link issue #41 was about: the separate `#/profile` page is gone,
- * and its settings are offered on the reader's own record instead.
- */
+/** Opens the signed-in person's own record through the account menu. */
 export async function openMyProfile(page: Page): Promise<void> {
   await page.getByRole("button", { name: "Account menu" }).click();
   await page.getByRole("menuitem", { name: "My profile" }).click();
   await expect(page).toHaveURL(/\/portal\/#\/users\/[^/?#]+$/, { timeout: 15_000 });
 }
 
-/**
- * Takes the "Edit profile" command on the record currently open.
- *
- * A record never arrives in edit mode, not even your own (#47): editing is an
- * action somebody takes from the record's own actions menu, so every spec
- * that changes a profile reaches the fields the way a reader does.
- */
-export async function openProfileEditor(page: Page): Promise<void> {
-  await page.getByRole("button", { name: "Record actions" }).click();
-  await page.getByRole("menuitem", { name: "Edit profile" }).click();
+/** Takes "Edit profile" on the professional profile: the record's edit view, with its profile fields open. */
+export async function editMyProfile(page: Page): Promise<void> {
+  await page.getByRole("link", { name: "Edit profile", exact: true }).click();
+  await expect(page).toHaveURL(/\/portal\/#\/users\/[^/?#]+\/edit$/, { timeout: 15_000 });
 }
 
 /**
@@ -71,7 +59,7 @@ export async function openMyOrganization(page: Page, organizationName: string): 
 }
 
 /** Establishes a real portal session through the same mailbox capability used by users. */
-export async function signInToPortal(page: Page, email: string): Promise<void> {
+export async function signInToPortal(page: Page, email: string, options: { continueAs?: string } = {}): Promise<void> {
   // Model independent users arriving from independent clients. The complete
   // serial suite otherwise funnels every sign-in through Wrangler's one local
   // address and exhausts the production-equivalent per-IP limiter.
@@ -83,14 +71,57 @@ export async function signInToPortal(page: Page, email: string): Promise<void> {
   await page.getByRole("button", { name: "Send sign-in link" }).click();
   await expect(page.getByText("you'll receive a sign-in link shortly", { exact: false })).toBeVisible();
   const emailMessage = await waitForCapturedEmail(email, "sign-in link", { since });
+  // A user normally opens the email in a new tab. The portal is already
+  // mounted here and a hash-only navigation would not rerun its one-time
+  // verifier, so leave the document first and open the link as a fresh load.
+  // (Reloading after the link instead races the first redemption: the reload
+  // cancels its response, the session cookie is lost, and the second
+  // redemption of the same token is refused.)
+  await page.goto("about:blank");
+  const verified = page.waitForResponse(
+    (response) =>
+      new URL(response.url()).pathname === "/api/v1/auth/verify-link" && response.request().method() === "POST",
+  );
   await page.goto(extractEmailUrl(emailMessage, "/portal/"));
-  // A user normally opens the email in a new tab. In this helper the portal
-  // application is already mounted, and a hash-only navigation does not rerun
-  // its one-time verifier; reload to model that fresh-tab mount.
-  await page.reload();
+  const session = userAuthSessionResponseSchema.parse(await (await verified).json());
   // The login heading remains visible while the hash verifier redeems the
   // capability, so waiting for that text would return before a session exists.
   await expect(page.getByRole("button", { name: "Sign in with a passkey" })).toHaveCount(0, { timeout: 15_000 });
+  // A person holding several identities is asked which one to continue as, unless this device remembers a choice.
+  const chooser = page.getByRole("heading", { name: "Choose how you take part" });
+  let chooseIdentity = false;
+  if (sessionActingIdentityChoiceRequired(session)) {
+    // Verification can briefly mount the shell before its canonical refresh
+    // asks for representation. A visible shell alone is not a settled choice.
+    await expect
+      .poll(
+        async () => {
+          if (await chooser.isVisible()) {
+            chooseIdentity = true;
+            return true;
+          }
+          if (!(await page.getByRole("button", { name: "Account menu", exact: true }).isVisible())) return false;
+          const currentResponse = await page.request.get("/api/v1/auth/session");
+          if (currentResponse.status() !== 200) return false;
+          const current = userAuthSessionResponseSchema.parse(await currentResponse.json());
+          return !sessionActingIdentityChoiceRequired(current);
+        },
+        { timeout: 15_000 },
+      )
+      .toBe(true);
+  }
+  if (chooseIdentity || (await chooser.isVisible())) {
+    const choices = page.getByRole("region", { name: "Choose how you take part" }).getByRole("button");
+    // A long identity name wraps inside its choice, on a phone as on a desktop.
+    for (const choice of await choices.all())
+      expect(await choice.evaluate((button) => button.scrollWidth <= button.clientWidth)).toBe(true);
+    await (options.continueAs ? choices.filter({ hasText: options.continueAs }) : choices.first()).click();
+  }
+  // Email sign-in can offer enrollment before the shell mounts. Follow its visible opt-out.
+  const passkeyOffer = page.getByRole("region", { name: "You're signed in", exact: true });
+  await expect(page.locator("#portal-root").or(passkeyOffer).first()).toBeVisible({ timeout: 15_000 });
+  if (await passkeyOffer.isVisible())
+    await passkeyOffer.getByRole("button", { name: "Continue without a passkey", exact: true }).click();
   await expect(page.locator("#portal-root")).toBeVisible({ timeout: 15_000 });
   await expect(page).toHaveURL(/\/portal\/#\/(?!verify(?:$|[/?]))[^?#]+/, { timeout: 15_000 });
 }

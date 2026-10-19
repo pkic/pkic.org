@@ -9,7 +9,7 @@ import { resetDb } from "./helpers/reset-db";
 import { env } from "cloudflare:workers";
 import { seedEventAndAdmin, queryAll } from "./helpers/context";
 import { createAdminSession } from "./helpers/auth";
-import app from "../functions/router";
+import app from "./helpers/app";
 
 async function callAppGet(path: string, token: string): Promise<Response> {
   return app.fetch(

@@ -1,10 +1,10 @@
 import { administratorGrants, grantAdministrator } from "./helpers/administrator";
 import { env } from "cloudflare:workers";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { parseEventFlowPath } from "../assets/shared/event-flow-paths";
 import { createGroupManagedEvent } from "../functions/_lib/services/events/group-management";
 import type { DatabaseLike, Env, StaticAssetsBinding } from "../functions/_lib/types";
-import app from "../functions/router";
+import app from "./helpers/app";
 import { insertUser } from "./helpers/membership";
 import { resetDb } from "./helpers/reset-db";
 import { seedEventAndAdmin } from "./helpers/context";
@@ -102,6 +102,12 @@ async function createPortalEvent(): Promise<string> {
 }
 
 describe("portal event public flow shells", () => {
+  // Rendering from source compiles every content page on first load, which takes seconds in a cold
+  // runtime. Load it once here so no single test spends its own time limit on that.
+  beforeAll(async () => {
+    await import("../functions/_lib/services/site-rendering");
+  }, 120_000);
+
   beforeEach(async () => {
     await resetDb();
   });

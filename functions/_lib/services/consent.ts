@@ -100,7 +100,7 @@ export function isConsentAcceptanceContextConflict(error: unknown): boolean {
 }
 
 /**
- * Rechecks the complete active attendee-terms snapshot in the registration
+ * Rechecks the complete active audience-terms snapshot in the caller's
  * batch. This keeps validation and consent writes from straddling a terms
  * replacement without persisting another revision abstraction.
  */
@@ -108,6 +108,7 @@ export function prepareActiveTermsSnapshotGuard(
   db: DatabaseLike,
   eventId: string,
   terms: readonly EventTermRecord[],
+  audienceType: "attendee" | "speaker" = "attendee",
 ): StatementLike {
   return prepareAuthorizationGuard(db, {
     sql: `WITH expected AS (
@@ -121,7 +122,7 @@ export function prepareActiveTermsSnapshotGuard(
            ), current AS (
              SELECT term_key, version, required, content_ref, display_text, help_text
                FROM event_terms
-              WHERE event_id = ? AND audience_type = 'attendee' AND active = 1
+              WHERE event_id = ? AND audience_type = ? AND active = 1
            )
            SELECT 1
             WHERE NOT EXISTS (
@@ -146,6 +147,7 @@ export function prepareActiveTermsSnapshotGuard(
         })),
       ),
       eventId,
+      audienceType,
     ],
   });
 }

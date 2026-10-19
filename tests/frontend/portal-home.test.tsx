@@ -10,6 +10,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { Home } from "../../assets/ts/member-flows/portal/sections/Home";
 import { portalSession, profile } from "../../assets/ts/member-flows/portal/state";
 import { portalSessionFixture } from "../helpers/portal-session";
+import { memoryStorage } from "./helpers/browser-storage";
 
 vi.mock("wouter", () => ({
   Link: ({ children, href, class: className }: { children?: ComponentChildren; href: string; class?: string }) => (
@@ -63,7 +64,11 @@ function stubFeeds(bodies: Record<string, unknown>, failing: readonly string[] =
   vi.stubGlobal(
     "fetch",
     vi.fn(async (input: RequestInfo | URL) => {
-      const path = new URL(String(input), location.origin).pathname;
+      const url = new URL(String(input), location.origin);
+      const path = url.pathname;
+      if (path === "/api/v1/events" && url.searchParams.get("phase") === "now") {
+        return json(bodies["/api/v1/events?phase=now"] ?? { events: [], page: emptyPage });
+      }
       if (failing.includes(path)) return new Response("", { status: 503 });
       const body = bodies[path];
       if (body === undefined) throw new Error(`unexpected request: ${path}`);
@@ -84,7 +89,9 @@ function audienceEventRow(overrides: Record<string, unknown> = {}): Record<strin
     registrationPolicy: "public",
     visibility: "public",
     accessLevel: "public",
-    location: "Amsterdam",
+    sponsorLeadAccess: false,
+    city: "Amsterdam",
+    country: "NL",
     links: [],
     basePath: "/events/pqc-2026",
     viewer: null,
@@ -152,11 +159,28 @@ describe("portal landing", () => {
 
     const root = container.firstElementChild;
     expect(root?.classList.contains("pk")).toBe(true);
-    expect(root?.textContent).toContain("Welcome back, Robin.");
+    // A first visit is not a return.
+    expect(root?.textContent).toContain("Welcome, Robin.");
+    expect(root?.textContent).not.toContain("Welcome back");
     // Nothing in the surface may reach back for the quarantined framework.
     expect(container.innerHTML).not.toMatch(
       /class="[^"]*(?<![-\w])(card|card-body|list-unstyled|text-muted|d-flex)(?![-\w])/,
     );
+  });
+
+  it("welcomes the person back only once this device has seen them before", async () => {
+    portalSession.value = portalSessionFixture({ member: true });
+    profile.value = { preferredName: "Robin" } as never;
+    stubFeeds(feeds());
+    vi.stubGlobal("localStorage", memoryStorage());
+
+    const first = mount();
+    await settle();
+    expect(first.textContent).toContain("Welcome, Robin.");
+
+    const second = mount();
+    await settle();
+    expect(second.textContent).toContain("Welcome back, Robin.");
   });
 
   it("names every panel as a heading and every list for assistive technology", async () => {
@@ -175,7 +199,7 @@ describe("portal landing", () => {
     await settle();
 
     const headings = [...container.querySelectorAll("h3")].map((heading) => heading.textContent);
-    expect(headings).toEqual(["Upcoming meetings", "Upcoming events"]);
+    expect(headings).toEqual(["Upcoming meetings", "Events"]);
     expect([...container.querySelectorAll("h3")].some((heading) => heading.textContent === "Needs your voice")).toBe(
       false,
     );
@@ -241,48 +265,87 @@ describe("portal landing", () => {
   });
 
   it("announces an empty panel through a status region rather than by looking empty", async () => {
-    portalSession.value = portalSessionFixture({ member: false });
+    portalSession.value = { ...portalSessionFixture({ member: false }), eventParticipation: true };
     stubFeeds(feeds());
 
     const container = mount();
     await settle();
 
-    const events = panelNamed(container, "Upcoming events");
+    const events = panelNamed(container, "Events");
     const empty = events.querySelector('[role="status"]');
-    expect(empty?.textContent).toContain("No upcoming events right now.");
+    expect(empty?.textContent).toContain("No current or upcoming events right now.");
     // A non-member sees only the panels that are theirs to see.
     expect(container.querySelectorAll(".pk-home-grid > section h3")).toHaveLength(1);
   });
 
   it("states a failed feed as a sentence in an alert region instead of an empty panel", async () => {
-    portalSession.value = portalSessionFixture({ member: false });
+    portalSession.value = { ...portalSessionFixture({ member: false }), eventParticipation: true };
     stubFeeds(feeds(), ["/api/v1/events"]);
 
     const container = mount();
     await settle();
 
-    const events = panelNamed(container, "Upcoming events");
+    const events = panelNamed(container, "Events");
     const alert = events.querySelector('[role="alert"]');
     expect(alert?.textContent).toBe(
       "Online services are temporarily unavailable. Keep this page open. If you were saving a change, check whether it completed before trying again.",
     );
     // The failure replaces the empty state; the panel must not claim both.
-    expect(events.textContent).not.toContain("No upcoming events right now.");
+    expect(events.textContent).not.toContain("No current or upcoming events right now.");
   });
 
-  it("renders an upcoming event as a link with its schedule and place beside it", async () => {
-    portalSession.value = portalSessionFixture({ member: false });
+  it("renders upcoming events using the shared discovery card", async () => {
+    portalSession.value = { ...portalSessionFixture({ member: false }), eventParticipation: true };
     stubFeeds(feeds({ "/api/v1/events": { events: [audienceEventRow()], page: onePage } }));
 
     const container = mount();
     await settle();
 
-    const events = panelNamed(container, "Upcoming events");
+    const events = panelNamed(container, "Events");
     const link = events.querySelector<HTMLAnchorElement>("a[href='#/events/pqc-2026']");
     expect(link?.textContent).toBe("PQC Conference 2026");
     expect(events.textContent).toContain("Amsterdam");
-    expect(events.querySelector("ul")?.getAttribute("aria-label")).toBe("Upcoming events");
+    expect(link?.closest(".event-card")).not.toBeNull();
+    expect(events.classList.contains("pk-panel")).toBe(false);
+    expect(events.querySelector("ul")?.getAttribute("aria-label")).toBe("Now and next events");
     expect(vi.mocked(fetch).mock.calls.some(([input]) => String(input).includes("kind=standalone"))).toBe(true);
+  });
+
+  it("shows a current event and the next event without embedding the events catalog", async () => {
+    portalSession.value = { ...portalSessionFixture({ member: false }), eventParticipation: true };
+    const at = Date.now();
+    stubFeeds(
+      feeds({
+        "/api/v1/events?phase=now": {
+          events: [
+            audienceEventRow({
+              id: "10000000-0000-4000-8000-000000000003",
+              slug: "current",
+              name: "Current event",
+              startsAt: new Date(at - 60_000).toISOString(),
+              endsAt: new Date(at + 60_000).toISOString(),
+            }),
+          ],
+          page: onePage,
+        },
+        "/api/v1/events": {
+          events: [
+            audienceEventRow({
+              startsAt: new Date(at + 120_000).toISOString(),
+              endsAt: new Date(at + 180_000).toISOString(),
+            }),
+          ],
+          page: onePage,
+        },
+      }),
+    );
+    const container = mount();
+    await settle();
+    const events = panelNamed(container, "Events");
+    expect(events.querySelectorAll(".event-card")).toHaveLength(2);
+    expect(events.querySelectorAll(".event-card-badge")[0]?.textContent).toBe("Happening now");
+    expect(events.querySelectorAll(".event-card-badge")[1]?.textContent).toBe("Upcoming");
+    expect(events.querySelector('a[href="#/events"]')?.textContent).toBe("More events");
   });
 
   it("lists an open ballot exactly once on the landing page", async () => {
@@ -339,7 +402,7 @@ describe("portal landing", () => {
     expect(attention.textContent).toContain("Vote on: Adopt the 2027 budget");
   });
 
-  it("keeps an organization's standing in words, not in the badge colour alone", async () => {
+  it("keeps an organization's standing in words, not in the badge color alone", async () => {
     portalSession.value = portalSessionFixture({ member: true });
     stubFeeds(
       feeds({
@@ -364,5 +427,40 @@ describe("portal landing", () => {
     const badges = [...organizations.querySelectorAll(".pk-badge")].map((badge) => badge.textContent);
     expect(badges).toEqual(["Primary contact", "Contact"]);
     expect(organizations.querySelector("a[href='#/organizations']")?.textContent).toBe("View all");
+  });
+
+  it("lists a pending organization review as a to-do that opens the organization", async () => {
+    portalSession.value = portalSessionFixture({ member: true });
+    stubFeeds(
+      feeds({
+        "/api/v1/users/current/organizations": {
+          organizations: [organizationRow({ hasPendingReview: true })],
+          page: onePage,
+        },
+      }),
+    );
+
+    const container = mount();
+    await settle();
+
+    const item = [...panelNamed(container, "Needs your voice").querySelectorAll("a")].find(
+      (link) => link.textContent === "Review pending: Organization A",
+    );
+    expect(item?.getAttribute("href")).toBe("#/organizations/50000000-0000-4000-8000-000000000001");
+    // One organization is listed in full, so there is nothing more to view.
+    expect(container.querySelector(".pk-home-affiliation")?.textContent).not.toContain("View all");
+  });
+
+  it("says an unaffiliated member participates as an individual, and waits on nothing", async () => {
+    portalSession.value = portalSessionFixture({ member: true });
+    stubFeeds(feeds());
+
+    const container = mount();
+    await settle();
+
+    expect(container.querySelector(".pk-home-affiliation")?.textContent).toContain("Participating as an individual");
+    expect([...container.querySelectorAll("h3")].some((heading) => heading.textContent === "Needs your voice")).toBe(
+      false,
+    );
   });
 });

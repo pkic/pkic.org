@@ -1,8 +1,7 @@
 import { describe, expect, it, vi } from "vitest";
 import { env } from "cloudflare:workers";
-import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
-import app from "../functions/worker";
-import "./helpers/load-worker-application";
+import { createExecutionContext } from "cloudflare:test";
+import app from "./helpers/app";
 import { callApi } from "./helpers/app";
 import { getAvailability } from "../functions/_lib/availability";
 import { apiStatusSchema } from "../assets/shared/schemas/availability";
@@ -69,7 +68,6 @@ describe("availability across Worker entry points", () => {
     const environment = paused("emergency");
     const context = createExecutionContext();
     app.scheduled({ cron: "* * * * *", scheduledTime: Date.now(), noRetry() {} }, environment, context);
-    await waitOnExecutionContext(context);
     expect(await dispatchScheduledJobs(environment, [], { maxJobsPerPass: 5, d1QueryBudget: 100 })).toEqual({
       reaped: 0,
       ran: 0,

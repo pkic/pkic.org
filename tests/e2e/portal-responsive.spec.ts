@@ -6,8 +6,8 @@
  * is where a wide table meets a narrow column meets a sidebar that has to get
  * out of the way.
  *
- * Three things are checked on every screen at every width, and each of them is
- * a defect this repository has actually shipped:
+ * These are checked on every screen at every width, and each of them is a
+ * defect this repository has actually shipped:
  *
  *   - Nothing pushes the page sideways. A single unclipped element does it,
  *     and once it happens every screen on the site scrolls horizontally.
@@ -17,13 +17,18 @@
  *   - Every table has a name, every icon-only control has a name, and every
  *     form control resolves to a label. An unnamed control is invisible to
  *     anyone who is not looking at it.
+ *   - A button is as wide as its label and never touches the next one: a
+ *     stretched or crowded command reads as part of the layout, not an action.
+ *   - Button text stays readable on its own background, in the light and the
+ *     dark theme alike.
  * @covers presentation.13.4
  */
 
 import { expect, test } from "@playwright/test";
-import type { Page } from "@playwright/test";
 
 import { e2eAdminEmail } from "../helpers/e2e-admin";
+import { eventScreens, prepareEventAppScreens, settleScreen } from "./helpers/event-app-screens-fixture";
+import { screenProblems } from "./helpers/responsive-probes";
 import { signInAsE2eStaff } from "./helpers/staff-auth";
 
 const WIDTHS = [
@@ -38,98 +43,29 @@ const SCREENS = [
   // The person's record replaced the separate profile page; this session is
   // staff, so the directory is the screen it can open without knowing an id.
   { name: "users", path: "#/users" },
-  { name: "account", path: "#/account" },
+  { name: "own-user-record", path: "#/users/current" },
   { name: "groups", path: "#/groups" },
   { name: "organizations", path: "#/organizations" },
+  { name: "events", path: "#/events" },
+  { name: "forms", path: "#/forms" },
+  { name: "donations", path: "#/donations" },
+  { name: "groups-new", path: "#/groups/new" },
+  // The seeded Post-Quantum Cryptography working group (by its identifier) and
+  // the Board (by its slug) are addressable without a record this sweep would
+  // have to create, so a group's own workspace is walked as well.
+  { name: "group-mailing-lists", path: "#/groups/20000000-0000-4000-8000-000000000003/mailing-lists" },
+  { name: "group-settings", path: "#/groups/20000000-0000-4000-8000-000000000003/settings" },
+  { name: "group-leadership", path: "#/groups/board/leadership" },
+  { name: "group-leadership-add", path: "#/groups/board/leadership/add" },
+  { name: "members", path: "#/members" },
+  { name: "members-grant", path: "#/members/grant" },
+  { name: "members-analytics", path: "#/members/analytics" },
+  { name: "access-control", path: "#/settings/access-control" },
+  { name: "audit-log", path: "#/settings/audit-log" },
+  { name: "email-outbox", path: "#/settings/email-outbox" },
+  { name: "email-templates", path: "#/settings/email-templates" },
+  { name: "scheduled-jobs", path: "#/settings/scheduled-jobs" },
 ] as const;
-
-async function horizontalOverflow(page: Page): Promise<number> {
-  return page.evaluate(() => {
-    const root = document.documentElement;
-    return Math.max(0, root.scrollWidth - root.clientWidth);
-  });
-}
-
-/** Elements that push the page sideways, skipping anything a scroller clips. */
-async function overflowingElements(page: Page): Promise<string[]> {
-  return page.evaluate(() => {
-    const limit = document.documentElement.clientWidth;
-    const guilty: string[] = [];
-
-    function clipped(element: HTMLElement): boolean {
-      let parent = element.parentElement;
-      while (parent && parent !== document.documentElement) {
-        const overflow = getComputedStyle(parent).overflowX;
-        if (overflow === "auto" || overflow === "scroll" || overflow === "hidden") return true;
-        parent = parent.parentElement;
-      }
-      return false;
-    }
-
-    for (const element of document.querySelectorAll<HTMLElement>("body *")) {
-      const rect = element.getBoundingClientRect();
-      if (rect.width === 0 || rect.right <= limit + 1) continue;
-      if (clipped(element)) continue;
-      if (element.parentElement && element.parentElement.getBoundingClientRect().right > limit + 1) continue;
-      guilty.push(`${element.tagName.toLowerCase()}.${element.className || "(none)"} → ${Math.round(rect.right)}px`);
-    }
-    return guilty;
-  });
-}
-
-/** Anything that responds to a click but cannot be focused or activated. */
-async function mouseOnlyControls(page: Page): Promise<string[]> {
-  return page.evaluate(() => {
-    const found: string[] = [];
-    for (const element of document.querySelectorAll<HTMLElement>("[onclick]")) {
-      const tag = element.tagName.toLowerCase();
-      if (tag === "button" || tag === "a" || tag === "input" || tag === "select" || tag === "textarea") continue;
-      if (element.tabIndex >= 0) continue;
-      found.push(`${tag}.${element.className || "(none)"}`);
-    }
-    return found;
-  });
-}
-
-/** Controls and regions with nothing to announce them by. */
-async function unnamedThings(page: Page): Promise<string[]> {
-  return page.evaluate(() => {
-    const problems: string[] = [];
-
-    function named(element: HTMLElement): boolean {
-      if (element.getAttribute("aria-label")?.trim()) return true;
-      if (element.getAttribute("aria-labelledby")) return true;
-      if (element.getAttribute("title")?.trim()) return true;
-      if ((element.textContent ?? "").trim()) return true;
-      // A link or button whose whole content is an image takes its name from
-      // that image's alt text, and an inline SVG from its <title>.
-      for (const image of element.querySelectorAll("img[alt]")) {
-        if ((image.getAttribute("alt") ?? "").trim()) return true;
-      }
-      if (element.querySelector("svg > title")?.textContent?.trim()) return true;
-      const id = element.getAttribute("id");
-      if (id && document.querySelector(`label[for="${id}"]`)) return true;
-      return Boolean(element.closest("label"));
-    }
-
-    for (const table of document.querySelectorAll("table")) {
-      const caption = table.querySelector("caption")?.textContent?.trim();
-      if (!caption && !table.getAttribute("aria-label") && !table.getAttribute("aria-labelledby")) {
-        problems.push(`table with no name: ${table.className || "(none)"}`);
-      }
-    }
-
-    for (const control of document.querySelectorAll<HTMLElement>("button, a[href], input, select, textarea")) {
-      if (control.getAttribute("aria-hidden") === "true") continue;
-      if (control instanceof HTMLInputElement && control.type === "hidden") continue;
-      if (!named(control)) {
-        problems.push(`${control.tagName.toLowerCase()} with no name: ${control.className || "(none)"}`);
-      }
-    }
-
-    return problems;
-  });
-}
 
 /*
  * One sign-in, every width.
@@ -142,7 +78,7 @@ async function unnamedThings(page: Page): Promise<string[]> {
  */
 test.describe("portal at every width", () => {
   test("is usable at mobile, tablet and desktop", async ({ page }) => {
-    await signInAsE2eStaff(page, e2eAdminEmail());
+    await signInAsE2eStaff(page, e2eAdminEmail("portal-responsive-widths"));
 
     const failures: string[] = [];
 
@@ -150,24 +86,13 @@ test.describe("portal at every width", () => {
       await page.setViewportSize({ width: viewport.width, height: viewport.height });
 
       for (const screen of SCREENS) {
+        await page.emulateMedia({ colorScheme: "light" });
         await page.goto(`/portal/${screen.path}`);
         await expect(page.locator("#portal-root")).toBeVisible();
         // The section renders into a lazy chunk; wait for content, not a timer.
         await page.waitForLoadState("networkidle");
 
-        const where = `${viewport.name}/${screen.name}`;
-        for (const problem of await overflowingElements(page)) {
-          failures.push(`${where}: overflows — ${problem}`);
-        }
-        const overflow = await horizontalOverflow(page);
-        if (overflow > 0) failures.push(`${where}: page scrolls ${String(overflow)}px sideways`);
-
-        for (const problem of await mouseOnlyControls(page)) {
-          failures.push(`${where}: mouse-only control — ${problem}`);
-        }
-        for (const problem of await unnamedThings(page)) {
-          failures.push(`${where}: ${problem}`);
-        }
+        failures.push(...(await screenProblems(page, `${viewport.name}/${screen.name}`)));
 
         await page.screenshot({
           path: `test-results/portal-${screen.name}-${viewport.name}.png`,
@@ -179,9 +104,57 @@ test.describe("portal at every width", () => {
     expect(failures, "portal problems across widths").toEqual([]);
   });
 
+  test("is usable on a phone and a desktop across the event app and its management", async ({ page, browser }) => {
+    // Two widths, two themes and some thirty screens: the walk, not any one screen, takes the time.
+    test.setTimeout(1_200_000);
+    const email = e2eAdminEmail("portal-responsive-events");
+    await signInAsE2eStaff(page, email);
+    // The player is a third-party frame; its box in the layout is under test, not YouTube.
+    await page.route(/youtube(-nocookie)?\.com/, (route) => route.abort());
+    const screens = eventScreens(await prepareEventAppScreens(page, email));
+
+    const failures: string[] = [];
+    for (const viewport of WIDTHS.filter((width) => width.name !== "tablet")) {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      for (const screen of screens) {
+        if (screen.canvas && viewport.name !== "desktop") continue;
+        await page.setViewportSize(screen.canvas ?? { width: viewport.width, height: viewport.height });
+        await page.emulateMedia({ colorScheme: "light" });
+        // A fresh document each time: an open dialog or a full-screen scanner must not carry over.
+        await page.goto("about:blank");
+        await page.goto(screen.path);
+        if (screen.path.startsWith("/portal/")) await expect(page.locator("#portal-root")).toBeVisible();
+        const where = `${viewport.name}/${screen.name}`;
+        try {
+          await settleScreen(page);
+          if (screen.open) await screen.open(page);
+        } catch (error) {
+          // A screen that never finishes loading is itself the finding; the walk goes on.
+          failures.push(`${where}: did not finish loading — ${(error as Error).message.split("\n")[0]}`);
+        }
+
+        failures.push(...(await screenProblems(page, where)));
+        await page.screenshot({ path: `test-results/portal-${screen.name}-${viewport.name}.png`, fullPage: true });
+      }
+    }
+
+    // The sign-in screen a registrant lands on from the event app, without a session.
+    const signedOut = await browser.newPage();
+    for (const viewport of WIDTHS.filter((width) => width.name !== "tablet")) {
+      await signedOut.setViewportSize({ width: viewport.width, height: viewport.height });
+      await signedOut.goto("/portal/");
+      await expect(signedOut.getByRole("button", { name: "Sign in with a passkey" })).toBeVisible();
+      failures.push(...(await screenProblems(signedOut, `${viewport.name}/login`)));
+      await signedOut.screenshot({ path: `test-results/portal-login-${viewport.name}.png`, fullPage: true });
+    }
+    await signedOut.close();
+
+    expect(failures, "event app problems across widths").toEqual([]);
+  });
+
   test("opens and closes its navigation on a phone, and returns focus", async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 812 });
-    await signInAsE2eStaff(page, e2eAdminEmail());
+    await signInAsE2eStaff(page, e2eAdminEmail("portal-responsive-navigation"));
 
     const toggle = page.locator("#portal-sidebar-toggle");
     await expect(toggle).toBeVisible();

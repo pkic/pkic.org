@@ -3,7 +3,7 @@
  *
  * `status` is a statement about coverage, never permission to skip:
  *   - "covered"  a spec walks this step
- *   - "unit"     the behaviour is tested below the browser only
+ *   - "unit"     the behavior is tested below the browser only
  *   - "gap"      nothing tests it
  *   - "absent"   the product does not do this yet
  *

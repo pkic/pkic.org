@@ -8,7 +8,10 @@
  */
 export type ProviderName = "sendgrid" | "stripe";
 export type ProviderOperation =
-  "send_email" | "create_checkout_session" | "fetch_checkout_session" | "fetch_payment_details";
+  | "send_email"
+  | "create_checkout_session"
+  | "fetch_checkout_session"
+  | "fetch_payment_details";
 
 export interface ProviderFailureDetails {
   kind: "provider_failure";

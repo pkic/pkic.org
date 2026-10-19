@@ -1,7 +1,7 @@
 import { env } from "cloudflare:workers";
 import { createExecutionContext, waitOnExecutionContext } from "cloudflare:test";
 import { expect, it } from "vitest";
-import worker from "../functions/router";
+import worker from "./helpers/app";
 import { profileD1Flow } from "./helpers/d1-flow-profile";
 import {
   addRepresentative,

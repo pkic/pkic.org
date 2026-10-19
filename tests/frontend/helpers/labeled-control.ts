@@ -79,6 +79,26 @@ export async function toggleChoice(control: HTMLElement): Promise<void> {
   });
 }
 
+/**
+ * The radio a choice card names through `aria-labelledby`, resolved the way
+ * assistive technology resolves it, so the lookup fails when the name does.
+ */
+export function radioNamed(root: ParentNode, name: string): HTMLInputElement {
+  const match = [...root.querySelectorAll<HTMLInputElement>('input[type="radio"]')].find((radio) => {
+    const ids = radio.getAttribute("aria-labelledby")?.split(/\s+/) ?? [];
+    const text = ids.map((id) => radio.ownerDocument.getElementById(id)?.textContent ?? "").join(" ");
+    return text.trim() === name;
+  });
+  if (!match) throw new Error(`no radio is named "${name}"`);
+  return match;
+}
+
+/** Chooses a choice card the way the browser would: the radio checks, then notifies. */
+export async function chooseCard(root: ParentNode, name: string): Promise<void> {
+  const radio = radioNamed(root, name);
+  if (!radio.checked) await toggleChoice(radio);
+}
+
 /** Chooses an option the way the browser would. */
 export async function chooseOption(control: HTMLElement, value: string): Promise<void> {
   (control as HTMLSelectElement).value = value;

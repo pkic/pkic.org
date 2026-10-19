@@ -33,7 +33,7 @@ function mountToastArea(): HTMLDivElement {
 
 function button(root: ParentNode, label: string): HTMLButtonElement {
   const found = [...root.querySelectorAll("button")].find((candidate) => candidate.textContent?.includes(label));
-  if (!found) throw new Error(`No button labelled ${label}`);
+  if (!found) throw new Error(`No button labeled ${label}`);
   return found;
 }
 

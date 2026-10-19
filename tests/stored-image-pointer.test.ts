@@ -10,6 +10,7 @@ import {
 } from "../functions/_lib/services/storage-deletion-outbox";
 import { onRequestGet as memberLogo } from "../functions/api/v1/members/[id]/logo";
 import { createContext } from "./helpers/context";
+import { seedOrganizationAggregate } from "./helpers/membership";
 import type { AuthAdmin } from "../functions/_lib/types";
 
 class FakeAssetsBucket {
@@ -56,6 +57,7 @@ async function setup() {
   )
     .bind(organizationId)
     .run();
+  await seedOrganizationAggregate(env.DB, organizationId, "F");
   const actor: AuthAdmin = {
     identityType: "user",
     id: adminId,
@@ -63,6 +65,12 @@ async function setup() {
     grants: administratorGrants,
   };
   return { actor, organizationId };
+}
+
+async function publicationCount() {
+  return env.DB.prepare(
+    "SELECT COUNT(*) AS count FROM site_publication_requests WHERE reason_code='organization_content_changed'",
+  ).first<number>("count");
 }
 
 describe("shared stored-image pointer lifecycle", () => {
@@ -88,6 +96,7 @@ describe("shared stored-image pointer lifecycle", () => {
       ])
     )[0].logo_r2_key;
     expect(bucket.keys()).toEqual([oldKey, pointer].sort());
+    expect(await publicationCount()).toBe(1);
     expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action = 'organization_logo_uploaded'")).toHaveLength(
       1,
     );
@@ -123,6 +132,7 @@ describe("shared stored-image pointer lifecycle", () => {
     }
 
     expect(bucket.keys()).toEqual([]);
+    expect(await publicationCount()).toBe(0);
     expect(
       await queryAll<{ logo_r2_key: string | null }>(env.DB, "SELECT logo_r2_key FROM organizations WHERE id = ?", [
         organizationId,
@@ -189,6 +199,9 @@ describe("shared stored-image pointer lifecycle", () => {
     await bucket.put(oldKey, jpeg.buffer);
     await env.DB.prepare("UPDATE organizations SET logo_r2_key = ? WHERE id = ?").bind(oldKey, organizationId).run();
     await removeOrganizationLogo(env.DB, actor, organizationId);
+    expect(await publicationCount()).toBe(1);
+    await removeOrganizationLogo(env.DB, actor, organizationId);
+    expect(await publicationCount()).toBe(1);
 
     bucket.failuresRemaining = 1;
     await processPendingStorageDeletions(env.DB, { ASSETS_BUCKET: bucket as unknown as R2Bucket }, 10);
@@ -210,6 +223,23 @@ describe("shared stored-image pointer lifecycle", () => {
       .run();
     await processPendingStorageDeletions(env.DB, { ASSETS_BUCKET: bucket as unknown as R2Bucket }, 10);
     expect(bucket.keys()).not.toContain(oldKey);
+  });
+
+  it("rolls back a losing concurrent logo removal without duplicate publication or deletion intents", async () => {
+    const { actor, organizationId } = await setup();
+    const oldKey = `org-logos/${organizationId}/old.jpg`;
+    await env.DB.prepare("UPDATE organizations SET logo_r2_key=? WHERE id=?").bind(oldKey, organizationId).run();
+    const results = await Promise.allSettled([
+      removeOrganizationLogo(env.DB, actor, organizationId),
+      removeOrganizationLogo(env.DB, actor, organizationId),
+    ]);
+    expect(results.filter((r) => r.status === "fulfilled")).toHaveLength(1);
+    expect(results.find((r) => r.status === "rejected")).toMatchObject({
+      reason: expect.objectContaining({ code: "IMAGE_CHANGED" }),
+    });
+    expect(await publicationCount()).toBe(1);
+    expect(await queryAll(env.DB, "SELECT id FROM audit_log WHERE action='organization_logo_removed'")).toHaveLength(1);
+    expect(await queryAll(env.DB, "SELECT object_key FROM storage_deletion_outbox")).toEqual([{ object_key: oldKey }]);
   });
 
   it("recovers an expired deletion lease without stealing a live lease", async () => {

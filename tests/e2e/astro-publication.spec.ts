@@ -1,7 +1,10 @@
 import axe from "axe-core";
+import { EMAIL_FIRST_COPY } from "../../assets/shared/email-first-copy";
 import { expect, test, type Page } from "@playwright/test";
 import { userAuthRequestSchema } from "../../assets/shared/schemas/user-auth";
 import { sitePublicationReleaseSchema } from "../../assets/shared/schemas/site-publication-release";
+import { constants } from "../../assets/design/tokens";
+import { contrastRatio } from "../../assets/design/color";
 
 async function openPublishedAgenda(page: Page, path: string): Promise<void> {
   await page.goto(path);
@@ -69,18 +72,13 @@ test("public social previews use complete static cards for every published varia
   expect(await page.locator('meta[property="og:image"]').count()).toBe(0);
 });
 
-test("membership organization choices occupy separate full-width rows", async ({ page }) => {
+test("published membership starts from a single work email field", async ({ page }) => {
   await page.route("**/api/**", (route) => route.abort());
   await page.goto("/join/");
-  const choices = page.locator("[data-join-start-form] .pk-check");
-  await expect(choices).toHaveCount(2);
-  const first = await choices.nth(0).boundingBox();
-  const second = await choices.nth(1).boundingBox();
-  expect(first).not.toBeNull();
-  expect(second).not.toBeNull();
-  expect(second!.y).toBeGreaterThanOrEqual(first!.y + first!.height);
-  expect(Math.abs(second!.x - first!.x)).toBeLessThan(1);
-  expect(Math.abs(second!.width - first!.width)).toBeLessThan(1);
+  const step = page.locator("[data-join-email-step]");
+  await expect(step.locator("input")).toHaveCount(1);
+  await expect(step.getByLabel("Your official work or organization email address")).toBeVisible();
+  await expect(page.locator('input[type="radio"][name="applicantKind"]')).toHaveCount(0);
 });
 
 test("sponsor brochures and authored session slides download from static files", async ({ page, request }) => {
@@ -629,13 +627,20 @@ test("PQC agenda uses full-width mobile sessions and bounded desktop scrolling",
       cards.map((card) => {
         const footer = card.querySelector(".pk-content-agenda__duration")?.getBoundingClientRect();
         const box = card.getBoundingClientRect();
-        return footer ? box.bottom - footer.bottom : null;
+        const style = getComputedStyle(card);
+        return footer
+          ? {
+              gap: box.bottom - footer.bottom,
+              padding: Number.parseFloat(style.paddingBottom),
+              border: Number.parseFloat(style.borderBottomWidth),
+            }
+          : null;
       }),
     );
-    for (const gap of durationBounds)
-      if (gap !== null) {
-        expect(gap).toBeGreaterThanOrEqual(8);
-        expect(gap).toBeLessThanOrEqual(12);
+    for (const bounds of durationBounds)
+      if (bounds !== null) {
+        expect(bounds.padding).toBe(4);
+        expect(Math.abs(bounds.gap - bounds.padding - bounds.border)).toBeLessThanOrEqual(1);
       }
     await page.screenshot({ path: testInfo.outputPath("agenda-sticky-controls.png") });
     await right.click();
@@ -654,7 +659,11 @@ test("PQC agenda uses full-width mobile sessions and bounded desktop scrolling",
   await expect(duration).toHaveCSS("font-size", "12px");
   const box = (await session.boundingBox())!;
   const durationBox = (await duration.boundingBox())!;
-  expect(box.y + box.height - durationBox.y - durationBox.height).toBeLessThanOrEqual(12);
+  await expect(session).toHaveCSS("padding-bottom", "4px");
+  const bottomBorder = await session.evaluate((element) =>
+    Number.parseFloat(getComputedStyle(element).borderBottomWidth),
+  );
+  expect(Math.abs(box.y + box.height - durationBox.y - durationBox.height - 4 - bottomBorder)).toBeLessThanOrEqual(1);
   const restingBorder = await session.evaluate((element) => getComputedStyle(element).borderTopColor);
   await session.hover();
   await expect
@@ -682,8 +691,19 @@ test("PQC agenda uses full-width mobile sessions and bounded desktop scrolling",
     has: page.getByRole("heading", { name: "Paul van Brouwershaven", exact: true }),
   });
   await expect(speakerCard).toBeVisible();
-  await expect(speakerCard.locator("img").first()).toHaveCSS("width", "92px");
-  await expect(speakerCard.locator(".pk-content-agenda__speaker-bio")).toHaveCSS("font-size", "13px");
+  const headshot = speakerCard.locator("img").first();
+  await expect(headshot).toBeVisible();
+  await expect(headshot).toHaveCSS("width", "40px");
+  await expect(headshot).toHaveCSS("height", "40px");
+  await expect
+    .poll(() => headshot.evaluate((image: HTMLImageElement) => image.complete && image.naturalWidth > 0))
+    .toBe(true);
+  const biography = speakerCard.locator(".pk-content-agenda__speaker-bio");
+  await expect(biography).toHaveCSS("font-size", "13px");
+  await biography.locator("summary").click();
+  await expect(biography).toHaveAttribute("open", "");
+  await expect(biography.locator(":scope > :not(summary)")).toBeVisible();
+  await expect(biography.locator(":scope > :not(summary)")).not.toHaveText("");
   await expect(speakerCard.getByRole("link", { name: /Paul van Brouwershaven on LinkedIn/ })).toBeVisible();
   await speakerCard.screenshot({ path: testInfo.outputPath("agenda-speaker-card.png") });
 });
@@ -704,7 +724,10 @@ for (const colorScheme of ["light", "dark"] as const) {
         }));
       }, selector);
     expect(await contrastViolations(".pk-content-agenda")).toEqual([]);
-    await page.getByRole("button", { name: "Open session details: Opening", exact: true }).click();
+    await page
+      .getByRole("link", { name: "Open session details: Opening", exact: true })
+      .or(page.getByRole("button", { name: "Open session details: Opening", exact: true }))
+      .click();
     await expect(page.getByRole("dialog", { name: "Opening", exact: true })).toBeVisible();
     expect(await contrastViolations("dialog[open]")).toEqual([]);
     await page.screenshot({ path: testInfo.outputPath(`agenda-dialog-${colorScheme}.png`) });
@@ -720,18 +743,40 @@ test("agenda shows the event clock and the viewer's local clock without API call
   });
   try {
     await openPublishedAgenda(page, "/events/2026/pqc-conference-amsterdam-nl/agenda/");
+    const agenda = page.getByRole("region", { name: "Event agenda", exact: true });
+    const panel = agenda.getByRole("tabpanel");
     const opening = page
       .locator(".pk-content-agenda__slot")
       .filter({
         has: page.getByRole("heading", { name: "Opening", exact: true }),
       })
       .first();
-    await expect(opening.locator('.pk-content-agenda__clock[aria-label="Event time"] > time')).toHaveText("09:00");
-    await expect(opening.locator('[aria-label="Event time"]')).toContainText("Event · Amsterdam");
-    await expect(opening.locator('[aria-label="Event time"]')).toContainText("Amsterdam");
-    await expect(opening.locator('[aria-label="Your time"]')).toContainText("Your time");
-    await expect(opening.locator('[aria-label="Your time"]')).toBeVisible();
-    await expect(opening.locator('time[data-local-time-format="time"]')).toContainText(/0?3:00.*(?:EST|GMT-5)/);
+    const zoneKey = panel
+      .locator(".pk-content-agenda__time-heading, .pk-content-agenda__zone-key")
+      .filter({ visible: true });
+    await expect(zoneKey).toHaveCount(1);
+    const eventZone = zoneKey.locator('[title="Europe/Amsterdam"]');
+    await expect(eventZone).toBeVisible();
+    await expect(eventZone).toHaveText(/^Event(?: time)? · Amsterdam$/);
+    await expect(eventZone).toHaveAttribute("title", "Europe/Amsterdam");
+    await expect(zoneKey.locator("[data-agenda-browser-zone]")).toHaveText("Your time · America/New_York");
+    await expect(zoneKey.locator("[data-agenda-browser-zone]")).toBeVisible();
+    const eventClock = opening.locator('.pk-content-agenda__clock[aria-label="Event time"] > time');
+    const viewerClock = opening.locator('[aria-label="Your time"] > time');
+    await expect(eventClock).toBeVisible();
+    await expect(eventClock).toHaveText("09:00");
+    await expect(eventClock).toHaveAttribute("datetime", /T08:00:00(?:\.000)?Z$/);
+    await expect(viewerClock).toBeVisible();
+    await expect(viewerClock).toHaveText("03:00");
+    await expect(viewerClock).toHaveAttribute("datetime", (await eventClock.getAttribute("datetime"))!);
+    const display = agenda.getByRole("combobox", { name: "Agenda time display", exact: true });
+    await expect(display).toHaveValue("venue");
+    await display.selectOption("browser");
+    await expect(agenda).toHaveAttribute("data-agenda-time-display", "browser");
+    await expect(viewerClock).toHaveText("03:00");
+    await expect(eventClock).toHaveText("09:00");
+    await display.selectOption("venue");
+    await expect(agenda).toHaveAttribute("data-agenda-time-display", "venue");
     await page.waitForLoadState("networkidle");
     expect(calls).toEqual([]);
   } finally {
@@ -749,7 +794,45 @@ test("event hero overlays sponsor logos on the image above the submenu on every 
   });
   await page.goto("/events/2026/pqc-conference-amsterdam-nl/");
   const action = page.getByRole("link", { name: "Secure your seat →", exact: true });
-  await expect(action).toHaveCSS("background-color", "rgb(237, 125, 49)");
+  await expect(action).toBeVisible();
+  for (const hovered of [false, true]) {
+    if (hovered) await action.hover();
+    const colors = await action.evaluate((element, token) => {
+      const style = getComputedStyle(element);
+      const canvas = document.createElement("canvas");
+      canvas.width = canvas.height = 1;
+      const context = canvas.getContext("2d")!;
+      const brightness = style.filter === "none" ? 1 : Number(/^brightness\(([\d.]+)\)$/.exec(style.filter)?.[1]);
+      if (!Number.isFinite(brightness)) throw new Error(`Unsupported hero filter: ${style.filter}`);
+      const reference = document.createElement("div");
+      reference.hidden = true;
+      reference.style.backgroundColor = token;
+      document.body.appendChild(reference);
+      const expectedBackground = getComputedStyle(reference).backgroundColor;
+      reference.remove();
+      const rgb = (color: string, factor = 1) => {
+        context.clearRect(0, 0, 1, 1);
+        context.fillStyle = color;
+        context.fillRect(0, 0, 1, 1);
+        const [r, g, b] = context.getImageData(0, 0, 1, 1).data;
+        return {
+          r: Math.min((r / 255) * factor, 1),
+          g: Math.min((g / 255) * factor, 1),
+          b: Math.min((b / 255) * factor, 1),
+        };
+      };
+      return {
+        token: rgb(style.getPropertyValue("--pk-public-hero-action").trim()),
+        background: rgb(style.backgroundColor),
+        expected: rgb(expectedBackground),
+        displayedBackground: rgb(style.backgroundColor, brightness),
+        displayedText: rgb(style.color, brightness),
+      };
+    }, constants["public-hero-action"]);
+    expect(colors.token).toEqual(colors.expected);
+    expect(colors.background).toEqual(colors.expected);
+    expect(contrastRatio(colors.displayedText, colors.displayedBackground)).toBeGreaterThanOrEqual(4.5);
+  }
   const organizers = page.getByRole("img", { name: "Main conference organizers", exact: true });
   await expect(organizers).toBeVisible();
   const centered = await organizers.evaluate((image) => {
@@ -945,7 +1028,7 @@ test("published database event workflows have static pages and local form config
   await expect(
     page.getByRole("heading", { name: "Event registration — Static publication workshop (synthetic)", exact: true }),
   ).toBeVisible();
-  await expect(page.getByLabel("First name")).toBeVisible();
+  await expect(page.getByLabel(EMAIL_FIRST_COPY.registration.work.label)).toBeVisible();
   await expect(page.locator("[data-step-next]")).toBeEnabled();
   await page.waitForLoadState("networkidle");
   expect(apiCalls).toEqual([]);
@@ -1037,9 +1120,10 @@ test("published diagrams render without a Mermaid download and support native ke
   const expand = diagram.getByRole("button", { name: "Expand diagram" });
   await expand.click();
   const dialog = page.getByRole("dialog", { name: "Expanded diagram" });
-  await expect(dialog.locator("svg")).toBeVisible();
+  const expandedDiagram = dialog.getByRole("region", { name: "Scrollable diagram" }).locator("svg");
+  await expect(expandedDiagram).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Close diagram" })).toBeFocused();
-  const dimensions = await dialog.locator("svg").evaluate((svg) => ({
+  const dimensions = await expandedDiagram.evaluate((svg) => ({
     rendered: svg.getBoundingClientRect().width,
     authored: svg instanceof SVGSVGElement ? svg.viewBox.baseVal.width : 0,
   }));
@@ -1056,9 +1140,22 @@ test("published diagrams render without a Mermaid download and support native ke
   const context = await browser.newContext({ baseURL, javaScriptEnabled: false, viewport: page.viewportSize()! });
   try {
     const plain = await context.newPage();
-    await plain.goto("/wg/pqc/pqcmm/levels/");
-    await expect(plain.locator(".mermaid-wrap svg").first()).toBeVisible();
-    expect(await plain.locator("svg style, svg [style]").count()).toBe(0);
+    for (const path of [
+      "/application-process/",
+      "/2026/09/29/pki-maturity-model-2.0.0-new-cryptography-category-and-a-deeper-self-assessment/",
+      "/wg/pqc/pqcmm/levels/",
+    ]) {
+      await plain.goto(path);
+      await expect(plain.locator(".mermaid-wrap svg").first()).toBeVisible();
+      expect(await plain.locator("svg style, svg [style]").count()).toBe(0);
+      if (path !== "/wg/pqc/pqcmm/levels/") {
+        const name = path === "/application-process/" ? "application-process" : "maturity-model";
+        await plain
+          .locator(".mermaid-wrap")
+          .first()
+          .screenshot({ path: test.info().outputPath(`${name}.png`) });
+      }
+    }
   } finally {
     await context.close();
   }
@@ -1170,7 +1267,8 @@ test("agenda compact and expanded views preserve tabs and session details", asyn
   await expect(compact).toHaveAttribute("aria-pressed", "true");
   await expect(description).toBeHidden();
   await agenda
-    .getByRole("button", { name: /Open session details:/ })
+    .getByRole("link", { name: /^Open session details:/ })
+    .or(agenda.getByRole("button", { name: /^Open session details:/ }))
     .first()
     .click();
   const session = page.getByRole("dialog").filter({ visible: true });
@@ -1224,8 +1322,14 @@ test("historical agenda integrates recording, slide downloads, and moderator rol
   expect(pdf.ok()).toBe(true);
   expect((await pdf.body()).subarray(0, 5).toString()).toBe("%PDF-");
   await expect(panel.getByText("Moderator", { exact: true }).first()).toBeVisible();
-  const recording = panel.getByRole("button", { name: "Watch recording", exact: true }).first();
+  const recording = panel.getByRole("link", { name: "Watch recording", exact: true }).first();
+  await expect(recording).toHaveAttribute("href", /^https:\/\//);
+  await expect(recording).toHaveAttribute("data-agenda-watch-recording", "true");
+  const recordingDialog = await recording.getAttribute("data-agenda-open-session");
+  expect(recordingDialog).toBeTruthy();
+  await expect(page.locator(`dialog[id="${recordingDialog}"]`)).toHaveCount(1);
   await recording.click();
+  await expect(page.locator(`dialog[id="${recordingDialog}"]`)).toBeVisible();
   await expect(page.locator("dialog[open] iframe")).toHaveAttribute("src", /youtube-nocookie\.com/);
   const recordingBox = (await page.locator("dialog[open] iframe").boundingBox())!;
   expect(recordingBox.height).toBeGreaterThan(100);
@@ -1380,7 +1484,6 @@ test("proposal agreements show rejected and accepted states beside a primary Con
   const invalidBackground = await body.evaluate((element) => getComputedStyle(element).backgroundColor);
   await terms.first().check();
   await expect(body).not.toHaveCSS("background-color", invalidBackground);
-  await expect(card.locator(".pk-panel__body--ok")).toBeVisible();
 });
 
 test("sticky section navigation meets the navbar without a transparent gap", async ({ page }) => {
