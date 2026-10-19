@@ -447,13 +447,18 @@ async function resolveInvitedSpeaker(page: Page, email: string): Promise<void> {
 
 async function fillProposal(
   page: Page,
-  options: { type?: "talk" | "panel"; proposerPresenting?: boolean; addPanelist?: boolean } = {},
+  options: {
+    type?: "talk" | "panel";
+    proposerPresenting?: boolean;
+    addPanelist?: boolean;
+    proposerEmail?: string;
+  } = {},
 ): Promise<void> {
   const type = options.type ?? "talk";
   await fillProposalParticipant(page, {
     firstName: "Priya",
     lastName: "Proposal",
-    email: "proposal-speaker@example.test",
+    email: options.proposerEmail ?? "proposal-speaker@example.test",
   });
   await page.getByRole("button", { name: /Continue/i }).click();
   await setNativeChecked(page, type === "panel" ? "input#type-panel" : "input#type-talk");
@@ -814,16 +819,18 @@ test.describe("browser workflows", () => {
     await setupPage(page);
     const errorMonitor = monitorErrors(page);
     const screenshot = createScreenshotter(page);
+    const proposerEmail = ownDomainEmail("proposal-speaker");
+    const invitedSpeakerEmail = ownDomainEmail("speaker");
 
     await page.goto("/events/2026/pqc-conference-amsterdam-nl/propose/");
     await expect(page).toHaveTitle(/Submit a Session Proposal/);
 
-    await fillProposal(page, { type: "panel", proposerPresenting: true, addPanelist: true });
+    await fillProposal(page, { type: "panel", proposerPresenting: true, addPanelist: true, proposerEmail });
     await page.getByRole("button", { name: /Submit proposal/i }).click();
     await expect(page.getByRole("heading", { name: /Proposal submitted, Priya!/i })).toBeVisible();
     await screenshot("01-proposal-submitted");
 
-    const proposalSubmittedEmail = await waitForEmail("proposal-speaker@example.test", "proposal");
+    const proposalSubmittedEmail = await waitForEmail(proposerEmail, "proposal");
     const proposalManageUrl = extractUrlFromEmail(proposalSubmittedEmail, "/propose/manage/");
     const originalProposalManageToken = new URL(proposalManageUrl).searchParams.get("token") ?? "";
     expect(originalProposalManageToken).toMatch(/^pkc1_/);
@@ -836,11 +843,11 @@ test.describe("browser workflows", () => {
     await expect(page.locator("[data-resend-proposal-manage-section]")).toBeVisible({ timeout: 10_000 });
     await expect(page.getByText(/request a fresh link below/i)).toBeVisible();
     await clearOutbox();
-    await page.locator("[data-resend-proposal-manage-email]").fill("proposal-speaker@example.test");
+    await page.locator("[data-resend-proposal-manage-email]").fill(proposerEmail);
     await page.locator("[data-resend-proposal-manage-btn]").click();
     await expect(page.getByText(/you will receive an email shortly/i)).toBeVisible({ timeout: 10_000 });
 
-    const recoveredProposalEmail = await waitForEmail("proposal-speaker@example.test", "Proposal received");
+    const recoveredProposalEmail = await waitForEmail(proposerEmail, "Proposal received");
     const recoveredProposalManageUrl = extractUrlFromEmail(recoveredProposalEmail, "/propose/manage/");
     const recoveredProposalManageToken = new URL(recoveredProposalManageUrl).searchParams.get("token") ?? "";
     expect(recoveredProposalManageToken).toMatch(/^pkc1_/);
@@ -849,14 +856,14 @@ test.describe("browser workflows", () => {
     await page.goto(proposalManageRoute);
     await expect(page.getByText(/Open this page from your proposal management link/i)).toBeVisible();
     await expect(page.locator("#manage-proposal-type")).toHaveValue("panel");
-    const proposerSpeakerCard = page.locator('[data-speaker-card][data-speaker-email="proposal-speaker@example.test"]');
+    const proposerSpeakerCard = page.locator(`[data-speaker-card][data-speaker-email="${proposerEmail}"]`);
     await expect(proposerSpeakerCard).toBeVisible();
     await proposerSpeakerCard.getByRole("button", { name: /^Actions for / }).click();
     await proposerSpeakerCard.getByRole("menuitem", { name: "Change role…", exact: true }).click();
     await expect(proposerSpeakerCard.getByLabel("Role")).toHaveValue("moderator");
     await proposerSpeakerCard.getByLabel("Role").selectOption("speaker");
     await proposerSpeakerCard.getByRole("button", { name: "Save role", exact: true }).click();
-    await expect(page.getByText(/Saved the role of proposal-speaker@example.test/i)).toBeVisible({
+    await expect(page.getByText(`Saved the role of ${proposerEmail}`)).toBeVisible({
       timeout: 15_000,
     });
     await expect(proposerSpeakerCard.getByText("Speaker", { exact: true })).toBeVisible();
@@ -871,15 +878,15 @@ test.describe("browser workflows", () => {
     await screenshot("02-proposal-updated");
 
     const inviteForm = page.locator("[data-cospeaker-form]");
-    await inviteForm.locator("#cs-email").fill("speaker@example.test");
+    await inviteForm.locator("#cs-email").fill(invitedSpeakerEmail);
     await inviteForm.locator("#cs-first-name").fill("Sam");
     await inviteForm.locator("#cs-last-name").fill("Speaker");
     await inviteForm.locator("#cs-role").selectOption("co_speaker");
     await inviteForm.getByRole("button", { name: /Send invite/i }).click();
-    await expect(page.getByText(/Invite sent to speaker@example.test/i)).toBeVisible();
+    await expect(page.getByText(`Invite sent to ${invitedSpeakerEmail}`)).toBeVisible();
     await screenshot("03-speaker-invited");
 
-    const speakerInviteEmail = await waitForEmail("speaker@example.test", "speaker");
+    const speakerInviteEmail = await waitForEmail(invitedSpeakerEmail, "speaker");
     const speakerManageUrl = extractUrlFromEmail(speakerInviteEmail, "/propose/speaker/");
 
     const speakerManageRoute = `/events/2026/pqc-conference-amsterdam-nl/propose/speaker/?event=pqc-conference-amsterdam-nl&token=${encodeURIComponent(new URL(speakerManageUrl).searchParams.get("token") ?? "")}`;
@@ -887,7 +894,7 @@ test.describe("browser workflows", () => {
     await expect(page.getByText(/Please confirm whether you would like to participate/i)).toBeVisible();
     const participationConfirmation = page.getByRole("button", { name: /Confirm participation/i });
     await expect(participationConfirmation).toBeDisabled();
-    await resolveInvitedSpeaker(page, "speaker@example.test");
+    await resolveInvitedSpeaker(page, invitedSpeakerEmail);
     await participationConfirmation.click();
     await expect(page.locator("[data-confirmed-msg]")).toBeVisible();
     await screenshot("04-speaker-participation-confirmed");
@@ -897,7 +904,11 @@ test.describe("browser workflows", () => {
     await identityProfile
       .getByLabel(/Biography/i)
       .fill("Updated speaker biography with enough detail to satisfy validation and demonstrate the browser workflow.");
-    await identityProfile.getByLabel("Social / profile links").fill("https://example.com/portfolio");
+    await identityProfile
+      .getByRole("textbox", { name: "Profile link URL", exact: true })
+      .fill("https://example.com/portfolio");
+    await identityProfile.getByRole("button", { name: "Add profile link", exact: true }).click();
+    await expect(identityProfile.getByRole("group", { name: "Added profile links" })).toBeVisible();
     await identityProfile.getByRole("button", { name: "Save changes", exact: true }).click();
     await expect(page.getByText(/Profile updated/i)).toBeVisible();
     await screenshot("05-speaker-profile-saved");
@@ -928,6 +939,9 @@ test.describe("browser workflows", () => {
     // Reload the speaker page and verify the headshot <img> element is rendered
     await page.goto(speakerManageRoute);
     await expect(page.locator("[data-headshot-section] img")).toBeVisible();
+    await expect(
+      identityProfile.getByRole("group", { name: "Added profile links" }).getByTitle("https://example.com/portfolio"),
+    ).toBeVisible();
     await screenshot("07-speaker-headshot-visible");
 
     // Accept the proposal via the API so the presentation-upload section becomes visible
